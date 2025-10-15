@@ -1,5 +1,5 @@
 {
-  "name": "changelogitea",
+  "name": "@kaynooo/changelogitea",
   "type": "module",
   "version": "1.0.1",
   "description": "Generate changelog for Gitea.",
