@@ -71,7 +71,7 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   baseUrl?: string
   /**
    * Gitea base API url
-   * @default api.gitea.com
+   * @default gitea.com/api/v1
    */
   baseUrlApi?: string
 

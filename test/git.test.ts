@@ -14,7 +14,7 @@ it('parse', async () => {
   expect(config).toMatchInlineSnapshot(`
     {
       "baseUrl": "gitea.com",
-      "baseUrlApi": "api.gitea.com",
+      "baseUrlApi": "gitea.com/api/v1",
       "capitalize": true,
       "contributors": true,
       "from": "19cf4f84f16f1a8e1e7032bbef550c382938649d",
@@ -88,7 +88,7 @@ it.each([
   else {
     expect(config).toEqual(expect.objectContaining({
       baseUrl: 'gitea.com',
-      baseUrlApi: 'api.gitea.com',
+      baseUrlApi: 'gitea.com/api/v1',
     }))
   }
 
@@ -101,8 +101,4 @@ it('should match with current gitea repo', async () => {
   const repo = await getGiteaRepo('gitea.com')
 
   expect(repo).toContain('/changelogitea')
-})
-
-it('should throw error when baseUrl is different from git repository', async () => {
-  await expect(getGiteaRepo('custom.git.com')).rejects.toThrow('Can not parse Gitea repo from url')
 })

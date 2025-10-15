@@ -72,7 +72,7 @@ function formatSection(commits: Commit[], sectionName: string, options: Resolved
   if (!Object.entries(scopes).some(([k, v]) => k && v.length > 1))
     useScopeGroup = false
 
-  Object.keys(scopes).sort().forEach((scope) => {
+  for (const scope of Object.keys(scopes).sort()) {
     let padding = ''
     let prefix = ''
     const scopeText = `**${options.scopeMap[scope] || scope}**`
@@ -89,7 +89,7 @@ function formatSection(commits: Commit[], sectionName: string, options: Resolved
       .reverse()
       .map(commit => `${padding}- ${prefix}${formatLine(commit, options)}`),
     )
-  })
+  }
 
   return lines
 }
@@ -108,9 +108,10 @@ export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOp
   for (const type of Object.keys(options.types)) {
     const items = group[type] || []
 
-    lines.push(
-      ...formatSection(items, options.types[type].title, options),
-    )
+    if (typeof options.types[type] === 'boolean')
+      continue
+
+    lines.push(...formatSection(items, options.types[type].title, options))
   }
 
   if (!lines.length)
@@ -127,7 +128,7 @@ function groupBy<T>(items: T[], key: string, groups: Record<string, T[]> = {}) {
   for (const item of items) {
     const v = (item as any)[key] as string
 
-    groups[v] = groups[v] || []
+    groups[v] ||= []
     groups[v].push(item)
   }
 
