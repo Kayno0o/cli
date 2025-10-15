@@ -1,3 +1,3 @@
-import antfu from '@antfu/eslint-config'
+import typescript from '@kaynooo/eslint/typescript'
 
-export default antfu()
+export default typescript()

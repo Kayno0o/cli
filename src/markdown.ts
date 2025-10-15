@@ -5,25 +5,29 @@ import { convert } from 'convert-gitmoji'
 
 const emojisRE = /([\u2700-\u27BF\uE000-\uF8FF\u2011-\u26FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|\uD83E[\uDD10-\uDDFF])/g
 
-function formatReferences(references: Reference[], baseUrl: string, github: string, type: 'issues' | 'hash'): string {
+function formatReferences(references: Reference[], baseUrl: string, gitea: string, type: 'issues' | 'hash'): string {
   const refs = references
     .filter((i) => {
       if (type === 'issues')
         return i.type === 'issue' || i.type === 'pull-request'
+
       return i.type === 'hash'
     })
     .map((ref) => {
-      if (!github)
+      if (!gitea)
         return ref.value
+
       if (ref.type === 'pull-request' || ref.type === 'issue')
-        return `https://${baseUrl}/${github}/issues/${ref.value.slice(1)}`
-      return `[<samp>(${ref.value.slice(0, 5)})</samp>](https://${baseUrl}/${github}/commit/${ref.value})`
+        return `https://${baseUrl}/${gitea}/issues/${ref.value.slice(1)}`
+
+      return `[<samp>(${ref.value.slice(0, 5)})</samp>](https://${baseUrl}/${gitea}/commit/${ref.value})`
     })
 
   const referencesString = join(refs).trim()
 
   if (type === 'issues')
     return referencesString && `in ${referencesString}`
+
   return referencesString
 }
 
@@ -32,13 +36,12 @@ function formatLine(commit: Commit, options: ResolvedChangelogOptions) {
   const hashRefs = formatReferences(commit.references, options.baseUrl, options.repo as string, 'hash')
 
   let authors = join([...new Set(commit.resolvedAuthors?.map(i => i.login ? `@${i.login}` : `**${i.name}**`))])?.trim()
-  if (authors)
-    authors = `by ${authors}`
+
+  authors &&= `by ${authors}`
 
   let refs = [authors, prRefs, hashRefs].filter(i => i?.trim()).join(' ')
 
-  if (refs)
-    refs = `&nbsp;-&nbsp; ${refs}`
+  refs &&= `&nbsp;-&nbsp; ${refs}`
 
   const description = options.capitalize ? capitalize(commit.description) : commit.description
 
@@ -73,6 +76,7 @@ function formatSection(commits: Commit[], sectionName: string, options: Resolved
     let padding = ''
     let prefix = ''
     const scopeText = `**${options.scopeMap[scope] || scope}**`
+
     if (scope && (useScopeGroup === true || (useScopeGroup === 'multiple' && scopes[scope].length > 1))) {
       lines.push(`- ${scopeText}:`)
       padding = '  '
@@ -103,6 +107,7 @@ export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOp
 
   for (const type of Object.keys(options.types)) {
     const items = group[type] || []
+
     lines.push(
       ...formatSection(items, options.types[type].title, options),
     )
@@ -113,7 +118,7 @@ export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOp
 
   const url = `https://${options.baseUrl}/${options.repo}/compare/${options.from}...${options.to}`
 
-  lines.push('', `##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on GitHub](${url})`)
+  lines.push('', `##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on Gitea](${url})`)
 
   return convert(lines.join('\n').trim(), true)
 }
@@ -121,9 +126,11 @@ export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOp
 function groupBy<T>(items: T[], key: string, groups: Record<string, T[]> = {}) {
   for (const item of items) {
     const v = (item as any)[key] as string
+
     groups[v] = groups[v] || []
     groups[v].push(item)
   }
+
   return groups
 }
 

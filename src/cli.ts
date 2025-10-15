@@ -6,23 +6,23 @@ import { blue, bold, cyan, dim, red, yellow } from 'ansis'
 import cac from 'cac'
 import { execa } from 'execa'
 import { version } from '../package.json'
-import { uploadAssets } from './github'
+import { uploadAssets } from './gitea'
 import { generate, hasTagOnGitHub, isRepoShallow, sendRelease } from './index'
 
-const cli = cac('changelogithub')
+const cli = cac('changelogitea')
 
 cli
   .version(version)
-  .option('-t, --token <path>', 'GitHub Token')
+  .option('-t, --token <path>', 'Gitea Token')
   .option('--from <ref>', 'From tag')
   .option('--to <ref>', 'To tag')
-  .option('--github <path>', 'GitHub Repository, e.g. antfu/changelogithub')
-  .option('--release-github <path>', 'Release GitHub Repository, defaults to `github`')
+  .option('--gitea <path>', 'Gitea Repository, e.g. kaynooo/changelogitea')
+  .option('--release-gitea <path>', 'Release Gitea Repository, defaults to `gitea`')
   .option('--name <name>', 'Name of the release')
   .option('--contributors', 'Show contributors section')
   .option('--prerelease', 'Mark release as prerelease')
   .option('-d, --draft', 'Mark release as draft')
-  .option('--output <path>', 'Output to file instead of sending to GitHub')
+  .option('--output <path>', 'Output to file instead of sending to Gitea')
   .option('--capitalize', 'Should capitalize for each comment message')
   .option('--emoji', 'Use emojis in section titles', { default: true })
   .option('--group', 'Nest commit messages under their scopes')
@@ -52,9 +52,10 @@ cli
 
     try {
       console.log()
-      console.log(dim(`changelo${bold('github')} `) + dim(`v${version}`))
+      console.log(dim(`changelo${bold('gitea')} `) + dim(`v${version}`))
 
-      const { config, md, commits } = await generate(args as any)
+      const { config, md, commits } = await generate(args)
+
       webUrl = `https://${config.baseUrl}/${config.releaseRepo}/releases/new?title=${encodeURIComponent(String(config.name || config.to))}&body=${encodeURIComponent(String(md))}&tag=${encodeURIComponent(String(config.to))}&prerelease=${config.prerelease}`
 
       console.log(cyan(config.from) + dim(' -> ') + blue(config.to) + dim(` (${commits.length} commits)`))
@@ -74,26 +75,30 @@ cli
       if (config.dry) {
         console.log(yellow('Dry run. Release skipped.'))
         printWebUrl()
+
         return
       }
 
       if (typeof config.output === 'string') {
         await fs.writeFile(config.output, md, 'utf-8')
         console.log(yellow(`Saved to ${config.output}`))
+
         return
       }
 
       if (!config.token) {
-        console.error(red('No GitHub token found, specify it via GITHUB_TOKEN env. Release skipped.'))
+        console.error(red('No Gitea token found, specify it via GITHUB_TOKEN env. Release skipped.'))
         process.exitCode = 1
         printWebUrl()
+
         return
       }
 
       if (!await hasTagOnGitHub(config.to, config)) {
-        console.error(yellow(`Current ref "${bold(config.to)}" is not available as tags on GitHub. Release skipped.`))
+        console.error(yellow(`Current ref "${bold(config.to)}" is not available as tags on Gitea. Release skipped.`))
         process.exitCode = 1
         printWebUrl()
+
         return
       }
 
@@ -101,6 +106,7 @@ cli
         console.error(yellow('The repo seems to be clone shallowly, which make changelog failed to generate. You might want to specify `fetch-depth: 0` in your CI config.'))
         process.exitCode = 1
         printWebUrl()
+
         return
       }
 
@@ -112,6 +118,7 @@ cli
     }
     catch (e: any) {
       console.error(red(String(e)))
+
       if (e?.stack)
         console.error(dim(e.stack?.split('\n').slice(1).join('\n')))
 

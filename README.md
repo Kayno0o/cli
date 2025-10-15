@@ -1,8 +1,8 @@
-# changelogithub
+# changelogitea
 
-[![NPM version](https://img.shields.io/npm/v/changelogithub?color=a1b858&label=)](https://www.npmjs.com/package/changelogithub)
+[![NPM version](https://img.shields.io/npm/v/changelogitea?color=a1b858&label=)](https://www.npmjs.com/package/changelogitea)
 
-Generate changelog for GitHub releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), powered by [changelogen](https://github.com/unjs/changelogen).
+Generate changelog for Gitea releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), powered by [changelogen](https://github.com/unjs/changelogen).
 
 [👉 Changelog example](https://github.com/unocss/unocss/releases/tag/v0.39.0)
 
@@ -15,7 +15,7 @@ Generate changelog for GitHub releases from [Conventional Commits](https://www.c
 
 ## Usage
 
-In GitHub Actions:
+In Gitea Actions:
 
 ```yml
 # .github/workflows/release.yml
@@ -44,21 +44,21 @@ jobs:
           registry-url: https://registry.npmjs.org/
           node-version: lts/*
 
-      - run: npx changelogithub # or changelogithub@0.12 to ensure a stable result
+      - run: npx changelogitea # or changelogitea@0.12 to ensure a stable result
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 ```
 
-It will be trigged whenever you push a tag to GitHub that starts with `v`.
+It will be trigged whenever you push a tag to Gitea that starts with `v`.
 
 ## Configuration
 
-You can put a configuration file in the project root, named as `changelogithub.config.{json,ts,js,mjs,cjs}`, `.changelogithubrc` or use the `changelogithub` field in `package.json`.
+You can put a configuration file in the project root, named as `changelogitea.config.{json,ts,js,mjs,cjs}`, `.changelogitearc` or use the `changelogitea` field in `package.json`.
 
 ## Preview Locally
 
 ```bash
-npx changelogithub --dry
+npx changelogitea --dry
 ```
 
 ## Why?
@@ -67,4 +67,4 @@ I used to use [`conventional-github-releaser`](https://github.com/conventional-c
 
 ## License
 
-[MIT](./LICENSE) License © 2022 [Anthony Fu](https://github.com/antfu)
+[MIT](./LICENSE) License © 2022 [Anthony Fu](https://git.kaynooo.fr/kaynooo)

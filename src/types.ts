@@ -18,7 +18,7 @@ export interface Commit extends GitCommit {
 
 export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   /**
-   * Dry run. Skip releasing to GitHub.
+   * Dry run. Skip releasing to Gitea.
    */
   dry?: boolean
   /**
@@ -40,7 +40,7 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
    */
   prerelease?: boolean
   /**
-   * GitHub Token
+   * Gitea Token
    */
   token?: string
   /**
@@ -65,13 +65,13 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
    */
   emoji?: boolean
   /**
-   * Github base url
-   * @default github.com
+   * Gitea base url
+   * @default gitea.com
    */
   baseUrl?: string
   /**
-   * Github base API url
-   * @default api.github.com
+   * Gitea base API url
+   * @default api.gitea.com
    */
   baseUrlApi?: string
 

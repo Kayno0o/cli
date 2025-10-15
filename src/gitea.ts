@@ -1,7 +1,7 @@
 import type { AuthorInfo, ChangelogOptions, Commit } from './types'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-/* eslint-disable no-console */
+
 import { notNullish } from '@antfu/utils'
 import { cyan, green, red } from 'ansis'
 import { $fetch } from 'ofetch'
@@ -19,6 +19,7 @@ export async function sendRelease(
     const exists = await $fetch(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
       headers,
     })
+
     if (exists.url) {
       url = exists.url
       method = 'PATCH'
@@ -34,6 +35,7 @@ export async function sendRelease(
     prerelease: options.prerelease,
     tag_name: options.to,
   }
+
   console.log(cyan(method === 'POST'
     ? 'Creating release notes...'
     : 'Updating release notes...'),
@@ -43,12 +45,13 @@ export async function sendRelease(
     body: JSON.stringify(body),
     headers,
   })
+
   console.log(green(`Released on ${res.html_url}`))
 }
 
 function getHeaders(options: ChangelogOptions) {
   return {
-    accept: 'application/vnd.github.v3+json',
+    accept: 'application/vnd.gitea.v3+json',
     authorization: `token ${options.token}`,
   }
 }
@@ -63,16 +66,17 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
   if (info.login)
     return info
 
-  // token not provided, skip github resolving
+  // token not provided, skip gitea resolving
   if (!options.token)
     return info
 
   try {
-    // https://docs.github.com/en/search-github/searching-on-github/searching-users#search-only-users-or-organizations
+    // https://docs.gitea.com/en/search-gitea/searching-on-gitea/searching-users#search-only-users-or-organizations
     const q = encodeURIComponent(`${info.email} type:user in:email`)
     const data = await $fetch(`https://${options.baseUrlApi}/search/users?q=${q}`, {
       headers: getHeaders(options),
     })
+
     info.login = data.items[0].login
   }
   catch {}
@@ -85,6 +89,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
       const data = await $fetch(`https://${options.baseUrlApi}/repos/${options.repo}/commits/${info.commits[0]}`, {
         headers: getHeaders(options),
       })
+
       info.login = data.author.login
     }
     catch {}
@@ -95,12 +100,15 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
 
 export async function resolveAuthors(commits: Commit[], options: ChangelogOptions) {
   const map = new Map<string, AuthorInfo>()
-  commits.forEach((commit) => {
+
+  for (const commit of commits) {
     commit.resolvedAuthors = commit.authors.map((a, idx) => {
       if (!a.email || !a.name)
         return null
+
       if (excludeAuthors.some(re => re.test(a.name)))
         return null
+
       if (!map.has(a.email)) {
         map.set(a.email, {
           commits: [],
@@ -108,6 +116,7 @@ export async function resolveAuthors(commits: Commit[], options: ChangelogOption
           email: a.email,
         })
       }
+
       const info = map.get(a.email)!
 
       // record commits only for the first author
@@ -116,25 +125,30 @@ export async function resolveAuthors(commits: Commit[], options: ChangelogOption
 
       return info
     }).filter(notNullish)
-  })
+  }
+
   const authors = Array.from(map.values())
-  const resolved = await Promise.all(authors.map(info => resolveAuthorInfo(options, info)))
+  const resolved = await Promise.all(authors.map(async info => resolveAuthorInfo(options, info)))
 
   const loginSet = new Set<string>()
   const nameSet = new Set<string>()
+
   return resolved
     .sort((a, b) => (a.login || a.name).localeCompare(b.login || b.name))
     .filter((i) => {
       if (i.login && loginSet.has(i.login))
         return false
+
       if (i.login) {
         loginSet.add(i.login)
       }
       else {
         if (nameSet.has(i.name))
           return false
+
         nameSet.add(i.name)
       }
+
       return true
     })
 }
@@ -144,6 +158,7 @@ export async function hasTagOnGitHub(tag: string, options: ChangelogOptions) {
     await $fetch(`https://${options.baseUrlApi}/repos/${options.repo}/git/ref/tags/${tag}`, {
       headers: getHeaders(options),
     })
+
     return true
   }
   catch {
@@ -154,6 +169,7 @@ export async function hasTagOnGitHub(tag: string, options: ChangelogOptions) {
 export async function uploadAssets(options: ChangelogOptions, assets: string | string[]) {
   const headers = getHeaders(options)
   let assetList: string[] = []
+
   if (typeof assets === 'string') {
     assetList = assets.split(',').map(s => s.trim()).filter(Boolean)
   }
@@ -165,10 +181,12 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
 
   // Expand glob patterns to actual file paths
   const expandedAssets: string[] = []
+
   for (const pattern of assetList) {
     try {
       // Use the pattern directly without shell expansion
       const matches = await glob(pattern)
+
       if (matches.length) {
         expandedAssets.push(...matches)
       }
@@ -191,13 +209,16 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
 
   for (const asset of expandedAssets) {
     const filePath = path.resolve(asset)
+
     try {
       const fileData = await fs.readFile(filePath)
       const fileName = path.basename(filePath)
       const contentType = 'application/octet-stream'
 
       const uploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent(fileName)}`)
+
       console.log(cyan(`Uploading ${fileName}...`))
+
       try {
         await $fetch(uploadUrl, {
           method: 'POST',
