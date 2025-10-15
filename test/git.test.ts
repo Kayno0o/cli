@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { generate, getGitHubRepo } from '../src'
+import { generate, getGiteaRepo } from '../src'
 
 const COMMIT_FROM = '19cf4f84f16f1a8e1e7032bbef550c382938649d'
 const COMMIT_TO = '49b0222e8d60b7f299941def7511cee0460a8149'
@@ -98,11 +98,11 @@ it.each([
 })
 
 it('should match with current gitea repo', async () => {
-  const repo = await getGitHubRepo('gitea.com')
+  const repo = await getGiteaRepo('gitea.com')
 
   expect(repo).toContain('/changelogitea')
 })
 
 it('should throw error when baseUrl is different from git repository', async () => {
-  await expect(getGitHubRepo('custom.git.com')).rejects.toThrow('Can not parse Gitea repo from url')
+  await expect(getGiteaRepo('custom.git.com')).rejects.toThrow('Can not parse Gitea repo from url')
 })

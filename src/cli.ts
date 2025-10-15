@@ -7,7 +7,7 @@ import cac from 'cac'
 import { execa } from 'execa'
 import { version } from '../package.json'
 import { uploadAssets } from './gitea'
-import { generate, hasTagOnGitHub, isRepoShallow, sendRelease } from './index'
+import { generate, hasTagOnGitea, isRepoShallow, sendRelease } from './index'
 
 const cli = cac('changelogitea')
 
@@ -30,7 +30,7 @@ cli
   .option('--assets <paths...>', 'Files to upload as assets to the release. Use quotes to prevent shell glob expansion, e.g., "--assets \'dist/*.js\'"')
   .help()
 
-async function readTokenFromGitHubCli() {
+async function readTokenFromGiteaCli() {
   try {
     return (await execa('gh', ['auth', 'token'])).stdout.trim()
   }
@@ -42,7 +42,7 @@ async function readTokenFromGitHubCli() {
 cli
   .command('')
   .action(async (args) => {
-    const token = args.token || process.env.GITHUB_TOKEN || await readTokenFromGitHubCli()
+    const token = args.token || process.env.GITHUB_TOKEN || await readTokenFromGiteaCli()
 
     if (token) {
       args.token = token
@@ -94,7 +94,7 @@ cli
         return
       }
 
-      if (!await hasTagOnGitHub(config.to, config)) {
+      if (!await hasTagOnGitea(config.to, config)) {
         console.error(yellow(`Current ref "${bold(config.to)}" is not available as tags on Gitea. Release skipped.`))
         process.exitCode = 1
         printWebUrl()

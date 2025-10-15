@@ -2,12 +2,12 @@ import type { ChangelogConfig, GitCommit, RepoConfig } from 'changelogen'
 
 export type ChangelogenOptions = ChangelogConfig
 
-export interface GitHubRepo {
+export interface GiteaRepo {
   owner: string
   repo: string
 }
 
-export interface GitHubAuth {
+export interface GiteaAuth {
   token: string
   url: string
 }

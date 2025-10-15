@@ -47,6 +47,7 @@
     "cli": "./cli.mjs"
   },
   "dependencies": {
+    "@typescript/native-preview": "^7.0.0-dev.20251015.1",
     "ansis": "^4.2.0",
     "c12": "^3.3.0",
     "cac": "^6.7.14",

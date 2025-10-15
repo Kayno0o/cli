@@ -1,5 +1,5 @@
 import type { ChangelogOptions, ResolvedChangelogOptions } from './types'
-import { getCurrentGitBranch, getFirstGitCommit, getGitHubRepo, getLastMatchingTag, getSafeTagTemplate, isPrerelease } from './git'
+import { getCurrentGitBranch, getFirstGitCommit, getGiteaRepo, getLastMatchingTag, getSafeTagTemplate, isPrerelease } from './git'
 
 export function defineConfig(config: ChangelogOptions) {
   return config
@@ -42,7 +42,7 @@ export async function resolveConfig(options: ChangelogOptions) {
     config.tag,
   ) || await getFirstGitCommit()
   // @ts-expect-error backward compatibility
-  config.repo ||= config.gitea || await getGitHubRepo(config.baseUrl)
+  config.repo ||= config.gitea || await getGiteaRepo(config.baseUrl)
   // @ts-expect-error backward compatibility
   config.releaseRepo ||= config.releaseGithub || config.repo
   config.prerelease ??= isPrerelease(config.to)

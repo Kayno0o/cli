@@ -1,6 +1,6 @@
 import semver from 'semver'
 
-export async function getGitHubRepo(baseUrl: string) {
+export async function getGiteaRepo(baseUrl: string) {
   const url = await execCommand('git', ['config', '--get', 'remote.origin.url'])
 
   // Remove .git suffix if present
