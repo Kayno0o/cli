@@ -155,6 +155,7 @@ export async function resolveAuthors(commits: Commit[], options: ChangelogOption
 
 export async function hasTagOnGitea(tag: string, options: ChangelogOptions) {
   try {
+    console.log(`https://${options.baseUrlApi}/repos/${options.repo}/tags/${tag}`)
     await $fetch(`https://${options.baseUrlApi}/repos/${options.repo}/tags/${tag}`, {
       headers: getHeaders(options),
     })
