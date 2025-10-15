@@ -43,7 +43,8 @@
     "build": "rm -rf ./dist && unbuild",
     "lint:fix": "bunx --bun eslint --fix",
     "lint": "bunx --bun eslint",
-    "test": "vitest"
+    "test": "vitest",
+    "cli": "./cli.mjs"
   },
   "dependencies": {
     "ansis": "^4.2.0",
