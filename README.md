@@ -67,4 +67,4 @@ I used to use [`conventional-github-releaser`](https://github.com/conventional-c
 
 ## License
 
-[MIT](./LICENSE) License © 2022 [Anthony Fu](https://git.kaynooo.fr/kaynooo)
+[MIT](./LICENSE) License © 2022 [Anthony Fu](https://github.com/antfu)
