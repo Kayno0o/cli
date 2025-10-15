@@ -1,18 +1,16 @@
 import semver from 'semver'
 
-export async function getGiteaRepo(baseUrl: string) {
+export async function getGiteaRepo() {
   const url = await execCommand('git', ['config', '--get', 'remote.origin.url'])
   const cleanUrl = url.replace(/\.git$/, '')
 
-  const escapedBaseUrl = baseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-  const standardRegex = new RegExp(`${escapedBaseUrl}[/:](\\w[\\w.-]+)/(\\w[\\w.-]+)$`, 'i')
-  let match = standardRegex.exec(cleanUrl)
+  const sshRegex = /(?:ssh:\/\/[^/]+\/|git@[^:]+:)(\w[\w.-]+)\/(\w[\w.-]+)$/i
+  let match = sshRegex.exec(cleanUrl)
 
   if (!match) {
-    const sshRegex = /ssh:\/\/[^/]+\/(\w[\w.-]+)\/(\w[\w.-]+)$/i
+    const httpsRegex = /https?:\/\/[^/]+\/(\w[\w.-]+)\/(\w[\w.-]+)$/i
 
-    match = sshRegex.exec(cleanUrl)
+    match = httpsRegex.exec(cleanUrl)
   }
 
   if (!match)

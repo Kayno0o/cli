@@ -30,6 +30,15 @@ it('parse', async () => {
       },
       "to": "49b0222e8d60b7f299941def7511cee0460a8149",
       "types": {
+        "build": {
+          "title": "📦 Build",
+        },
+        "ci": {
+          "title": "🤖 CI",
+        },
+        "docs": {
+          "title": "📖 Documentation",
+        },
         "feat": {
           "title": "🚀 Features",
         },
@@ -38,6 +47,18 @@ it('parse', async () => {
         },
         "perf": {
           "title": "🏎 Performance",
+        },
+        "refactor": {
+          "title": "💅 Refactors",
+        },
+        "style": {
+          "title": "🎨 Styles",
+        },
+        "test": {
+          "title": "✅ Tests",
+        },
+        "types": {
+          "title": "🌊 Types",
         },
       },
     }
@@ -98,7 +119,7 @@ it.each([
 })
 
 it('should match with current gitea repo', async () => {
-  const repo = await getGiteaRepo('gitea.com')
+  const repo = await getGiteaRepo()
 
   expect(repo).toContain('/changelogitea')
 })

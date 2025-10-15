@@ -15,7 +15,6 @@ const defaultConfig = {
     docs: { title: '📖 Documentation' },
     build: { title: '📦 Build' },
     types: { title: '🌊 Types' },
-    chore: { title: '🏡 Chore' },
     test: { title: '✅ Tests' },
     style: { title: '🎨 Styles' },
     ci: { title: '🤖 CI' },
@@ -50,7 +49,7 @@ export async function resolveConfig(options: ChangelogOptions) {
     config.tag,
   ) || await getFirstGitCommit()
   // @ts-expect-error backward compatibility
-  config.repo ||= config.gitea || await getGiteaRepo(config.baseUrl)
+  config.repo ||= config.gitea || await getGiteaRepo()
   // @ts-expect-error backward compatibility
   config.releaseRepo ||= config.releaseGithub || config.repo
   config.prerelease ??= isPrerelease(config.to)
