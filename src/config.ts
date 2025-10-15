@@ -31,8 +31,8 @@ export async function resolveConfig(options: ChangelogOptions) {
     // eslint-disable-next-line github/no-then
   }).then(r => r.config || defaultConfig)
 
+  config.baseUrlApi ??= config.baseUrl ? `${config.baseUrl}/api/v1` : 'gitea.com/api/v1'
   config.baseUrl ??= 'gitea.com'
-  config.baseUrlApi ??= 'api.gitea.com'
   config.to ||= await getCurrentGitBranch()
   config.tagFilter ??= () => true
   config.tag = getSafeTagTemplate(config.tag ?? defaultConfig.tag)

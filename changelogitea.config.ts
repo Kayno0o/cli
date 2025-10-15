@@ -1,7 +1,5 @@
-import { defineConfig } from './src/config'
+import type { ChangelogOptions } from './src'
 
-export default defineConfig({
+export default {
   baseUrl: 'git.kaynooo.fr',
-  baseUrlApi: 'git.kaynooo.fr/api/v1',
-  repo: 'kaynooo/changelogitea',
-})
+} satisfies ChangelogOptions

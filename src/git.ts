@@ -2,28 +2,15 @@ import semver from 'semver'
 
 export async function getGiteaRepo(baseUrl: string) {
   const url = await execCommand('git', ['config', '--get', 'remote.origin.url'])
-
-  // Remove .git suffix if present
   const cleanUrl = url.replace(/\.git$/, '')
 
   const escapedBaseUrl = baseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-  // Handle different URL formats:
-  // - https://gitea.com/user/repo
-  // - git@gitea.com:user/repo
-  // - ssh://gitea/user/repo (without domain - only matches if URL doesn't contain the full baseUrl)
-  // - ssh://gitea.com/user/repo (with domain)
-
-  // Try standard format first: https://baseUrl/user/repo or git@baseUrl:user/repo
   const standardRegex = new RegExp(`${escapedBaseUrl}[/:](\\w[\\w.-]+)/(\\w[\\w.-]+)$`, 'i')
   let match = standardRegex.exec(cleanUrl)
 
-  // Try SSH without domain format: ssh://hostname/user/repo
-  // Only use this if the standard regex didn't match (meaning baseUrl might be shortened)
   if (!match) {
-    // Extract first part of baseUrl (e.g., 'gitea' from 'gitea.com')
-    const baseHostname = baseUrl.split('.')[0]
-    const sshRegex = new RegExp(`ssh://${baseHostname}/(\\w[\\w.-]+)/(\\w[\\w.-]+)$`, 'i')
+    const sshRegex = /ssh:\/\/[^/]+\/(\w[\w.-]+)\/(\w[\w.-]+)$/i
 
     match = sshRegex.exec(cleanUrl)
   }
