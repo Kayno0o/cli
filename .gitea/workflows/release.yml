@@ -10,7 +10,7 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: debian
     steps:
       - name: Install git before checkout
         run: apt-get update && apt-get install -y git unzip
