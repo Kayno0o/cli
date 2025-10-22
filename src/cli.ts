@@ -2,7 +2,7 @@
 
 import fs from 'node:fs/promises'
 import process from 'node:process'
-import { blue, bold, cyan, dim, red, yellow } from 'ansis'
+import { colors } from '@kaynooo/utils/tools'
 import cac from 'cac'
 import { execa } from 'execa'
 import { version } from '../package.json'
@@ -52,28 +52,28 @@ cli
 
     try {
       console.log()
-      console.log(dim(`changelo${bold('gitea')} `) + dim(`v${version}`))
+      console.log(colors.dim(`changelo${colors.bold('gitea')} `) + colors.dim(`v${version}`))
 
       const { config, md, commits } = await generate(args)
 
       webUrl = `https://${config.baseUrl}/${config.releaseRepo}/releases/new?title=${encodeURIComponent(String(config.name || config.to))}&body=${encodeURIComponent(String(md))}&tag=${encodeURIComponent(String(config.to))}&prerelease=${config.prerelease}`
 
-      console.log(cyan(config.from) + dim(' -> ') + blue(config.to) + dim(` (${commits.length} commits)`))
-      console.log(dim('--------------'))
+      console.log(colors.cyan(config.from) + colors.dim(' -> ') + colors.blue(config.to) + colors.dim(` (${commits.length} commits)`))
+      console.log(colors.dim('--------------'))
       console.log()
       console.log(md.replace(/&nbsp;/g, ''))
       console.log()
-      console.log(dim('--------------'))
+      console.log(colors.dim('--------------'))
 
       function printWebUrl() {
         console.log()
-        console.error(yellow('Using the following link to create it manually:'))
-        console.error(yellow(webUrl))
+        console.error(colors.yellow('Using the following link to create it manually:'))
+        console.error(colors.yellow(webUrl))
         console.log()
       }
 
       if (config.dry) {
-        console.log(yellow('Dry run. Release skipped.'))
+        console.log(colors.yellow('Dry run. Release skipped.'))
         printWebUrl()
 
         return
@@ -81,13 +81,13 @@ cli
 
       if (typeof config.output === 'string') {
         await fs.writeFile(config.output, md, 'utf-8')
-        console.log(yellow(`Saved to ${config.output}`))
+        console.log(colors.yellow(`Saved to ${config.output}`))
 
         return
       }
 
       if (!config.token) {
-        console.error(red('No Gitea token found, specify it via GITHUB_TOKEN env. Release skipped.'))
+        console.error(colors.red('No Gitea token found, specify it via GITHUB_TOKEN env. Release skipped.'))
         process.exitCode = 1
         printWebUrl()
 
@@ -95,7 +95,7 @@ cli
       }
 
       if (!await hasTagOnGitea(config.to, config)) {
-        console.error(yellow(`Current ref "${bold(config.to)}" is not available as tags on Gitea. Release skipped.`))
+        console.error(colors.yellow(`Current ref "${colors.bold(config.to)}" is not available as tags on Gitea. Release skipped.`))
         process.exitCode = 1
         printWebUrl()
 
@@ -103,7 +103,7 @@ cli
       }
 
       if (!commits.length && await isRepoShallow()) {
-        console.error(yellow('The repo seems to be clone shallowly, which make changelog failed to generate. You might want to specify `fetch-depth: 0` in your CI config.'))
+        console.error(colors.yellow('The repo seems to be clone shallowly, which make changelog failed to generate. You might want to specify `fetch-depth: 0` in your CI config.'))
         process.exitCode = 1
         printWebUrl()
 
@@ -117,15 +117,15 @@ cli
       }
     }
     catch (e: any) {
-      console.error(red(String(e)))
+      console.error(colors.red(String(e)))
 
       if (e?.stack)
-        console.error(dim(e.stack?.split('\n').slice(1).join('\n')))
+        console.error(colors.dim(e.stack?.split('\n').slice(1).join('\n')))
 
       if (webUrl) {
         console.log()
-        console.error(red('Failed to create the release. Using the following link to create it manually:'))
-        console.error(yellow(webUrl))
+        console.error(colors.red('Failed to create the release. Using the following link to create it manually:'))
+        console.error(colors.yellow(webUrl))
         console.log()
       }
 

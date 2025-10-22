@@ -10,7 +10,10 @@ export default defineBuildConfig({
   rollup: {
     emitCJS: true,
     inlineDependencies: [
-      '@antfu/utils',
+      '@kaynooo/utils',
+      'ofetch',
+      'destr',
+      'ufo',
     ],
   },
 })

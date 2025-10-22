@@ -1,6 +1,5 @@
 import type { Reference } from 'changelogen'
 import type { Commit, ResolvedChangelogOptions } from './types'
-import { partition } from '@antfu/utils'
 import { convert } from 'convert-gitmoji'
 
 const emojisRE = /([\u2700-\u27BF\uE000-\uF8FF\u2011-\u26FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|\uD83E[\uDD10-\uDDFF])/g
@@ -97,7 +96,11 @@ function formatSection(commits: Commit[], sectionName: string, options: Resolved
 export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOptions) {
   const lines: string[] = []
 
-  const [breaking, changes] = partition(commits, c => c.isBreaking)
+  const [breaking, changes] = commits.reduce((curr, c) => {
+    curr[Number(!c.isBreaking)].push(c)
+
+    return curr
+  }, [[], []] as [Commit[], Commit[]])
 
   const group = groupBy(changes, 'type')
 

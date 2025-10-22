@@ -1,11 +1,10 @@
 import type { AuthorInfo, ChangelogOptions, Commit } from './types'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { notNullish } from '@kaynooo/utils'
 
-import { notNullish } from '@antfu/utils'
-import { cyan, green, red } from 'ansis'
+import { colors } from '@kaynooo/utils/tools'
 import { $fetch } from 'ofetch'
-import { glob } from 'tinyglobby'
 
 export async function sendRelease(
   options: ChangelogOptions,
@@ -36,7 +35,7 @@ export async function sendRelease(
     tag_name: options.to,
   }
 
-  console.log(cyan(method === 'POST'
+  console.log(colors.cyan(method === 'POST'
     ? 'Creating release notes...'
     : 'Updating release notes...'),
   )
@@ -46,7 +45,7 @@ export async function sendRelease(
     headers,
   })
 
-  console.log(green(`Released on ${res.html_url}`))
+  console.log(colors.green(`Released on ${res.html_url}`))
 }
 
 function getHeaders(options: ChangelogOptions) {
@@ -186,7 +185,8 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
   for (const pattern of assetList) {
     try {
       // Use the pattern directly without shell expansion
-      const matches = await glob(pattern)
+      const glob = new Bun.Glob(pattern)
+      const matches = Array.from(glob.scanSync())
 
       if (matches.length) {
         expandedAssets.push(...matches)
@@ -197,7 +197,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
       }
     }
     catch (error) {
-      console.error(red(`Failed to process glob pattern "${pattern}": ${error}`))
+      console.error(colors.red(`Failed to process glob pattern "${pattern}": ${error}`))
       // Keep the original pattern as fallback
       expandedAssets.push(pattern)
     }
@@ -218,7 +218,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
 
       const uploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent(fileName)}`)
 
-      console.log(cyan(`Uploading ${fileName}...`))
+      console.log(colors.cyan(`Uploading ${fileName}...`))
 
       try {
         await $fetch(uploadUrl, {
@@ -229,14 +229,14 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
           },
           body: fileData,
         })
-        console.log(green(`Uploaded ${fileName} successfully.`))
+        console.log(colors.green(`Uploaded ${fileName} successfully.`))
       }
       catch (error) {
-        console.error(red(`Failed to upload ${fileName}: ${error}`))
+        console.error(colors.red(`Failed to upload ${fileName}: ${error}`))
       }
     }
     catch (error) {
-      console.error(red(`Failed to read file ${filePath}: ${error}`))
+      console.error(colors.red(`Failed to read file ${filePath}: ${error}`))
     }
   }
 }
