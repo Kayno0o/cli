@@ -13,8 +13,8 @@ it('parse', async () => {
 
   expect(config).toMatchInlineSnapshot(`
     {
-      "baseUrl": "gitea.com",
-      "baseUrlApi": "gitea.com/api/v1",
+      "baseUrl": "git.kaynooo.fr",
+      "baseUrlApi": "git.kaynooo.fr/api/v1",
       "capitalize": true,
       "contributors": true,
       "from": "19cf4f84f16f1a8e1e7032bbef550c382938649d",
@@ -66,36 +66,36 @@ it('parse', async () => {
   expect(md.replace(/&nbsp;/g, ' ').replace(/ +/g, ' ')).toMatchInlineSnapshot(`
     "### Breaking Changes
 
-    - **cli**: Rename \`groupByScope\` to \`group\` - by **Enzo Innocenzi** in https://gitea.com/kaynooo/changelogitea/issues/22 [<samp>(89282)</samp>](https://gitea.com/kaynooo/changelogitea/commit/8928229)
+    - **cli**: Rename \`groupByScope\` to \`group\` - by **Enzo Innocenzi** in [#22](https://git.kaynooo.fr/kaynooo/changelogitea/issues/22) [(89282)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/8928229)
 
     ### Features
 
-    - Inline contributors - by **Anthony Fu** [<samp>(e4044)</samp>](https://gitea.com/kaynooo/changelogitea/commit/e404493)
-    - Throw on shallow repo - by **Anthony Fu** [<samp>(f1c1f)</samp>](https://gitea.com/kaynooo/changelogitea/commit/f1c1fad)
-    - Improve how references are displayed - by **Enzo Innocenzi** in https://gitea.com/kaynooo/changelogitea/issues/19 [<samp>(cdf8f)</samp>](https://gitea.com/kaynooo/changelogitea/commit/cdf8fe5)
-    - Support \`--no-emoji\` - by **Enzo Innocenzi** in https://gitea.com/kaynooo/changelogitea/issues/20 [<samp>(e94ba)</samp>](https://gitea.com/kaynooo/changelogitea/commit/e94ba4a)
+    - Inline contributors - by **Anthony Fu** [(e4044)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/e404493)
+    - Throw on shallow repo - by **Anthony Fu** [(f1c1f)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/f1c1fad)
+    - Improve how references are displayed - by **Enzo Innocenzi** in [#19](https://git.kaynooo.fr/kaynooo/changelogitea/issues/19) [(cdf8f)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/cdf8fe5)
+    - Support \`--no-emoji\` - by **Enzo Innocenzi** in [#20](https://git.kaynooo.fr/kaynooo/changelogitea/issues/20) [(e94ba)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/e94ba4a)
     - **contributors**:
-     - Improve author list - by **Enzo Innocenzi** in https://gitea.com/kaynooo/changelogitea/issues/18 [<samp>(8d8d9)</samp>](https://gitea.com/kaynooo/changelogitea/commit/8d8d914)
+     - Improve author list - by **Enzo Innocenzi** in [#18](https://git.kaynooo.fr/kaynooo/changelogitea/issues/18) [(8d8d9)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/8d8d914)
     - **style**:
-     - Group scopes only when one of the scope have multiple commits - by **Anthony Fu** [<samp>(312f7)</samp>](https://gitea.com/kaynooo/changelogitea/commit/312f796)
-     - Use \`<sup>\` for author info - by **Anthony Fu** [<samp>(b51c0)</samp>](https://gitea.com/kaynooo/changelogitea/commit/b51c075)
-     - Limit sha to 5 letters and make monospace - by **Anthony Fu** [<samp>(b07ad)</samp>](https://gitea.com/kaynooo/changelogitea/commit/b07ade8)
+     - Group scopes only when one of the scope have multiple commits - by **Anthony Fu** [(312f7)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/312f796)
+     - Use \`<sup>\` for author info - by **Anthony Fu** [(b51c0)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/b51c075)
+     - Limit sha to 5 letters and make monospace - by **Anthony Fu** [(b07ad)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/b07ade8)
 
     ### Bug Fixes
 
-    - Use \`creatordate\` to sort tags - by **Frost Ming** in https://gitea.com/kaynooo/changelogitea/issues/17 [<samp>(5666d)</samp>](https://gitea.com/kaynooo/changelogitea/commit/5666d8d)
-    - Config defaults - by **Anthony Fu** [<samp>(9232f)</samp>](https://gitea.com/kaynooo/changelogitea/commit/9232fdf)
-    - Use \`replace\` instead of \`replaceAll\` for Node 14 - by **Anthony Fu** [<samp>(5154e)</samp>](https://gitea.com/kaynooo/changelogitea/commit/5154e78)
-    - **cli**: Add missing \`--group\` option - by **Enzo Innocenzi** in https://gitea.com/kaynooo/changelogitea/issues/21 [<samp>(22800)</samp>](https://gitea.com/kaynooo/changelogitea/commit/228001d)
-    - **style**: Revert \`<sup>\` style - by **Anthony Fu** [<samp>(742ae)</samp>](https://gitea.com/kaynooo/changelogitea/commit/742ae0b)
+    - Use \`creatordate\` to sort tags - by **Frost Ming** in [#17](https://git.kaynooo.fr/kaynooo/changelogitea/issues/17) [(5666d)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/5666d8d)
+    - Config defaults - by **Anthony Fu** [(9232f)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/9232fdf)
+    - Use \`replace\` instead of \`replaceAll\` for Node 14 - by **Anthony Fu** [(5154e)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/5154e78)
+    - **cli**: Add missing \`--group\` option - by **Enzo Innocenzi** in [#21](https://git.kaynooo.fr/kaynooo/changelogitea/issues/21) [(22800)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/228001d)
+    - **style**: Revert \`<sup>\` style - by **Anthony Fu** [(742ae)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/742ae0b)
 
-    ##### [View changes on Gitea](https://gitea.com/kaynooo/changelogitea/compare/19cf4f84f16f1a8e1e7032bbef550c382938649d...49b0222e8d60b7f299941def7511cee0460a8149)"
+    ### [View changes on Gitea](https://git.kaynooo.fr/kaynooo/changelogitea/compare/19cf4f84f16f1a8e1e7032bbef550c382938649d...49b0222e8d60b7f299941def7511cee0460a8149)"
   `)
 })
 
 it.each([
   { baseUrl: undefined, baseUrlApi: undefined, repo: undefined },
-  { baseUrl: 'test.gitea.com', baseUrlApi: 'api.test.gitea.com', repo: 'user/changelogitea' },
+  { baseUrl: 'test.git.kaynooo.fr', baseUrlApi: 'api.test.git.kaynooo.fr', repo: 'user/changelogitea' },
 ])('should generate config while baseUrl is set to $baseUrl', async (proposedConfig) => {
   const { config, md } = await generate({
     ...proposedConfig,
@@ -108,8 +108,8 @@ it.each([
   }
   else {
     expect(config).toEqual(expect.objectContaining({
-      baseUrl: 'gitea.com',
-      baseUrlApi: 'gitea.com/api/v1',
+      baseUrl: 'git.kaynooo.fr',
+      baseUrlApi: 'git.kaynooo.fr/api/v1',
     }))
   }
 
