@@ -18,9 +18,9 @@ function formatReferences(references: Reference[], baseUrl: string, gitea: strin
         return ref.value
 
       if (ref.type === 'pull-request' || ref.type === 'issue')
-        return `https://${baseUrl}/${gitea}/issues/${ref.value.slice(1)}`
+        return `[${ref.value}](https://${baseUrl}/${gitea}/issues/${ref.value.slice(1)})`
 
-      return `[<samp>(${ref.value.slice(0, 5)})</samp>](https://${baseUrl}/${gitea}/commit/${ref.value})`
+      return `[(${ref.value.slice(0, 5)})](https://${baseUrl}/${gitea}/commit/${ref.value})`
     })
 
   const referencesString = join(refs).trim()
@@ -41,7 +41,7 @@ function formatLine(commit: Commit, options: ResolvedChangelogOptions) {
 
   let refs = [authors, prRefs, hashRefs].filter(i => i?.trim()).join(' ')
 
-  refs &&= `&nbsp;-&nbsp; ${refs}`
+  refs &&= `- ${refs}`
 
   const description = options.capitalize ? capitalize(commit.description) : commit.description
 
@@ -52,7 +52,7 @@ function formatTitle(name: string, options: ResolvedChangelogOptions) {
   if (!options.emoji)
     name = name.replace(emojisRE, '')
 
-  return `### &nbsp;&nbsp;&nbsp;${name.trim()}`
+  return `### ${name.trim()}`
 }
 
 function formatSection(commits: Commit[], sectionName: string, options: ResolvedChangelogOptions) {
@@ -119,7 +119,7 @@ export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOp
 
   const url = `https://${options.baseUrl}/${options.repo}/compare/${options.from}...${options.to}`
 
-  lines.push('', `##### &nbsp;&nbsp;&nbsp;&nbsp;[View changes on Gitea](${url})`)
+  lines.push('', `##### [View changes on Gitea](${url})`)
 
   return convert(lines.join('\n').trim(), true)
 }
