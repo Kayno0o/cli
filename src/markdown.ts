@@ -119,7 +119,7 @@ export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOp
 
   const url = `https://${options.baseUrl}/${options.repo}/compare/${options.from}...${options.to}`
 
-  lines.push('', `##### [View changes on Gitea](${url})`)
+  lines.push('', `### [View changes on Gitea](${url})`)
 
   return convert(lines.join('\n').trim(), true)
 }
