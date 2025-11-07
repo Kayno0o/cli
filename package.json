@@ -31,7 +31,7 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "bin": {
-    "changelogitea": "cli.mjs"
+    "changelogitea": "./dist/cli.mjs"
   },
   "files": [
     "*.mjs",
