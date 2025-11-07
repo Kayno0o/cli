@@ -141,9 +141,9 @@
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
-    "@kaynooo/eslint": ["@kaynooo/eslint@1.4.4", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/1.4.4/eslint-1.4.4.tgz", { "dependencies": { "lodash": "^4.17.21" }, "peerDependencies": { "@antfu/eslint-config": "^6.0.0", "eslint": "^9.37.0", "eslint-plugin-better-tailwindcss": "^3.7.10", "eslint-plugin-format": "^1.0.2", "eslint-plugin-github": "^6.0.0" }, "bin": { "eslint": "bin/index.js" } }, "sha512-iQc4EE1+S9pMU0VhPJ91fVlOnb5uO8+eIVbSFMCUQZ5BW5THho8HPJZZa7huOOuthufZDmPahxw2pE4kKNn97g=="],
+    "@kaynooo/eslint": ["@kaynooo/eslint@1.5.3", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/1.5.3/eslint-1.5.3.tgz", { "dependencies": { "lodash": "^4.17.21" }, "peerDependencies": { "@antfu/eslint-config": "^6.2.0", "eslint": "^9.39.1", "eslint-plugin-better-tailwindcss": "^3.7.10", "eslint-plugin-format": "^1.0.2", "eslint-plugin-github": "^6.0.0" } }, "sha512-BrLYr5+o11Ke6oxxhDBjvK8A3jIczcW6kLie5YO3y8FCFcSf0mdXMVuGovqx64msFfRycSRxOXMgRlhF/0mlWw=="],
 
-    "@kaynooo/utils": ["@kaynooo/utils@1.6.15", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Futils/-/1.6.15/utils-1.6.15.tgz", { "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-MO5v+ijJOxBNp/BzEXVuRLWa9f2m+3wOEsXNKgiTqOArhQNCSWcrMCfDNYLwEXHxuYY/Oj1hxVikgKebJxhfSw=="],
+    "@kaynooo/utils": ["@kaynooo/utils@1.7.2", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Futils/-/1.7.2/utils-1.7.2.tgz", { "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-Iq8Mu5/uEFOtMYBsuv6gYe99whe3wnTRs8b69vK2u/6D0qq2RA2XoOT2i8NpwInW5J9fnFp4N87pkiRuYIzp3A=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 
