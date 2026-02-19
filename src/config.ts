@@ -39,7 +39,7 @@ export async function resolveConfig(options: ChangelogOptions) {
   }).then(r => r.config || defaultConfig)
 
   config.baseUrlApi ??= config.baseUrl ? `${config.baseUrl}/api/v1` : 'gitea.com/api/v1'
-  config.baseUrl ??= 'gitea.com'
+  config.baseUrl ??= 'git.kaynooo.fr'
   config.to ||= await getCurrentGitBranch()
   config.tagFilter ??= () => true
   config.tag = getSafeTagTemplate(config.tag ?? defaultConfig.tag)
