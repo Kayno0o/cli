@@ -38,8 +38,8 @@ export async function resolveConfig(options: ChangelogOptions) {
     // eslint-disable-next-line github/no-then
   }).then(r => r.config || defaultConfig)
 
-  config.baseUrlApi ??= config.baseUrl ? `${config.baseUrl}/api/v1` : 'gitea.com/api/v1'
   config.baseUrl ??= 'git.kaynooo.fr'
+  config.baseUrlApi ??= config.baseUrl ? `${config.baseUrl}/api/v1` : 'git.kaynooo.fr/api/v1'
   config.to ||= await getCurrentGitBranch()
   config.tagFilter ??= () => true
   config.tag = getSafeTagTemplate(config.tag ?? defaultConfig.tag)

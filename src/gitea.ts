@@ -70,7 +70,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
     return info
 
   try {
-    // https://docs.gitea.com/en/search-gitea/searching-on-gitea/searching-users#search-only-users-or-organizations
+    // https://docs.git.kaynooo.fr/en/search-gitea/searching-on-gitea/searching-users#search-only-users-or-organizations
     const q = encodeURIComponent(`${info.email} type:user in:email`)
     const data = await $fetch(`https://${options.baseUrlApi}/search/users?q=${q}`, {
       headers: getHeaders(options),

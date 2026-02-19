@@ -66,12 +66,12 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   emoji?: boolean
   /**
    * Gitea base url
-   * @default gitea.com
+   * @default git.kaynooo.fr
    */
   baseUrl?: string
   /**
    * Gitea base API url
-   * @default gitea.com/api/v1
+   * @default git.kaynooo.fr/api/v1
    */
   baseUrlApi?: string
 
