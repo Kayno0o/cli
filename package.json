@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/changelogitea",
   "type": "module",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Generate changelog for Gitea.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
