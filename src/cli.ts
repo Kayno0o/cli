@@ -2,7 +2,7 @@
 
 import fs from 'node:fs/promises'
 import process from 'node:process'
-import { colors } from '@kaynooo/utils/tools'
+import { colors } from '@kaynooo/utils/tools/colors'
 import cac from 'cac'
 import { execa } from 'execa'
 import { version } from '../package.json'

@@ -5,7 +5,7 @@
     "": {
       "name": "@kaynooo/changelogitea",
       "dependencies": {
-        "@kaynooo/utils": "^1.8.1",
+        "@kaynooo/utils": "^1.8.2",
         "@typescript/native-preview": "^7.0.0-dev.20260225.1",
         "c12": "^3.3.3",
         "cac": "^6.7.14",
@@ -144,7 +144,7 @@
 
     "@kaynooo/eslint": ["@kaynooo/eslint@1.5.7", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/1.5.7/eslint-1.5.7.tgz", { "dependencies": { "lodash": "^4.17.23" }, "peerDependencies": { "@antfu/eslint-config": "^7.4.3", "eslint": "^9", "eslint-plugin-better-tailwindcss": "^4.2.0", "eslint-plugin-format": "^1.4.0", "eslint-plugin-github": "^6.0.0" } }, "sha512-8LMiNv0lHpzSvQ05XlEccLhZlC8GTkkl5m7zQN5SLpHCjjNTDWZdXNq3jk0JF+6iFp7uFlYFf7RgbGW63qwzIQ=="],
 
-    "@kaynooo/utils": ["@kaynooo/utils@1.8.1", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Futils/-/1.8.1/utils-1.8.1.tgz", { "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-EbkYNC1ZJ9rjFg55S76DLvYwBopzXs0a6TAqKSZiyXg7CSf+FvineCuqgsXQKmzbdxwHbuH/eQS74jNhvEXHrg=="],
+    "@kaynooo/utils": ["@kaynooo/utils@1.8.2", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Futils/-/1.8.2/utils-1.8.2.tgz", { "peerDependencies": { "typescript": "^5.0.0" } }, "sha512-KGEfe/Z/hvUrMajluiSBJDGyJ0Jzo7V+KAkYIVOB3qVoqpdKXnPLXcqO3PphIfw4D0okE8Ar31lC885z6CCtHw=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 

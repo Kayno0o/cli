@@ -1,9 +1,8 @@
 import type { AuthorInfo, ChangelogOptions, Commit } from './types'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { notNullish } from '@kaynooo/utils'
+import { colors, notNullish } from '@kaynooo/utils'
 
-import { colors } from '@kaynooo/utils/tools'
 import { $fetch } from 'ofetch'
 
 export async function sendRelease(
