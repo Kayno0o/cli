@@ -224,11 +224,14 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
       console.log(colors.cyan(`Uploading ${fileName}...`))
 
       try {
-        await $fetch(uploadUrl, {
+        const res = await fetch(uploadUrl, {
           method: 'POST',
           headers,
           body: form,
         })
+        if (!res.ok) {
+          throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
+        }
         console.log(colors.green(`Uploaded ${fileName} successfully.`))
       }
       catch (error) {
