@@ -202,7 +202,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
     }
   }
 
-  // Get the release by tag to obtain the upload_url
+  // Get the release by tag to obtain its id
   const release = await $fetch(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
     headers,
   })
@@ -213,20 +213,20 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
     try {
       const fileData = await fs.readFile(filePath)
       const fileName = path.basename(filePath)
-      const contentType = 'application/octet-stream'
 
-      const uploadUrl = release.upload_url.replace('{?name,label}', `?name=${encodeURIComponent(fileName)}`)
+      // Gitea expects multipart/form-data with an `attachment` field
+      const form = new FormData()
+      form.append('attachment', new Blob([fileData]), fileName)
+
+      const uploadUrl = `https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`
 
       console.log(colors.cyan(`Uploading ${fileName}...`))
 
       try {
         await $fetch(uploadUrl, {
           method: 'POST',
-          headers: {
-            ...headers,
-            'Content-Type': contentType,
-          },
-          body: fileData,
+          headers,
+          body: form,
         })
         console.log(colors.green(`Uploaded ${fileName} successfully.`))
       }
