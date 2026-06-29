@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "lib": ["ESNext", "DOM"],
+    "types": ["bun"],
     "moduleDetection": "force",
     "experimentalDecorators": true,
     "module": "Preserve",

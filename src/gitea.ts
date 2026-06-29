@@ -216,6 +216,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
 
       // Gitea expects multipart/form-data with an `attachment` field
       const form = new FormData()
+
       form.append('attachment', new Blob([fileData]), fileName)
 
       const uploadUrl = `https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`

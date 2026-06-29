@@ -35,7 +35,7 @@ export async function resolveConfig(options: ChangelogOptions) {
     defaults: defaultConfig,
     overrides: options,
     packageJson: 'changelogitea',
-    // eslint-disable-next-line github/no-then
+    // eslint-disable-next-line kaynooo/no-then
   }).then(r => r.config || defaultConfig)
 
   config.baseUrl ??= 'git.kaynooo.fr'
