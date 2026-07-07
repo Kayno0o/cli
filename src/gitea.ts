@@ -1,9 +1,15 @@
 import type { AuthorInfo, ChangelogOptions, Commit } from './types'
-import fs from 'node:fs/promises'
 import path from 'node:path'
 import { colors, notNullish } from '@kaynooo/utils'
 
-import { $fetch } from 'ofetch'
+async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init)
+
+  if (!res.ok)
+    throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
+
+  return res.json() as Promise<T>
+}
 
 export async function sendRelease(
   options: ChangelogOptions,
@@ -14,7 +20,7 @@ export async function sendRelease(
   let method = 'POST'
 
   try {
-    const exists = await $fetch(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
+    const exists = await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
       headers,
     })
 
@@ -38,10 +44,10 @@ export async function sendRelease(
     ? 'Creating release notes...'
     : 'Updating release notes...'),
   )
-  const res = await $fetch(url, {
+  const res = await api(url, {
     method,
     body: JSON.stringify(body),
-    headers,
+    headers: { ...headers, 'content-type': 'application/json' },
   })
 
   console.log(colors.green(`Released on ${res.html_url}`))
@@ -71,7 +77,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
   try {
     // https://docs.git.kaynooo.fr/en/search-gitea/searching-on-gitea/searching-users#search-only-users-or-organizations
     const q = encodeURIComponent(`${info.email} type:user in:email`)
-    const data = await $fetch(`https://${options.baseUrlApi}/search/users?q=${q}`, {
+    const data = await api(`https://${options.baseUrlApi}/search/users?q=${q}`, {
       headers: getHeaders(options),
     })
 
@@ -84,7 +90,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
 
   if (info.commits.length) {
     try {
-      const data = await $fetch(`https://${options.baseUrlApi}/repos/${options.repo}/commits/${info.commits[0]}`, {
+      const data = await api(`https://${options.baseUrlApi}/repos/${options.repo}/commits/${info.commits[0]}`, {
         headers: getHeaders(options),
       })
 
@@ -154,7 +160,7 @@ export async function resolveAuthors(commits: Commit[], options: ChangelogOption
 export async function hasTagOnGitea(tag: string, options: ChangelogOptions) {
   try {
     console.log(`checking if tag exists on https://${options.baseUrlApi}/repos/${options.repo}/tags/${tag}`)
-    await $fetch(`https://${options.baseUrlApi}/repos/${options.repo}/tags/${tag}`, {
+    await api(`https://${options.baseUrlApi}/repos/${options.repo}/tags/${tag}`, {
       headers: getHeaders(options),
     })
 
@@ -203,43 +209,46 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
   }
 
   // Get the release by tag to obtain its id
-  const release = await $fetch(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
+  const release = await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
     headers,
   })
 
   for (const asset of expandedAssets) {
     const filePath = path.resolve(asset)
+    const file = Bun.file(filePath)
+
+    if (!await file.exists()) {
+      console.error(colors.red(`Failed to read file ${filePath}: file does not exist`))
+
+      continue
+    }
+
+    const fileName = path.basename(filePath)
+
+    // Gitea expects multipart/form-data with an `attachment` field
+    const form = new FormData()
+
+    form.append('attachment', file, fileName)
+
+    const uploadUrl = `https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`
+
+    console.log(colors.cyan(`Uploading ${fileName}...`))
 
     try {
-      const fileData = await fs.readFile(filePath)
-      const fileName = path.basename(filePath)
+      const res = await fetch(uploadUrl, {
+        method: 'POST',
+        headers,
+        body: form,
+      })
 
-      // Gitea expects multipart/form-data with an `attachment` field
-      const form = new FormData()
-
-      form.append('attachment', new Blob([fileData]), fileName)
-
-      const uploadUrl = `https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`
-
-      console.log(colors.cyan(`Uploading ${fileName}...`))
-
-      try {
-        const res = await fetch(uploadUrl, {
-          method: 'POST',
-          headers,
-          body: form,
-        })
-        if (!res.ok) {
-          throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
-        }
-        console.log(colors.green(`Uploaded ${fileName} successfully.`))
+      if (!res.ok) {
+        throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
       }
-      catch (error) {
-        console.error(colors.red(`Failed to upload ${fileName}: ${error}`))
-      }
+
+      console.log(colors.green(`Uploaded ${fileName} successfully.`))
     }
     catch (error) {
-      console.error(colors.red(`Failed to read file ${filePath}: ${error}`))
+      console.error(colors.red(`Failed to upload ${fileName}: ${error}`))
     }
   }
 }

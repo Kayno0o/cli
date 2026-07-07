@@ -1,3 +1,3 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // eslint-disable-next-line antfu/no-import-dist
 import './dist/cli.mjs'

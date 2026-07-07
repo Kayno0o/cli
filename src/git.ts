@@ -1,3 +1,4 @@
+import { $ } from 'bun'
 import semver from 'semver'
 
 export async function getGiteaRepo() {
@@ -94,10 +95,10 @@ export async function getLastMatchingTag(
 }
 
 export async function isRefGitTag(to: string) {
-  const { execa } = await import('execa')
+  const ref = `refs/tags/${to}`
 
   try {
-    await execa('git', ['show-ref', '--verify', `refs/tags/${to}`], { reject: true })
+    await $`git show-ref --verify ${ref}`.quiet()
 
     return true
   }
@@ -115,8 +116,5 @@ export function isPrerelease(version: string) {
 }
 
 async function execCommand(cmd: string, args: string[]) {
-  const { execa } = await import('execa')
-  const res = await execa(cmd, args)
-
-  return res.stdout.trim()
+  return (await $`${cmd} ${args}`.quiet().text()).trim()
 }

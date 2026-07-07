@@ -7,13 +7,11 @@ export default defineBuildConfig({
   ],
   declaration: true,
   clean: true,
+  externals: ['bun'],
   rollup: {
-    emitCJS: true,
+    emitCJS: false,
     inlineDependencies: [
       '@kaynooo/utils',
-      'ofetch',
-      'destr',
-      'ufo',
     ],
   },
 })

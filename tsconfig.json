@@ -2,12 +2,12 @@
   "compilerOptions": {
     "target": "ESNext",
     "lib": ["ESNext", "DOM"],
-    "types": ["bun"],
     "moduleDetection": "force",
     "experimentalDecorators": true,
     "module": "Preserve",
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
+    "types": ["bun"],
     "allowImportingTsExtensions": true,
     "allowJs": false,
     "strict": true,

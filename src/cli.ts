@@ -1,10 +1,8 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
-import fs from 'node:fs/promises'
-import process from 'node:process'
+import { $ } from 'bun'
 import { colors } from '@kaynooo/utils/tools/colors'
 import cac from 'cac'
-import { execa } from 'execa'
 import { version } from '../package.json'
 import { uploadAssets } from './gitea'
 import { generate, hasTagOnGitea, isRepoShallow, sendRelease } from './index'
@@ -32,7 +30,7 @@ cli
 
 async function readTokenFromGiteaCli() {
   try {
-    return (await execa('gh', ['auth', 'token'])).stdout.trim()
+    return (await $`gh auth token`.quiet().text()).trim()
   }
   catch {
     return ''
@@ -80,7 +78,7 @@ cli
       }
 
       if (typeof config.output === 'string') {
-        await fs.writeFile(config.output, md, 'utf-8')
+        await Bun.write(config.output, md)
         console.log(colors.yellow(`Saved to ${config.output}`))
 
         return

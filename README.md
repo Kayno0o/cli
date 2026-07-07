@@ -1,10 +1,8 @@
 # @kaynooo/changelogitea
 
-[![NPM version](https://img.shields.io/npm/v/@kaynooo/changelogitea?color=a1b858&label=)](https://www.npmjs.com/package/@kaynooo/changelogitea)
+Generate changelog for Gitea / Forgejo releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), powered by [changelogen](https://github.com/unjs/changelogen).
 
-Generate changelog for Gitea releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), powered by [changelogen](https://github.com/unjs/changelogen).
-
-[👉 Changelog example](https://github.com/unocss/unocss/releases/tag/v0.39.0)
+> **Bun only.** This tool runs on [Bun](https://bun.sh) and uses Bun-native APIs (`Bun.$`, `Bun.file`, `Bun.Glob`, global `fetch`). It is not meant to run under Node.
 
 ## Features
 
@@ -12,13 +10,14 @@ Generate changelog for Gitea releases from [Conventional Commits](https://www.co
 - Grouped scope in changelog
 - Create the release note, or update the existing one
 - List contributors
+- Upload assets to the release
 
 ## Usage
 
-In Gitea Actions:
+In Gitea / Forgejo Actions:
 
 ```yml
-# .github/workflows/release.yml
+# .gitea/workflows/release.yml
 
 name: Release
 
@@ -38,18 +37,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set node
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          registry-url: https://registry.npmjs.org/
-          node-version: lts/*
+          bun-version: latest
 
-      - run: npx @kaynooo/changelogitea # or changelogitea@0.12 to ensure a stable result
+      - run: bunx @kaynooo/changelogitea
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 ```
 
-It will be trigged whenever you push a tag to Gitea that starts with `v`.
+It will be triggered whenever you push a tag that starts with `v`.
+
+The package is published to the Forgejo npm registry. To install it from there, add to your `.npmrc`:
+
+```ini
+@kaynooo:registry=https://git.kaynooo.fr/api/packages/kaynooo/npm/
+```
 
 ## Configuration
 
@@ -58,12 +62,16 @@ You can put a configuration file in the project root, named as `@kaynooo/changel
 ## Preview Locally
 
 ```bash
-npx @kaynooo/changelogitea --dry
+bunx @kaynooo/changelogitea --dry
 ```
 
 ## Why?
 
 I used to use [`conventional-github-releaser`](https://github.com/conventional-changelog/releaser-tools/tree/master/packages/conventional-github-releaser) for almost all my projects. Until I found that it [does NOT support using exclamation marks for breaking changes](https://github.com/conventional-changelog/conventional-changelog/issues/648) - hiding those important breaking changes in the changelog without the awareness from maintainers.
+
+## Credits
+
+This is a Gitea / Forgejo port of [`changelogithub`](https://github.com/antfu/changelogithub) by [Anthony Fu](https://github.com/antfu).
 
 ## License
 
