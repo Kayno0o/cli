@@ -44,7 +44,7 @@
     "build": "rm -rf ./dist && unbuild",
     "lint:fix": "bunx --bun eslint --fix",
     "lint": "bunx --bun eslint",
-    "test": "vitest",
+    "test": "bun test",
     "cli": "./cli.mjs"
   },
   "dependencies": {

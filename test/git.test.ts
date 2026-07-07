@@ -1,8 +1,8 @@
-import { expect, it } from 'vitest'
+import { expect, it } from 'bun:test'
 import { generate, getGiteaRepo } from '../src'
 
-const COMMIT_FROM = '19cf4f84f16f1a8e1e7032bbef550c382938649d'
-const COMMIT_TO = '49b0222e8d60b7f299941def7511cee0460a8149'
+const COMMIT_FROM = 'fe0e9ea9a08a817b7ba849ebbecd556a274c79d1'
+const COMMIT_TO = '1f352da7c4763d4dba7861ef78443f9f731c6573'
 const regexToFindAllUrls = /https:\/\/\S*/g
 
 it('parse', async () => {
@@ -17,7 +17,7 @@ it('parse', async () => {
       "baseUrlApi": "git.kaynooo.fr/api/v1",
       "capitalize": true,
       "contributors": true,
-      "from": "19cf4f84f16f1a8e1e7032bbef550c382938649d",
+      "from": "fe0e9ea9a08a817b7ba849ebbecd556a274c79d1",
       "group": true,
       "prerelease": false,
       "releaseRepo": "kaynooo/changelogitea",
@@ -28,7 +28,7 @@ it('parse', async () => {
       "titles": {
         "breakingChanges": "🚨 Breaking Changes",
       },
-      "to": "49b0222e8d60b7f299941def7511cee0460a8149",
+      "to": "1f352da7c4763d4dba7861ef78443f9f731c6573",
       "types": {
         "build": {
           "title": "📦 Build",
@@ -64,32 +64,19 @@ it('parse', async () => {
     }
   `)
   expect(md.replace(/&nbsp;/g, ' ').replace(/ +/g, ' ')).toMatchInlineSnapshot(`
-    "### Breaking Changes
+    "### Bug Fixes
 
-    - **cli**: Rename \`groupByScope\` to \`group\` - by **Enzo Innocenzi** in [#22](https://git.kaynooo.fr/kaynooo/changelogitea/issues/22) [(89282)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/8928229)
+    - Upload to forgejo using bun - by **Kaynooo** [(218d0)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/218d0f7)
 
-    ### Features
+    ### Refactors
 
-    - Inline contributors - by **Anthony Fu** [(e4044)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/e404493)
-    - Throw on shallow repo - by **Anthony Fu** [(f1c1f)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/f1c1fad)
-    - Improve how references are displayed - by **Enzo Innocenzi** in [#19](https://git.kaynooo.fr/kaynooo/changelogitea/issues/19) [(cdf8f)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/cdf8fe5)
-    - Support \`--no-emoji\` - by **Enzo Innocenzi** in [#20](https://git.kaynooo.fr/kaynooo/changelogitea/issues/20) [(e94ba)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/e94ba4a)
-    - **contributors**:
-     - Improve author list - by **Enzo Innocenzi** in [#18](https://git.kaynooo.fr/kaynooo/changelogitea/issues/18) [(8d8d9)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/8d8d914)
-    - **style**:
-     - Group scopes only when one of the scope have multiple commits - by **Anthony Fu** [(312f7)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/312f796)
-     - Use \`<sup>\` for author info - by **Anthony Fu** [(b51c0)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/b51c075)
-     - Limit sha to 5 letters and make monospace - by **Anthony Fu** [(b07ad)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/b07ade8)
+    - Remove deps execa and node - by **Kaynooo** [(02a9c)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/02a9c2b)
 
-    ### Bug Fixes
+    ### CI
 
-    - Use \`creatordate\` to sort tags - by **Frost Ming** in [#17](https://git.kaynooo.fr/kaynooo/changelogitea/issues/17) [(5666d)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/5666d8d)
-    - Config defaults - by **Anthony Fu** [(9232f)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/9232fdf)
-    - Use \`replace\` instead of \`replaceAll\` for Node 14 - by **Anthony Fu** [(5154e)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/5154e78)
-    - **cli**: Add missing \`--group\` option - by **Enzo Innocenzi** in [#21](https://git.kaynooo.fr/kaynooo/changelogitea/issues/21) [(22800)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/228001d)
-    - **style**: Revert \`<sup>\` style - by **Anthony Fu** [(742ae)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/742ae0b)
+    - Use bun - by **Kaynooo** [(6fc61)](https://git.kaynooo.fr/kaynooo/changelogitea/commit/6fc61f0)
 
-    ### [View changes on Gitea](https://git.kaynooo.fr/kaynooo/changelogitea/compare/19cf4f84f16f1a8e1e7032bbef550c382938649d...49b0222e8d60b7f299941def7511cee0460a8149)"
+    ### [View changes on Gitea](https://git.kaynooo.fr/kaynooo/changelogitea/compare/fe0e9ea9a08a817b7ba849ebbecd556a274c79d1...1f352da7c4763d4dba7861ef78443f9f731c6573)"
   `)
 })
 
