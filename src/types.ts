@@ -81,6 +81,27 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   tagFilter?: (tag: string) => boolean
 
   /**
+   * Roll up intermediate releases into the range so a minor/major note lists
+   * every commit since the previous minor/major, not only since the last patch.
+   */
+  rollup?: {
+    /**
+     * On a minor release (`x.y.0`), start the range at the previous minor
+     * (`x.(y-1).0`) instead of the last patch, absorbing all patch commits.
+     *
+     * @default false
+     */
+    minor?: boolean
+    /**
+     * On a major release (`x.0.0`), start the range at the previous major
+     * (`(x-1).0.0`), absorbing all minor and patch commits.
+     *
+     * @default false
+     */
+    major?: boolean
+  }
+
+  /**
    * Release repository, defaults to `repo`
    */
   releaseRepo?: RepoConfig | string

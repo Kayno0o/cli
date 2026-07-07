@@ -1,5 +1,5 @@
 import { expect, it } from 'bun:test'
-import { generate, getGiteaRepo } from '../src'
+import { generate, getGiteaRepo, getLastMatchingTag } from '../src'
 
 const COMMIT_FROM = 'fe0e9ea9a08a817b7ba849ebbecd556a274c79d1'
 const COMMIT_TO = '1f352da7c4763d4dba7861ef78443f9f731c6573'
@@ -22,6 +22,7 @@ it('parse', async () => {
       "prerelease": false,
       "releaseRepo": "kaynooo/changelogitea",
       "repo": "kaynooo/changelogitea",
+      "rollup": {},
       "scopeMap": {},
       "tag": "v%s",
       "tagFilter": [Function],
@@ -109,4 +110,26 @@ it('should match with current gitea repo', async () => {
   const repo = await getGiteaRepo()
 
   expect(repo).toContain('/changelogitea')
+})
+
+// Constrain the tag universe to a fixed historical subset so results stay
+// deterministic regardless of future tags.
+const ALLOWED = new Set(['v1.4.2', 'v1.4.1', 'v1.4.0', 'v1.3.0', 'v1.2.2', 'v1.2.0'])
+const only = (tag: string) => ALLOWED.has(tag)
+
+it('picks the last patch without rollup', async () => {
+  expect(await getLastMatchingTag('v1.5.0', only, 'v%s')).toBe('v1.4.2')
+})
+
+it('rolls a minor release back to the previous minor', async () => {
+  expect(await getLastMatchingTag('v1.5.0', only, 'v%s', { minor: true })).toBe('v1.4.0')
+})
+
+it('does not roll up a patch release', async () => {
+  expect(await getLastMatchingTag('v1.4.3', only, 'v%s', { minor: true })).toBe('v1.4.2')
+})
+
+it('rolls a major release back to the previous major line', async () => {
+  // No `x.0.0` tag in the set, so it falls back to the newest matching tag.
+  expect(await getLastMatchingTag('v2.0.0', only, 'v%s', { major: true })).toBe('v1.4.2')
 })

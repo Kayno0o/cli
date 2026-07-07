@@ -1,5 +1,6 @@
+import type { ChangelogOptions } from './types'
 import { $ } from 'bun'
-import { validateSemver } from '@kaynooo/utils'
+import { parseSemver, validateSemver } from '@kaynooo/utils'
 
 export async function getGiteaRepo() {
   const url = await execCommand('git', ['config', '--get', 'remote.origin.url'])
@@ -68,6 +69,7 @@ export async function getLastMatchingTag(
   inputTag: string,
   tagFilter: (tag: string) => boolean,
   tagTemplate: string,
+  rollup: NonNullable<ChangelogOptions['rollup']> = {},
 ) {
   const inputVersionString = getVersionString(tagTemplate, inputTag)
   // `validateSemver` only accepts stable `x.y.z` versions, so it doubles as a
@@ -80,11 +82,26 @@ export async function getLastMatchingTag(
 
   // Doing a stable release, find the last stable release to compare with
   if (isStableVersion) {
+    const input = parseSemver(inputVersionString)
+    const isMajor = input.minor === 0 && input.patch === 0
+    const isMinor = !isMajor && input.patch === 0
+
+    // On a rolled-up minor/major release, walk back to the previous minor/major
+    // tag so the range absorbs every intermediate patch (and minor) release.
+    let boundary: ((v: { minor: number, patch: number }) => boolean) | undefined
+
+    if (isMajor && rollup.major)
+      boundary = v => v.minor === 0 && v.patch === 0
+    else if (isMinor && rollup.minor)
+      boundary = v => v.patch === 0
+
     tag = filteredTags.find((tag) => {
       const versionString = getVersionString(tagTemplate, tag)
 
-      return versionString !== inputVersionString
-        && validateSemver(versionString)
+      if (versionString === inputVersionString || !validateSemver(versionString))
+        return false
+
+      return boundary ? boundary(parseSemver(versionString)) : true
     })
   }
 

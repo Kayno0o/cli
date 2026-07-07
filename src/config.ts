@@ -43,10 +43,12 @@ export async function resolveConfig(options: ChangelogOptions) {
   config.to ||= await getCurrentGitBranch()
   config.tagFilter ??= () => true
   config.tag = getSafeTagTemplate(config.tag ?? defaultConfig.tag)
+  config.rollup ??= {}
   config.from ||= await getLastMatchingTag(
     config.to,
     config.tagFilter,
     config.tag,
+    config.rollup,
   ) || await getFirstGitCommit()
   // @ts-expect-error backward compatibility
   config.repo ||= config.gitea || await getGiteaRepo()

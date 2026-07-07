@@ -59,6 +59,28 @@ The package is published to the Forgejo npm registry. To install it from there, 
 
 You can put a configuration file in the project root, named as `@kaynooo/changelogitea.config.{json,ts,js,mjs,cjs}`, `.changelogitearc` or use the `changelogitea` field in `package.json`.
 
+### Roll up patches into minor releases
+
+If you cut several patches between minor releases, `rollup` makes a minor (or major) note list every commit since the previous minor (or major), instead of only since the last patch:
+
+```ts
+// @kaynooo/changelogitea.config.ts
+import { defineConfig } from '@kaynooo/changelogitea'
+
+export default defineConfig({
+  rollup: {
+    // On a `x.y.0` release, start from the previous `x.(y-1).0` tag,
+    // absorbing every patch in between.
+    minor: true,
+    // On a `x.0.0` release, start from the previous `(x-1).0.0` tag,
+    // absorbing every minor and patch in between.
+    major: true,
+  },
+})
+```
+
+Both default to `false`.
+
 ## Preview Locally
 
 ```bash
