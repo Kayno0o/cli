@@ -22,7 +22,9 @@ it('parse', async () => {
       "prerelease": false,
       "releaseRepo": "kaynooo/changelogitea",
       "repo": "kaynooo/changelogitea",
-      "rollup": {},
+      "rollup": {
+        "minor": true,
+      },
       "scopeMap": {},
       "tag": "v%s",
       "tagFilter": [Function],

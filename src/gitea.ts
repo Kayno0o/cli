@@ -53,6 +53,50 @@ export async function sendRelease(
   console.log(colors.green(`Released on ${res.html_url}`))
 }
 
+export async function getRelease(options: ChangelogOptions, tag: string) {
+  try {
+    return await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${tag}`, {
+      headers: getHeaders(options),
+    })
+  }
+  catch {
+    return null
+  }
+}
+
+export async function deleteRelease(options: ChangelogOptions, releaseId: number) {
+  const res = await fetch(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${releaseId}`, {
+    method: 'DELETE',
+    headers: getHeaders(options),
+  })
+
+  if (!res.ok)
+    throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
+}
+
+export async function hasRemoteTag(options: ChangelogOptions, tag: string) {
+  try {
+    await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/tags/${tag}`, {
+      headers: getHeaders(options),
+    })
+
+    return true
+  }
+  catch {
+    return false
+  }
+}
+
+export async function deleteRemoteTag(options: ChangelogOptions, tag: string) {
+  const res = await fetch(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/tags/${tag}`, {
+    method: 'DELETE',
+    headers: getHeaders(options),
+  })
+
+  if (!res.ok)
+    throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
+}
+
 function getHeaders(options: ChangelogOptions) {
   return {
     accept: 'application/vnd.gitea.v3+json',

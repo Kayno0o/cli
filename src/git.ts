@@ -128,6 +128,26 @@ export async function getFirstGitCommit() {
   return execCommand('git', ['rev-list', '--max-parents=0', 'HEAD'])
 }
 
+export async function deleteLocalTag(tag: string) {
+  await $`git tag -d ${tag}`.quiet()
+}
+
+export async function getTagCommit(tag: string) {
+  return execCommand('git', ['rev-list', '-n', '1', tag])
+}
+
+export async function getHeadCommit() {
+  return execCommand('git', ['rev-parse', 'HEAD'])
+}
+
+export async function getCommitSubject(ref: string) {
+  return execCommand('git', ['log', '-1', '--format=%s', ref])
+}
+
+export async function softResetLastCommit() {
+  await $`git reset --soft HEAD~1`.quiet()
+}
+
 export function isPrerelease(version: string) {
   return !(/^[^.]*(?:\.[\d.]*|\d)$/).test(version)
 }

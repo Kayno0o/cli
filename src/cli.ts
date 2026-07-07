@@ -4,8 +4,8 @@ import { $ } from 'bun'
 import { colors } from '@kaynooo/utils/tools/colors'
 import cac from 'cac'
 import { version } from '../package.json'
-import { uploadAssets } from './gitea'
-import { generate, hasTagOnGitea, isRepoShallow, sendRelease } from './index'
+import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
+import { deleteLocalTag, generate, getCommitSubject, getHeadCommit, getTagCommit, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
 
 const cli = cac('changelogitea')
 
@@ -27,6 +27,11 @@ cli
   .option('--dry', 'Dry run')
   .option('--assets <paths...>', 'Files to upload as assets to the release. Use quotes to prevent shell glob expansion, e.g., "--assets \'dist/*.js\'"')
   .help()
+
+function ask(message: string) {
+  // eslint-disable-next-line no-alert
+  return confirm(colors.yellow(message))
+}
 
 async function readTokenFromGiteaCli() {
   try {
@@ -126,6 +131,116 @@ cli
         console.error(colors.yellow(webUrl))
         console.log()
       }
+
+      process.exit(1)
+    }
+  })
+
+cli
+  .command('undo <tag>', 'Undo a release: delete the remote/local tag and reset the bump commit (optionally the Gitea release note)')
+  .option('--note', 'Also delete the Gitea release note (skips the interactive question)')
+  .option('--yes', 'Skip confirmation prompts')
+  .action(async (tag: string, args: any) => {
+    const token = args.token || process.env.GITHUB_TOKEN || await readTokenFromGiteaCli()
+
+    if (token) {
+      args.token = token
+    }
+
+    try {
+      console.log()
+      console.log(colors.dim(`changelo${colors.bold('gitea')} `) + colors.dim(`v${version}`))
+
+      const config = await resolveConfig({ ...args, to: tag })
+
+      const release = config.token ? await getRelease(config, tag) : null
+      const remoteTag = config.token ? await hasRemoteTag(config, tag) : false
+      const localTag = await isRefGitTag(tag)
+
+      // Only reset the bump commit when the tag actually points at HEAD,
+      // otherwise we'd drop an unrelated commit.
+      let commitToReset: { hash: string, subject: string } | undefined
+
+      if (localTag && await getTagCommit(tag) === await getHeadCommit()) {
+        commitToReset = { hash: await getHeadCommit(), subject: await getCommitSubject('HEAD') }
+      }
+
+      // Ask about the release note (opt-in): --note forces it, --yes without
+      // --note skips it, otherwise prompt with a default of "no".
+      let deleteNote = false
+
+      if (release) {
+        if (args.note)
+          deleteNote = true
+        else if (!args.yes)
+          deleteNote = ask(`Also delete the Gitea release note "${release.name || tag}"?`)
+      }
+
+      const actions: string[] = []
+
+      if (deleteNote && release)
+        actions.push(`${colors.red('release note')}  ${tag}`)
+
+      if (remoteTag)
+        actions.push(`${colors.red('remote tag')}    ${tag}`)
+
+      if (localTag)
+        actions.push(`${colors.red('local tag')}     ${tag}`)
+
+      if (commitToReset)
+        actions.push(`${colors.red('commit')}        reset --soft (${commitToReset.hash.slice(0, 7)} "${commitToReset.subject}")`)
+      else if (localTag)
+        actions.push(colors.dim(`commit        skipped (${tag} is not HEAD)`))
+
+      if (!actions.length) {
+        console.log(colors.yellow(`Nothing to undo for "${tag}".`))
+
+        return
+      }
+
+      console.log()
+      console.log(`About to remove on ${colors.bold(String(config.releaseRepo))}:`)
+      for (const action of actions)
+        console.log(`  - ${action}`)
+      console.log()
+
+      if (args.dry) {
+        console.log(colors.yellow('Dry run. Nothing removed.'))
+
+        return
+      }
+
+      if (!args.yes && !ask('Proceed?')) {
+        console.log(colors.yellow('Aborted.'))
+
+        return
+      }
+
+      if (deleteNote && release) {
+        await deleteRelease(config, release.id)
+        console.log(colors.green(`Deleted release note ${tag}`))
+      }
+
+      if (remoteTag) {
+        await deleteRemoteTag(config, tag)
+        console.log(colors.green(`Deleted remote tag ${tag}`))
+      }
+
+      if (localTag) {
+        await deleteLocalTag(tag)
+        console.log(colors.green(`Deleted local tag ${tag}`))
+      }
+
+      if (commitToReset) {
+        await softResetLastCommit()
+        console.log(colors.green(`Reset commit ${commitToReset.hash.slice(0, 7)} (changes kept in working tree)`))
+      }
+    }
+    catch (e: any) {
+      console.error(colors.red(String(e)))
+
+      if (e?.stack)
+        console.error(colors.dim(e.stack?.split('\n').slice(1).join('\n')))
 
       process.exit(1)
     }

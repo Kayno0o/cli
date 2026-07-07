@@ -87,6 +87,22 @@ Both default to `false`.
 bunx @kaynooo/changelogitea --dry
 ```
 
+## Undo a Release
+
+Rolled a bad release? `undo` deletes the remote tag, the local tag, and soft-resets the version-bump commit (changes are kept in your working tree). The commit is only reset when the tag points at `HEAD`.
+
+```bash
+bunx @kaynooo/changelogitea undo v1.4.2
+```
+
+The Gitea release note is **not** removed by default - you're asked about it interactively. Pass `--note` to include it non-interactively.
+
+| Flag     | Description                                             |
+| -------- | ------------------------------------------------------- |
+| `--note` | Also delete the Gitea release note (skips the question) |
+| `--dry`  | Preview what would be removed, without deleting         |
+| `--yes`  | Skip confirmation prompts (for CI/scripts)              |
+
 ## Why?
 
 I used to use [`conventional-github-releaser`](https://github.com/conventional-changelog/releaser-tools/tree/master/packages/conventional-github-releaser) for almost all my projects. Until I found that it [does NOT support using exclamation marks for breaking changes](https://github.com/conventional-changelog/conventional-changelog/issues/648) - hiding those important breaking changes in the changelog without the awareness from maintainers.
