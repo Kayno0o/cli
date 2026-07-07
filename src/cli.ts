@@ -5,7 +5,7 @@ import { colors } from '@kaynooo/utils/tools/colors'
 import cac from 'cac'
 import { version } from '../package.json'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
-import { deleteLocalTag, generate, getCommitSubject, getHeadCommit, getTagCommit, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
+import { deleteLocalTag, generate, getCommitSubject, getGitTags, getHeadCommit, getTagCommit, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
 
 const cli = cac('changelogitea')
 
@@ -137,10 +137,10 @@ cli
   })
 
 cli
-  .command('undo <tag>', 'Undo a release: delete the remote/local tag and reset the bump commit (optionally the Gitea release note)')
+  .command('undo [tag]', 'Undo a release: delete the remote/local tag and reset the bump commit (optionally the Gitea release note)')
   .option('--note', 'Also delete the Gitea release note (skips the interactive question)')
   .option('--yes', 'Skip confirmation prompts')
-  .action(async (tag: string, args: any) => {
+  .action(async (tag: string | undefined, args: any) => {
     const token = args.token || process.env.GITHUB_TOKEN || await readTokenFromGiteaCli()
 
     if (token) {
@@ -150,6 +150,18 @@ cli
     try {
       console.log()
       console.log(colors.dim(`changelo${colors.bold('gitea')} `) + colors.dim(`v${version}`))
+
+      if (!tag) {
+        tag = (await getGitTags())[0]
+
+        if (!tag) {
+          console.log(colors.yellow('No tags found, nothing to undo.'))
+
+          return
+        }
+
+        console.log(colors.yellow(`No tag specified, using the latest tag "${colors.bold(tag)}".`))
+      }
 
       const config = await resolveConfig({ ...args, to: tag })
 

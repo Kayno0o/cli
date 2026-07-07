@@ -95,6 +95,12 @@ Rolled a bad release? `undo` deletes the remote tag, the local tag, and soft-res
 bunx @kaynooo/changelogitea undo v1.4.2
 ```
 
+The tag is optional - omit it to undo the latest tag (you'll be warned which one):
+
+```bash
+bunx @kaynooo/changelogitea undo
+```
+
 The Gitea release note is **not** removed by default - you're asked about it interactively. Pass `--note` to include it non-interactively.
 
 | Flag     | Description                                             |
