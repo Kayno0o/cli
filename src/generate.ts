@@ -1,5 +1,5 @@
 import type { ChangelogOptions } from './types'
-import { getGitDiff } from 'changelogen'
+import { getGitDiff } from './changelog'
 import { resolveConfig } from './config'
 import { resolveAuthors } from './gitea'
 import { generateMarkdown } from './markdown'

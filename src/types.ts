@@ -1,4 +1,4 @@
-import type { ChangelogConfig, GitCommit, RepoConfig } from 'changelogen'
+import type { ChangelogConfig, GitCommit, RepoConfig } from './changelog'
 
 export type ChangelogenOptions = ChangelogConfig
 

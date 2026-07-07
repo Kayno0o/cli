@@ -1,7 +1,7 @@
-import type { GitCommit, RawGitCommit } from 'changelogen'
+import type { GitCommit, RawGitCommit } from './changelog'
 import type { ChangelogenOptions } from './types'
 import { notNullish } from '@kaynooo/utils'
-import { parseGitCommit } from 'changelogen'
+import { parseGitCommit } from './changelog'
 
 export function parseCommits(commits: RawGitCommit[], config: ChangelogenOptions): GitCommit[] {
   return commits.map(commit => parseGitCommit(commit, config)).filter(notNullish)

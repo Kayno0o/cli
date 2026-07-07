@@ -1,5 +1,5 @@
 import { $ } from 'bun'
-import semver from 'semver'
+import { validateSemver } from '@kaynooo/utils'
 
 export async function getGiteaRepo() {
   const url = await execCommand('git', ['config', '--get', 'remote.origin.url'])
@@ -70,21 +70,21 @@ export async function getLastMatchingTag(
   tagTemplate: string,
 ) {
   const inputVersionString = getVersionString(tagTemplate, inputTag)
-  const isVersion = semver.valid(inputVersionString) !== null
-  const isPrerelease = semver.prerelease(inputVersionString) !== null
+  // `validateSemver` only accepts stable `x.y.z` versions, so it doubles as a
+  // "is a stable (non-prerelease) version" check.
+  const isStableVersion = validateSemver(inputVersionString)
   const tags = await getGitTags()
   const filteredTags = tags.filter(tagFilter)
 
   let tag: string | undefined
 
   // Doing a stable release, find the last stable release to compare with
-  if (!isPrerelease && isVersion) {
+  if (isStableVersion) {
     tag = filteredTags.find((tag) => {
       const versionString = getVersionString(tagTemplate, tag)
 
       return versionString !== inputVersionString
-        && semver.valid(versionString) !== null
-        && semver.prerelease(versionString) === null
+        && validateSemver(versionString)
     })
   }
 

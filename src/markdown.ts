@@ -1,4 +1,4 @@
-import type { Reference } from 'changelogen'
+import type { Reference } from './changelog'
 import type { Commit, ResolvedChangelogOptions } from './types'
 import { convert } from 'convert-gitmoji'
 
