@@ -132,6 +132,14 @@ export async function deleteLocalTag(tag: string) {
   await $`git tag -d ${tag}`.quiet()
 }
 
+export async function hasRemoteGitTag(tag: string, remote = 'origin') {
+  return (await execCommand('git', ['ls-remote', '--tags', remote, `refs/tags/${tag}`])).length > 0
+}
+
+export async function deleteRemoteGitTag(tag: string, remote = 'origin') {
+  await $`git push ${remote} --delete ${tag}`.quiet()
+}
+
 export async function getTagCommit(tag: string) {
   return execCommand('git', ['rev-list', '-n', '1', tag])
 }

@@ -5,7 +5,7 @@ import { colors } from '@kaynooo/utils/tools/colors'
 import cac from 'cac'
 import { version } from '../package.json'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
-import { deleteLocalTag, generate, getCommitSubject, getGitTags, getHeadCommit, getTagCommit, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
+import { deleteLocalTag, deleteRemoteGitTag, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
 
 const cli = cac('changelogitea')
 
@@ -165,8 +165,21 @@ cli
 
       const config = await resolveConfig({ ...args, to: tag })
 
+      // Prefer plain git for the origin repo so remote tags are handled without
+      // relying on a Gitea API token; only fall back to the API for a distinct
+      // release repository.
+      let originRepo: string | undefined
+
+      try {
+        originRepo = await getGiteaRepo()
+      }
+      catch {}
+      const remoteViaGit = Boolean(originRepo) && String(config.releaseRepo) === originRepo
+
       const release = config.token ? await getRelease(config, tag) : null
-      const remoteTag = config.token ? await hasRemoteTag(config, tag) : false
+      const remoteTag = remoteViaGit
+        ? await hasRemoteGitTag(tag)
+        : (config.token ? await hasRemoteTag(config, tag) : false)
       const localTag = await isRefGitTag(tag)
 
       // Only reset the bump commit when the tag actually points at HEAD,
@@ -234,7 +247,11 @@ cli
       }
 
       if (remoteTag) {
-        await deleteRemoteTag(config, tag)
+        if (remoteViaGit)
+          await deleteRemoteGitTag(tag)
+        else
+          await deleteRemoteTag(config, tag)
+
         console.log(colors.green(`Deleted remote tag ${tag}`))
       }
 
