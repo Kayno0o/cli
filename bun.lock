@@ -5,7 +5,7 @@
     "": {
       "name": "@kaynooo/changelogitea",
       "dependencies": {
-        "@kaynooo/utils": "^1.12.3",
+        "@kaynooo/utils": "^2.0.1",
         "c12": "^3.3.4",
         "cac": "^6.7.14",
         "convert-gitmoji": "^0.1.5",
@@ -16,7 +16,7 @@
         "@types/debug": "^4.1.13",
         "@typescript/native-preview": "^7.0.0-dev.20260707.2",
         "eslint": "^10.6.0",
-        "typescript": "^5.9.3",
+        "typescript": "6",
         "unbuild": "^3.6.1",
       },
     },
@@ -138,7 +138,9 @@
 
     "@kaynooo/eslint": ["@kaynooo/eslint@3.0.1", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/3.0.1/eslint-3.0.1.tgz", { "dependencies": { "@antfu/eslint-config": "^9.1.0", "@typescript-eslint/parser": "^8.63.0", "eslint-plugin-better-tailwindcss": "^4.6.1", "eslint-plugin-format": "^2.0.1", "eslint-plugin-solid": "^0.14.5", "lodash.merge": "^4.6.2" }, "peerDependencies": { "eslint": "^10.6.0" } }, "sha512-eRlTOxFKHdEt7108tJAGHmiC8dKLUrlAaLn8UMUa38PbcdpFFMliEBbNbKHsAFZg08/jKMjPLxu5XJ+P8dPaQg=="],
 
-    "@kaynooo/utils": ["@kaynooo/utils@1.12.3", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Futils/-/1.12.3/utils-1.12.3.tgz", { "peerDependencies": { "typescript": "^6.0.3" } }, "sha512-FlnH1PHAXmjWbV2nSTMzc7ehbCv0Q1L4KdplX0vBpNfv7z22yuPKknt0rx7J8tFkyrVlJg99A2YsD1l9Uf8tRA=="],
+    "@kaynooo/utils": ["@kaynooo/utils@2.0.1", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Futils/-/2.0.1/utils-2.0.1.tgz", { "peerDependencies": { "turndown": "^7.2.4", "typescript": "^6.0.3" } }, "sha512-0vd71UwmmLvMsvpvPFg0ArkEhHe1I4KRNNIJOTsX89LwmGoDFp+gi/sYFF2sNFZBJsk5WKbDgdRgA4XZuDqnRQ=="],
+
+    "@mixmark-io/domino": ["@mixmark-io/domino@2.2.0", "", {}, "sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw=="],
 
     "@ota-meshi/ast-token-store": ["@ota-meshi/ast-token-store@0.3.0", "", {}, "sha512-XRO0zi2NIUKq2lUk3T1ecFSld1fMWRKE6naRFGkgkdeosx7IslyUKNv5Dcb5PJTja9tHJoFu0v/7yEpAkrkrTg=="],
 
@@ -966,9 +968,11 @@
 
     "tsconfig-paths-webpack-plugin": ["tsconfig-paths-webpack-plugin@4.2.0", "", { "dependencies": { "chalk": "^4.1.0", "enhanced-resolve": "^5.7.0", "tapable": "^2.2.1", "tsconfig-paths": "^4.1.2" } }, "sha512-zbem3rfRS8BgeNK50Zz5SIQgXzLafiHjOwUAvk/38/o1jHn/V5QAgVUcz884or7WYcPaH3N2CIfUc2u0ul7UcA=="],
 
+    "turndown": ["turndown@7.2.4", "", { "dependencies": { "@mixmark-io/domino": "^2.2.0" } }, "sha512-I8yFsfRzmzK0WV1pNNOA4A7y4RDfFxPRxb3t+e3ui14qSGOxGtiSP6GjeX+Y6CHb7HYaFj7ECUD7VE5kQMZWGQ=="],
+
     "type-check": ["type-check@0.4.0", "", { "dependencies": { "prelude-ls": "^1.2.1" } }, "sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew=="],
 
-    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "ufo": ["ufo@1.6.1", "", {}, "sha512-9a4/uxlTWJ4+a5i0ooc1rU7C7YOw3wT+UGqdeNNHWnOF9qcMBgLRS+4IYUqbczewFx4mLEig6gawh7X6mFlEkA=="],
 
