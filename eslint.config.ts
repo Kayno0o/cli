@@ -1,3 +1,3 @@
-import typescript from '@kaynooo/eslint/typescript'
+import { defineConfig } from '@kaynooo/eslint'
 
-export default typescript()
+export default defineConfig({})
