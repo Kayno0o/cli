@@ -118,20 +118,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
   if (!options.token)
     return info
 
-  try {
-    // https://docs.git.kaynooo.fr/en/search-gitea/searching-on-gitea/searching-users#search-only-users-or-organizations
-    const q = encodeURIComponent(`${info.email} type:user in:email`)
-    const data = await api(`https://${options.baseUrlApi}/search/users?q=${q}`, {
-      headers: getHeaders(options),
-    })
-
-    info.login = data.items[0].login
-  }
-  catch {}
-
-  if (info.login)
-    return info
-
+  // A commit names its author's account exactly, so only an author with no commit of their own, a co-author, is searched by email.
   if (info.commits.length) {
     try {
       const data = await api(`https://${options.baseUrlApi}/repos/${options.repo}/commits/${info.commits[0]}`, {
@@ -142,6 +129,19 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
     }
     catch {}
   }
+
+  if (info.login)
+    return info
+
+  try {
+    // Forgejo matches the keyword inside a public email only, so the account whose email is exactly this one is picked.
+    const data = await api<{ data: { login: string, email: string }[] }>(`https://${options.baseUrlApi}/users/search?q=${encodeURIComponent(info.email)}`, {
+      headers: getHeaders(options),
+    })
+
+    info.login = data.data.find(user => user.email.toLowerCase() === info.email.toLowerCase())?.login
+  }
+  catch {}
 
   return info
 }
