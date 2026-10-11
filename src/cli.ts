@@ -24,6 +24,7 @@ cli
   .option('--capitalize', 'Should capitalize for each comment message')
   .option('--emoji', 'Use emojis in section titles', { default: true })
   .option('--group', 'Nest commit messages under their scopes')
+  .option('--first-parent', 'Walk only the first parent of each merge')
   .option('--dry', 'Dry run')
   .option('--assets <paths...>', 'Files to upload as assets to the release. Use quotes to prevent shell glob expansion, e.g., "--assets \'dist/*.js\'"')
   .help()

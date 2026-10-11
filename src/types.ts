@@ -76,6 +76,13 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   baseUrlApi?: string
 
   /**
+   * Walk only the first parent of each merge, so a merged history shows as the merge commit instead of its commits.
+   *
+   * @default false
+   */
+  firstParent?: boolean
+
+  /**
    * Filter tags
    */
   tagFilter?: (tag: string) => boolean

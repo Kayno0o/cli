@@ -71,10 +71,11 @@ const CoAuthoredByRegex = /co-authored-by:\s*(?<name>\S[^<]*)(<(?<email>[^>]+)>)
 const PullRequestRE = /\([ a-z]*(#\d+)\s*\)/g
 const IssueRE = /(#\d+)/g
 
-export async function getGitDiff(from: string | undefined, to = 'HEAD'): Promise<RawGitCommit[]> {
+export async function getGitDiff(from: string | undefined, to = 'HEAD', firstParent = false): Promise<RawGitCommit[]> {
   const range = `${from ? `${from}...` : ''}${to}`
   const pretty = '----%n%s|%h|%an|%ae%n%b'
-  const output = (await $`git --no-pager log ${range} --pretty=${pretty} --name-status`.quiet().text()).trim()
+  const flags = firstParent ? ['--first-parent'] : []
+  const output = (await $`git --no-pager log ${range} ${flags} --pretty=${pretty} --name-status`.quiet().text()).trim()
 
   return output
     .split('----\n')

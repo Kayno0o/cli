@@ -8,7 +8,7 @@ import { parseCommits } from './parse'
 export async function generate(options: ChangelogOptions) {
   const resolved = await resolveConfig(options)
 
-  const rawCommits = await getGitDiff(resolved.from, resolved.to)
+  const rawCommits = await getGitDiff(resolved.from, resolved.to, resolved.firstParent)
   const commits = parseCommits(rawCommits, resolved)
 
   if (resolved.contributors)

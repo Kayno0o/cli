@@ -17,6 +17,7 @@ it('parse', async () => {
       "baseUrlApi": "git.kaynooo.fr/api/v1",
       "capitalize": true,
       "contributors": true,
+      "firstParent": false,
       "from": "fe0e9ea9a08a817b7ba849ebbecd556a274c79d1",
       "group": true,
       "prerelease": false,

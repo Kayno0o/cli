@@ -25,6 +25,7 @@ const defaultConfig = {
   contributors: true,
   capitalize: true,
   group: true,
+  firstParent: false,
   tag: 'v%s',
 } satisfies ChangelogOptions
 

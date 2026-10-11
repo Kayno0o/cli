@@ -81,6 +81,21 @@ export default defineConfig({
 
 Both default to `false`.
 
+### Follow only the first parent
+
+After a `git merge --allow-unrelated-histories` (or any big merge), the note would list every commit the merge brought in. `firstParent` walks only the first parent of each merge, so the merge shows as itself:
+
+```ts
+// @kaynooo/changelogitea.config.ts
+import { defineConfig } from '@kaynooo/changelogitea'
+
+export default defineConfig({
+  firstParent: true,
+})
+```
+
+It defaults to `false`.
+
 ## Preview Locally
 
 ```bash
