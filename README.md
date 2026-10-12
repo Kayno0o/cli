@@ -94,7 +94,9 @@ export default defineConfig({
 })
 ```
 
-It defaults to `false`.
+It defaults to `false`. The tag the range starts from and the first commit are also looked up along the first parent.
+
+This also drops the commits of a feature branch merged with a merge commit: only the merge's own message is read. It suits repos that squash or fast-forward, plus a one-off import.
 
 ## Preview Locally
 

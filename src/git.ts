@@ -41,9 +41,10 @@ function getVersionString(template: string, tag: string) {
   return match ? match[1] : tag
 }
 
-export async function getGitTags() {
+export async function getGitTags(firstParent = false) {
   const output = await execCommand('git', [
     'log',
+    ...firstParent ? ['--first-parent'] : [],
     '--simplify-by-decoration',
     '--pretty=format:"%d"',
   ])
@@ -70,12 +71,13 @@ export async function getLastMatchingTag(
   tagFilter: (tag: string) => boolean,
   tagTemplate: string,
   rollup: NonNullable<ChangelogOptions['rollup']> = {},
+  firstParent = false,
 ) {
   const inputVersionString = getVersionString(tagTemplate, inputTag)
   // `validateSemver` only accepts stable `x.y.z` versions, so it doubles as a
   // "is a stable (non-prerelease) version" check.
   const isStableVersion = validateSemver(inputVersionString)
-  const tags = await getGitTags()
+  const tags = await getGitTags(firstParent)
   const filteredTags = tags.filter(tagFilter)
 
   let tag: string | undefined
@@ -124,8 +126,8 @@ export async function isRefGitTag(to: string) {
   }
 }
 
-export async function getFirstGitCommit() {
-  return execCommand('git', ['rev-list', '--max-parents=0', 'HEAD'])
+export async function getFirstGitCommit(firstParent = false) {
+  return execCommand('git', ['rev-list', '--max-parents=0', ...firstParent ? ['--first-parent'] : [], 'HEAD'])
 }
 
 export async function deleteLocalTag(tag: string) {

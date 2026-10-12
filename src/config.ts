@@ -50,7 +50,8 @@ export async function resolveConfig(options: ChangelogOptions) {
     config.tagFilter,
     config.tag,
     config.rollup,
-  ) || await getFirstGitCommit()
+    config.firstParent,
+  ) || await getFirstGitCommit(config.firstParent)
   // @ts-expect-error backward compatibility
   config.repo ||= config.gitea || await getGiteaRepo()
   // @ts-expect-error backward compatibility
