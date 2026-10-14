@@ -1,8 +1,10 @@
 #!/usr/bin/env bun
 
 import type { ParseArgsOptionsConfig } from 'node:util'
-import type { ChangelogOptions } from './types'
+import type { ChangelogOptions, ResolvedChangelogOptions } from './types'
 import { $ } from 'bun'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { colors } from '@kaynooo/utils/tools/colors'
 import { version } from '../package.json'
@@ -98,9 +100,21 @@ async function withToken(options: ChangelogOptions) {
   return token ? { ...options, token } : options
 }
 
+// Forgejo's new-release page only reads `tag`, so the notes go to a file to paste instead of into the link.
+async function printManualRelease(config: ResolvedChangelogOptions, md: string, heading: string) {
+  const file = join(tmpdir(), `changelogitea-${config.to.replaceAll('/', '-')}.md`)
+
+  await Bun.write(file, md)
+  console.log()
+  console.error(colors.yellow(heading))
+  console.error(colors.yellow(`  https://${config.baseUrl}/${config.releaseRepo}/releases/new?tag=${encodeURIComponent(config.to)}`))
+  console.error(colors.yellow(`  pasting the notes saved to ${file}`))
+  console.log()
+}
+
 async function release() {
   const options = await withToken(toOptions())
-  let webUrl = ''
+  let generated: { config: ResolvedChangelogOptions, md: string } | undefined
 
   try {
     console.log()
@@ -108,7 +122,7 @@ async function release() {
 
     const { config, md, discord, commits } = await generate(options)
 
-    webUrl = `https://${config.baseUrl}/${config.releaseRepo}/releases/new?title=${encodeURIComponent(String(config.name || config.to))}&body=${encodeURIComponent(String(md))}&tag=${encodeURIComponent(String(config.to))}&prerelease=${config.prerelease}`
+    generated = { config, md }
 
     console.log(colors.cyan(config.from) + colors.dim(' -> ') + colors.blue(config.to) + colors.dim(` (${commits.length} commits)`))
     console.log(colors.dim('--------------'))
@@ -117,16 +131,9 @@ async function release() {
     console.log()
     console.log(colors.dim('--------------'))
 
-    function printWebUrl() {
-      console.log()
-      console.error(colors.yellow('Using the following link to create it manually:'))
-      console.error(colors.yellow(webUrl))
-      console.log()
-    }
-
     if (config.dry) {
       console.log(colors.yellow(config.discordWebhook ? 'Dry run. Release and Discord post skipped.' : 'Dry run. Release skipped.'))
-      printWebUrl()
+      await printManualRelease(config, md, 'Create it manually at')
 
       return
     }
@@ -141,7 +148,7 @@ async function release() {
     if (!config.token) {
       console.error(colors.red('No Gitea token found, specify it via GITHUB_TOKEN env. Release skipped.'))
       process.exitCode = 1
-      printWebUrl()
+      await printManualRelease(config, md, 'Create it manually at')
 
       return
     }
@@ -149,7 +156,7 @@ async function release() {
     if (!await hasTagOnGitea(config.to, config)) {
       console.error(colors.yellow(`Current ref "${colors.bold(config.to)}" is not available as tags on Gitea. Release skipped.`))
       process.exitCode = 1
-      printWebUrl()
+      await printManualRelease(config, md, 'Create it manually at')
 
       return
     }
@@ -157,7 +164,7 @@ async function release() {
     if (!commits.length && await isRepoShallow()) {
       console.error(colors.yellow('The repo seems to be clone shallowly, which make changelog failed to generate. You might want to specify `fetch-depth: 0` in your CI config.'))
       process.exitCode = 1
-      printWebUrl()
+      await printManualRelease(config, md, 'Create it manually at')
 
       return
     }
@@ -184,12 +191,8 @@ async function release() {
     if (e?.stack)
       console.error(colors.dim(e.stack?.split('\n').slice(1).join('\n')))
 
-    if (webUrl) {
-      console.log()
-      console.error(colors.red('Failed to create the release. Using the following link to create it manually:'))
-      console.error(colors.yellow(webUrl))
-      console.log()
-    }
+    if (generated)
+      await printManualRelease(generated.config, generated.md, 'Failed to create the release. Create it manually at')
 
     process.exit(1)
   }

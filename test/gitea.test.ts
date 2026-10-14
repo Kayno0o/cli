@@ -28,9 +28,9 @@ afterEach(() => {
 })
 
 it('takes the login from the author\'s first commit, without searching', async () => {
-  const asked = answer({ '/repos/owner/repo/commits/abc': { author: { login: 'ada' } } })
+  const asked = answer({ '/repos/owner/repo/git/commits/abc': { author: { login: 'ada', avatar_url: 'https://forge.example/avatars/ada' } } })
 
-  expect((await resolveAuthorInfo(options, author(['abc']))).login).toBe('ada')
+  expect(await resolveAuthorInfo(options, author(['abc']))).toMatchObject({ login: 'ada', avatar: 'https://forge.example/avatars/ada' })
   expect(asked).toHaveLength(1)
 })
 

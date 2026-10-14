@@ -121,7 +121,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
   // A commit names its author's account exactly, so only an author with no commit of their own, a co-author, is searched by email.
   if (info.commits.length) {
     try {
-      const data = await api(`https://${options.baseUrlApi}/repos/${options.repo}/commits/${info.commits[0]}`, {
+      const data = await api(`https://${options.baseUrlApi}/repos/${options.repo}/git/commits/${info.commits[0]}`, {
         headers: getHeaders(options),
       })
 
