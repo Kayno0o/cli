@@ -6,9 +6,9 @@ import { $ } from 'bun'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
+import { sendDiscordWebhook } from '@kaynooo/utils'
 import { colors } from '@kaynooo/utils/tools/colors'
 import { version } from '../package.json'
-import { sendDiscord } from './discord'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
 import { deleteLocalTag, deleteRemoteGitTag, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
 
@@ -176,7 +176,7 @@ async function release() {
 
     if (config.discordWebhook) {
       try {
-        await sendDiscord(config.discordWebhook, discord)
+        await sendDiscordWebhook(config.discordWebhook, discord)
         console.log(colors.green('Posted to Discord'))
       }
       catch (e) {

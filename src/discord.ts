@@ -1,3 +1,4 @@
+import type { DiscordWebhookPayload } from '@kaynooo/utils'
 import type { AuthorInfo, Commit, ResolvedChangelogOptions } from './types'
 import { compareUrl, foldedCounts, formatLine, formatTitle, groupCommits, releaseUrl, shortRef } from './markdown'
 
@@ -5,19 +6,6 @@ import { compareUrl, foldedCounts, formatLine, formatTitle, groupCommits, releas
 const descriptionLimit = 4096
 const color = 0xFB923C
 const breakingColor = 0xED4245
-
-export interface DiscordEmbed {
-  title: string
-  url: string
-  color: number
-  description: string
-  footer: { text: string, icon_url?: string }
-  timestamp: string
-}
-
-export interface DiscordPayload {
-  embeds: DiscordEmbed[]
-}
 
 const isCommitLine = (line: string) => line.startsWith('- ')
 
@@ -41,7 +29,7 @@ function fitDescription(lines: string[], tail: string) {
   return tail.slice(0, descriptionLimit)
 }
 
-export function generateDiscordPayload(commits: Commit[], options: ResolvedChangelogOptions, contributors: AuthorInfo[] = []): DiscordPayload {
+export function generateDiscordPayload(commits: Commit[], options: ResolvedChangelogOptions, contributors: AuthorInfo[] = []): DiscordWebhookPayload {
   const { sections, folded } = groupCommits(commits, options)
   const lines: string[] = []
 
@@ -70,15 +58,4 @@ export function generateDiscordPayload(commits: Commit[], options: ResolvedChang
       timestamp: new Date().toISOString(),
     }],
   }
-}
-
-export async function sendDiscord(webhook: string, payload: DiscordPayload) {
-  const res = await fetch(webhook, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-
-  if (!res.ok)
-    throw new Error(`Discord webhook answered ${res.status} ${res.statusText}: ${await res.text()}`)
 }

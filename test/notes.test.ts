@@ -105,10 +105,10 @@ describe('forgejo markdown', () => {
 
 describe('discord embed', () => {
   it('uses bold titles, inline issue titles and one maintenance line', async () => {
-    const { embeds: [embed] } = generateDiscordPayload([
+    const embed = generateDiscordPayload([
       commit('feat(undo): default to latest tag', '#3 - undo needs a tag'),
       commit('ci: use alpine'),
-    ], await options(), [ada])
+    ], await options(), [ada]).embeds![0]!
 
     expect(embed.title).toBe('r v1.1.0')
     expect(embed.url).toBe('https://forge.example/o/r/releases/tag/v1.1.0')
@@ -125,10 +125,10 @@ describe('discord embed', () => {
     const commits = Array.from({ length: 80 }, (_, i) => commit(`feat: ${'long change '.repeat(6)}${i}`))
 
     commits.push(commit('fix!: breaking'))
-    const { embeds: [embed] } = generateDiscordPayload(commits, await options())
-    const shown = embed.description.split('\n').filter(line => line.startsWith('- ')).length
+    const embed = generateDiscordPayload(commits, await options()).embeds![0]!
+    const shown = embed.description!.split('\n').filter(line => line.startsWith('- ')).length
 
-    expect(embed.description.length).toBeLessThanOrEqual(4096)
+    expect(embed.description!.length).toBeLessThanOrEqual(4096)
     expect(embed.description).toContain(`*…and ${81 - shown} more*`)
     expect(embed.description).toEndWith('[diff](https://forge.example/o/r/compare/v1.0.0...v1.1.0)')
     expect(embed.color).toBe(0xED4245)
