@@ -16,7 +16,7 @@ export interface RepoConfig {
 
 export interface ChangelogConfig {
   cwd: string
-  types: Record<string, { title: string, semver?: SemverBumpType } | boolean>
+  types: Record<string, { title: string, semver?: SemverBumpType, folded?: boolean } | boolean>
   scopeMap: Record<string, string>
   repo?: RepoConfig | string
   tokens: Partial<Record<RepoProvider, string>>
@@ -55,6 +55,7 @@ export interface RawGitCommit {
 export interface Reference {
   type: 'hash' | 'issue' | 'pull-request'
   value: string
+  title?: string
 }
 
 export interface GitCommit extends RawGitCommit {
@@ -70,6 +71,7 @@ const ConventionalCommitRegex = /(?<emoji>:.+:|(\uD83C[\uDF00-\uDFFF])|(\uD83D[\
 const CoAuthoredByRegex = /co-authored-by:\s*(?<name>\S[^<]*)(<(?<email>[^>]+)>)/gi
 const PullRequestRE = /\([ a-z]*(#\d+)\s*\)/g
 const IssueRE = /(#\d+)/g
+const TicketLineRE = /^(#\d+) - (.+)$/gm
 
 export async function getGitDiff(from: string | undefined, to = 'HEAD', firstParent = false): Promise<RawGitCommit[]> {
   const range = `${from ? `${from}...` : ''}${to}`
@@ -114,6 +116,15 @@ export function parseGitCommit(commit: RawGitCommit, config: ChangelogConfig): G
   for (const m of description.matchAll(IssueRE)) {
     if (!references.some(i => i.value === m[1]))
       references.push({ type: 'issue', value: m[1] })
+  }
+
+  for (const m of commit.body.matchAll(TicketLineRE)) {
+    const known = references.find(i => i.value === m[1])
+
+    if (known)
+      known.title = m[2].trim()
+    else
+      references.push({ type: 'issue', value: m[1], title: m[2].trim() })
   }
 
   references.push({ value: commit.shortHash, type: 'hash' })

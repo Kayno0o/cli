@@ -12,9 +12,7 @@ export interface GiteaAuth {
   url: string
 }
 
-export interface Commit extends GitCommit {
-  resolvedAuthors?: AuthorInfo[]
-}
+export type Commit = GitCommit
 
 export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   /**
@@ -48,6 +46,10 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
    */
   titles?: {
     breakingChanges?: string
+    /**
+     * Title of the collapsed block holding every type marked `folded`
+     */
+    maintenance?: string
   }
   /**
    * Capitalize commit messages
@@ -124,6 +126,13 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   tag?: string
 
   /**
+   * Discord webhook the release is posted to once it is out on Gitea, as an embed
+   *
+   * @default process.env.DISCORD_WEBHOOK
+   */
+  discordWebhook?: string
+
+  /**
    * Files to upload as assets to the release
    * `--assets path1,path2` or `--assets path1 --assets path2`
    */
@@ -135,6 +144,7 @@ export type ResolvedChangelogOptions = Required<ChangelogOptions>
 export interface AuthorInfo {
   commits: string[]
   login?: string
+  avatar?: string
   email: string
   name: string
 }

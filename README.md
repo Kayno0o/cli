@@ -1,6 +1,6 @@
 # @kaynooo/changelogitea
 
-Generate changelog for Gitea / Forgejo releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), powered by [changelogen](https://github.com/unjs/changelogen).
+Generate changelog for Gitea / Forgejo releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), and post it to Discord.
 
 > **Bun only.** This tool runs on [Bun](https://bun.sh) and uses Bun-native APIs (`Bun.$`, `Bun.file`, `Bun.Glob`, global `fetch`). It is not meant to run under Node.
 
@@ -8,9 +8,32 @@ Generate changelog for Gitea / Forgejo releases from [Conventional Commits](http
 
 - Support exclamation mark as breaking change, e.g. `chore!: drop node v10`
 - Grouped scope in changelog
+- Issues linked from the subject (`#12`) and from `#12 - title` lines in the commit body
 - Create the release note, or update the existing one
-- List contributors
+- Post the release to a Discord webhook
+- List contributors with their avatars
 - Upload assets to the release
+
+## Format
+
+A note opens with a one-line summary (`3 new · 3 fixed · 6 maintenance · by @kaynooo · v1.5.0 → v1.6.6`), then lists:
+
+- **⚠️ Breaking**, **✨ New**, **🔧 Fixed** and **⚡ Faster**, each line ending with its commit and issue links
+- refactor, docs, build, types, test, style and ci commits folded into one collapsed **🧹 Maintenance** block
+- the contributors' avatars and a link to the full diff
+
+A type set to `{ title, folded: true }` in `types` joins the maintenance block, and `titles.maintenance` renames it.
+
+## Discord
+
+Once the release is out on Forgejo, it is posted to the webhook in `DISCORD_WEBHOOK` (or `discordWebhook` / `--discord-webhook`) as one embed: the same sections with each issue's title beside it, maintenance as a count line, and links to the full note and the diff. A note too long for Discord's 4096 characters ends with `…and N more`. Nothing is posted when no webhook is set.
+
+```yml
+      - run: bunx @kaynooo/changelogitea
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          DISCORD_WEBHOOK: ${{secrets.DISCORD_WEBHOOK}}
+```
 
 ## Usage
 
@@ -57,14 +80,14 @@ The package is published to the Forgejo npm registry. To install it from there, 
 
 ## Configuration
 
-You can put a configuration file in the project root, named as `@kaynooo/changelogitea.config.{json,ts,js,mjs,cjs}`, `.changelogitearc` or use the `changelogitea` field in `package.json`.
+Put a `changelogitea.config.{ts,mts,js,mjs,json}` file in the project root, or a `changelogitea` field in `package.json`. CLI flags override the file, which overrides `package.json`.
 
 ### Roll up patches into minor releases
 
 If you cut several patches between minor releases, `rollup` makes a minor (or major) note list every commit since the previous minor (or major), instead of only since the last patch:
 
 ```ts
-// @kaynooo/changelogitea.config.ts
+// changelogitea.config.ts
 import { defineConfig } from '@kaynooo/changelogitea'
 
 export default defineConfig({
@@ -86,7 +109,7 @@ Both default to `false`.
 After a `git merge --allow-unrelated-histories` (or any big merge), the note would list every commit the merge brought in. `firstParent` walks only the first parent of each merge, so the merge shows as itself:
 
 ```ts
-// @kaynooo/changelogitea.config.ts
+// changelogitea.config.ts
 import { defineConfig } from '@kaynooo/changelogitea'
 
 export default defineConfig({

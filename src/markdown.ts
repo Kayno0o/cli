@@ -1,156 +1,184 @@
 import type { Reference } from './changelog'
-import type { Commit, ResolvedChangelogOptions } from './types'
-import { convert } from 'convert-gitmoji'
+import type { AuthorInfo, Commit, ResolvedChangelogOptions } from './types'
+import { capitalize, groupBy } from '@kaynooo/utils'
 
-const emojisRE = /([\u2700-\u27BF\uE000-\uF8FF\u2011-\u26FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|\uD83E[\uDD10-\uDDFF])/g
+const emojiRE = /\p{Extended_Pictographic}\uFE0F?/gu
+const fullHashRE = /^[\da-f]{40}$/
 
-function formatReferences(references: Reference[], baseUrl: string, gitea: string, type: 'issues' | 'hash'): string {
-  const refs = references
-    .filter((i) => {
-      if (type === 'issues')
-        return i.type === 'issue' || i.type === 'pull-request'
-
-      return i.type === 'hash'
-    })
-    .map((ref) => {
-      if (!gitea)
-        return ref.value
-
-      if (ref.type === 'pull-request' || ref.type === 'issue')
-        return `[${ref.value}](https://${baseUrl}/${gitea}/issues/${ref.value.slice(1)})`
-
-      return `[(${ref.value.slice(0, 5)})](https://${baseUrl}/${gitea}/commit/${ref.value})`
-    })
-
-  const referencesString = join(refs).trim()
-
-  if (type === 'issues')
-    return referencesString && `in ${referencesString}`
-
-  return referencesString
+export interface Section {
+  title: string
+  commits: Commit[]
 }
 
-function formatLine(commit: Commit, options: ResolvedChangelogOptions) {
-  const prRefs = formatReferences(commit.references, options.baseUrl, options.repo as string, 'issues')
-  const hashRefs = formatReferences(commit.references, options.baseUrl, options.repo as string, 'hash')
+export interface GroupedCommits {
+  sections: Section[]
+  folded: Section[]
+}
 
-  let authors = join([...new Set(commit.resolvedAuthors?.map(i => i.login ? `@${i.login}` : `**${i.name}**`))])?.trim()
+// Breaking commits lead whatever their type, and the types marked `folded` are kept apart for the maintenance block.
+export function groupCommits(commits: Commit[], options: ResolvedChangelogOptions): GroupedCommits {
+  const breaking = commits.filter(c => c.isBreaking)
+  const byType = groupBy(commits.filter(c => !c.isBreaking), c => c.type)
+  const sections: Section[] = breaking.length ? [{ title: options.titles.breakingChanges!, commits: breaking }] : []
+  const folded: Section[] = []
 
-  authors &&= `by ${authors}`
+  for (const [type, config] of Object.entries(options.types)) {
+    if (typeof config === 'boolean' || !byType[type]?.length)
+      continue
 
-  let refs = [authors, prRefs, hashRefs].filter(i => i?.trim()).join(' ')
+    const target = config.folded ? folded : sections
 
-  refs &&= `- ${refs}`
+    target.push({ title: config.title, commits: byType[type] })
+  }
 
+  return { sections, folded }
+}
+
+export function formatTitle(title: string, options: ResolvedChangelogOptions) {
+  return (options.emoji ? title : title.replace(emojiRE, '')).trim()
+}
+
+// A range starting at the first commit names it by its full hash, too long to read.
+export function shortRef(ref: string) {
+  return fullHashRE.test(ref) ? ref.slice(0, 7) : ref
+}
+
+export function repoUrl(options: ResolvedChangelogOptions) {
+  return `https://${options.baseUrl}/${options.repo}`
+}
+
+export function compareUrl(options: ResolvedChangelogOptions) {
+  return `${repoUrl(options)}/compare/${options.from}...${options.to}`
+}
+
+export function releaseUrl(options: ResolvedChangelogOptions) {
+  return `https://${options.baseUrl}/${options.releaseRepo}/releases/tag/${encodeURIComponent(options.to)}`
+}
+
+export function userUrl(login: string, options: ResolvedChangelogOptions) {
+  return `https://${options.baseUrl}/${login}`
+}
+
+function formatIssue(ref: Reference, options: ResolvedChangelogOptions, withTitle: boolean) {
+  const text = withTitle && ref.title ? `${ref.value} ${ref.title}` : ref.value
+
+  return `[${text}](${repoUrl(options)}/issues/${ref.value.slice(1)})`
+}
+
+// One commit as `description · hash · issues`; Discord has no hover card on issue links, so it asks for their titles inline.
+export function formatLine(commit: Commit, options: ResolvedChangelogOptions, prefix = '', issueTitles = false) {
   const description = options.capitalize ? capitalize(commit.description) : commit.description
+  const hash = `[\`${commit.shortHash.slice(0, 7)}\`](${repoUrl(options)}/commit/${commit.shortHash})`
+  const issues = commit.references
+    .filter(ref => ref.type !== 'hash')
+    .map(ref => formatIssue(ref, options, issueTitles))
 
-  return [description, refs].filter(i => i?.trim()).join(' ')
+  return [`${prefix}${description}`, hash, ...issues].join(' · ')
 }
 
-function formatTitle(name: string, options: ResolvedChangelogOptions) {
-  if (!options.emoji)
-    name = name.replace(emojisRE, '')
-
-  return `### ${name.trim()}`
+export function foldedPrefix(commit: Commit) {
+  return `**${commit.scope ? `${commit.type}(${commit.scope})` : commit.type}**: `
 }
 
-function formatSection(commits: Commit[], sectionName: string, options: ResolvedChangelogOptions) {
-  if (!commits.length)
-    return []
+export function foldedCounts(folded: Section[], options: ResolvedChangelogOptions) {
+  return folded.map(section => `${section.commits.length} ${formatTitle(section.title, options)}`).join(', ')
+}
 
-  const lines: string[] = [
-    '',
-    formatTitle(sectionName, options),
-    '',
+export function formatAuthors(contributors: AuthorInfo[], options: ResolvedChangelogOptions) {
+  return join(contributors.map(c => c.login ? `[@${c.login}](${userUrl(c.login, options)})` : `**${c.name}**`))
+}
+
+function summaryLabel(title: string) {
+  return title.replace(emojiRE, '').trim().toLowerCase()
+}
+
+function formatSummary({ sections, folded }: GroupedCommits, contributors: AuthorInfo[], options: ResolvedChangelogOptions) {
+  const counts = sections.map(section => `${section.commits.length} ${summaryLabel(section.title)}`)
+
+  if (folded.length) {
+    const total = folded.reduce((sum, section) => sum + section.commits.length, 0)
+
+    counts.push(`${total} ${summaryLabel(options.titles.maintenance!)}`)
+  }
+
+  const authors = formatAuthors(contributors, options)
+  const parts = [
+    counts.length ? `**${counts.join(' · ')}**` : '',
+    authors && `by ${authors}`,
+    `\`${shortRef(options.from)}\` → \`${shortRef(options.to)}\``,
   ]
 
-  const scopes = groupBy(commits, 'scope')
-  let useScopeGroup = options.group
+  return `> ${parts.filter(Boolean).join(' · ')}`
+}
 
-  // group scopes only when one of the scope have multiple commits
-  if (!Object.entries(scopes).some(([k, v]) => k && v.length > 1))
-    useScopeGroup = false
+function formatSection(section: Section, options: ResolvedChangelogOptions) {
+  const lines = ['', `### ${formatTitle(section.title, options)}`, '']
+  const scopes = groupBy(section.commits, c => c.scope)
+
+  // Nesting under scopes only pays off when one of them holds several commits.
+  const nestable = Object.entries(scopes).some(([scope, commits]) => scope && commits.length > 1)
 
   for (const scope of Object.keys(scopes).sort()) {
-    let padding = ''
-    let prefix = ''
     const scopeText = `**${options.scopeMap[scope] || scope}**`
+    const nested = nestable && scope && (options.group === true || (options.group === 'multiple' && scopes[scope].length > 1))
+    const prefix = scope && !nested ? `${scopeText}: ` : ''
+    const padding = nested ? '  ' : ''
 
-    if (scope && (useScopeGroup === true || (useScopeGroup === 'multiple' && scopes[scope].length > 1))) {
+    if (nested)
       lines.push(`- ${scopeText}:`)
-      padding = '  '
-    }
-    else if (scope) {
-      prefix = `${scopeText}: `
-    }
 
-    lines.push(...scopes[scope]
-      .reverse()
-      .map(commit => `${padding}- ${prefix}${formatLine(commit, options)}`),
-    )
+    for (const commit of scopes[scope].toReversed())
+      lines.push(`${padding}- ${formatLine(commit, options, prefix)}`)
   }
 
   return lines
 }
 
-export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOptions) {
-  const lines: string[] = []
+function formatAvatars(contributors: AuthorInfo[], options: ResolvedChangelogOptions) {
+  return contributors
+    .filter(c => c.login && c.avatar)
+    .map(c => `<a href="${userUrl(c.login!, options)}"><img src="${c.avatar}" width="28" height="28" alt="@${c.login}"></a>`)
+    .join(' ')
+}
 
-  const [breaking, changes] = commits.reduce((curr, c) => {
-    curr[Number(!c.isBreaking)].push(c)
+export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOptions, contributors: AuthorInfo[] = []) {
+  const grouped = groupCommits(commits, options)
+  const { sections, folded } = grouped
+  const lines = [formatSummary(grouped, contributors, options)]
 
-    return curr
-  }, [[], []] as [Commit[], Commit[]])
+  for (const section of sections)
+    lines.push(...formatSection(section, options))
 
-  const group = groupBy(changes, 'type')
-
-  lines.push(
-    ...formatSection(breaking, options.titles.breakingChanges!, options),
-  )
-
-  for (const type of Object.keys(options.types)) {
-    const items = group[type] || []
-
-    if (typeof options.types[type] === 'boolean')
-      continue
-
-    lines.push(...formatSection(items, options.types[type].title, options))
+  if (folded.length) {
+    lines.push(
+      '',
+      '<details>',
+      `<summary><b>${formatTitle(options.titles.maintenance!, options)}</b> · ${foldedCounts(folded, options)}</summary>`,
+      '',
+      ...folded.flatMap(section => section.commits.toReversed().map(commit => `- ${formatLine(commit, options, foldedPrefix(commit))}`)),
+      '',
+      '</details>',
+    )
   }
 
-  if (!lines.length)
-    lines.push('*No significant changes*')
+  if (!sections.length && !folded.length)
+    lines.push('', '*No significant changes*')
 
-  const url = `https://${options.baseUrl}/${options.repo}/compare/${options.from}...${options.to}`
+  lines.push('', '---', '')
 
-  lines.push('', `### [View changes on Gitea](${url})`)
+  const avatars = formatAvatars(contributors, options)
 
-  return convert(lines.join('\n').trim(), true)
+  if (avatars)
+    lines.push(avatars, '')
+
+  lines.push(`<sub>[Full diff \`${shortRef(options.from)}...${shortRef(options.to)}\`](${compareUrl(options)}) · generated by changelogitea</sub>`)
+
+  return lines.join('\n')
 }
 
-function groupBy<T>(items: T[], key: string, groups: Record<string, T[]> = {}) {
-  for (const item of items) {
-    const v = (item as any)[key] as string
-
-    groups[v] ||= []
-    groups[v].push(item)
-  }
-
-  return groups
-}
-
-function capitalize(str: string) {
-  return str.charAt(0).toUpperCase() + str.slice(1)
-}
-
-function join(array?: string[], glue = ', ', finalGlue = ' and '): string {
-  if (!array || array.length === 0)
-    return ''
-
-  if (array.length === 1)
-    return array[0]
-
-  if (array.length === 2)
+function join(array: string[], glue = ', ', finalGlue = ' and '): string {
+  if (array.length <= 2)
     return array.join(finalGlue)
 
-  return `${array.slice(0, -1).join(glue)}${finalGlue}${array.slice(-1)}`
+  return `${array.slice(0, -1).join(glue)}${finalGlue}${array.at(-1)}`
 }

@@ -1,6 +1,6 @@
 import type { AuthorInfo, ChangelogOptions, Commit } from './types'
 import path from 'node:path'
-import { colors, notNullish } from '@kaynooo/utils'
+import { colors } from '@kaynooo/utils'
 
 async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
@@ -126,6 +126,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
       })
 
       info.login = data.author.login
+      info.avatar = data.author.avatar_url
     }
     catch {}
   }
@@ -135,11 +136,14 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
 
   try {
     // Forgejo matches the keyword inside a public email only, so the account whose email is exactly this one is picked.
-    const data = await api<{ data: { login: string, email: string }[] }>(`https://${options.baseUrlApi}/users/search?q=${encodeURIComponent(info.email)}`, {
+    const data = await api<{ data: { login: string, email: string, avatar_url?: string }[] }>(`https://${options.baseUrlApi}/users/search?q=${encodeURIComponent(info.email)}`, {
       headers: getHeaders(options),
     })
 
-    info.login = data.data.find(user => user.email.toLowerCase() === info.email.toLowerCase())?.login
+    const user = data.data.find(user => user.email.toLowerCase() === info.email.toLowerCase())
+
+    info.login = user?.login
+    info.avatar = user?.avatar_url
   }
   catch {}
 
@@ -150,29 +154,17 @@ export async function resolveAuthors(commits: Commit[], options: ChangelogOption
   const map = new Map<string, AuthorInfo>()
 
   for (const commit of commits) {
-    commit.resolvedAuthors = commit.authors.map((a, idx) => {
-      if (!a.email || !a.name)
-        return null
+    for (const [idx, author] of commit.authors.entries()) {
+      if (!author.email || !author.name || excludeAuthors.some(re => re.test(author.name)))
+        continue
 
-      if (excludeAuthors.some(re => re.test(a.name)))
-        return null
-
-      if (!map.has(a.email)) {
-        map.set(a.email, {
-          commits: [],
-          name: a.name,
-          email: a.email,
-        })
-      }
-
-      const info = map.get(a.email)!
+      if (!map.has(author.email))
+        map.set(author.email, { commits: [], name: author.name, email: author.email })
 
       // record commits only for the first author
       if (idx === 0)
-        info.commits.push(commit.shortHash)
-
-      return info
-    }).filter(notNullish)
+        map.get(author.email)!.commits.push(commit.shortHash)
+    }
   }
 
   const authors = Array.from(map.values())
