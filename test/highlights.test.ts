@@ -84,6 +84,7 @@ describe('the section', () => {
 
   it('skips the frontmatter, so a heading written in it is not a section', () => {
     expect(parseHighlights('---\n## 3.0.0\n---\n## 1.0.0\n- a', '3.0.0', PAGE)).toBeUndefined()
+    expect(parseHighlights('---\n## 3.0.0\n--- \n## 1.0.0\n- a', '3.0.0', PAGE)).toBeUndefined()
   })
 
   it('reads the version off the tag through the tag template, and nothing for a missing file', async () => {
@@ -156,6 +157,15 @@ describe('notes', () => {
       '',
       '**✨ New**',
     ].join('\n'))
+  })
+
+  it('close a code block cut open on Discord with its own marker', async () => {
+    const commits = Array.from({ length: 40 }, (_, i) => commit(`feat: ${'long change '.repeat(6)}${i}`, `a${String(i).padStart(6, '0')}`))
+    const long = { lines: ['~~~~sh', ...Array.from({ length: 200 }, (_, i) => `echo ${'word '.repeat(6)}${i}`), '~~~~'], link: `${PAGE}#110` }
+    const description = generateDiscordPayload(commits, await options(), [], long).embeds![0]!.description!
+
+    expect(description.length).toBeLessThanOrEqual(4096)
+    expect(description).toContain(`~~~~\n…\n[Read more](${PAGE}#110)`)
   })
 
   it('cut on Discord at a line, commits first, then the highlights, the link to the page kept', async () => {

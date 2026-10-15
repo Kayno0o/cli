@@ -8,7 +8,7 @@ const descriptionLimit = 4096
 const color = 0xFB923C
 const breakingColor = 0xED4245
 
-const fenceRE = /^\s*(?:`{3,}|~{3,})/
+const fenceRE = /^\s*(`{3,}|~{3,})/
 const headingRE = /^#{1,6}\s(.*)$/
 
 const isCommitLine = (line: string) => line.startsWith('- ')
@@ -43,8 +43,10 @@ function fitDescription(head: string[], lines: string[], tail: string) {
   for (let kept = head.length - 2; kept >= 1; kept--) {
     const shown = head.slice(0, kept)
 
-    if (shown.filter(line => fenceRE.test(line)).length % 2)
-      shown.push('```')
+    const open = openFence(shown)
+
+    if (open)
+      shown.push(open)
 
     const text = fitCommits([...shown, '…', head.at(-1)!], lines, tail)
 
@@ -53,6 +55,20 @@ function fitDescription(head: string[], lines: string[], tail: string) {
   }
 
   return tail.slice(0, descriptionLimit)
+}
+
+// The marker of a code block the lines leave open, which closes it again.
+function openFence(lines: string[]) {
+  let open: string | undefined
+
+  for (const line of lines) {
+    const marker = fenceRE.exec(line)?.[1]
+
+    if (marker)
+      open = !open ? marker : marker.startsWith(open) ? undefined : open
+  }
+
+  return open
 }
 
 // The highlights as Discord shows them: under a bold title, their headings in bold too, as an embed draws no heading.

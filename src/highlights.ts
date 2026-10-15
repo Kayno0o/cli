@@ -63,7 +63,7 @@ function withoutFrontmatter(lines: string[]) {
   if (lines[0]?.trim() !== '---')
     return lines
 
-  const end = lines.indexOf('---', 1)
+  const end = lines.findIndex((line, index) => index > 0 && line.trim() === '---')
 
   return end === -1 ? lines : lines.slice(end + 1)
 }
