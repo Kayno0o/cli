@@ -104,6 +104,12 @@ describe('links', () => {
     )
   })
 
+  it('keeps balanced parentheses inside a target', () => {
+    expect(resolveLinks('[a](/wiki/Foo_(bar)) [b](notes_(1).md#x) [d](../up_(x)/../y) (see [c](/c))', PAGE)).toBe(
+      '[a](https://docs.example/wiki/Foo_(bar)) [b](https://docs.example/guides/whats-new/notes_(1).md#x) [d](https://docs.example/guides/y) (see [c](https://docs.example/c))',
+    )
+  })
+
   it('resolves a reference definition', () => {
     expect(resolveLinks('[cli]: /reference/cli', PAGE)).toBe('[cli]: https://docs.example/reference/cli')
   })
@@ -157,6 +163,13 @@ describe('notes', () => {
       '',
       '**✨ New**',
     ].join('\n'))
+  })
+
+  it('bold a heading on Discord without doubling its own emphasis, and drop an empty one', async () => {
+    const own = { lines: ['### **Big** news', '- a', '###', '- b', '### ', '- c'], link: PAGE }
+    const embed = generateDiscordPayload([commit('feat: a')], await options(), [], own).embeds![0]!
+
+    expect(embed.description).toStartWith(['**🌟 Highlights**', '**Big news**', '- a', '- b', '- c', `[Read more](${PAGE})`].join('\n'))
   })
 
   it('close a code block cut open on Discord with its own marker', async () => {

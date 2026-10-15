@@ -12,7 +12,8 @@ export interface Highlights {
 const fenceRE = /^\s*(`{3,}|~{3,})/
 const headingRE = /^(#{1,6})(\s.*)$/
 const schemeRE = /^[a-z][a-z\d+.-]*:/i
-const inlineLinkRE = /(\]\(\s*<?)([^\s<)>]+)/g
+// A target may hold balanced parentheses, as CommonMark allows: `/wiki/Foo_(bar)`.
+const inlineLinkRE = /(\]\(\s*<?)((?:[^\s<>()]|\([^\s<>()]*\))+)/g
 const definitionRE = /^(\s{0,3}\[[^\]]+\]:\s*<?)([^\s<>]+)(>?(?:\s.*)?)$/
 const codeSpanRE = /(`+)[\s\S]*?\1/
 

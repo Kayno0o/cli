@@ -9,7 +9,8 @@ const color = 0xFB923C
 const breakingColor = 0xED4245
 
 const fenceRE = /^\s*(`{3,}|~{3,})/
-const headingRE = /^#{1,6}\s(.*)$/
+const headingRE = /^#{1,6}(?:\s(.*))?$/
+const strongRE = /\*\*|__/g
 
 const isCommitLine = (line: string) => line.startsWith('- ')
 
@@ -74,13 +75,19 @@ function openFence(lines: string[]) {
 // The highlights as Discord shows them: under a bold title, their headings in bold too, as an embed draws no heading.
 function highlightLines(highlights: Highlights, options: ResolvedChangelogOptions) {
   let fenced = false
-  const lines = highlights.lines.map((line) => {
+  const lines = highlights.lines.flatMap((line) => {
     if (fenceRE.test(line))
       fenced = !fenced
 
     const heading = fenced ? null : headingRE.exec(line)
 
-    return heading ? `**${heading[1]!.trim()}**` : line
+    if (!heading)
+      return [line]
+
+    // Its own bold would close the one around it; an empty heading has nothing to show.
+    const text = (heading[1] ?? '').replace(strongRE, '').trim()
+
+    return text ? [`**${text}**`] : []
   })
 
   return [`**${formatTitle(options.titles.highlights!, options)}**`, ...lines, `[Read more](${highlights.link})`]
