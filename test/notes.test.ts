@@ -149,7 +149,7 @@ describe('config', () => {
     expect(config.assets).toEqual(['b'])
     expect(config.capitalize).toBe(true)
     expect(config.emoji).toBe(false)
-    expect(config.titles).toEqual({ breakingChanges: '⚠️ Breaking', maintenance: 'Chores' })
+    expect(config.titles).toEqual({ breakingChanges: '⚠️ Breaking', highlights: '🌟 Highlights', maintenance: 'Chores' })
     expect(config.types!.feat).toEqual({ title: 'Added' })
     expect(config.types!.ci).toEqual({ title: 'ci', folded: true })
   })

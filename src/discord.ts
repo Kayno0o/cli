@@ -1,4 +1,5 @@
 import type { DiscordWebhookPayload } from '@kaynooo/utils'
+import type { Highlights } from './highlights'
 import type { AuthorInfo, Commit, ResolvedChangelogOptions } from './types'
 import { compareUrl, foldedCounts, formatLine, formatTitle, groupCommits, releaseUrl, shortRef } from './markdown'
 
@@ -7,10 +8,13 @@ const descriptionLimit = 4096
 const color = 0xFB923C
 const breakingColor = 0xED4245
 
+const fenceRE = /^\s*(?:`{3,}|~{3,})/
+const headingRE = /^#{1,6}\s(.*)$/
+
 const isCommitLine = (line: string) => line.startsWith('- ')
 
-// Keeps the description under Discord's limit by dropping commit lines from the end, saying how many went.
-function fitDescription(lines: string[], tail: string) {
+// Drops commit lines from the end until the description fits, saying how many went; nothing when even the head and the tail alone run over.
+function fitCommits(head: string[], lines: string[], tail: string) {
   const total = lines.filter(isCommitLine).length
 
   for (let kept = lines.length; kept >= 0; kept--) {
@@ -20,16 +24,53 @@ function fitDescription(lines: string[], tail: string) {
       shown.pop()
 
     const more = total - shown.filter(isCommitLine).length
-    const text = [...shown, ...(more ? ['', `*…and ${more} more*`] : []), '', tail].join('\n').trim()
+    const text = [...head, ...shown, ...(more ? ['', `*…and ${more} more*`] : []), '', tail].join('\n').trim()
 
     if (text.length <= descriptionLimit)
+      return text
+  }
+
+  return undefined
+}
+
+// Keeps the description under Discord's limit: commit lines go first, then the highlights' lines from the end, their title and the link to the page kept, and a code block cut open closed again.
+function fitDescription(head: string[], lines: string[], tail: string) {
+  const fitted = fitCommits(head, lines, tail)
+
+  if (fitted !== undefined || !head.length)
+    return fitted ?? tail.slice(0, descriptionLimit)
+
+  for (let kept = head.length - 2; kept >= 1; kept--) {
+    const shown = head.slice(0, kept)
+
+    if (shown.filter(line => fenceRE.test(line)).length % 2)
+      shown.push('```')
+
+    const text = fitCommits([...shown, '…', head.at(-1)!], lines, tail)
+
+    if (text !== undefined)
       return text
   }
 
   return tail.slice(0, descriptionLimit)
 }
 
-export function generateDiscordPayload(commits: Commit[], options: ResolvedChangelogOptions, contributors: AuthorInfo[] = []): DiscordWebhookPayload {
+// The highlights as Discord shows them: under a bold title, their headings in bold too, as an embed draws no heading.
+function highlightLines(highlights: Highlights, options: ResolvedChangelogOptions) {
+  let fenced = false
+  const lines = highlights.lines.map((line) => {
+    if (fenceRE.test(line))
+      fenced = !fenced
+
+    const heading = fenced ? null : headingRE.exec(line)
+
+    return heading ? `**${heading[1]!.trim()}**` : line
+  })
+
+  return [`**${formatTitle(options.titles.highlights!, options)}**`, ...lines, `[Read more](${highlights.link})`]
+}
+
+export function generateDiscordPayload(commits: Commit[], options: ResolvedChangelogOptions, contributors: AuthorInfo[] = [], highlights?: Highlights): DiscordWebhookPayload {
   const { sections, folded } = groupCommits(commits, options)
   const lines: string[] = []
 
@@ -53,7 +94,7 @@ export function generateDiscordPayload(commits: Commit[], options: ResolvedChang
       title: `${String(options.releaseRepo).split('/').at(-1)} ${options.name || options.to}`.slice(0, 256),
       url: releaseUrl(options),
       color: commits.some(c => c.isBreaking) ? breakingColor : color,
-      description: fitDescription(lines, tail),
+      description: fitDescription(highlights ? highlightLines(highlights, options) : [], lines, tail),
       footer: { text: authors ? `${authors} · ${range}` : range, icon_url: contributors.find(c => c.avatar)?.avatar },
       timestamp: new Date().toISOString(),
     }],

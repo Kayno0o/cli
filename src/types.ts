@@ -47,6 +47,10 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   titles?: {
     breakingChanges?: string
     /**
+     * Title of the section `highlights` opens the notes with
+     */
+    highlights?: string
+    /**
      * Title of the collapsed block holding every type marked `folded`
      */
     maintenance?: string
@@ -131,6 +135,20 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
    * @default process.env.DISCORD_WEBHOOK
    */
   discordWebhook?: string
+
+  /**
+   * Open the notes and the Discord post with the released version's section of a Markdown page, the `## 1.2.0` heading for tag `v1.2.0`, ending on a link to it
+   */
+  highlights?: {
+    /**
+     * The page's Markdown, from the project root
+     */
+    file: string
+    /**
+     * Where the page is published: its links resolve against it, and the notes link to the version's heading on it
+     */
+    url: string
+  }
 
   /**
    * Files to upload as assets to the release

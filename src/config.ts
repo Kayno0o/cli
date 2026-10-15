@@ -24,6 +24,7 @@ const defaultConfig = {
   },
   titles: {
     breakingChanges: '⚠️ Breaking',
+    highlights: '🌟 Highlights',
     maintenance: '🧹 Maintenance',
   },
   contributors: true,

@@ -1,4 +1,5 @@
 import type { Reference } from './changelog'
+import type { Highlights } from './highlights'
 import type { AuthorInfo, Commit, ResolvedChangelogOptions } from './types'
 import { capitalize, groupBy } from '@kaynooo/utils'
 
@@ -141,10 +142,13 @@ function formatAvatars(contributors: AuthorInfo[], options: ResolvedChangelogOpt
     .join(' ')
 }
 
-export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOptions, contributors: AuthorInfo[] = []) {
+export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOptions, contributors: AuthorInfo[] = [], highlights?: Highlights) {
   const grouped = groupCommits(commits, options)
   const { sections, folded } = grouped
   const lines = [formatSummary(grouped, contributors, options)]
+
+  if (highlights)
+    lines.push('', `### ${formatTitle(options.titles.highlights!, options)}`, '', ...highlights.lines, '', `[Read more](${highlights.link})`)
 
   for (const section of sections)
     lines.push(...formatSection(section, options))

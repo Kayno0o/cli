@@ -33,6 +33,7 @@ it('parse', async () => {
       "tagFilter": [Function],
       "titles": {
         "breakingChanges": "⚠️ Breaking",
+        "highlights": "🌟 Highlights",
         "maintenance": "🧹 Maintenance",
       },
       "to": "1f352da7c4763d4dba7861ef78443f9f731c6573",

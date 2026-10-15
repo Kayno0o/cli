@@ -11,6 +11,7 @@ Generate changelog for Gitea / Forgejo releases from [Conventional Commits](http
 - Issues linked from the subject (`#12`) and from `#12 - title` lines in the commit body
 - Create the release note, or update the existing one
 - Post the release to a Discord webhook
+- Open the notes with the release's section of a hand-written "what's new" page
 - List contributors with their avatars
 - Upload assets to the release
 
@@ -23,6 +24,8 @@ A note opens with a one-line summary (`3 new · 3 fixed · 6 maintenance · by @
 - the contributors' avatars and a link to the full diff
 
 A type set to `{ title, folded: true }` in `types` joins the maintenance block, and `titles.maintenance` renames it.
+
+With [`highlights`](#open-the-notes-with-highlights), a **🌟 Highlights** section comes right after the summary.
 
 ## Discord
 
@@ -120,6 +123,33 @@ export default defineConfig({
 It defaults to `false`. The tag the range starts from and the first commit are also looked up along the first parent.
 
 This also drops the commits of a feature branch merged with a merge commit: only the merge's own message is read. It suits repos that squash or fast-forward, plus a one-off import.
+
+### Open the notes with highlights
+
+Commit lines say what changed, not why it matters. `highlights` points at a Markdown page you write by hand, one `## <version>` section per release, and opens the notes with the section of the version being released, under **🌟 Highlights**, ending on a link to it:
+
+```ts
+// changelogitea.config.ts
+import { defineConfig } from '@kaynooo/changelogitea'
+
+export default defineConfig({
+  highlights: {
+    file: 'docs/whats-new.md',
+    url: 'https://docs.example.com/whats-new/',
+  },
+})
+```
+
+```md
+## 1.4.0
+
+- `render` prints a page without a server: see [the CLI](/reference/cli#render).
+```
+
+- The section is found by the version without the tag's prefix: `## 1.4.0` for `v1.4.0`. It runs to the next `## ` heading; its own headings are demoted one level, and the page's frontmatter is skipped.
+- Links resolve against `url`, so `/reference/cli` becomes `https://docs.example.com/reference/cli`. The closing link goes to the version's heading on the page, slugged as GitHub does (`#140`).
+- The Discord post opens with the same section, its headings in bold. When the post runs past Discord's limit, commits are dropped first, then the section's last lines, the link to the page always kept.
+- Without the file or a section for the version, the notes are as they would be without the option. `titles.highlights` renames the section.
 
 ## Preview Locally
 
