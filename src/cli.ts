@@ -29,6 +29,38 @@ const COMMANDS: Record<string, { run: Command, summary: string }> = {
   remote: { run: remote, summary: 'check or fix an origin using an ssh alias tea cannot match' },
 }
 
+// Names sessions reach for that mean an existing command.
+const ALIASES: Record<string, string> = { show: 'issue', view: 'issue' }
+
+// Edit distance between two names, for pointing a mistyped command at the one meant.
+function distance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index)
+
+  for (const [i, left] of [...a].entries()) {
+    const current = [i + 1]
+
+    for (const [j, right] of [...b].entries())
+      current.push(Math.min((previous[j + 1] ?? 0) + 1, (current[j] ?? 0) + 1, (previous[j] ?? 0) + (left === right ? 0 : 1)))
+
+    previous = current
+  }
+
+  return previous[b.length] ?? 0
+}
+
+// A command the name starts, else one within two edits (one for a name under four letters).
+function closest(name: string): string | undefined {
+  const names = Object.keys(COMMANDS)
+  const started = names.find(known => known.startsWith(name))
+
+  if (started !== undefined)
+    return started
+
+  const [best] = names.map(known => ({ known, far: distance(name, known) })).sort((a, b) => a.far - b.far)
+
+  return best !== undefined && best.far <= (name.length < 4 ? 1 : 2) ? best.known : undefined
+}
+
 function help(): string {
   const width = Math.max(...Object.keys(COMMANDS).map(name => name.length))
 
@@ -53,10 +85,12 @@ if (name === '--version' || name === '-v') {
   process.exit(0)
 }
 
-const command = COMMANDS[name]
+const command = COMMANDS[ALIASES[name] ?? name]
 
 if (command === undefined) {
-  console.error(`ft: no command ${name}\n\n${help()}`)
+  const meant = closest(name)
+
+  console.error(meant === undefined ? `ft: no command ${name}\n\n${help()}` : `ft: no command ${name}, did you mean ${meant}?`)
   process.exit(2)
 }
 

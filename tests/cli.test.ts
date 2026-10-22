@@ -25,6 +25,17 @@ describe('ft', () => {
     expect(help.out).toContain('--undo')
   })
 
+  test('runs show and view as issue, and names the command a typo meant', () => {
+    expect(ft('show', '--help').out).toStartWith('ft issue <n>')
+    expect(ft('view', '--help').out).toStartWith('ft issue <n>')
+
+    const typo = ft('tik', '12', '1')
+
+    expect(typo.code).toBe(2)
+    expect(typo.err.trim()).toBe('ft: no command tik, did you mean tick?')
+    expect(ft('nope').err).toContain('usage: ft <command>')
+  })
+
   test('exits 2 on an unknown command, an unknown flag or a missing argument', () => {
     expect(ft('nope').code).toBe(2)
 
