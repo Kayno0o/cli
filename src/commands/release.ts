@@ -7,7 +7,7 @@ import { watchRuns } from './watch'
 const usage = `ft release <patch|minor|major|x.y.z>
 ft release --tagged
 
-Cuts a release from the default branch as origin has it: \`bun pm version\` commits and tags the bump, one atomic push sends the branch and its tag, then it waits for the runs the push started and for the registry to serve the version.
+Cuts a release from the default branch: \`bun pm version\` commits and tags the bump, one atomic push sends the branch, with any commits origin lacks, and its tag, then it waits for the runs the push started and for the registry to serve the version.
 --tagged releases a version commit already tagged at HEAD instead, for repos bumping with their own script.
 A refused push drops the bump commit and its tag, so a retry starts clean.`
 
@@ -67,11 +67,9 @@ export async function release(args: string[]): Promise<number> {
 
   await git(['fetch', '-q', 'origin', branch])
 
-  // The tag must name what origin has plus the version commit alone, so nothing unpushed rides along untested.
-  const base = tagged ? 'HEAD~1' : 'HEAD'
-
-  if (await git(['rev-parse', base]) !== await git(['rev-parse', `origin/${branch}`]))
-    fail(`${base} differs from origin/${branch}: pull or push first`)
+  // Unpushed commits ride along, the tag workflow testing them before it publishes; a push origin would refuse is caught before the bump.
+  if ((await $`git merge-base --is-ancestor ${`origin/${branch}`} HEAD`.quiet().nothrow()).exitCode !== 0)
+    fail(`origin/${branch} has commits HEAD lacks: pull first`)
 
   if (level !== undefined) {
     const bump = await $`bun pm version ${level}`.quiet().nothrow()

@@ -38,7 +38,7 @@ With an admin login, a queued run is checked against the runners: a job whose `r
 
 ## Releases
 
-`ft release patch|minor|major` releases from the default branch when it matches origin's, so the tag names what CI tested. A refused push drops the bump commit and tag. A repo with its own bump script runs it, then `ft release --tagged`.
+`ft release patch|minor|major` releases from the default branch, pushing any commits origin lacks along with the bump, which the tag workflow tests before it publishes. A refused push drops the bump commit and tag. A repo with its own bump script runs it, then `ft release --tagged`.
 
 ## Issue claims
 
