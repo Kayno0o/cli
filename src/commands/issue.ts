@@ -1,5 +1,5 @@
 import type { Issue, IssueComment } from '../issues'
-import { fail, issueNumber, parse, repoOption } from '../args'
+import { fail, issueNumber, issueNumbers, parse, repoOption } from '../args'
 import { boxes, numberedBody, setBoxes } from '../checklist'
 import { latestClaim } from '../claims'
 import { formatAge } from '../format'
@@ -72,7 +72,7 @@ export async function issue(args: string[]): Promise<number> {
     return 0
 
   const { values, positionals } = parsed
-  const numbers = (positionals.length === 0 ? [undefined] : positionals).map(value => issueNumber(value, issueUsage))
+  const numbers = issueNumbers(positionals, issueUsage)
   const read = await Promise.all(numbers.map(async number => Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])))
 
   if (values.json === true) {

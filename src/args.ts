@@ -56,6 +56,10 @@ export function issueNumber(value: string | undefined, usage: string): number {
   return wholeNumber(value.replace(ISSUE_HASH, ''), 'issue', 0)
 }
 
+export function issueNumbers(values: string[], usage: string): number[] {
+  return values.length === 0 ? [issueNumber(undefined, usage)] : values.map(value => issueNumber(value, usage))
+}
+
 export function wholeNumber(value: string | undefined, name: string, fallback: number, min = 1): number {
   if (value === undefined)
     return fallback

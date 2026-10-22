@@ -18,7 +18,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft logs <run>` | what the failed jobs of a run say went wrong, `--full` for whole logs |
 | `ft release <level>` | `bun pm version`, one atomic push of branch and tag, then waits for the runs and the registry |
 | `ft board` | open issues: available, taken by a live session, or claimed with no live session here, each claim with its boxes left and a stale one with its latest note |
-| `ft take <n>` / `ft drop <n>` | claims or gives back an issue for the calling Claude Code session |
+| `ft take <n>...` / `ft drop <n>...` | claims or gives back issues for the calling Claude Code session, `--lane` as `lane-<s>-<n>` |
 | `ft issue <n>...` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `--json`) |
 | `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks |
 | `ft fixed <n> [sha]` | comments `Fixed in <sha>: <subject>` and closes, refusing while boxes are left |
@@ -42,4 +42,4 @@ With an admin login, a queued run is checked against the runners: a job whose `r
 
 ## Issue claims
 
-Sessions claim an issue with a `Taken by session <name>.` comment and give it back with `Released by session <name>.`. `ft board` checks each claim against the Claude Code sessions running on this machine (`~/.claude/sessions` and `~/.claude-accounts/*/sessions`, pid and start time). A lane's claim (`lane-<n>-<issue>`) is held while the session named `*-<n>` runs. A claim no session here answers to may come from another machine, so `ft take` only takes it over with `--take-stale`.
+Sessions claim an issue with a `Taken by session <name>.` comment and give it back with `Released by session <name>.`. `ft board` checks each claim against the Claude Code sessions running on this machine (`~/.claude/sessions` and `~/.claude-accounts/*/sessions`, pid and start time). A lane's claim (`lane-<n>-<issue>`) is held while the session named `*-<n>` runs: `ft take 12 13 --lane` from session `kayjs-60` claims them as `lane-60-12` and `lane-60-13`, and a session passes its own claim to its lanes without `--take-stale`. A claim no session here answers to may come from another machine, so `ft take` only takes it over with `--take-stale`.

@@ -1,9 +1,9 @@
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
 import type { Session } from '../sessions'
-import { fail, issueNumber, parse, repoOption } from '../args'
+import { Exit, fail, issueNumbers, parse, repoOption } from '../args'
 import { boxes } from '../checklist'
-import { holderSession, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
+import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
 import { formatAge, table, truncate } from '../format'
 import { comment, commentsOf, commentsOfAll, getIssue, openIssues } from '../issues'
 import { currentSession, liveSessions } from '../sessions'
@@ -130,16 +130,56 @@ async function me(as: string | undefined, sessions: Session[]): Promise<string> 
   return session.name
 }
 
-const takeUsage = `ft take <n>
+const takeUsage = `ft take <n>...
 
-Claims issue <n> for this Claude Code session with a "Taken by session <name>." comment.
-An issue a live session holds is refused, and one claimed by a session no session here answers to needs --take-stale.`
+Claims each issue for this Claude Code session with a "Taken by session <name>." comment.
+An issue another live session holds is refused, one this session or its lanes hold passes to the new name, and one claimed by a session no session here answers to needs --take-stale; a refusal leaves the other issues taken and exits 1.`
+
+const laneOption = {
+  lane: { type: 'boolean', description: 'claim each as lane-<s>-<n>, <s> ending this session\'s name, so the claim stays live while it runs' },
+} as const
 
 const takeOptions = {
   'as': { type: 'string', description: 'the name to claim as, instead of this session\'s' },
+  ...laneOption,
   'take-stale': { type: 'boolean', description: 'take it over from a claim no live session here answers to' },
   ...repoOption,
 } as const
+
+// The name each issue is claimed as: the session's own, or with --lane the lane named after it and the issue.
+async function claimant(values: { as?: string | undefined, lane?: boolean | undefined }, sessions: Session[]): Promise<(number: number) => string> {
+  const name = await me(values.as, sessions)
+
+  if (values.lane !== true)
+    return () => name
+
+  const suffix = laneSuffix(name)
+
+  if (suffix === undefined)
+    fail(`a lane is named after a session whose name ends in -<n>, not ${name}: pass --as`)
+
+  return number => `lane-${suffix}-${number}`
+}
+
+// Runs a step for each issue, reporting a refusal and carrying on with the rest, so the exit code is the worst refusal's.
+async function eachIssue(command: string, numbers: number[], step: (number: number) => Promise<void>): Promise<number> {
+  let code = 0
+
+  for (const number of numbers) {
+    try {
+      await step(number)
+    }
+    catch (error) {
+      if (!(error instanceof Exit) || numbers.length === 1)
+        throw error
+
+      console.error(`ft ${command}: ${error.message}`)
+      code = Math.max(code, error.code)
+    }
+  }
+
+  return code
+}
 
 export async function take(args: string[]): Promise<number> {
   const parsed = parse(args, takeUsage, takeOptions)
@@ -148,41 +188,45 @@ export async function take(args: string[]): Promise<number> {
     return 0
 
   const { values, positionals } = parsed
-  const number = issueNumber(positionals[0], takeUsage)
+  const numbers = issueNumbers(positionals, takeUsage)
   const sessions = await liveSessions()
-  const name = await me(values.as, sessions)
-  const [found, comments] = await Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])
+  const nameFor = await claimant(values, sessions)
 
-  if (found.state === 'closed')
-    fail(`#${number} is closed`)
+  return eachIssue('take', numbers, async (number) => {
+    const name = nameFor(number)
+    const [found, comments] = await Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])
 
-  const claim = latestClaim(comments)
-  const current = standing(claim, sessions)
+    if (found.state === 'closed')
+      fail(`#${number} is closed`, 1)
 
-  if (claim?.holder === name) {
-    console.log(`#${number} is already taken by ${name}`)
+    const claim = latestClaim(comments)
+    const current = standing(claim, sessions)
 
-    return 0
-  }
+    if (claim?.holder === name) {
+      console.log(`#${number} is already taken by ${name}`)
 
-  if (current.state === 'taken')
-    fail(`#${number} is taken by ${current.claim.holder}${current.session.name === current.claim.holder ? '' : ` in ${current.session.name}`}, which still runs (${current.session.status})`, 1)
+      return
+    }
 
-  if (current.state === 'away' && values['take-stale'] !== true)
-    fail(`#${number} was taken by ${current.claim.holder} ${formatAge(current.claim.at)}, which no session here answers to: it may run on another machine, so pass --take-stale to take it over`, 1)
+    // A session hands its own claim to one of its lanes, or back, as both answer to it.
+    if (current.state === 'taken' && holderSession(name, sessions)?.pid !== current.session.pid)
+      fail(`#${number} is taken by ${current.claim.holder}${current.session.name === current.claim.holder ? '' : ` in ${current.session.name}`}, which still runs (${current.session.status})`, 1)
 
-  await comment(number, takenComment(name), values.repo)
-  console.log(`took #${number} as ${name}: ${found.title}`)
+    if (current.state === 'away' && values['take-stale'] !== true)
+      fail(`#${number} was taken by ${current.claim.holder} ${formatAge(current.claim.at)}, which no session here answers to: it may run on another machine, so pass --take-stale to take it over`, 1)
 
-  return 0
+    await comment(number, takenComment(name), values.repo)
+    console.log(`took #${number} as ${name}: ${found.title}`)
+  })
 }
 
-const dropUsage = `ft drop <n>
+const dropUsage = `ft drop <n>...
 
-Gives issue <n> back with a "Released by session <name>." comment, when this session holds it.`
+Gives each issue back with a "Released by session <name>." comment, when this session holds it.`
 
 const dropOptions = {
   as: { type: 'string', description: 'the name it was taken as, instead of this session\'s' },
+  ...laneOption,
   ...repoOption,
 } as const
 
@@ -193,15 +237,17 @@ export async function drop(args: string[]): Promise<number> {
     return 0
 
   const { values, positionals } = parsed
-  const number = issueNumber(positionals[0], dropUsage)
-  const name = await me(values.as, await liveSessions())
-  const claim = latestClaim(await commentsOf(number, values.repo))
+  const numbers = issueNumbers(positionals, dropUsage)
+  const nameFor = await claimant(values, await liveSessions())
 
-  if (claim?.holder !== name)
-    fail(`#${number} is ${claim === undefined ? 'not taken' : `taken by ${claim.holder}, not ${name}`}`, 1)
+  return eachIssue('drop', numbers, async (number) => {
+    const name = nameFor(number)
+    const claim = latestClaim(await commentsOf(number, values.repo))
 
-  await comment(number, releasedComment(name), values.repo)
-  console.log(`released #${number}`)
+    if (claim?.holder !== name)
+      fail(`#${number} is ${claim === undefined ? 'not taken' : `taken by ${claim.holder}, not ${name}`}`, 1)
 
-  return 0
+    await comment(number, releasedComment(name), values.repo)
+    console.log(`released #${number}`)
+  })
 }

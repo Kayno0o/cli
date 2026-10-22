@@ -37,6 +37,13 @@ export function latestClaim(comments: Comment[]): Claim | undefined {
   return claim
 }
 
+// What a lane started from this session is named after: the part of its name after the last dash.
+export function laneSuffix(session: string): string | undefined {
+  const suffix = session.slice(session.lastIndexOf('-') + 1)
+
+  return session.includes('-') && suffix !== '' ? suffix : undefined
+}
+
 // The latest comment that neither takes nor gives back the issue, which says where its work stands.
 export function latestNote<T extends Comment>(comments: T[]): T | undefined {
   return comments.filter(comment => !TAKEN.test(comment.body) && !RELEASED.test(comment.body)).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).at(-1)

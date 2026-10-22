@@ -2,7 +2,7 @@ import type { Issue } from '../src/issues'
 import type { Session } from '../src/sessions'
 import process from 'node:process'
 import { describe, expect, test } from 'bun:test'
-import { holderSession, latestClaim, latestNote, releasedComment, takenComment } from '../src/claims'
+import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../src/claims'
 import { renderBoard, standing } from '../src/commands/board'
 import { currentSession } from '../src/sessions'
 
@@ -36,6 +36,15 @@ describe('holderSession', () => {
     expect(holderSession('lane-80-1978', sessions)?.name).toBe('kayjs-80')
     expect(holderSession('lane-fum-1922', sessions)).toBeUndefined()
     expect(holderSession('kayjs-12', sessions)).toBeUndefined()
+  })
+})
+
+describe('laneSuffix', () => {
+  test('names a lane after the end of the session name, which holderSession reads back', () => {
+    expect(laneSuffix('kayjs-60')).toBe('60')
+    expect(holderSession(`lane-${laneSuffix('forgejo-tools-46')}-12`, [session('kayjs-46'), session('forgejo-tools-46', 2)])?.name).toBe('kayjs-46')
+    expect(laneSuffix('kayjs')).toBeUndefined()
+    expect(laneSuffix('kayjs-')).toBeUndefined()
   })
 })
 
