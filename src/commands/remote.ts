@@ -1,7 +1,8 @@
+import { lookup } from 'node:dns/promises'
 import { $ } from 'bun'
 import { parse } from '../args'
 import { git } from '../git'
-import { canonicalRemote, parseSshRemote } from '../remote'
+import { canonicalRemote, parseSshRemote, reachesHost } from '../remote'
 
 const usage = `ft remote [--fix]
 
@@ -15,8 +16,21 @@ const options = {
 
 const HOSTNAME = /^hostname (.+)$/m
 
-async function resolveAlias(alias: string): Promise<string | undefined> {
+async function sshHostname(alias: string): Promise<string | undefined> {
   return HOSTNAME.exec(await $`ssh -G ${alias}`.quiet().nothrow().text())?.[1]
+}
+
+async function addresses(name: string): Promise<string[]> {
+  try {
+    return (await lookup(name, { all: true })).map(entry => entry.address)
+  }
+  catch {
+    return []
+  }
+}
+
+function originHost(url: string): string | undefined {
+  return parseSshRemote(url)?.host ?? (URL.canParse(url) ? new URL(url).hostname : undefined)
 }
 
 export async function remote(args: string[]): Promise<number> {
@@ -29,22 +43,40 @@ export async function remote(args: string[]): Promise<number> {
   const host = values.host ?? 'git.kaynooo.fr'
   const fetchUrl = await git(['remote', 'get-url', 'origin'])
   const pushUrls = (await $`git config --get-all remote.origin.pushurl`.quiet().nothrow().text()).split('\n').filter(Boolean)
-  const resolved = new Map<string, string | undefined>()
+  const hostAddresses = new Set(await addresses(host))
+  const hostnames = new Map<string, string | undefined>()
+  const reaching = new Set<string>()
 
   for (const url of [fetchUrl, ...pushUrls]) {
     const alias = parseSshRemote(url)?.host
 
-    if (alias !== undefined && !resolved.has(alias))
-      resolved.set(alias, await resolveAlias(alias))
+    if (alias === undefined || hostnames.has(alias))
+      continue
+
+    const hostname = await sshHostname(alias)
+
+    hostnames.set(alias, hostname)
+
+    if (await reachesHost(hostname, host, hostAddresses, addresses))
+      reaching.add(alias)
   }
 
-  const resolve = (alias: string) => resolved.get(alias)
-  const changes = [fetchUrl, ...pushUrls].map(url => [url, canonicalRemote(url, host, resolve)] as const).filter((change): change is readonly [string, string] => change[1] !== undefined)
+  const changes = [fetchUrl, ...pushUrls].map(url => [url, canonicalRemote(url, host, alias => reaching.has(alias))] as const).filter((change): change is readonly [string, string] => change[1] !== undefined)
 
   if (changes.length === 0) {
-    console.log(`origin already names ${host}: ${fetchUrl}`)
+    const named = originHost(fetchUrl)
 
-    return 0
+    if (named === host) {
+      console.log(`origin already names ${host}: ${fetchUrl}`)
+
+      return 0
+    }
+
+    const hostname = named === undefined ? undefined : hostnames.get(named)
+
+    console.log(`origin ${fetchUrl} does not reach ${host}${hostname === undefined || hostname === named ? '' : `: ssh connects ${named} to ${hostname}`}, pass --host if Forgejo lives elsewhere`)
+
+    return 1
   }
 
   for (const [from, to] of changes)

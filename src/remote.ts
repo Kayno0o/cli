@@ -10,12 +10,20 @@ export function parseSshRemote(url: string): SshRemote | undefined {
   return match === null ? undefined : { user: match[1] ?? 'git', host: match[2] ?? '', path: match[3] ?? '' }
 }
 
-// The `git@<host>:<owner>/<repo>.git` form tea matches a login's ssh_host against, for a remote whose host is an ssh alias resolving to <host>; undefined when it needs no change.
-export function canonicalRemote(url: string, host: string, resolve: (alias: string) => string | undefined): string | undefined {
+// The `git@<host>:<owner>/<repo>.git` form tea matches a login's ssh_host against, for a remote whose host is an ssh alias that reaches <host>; undefined when it needs no change.
+export function canonicalRemote(url: string, host: string, reaches: (alias: string) => boolean): string | undefined {
   const remote = parseSshRemote(url)
 
-  if (remote === undefined || remote.host === host || resolve(remote.host) !== host)
+  if (remote === undefined || remote.host === host || !reaches(remote.host))
     return undefined
 
   return `${remote.user}@${host}:${remote.path}.git`
+}
+
+// Whether ssh, connecting an alias to <hostname>, reaches <host>: by its name, or by an address <host> resolves to, as a LAN IP does.
+export async function reachesHost(hostname: string | undefined, host: string, hostAddresses: Set<string>, addressesOf: (name: string) => Promise<string[]>): Promise<boolean> {
+  if (hostname === undefined)
+    return false
+
+  return hostname === host || (await addressesOf(hostname)).some(address => hostAddresses.has(address))
 }
