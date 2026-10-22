@@ -1,5 +1,6 @@
+import type { Issue, IssueComment } from '../issues'
 import { fail, issueNumber, parse, repoOption } from '../args'
-import { boxes, setBoxes } from '../checklist'
+import { boxes, numberedBody, setBoxes } from '../checklist'
 import { latestClaim } from '../claims'
 import { formatAge } from '../format'
 import { git, resolveCommit } from '../git'
@@ -7,12 +8,62 @@ import { close, comment, commentsOf, getIssue, setBody } from '../issues'
 
 const issueUsage = `ft issue <n>
 
-Prints an issue's title, state, claim and its checklist boxes with their numbers, as \`ft tick\` takes them.`
+Prints an issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it.`
 
 const issueOptions = {
-  todo: { type: 'boolean', short: 't', description: 'only the boxes left to tick' },
+  todo: { type: 'boolean', short: 't', description: 'only the header and the boxes left to tick' },
+  comments: { type: 'boolean', short: 'c', description: 'add the comments, each with its author and age' },
+  json: { type: 'boolean', description: 'print JSON: number, title, state, url, labels, claim, boxes, body and comments' },
   ...repoOption,
 } as const
+
+export interface IssueView { todo: boolean, comments: boolean }
+
+// Renders an issue as `ft issue` prints it, now being the time ages are counted from.
+export function renderIssue(found: Issue, comments: IssueComment[], view: IssueView, now = Date.now()): string {
+  const claim = latestClaim(comments)
+  const list = boxes(found.body)
+  const left = list.filter(box => !box.done)
+  const facts = [found.state]
+
+  if (list.length > 0)
+    facts.push(`${left.length} of ${list.length} boxes left`)
+
+  if (claim !== undefined)
+    facts.push(`taken by ${claim.holder} ${formatAge(claim.at, now)}`)
+
+  const header = `#${found.number} ${found.title} (${facts.join(', ')})`
+
+  if (view.todo)
+    return [header, ...left.map(box => `${String(box.number).padStart(3)} [ ] ${box.text}`)].join('\n')
+
+  const parts = [`${header}\n${found.html_url}`]
+  const body = numberedBody(found.body)
+
+  if (body !== '')
+    parts.push(body)
+
+  if (view.comments) {
+    for (const each of comments)
+      parts.push(`--- ${each.user.login}, ${formatAge(each.created_at, now)}\n${each.body.replaceAll('\r\n', '\n').trim()}`)
+  }
+
+  return parts.join('\n\n')
+}
+
+function issueJson(found: Issue, comments: IssueComment[]) {
+  return {
+    number: found.number,
+    title: found.title,
+    state: found.state,
+    url: found.html_url,
+    labels: found.labels.map(label => label.name),
+    claim: latestClaim(comments) ?? null,
+    boxes: boxes(found.body).map(({ number, done, text }) => ({ number, done, text })),
+    body: found.body,
+    comments: comments.map(each => ({ author: each.user.login, at: each.created_at, body: each.body })),
+  }
+}
 
 export async function issue(args: string[]): Promise<number> {
   const parsed = parse(args, issueUsage, issueOptions)
@@ -23,18 +74,10 @@ export async function issue(args: string[]): Promise<number> {
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], issueUsage)
   const [found, comments] = await Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])
-  const claim = latestClaim(comments)
-  const list = boxes(found.body)
-  const left = list.filter(box => !box.done)
 
-  console.log(`#${found.number} ${found.title} (${found.state}${claim === undefined ? '' : `, taken by ${claim.holder} ${formatAge(claim.at)}`})`)
-  console.log(found.html_url)
-
-  if (list.length > 0)
-    console.log(`\n${left.length} of ${list.length} boxes left`)
-
-  for (const box of values.todo === true ? left : list)
-    console.log(`${String(box.number).padStart(3)} [${box.done ? 'x' : ' '}] ${box.text}`)
+  console.log(values.json === true
+    ? JSON.stringify(issueJson(found, comments), null, 2)
+    : renderIssue(found, comments, { todo: values.todo === true, comments: values.comments === true }))
 
   return 0
 }

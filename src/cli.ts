@@ -23,7 +23,7 @@ const COMMANDS: Record<string, { run: Command, summary: string }> = {
   board: { run: board, summary: 'open issues: available, taken by a live session, or claimed by one gone' },
   take: { run: take, summary: 'claim an issue for this Claude Code session' },
   drop: { run: drop, summary: 'give back an issue this session took' },
-  issue: { run: issue, summary: 'an issue\'s claim and checklist boxes, numbered' },
+  issue: { run: issue, summary: 'an issue\'s claim, description and numbered boxes, -c comments' },
   tick: { run: tick, summary: 'tick checklist boxes of an issue' },
   fixed: { run: fixed, summary: 'comment "Fixed in <sha>" and close an issue' },
   remote: { run: remote, summary: 'check or fix an origin using an ssh alias tea cannot match' },

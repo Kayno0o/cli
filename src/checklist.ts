@@ -24,6 +24,18 @@ export function boxes(body: string): Box[] {
   return found
 }
 
+const INDENT = /^\s*/
+
+// The body as it reads, each box line carrying its number as `ft tick` takes it in place of the list marker.
+export function numberedBody(body: string): string {
+  const lines = body.replaceAll('\r\n', '\n').split('\n')
+
+  for (const box of boxes(body))
+    lines[box.line] = `${INDENT.exec(lines[box.line] ?? '')?.[0] ?? ''}${box.number} [${box.done ? 'x' : ' '}] ${box.text}`
+
+  return lines.join('\n').trim()
+}
+
 export interface Ticked { body: string, changed: Box[] }
 
 // Picks are box numbers or text matching exactly one box, case-insensitive; an unknown or ambiguous pick throws.

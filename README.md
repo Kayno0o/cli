@@ -19,7 +19,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft release <level>` | `bun pm version`, one atomic push of branch and tag, then waits for the runs and the registry |
 | `ft board` | open issues: available, taken by a live session, or claimed with no live session here |
 | `ft take <n>` / `ft drop <n>` | claims or gives back an issue for the calling Claude Code session |
-| `ft issue <n>` | an issue's claim and numbered checklist boxes |
+| `ft issue <n>` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `--json`) |
 | `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks |
 | `ft fixed <n> [sha]` | comments `Fixed in <sha>: <subject>` and closes, refusing while boxes are left |
 | `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches |
