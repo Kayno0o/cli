@@ -5,7 +5,7 @@ import { version } from '../package.json'
 import { Exit } from './args'
 import { board, drop, take } from './commands/board'
 import { ci } from './commands/ci'
-import { fixed, issue, tick } from './commands/issue'
+import { commentOn, fixed, issue, tick } from './commands/issue'
 import { logs } from './commands/logs'
 import { release } from './commands/release'
 import { remote } from './commands/remote'
@@ -24,7 +24,8 @@ const COMMANDS: Record<string, { run: Command, summary: string }> = {
   take: { run: take, summary: 'claim an issue for this Claude Code session' },
   drop: { run: drop, summary: 'give back an issue this session took' },
   issue: { run: issue, summary: 'an issue\'s claim, description and numbered boxes, -c comments' },
-  tick: { run: tick, summary: 'tick checklist boxes of an issue' },
+  tick: { run: tick, summary: 'tick checklist boxes of an issue, -m to comment too' },
+  comment: { run: commentOn, summary: 'comment on an issue, from stdin when no text is given' },
   fixed: { run: fixed, summary: 'comment "Fixed in <sha>" and close an issue' },
   remote: { run: remote, summary: 'check or fix an origin using an ssh alias tea cannot match' },
 }

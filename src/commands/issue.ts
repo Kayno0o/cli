@@ -90,12 +90,37 @@ export async function issue(args: string[]): Promise<number> {
   return 0
 }
 
+const noteOptions = {
+  message: { type: 'string', short: 'm', description: 'comment this text on the issue' },
+  file: { type: 'string', short: 'F', description: 'comment the text of this file, - for stdin' },
+} as const
+
+// The comment a command posts, from -m or -F, read before anything is written so a missing file changes nothing.
+async function noteText(values: { message?: string | undefined, file?: string | undefined }): Promise<string | undefined> {
+  if (values.message !== undefined && values.file !== undefined)
+    fail('give the comment once, as text or with -F')
+
+  let text = values.message
+
+  if (values.file !== undefined) {
+    const file = values.file === '-' ? Bun.stdin : Bun.file(values.file)
+
+    if (values.file !== '-' && !await file.exists())
+      fail(`no file ${values.file}`)
+
+    text = await file.text()
+  }
+
+  return text?.trim() === '' ? undefined : text?.trim()
+}
+
 const tickUsage = `ft tick <n> <box>...
 
-Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box.`
+Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box, then posts the -m or -F comment.`
 
 const tickOptions = {
   undo: { type: 'boolean', short: 'u', description: 'untick them instead' },
+  ...noteOptions,
   ...repoOption,
 } as const
 
@@ -112,6 +137,7 @@ export async function tick(args: string[]): Promise<number> {
   if (picks.length === 0)
     fail(`name the boxes to tick\n\n${tickUsage}`)
 
+  const note = await noteText(values)
   const found = await getIssue(number, values.repo)
   const done = values.undo !== true
   let result
@@ -132,6 +158,40 @@ export async function tick(args: string[]): Promise<number> {
   const left = boxes(result.body).filter(box => !box.done).length
 
   console.log(`#${number}: ${result.changed.length === 0 ? 'nothing to change, ' : ''}${left} box${left === 1 ? '' : 'es'} left`)
+
+  if (note !== undefined) {
+    await comment(number, note, values.repo)
+    console.log(`commented on #${number}`)
+  }
+
+  return 0
+}
+
+const commentUsage = `ft comment <n> [text]
+
+Posts a comment on issue <n>: the text given, -F <file>, or stdin when neither is, so a heredoc needs no escaping.`
+
+const commentOptions = {
+  file: noteOptions.file,
+  ...repoOption,
+} as const
+
+export async function commentOn(args: string[]): Promise<number> {
+  const parsed = parse(args, commentUsage, commentOptions)
+
+  if (parsed === undefined)
+    return 0
+
+  const { values, positionals } = parsed
+  const number = issueNumber(positionals[0], commentUsage)
+  const given = positionals.slice(1).join(' ') || undefined
+  const text = await noteText({ message: given, file: values.file ?? (given === undefined ? '-' : undefined) })
+
+  if (text === undefined)
+    fail(`nothing to comment\n\n${commentUsage}`)
+
+  await comment(number, text, values.repo)
+  console.log(`commented on #${number}`)
 
   return 0
 }

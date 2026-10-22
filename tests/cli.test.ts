@@ -36,6 +36,14 @@ describe('ft', () => {
     expect(ft('nope').err).toContain('usage: ft <command>')
   })
 
+  test('refuses a comment given twice or from a missing file before writing anything', () => {
+    const twice = ft('tick', '12', '1', '-m', 'done', '-F', 'note.md')
+
+    expect(twice.code).toBe(2)
+    expect(twice.err.trim()).toBe('ft tick: give the comment once, as text or with -F')
+    expect(ft('comment', '12', '-F', '/no/such/note.md').err.trim()).toBe('ft comment: no file /no/such/note.md')
+  })
+
   test('exits 2 on an unknown command, an unknown flag or a missing argument', () => {
     expect(ft('nope').code).toBe(2)
 

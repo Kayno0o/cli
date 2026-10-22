@@ -20,7 +20,8 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft board` | open issues: available, taken by a live session, or claimed with no live session here, each claim with its boxes left and a stale one with its latest note |
 | `ft take <n>...` / `ft drop <n>...` | claims or gives back issues for the calling Claude Code session, `--lane` as `lane-<s>-<n>` |
 | `ft issue <n>...` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `--json`) |
-| `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks |
+| `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks, `-m <text>` or `-F <file>` comments too |
+| `ft comment <n> [text]` | comments on an issue, from `-F <file>` or stdin when no text is given, so a heredoc needs no escaping |
 | `ft fixed <n> [sha]` | comments `Fixed in <sha>: <subject>` and closes, refusing while boxes are left |
 | `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches |
 
@@ -42,4 +43,4 @@ With an admin login, a queued run is checked against the runners: a job whose `r
 
 ## Issue claims
 
-Sessions claim an issue with a `Taken by session <name>.` comment and give it back with `Released by session <name>.`. `ft board` checks each claim against the Claude Code sessions running on this machine (`~/.claude/sessions` and `~/.claude-accounts/*/sessions`, pid and start time). A lane's claim (`lane-<n>-<issue>`) is held while the session named `*-<n>` runs: `ft take 12 13 --lane` from session `kayjs-60` claims them as `lane-60-12` and `lane-60-13`, and a session passes its own claim to its lanes without `--take-stale`. A claim no session here answers to may come from another machine, so `ft take` only takes it over with `--take-stale`.
+Sessions claim an issue with a `Taken by session <name>.` comment and give it back with `Released by session <name>.`. `ft board` checks each claim against the Claude Code sessions running on this machine (`~/.claude/sessions` and `~/.claude-accounts/*/sessions`, pid and start time). A lane's claim (`lane-<n>-<issue>`) is held while the session named `*-<n>` runs: `ft take 12 13 --lane` from session `kayjs-60` claims them as `lane-60-12` and `lane-60-13`, and a session can pass its own claim to one of its lanes. A claim no session here answers to may come from another machine, so `ft take` only takes it over with `--take-stale`.
