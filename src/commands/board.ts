@@ -24,6 +24,7 @@ export function standing(claim: Claim | undefined, sessions: Session[]): Standin
 }
 
 const NOTE_WIDTH = 100
+const STATES = new Set(['available', 'taken', 'away'])
 
 type Claimed = Exclude<Standing, { state: 'available' }>
 
@@ -72,7 +73,9 @@ A lane's claim (lane-<n>-<issue>) is held while the session whose name ends in -
 
 const boardOptions = {
   labels: { type: 'string', short: 'L', description: 'only issues with these labels, comma separated' },
-  json: { type: 'boolean', description: 'print JSON' },
+  query: { type: 'string', short: 'q', description: 'only issues whose title matches this, a case-insensitive regex such as dom|eager' },
+  state: { type: 'string', description: 'only issues in this state: available, taken or away (claimed, no live session here)' },
+  json: { type: 'boolean', description: 'print JSON: number, title, labels, state, holder, since, session, boxesTotal, boxesLeft and note (author, at, body of the latest comment that is not a claim)' },
   ...repoOption,
 } as const
 
@@ -83,13 +86,28 @@ export async function board(args: string[]): Promise<number> {
     return 0
 
   const { values } = parsed
-  const [issues, sessions] = await Promise.all([openIssues(values.labels, values.repo), liveSessions()])
+  const state = values.state
+
+  if (state !== undefined && !STATES.has(state))
+    fail(`--state takes available, taken or away, not ${state}`)
+
+  let query: RegExp | undefined
+
+  try {
+    query = values.query === undefined ? undefined : new RegExp(values.query, 'i')
+  }
+  catch (error) {
+    fail(`--query: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  const [open, sessions] = await Promise.all([openIssues(values.labels, values.repo), liveSessions()])
+  const issues = query === undefined ? open : open.filter(issue => query.test(issue.title))
   const comments = await commentsOfAll(issues, values.repo)
   const rows = issues.map((issue) => {
     const own = comments.get(issue.number) ?? []
 
     return { issue, standing: standing(latestClaim(own), sessions), comments: own }
-  })
+  }).filter(row => state === undefined || row.standing.state === state)
 
   if (values.json === true) {
     console.log(JSON.stringify(rows.map(({ issue, standing: { state, ...rest }, comments: own }) => {

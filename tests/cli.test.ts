@@ -44,6 +44,11 @@ describe('ft', () => {
     expect(ft('comment', '12', '-F', '/no/such/note.md').err.trim()).toBe('ft comment: no file /no/such/note.md')
   })
 
+  test('refuses an unknown board state or a broken query before reading the board', () => {
+    expect(ft('board', '--state', 'stale').err.trim()).toBe('ft board: --state takes available, taken or away, not stale')
+    expect(ft('board', '-q', '(').err).toStartWith('ft board: --query:')
+  })
+
   test('exits 2 on an unknown command, an unknown flag or a missing argument', () => {
     expect(ft('nope').code).toBe(2)
 
