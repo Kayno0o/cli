@@ -37,6 +37,11 @@ export function latestClaim(comments: Comment[]): Claim | undefined {
   return claim
 }
 
+// The latest comment that neither takes nor gives back the issue, which says where its work stands.
+export function latestNote<T extends Comment>(comments: T[]): T | undefined {
+  return comments.filter(comment => !TAKEN.test(comment.body) && !RELEASED.test(comment.body)).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).at(-1)
+}
+
 // The live session holding a claim: the one of that name, or for a lane the session it runs in.
 export function holderSession(holder: string, sessions: Session[]): Session | undefined {
   const own = sessions.find(session => session.name === holder)

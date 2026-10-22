@@ -1,8 +1,9 @@
 import type { Claim } from '../claims'
-import type { Issue } from '../issues'
+import type { Issue, IssueComment } from '../issues'
 import type { Session } from '../sessions'
 import { fail, issueNumber, parse, repoOption } from '../args'
-import { holderSession, latestClaim, releasedComment, takenComment } from '../claims'
+import { boxes } from '../checklist'
+import { holderSession, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
 import { formatAge, table, truncate } from '../format'
 import { comment, commentsOf, commentsOfAll, getIssue, openIssues } from '../issues'
 import { currentSession, liveSessions } from '../sessions'
@@ -22,19 +23,51 @@ export function standing(claim: Claim | undefined, sessions: Session[]): Standin
   return session === undefined ? { state: 'away', claim } : { state: 'taken', claim, session }
 }
 
-function claimRow(issue: Issue, row: Standing): string[] {
-  if (row.state === 'available')
-    return [`#${issue.number}`, '', '', truncate(issue.title, TITLE_WIDTH)]
+const NOTE_WIDTH = 100
 
+type Claimed = Exclude<Standing, { state: 'available' }>
+
+export interface BoardRow { issue: Issue, standing: Standing, comments: IssueComment[] }
+
+function boxesLeft(issue: Issue): string {
+  const list = boxes(issue.body)
+
+  return list.length === 0 ? '' : `${list.filter(box => !box.done).length}/${list.length} left`
+}
+
+function claimRow(issue: Issue, row: Claimed, now: number): string[] {
   const holder = row.state === 'taken' && row.session.name !== row.claim.holder ? `${row.claim.holder} via ${row.session.name}` : row.claim.holder
   const status = row.state === 'taken' ? ` (${row.session.status})` : ''
 
-  return [`#${issue.number}`, `${holder}${status}`, formatAge(row.claim.at), truncate(issue.title, TITLE_WIDTH)]
+  return [`#${issue.number}`, `${holder}${status}`, formatAge(row.claim.at, now), boxesLeft(issue), truncate(issue.title, TITLE_WIDTH)]
+}
+
+// The first line of the latest comment that is not a claim, which tells whether a claim no live session holds landed in part.
+function noteLine(comments: IssueComment[], now: number): string[] {
+  const note = latestNote(comments)
+  const first = note?.body.split('\n').map(line => line.trim()).find(line => line !== '')
+
+  return note === undefined || first === undefined ? [] : [`    ${note.user.login} ${formatAge(note.created_at, now)}: ${truncate(first, NOTE_WIDTH)}`]
+}
+
+export function renderBoard(rows: BoardRow[], now = Date.now()): string {
+  const available = rows.filter(row => row.standing.state === 'available')
+  const claimed = (state: Claimed['state']) => rows.flatMap(({ issue, standing: row, comments }) => row.state === state ? [{ issue, row, comments }] : [])
+  const taken = claimed('taken')
+  const away = claimed('away')
+  const sections = [
+    { heading: 'available', count: available.length, lines: table(available.map(({ issue }) => [`#${issue.number}`, truncate(issue.title, TITLE_WIDTH), issue.labels.map(label => label.name).join(', ')])).split('\n') },
+    { heading: 'taken', count: taken.length, lines: table(taken.map(({ issue, row }) => claimRow(issue, row, now))).split('\n') },
+    { heading: 'claimed, no live session here', count: away.length, lines: table(away.map(({ issue, row }) => claimRow(issue, row, now))).split('\n').flatMap((line, index) => [line, ...noteLine(away[index]?.comments ?? [], now)]) },
+  ].filter(section => section.count > 0)
+
+  return sections.length === 0 ? 'no open issue' : sections.map(({ heading, count, lines }) => `${heading} (${count})\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
 }
 
 const boardUsage = `ft board
 
 Lists open issues as available, taken by a session running here, or claimed by a session no session here answers to, from their latest "Taken by session <name>." comment.
+A claim shows its boxes left, and one no live session holds also the latest comment that is not a claim.
 A lane's claim (lane-<n>-<issue>) is held while the session whose name ends in -<n> runs.`
 
 const boardOptions = {
@@ -52,31 +85,35 @@ export async function board(args: string[]): Promise<number> {
   const { values } = parsed
   const [issues, sessions] = await Promise.all([openIssues(values.labels, values.repo), liveSessions()])
   const comments = await commentsOfAll(issues, values.repo)
-  const rows = issues.map(issue => ({ issue, standing: standing(latestClaim(comments.get(issue.number) ?? []), sessions) }))
+  const rows = issues.map((issue) => {
+    const own = comments.get(issue.number) ?? []
+
+    return { issue, standing: standing(latestClaim(own), sessions), comments: own }
+  })
 
   if (values.json === true) {
-    console.log(JSON.stringify(rows.map(({ issue, standing: { state, ...rest } }) => ({
-      number: issue.number,
-      title: issue.title,
-      labels: issue.labels.map(label => label.name),
-      state,
-      holder: 'claim' in rest ? rest.claim.holder : undefined,
-      since: 'claim' in rest ? rest.claim.at : undefined,
-      session: 'session' in rest ? rest.session.name : undefined,
-    })), null, 2))
+    console.log(JSON.stringify(rows.map(({ issue, standing: { state, ...rest }, comments: own }) => {
+      const list = boxes(issue.body)
+      const note = latestNote(own)
+
+      return {
+        number: issue.number,
+        title: issue.title,
+        labels: issue.labels.map(label => label.name),
+        state,
+        holder: 'claim' in rest ? rest.claim.holder : undefined,
+        since: 'claim' in rest ? rest.claim.at : undefined,
+        session: 'session' in rest ? rest.session.name : undefined,
+        boxesTotal: list.length,
+        boxesLeft: list.filter(box => !box.done).length,
+        note: note === undefined ? undefined : { author: note.user.login, at: note.created_at, body: note.body },
+      }
+    }), null, 2))
 
     return 0
   }
 
-  const byState = (state: Standing['state']) => rows.filter(row => row.standing.state === state)
-  const sections: [string, string[][]][] = [
-    ['available', byState('available').map(({ issue }) => [`#${issue.number}`, truncate(issue.title, TITLE_WIDTH), issue.labels.map(label => label.name).join(', ')])],
-    ['taken', byState('taken').map(({ issue, standing: row }) => claimRow(issue, row))],
-    ['claimed, no live session here', byState('away').map(({ issue, standing: row }) => claimRow(issue, row))],
-  ]
-  const shown = sections.filter(([, lines]) => lines.length > 0)
-
-  console.log(shown.length === 0 ? 'no open issue' : shown.map(([heading, lines]) => `${heading} (${lines.length})\n${table(lines).replace(LINE_START, '  ')}`).join('\n\n'))
+  console.log(renderBoard(rows))
 
   return 0
 }

@@ -17,9 +17,9 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft watch` | waits for the runs in progress, or `--after <id>` those newer than a run |
 | `ft logs <run>` | what the failed jobs of a run say went wrong, `--full` for whole logs |
 | `ft release <level>` | `bun pm version`, one atomic push of branch and tag, then waits for the runs and the registry |
-| `ft board` | open issues: available, taken by a live session, or claimed with no live session here |
+| `ft board` | open issues: available, taken by a live session, or claimed with no live session here, each claim with its boxes left and a stale one with its latest note |
 | `ft take <n>` / `ft drop <n>` | claims or gives back an issue for the calling Claude Code session |
-| `ft issue <n>` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `--json`) |
+| `ft issue <n>...` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `--json`) |
 | `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks |
 | `ft fixed <n> [sha]` | comments `Fixed in <sha>: <subject>` and closes, refusing while boxes are left |
 | `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches |

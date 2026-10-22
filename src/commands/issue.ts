@@ -6,14 +6,14 @@ import { formatAge } from '../format'
 import { git, resolveCommit } from '../git'
 import { close, comment, commentsOf, getIssue, setBody } from '../issues'
 
-const issueUsage = `ft issue <n>
+const issueUsage = `ft issue <n>...
 
-Prints an issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it.`
+Prints each issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it.`
 
 const issueOptions = {
   todo: { type: 'boolean', short: 't', description: 'only the header and the boxes left to tick' },
   comments: { type: 'boolean', short: 'c', description: 'add the comments, each with its author and age' },
-  json: { type: 'boolean', description: 'print JSON: number, title, state, url, labels, claim, boxes, body and comments' },
+  json: { type: 'boolean', description: 'print JSON: number, title, state, url, labels, claim, boxes, body and comments, an array for several issues' },
   ...repoOption,
 } as const
 
@@ -72,12 +72,20 @@ export async function issue(args: string[]): Promise<number> {
     return 0
 
   const { values, positionals } = parsed
-  const number = issueNumber(positionals[0], issueUsage)
-  const [found, comments] = await Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])
+  const numbers = (positionals.length === 0 ? [undefined] : positionals).map(value => issueNumber(value, issueUsage))
+  const read = await Promise.all(numbers.map(async number => Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])))
 
-  console.log(values.json === true
-    ? JSON.stringify(issueJson(found, comments), null, 2)
-    : renderIssue(found, comments, { todo: values.todo === true, comments: values.comments === true }))
+  if (values.json === true) {
+    const json = read.map(([found, comments]) => issueJson(found, comments))
+
+    console.log(JSON.stringify(json.length === 1 ? json[0] : json, null, 2))
+
+    return 0
+  }
+
+  const view = { todo: values.todo === true, comments: values.comments === true }
+
+  console.log(read.map(([found, comments]) => renderIssue(found, comments, view)).join(view.todo ? '\n\n' : '\n\n\n'))
 
   return 0
 }
