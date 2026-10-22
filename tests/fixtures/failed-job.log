@@ -1,0 +1,71 @@
+2026-10-22T19:58:27.2681088Z docker-runner(version:v0.6.1) received task 3406 of job test, be triggered by event: push
+2026-10-22T19:58:27.2698105Z workflow prepared
+2026-10-22T19:58:27.2698453Z evaluating expression 'success()'
+2026-10-22T19:59:34.0764509Z ::group::tests/build.test.ts:
+2026-10-22T19:59:34.0775427Z (pass) kay.config.ts > keeps the config's value for an option pages() is given as undefined [3692.24ms]
+2026-10-22T19:59:34.0840885Z (pass) kay.config.ts > leaves the build plugins out of the config a compiled server loads, with what only they imported [8.56ms]
+2026-10-22T19:59:34.0908270Z (pass) kay.config.ts > keeps what the rest of the config uses, and a config without plugins as it is [6.38ms]
+2026-10-22T19:59:34.0939876Z (pass) kay.config.ts > takes a plugins key however it is written, and gives up on a spread that may carry more [2.58ms]
+2026-10-22T19:59:35.3910511Z (pass) kay.config.ts > builds a project through a link to it as from its real path, its islands and a library's named and bundled alike [1296.78ms]
+2026-10-22T19:59:35.7751149Z 
+2026-10-22T19:59:35.7751757Z ::endgroup::
+2026-10-22T19:59:35.7751841Z 
+2026-10-22T19:59:35.7752336Z ::group::tests/dev.test.ts:
+2026-10-22T19:59:35.7752482Z (pass) kay dev > keeps the types process through an edit of a code file it did not load, and boots another for one it did [10841.69ms]
+2026-10-22T19:59:36.1033228Z 
+2026-10-22T19:59:36.1033847Z ::endgroup::
+2026-10-22T19:59:36.1034899Z 
+2026-10-22T19:59:36.1035185Z ::group::tests/screenshot.test.ts:
+2026-10-22T19:59:36.1035281Z (pass) kay screenshot on a running kay dev > asks the page for the dark scheme [5855.38ms]
+2026-10-22T19:59:36.8979766Z 
+2026-10-22T19:59:36.8980640Z ::endgroup::
+2026-10-22T19:59:36.8980736Z 
+2026-10-22T19:59:36.8980951Z ::group::tests/production.test.ts:
+2026-10-22T19:59:36.8981033Z killed 1 dangling process
+2026-10-22T19:59:36.8981301Z ::error title=error: Test "on SIGTERM lets open requests finish%2C runs the stop hooks%2C and exits" timed out after 20000ms::
+2026-10-22T19:59:36.8981405Z (fail) lifecycle > on SIGTERM lets open requests finish, runs the stop hooks, and exits [20002.85ms]
+2026-10-22T20:18:27.2643801Z (pass) kay check --fix on raw environment reads > adds to the schema the app already has instead of making a second [2180.63ms]
+2026-10-22T20:18:28.4320894Z (pass) kay check --fix on raw environment reads > leaves the shapes it cannot rewrite safely, with their warning [1167.81ms]
+2026-10-22T20:18:32.4113378Z (pass) kay check --fix on raw environment reads > does nothing without --fix and where a schema in another shape exists [3979.48ms]
+2026-10-22T20:18:35.4409557Z (pass) kay check --fix on raw environment reads > leaves a byte order mark file alone, rewrites two reads on a line with CRLF, and fills a `t.Object({})` with no field [3026.06ms]
+2026-10-22T20:18:36.6988729Z (pass) kay check --fix on raw environment reads > reads past a regular expression holding a quote, a backtick or two slashes [1259.06ms]
+2026-10-22T20:18:39.5640294Z (pass) kay check --fix on raw environment reads > changes only the scoped files, and nothing during kay upgrade [2866.03ms]
+2026-10-22T20:18:39.6154282Z 
+2026-10-22T20:18:39.6154758Z ::endgroup::
+2026-10-22T20:18:39.7728981Z 
+2026-10-22T20:18:39.7729789Z 4 tests skipped:
+2026-10-22T20:18:39.7730792Z (skip) files.list > skips a file whose stat fails instead of failing the listing
+2026-10-22T20:18:39.7730938Z (skip) the store on disk > throws what the store says for a data folder nobody can write, apart from a refusal
+2026-10-22T20:18:39.7731234Z (skip) kay check, unused code > keeps watching after a check that throws, as a fix it cannot write
+2026-10-22T20:18:39.7731314Z (skip) compressing a public text file > answers from memory once asked for: the file is not opened again
+2026-10-22T20:18:39.7732226Z 
+2026-10-22T20:18:39.7732391Z 
+2026-10-22T20:18:39.7732452Z 9 tests failed:
+2026-10-22T20:18:39.7733223Z (fail) kay migrate --format json > writes into --out [20000.44ms]
+2026-10-22T20:18:39.7733305Z   ^ this test timed out after 20000ms.
+2026-10-22T20:18:39.7733382Z (fail) a French page served > writes the spaces into a page prerendered at build time, served from its file [20089.13ms]
+2026-10-22T20:18:39.7733467Z   ^ this test timed out after 20000ms.
+2026-10-22T20:18:39.7733879Z (fail) kay dev .env values > follows a plain value edited, a value added and a value removed, and restarts nothing for one written again with the same content [10758.10ms]
+2026-10-22T20:18:39.7734042Z (fail) page swap in Chromium > posts a form without a reload, pending meanwhile, and shows what the action answered [20597.44ms]
+2026-10-22T20:18:39.7734128Z (fail) page swap in Chromium > keeps the scroll and skips the view transition when asked, by navigate() or a link, and goes to the top otherwise [20002.10ms]
+2026-10-22T20:18:39.7734224Z   ^ this test timed out after 20000ms.
+2026-10-22T20:18:39.7734291Z (fail) the islands of a streamed await block > dispose a replaced island while it is still in the document, at /nested [7758.17ms]
+2026-10-22T20:18:39.7734380Z (fail) lifecycle > on SIGTERM lets open requests finish, runs the stop hooks, and exits [20002.85ms]
+2026-10-22T20:18:39.7734454Z   ^ this test timed out after 20000ms.
+2026-10-22T20:18:39.7734794Z (fail) the release's link check > names the file and anchor of a link the moved or trimmed pages leave dangling [21075.43ms]
+2026-10-22T20:18:39.7734877Z   ^ this test timed out after 20000ms.
+2026-10-22T20:18:39.7734938Z (fail) the release's link check > checks a link by path into a library or another doc, whose target must exist [22320.27ms]
+2026-10-22T20:18:39.7735018Z   ^ this test timed out after 20000ms.
+2026-10-22T20:18:39.7736264Z 
+2026-10-22T20:18:39.7736440Z  7820 pass
+2026-10-22T20:18:39.7736508Z  4 skip
+2026-10-22T20:18:39.7736569Z  9 fail
+2026-10-22T20:18:39.7736793Z  2 errors
+2026-10-22T20:18:39.7736856Z  42184 expect() calls
+2026-10-22T20:18:39.7736928Z Ran 7833 tests across 403 files. [1187.43s]
+2026-10-22T20:18:39.7781943Z error: script "test" exited with code 1
+2026-10-22T20:18:39.8244196Z   ❌  Failure - Main Tests
+2026-10-22T20:18:39.9233701Z exitcode '1': failure
+2026-10-22T20:18:40.1453979Z ::group::Run jq -r '.files | to_entries | sort_by(-.value) | .[:40][] | "\(.value / 1000 | floor)s \(.key)"' .kay/timings.json
+2026-10-22T20:18:51.7353181Z 🏁  Job failed
+2026-10-22T20:18:51.7516016Z Job 'test' failed
