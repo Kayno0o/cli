@@ -131,7 +131,7 @@ export async function board(args: string[]): Promise<number> {
     return 0
   }
 
-  console.log(renderBoard(rows))
+  console.log(rows.length === 0 && (query !== undefined || state !== undefined) ? 'no open issue matches' : renderBoard(rows))
 
   return 0
 }
