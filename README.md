@@ -147,7 +147,7 @@ export default defineConfig({
 ```
 
 - The section is found by the version without the tag's prefix: `## 1.4.0` for `v1.4.0`. It runs to the next `## ` heading; its own headings are demoted one level, and the page's frontmatter is skipped.
-- Links resolve against `url`, so `/reference/cli` becomes `https://docs.example.com/reference/cli`. The closing link goes to the version's heading on the page, slugged as GitHub does (`#140`).
+- Links resolve against `url`, so `/reference/cli` becomes `https://docs.example.com/reference/cli`. When the site serves a page elsewhere than its file, `link` maps each target as written before it resolves, `undefined` keeping it: `link: target => target.replace(/\.md(?=#|$)/, '')` turns `cli.md#render` into `cli#render`. The closing link goes to the version's heading on the page, slugged as GitHub does (`#140`).
 - The Discord post opens with the same section, its headings in bold. When the post runs past Discord's limit, commits are dropped first, then the section's last lines, the link to the page always kept.
 - Without the file or a section for the version, the notes are as they would be without the option. `titles.highlights` renames the section.
 

@@ -148,6 +148,10 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
      * Where the page is published: its links resolve against it, and the notes link to the version's heading on it
      */
     url: string
+    /**
+     * Maps a link target as the page writes it to the one the published page has, when the site serves its pages elsewhere than their files: `(target) => target.replace(/\.md(?=#|$)/, '')`. What it returns still resolves against `url`; `undefined` keeps the target
+     */
+    link?: LinkMap
   }
 
   /**
@@ -156,6 +160,8 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
    */
   assets?: string[] | string
 }
+
+export type LinkMap = (target: string) => string | undefined
 
 export type ResolvedChangelogOptions = Required<ChangelogOptions>
 

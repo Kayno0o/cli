@@ -1,4 +1,4 @@
-import type { ResolvedChangelogOptions } from './types'
+import type { LinkMap, ResolvedChangelogOptions } from './types'
 import { isAbsolute, join } from 'node:path'
 import { getVersionString } from './git'
 
@@ -22,7 +22,10 @@ export function headingAnchor(text: string) {
   return text.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-')
 }
 
-function resolveTarget(target: string, base: string) {
+// The page a target names, as `link` maps it, then made absolute against the page.
+function resolveTarget(written: string, base: string, link?: LinkMap) {
+  const target = link?.(written) ?? written
+
   if (schemeRE.test(target) || target.startsWith('//'))
     return target
 
@@ -35,11 +38,11 @@ function resolveTarget(target: string, base: string) {
 }
 
 // Makes each link of a line absolute against the page, leaving code spans as written.
-export function resolveLinks(line: string, base: string) {
+export function resolveLinks(line: string, base: string, link?: LinkMap) {
   const definition = definitionRE.exec(line)
 
   if (definition)
-    return `${definition[1]}${resolveTarget(definition[2]!, base)}${definition[3]}`
+    return `${definition[1]}${resolveTarget(definition[2]!, base, link)}${definition[3]}`
 
   let rest = line
   let out = ''
@@ -48,7 +51,7 @@ export function resolveLinks(line: string, base: string) {
     const code = codeSpanRE.exec(rest)
     const text = code ? rest.slice(0, code.index) : rest
 
-    out += text.replace(inlineLinkRE, (_, open: string, target: string) => `${open}${resolveTarget(target, base)}`)
+    out += text.replace(inlineLinkRE, (_, open: string, target: string) => `${open}${resolveTarget(target, base, link)}`)
 
     if (!code)
       break
@@ -70,7 +73,7 @@ function withoutFrontmatter(lines: string[]) {
 }
 
 // The lines under `## <version>`, up to the next `## ` heading outside a code fence; a heading under it is demoted one level, below the `###` highlights title.
-export function parseHighlights(source: string, version: string, url: string): Highlights | undefined {
+export function parseHighlights(source: string, version: string, url: string, link?: LinkMap): Highlights | undefined {
   const lines = withoutFrontmatter(source.split(/\r?\n/))
   const section: string[] = []
   let fence: string | undefined
@@ -102,7 +105,7 @@ export function parseHighlights(source: string, version: string, url: string): H
       fence = !fence ? marker : marker.startsWith(fence) ? undefined : fence
 
     if (inside)
-      section.push(fence || marker ? line : resolveLinks(line, url))
+      section.push(fence || marker ? line : resolveLinks(line, url, link))
   }
 
   while (section.length && !section[0]!.trim())
@@ -122,11 +125,11 @@ export async function readHighlights(options: ResolvedChangelogOptions, cwd = pr
   if (!options.highlights)
     return undefined
 
-  const { file, url } = options.highlights
+  const { file, url, link } = options.highlights
   const source = Bun.file(isAbsolute(file) ? file : join(cwd, file))
 
   if (!await source.exists())
     return undefined
 
-  return parseHighlights(await source.text(), getVersionString(options.tag, options.to), url)
+  return parseHighlights(await source.text(), getVersionString(options.tag, options.to), url, link)
 }

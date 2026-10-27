@@ -113,6 +113,16 @@ describe('links', () => {
   it('resolves a reference definition', () => {
     expect(resolveLinks('[cli]: /reference/cli', PAGE)).toBe('[cli]: https://docs.example/reference/cli')
   })
+
+  it('maps a target with link before resolving it, and keeps the one link leaves', () => {
+    const link = (target: string) => target.endsWith('.md') || target.includes('.md#') ? `/docs/${target.replace('.md', '')}` : undefined
+
+    expect(resolveLinks('[a](production.md#check) [b](/x)', PAGE, link)).toBe(
+      '[a](https://docs.example/docs/production#check) [b](https://docs.example/x)',
+    )
+    expect(resolveLinks('[cli]: cli.md', PAGE, link)).toBe('[cli]: https://docs.example/docs/cli')
+    expect(parseHighlights('## 1.0.0\n- [a](a.md)', '1.0.0', PAGE, link)?.lines).toEqual(['- [a](https://docs.example/docs/a)'])
+  })
 })
 
 describe('anchors', () => {
