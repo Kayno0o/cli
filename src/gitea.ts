@@ -2,7 +2,18 @@ import type { AuthorInfo, ChangelogOptions, Commit } from './types'
 import path from 'node:path'
 import { colors } from '@kaynooo/utils'
 
-async function api<T = any>(url: string, init?: RequestInit): Promise<T> {
+interface GiteaRelease {
+  id: number
+  name: string
+  url: string
+  html_url: string
+}
+
+interface GiteaCommit {
+  author: { login: string, avatar_url: string }
+}
+
+async function api<T = unknown>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
 
   if (!res.ok)
@@ -20,7 +31,7 @@ export async function sendRelease(
   let method = 'POST'
 
   try {
-    const exists = await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
+    const exists = await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
       headers,
     })
 
@@ -44,7 +55,7 @@ export async function sendRelease(
     ? 'Creating release notes...'
     : 'Updating release notes...'),
   )
-  const res = await api(url, {
+  const res = await api<GiteaRelease>(url, {
     method,
     body: JSON.stringify(body),
     headers: { ...headers, 'content-type': 'application/json' },
@@ -55,7 +66,7 @@ export async function sendRelease(
 
 export async function getRelease(options: ChangelogOptions, tag: string) {
   try {
-    return await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${tag}`, {
+    return await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${tag}`, {
       headers: getHeaders(options),
     })
   }
@@ -121,7 +132,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
   // A commit names its author's account exactly, so only an author with no commit of their own, a co-author, is searched by email.
   if (info.commits.length) {
     try {
-      const data = await api(`https://${options.baseUrlApi}/repos/${options.repo}/git/commits/${info.commits[0]}`, {
+      const data = await api<GiteaCommit>(`https://${options.baseUrlApi}/repos/${options.repo}/git/commits/${info.commits[0]}`, {
         headers: getHeaders(options),
       })
 
@@ -245,7 +256,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
   }
 
   // Get the release by tag to obtain its id
-  const release = await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
+  const release = await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
     headers,
   })
 

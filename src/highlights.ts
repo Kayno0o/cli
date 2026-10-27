@@ -15,6 +15,7 @@ const schemeRE = /^[a-z][a-z\d+.-]*:/i
 // A target may hold balanced parentheses, as CommonMark allows: `/wiki/Foo_(bar)`.
 const inlineLinkRE = /(\]\(\s*<?)((?:[^\s<>()]|\([^\s<>()]*\))+)/g
 const definitionRE = /^(\s{0,3}\[[^\]]+\]:\s*<?)([^\s<>]+)(>?(?:\s.*)?)$/
+const newlineRE = /\r?\n/
 const codeSpanRE = /(`+)[\s\S]*?\1/
 
 // The same slug GitHub and Bun.markdown give a heading: `1.44.0` is `#1440`.
@@ -63,6 +64,12 @@ export function resolveLinks(line: string, base: string, link?: LinkMap) {
   return out
 }
 
+function withoutAnchor(url: string) {
+  const hash = url.indexOf('#')
+
+  return hash === -1 ? url : url.slice(0, hash)
+}
+
 function withoutFrontmatter(lines: string[]) {
   if (lines[0]?.trim() !== '---')
     return lines
@@ -74,7 +81,7 @@ function withoutFrontmatter(lines: string[]) {
 
 // The lines under `## <version>`, up to the next `## ` heading outside a code fence; a heading under it is demoted one level, below the `###` highlights title.
 export function parseHighlights(source: string, version: string, url: string, link?: LinkMap): Highlights | undefined {
-  const lines = withoutFrontmatter(source.split(/\r?\n/))
+  const lines = withoutFrontmatter(source.split(newlineRE))
   const section: string[] = []
   let fence: string | undefined
   let inside = false
@@ -102,7 +109,7 @@ export function parseHighlights(source: string, version: string, url: string, li
     }
 
     if (marker)
-      fence = !fence ? marker : marker.startsWith(fence) ? undefined : fence
+      fence = fence && marker.startsWith(fence) ? undefined : fence ?? marker
 
     if (inside)
       section.push(fence || marker ? line : resolveLinks(line, url, link))
@@ -114,10 +121,7 @@ export function parseHighlights(source: string, version: string, url: string, li
   while (section.length && !section.at(-1)!.trim())
     section.pop()
 
-  if (!section.length)
-    return undefined
-
-  return { lines: section, link: `${url.split('#')[0]}#${headingAnchor(version)}` }
+  return !section.length ? undefined : { lines: section, link: `${withoutAnchor(url)}#${headingAnchor(version)}` }
 }
 
 // The `highlights.file` section of the version being released, or nothing without the option, the file or a section for it.

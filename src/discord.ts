@@ -66,7 +66,7 @@ function openFence(lines: string[]) {
     const marker = fenceRE.exec(line)?.[1]
 
     if (marker)
-      open = !open ? marker : marker.startsWith(open) ? undefined : open
+      open = open && marker.startsWith(open) ? undefined : open ?? marker
   }
 
   return open

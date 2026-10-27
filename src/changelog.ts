@@ -71,6 +71,7 @@ const ConventionalCommitRegex = /(?<emoji>:.+:|(\uD83C[\uDF00-\uDFFF])|(\uD83D[\
 const CoAuthoredByRegex = /co-authored-by:\s*(?<name>\S[^<]*)(<(?<email>[^>]+)>)/gi
 const PullRequestRE = /\([ a-z]*(#\d+)\s*\)/g
 const IssueRE = /(#\d+)/g
+const BreakingBodyRE = /breaking change:/i
 const TicketLineRE = /^(#\d+) - (.+)$/gm
 
 export async function getGitDiff(from: string | undefined, to = 'HEAD', firstParent = false): Promise<RawGitCommit[]> {
@@ -102,7 +103,7 @@ export function parseGitCommit(commit: RawGitCommit, config: ChangelogConfig): G
     return null
 
   const type = match.groups.type
-  const hasBreakingBody = (/breaking change:/i).test(commit.body)
+  const hasBreakingBody = BreakingBodyRE.test(commit.body)
   let scope = match.groups.scope || ''
 
   scope = config.scopeMap[scope] || scope

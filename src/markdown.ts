@@ -181,8 +181,5 @@ export function generateMarkdown(commits: Commit[], options: ResolvedChangelogOp
 }
 
 function join(array: string[], glue = ', ', finalGlue = ' and '): string {
-  if (array.length <= 2)
-    return array.join(finalGlue)
-
-  return `${array.slice(0, -1).join(glue)}${finalGlue}${array.at(-1)}`
+  return array.length <= 2 ? array.join(finalGlue) : `${array.slice(0, -1).join(glue)}${finalGlue}${array.at(-1)}`
 }

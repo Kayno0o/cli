@@ -69,10 +69,7 @@ async function loadConfigFile(cwd: string): Promise<ChangelogOptions> {
 async function loadPackageConfig(cwd: string): Promise<ChangelogOptions> {
   const file = Bun.file(join(cwd, 'package.json'))
 
-  if (!await file.exists())
-    return {}
-
-  return (await file.json()).changelogitea ?? {}
+  return !await file.exists() ? {} : (await file.json()).changelogitea ?? {}
 }
 
 // Layers, lowest first: defaults, the package.json `changelogitea` field, `changelogitea.config.*`, then the options passed in.

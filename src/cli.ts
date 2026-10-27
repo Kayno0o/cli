@@ -185,11 +185,11 @@ async function release() {
       }
     }
   }
-  catch (e: any) {
+  catch (e) {
     console.error(colors.red(String(e)))
 
-    if (e?.stack)
-      console.error(colors.dim(e.stack?.split('\n').slice(1).join('\n')))
+    if (e instanceof Error && e.stack)
+      console.error(colors.dim(e.stack.split('\n').slice(1).join('\n')))
 
     if (generated)
       await printManualRelease(generated.config, generated.md, 'Failed to create the release. Create it manually at')
@@ -233,7 +233,7 @@ async function undo(tag: string | undefined) {
     const release = config.token ? await getRelease(config, tag) : null
     const remoteTag = remoteViaGit
       ? await hasRemoteGitTag(tag)
-      : (config.token ? await hasRemoteTag(config, tag) : false)
+      : Boolean(config.token) && await hasRemoteTag(config, tag)
     const localTag = await isRefGitTag(tag)
 
     // Only reset the bump commit when the tag actually points at HEAD,
@@ -319,11 +319,11 @@ async function undo(tag: string | undefined) {
       console.log(colors.green(`Reset commit ${commitToReset.hash.slice(0, 7)} (changes kept in working tree)`))
     }
   }
-  catch (e: any) {
+  catch (e) {
     console.error(colors.red(String(e)))
 
-    if (e?.stack)
-      console.error(colors.dim(e.stack?.split('\n').slice(1).join('\n')))
+    if (e instanceof Error && e.stack)
+      console.error(colors.dim(e.stack.split('\n').slice(1).join('\n')))
 
     process.exit(1)
   }

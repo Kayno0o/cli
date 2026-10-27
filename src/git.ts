@@ -2,18 +2,18 @@ import type { ChangelogOptions } from './types'
 import { $ } from 'bun'
 import { parseSemver, validateSemver } from '@kaynooo/utils'
 
+const gitSuffixRE = /\.git$/
+const sshRegex = /(?:ssh:\/\/[^/]+\/|git@[^:]+:)(\w[\w.-]+)\/(\w[\w.-]+)$/i
+const httpsRegex = /https?:\/\/[^/]+\/(\w[\w.-]+)\/(\w[\w.-]+)$/i
+const releaseVersionRE = /^[^.]*(?:\.[\d.]*|\d)$/
+
 export async function getGiteaRepo() {
   const url = await execCommand('git', ['config', '--get', 'remote.origin.url'])
-  const cleanUrl = url.replace(/\.git$/, '')
+  const cleanUrl = url.replace(gitSuffixRE, '')
 
-  const sshRegex = /(?:ssh:\/\/[^/]+\/|git@[^:]+:)(\w[\w.-]+)\/(\w[\w.-]+)$/i
   let match = sshRegex.exec(cleanUrl)
 
-  if (!match) {
-    const httpsRegex = /https?:\/\/[^/]+\/(\w[\w.-]+)\/(\w[\w.-]+)$/i
-
-    match = httpsRegex.exec(cleanUrl)
-  }
+  match ||= httpsRegex.exec(cleanUrl)
 
   if (!match)
     throw new Error(`Can not parse Gitea repo from url ${url}`)
@@ -159,7 +159,7 @@ export async function softResetLastCommit() {
 }
 
 export function isPrerelease(version: string) {
-  return !(/^[^.]*(?:\.[\d.]*|\d)$/).test(version)
+  return !releaseVersionRE.test(version)
 }
 
 async function execCommand(cmd: string, args: string[]) {
