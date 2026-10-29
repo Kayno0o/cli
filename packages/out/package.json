@@ -1,0 +1,35 @@
+{
+  "name": "@kaynooo/out-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "out: shortens noisy command output for Claude Code, folding long logs and keeping errors, with the full log saved to a file.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/out#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/out"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": ["claude-code", "cli", "output", "logs", "tokens"],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "out": "./src/cli.ts"
+  },
+  "files": ["src"],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "out": "$npm_execpath src/cli.ts"
+  },
+  "dependencies": {
+    "@kaynooo/cli-kit": "workspace:^"
+  }
+}

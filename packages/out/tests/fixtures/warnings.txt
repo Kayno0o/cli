@@ -1,0 +1,182 @@
+start
+warning: unused variable 'x0' in src/mod0/file.ts:10:3
+  at check (src/mod0/file.ts:10)
+  help: remove it
+warning: unused variable 'x1' in src/mod1/file.ts:11:3
+  at check (src/mod1/file.ts:11)
+  help: remove it
+warning: unused variable 'x2' in src/mod2/file.ts:12:3
+  at check (src/mod2/file.ts:12)
+  help: remove it
+warning: unused variable 'x3' in src/mod3/file.ts:13:3
+  at check (src/mod3/file.ts:13)
+  help: remove it
+warning: unused variable 'x4' in src/mod4/file.ts:14:3
+  at check (src/mod4/file.ts:14)
+  help: remove it
+warning: unused variable 'x5' in src/mod5/file.ts:15:3
+  at check (src/mod5/file.ts:15)
+  help: remove it
+warning: unused variable 'x6' in src/mod6/file.ts:16:3
+  at check (src/mod6/file.ts:16)
+  help: remove it
+warning: unused variable 'x7' in src/mod7/file.ts:17:3
+  at check (src/mod7/file.ts:17)
+  help: remove it
+warning: unused variable 'x8' in src/mod8/file.ts:18:3
+  at check (src/mod8/file.ts:18)
+  help: remove it
+warning: unused variable 'x9' in src/mod9/file.ts:19:3
+  at check (src/mod9/file.ts:19)
+  help: remove it
+warning: unused variable 'x10' in src/mod10/file.ts:20:3
+  at check (src/mod10/file.ts:20)
+  help: remove it
+warning: unused variable 'x11' in src/mod11/file.ts:21:3
+  at check (src/mod11/file.ts:21)
+  help: remove it
+warning: unused variable 'x12' in src/mod12/file.ts:22:3
+  at check (src/mod12/file.ts:22)
+  help: remove it
+warning: unused variable 'x13' in src/mod13/file.ts:23:3
+  at check (src/mod13/file.ts:23)
+  help: remove it
+warning: unused variable 'x14' in src/mod14/file.ts:24:3
+  at check (src/mod14/file.ts:24)
+  help: remove it
+warning: unused variable 'x15' in src/mod15/file.ts:25:3
+  at check (src/mod15/file.ts:25)
+  help: remove it
+warning: unused variable 'x16' in src/mod16/file.ts:26:3
+  at check (src/mod16/file.ts:26)
+  help: remove it
+warning: unused variable 'x17' in src/mod17/file.ts:27:3
+  at check (src/mod17/file.ts:27)
+  help: remove it
+warning: unused variable 'x18' in src/mod18/file.ts:28:3
+  at check (src/mod18/file.ts:28)
+  help: remove it
+warning: unused variable 'x19' in src/mod19/file.ts:29:3
+  at check (src/mod19/file.ts:29)
+  help: remove it
+warning: unused variable 'x20' in src/mod20/file.ts:30:3
+  at check (src/mod20/file.ts:30)
+  help: remove it
+warning: unused variable 'x21' in src/mod21/file.ts:31:3
+  at check (src/mod21/file.ts:31)
+  help: remove it
+warning: unused variable 'x22' in src/mod22/file.ts:32:3
+  at check (src/mod22/file.ts:32)
+  help: remove it
+warning: unused variable 'x23' in src/mod23/file.ts:33:3
+  at check (src/mod23/file.ts:33)
+  help: remove it
+warning: unused variable 'x24' in src/mod24/file.ts:34:3
+  at check (src/mod24/file.ts:34)
+  help: remove it
+warning: unused variable 'x25' in src/mod25/file.ts:35:3
+  at check (src/mod25/file.ts:35)
+  help: remove it
+warning: unused variable 'x26' in src/mod26/file.ts:36:3
+  at check (src/mod26/file.ts:36)
+  help: remove it
+warning: unused variable 'x27' in src/mod27/file.ts:37:3
+  at check (src/mod27/file.ts:37)
+  help: remove it
+warning: unused variable 'x28' in src/mod28/file.ts:38:3
+  at check (src/mod28/file.ts:38)
+  help: remove it
+warning: unused variable 'x29' in src/mod29/file.ts:39:3
+  at check (src/mod29/file.ts:39)
+  help: remove it
+warning: unused variable 'x30' in src/mod30/file.ts:40:3
+  at check (src/mod30/file.ts:40)
+  help: remove it
+warning: unused variable 'x31' in src/mod31/file.ts:41:3
+  at check (src/mod31/file.ts:41)
+  help: remove it
+warning: unused variable 'x32' in src/mod32/file.ts:42:3
+  at check (src/mod32/file.ts:42)
+  help: remove it
+warning: unused variable 'x33' in src/mod33/file.ts:43:3
+  at check (src/mod33/file.ts:43)
+  help: remove it
+warning: unused variable 'x34' in src/mod34/file.ts:44:3
+  at check (src/mod34/file.ts:44)
+  help: remove it
+warning: unused variable 'x35' in src/mod35/file.ts:45:3
+  at check (src/mod35/file.ts:45)
+  help: remove it
+warning: unused variable 'x36' in src/mod36/file.ts:46:3
+  at check (src/mod36/file.ts:46)
+  help: remove it
+warning: unused variable 'x37' in src/mod37/file.ts:47:3
+  at check (src/mod37/file.ts:47)
+  help: remove it
+warning: unused variable 'x38' in src/mod38/file.ts:48:3
+  at check (src/mod38/file.ts:48)
+  help: remove it
+warning: unused variable 'x39' in src/mod39/file.ts:49:3
+  at check (src/mod39/file.ts:49)
+  help: remove it
+warning: unused variable 'x40' in src/mod40/file.ts:50:3
+  at check (src/mod40/file.ts:50)
+  help: remove it
+warning: unused variable 'x41' in src/mod41/file.ts:51:3
+  at check (src/mod41/file.ts:51)
+  help: remove it
+warning: unused variable 'x42' in src/mod42/file.ts:52:3
+  at check (src/mod42/file.ts:52)
+  help: remove it
+warning: unused variable 'x43' in src/mod43/file.ts:53:3
+  at check (src/mod43/file.ts:53)
+  help: remove it
+warning: unused variable 'x44' in src/mod44/file.ts:54:3
+  at check (src/mod44/file.ts:54)
+  help: remove it
+warning: unused variable 'x45' in src/mod45/file.ts:55:3
+  at check (src/mod45/file.ts:55)
+  help: remove it
+warning: unused variable 'x46' in src/mod46/file.ts:56:3
+  at check (src/mod46/file.ts:56)
+  help: remove it
+warning: unused variable 'x47' in src/mod47/file.ts:57:3
+  at check (src/mod47/file.ts:57)
+  help: remove it
+warning: unused variable 'x48' in src/mod48/file.ts:58:3
+  at check (src/mod48/file.ts:58)
+  help: remove it
+warning: unused variable 'x49' in src/mod49/file.ts:59:3
+  at check (src/mod49/file.ts:59)
+  help: remove it
+warning: unused variable 'x50' in src/mod50/file.ts:60:3
+  at check (src/mod50/file.ts:60)
+  help: remove it
+warning: unused variable 'x51' in src/mod51/file.ts:61:3
+  at check (src/mod51/file.ts:61)
+  help: remove it
+warning: unused variable 'x52' in src/mod52/file.ts:62:3
+  at check (src/mod52/file.ts:62)
+  help: remove it
+warning: unused variable 'x53' in src/mod53/file.ts:63:3
+  at check (src/mod53/file.ts:63)
+  help: remove it
+warning: unused variable 'x54' in src/mod54/file.ts:64:3
+  at check (src/mod54/file.ts:64)
+  help: remove it
+warning: unused variable 'x55' in src/mod55/file.ts:65:3
+  at check (src/mod55/file.ts:65)
+  help: remove it
+warning: unused variable 'x56' in src/mod56/file.ts:66:3
+  at check (src/mod56/file.ts:66)
+  help: remove it
+warning: unused variable 'x57' in src/mod57/file.ts:67:3
+  at check (src/mod57/file.ts:67)
+  help: remove it
+warning: unused variable 'x58' in src/mod58/file.ts:68:3
+  at check (src/mod58/file.ts:68)
+  help: remove it
+warning: unused variable 'x59' in src/mod59/file.ts:69:3
+  at check (src/mod59/file.ts:69)
+  help: remove it
+done
