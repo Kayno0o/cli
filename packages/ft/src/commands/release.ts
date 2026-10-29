@@ -1,3 +1,4 @@
+import { basename, join, resolve } from 'node:path'
 import { $ } from 'bun'
 import { fail, parse, wholeNumber } from '../args'
 import { defaultBranch, git, tagsAt } from '../git'
@@ -9,21 +10,53 @@ ft release --tagged
 
 Cuts a release from the default branch: \`bun pm version\` commits and tags the bump, one atomic push sends the branch, with any commits origin lacks, and its tag, then it waits for the runs the push started and for the registry to serve the version.
 --tagged releases a version commit already tagged at HEAD instead, for repos bumping with their own script.
+--package releases one workspace package of a monorepo on its own, tagged \`<folder>-v<version>\` (\`ft release patch -p ft\` tags packages/ft as ft-v0.3.0).
 A refused push drops the bump commit and its tag, so a retry starts clean.`
 
 const options = {
   'tagged': { type: 'boolean', description: 'push the version commit and tag already at HEAD instead of bumping' },
+  'package': { type: 'string', short: 'p', description: 'workspace folder to release, a path or a name under packages/' },
   'no-registry': { type: 'boolean', description: 'do not wait for the registry to serve the new version' },
   'timeout': { type: 'string', short: 't', description: 'minutes to wait for the runs (15)' },
 } as const
 
 const LEVELS = new Set(['patch', 'minor', 'major', 'prepatch', 'preminor', 'premajor', 'prerelease'])
 const VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/
-const VERSION_TAG = /^v\d/
 const REGISTRY_TRIES = 12
 const REGISTRY_POLL = 5000
 
 interface Manifest { name?: string, version?: string, private?: boolean }
+
+// The version a release tag carries, undefined for any other tag: `v1.2.0` with prefix `v`, `ft-v1.2.0` with `ft-v`.
+export function taggedVersion(tag: string, prefix: string): string | undefined {
+  const version = tag.slice(prefix.length)
+
+  return tag.startsWith(prefix) && VERSION.test(version) ? version : undefined
+}
+
+async function packageDir(value: string): Promise<string> {
+  for (const dir of [resolve(value), join(await git(['rev-parse', '--show-toplevel']), 'packages', value)]) {
+    if (await Bun.file(join(dir, 'package.json')).exists())
+      return dir
+  }
+
+  fail(`no package.json in ${value} nor in packages/${value}`)
+}
+
+// Commits and tags a package's bump with the lockfile refreshed, since `bun install --frozen-lockfile` refuses a workspace version it does not list.
+export async function commitPackageBump(dir: string, prefix: string): Promise<void> {
+  const { version } = await Bun.file(join(dir, 'package.json')).json() as Manifest
+  const root = await git(['rev-parse', '--show-toplevel'])
+  const tag = `${prefix}${version}`
+  const lock = await $`bun install --lockfile-only`.cwd(root).quiet().nothrow()
+
+  if (lock.exitCode !== 0)
+    fail(`bun install --lockfile-only after the bump: ${lock.stderr.toString().trim()}`)
+
+  await git(['add', join(dir, 'package.json'), join(root, 'bun.lock')])
+  await git(['commit', '-q', '-m', tag])
+  await git(['tag', '-a', tag, '-m', tag])
+}
 
 // The registry serves a version a short while after the publish job ends; --no-cache skips a manifest bun cached before it.
 async function waitForRegistry(name: string, version: string): Promise<boolean> {
@@ -56,6 +89,8 @@ export async function release(args: string[]): Promise<number> {
     fail(`${level} is no level nor x.y.z version`)
 
   const timeout = wholeNumber(values.timeout, 'timeout', 15)
+  const dir = values.package === undefined ? undefined : await packageDir(values.package)
+  const prefix = dir === undefined ? 'v' : `${basename(dir)}-v`
   const branch = await defaultBranch()
   const current = await git(['branch', '--show-current'])
 
@@ -72,16 +107,21 @@ export async function release(args: string[]): Promise<number> {
     fail(`origin/${branch} has commits HEAD lacks: pull first`)
 
   if (level !== undefined) {
-    const bump = await $`bun pm version ${level}`.quiet().nothrow()
+    const bump = dir === undefined
+      ? await $`bun pm version ${level}`.quiet().nothrow()
+      : await $`bun pm version ${level} --no-git-tag-version`.cwd(dir).quiet().nothrow()
 
     if (bump.exitCode !== 0)
       fail(`bun pm version ${level}: ${bump.stderr.toString().trim() || bump.stdout.toString().trim()}`)
+
+    if (dir !== undefined)
+      await commitPackageBump(dir, prefix)
   }
 
-  const tag = (await tagsAt('HEAD')).find(name => VERSION_TAG.test(name))
+  const tag = (await tagsAt('HEAD')).find(name => taggedVersion(name, prefix) !== undefined)
 
   if (tag === undefined)
-    fail(tagged ? 'HEAD carries no v* tag' : 'bun pm version made no v* tag')
+    fail(tagged ? `HEAD carries no ${prefix}* tag` : `the bump made no ${prefix}* tag`)
 
   const before = (await recentRuns(1))[0]?.id ?? 0
   const push = await $`git push --atomic origin ${`HEAD:refs/heads/${branch}`} ${tag}`.quiet().nothrow()
@@ -99,9 +139,9 @@ export async function release(args: string[]): Promise<number> {
   if (code !== 0)
     return code
 
-  const file = Bun.file('package.json')
+  const file = Bun.file(join(dir ?? '.', 'package.json'))
   const pkg = await file.exists() ? await file.json() as Manifest : undefined
-  const version = tag.slice(1)
+  const version = tag.slice(prefix.length)
 
   if (values['no-registry'] === true || pkg?.name === undefined || pkg.private === true) {
     console.log(`released ${tag}`)
