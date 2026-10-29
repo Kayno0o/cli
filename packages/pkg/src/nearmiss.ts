@@ -1,23 +1,8 @@
+import { distance } from '@kaynooo/cli-kit'
 import popularNames from './popular.json'
 
 const SEPARATORS = /[-_.]/g
 const MIN_LENGTH = 5
-
-// Edit distance between two names.
-export function distance(a: string, b: string): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, index) => index)
-
-  for (const [i, left] of [...a].entries()) {
-    const current = [i + 1]
-
-    for (const [j, right] of [...b].entries())
-      current.push(Math.min((previous[j + 1] ?? 0) + 1, (current[j] ?? 0) + 1, (previous[j] ?? 0) + (left === right ? 0 : 1)))
-
-    previous = current
-  }
-
-  return previous[b.length] ?? 0
-}
 
 function baseName(name: string): string {
   return name.slice(name.indexOf('/') + 1)

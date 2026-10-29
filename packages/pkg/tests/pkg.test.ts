@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseSpec } from '../src/analyze'
 import { checkPackage, render } from '../src/commands/check'
 import { parseBunfig, parseNpmrc, registryFor } from '../src/config'
-import { distance, nearMisses } from '../src/nearmiss'
+import { nearMisses } from '../src/nearmiss'
 
 const FIXTURES = new URL('fixtures/', import.meta.url)
 
@@ -166,11 +166,6 @@ describe('registry configuration', () => {
 })
 
 describe('nearMisses', () => {
-  test('counts edits between two names', () => {
-    expect(distance('lodash', 'lodahs')).toBe(2)
-    expect(distance('react', 'reakt')).toBe(1)
-  })
-
   test('flags a typo, other separators and another scope of a popular name', () => {
     expect(nearMisses('lodasch')).toEqual(['lodash, 1 edit away'])
     expect(nearMisses('react_dom')[0]).toContain('react-dom')
