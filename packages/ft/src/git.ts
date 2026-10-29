@@ -1,10 +1,24 @@
+import { basename, dirname } from 'node:path'
+import process from 'node:process'
 import { fail } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 
 const ORIGIN_PREFIX = /^origin\//
 
+// A spawn failing before the command runs says only "No such file or directory", which names the working directory once it was deleted.
+export function spawnFailure(command: string, error: unknown): Error {
+  return new Error(`${command}: ${error instanceof Error ? error.message : String(error)}${cwdGone() ? ' (the working directory was removed)' : ''}`)
+}
+
 export async function git(args: string[]): Promise<string> {
-  const result = await $`git ${args}`.quiet().nothrow()
+  let result
+
+  try {
+    result = await $`git ${args}`.quiet().nothrow()
+  }
+  catch (error) {
+    throw spawnFailure(`git ${args.join(' ')}`, error)
+  }
 
   if (result.exitCode !== 0)
     throw new Error(`git ${args.join(' ')}: ${result.stderr.toString().trim() || `exit ${result.exitCode}`}`)
@@ -34,4 +48,24 @@ export async function defaultBranch(): Promise<string> {
 
 export async function tagsAt(commit: string): Promise<string[]> {
   return (await git(['tag', '--points-at', commit])).split('\n').filter(Boolean)
+}
+
+// True once the directory the process runs in was deleted, as a worktree is after its work lands.
+export function cwdGone(): boolean {
+  try {
+    process.cwd()
+
+    return false
+  }
+  catch {
+    return true
+  }
+}
+
+// A linked worktree can be deleted while a wait runs in it, so the wait moves to the main checkout, which outlives it.
+export async function leaveWorktree(): Promise<void> {
+  const common = await git(['rev-parse', '--path-format=absolute', '--git-common-dir'])
+
+  if (basename(common) === '.git')
+    process.chdir(dirname(common))
 }

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 
 export interface FakeIssue { number: number, title: string, body: string, state: string, labels?: { name: string }[] }
-export interface FakeState { issues: FakeIssue[], comments?: Record<number, string[]>, calls?: string[][] }
+export interface FakeState { issues: FakeIssue[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][] }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -28,10 +28,13 @@ const [command, sub, number] = args
 
 if (command === 'api') {
   const path = sub.replace('repos/{owner}/{repo}/', '')
+  const run = /^actions\\/runs\\/(\\d+)$/.exec(path)
   const one = /^issues\\/(\\d+)(\\/comments)?$/.exec(path)
   const found = one === null ? undefined : issue(one[1])
 
-  if (path.startsWith('issues?'))
+  if (run !== null)
+    console.log(JSON.stringify(state.runs?.find(each => each.id === Number(run[1])) ?? { message: 'not found', url: '' }))
+  else if (path.startsWith('issues?'))
     console.log(JSON.stringify(state.issues.filter(each => each.state === 'open').map(view)))
   else if (found === undefined)
     console.log(JSON.stringify({ message: 'not found', url: '' }))

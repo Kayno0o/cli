@@ -1,5 +1,6 @@
 import { upTo } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
+import { spawnFailure } from './git'
 
 // Every Forgejo call goes through tea, which owns the OAuth login and fills {owner}/{repo} from the cwd's origin, or from --repo.
 function repoFlag(repo: string | undefined): string[] {
@@ -7,7 +8,14 @@ function repoFlag(repo: string | undefined): string[] {
 }
 
 async function request(path: string, repo: string | undefined): Promise<string> {
-  const result = await $`tea api ${repoFlag(repo)} ${path}`.quiet().nothrow()
+  let result
+
+  try {
+    result = await $`tea api ${repoFlag(repo)} ${path}`.quiet().nothrow()
+  }
+  catch (error) {
+    throw spawnFailure(`tea api ${path}`, error)
+  }
 
   if (result.exitCode !== 0)
     throw new Error(`tea api ${path}: ${result.stderr.toString().trim() || `exit ${result.exitCode}`}`)
@@ -45,7 +53,14 @@ export async function repoApiText(path: string, repo?: string): Promise<string> 
 }
 
 export async function tea(args: string[], repo?: string): Promise<string> {
-  const result = await $`tea ${args} ${repoFlag(repo)}`.quiet().nothrow()
+  let result
+
+  try {
+    result = await $`tea ${args} ${repoFlag(repo)}`.quiet().nothrow()
+  }
+  catch (error) {
+    throw spawnFailure(`tea ${args[0] ?? ''}`, error)
+  }
 
   if (result.exitCode !== 0)
     throw new Error(`tea ${args[0] ?? ''}: ${result.stderr.toString().trim() || result.stdout.toString().trim() || `exit ${result.exitCode}`}`)

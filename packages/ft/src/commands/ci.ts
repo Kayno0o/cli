@@ -1,7 +1,7 @@
 import type { Run } from '../runs'
 import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
-import { defaultBranch, git, gitOk, resolveCommit, tagsAt } from '../git'
-import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, runsOn, stallReason } from '../runs'
+import { cwdGone, defaultBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
+import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
 
 const usage = `ft ci [ref]
 
@@ -53,6 +53,9 @@ export async function ci(args: string[]): Promise<number> {
   const giveUp = wholeNumber(values.timeout, 'timeout', 30) * 60_000
   const sha = await resolveCommit(positionals[0] ?? `origin/${branch}`)
   const short = sha.slice(0, 7)
+
+  await leaveWorktree()
+
   // Commits whose runs are over without testing, which no later poll needs to ask about again.
   const passedOver = new Set<string>()
 
@@ -104,12 +107,24 @@ export async function ci(args: string[]): Promise<number> {
     if (Date.now() - started > giveUp)
       fail(`CI has not finished on ${short} in ${giveUp / 60_000} minutes${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
 
-    // Forgejo or origin missing one poll leaves the wait to the next.
+    // Forgejo or origin missing one poll leaves the wait to the next, unless the runs followed are over by then.
     try {
       runs = await covering()
     }
     catch (error) {
+      if (cwdGone())
+        fail(`the working directory was removed while waiting for CI on ${short}${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
+
       console.warn(`ft ci: ${error instanceof Error ? error.message : String(error)}, polling again`)
+
+      const latest = runs === undefined ? undefined : await refreshed(runs)
+
+      if (latest?.every(run => FINISHED.has(run.status)) === true) {
+        runs = latest
+
+        break
+      }
+
       await Bun.sleep(POLL)
 
       continue

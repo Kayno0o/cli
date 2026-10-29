@@ -58,6 +58,16 @@ export async function jobLog(job: number, repo?: string): Promise<string> {
   return repoApiText(`actions/jobs/${job}/logs`, repo)
 }
 
+// The runs as they stand now, or undefined when they cannot be read.
+export async function refreshed(runs: Run[], repo?: string): Promise<Run[] | undefined> {
+  try {
+    return await Promise.all(runs.map(async run => runById(run.id, repo)))
+  }
+  catch {
+    return undefined
+  }
+}
+
 // The newest push run of each workflow, or of the one asked for.
 export function newestPerWorkflow(runs: Run[], workflow?: string): Run[] {
   const newest = new Map<string, Run>()
