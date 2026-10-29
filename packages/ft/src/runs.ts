@@ -1,3 +1,4 @@
+import { formatAge } from '@kaynooo/cli-kit'
 import { excerpt } from './log'
 import { api, repoApi, repoApiText } from './tea'
 
@@ -24,9 +25,15 @@ interface Runner { name: string, status: string, labels: string[] | null }
 export const FINISHED = new Set(['success', 'failure', 'skipped', 'cancelled'])
 export const QUEUED = new Set(['waiting', 'blocked'])
 const NANOSECONDS = 1e9
+const EPOCH = Date.parse('2000-01-01T00:00:00Z')
 
 export function runSeconds(run: Run): number {
   return run.duration / NANOSECONDS
+}
+
+// A run that never started carries Forgejo's zero time, year 1.
+export function startedAge(run: Run, now = Date.now()): string {
+  return Date.parse(run.started) < EPOCH ? '-' : formatAge(run.started, now)
 }
 
 export async function recentRuns(limit: number, repo?: string, workflow?: string): Promise<Run[]> {

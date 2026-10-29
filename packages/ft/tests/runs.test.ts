@@ -1,7 +1,7 @@
 import type { Run } from '../src/runs'
 import { describe, expect, test } from 'bun:test'
 import { judge } from '../src/commands/ci'
-import { newestPerWorkflow, overall } from '../src/runs'
+import { newestPerWorkflow, overall, startedAge } from '../src/runs'
 
 function run(id: number, status: string, workflow = 'test.yml', event = 'push'): Run {
   return { id, status, workflow_id: workflow, event, index_in_repo: id, title: '', commit_sha: 'abc', html_url: '', prettyref: 'main', started: '', stopped: '', duration: 0 }
@@ -38,5 +38,14 @@ describe('overall', () => {
     expect(overall([run(1, 'success'), run(2, 'waiting')])).toBe('waiting')
     expect(overall([run(1, 'success'), run(2, 'skipped')])).toBe('success')
     expect(overall([run(1, 'skipped')])).toBe('skipped')
+  })
+})
+
+describe('startedAge', () => {
+  test('is - for a run that never started, whose start is the zero time', () => {
+    const now = Date.parse('2026-10-23T12:00:00Z')
+
+    expect(startedAge({ ...run(1, 'waiting'), started: '0001-01-01T00:00:00Z' }, now)).toBe('-')
+    expect(startedAge({ ...run(1, 'running'), started: '2026-10-23T10:00:00Z' }, now)).toBe('2h ago')
   })
 })

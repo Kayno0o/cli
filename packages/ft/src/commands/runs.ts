@@ -1,7 +1,7 @@
-import { formatAge, formatSeconds, parse, table, truncate, upTo, wholeNumber } from '@kaynooo/cli-kit'
+import { formatSeconds, parse, table, truncate, upTo, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { resolveCommit } from '../git'
-import { recentRuns, runSeconds, runsOn } from '../runs'
+import { recentRuns, runSeconds, runsOn, startedAge } from '../runs'
 
 const usage = `ft runs [--sha <ref>]
 
@@ -44,7 +44,7 @@ export async function runs(args: string[]): Promise<number> {
 
   console.log(table([
     ['ID', 'STATUS', 'WORKFLOW', 'REF', 'EVENT', 'TOOK', 'STARTED', 'TITLE'],
-    ...list.map(run => [String(run.id), run.status, run.workflow_id, run.prettyref, run.event, run.duration > 0 ? formatSeconds(runSeconds(run)) : '-', formatAge(run.started), truncate(upTo(run.title, '\n'), TITLE_WIDTH)]),
+    ...list.map(run => [String(run.id), run.status, run.workflow_id, run.prettyref, run.event, run.duration > 0 ? formatSeconds(runSeconds(run)) : '-', startedAge(run), truncate(upTo(run.title, '\n'), TITLE_WIDTH)]),
   ]))
 
   return 0
