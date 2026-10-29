@@ -72,4 +72,22 @@ describe('writes', () => {
     expect(writes('comment on table t is \'x\'')).toEqual(['uses COMMENT ON'])
     expect(writes('select comment from posts')).toEqual([])
   })
+
+  test('sees inside what would hide a write: a DO body, a MySQL /*! comment, a quote that never closes', () => {
+    expect(writes('do $$ begin delete from t; end $$')).toEqual(['uses DO'])
+    expect(writes('select 1 /*!50000 ; drop table t */')).toEqual(['uses DROP'])
+    expect(writes('select \'a; drop table t')).toEqual(['has a quote that never closes'])
+    expect(writes('select $x$ never closed')).toEqual(['has a quote that never closes'])
+  })
+
+  test('lets session settings, exports and names that look like keywords read', () => {
+    for (const sql of ['set search_path to app', 'set statement_timeout = 5000', '\\set x 1', 'copy (select 1) to stdout', '\\copy t to \'x.csv\'', 'select u.lock, u.call from u', 'select `drop`, `create` from t'])
+      expect(writes(sql)).toEqual([])
+
+    expect(writes('set role admin')).toEqual(['uses SET'])
+    expect(writes('set transaction read write')).toEqual(['uses SET'])
+    expect(writes('select 1; set session authorization x')).toEqual(['uses SET'])
+    expect(writes('copy t to \'/tmp/x.csv\'')).toEqual(['uses COPY'])
+    expect(writes('copy t from stdin')).toEqual(['uses COPY'])
+  })
 })

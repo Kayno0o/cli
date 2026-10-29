@@ -11,6 +11,7 @@ const COPIES = [
   ['packages/db/src/guard.ts', 'guards/hooks/sql-guard.ts'],
 ] as const
 
+// Only where the mods live, ~/zshrc, so CI skips it.
 const present = await Bun.file(join(MODS, COPIES[0][1])).exists()
 
 describe.skipIf(!present)('the mods\' copies', () => {

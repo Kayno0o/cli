@@ -15,18 +15,24 @@ const SPACE = /\s/
 const ESCAPE_PREFIX = /e/i
 const DOLLAR_TAG = /^\$(?:[a-z_]\w*)?\$/i
 const LOCK_KIND = /^(?:update|share|no|key)$/
+const DIGITS = /\d/
 const COMMAND_ENDS = ';'
+// Stands for a quote or dollar-quoted body that never closes, which hides the rest of the text.
+const UNCLOSED = 'unclosed'
+
+// A SET starting a statement changes a session setting, harmless unless it switches the role or the transaction's access mode.
+const PRIVILEGED_SET = new Set(['role', 'session', 'transaction'])
 
 // Statements that may start a read.
 const READ_STARTS = new Set(['select', 'with', 'values', 'table', 'show', 'explain'])
 
 // Words that write or lock wherever they appear in a statement that started like a read, such as a DELETE inside a CTE.
-const WRITE_WORDS = new Set(['insert', 'update', 'delete', 'merge', 'truncate', 'drop', 'alter', 'create', 'grant', 'revoke', 'into', 'set', 'copy', 'call', 'vacuum', 'lock', 'refresh', 'reindex', 'cluster'])
+const WRITE_WORDS = new Set(['insert', 'update', 'delete', 'merge', 'truncate', 'drop', 'alter', 'create', 'grant', 'revoke', 'into', 'call', 'vacuum', 'lock', 'refresh', 'reindex', 'cluster', 'do'])
 
 // Functions with side effects: sequences, settings, backends, advisory locks, large objects, remote access and server files.
 const SIDE_EFFECT_FUNCTIONS = /^(?:nextval|setval|set_config|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_switch_wal|pg_create_restore_point|pg_advisory_lock\w*|pg_advisory_xact_lock\w*|pg_try_advisory\w*|pg_notify|lo_\w+|dblink\w*|pg_read_file|pg_read_binary_file|pg_ls_dir|query_to_xml\w*|pg_logical_\w+|pg_replication_\w+|pg_drop_replication_slot|pg_stat_reset\w*|pg_promote|pg_file_\w+)$/
 
-// Splits SQL into words and punctuation, dropping comments and the content of strings, quoted identifiers and dollar-quoted bodies.
+// Splits SQL into words and punctuation, dropping comments and the content of strings, quoted identifiers and dollar-quoted bodies, but keeping what a MySQL `/*! ... */` comment runs.
 export function tokenize(sql: string): Token[] {
   const tokens: Token[] = []
   let at = 0
@@ -43,21 +49,28 @@ export function tokenize(sql: string): Token[] {
 
       at = end === -1 ? sql.length : end + 1
     }
+    else if (char === '/' && next === '*' && sql.charAt(at + 2) === '!') {
+      at += 3
+
+      while (DIGITS.test(sql.charAt(at)))
+        at++
+    }
     else if (char === '/' && next === '*') {
       at = skipComment(sql, at)
     }
-    else if (char === '\'' || char === '"') {
+    else if (char === '\'' || char === '"' || char === '`') {
       const backslashes = char === '\'' && ESCAPE_PREFIX.test(sql.charAt(at - 1)) && !WORD_PART.test(sql.charAt(at - 2))
+      const end = skipQuoted(sql, at, char, backslashes)
 
-      at = skipQuoted(sql, at, char, backslashes)
-      tokens.push({ kind: 'punct', text: char })
+      at = end ?? sql.length
+      tokens.push({ kind: 'punct', text: end === undefined ? UNCLOSED : char })
     }
     else if (char === '$' && DOLLAR_TAG.test(sql.slice(at))) {
       const tag = DOLLAR_TAG.exec(sql.slice(at))?.[0] ?? '$$'
       const end = sql.indexOf(tag, at + tag.length)
 
       at = end === -1 ? sql.length : end + tag.length
-      tokens.push({ kind: 'punct', text: '$' })
+      tokens.push({ kind: 'punct', text: end === -1 ? UNCLOSED : '$' })
     }
     else if (WORD_START.test(char)) {
       let end = at + 1
@@ -102,8 +115,8 @@ function skipComment(sql: string, start: number): number {
   return sql.length
 }
 
-// Index just past the closing quote, where a doubled quote is an escaped one.
-function skipQuoted(sql: string, start: number, quote: string, backslashes: boolean): number {
+// Index just past the closing quote, where a doubled quote is an escaped one; undefined when it never closes.
+function skipQuoted(sql: string, start: number, quote: string, backslashes: boolean): number | undefined {
   let at = start + 1
 
   while (at < sql.length) {
@@ -123,7 +136,7 @@ function skipQuoted(sql: string, start: number, quote: string, backslashes: bool
     }
   }
 
-  return sql.length
+  return undefined
 }
 
 export function splitStatements(tokens: Token[]): Token[][] {
@@ -139,24 +152,67 @@ export function splitStatements(tokens: Token[]): Token[][] {
   return statements.filter(statement => statement.length > 0)
 }
 
+const isPunct = (token: Token | undefined, text: string) => token?.kind === 'punct' && token.text === text
+
+// COPY ... TO STDOUT, or psql's \copy ... TO, only reads: the direction is the first FROM or TO outside parentheses.
+function copyReads(statement: Token[], index: number): boolean {
+  let depth = 0
+
+  for (const [at, token] of statement.entries()) {
+    if (at <= index)
+      continue
+
+    if (isPunct(token, '('))
+      depth++
+    else if (isPunct(token, ')'))
+      depth--
+    else if (depth === 0 && token.kind === 'word' && (token.text === 'from' || token.text === 'to'))
+      return token.text === 'to' && (statement[at + 1]?.text === 'stdout' || isPunct(statement[index - 1], '\\'))
+  }
+
+  return false
+}
+
 function statementWrites(statement: Token[]): string[] {
   const first = statement[0]
+  // psql's meta-commands start with a backslash, `\set` or `\copy`.
+  const start = isPunct(first, '\\') ? 1 : 0
   const reasons: string[] = []
 
   for (const [index, token] of statement.entries()) {
+    if (isPunct(token, UNCLOSED))
+      reasons.push('has a quote that never closes')
+
     if (token.kind !== 'word')
       continue
 
-    if (WRITE_WORDS.has(token.text))
-      reasons.push(`uses ${token.text.toUpperCase()}`)
-    else if (token.text === 'analyze' && first?.text !== 'explain')
-      reasons.push('uses ANALYZE')
-    else if (SIDE_EFFECT_FUNCTIONS.test(token.text))
+    if (SIDE_EFFECT_FUNCTIONS.test(token.text)) {
       reasons.push(`calls ${token.text}`)
-    else if (token.text === 'for' && LOCK_KIND.test(statement[index + 1]?.text ?? ''))
+    }
+    // Past a dot a keyword is a column or table name, `u.lock`, while a function stays one, `pg_catalog.setval`.
+    else if (isPunct(statement[index - 1], '.')) {
+      continue
+    }
+    else if (token.text === 'set') {
+      if (index !== start || PRIVILEGED_SET.has(statement[index + 1]?.text ?? ''))
+        reasons.push('uses SET')
+    }
+    else if (token.text === 'copy') {
+      if (!copyReads(statement, index))
+        reasons.push('uses COPY')
+    }
+    else if (WRITE_WORDS.has(token.text)) {
+      reasons.push(`uses ${token.text.toUpperCase()}`)
+    }
+    else if (token.text === 'analyze' && first?.text !== 'explain') {
+      reasons.push('uses ANALYZE')
+    }
+    else if (token.text === 'for' && LOCK_KIND.test(statement[index + 1]?.text ?? '')) {
       reasons.push('takes row locks with FOR UPDATE or SHARE')
-    else if (token.text === 'comment' && statement[index + 1]?.text === 'on')
+    }
+    else if (token.text === 'comment' && statement[index + 1]?.text === 'on') {
       reasons.push('uses COMMENT ON')
+    }
   }
 
   return reasons
