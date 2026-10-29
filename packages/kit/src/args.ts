@@ -15,6 +15,13 @@ export function fail(message: string, code = 2): never {
   throw new Exit(message, code)
 }
 
+// Thrown by parse while a bin answers `__complete`, so the command reached hands over its options before doing anything else.
+export class Completing {
+  constructor(readonly options: Options) {}
+}
+
+export const completion = { active: false }
+
 export function helpText(usage: string, options: Options): string {
   const rows = Object.entries(options).map(([name, option]) => [`${option.short === undefined ? '    ' : `-${option.short}, `}--${name}${option.type === 'string' ? ' <value>' : ''}`, option.description] as const)
   const width = Math.max(0, ...rows.map(([flag]) => flag.length))
@@ -30,6 +37,10 @@ export interface ParseSettings {
 // Parses a command's arguments, printing its help and returning undefined on --help.
 export function parse<const T extends Options>(args: string[], usage: string, options: T, settings: ParseSettings = {}) {
   const all = { ...options, help: { type: 'boolean', short: 'h', description: 'show this help' } } as const
+
+  if (completion.active)
+    throw new Completing(all)
+
   const separator = settings.rest === true ? args.indexOf('--') : -1
   const own = separator === -1 ? args : args.slice(0, separator)
   const rest = separator === -1 ? undefined : args.slice(separator + 1)

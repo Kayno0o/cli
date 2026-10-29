@@ -1,5 +1,6 @@
+import type { Options } from './args'
 import process from 'node:process'
-import { Exit } from './args'
+import { Completing, completion, Exit } from './args'
 import { distance } from './text'
 
 export type Command = { summary: string } & (
@@ -105,8 +106,66 @@ async function dispatch(level: Level, argv: string[], version: string): Promise<
   }
 }
 
+// The hidden first argument a shell completion calls a bin with: `<bin> __complete <words typed after it>... <word being typed>`.
+export const COMPLETE = '__complete'
+// Printed instead of candidates where a path fits, for the shell to complete files itself.
+export const FILES = '__files__'
+
+// A command's options, read by running it until its parse call throws them: every command parses its arguments before anything else.
+async function optionsOf(run: (args: string[]) => Promise<number>): Promise<Options> {
+  completion.active = true
+
+  try {
+    await run([])
+  }
+  catch (error) {
+    if (error instanceof Completing)
+      return error.options
+  }
+  finally {
+    completion.active = false
+  }
+
+  return {}
+}
+
+// A leaf command's candidates: its long options for a word starting with a dash, else paths.
+async function leafCandidates(run: (args: string[]) => Promise<number>, words: string[]): Promise<string[]> {
+  if (!(words.at(-1) ?? '').startsWith('-'))
+    return [FILES]
+
+  return Object.entries(await optionsOf(run)).map(([name, option]) => `--${name}\t${option.description}`)
+}
+
+// The candidates for the last word, `value\tdescription` per line, after walking the subcommands the earlier words name.
+async function candidates(commands: Record<string, Command>, aliases: Record<string, string> | undefined, defaultCommand: string | undefined, words: string[]): Promise<string[]> {
+  const [word = '', ...rest] = words
+  const command = commands[aliases?.[word] ?? word]
+
+  if (rest.length === 0 && !word.startsWith('-'))
+    return Object.entries(commands).map(([name, { summary }]) => `${name}\t${summary}`)
+
+  if (command === undefined) {
+    const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]
+
+    return fallback !== undefined && 'run' in fallback ? leafCandidates(fallback.run, words) : []
+  }
+
+  return 'commands' in command ? candidates(command.commands, command.aliases, undefined, rest) : leafCandidates(command.run, rest)
+}
+
+async function printCandidates(found: Promise<string[]>): Promise<number> {
+  for (const line of await found)
+    console.log(line)
+
+  return 0
+}
+
 // Runs the command argv names and returns the exit code: 0 for help and version, 2 for an unknown command.
 export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<number> {
+  if (argv[0] === COMPLETE)
+    return printCandidates(candidates(cli.commands, cli.aliases, cli.defaultCommand, argv.slice(1)))
+
   return dispatch({ path: [cli.name], header: `${cli.name} ${cli.version}: ${cli.about}`, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand }, argv, cli.version)
 }
 
@@ -118,6 +177,9 @@ export interface Main {
 
 // Runs a CLI that is a single command: `--version` or `-v` alone prints the version, an `Exit` or any error prints `<name>: <message>`. Returns the exit code.
 export async function runMain({ name, version, run }: Main, argv = process.argv.slice(2)): Promise<number> {
+  if (argv[0] === COMPLETE)
+    return printCandidates(leafCandidates(run, argv.slice(1)))
+
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
     console.log(version)
 

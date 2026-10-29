@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { fail, runCli, runMain } from '../src'
+import { fail, parse, runCli, runMain } from '../src'
 import { capture } from '../src/test'
 
 const cli = {
@@ -83,5 +83,40 @@ describe('runMain', () => {
     expect(await capture(async () => runMain(main(async () => {
       throw new Error('crash')
     }), []))).toEqual({ result: 1, out: '', err: 'solo: crash\n' })
+  })
+})
+
+describe('__complete', () => {
+  const ran: string[] = []
+  const parsing = {
+    ...cli,
+    commands: {
+      ...cli.commands,
+      port: { summary: 'parses first', run: async (args: string[]) => {
+        parse(args, 'port <name>', { max: { type: 'string', description: 'highest port' } })
+        ran.push('port')
+
+        return 0
+      } },
+    },
+  }
+
+  test('lists the commands, or a group\'s, with their summaries', async () => {
+    expect((await capture(async () => runCli(parsing, ['__complete', '']))).out).toBe('echo\tprints its arguments\nboom\tfails\nplan\ta group\nport\tparses first\n')
+    expect((await capture(async () => runCli(parsing, ['__complete', 'plan', 'a']))).out).toBe('add\tadds\nbad\tfails\n')
+  })
+
+  test('lists a command\'s options without running it, and asks for paths otherwise', async () => {
+    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '--']))).out).toBe('--max\thighest port\n--help\tshow this help\n')
+    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '']))).out).toBe('__files__\n')
+    expect(ran).toEqual([])
+    expect((await capture(async () => runCli(parsing, ['port']))).result).toBe(0)
+    expect(ran).toEqual(['port'])
+  })
+
+  test('completes a single-command bin\'s options', async () => {
+    const run = async (args: string[]) => (parse(args, 'x', { only: { type: 'string', description: 'some' } }) === undefined ? 0 : 0)
+
+    expect((await capture(async () => runMain({ name: 'x', version: '1', run }, ['__complete', '-']))).out).toBe('--only\tsome\n--help\tshow this help\n')
   })
 })
