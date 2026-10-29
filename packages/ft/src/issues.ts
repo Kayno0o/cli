@@ -45,9 +45,9 @@ export async function commentsOfAll(issues: Issue[], repo?: string): Promise<Map
   return result
 }
 
-// `tea api` cannot write with an OAuth login, so writes go through tea's own commands.
+// `tea api` cannot write with an OAuth login, so writes go through tea's own commands, with `-d` as tea 0.15 has no description file.
 export async function setBody(number: number, body: string, repo?: string): Promise<void> {
-  await tea(['issues', 'edit', String(number), '--description-file', '-'], repo, body)
+  await tea(['issues', 'edit', String(number), '-d', body], repo)
 }
 
 export async function comment(number: number, body: string, repo?: string): Promise<void> {

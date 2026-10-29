@@ -44,12 +44,11 @@ export async function repoApiText(path: string, repo?: string): Promise<string> 
   return request(`repos/{owner}/{repo}/${path}`, repo)
 }
 
-export async function tea(args: string[], repo?: string, stdin?: string): Promise<void> {
-  const command = stdin === undefined
-    ? $`tea ${args} ${repoFlag(repo)}`
-    : $`tea ${args} ${repoFlag(repo)} < ${Buffer.from(stdin)}`
-  const result = await command.quiet().nothrow()
+export async function tea(args: string[], repo?: string): Promise<string> {
+  const result = await $`tea ${args} ${repoFlag(repo)}`.quiet().nothrow()
 
   if (result.exitCode !== 0)
     throw new Error(`tea ${args[0] ?? ''}: ${result.stderr.toString().trim() || result.stdout.toString().trim() || `exit ${result.exitCode}`}`)
+
+  return result.stdout.toString()
 }
