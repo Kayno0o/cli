@@ -1,33 +1,17 @@
 {
-  "name": "@kaynooo/forgejo-tools",
+  "name": "agent-tools",
   "type": "module",
-  "version": "0.2.0",
-  "description": "ft: Forgejo CI runs, logs, releases and issue checklists from the terminal, through tea.",
+  "private": true,
+  "description": "CLIs built for Claude Code: ft for Forgejo, and more to come.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/forgejo-tools#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/forgejo-tools.git"
-  },
-  "bugs": "https://git.kaynooo.fr/kaynooo/forgejo-tools/issues",
-  "keywords": ["forgejo", "gitea", "tea", "ci", "actions", "release"],
-  "bin": {
-    "ft": "./src/cli.ts"
-  },
-  "files": ["src"],
-  "engines": {
-    "bun": ">=1.4.3"
-  },
-  "publishConfig": {
-    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
-  },
+  "workspaces": ["packages/*"],
   "scripts": {
     "check": "$npm_execpath check",
     "lint": "keslint --cache",
     "lint:fix": "keslint --fix --cache",
     "test": "$npm_execpath test",
-    "ft": "$npm_execpath src/cli.ts"
+    "ft": "$npm_execpath packages/ft/src/cli.ts"
   },
   "devDependencies": {
     "@kaynooo/eslint": "^7.0.4",

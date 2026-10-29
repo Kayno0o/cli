@@ -1,9 +1,9 @@
 # release a new version with ft itself: bump, atomic push of main and its tag, then wait for CI and the registry
 patch:
-    bun src/cli.ts release patch
+    bun packages/ft/src/cli.ts release patch
 
 minor:
-    bun src/cli.ts release minor
+    bun packages/ft/src/cli.ts release minor
 
 major:
-    bun src/cli.ts release major
+    bun packages/ft/src/cli.ts release major
