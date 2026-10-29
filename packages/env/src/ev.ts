@@ -3,6 +3,7 @@
 import process from 'node:process'
 import { runCli } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
+import { audit } from './commands/audit'
 import { diff, missing } from './commands/compare'
 import { mv, set, unset } from './commands/edit'
 import { get, list } from './commands/read'
@@ -19,6 +20,7 @@ process.exitCode = await runCli({
     mv: { run: mv, summary: 'move a key from one file to another' },
     diff: { run: diff, summary: 'keys set in one file and not the other' },
     missing: { run: missing, summary: 'keys of .env.example that .env lacks' },
+    audit: { run: audit, summary: '.env files others can read or git tracks, compose files writing secrets out' },
   },
   aliases: { ls: 'list' },
 })
