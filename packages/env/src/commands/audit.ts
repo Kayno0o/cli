@@ -124,10 +124,14 @@ export async function audit(args: string[]): Promise<number> {
     return 0
   }
 
+  const uid = process.getuid?.()
+
   for (const { path, readable, tracked, secrets } of exposed) {
+    // Only the owner or root can change a file's mode.
+    const sudo = uid !== undefined && uid !== 0 && (await stat(path)).uid !== uid ? 'sudo ' : ''
     const problems = [
-      ...secrets === undefined ? [] : [`writes out ${secrets.join(', ')}: move the values into a .env beside it`],
-      ...readable ? [`readable by any account: chmod o-rwx ${quoted(shown(path))}`] : [],
+      ...secrets === undefined ? [] : [`writes out ${secrets.join(', ')}: ev audit --fix moves the values into a .env beside it`],
+      ...readable ? [`readable by any account: ${sudo}chmod o-rwx ${quoted(shown(path))}`] : [],
       ...tracked ? [`tracked by git: git rm --cached ${quoted(shown(path))}, then ignore it`] : [],
     ]
 

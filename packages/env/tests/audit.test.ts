@@ -113,7 +113,7 @@ describe('ev audit', () => {
     const result = ev(['audit'])
 
     expect(result.code).toBe(1)
-    expect(result.out).toBe('.env\n  readable by any account: chmod o-rwx .env\ncompose.yml\n  writes out DB_PASSWORD: move the values into a .env beside it\n  readable by any account: chmod o-rwx compose.yml\n')
+    expect(result.out).toBe('.env\n  readable by any account: chmod o-rwx .env\ncompose.yml\n  writes out DB_PASSWORD: ev audit --fix moves the values into a .env beside it\n  readable by any account: chmod o-rwx compose.yml\n')
     expect(result.out + result.err).not.toContain(VALUE)
     expect((JSON.parse(ev(['audit', '--json']).out) as { exposed: unknown[] }).exposed).toHaveLength(2)
   })
