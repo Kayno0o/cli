@@ -1,10 +1,9 @@
 import type { Step } from './steps'
 import { mkdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import process from 'node:process'
-import { fail, formatDuration, parse, runCommand, stripAnsi, table } from '@kaynooo/cli-kit'
-import { failureExcerpt } from './output'
+import { fail, parse, table } from '@kaynooo/cli-kit'
+import { logDirectory, printOutcome, runStep } from './run'
 import { discover, STEP_NAMES } from './steps'
 
 const usage = `check [--only <steps>] [--list]
@@ -20,12 +19,8 @@ const options = {
 
 const COMMA = /\s*,\s*/
 
-// Where the steps' full outputs go: one folder per repo, rewritten by the next run.
-function logDirectory(cwd: string): string {
-  return join(tmpdir(), 'check', `${basename(cwd)}-${Bun.hash(cwd).toString(36)}`)
-}
-
-function pick(steps: Step[], only: string | undefined): Step[] {
+// The steps --only names, failing on one the repo lacks.
+export function pick<T extends { name: string }>(steps: T[], only: string | undefined): T[] {
   if (only === undefined)
     return steps
 
@@ -36,16 +31,6 @@ function pick(steps: Step[], only: string | undefined): Step[] {
     fail(`no ${unknown.join(', ')} step here, found ${steps.map(step => step.name).join(', ')}`)
 
   return steps.filter(step => names.includes(step.name))
-}
-
-async function runStep(step: Step, cwd: string, logFile: string): Promise<{ ok: boolean, ms: number, output: string }> {
-  const started = Date.now()
-  const { code, text } = await runCommand(['sh', '-c', `${step.command} 2>&1`], { cwd, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } })
-  const output = stripAnsi(text)
-
-  await Bun.write(logFile, output)
-
-  return { ok: code === 0, ms: Date.now() - started, output }
 }
 
 // Runs the repo's steps in order and prints one line each, with what failed under a failing one; returns 0 only when every step passed.
@@ -60,7 +45,7 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   if (found.length === 0)
     fail(`no ${STEP_NAMES.join(', ')} step in package.json, composer.json, a Justfile or a Makefile`)
 
-  const steps = pick(found, parsed.values.only)
+  const steps: Step[] = pick(found, parsed.values.only)
 
   if (parsed.values.list === true) {
     console.log(table(steps.map(step => [step.name, step.command, step.source])))
@@ -77,17 +62,12 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
 
   for (const step of steps) {
     const logFile = join(directory, `${step.name}.log`)
-    const result = await runStep(step, cwd, logFile)
+    const outcome = await runStep(step.command, cwd, logFile)
 
-    if (result.ok) {
-      console.log(`ok    ${step.name.padEnd(width)}  ${formatDuration(result.ms)}  ${logFile}`)
+    printOutcome(step.name, width, step.command, logFile, outcome)
 
-      continue
-    }
-
-    failed++
-    console.log(`FAIL  ${step.name.padEnd(width)}  ${formatDuration(result.ms)}  ${step.command}  ${logFile}`)
-    console.log(failureExcerpt(result.output).split('\n').map(line => `  ${line}`.trimEnd()).join('\n'))
+    if (!outcome.ok)
+      failed++
   }
 
   return failed === 0 ? 0 : 1

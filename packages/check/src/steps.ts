@@ -10,11 +10,9 @@ export interface Step {
 // Validation steps in the order they run.
 export const STEP_NAMES = ['check', 'typecheck', 'lint', 'test'] as const
 
-const TARGET = /^(check|typecheck|lint|test)[ \t]*:(?!=)/gm
-// A script that calls this very bin would recurse.
-const SELF = /^check(?:\s|$)/
+const TARGET = /^([\w-]+)[ \t]*:(?!=)/gm
 
-async function read(dir: string, ...files: string[]): Promise<string | undefined> {
+export async function read(dir: string, ...files: string[]): Promise<string | undefined> {
   for (const file of files) {
     const handle = Bun.file(join(dir, file))
 
@@ -40,8 +38,13 @@ function targets(text: string): string[] {
   return [...text.matchAll(TARGET)].map(match => match[1] ?? '')
 }
 
-// Every step name each source offers, in source order.
-async function candidates(dir: string): Promise<Step[]> {
+// A script that calls the bin running it would recurse.
+function callsSelf(value: unknown, bin: string): boolean {
+  return typeof value === 'string' && (value === bin || value.startsWith(`${bin} `) || value.startsWith(`${bin}\t`))
+}
+
+// Every script, recipe and target each source offers, in source order, but a package.json script calling `bin`.
+export async function candidates(dir: string, bin: string): Promise<Step[]> {
   const steps: Step[] = []
   const packageJson = await read(dir, 'package.json')
   const composerJson = await read(dir, 'composer.json')
@@ -51,7 +54,7 @@ async function candidates(dir: string): Promise<Step[]> {
   // Scripts go through `bun run`, as a `check` script of `$npm_execpath check` is Bun's type checker, not this bin.
   if (packageJson !== undefined) {
     for (const [name, value] of Object.entries(scripts('package.json', packageJson))) {
-      if (!(typeof value === 'string' && SELF.test(value)))
+      if (!callsSelf(value, bin))
         steps.push({ name, command: `bun run ${name}`, source: 'package.json' })
     }
   }
@@ -72,7 +75,7 @@ async function candidates(dir: string): Promise<Step[]> {
 
 // The repo's steps: each of STEP_NAMES once, from package.json, else composer.json, else a Justfile, else a Makefile.
 export async function discover(dir: string): Promise<Step[]> {
-  const found = await candidates(dir)
+  const found = await candidates(dir, 'check')
 
   return STEP_NAMES.flatMap((name) => {
     const step = found.find(candidate => candidate.name === name)
