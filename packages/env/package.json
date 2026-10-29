@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/env-tools",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "ev lists and edits .env files with secrets masked, redact masks secrets in any piped output.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
