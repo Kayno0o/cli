@@ -66,7 +66,7 @@ describe('check', () => {
     const lines = logs.join('\n').split('\n')
 
     expect(lines[0]).toMatch(/^ok {4}check {2}\d+\.\ds {2}\S+check\.log$/)
-    expect(lines[1]).toMatch(/^FAIL {2}lint {2}\d+\.\ds {2}bun run lint {2}\S+lint\.log$/)
+    expect(lines[1]).toMatch(/^FAIL {2}lint {3}\d+\.\ds {2}bun run lint {2}\S+lint\.log$/)
     expect(lines[2]).toBe('  src/a.ts(1,7): error TS2322: bad')
     expect(lines[3]).toStartWith('ok    test')
   })

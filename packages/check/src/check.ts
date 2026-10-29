@@ -77,6 +77,7 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
 
   await mkdir(directory, { recursive: true })
 
+  const width = Math.max(...steps.map(step => step.name.length))
   let failed = 0
 
   for (const step of steps) {
@@ -84,13 +85,13 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
     const result = await runStep(step, cwd, logFile)
 
     if (result.ok) {
-      console.log(`ok    ${step.name}  ${seconds(result.ms)}  ${logFile}`)
+      console.log(`ok    ${step.name.padEnd(width)}  ${seconds(result.ms)}  ${logFile}`)
 
       continue
     }
 
     failed++
-    console.log(`FAIL  ${step.name}  ${seconds(result.ms)}  ${step.command}  ${logFile}`)
+    console.log(`FAIL  ${step.name.padEnd(width)}  ${seconds(result.ms)}  ${step.command}  ${logFile}`)
     console.log(failureExcerpt(result.output).split('\n').map(line => `  ${line}`.trimEnd()).join('\n'))
   }
 
