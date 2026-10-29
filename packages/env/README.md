@@ -18,6 +18,7 @@ bun install -g @kaynooo/env-tools
 | `ev diff <a> <b>` | names the keys set in one file and not the other, exit 1 when they differ |
 | `ev missing [file]` | names the keys of `.env.example` (`--against`) that the file lacks, exit 1 when some are |
 | `ev audit [dir...]` | lists the `.env` files any account can read or git tracks, and the compose files any account can read that write a secret or URL password out, with the fix for each, exit 1 when it finds one |
+| `ev audit --fix [dir...]` | moves each secret a listed compose file writes out into the `.env` beside it as `${KEY}` (a key the `.env` sets to another value stays put), puts it back when `docker compose config` resolves differently, and shuts other accounts out of both files and of every listed `.env`; exit 1 when something is left |
 
 A value is masked when its key looks like `TOKEN|SECRET|PASSWORD|KEY|PRIVATE|DSN`, when it is a private key, or in the password part of any URL (`postgres://user:***@host/db`) and any known token format. A masked value keeps a few leading characters and its length (`ghp***(40)`) so two values can be told apart. There is no flag that prints a secret unmasked.
 

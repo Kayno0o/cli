@@ -23,15 +23,20 @@ const SECRET_NAME = /(?:PASSWORD|PASSWD|SECRET|TOKEN|KEY)$/
 // A switch like MYSQL_RANDOM_ROOT_PASSWORD: 1, not a secret.
 const FLAG = /^(?:[01]|yes|no|true|false)$/i
 
-// The names of the secrets a compose file writes out rather than reading from a .env, the environment or a secrets file: secret-named values and URL passwords.
+// A compose value written out rather than read from a .env, the environment or a secrets file: a secret-named value or a URL password.
+export function isInlineSecret(name: string, value: string): boolean {
+  if (value === '' || value.startsWith('$') || value.startsWith('/run/secrets/') || FLAG.test(value))
+    return false
+
+  return SECRET_NAME.test(name) || urlPasswords(value).some(password => !password.startsWith('$'))
+}
+
+// The names of the secrets a compose file writes out.
 export function inlineSecrets(compose: string): string[] {
   const names = compose.split('\n').flatMap((line) => {
     const [, name = '', value = ''] = ENTRY.exec(line) ?? []
 
-    if (value.startsWith('$') || value.startsWith('/run/secrets/') || FLAG.test(value))
-      return []
-
-    return SECRET_NAME.test(name) || urlPasswords(value).some(password => !password.startsWith('$')) ? [name] : []
+    return isInlineSecret(name, value) ? [name] : []
   })
 
   return [...new Set(names)]
