@@ -5,15 +5,17 @@ import { issueNumber, issueNumbers, repoOption } from '../args'
 import { boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { latestClaim } from '../claims'
 import { commitsNaming, defaultBranch, git, resolveCommit } from '../git'
-import { close, comment, commentsOf, editBody, getIssue, openIssues, setBody } from '../issues'
+import { close, comment, commentsOf, createIssue, editBody, editIssue, getIssue, openIssues, setBody } from '../issues'
 
 const issueUsage = `ft issue <n>...
 
-Prints each issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it.`
+Prints each issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it.
+With --body, prints only the raw description, to edit and give back to \`ft edit -F\`.`
 
 const issueOptions = {
   todo: { type: 'boolean', short: 't', description: 'only the header and the boxes left to tick' },
   comments: { type: 'boolean', short: 'c', description: 'add the comments, each with its author and age' },
+  body: { type: 'boolean', short: 'b', description: 'only the raw description, without numbered boxes' },
   json: { type: 'boolean', description: 'print JSON: number, title, state, url, labels, claim, boxes, body and comments, an array for several issues' },
   ...repoOption,
 } as const
@@ -74,6 +76,15 @@ export async function issue(args: string[]): Promise<number> {
 
   const { values, positionals } = parsed
   const numbers = issueNumbers(positionals, issueUsage)
+
+  if (values.body === true) {
+    const bodies = await Promise.all(numbers.map(async number => (await getIssue(number, values.repo)).body.replaceAll('\r\n', '\n')))
+
+    console.log(bodies.join('\n\n'))
+
+    return 0
+  }
+
   const read = await Promise.all(numbers.map(async number => Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])))
 
   if (values.json === true) {
@@ -130,6 +141,69 @@ async function closedReferences(body: string, repo: string | undefined): Promise
   const states = await Promise.all(listed.map(async issue => isClosed(issue, repo)))
 
   return new Set(listed.filter((_, at) => states[at] === true))
+}
+
+const newUsage = `ft new -t <title> [-F <file>]
+
+Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it.`
+
+const newOptions = {
+  title: { type: 'string', short: 't', description: 'the issue title' },
+  file: { type: 'string', short: 'F', description: 'the description: a file, - for stdin' },
+  labels: { type: 'string', short: 'L', description: 'comma-separated labels' },
+  ...repoOption,
+} as const
+
+export async function newIssue(args: string[]): Promise<number> {
+  const parsed = parse(args, newUsage, newOptions)
+
+  if (parsed === undefined)
+    return 0
+
+  const { values } = parsed
+
+  if (values.title === undefined || values.title.trim() === '')
+    fail(`give the issue a title with -t\n\n${newUsage}`)
+
+  const body = await noteText({ file: values.file })
+  const created = await createIssue(values.title.trim(), body ?? '', values.labels, values.repo)
+
+  console.log(`#${created.number} ${created.html_url}`)
+
+  return 0
+}
+
+const editUsage = `ft edit <n> [-t <title>] [-F <file>]
+
+Replaces the title and/or the description of issue <n>, the description from -F <file> or from stdin with -F -.
+\`ft issue <n> --body\` prints the description to edit.`
+
+const editOptions = {
+  title: { type: 'string', short: 't', description: 'the new title' },
+  file: { type: 'string', short: 'F', description: 'the new description: a file, - for stdin' },
+  ...repoOption,
+} as const
+
+export async function edit(args: string[]): Promise<number> {
+  const parsed = parse(args, editUsage, editOptions)
+
+  if (parsed === undefined)
+    return 0
+
+  const { values, positionals } = parsed
+  const number = issueNumber(positionals[0], editUsage)
+  const body = await noteText({ file: values.file })
+
+  if (values.file !== undefined && body === undefined)
+    fail('the description file is empty')
+
+  if (values.title === undefined && body === undefined)
+    fail(`nothing to change: give -t or -F\n\n${editUsage}`)
+
+  await editIssue(number, { ...values.title === undefined ? {} : { title: values.title.trim() }, ...body === undefined ? {} : { body } }, values.repo)
+  console.log(`edited #${number}`)
+
+  return 0
 }
 
 const tickUsage = `ft tick <n> <box>...

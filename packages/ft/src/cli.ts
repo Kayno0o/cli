@@ -5,7 +5,7 @@ import { runCli } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { board, drop, take } from './commands/board'
 import { ci } from './commands/ci'
-import { commentOn, fixed, issue, tick } from './commands/issue'
+import { commentOn, edit, fixed, issue, newIssue, tick } from './commands/issue'
 import { logs } from './commands/logs'
 import { plan } from './commands/plan'
 import { release } from './commands/release'
@@ -27,6 +27,8 @@ process.exitCode = await runCli({
     take: { run: take, summary: 'claim an issue for this Claude Code session' },
     drop: { run: drop, summary: 'give back an issue this session took' },
     issue: { run: issue, summary: 'an issue\'s claim, description and numbered boxes, -c comments' },
+    new: { run: newIssue, summary: 'create an issue from -t and a description file or stdin' },
+    edit: { run: edit, summary: 'replace an issue\'s title or description, from a file or stdin' },
     tick: { run: tick, summary: 'tick checklist boxes of an issue, -m to comment too' },
     comment: { run: commentOn, summary: 'comment on an issue, from stdin when no text is given' },
     fixed: { run: fixed, summary: 'comment "Fixed in <sha>" and close an issue' },

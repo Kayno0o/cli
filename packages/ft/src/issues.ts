@@ -46,8 +46,37 @@ export async function commentsOfAll(issues: Issue[], repo?: string): Promise<Map
 }
 
 // `tea api` cannot write with an OAuth login, so writes go through tea's own commands, with `-d` as tea 0.15 has no description file.
+export async function editIssue(number: number, change: { title?: string, body?: string }, repo?: string): Promise<void> {
+  const args = ['issues', 'edit', String(number)]
+
+  if (change.title !== undefined)
+    args.push('-t', change.title)
+
+  if (change.body !== undefined)
+    args.push('-d', change.body)
+
+  await tea(args, repo)
+}
+
 export async function setBody(number: number, body: string, repo?: string): Promise<void> {
-  await tea(['issues', 'edit', String(number), '-d', body], repo)
+  await editIssue(number, { body }, repo)
+}
+
+// tea prints the new issue in a boxed view no script can read, so it is found again by its title, the newest one winning.
+export async function createIssue(title: string, body: string, labels: string | undefined, repo?: string): Promise<Issue> {
+  const args = ['issues', 'create', '-t', title, '-d', body]
+
+  if (labels !== undefined)
+    args.push('-L', labels)
+
+  await tea(args, repo)
+
+  const created = (await openIssues(undefined, repo)).filter(found => found.title === title).sort((a, b) => b.number - a.number)[0]
+
+  if (created === undefined)
+    throw new Error(`created "${title}" but cannot find it among the open issues`)
+
+  return created
 }
 
 // Re-reads the body right before writing it, so an edit made since the caller last looked is not overwritten.
