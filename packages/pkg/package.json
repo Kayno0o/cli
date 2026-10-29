@@ -14,9 +14,9 @@
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
   "keywords": ["npm", "package", "typosquat", "supply-chain", "dependencies"],
   "bin": {
-    "pkg": "./src/cli.ts"
+    "pkg": "./dist/cli.js"
   },
-  "files": ["src"],
+  "files": ["dist"],
   "engines": {
     "bun": ">=1.4.3"
   },
@@ -24,11 +24,12 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
     "pkg": "$npm_execpath src/cli.ts",
     "popular": "$npm_execpath scripts/popular.ts",
     "record": "$npm_execpath scripts/record.ts"
   },
-  "dependencies": {
-    "@kaynooo/cli-kit": "workspace:^"
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
   }
 }

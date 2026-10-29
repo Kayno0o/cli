@@ -21,4 +21,4 @@ out -- bun install
 
 ## Wrapping from a hook
 
-The package exports the pure functions a Claude Code PreToolUse hook needs: `shouldWrap(command)` is true when every part of a command line is a listed noisy command (installs, builds, test runners, linters, `docker build`/`docker compose build|pull`, `just <recipe>`), with no pipe, redirect, background, substitution, `--json` or `--help`. `wrap(command)` returns `out -- <command>`, through `sh -c '...'` for `&&` chains and leading `VAR=value` assignments.
+The pure functions a Claude Code PreToolUse hook needs live in `src/wrap.ts`: `shouldWrap(command)` is true when every part of a command line is a listed noisy command (installs, builds, test runners, linters, `docker build`/`docker compose build|pull`, `just <recipe>`), with no pipe, redirect, background, substitution, `--json` or `--help`. `wrap(command)` returns `out -- <command>`, through `sh -c '...'` for `&&` chains and leading `VAR=value` assignments. The agent-tools mod in the user's dotfiles carries a copy, as a mod cannot import a package.

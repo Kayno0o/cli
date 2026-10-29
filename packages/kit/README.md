@@ -1,5 +1,7 @@
 # @kaynooo/cli-kit
 
+Private to this repo: every CLI bundles it at publish (`bun run build`), so it is never released on its own.
+
 What every agent-tools CLI shares, so each one parses, helps and fails the same way.
 
 - `runCli({ name, version, about, commands, aliases })` dispatches `<cli> <command> [args]`: `--help` lists the commands, `--version` prints the version, a typo names the command it likely meant, and an `Exit` thrown by a command prints `<cli> <command>: <message>` and exits with its code.

@@ -10,7 +10,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/check-tools`](packages/check) | `check` | a repo's check, typecheck, lint and test steps, showing only what failed |
 | [`@kaynooo/pkg-tools`](packages/pkg) | `pkg` | an npm package checked before it is added: guessed names, versions under two weeks old, install scripts |
 | [`@kaynooo/out-tools`](packages/out) | `out` | noisy command output folded, errors kept, the full log saved to a file |
-| [`@kaynooo/cli-kit`](packages/kit) | - | argument parsing with `--help`, the command dispatcher and output formatting every CLI here shares |
+| `packages/kit` (private) | - | argument parsing with `--help`, the command dispatcher, input, process and formatting helpers every CLI here shares, bundled into each |
 
 ## Development
 
@@ -21,7 +21,7 @@ bun run check && bun run lint && bun run test
 
 ## Releasing
 
-Each package releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow publishes that folder. A package depending on a newer `@kaynooo/cli-kit` than the registry serves needs kit released first.
+Each CLI releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow builds that folder (`bun run build`, a Bun bundle per bin with `packages/kit` inlined) and publishes it. Kit is never published: a kit change reaches a CLI with that CLI's next release.
 
 ## Claude Code mod
 

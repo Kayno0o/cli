@@ -13,41 +13,41 @@
       "name": "@kaynooo/check-tools",
       "version": "0.0.0",
       "bin": {
-        "check": "./src/cli.ts",
+        "check": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/cli-kit": "workspace:^",
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
       },
     },
     "packages/db": {
       "name": "@kaynooo/db-tools",
       "version": "0.0.0",
       "bin": {
-        "db": "./src/cli.ts",
+        "db": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/cli-kit": "workspace:^",
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
       },
     },
     "packages/env": {
       "name": "@kaynooo/env-tools",
       "version": "0.0.0",
       "bin": {
-        "ev": "./src/ev.ts",
-        "redact": "./src/redact.ts",
+        "ev": "./dist/ev.js",
+        "redact": "./dist/redact.js",
       },
-      "dependencies": {
-        "@kaynooo/cli-kit": "workspace:^",
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
       },
     },
     "packages/ft": {
       "name": "@kaynooo/forgejo-tools",
       "version": "0.2.0",
       "bin": {
-        "ft": "./src/cli.ts",
+        "ft": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/cli-kit": "workspace:^",
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
       },
     },
     "packages/kit": {
@@ -58,20 +58,20 @@
       "name": "@kaynooo/out-tools",
       "version": "0.0.0",
       "bin": {
-        "out": "./src/cli.ts",
+        "out": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/cli-kit": "workspace:^",
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
       },
     },
     "packages/pkg": {
       "name": "@kaynooo/pkg-tools",
       "version": "0.0.0",
       "bin": {
-        "pkg": "./src/cli.ts",
+        "pkg": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/cli-kit": "workspace:^",
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
       },
     },
   },

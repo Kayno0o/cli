@@ -13,13 +13,10 @@
   },
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
   "keywords": ["claude-code", "cli", "output", "logs", "tokens"],
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "bin": {
-    "out": "./src/cli.ts"
+    "out": "./dist/cli.js"
   },
-  "files": ["src"],
+  "files": ["dist"],
   "engines": {
     "bun": ">=1.4.3"
   },
@@ -27,9 +24,10 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
     "out": "$npm_execpath src/cli.ts"
   },
-  "dependencies": {
-    "@kaynooo/cli-kit": "workspace:^"
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
   }
 }

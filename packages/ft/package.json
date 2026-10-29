@@ -14,9 +14,9 @@
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
   "keywords": ["forgejo", "gitea", "tea", "ci", "actions", "release"],
   "bin": {
-    "ft": "./src/cli.ts"
+    "ft": "./dist/cli.js"
   },
-  "files": ["src"],
+  "files": ["dist"],
   "engines": {
     "bun": ">=1.4.3"
   },
@@ -24,9 +24,10 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
     "ft": "$npm_execpath src/cli.ts"
   },
-  "dependencies": {
-    "@kaynooo/cli-kit": "workspace:^"
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
   }
 }

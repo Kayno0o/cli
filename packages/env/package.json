@@ -14,10 +14,10 @@
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
   "keywords": ["env", "dotenv", "secrets", "redact", "mask"],
   "bin": {
-    "ev": "./src/ev.ts",
-    "redact": "./src/redact.ts"
+    "ev": "./dist/ev.js",
+    "redact": "./dist/redact.js"
   },
-  "files": ["src"],
+  "files": ["dist"],
   "engines": {
     "bun": ">=1.4.3"
   },
@@ -25,10 +25,11 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
+    "build": "$npm_execpath build src/ev.ts src/redact.ts --target bun --outdir dist",
     "ev": "$npm_execpath src/ev.ts",
     "redact": "$npm_execpath src/redact.ts"
   },
-  "dependencies": {
-    "@kaynooo/cli-kit": "workspace:^"
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
   }
 }

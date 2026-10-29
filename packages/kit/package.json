@@ -2,6 +2,7 @@
   "name": "@kaynooo/cli-kit",
   "type": "module",
   "version": "0.1.0",
+  "private": true,
   "description": "What every agent-tools CLI shares: argument parsing with --help, a command dispatcher, and table and age formatting.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
@@ -19,8 +20,5 @@
   "files": ["src"],
   "engines": {
     "bun": ">=1.4.3"
-  },
-  "publishConfig": {
-    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   }
 }

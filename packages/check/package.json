@@ -14,16 +14,19 @@
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
   "keywords": ["check", "lint", "typecheck", "test", "claude-code"],
   "bin": {
-    "check": "./src/cli.ts"
+    "check": "./dist/cli.js"
   },
-  "files": ["src"],
+  "files": ["dist"],
   "engines": {
     "bun": ">=1.4.3"
   },
   "publishConfig": {
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
-  "dependencies": {
-    "@kaynooo/cli-kit": "workspace:^"
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
   }
 }
