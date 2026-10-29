@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { inspect } from '../src/guard'
+import { inspect, writes } from '../src/guard'
 
 const reads = [
   'select * from users',
@@ -20,7 +20,7 @@ const reads = [
   'values (1), (2)',
 ]
 
-const writes: [string, string][] = [
+const writing: [string, string][] = [
   ['insert into t values (1)', 'starts with insert'],
   ['delete from t', 'starts with delete'],
   ['update t set a = 1', 'UPDATE'],
@@ -49,11 +49,25 @@ describe('inspect', () => {
     expect(inspect(sql).reasons).toEqual([])
   })
 
-  test.each(writes)('stops %p', (sql, reason) => {
+  test.each(writing)('stops %p', (sql, reason) => {
     expect(inspect(sql).reasons.join(' ')).toContain(reason)
   })
 
   test('counts statements and ignores empty ones', () => {
     expect(inspect('select 1; select 2;;').statements).toBe(2)
+  })
+})
+
+describe('writes', () => {
+  test('passes what only reads, however it starts', () => {
+    for (const sql of ['\\dt', 'describe users', 'show tables', 'select * from t where note = \'drop it\'', 'select * from "grant"', '-- delete from t\nselect 1'])
+      expect(writes(sql)).toEqual([])
+  })
+
+  test('names what writes, locks or has a side effect, wherever it sits', () => {
+    expect(writes('with d as (delete from t returning *) select * from d')).toEqual(['uses DELETE'])
+    expect(writes('select 1; truncate logs')).toEqual(['uses TRUNCATE'])
+    expect(writes('select nextval(\'s\')')).toEqual(['calls nextval'])
+    expect(writes('\\copy t from \'x.csv\'')).toEqual(['uses COPY'])
   })
 })

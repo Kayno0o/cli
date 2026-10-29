@@ -139,6 +139,32 @@ export function splitStatements(tokens: Token[]): Token[][] {
   return statements.filter(statement => statement.length > 0)
 }
 
+function statementWrites(statement: Token[]): string[] {
+  const first = statement[0]
+  const reasons: string[] = []
+
+  for (const [index, token] of statement.entries()) {
+    if (token.kind !== 'word')
+      continue
+
+    if (WRITE_WORDS.has(token.text))
+      reasons.push(`uses ${token.text.toUpperCase()}`)
+    else if (token.text === 'analyze' && first?.text !== 'explain')
+      reasons.push('uses ANALYZE')
+    else if (SIDE_EFFECT_FUNCTIONS.test(token.text))
+      reasons.push(`calls ${token.text}`)
+    else if (token.text === 'for' && LOCK_KIND.test(statement[index + 1]?.text ?? ''))
+      reasons.push('takes row locks with FOR UPDATE or SHARE')
+  }
+
+  return reasons
+}
+
+// What in the SQL writes, locks or has a side effect, without asking every statement to start like a read: `\dt` or `describe t` pass, a DELETE inside a CTE does not.
+export function writes(sql: string): string[] {
+  return [...new Set(splitStatements(tokenize(sql)).flatMap(statementWrites))]
+}
+
 // Judges SQL before it runs: anything not plainly a read comes back with the reasons.
 export function inspect(sql: string): Verdict {
   const statements = splitStatements(tokenize(sql))
@@ -150,19 +176,7 @@ export function inspect(sql: string): Verdict {
     if (first?.kind !== 'word' || !READ_STARTS.has(first.text))
       reasons.push(`starts with ${first?.text ?? 'nothing'}, not a read`)
 
-    for (const [index, token] of statement.entries()) {
-      if (token.kind !== 'word')
-        continue
-
-      if (WRITE_WORDS.has(token.text))
-        reasons.push(`uses ${token.text.toUpperCase()}`)
-      else if (token.text === 'analyze' && first?.text !== 'explain')
-        reasons.push('uses ANALYZE')
-      else if (SIDE_EFFECT_FUNCTIONS.test(token.text))
-        reasons.push(`calls ${token.text}`)
-      else if (token.text === 'for' && LOCK_KIND.test(statement[index + 1]?.text ?? ''))
-        reasons.push('takes row locks with FOR UPDATE or SHARE')
-    }
+    reasons.push(...statementWrites(statement))
   }
 
   return { reasons: [...new Set(reasons)], statements: statements.length }
