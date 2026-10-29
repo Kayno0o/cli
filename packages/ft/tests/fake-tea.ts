@@ -59,7 +59,7 @@ else if (command === 'issues' && sub === 'close') {
   issue(number).state = 'closed'
 }
 else if (command === 'comment') {
-  state.comments = { ...state.comments, [number]: [...(state.comments?.[number] ?? []), args[2]] }
+  state.comments = { ...state.comments, [sub]: [...(state.comments?.[sub] ?? []), args[2]] }
 }
 else {
   console.error('fake tea: unhandled ' + args.join(' '))
@@ -68,6 +68,18 @@ else {
 
 writeFileSync(file, JSON.stringify(state))
 `
+
+// What a rejected promise says, or an empty string when it resolved.
+export async function refusal(pending: Promise<unknown>): Promise<string> {
+  try {
+    await pending
+
+    return ''
+  }
+  catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
 
 function restore(name: string, value: string | undefined): void {
   if (value === undefined)

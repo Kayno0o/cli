@@ -6,7 +6,7 @@ import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
 import { cwdGone, git, leaveWorktree } from '../src/git'
 import { refreshed } from '../src/runs'
-import { withFakeTea } from './fake-tea'
+import { refusal, withFakeTea } from './fake-tea'
 
 describe('a wait whose working directory is deleted', () => {
   test('moves from a linked worktree to the main checkout, and names a removed working directory', async () => {
@@ -24,7 +24,7 @@ describe('a wait whose working directory is deleted', () => {
       process.chdir(linked)
       await rm(linked, { recursive: true })
       expect(cwdGone()).toBe(true)
-      expect(git(['status'])).rejects.toThrow('the working directory was removed')
+      expect(await refusal(git(['status']))).toContain('the working directory was removed')
     }
     finally {
       process.chdir(home)

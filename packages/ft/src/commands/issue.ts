@@ -1,9 +1,10 @@
+import type { Named } from '../git'
 import type { Issue, IssueComment } from '../issues'
 import { fail, formatAge, parse } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
 import { boxes, numberedBody, setBoxes } from '../checklist'
 import { latestClaim } from '../claims'
-import { git, resolveCommit } from '../git'
+import { commitsNaming, defaultBranch, git, resolveCommit } from '../git'
 import { close, comment, commentsOf, getIssue, setBody } from '../issues'
 
 const issueUsage = `ft issue <n>...
@@ -196,16 +197,55 @@ export async function commentOn(args: string[]): Promise<number> {
   return 0
 }
 
-const fixedUsage = `ft fixed <n> [commit]
+const fixedUsage = `ft fixed <n> [commit]...
 
-Comments "Fixed in <sha>: <message>" on issue <n> and closes it, the message defaulting to the commit's subject.
-An issue with boxes left is refused, as a partly done issue stays open.`
+Comments "Fixed in <sha>: <message>" on issue <n> and closes it, naming each commit given as "Fixed in <a>, <b> and <c>".
+Without a commit it takes those on origin's default branch whose message names #<n>, and says which, or HEAD when none does.
+The message defaults to the subject of the first commit. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.`
 
 const fixedOptions = {
   message: { type: 'string', short: 'm', description: 'the line after "Fixed in <sha>:"' },
+  tick: { type: 'boolean', description: 'tick the boxes left before closing' },
   force: { type: 'boolean', description: 'close even with boxes left' },
   ...repoOption,
 } as const
+
+// "a", "a and b", "a, b and c".
+export function joinShas(shas: string[]): string {
+  const last = shas.at(-1) ?? ''
+
+  return shas.length < 2 ? last : `${shas.slice(0, -1).join(', ')} and ${last}`
+}
+
+// The commits an issue was fixed in: those given, else those of origin's default branch naming it, else HEAD.
+async function fixingCommits(number: number, given: string[]): Promise<Named[]> {
+  if (given.length > 0) {
+    const named: Named[] = []
+
+    for (const ref of given) {
+      const sha = await resolveCommit(ref)
+
+      named.push({ sha, subject: await git(['log', '-1', '--format=%s', sha]) })
+    }
+
+    return named
+  }
+
+  const ref = `origin/${await defaultBranch()}`
+  const found = await commitsNaming(number, ref)
+
+  if (found.length > 0) {
+    console.log(`commits on ${ref} naming #${number}:\n${found.map(each => `  ${each.sha.slice(0, 7)} ${each.subject}`).join('\n')}`)
+
+    return found
+  }
+
+  const sha = await resolveCommit('HEAD')
+
+  console.log(`no commit on ${ref} names #${number}, using HEAD`)
+
+  return [{ sha, subject: await git(['log', '-1', '--format=%s', sha]) }]
+}
 
 export async function fixed(args: string[]): Promise<number> {
   const parsed = parse(args, fixedUsage, fixedOptions)
@@ -215,7 +255,7 @@ export async function fixed(args: string[]): Promise<number> {
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], fixedUsage)
-  const sha = await resolveCommit(positionals[1] ?? 'HEAD')
+  const commits = await fixingCommits(number, positionals.slice(1))
   const found = await getIssue(number, values.repo)
 
   if (found.state === 'closed')
@@ -223,14 +263,19 @@ export async function fixed(args: string[]): Promise<number> {
 
   const left = boxes(found.body).filter(box => !box.done)
 
-  if (left.length > 0 && values.force !== true)
-    fail(`#${number} has ${left.length} boxes left, tick them or pass --force:\n${left.map(box => `${String(box.number).padStart(3)} [ ] ${box.text}`).join('\n')}`)
+  if (left.length > 0 && values.tick === true) {
+    await setBody(number, setBoxes(found.body, left.map(box => String(box.number)), true).body, values.repo)
+    console.log(`ticked ${left.length} box${left.length === 1 ? '' : 'es'} of #${number}`)
+  }
+  else if (left.length > 0 && values.force !== true) {
+    fail(`#${number} has ${left.length} boxes left, tick them, pass --tick or pass --force:\n${left.map(box => `${String(box.number).padStart(3)} [ ] ${box.text}`).join('\n')}`)
+  }
 
-  const message = values.message ?? await git(['log', '-1', '--format=%s', sha])
+  const shas = joinShas(commits.map(each => each.sha.slice(0, 7)))
 
-  await comment(number, `Fixed in ${sha.slice(0, 7)}: ${message}`, values.repo)
+  await comment(number, `Fixed in ${shas}: ${values.message ?? commits[0]?.subject ?? ''}`, values.repo)
   await close(number, values.repo)
-  console.log(`closed #${number}: fixed in ${sha.slice(0, 7)}`)
+  console.log(`closed #${number}: fixed in ${shas}`)
 
   return 0
 }

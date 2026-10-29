@@ -1,0 +1,69 @@
+import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
+import { $ } from 'bun'
+import { describe, expect, test } from 'bun:test'
+import { fixed, joinShas } from '../src/commands/issue'
+import { refusal, withFakeTea } from './fake-tea'
+
+// A clone of a bare origin holding one pushed commit per message, the shas returned oldest first.
+async function withClone(messages: string[], run: (shas: string[]) => Promise<void>): Promise<void> {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'ft-fixed-')))
+  const clone = join(root, 'clone')
+  const home = process.cwd()
+  const shas: string[] = []
+
+  try {
+    await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${clone}`.quiet()
+    process.chdir(clone)
+    await $`git config user.name t && git config user.email t@t`.quiet()
+
+    for (const message of messages) {
+      await $`git commit -q --allow-empty -m ${message}`.quiet()
+      shas.push((await $`git rev-parse HEAD`.text()).trim())
+    }
+
+    await $`git push -q origin main && git remote set-head origin -a`.quiet()
+    await run(shas)
+  }
+  finally {
+    process.chdir(home)
+    await rm(root, { recursive: true, force: true })
+  }
+}
+
+const issues = [{ number: 7, title: 'seven', body: '- [x] a\n- [ ] b', state: 'open' }]
+
+describe('joinShas', () => {
+  test('lists one, two or several commits', () => {
+    expect(joinShas(['a'])).toBe('a')
+    expect(joinShas(['a', 'b'])).toBe('a and b')
+    expect(joinShas(['a', 'b', 'c'])).toBe('a, b and c')
+  })
+})
+
+describe('fixed', () => {
+  test('finds the commits on origin naming the issue, and ticks the boxes left with --tick', async () => {
+    await withClone(['fix(x): the fix\n\n#7 - seven', 'chore: unrelated\n\n#70 - other', 'fix(x): its review follow-up\n\n#7 - seven', 'chore: later'], async (shas) => {
+      const state = await withFakeTea({ issues }, async () => {
+        expect(await fixed(['7', '--tick'])).toBe(0)
+      })
+
+      expect(state.issues[0]).toMatchObject({ state: 'closed', body: '- [x] a\n- [x] b' })
+      expect(state.comments?.[7]).toEqual([`Fixed in ${shas[0]?.slice(0, 7)} and ${shas[2]?.slice(0, 7)}: fix(x): the fix`])
+    })
+  })
+
+  test('names the commits given, and refuses boxes left without --tick', async () => {
+    await withClone(['one', 'two'], async (shas) => {
+      const state = await withFakeTea({ issues }, async () => {
+        expect(await refusal(fixed(['7', 'HEAD~1', 'HEAD']))).toContain('1 boxes left')
+        expect(await fixed(['7', 'HEAD~1', 'HEAD', '--force', '-m', 'done'])).toBe(0)
+      })
+
+      expect(state.comments?.[7]).toEqual([`Fixed in ${shas[0]?.slice(0, 7)} and ${shas[1]?.slice(0, 7)}: done`])
+      expect(state.issues[0]?.body).toBe('- [x] a\n- [ ] b')
+    })
+  })
+})
