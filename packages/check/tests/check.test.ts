@@ -1,18 +1,9 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { capture } from '@kaynooo/cli-kit/test'
+import { describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
 import { discover } from '../src/steps'
 
 const repo = (name: string) => new URL(`fixtures/repos/${name}`, import.meta.url).pathname
-
-let logs: string[] = []
-const spy = spyOn(console, 'log').mockImplementation((...parts: unknown[]) => {
-  logs.push(parts.join(' '))
-})
-
-afterEach(() => {
-  logs = []
-  spy.mockClear()
-})
 
 async function failure(run: Promise<number>): Promise<string> {
   try {
@@ -56,14 +47,17 @@ describe('discover', () => {
 
 describe('check', () => {
   test('--list prints the steps without running them', async () => {
-    expect(await check(['--list'], repo('composer'))).toBe(0)
-    expect(logs.join('\n')).toContain('lint  composer run lint  composer.json')
+    const { result, out } = await capture(async () => check(['--list'], repo('composer')))
+
+    expect(result).toBe(0)
+    expect(out).toContain('lint  composer run lint  composer.json')
   })
 
   test('one line per passing step, the failure of a failing one, and a failing exit code', async () => {
-    expect(await check([], repo('js'))).toBe(1)
+    const { result, out } = await capture(async () => check([], repo('js')))
+    const lines = out.split('\n')
 
-    const lines = logs.join('\n').split('\n')
+    expect(result).toBe(1)
 
     expect(lines[0]).toMatch(/^ok {4}check {2}\d+\.\ds {2}\S+check\.log$/)
     expect(lines[1]).toMatch(/^FAIL {2}lint {3}\d+\.\ds {2}bun run lint {2}\S+lint\.log$/)
@@ -72,16 +66,17 @@ describe('check', () => {
   })
 
   test('saves each step\'s full output to the file it prints', async () => {
-    await check(['--only', 'check'], repo('js'))
-
-    const path = logs[0]?.split('  ').at(-1) ?? ''
+    const { out } = await capture(async () => check(['--only', 'check'], repo('js')))
+    const path = out.slice(0, out.indexOf('\n')).split('  ').at(-1) ?? ''
 
     expect(await Bun.file(path).text()).toContain('types fine')
   })
 
   test('--only picks steps and exits 0 when they pass', async () => {
-    expect(await check(['--only', 'check,test'], repo('js'))).toBe(0)
-    expect(logs).toHaveLength(2)
+    const { result, out } = await capture(async () => check(['--only', 'check,test'], repo('js')))
+
+    expect(result).toBe(0)
+    expect(out.trimEnd().split('\n')).toHaveLength(2)
   })
 
   test('--only with a step the repo lacks fails with the steps found', async () => {

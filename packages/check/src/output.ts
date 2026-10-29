@@ -1,4 +1,5 @@
-const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[\\d;?]*[a-z]`, 'gi')
+import { stripAnsi } from '@kaynooo/cli-kit'
+
 const BASH_ECHO = /^\$ /
 const DURATION = / \[[\d.]+m?s\]$/
 const BOUNDARY = /^(?:\((?:pass|fail|skip|todo)\) |\S+\.test\.[jt]sx?:$)/
@@ -21,10 +22,6 @@ const MAX_LINES = 100
 const TAIL = 30
 
 export type Parser = (lines: string[]) => string[] | undefined
-
-export function stripAnsi(text: string): string {
-  return text.replace(ANSI, '')
-}
 
 // Each failed bun test's own output, from the line after the previous boundary down to its `(fail)` line, once per test as bun test lists them again by name at the end.
 export const bunTest: Parser = (lines) => {

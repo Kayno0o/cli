@@ -1,13 +1,8 @@
 #!/usr/bin/env bun
 
 import process from 'node:process'
-import { Exit } from '@kaynooo/cli-kit'
+import { runMain } from '@kaynooo/cli-kit'
+import { version } from '../package.json'
 import { check } from './check'
 
-try {
-  process.exitCode = await check(process.argv.slice(2))
-}
-catch (error) {
-  console.error(`check: ${error instanceof Error ? error.message : String(error)}`)
-  process.exitCode = error instanceof Exit ? error.code : 1
-}
+process.exitCode = await runMain({ name: 'check', version, run: async args => check(args) })

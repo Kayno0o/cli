@@ -3,8 +3,8 @@ import { mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import process from 'node:process'
-import { fail, parse, table } from '@kaynooo/cli-kit'
-import { failureExcerpt, stripAnsi } from './output'
+import { fail, formatDuration, parse, runCommand, stripAnsi, table } from '@kaynooo/cli-kit'
+import { failureExcerpt } from './output'
 import { discover, STEP_NAMES } from './steps'
 
 const usage = `check [--only <steps>] [--list]
@@ -19,10 +19,6 @@ const options = {
 } as const
 
 const COMMA = /\s*,\s*/
-
-function seconds(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`
-}
 
 // Where the steps' full outputs go: one folder per repo, rewritten by the next run.
 function logDirectory(cwd: string): string {
@@ -44,9 +40,8 @@ function pick(steps: Step[], only: string | undefined): Step[] {
 
 async function runStep(step: Step, cwd: string, logFile: string): Promise<{ ok: boolean, ms: number, output: string }> {
   const started = Date.now()
-  const child = Bun.spawn(['sh', '-c', `${step.command} 2>&1`], { cwd, stdout: 'pipe', stdin: 'ignore', env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } })
-  const output = stripAnsi(await new Response(child.stdout).text())
-  const code = await child.exited
+  const { code, text } = await runCommand(['sh', '-c', `${step.command} 2>&1`], { cwd, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } })
+  const output = stripAnsi(text)
 
   await Bun.write(logFile, output)
 
@@ -85,13 +80,13 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
     const result = await runStep(step, cwd, logFile)
 
     if (result.ok) {
-      console.log(`ok    ${step.name.padEnd(width)}  ${seconds(result.ms)}  ${logFile}`)
+      console.log(`ok    ${step.name.padEnd(width)}  ${formatDuration(result.ms)}  ${logFile}`)
 
       continue
     }
 
     failed++
-    console.log(`FAIL  ${step.name.padEnd(width)}  ${seconds(result.ms)}  ${step.command}  ${logFile}`)
+    console.log(`FAIL  ${step.name.padEnd(width)}  ${formatDuration(result.ms)}  ${step.command}  ${logFile}`)
     console.log(failureExcerpt(result.output).split('\n').map(line => `  ${line}`.trimEnd()).join('\n'))
   }
 
