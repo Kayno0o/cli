@@ -20,5 +20,16 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The image's baked cluster trusts every connection, so TCP is moved to passwords for db's test of a wrong one.
+      - name: Start Postgres
+        run: |
+          install -d -o postgres -g postgres /run/postgresql
+          su postgres -c "pg_ctl -D /var/lib/postgresql/data -w start"
+          su postgres -c "psql -c \"alter user postgres password 'ci-only-never-printed'\""
+          sed -i -E 's/^(host.*)trust$/\1scram-sha-256/' /var/lib/postgresql/data/pg_hba.conf
+          su postgres -c "pg_ctl -D /var/lib/postgresql/data reload"
+
       - name: Check, lint and test
         run: bun run check && bun run lint && bun run test
+        env:
+          DB_TOOLS_TEST_SERVER: postgres://postgres:ci-only-never-printed@127.0.0.1:5432/postgres

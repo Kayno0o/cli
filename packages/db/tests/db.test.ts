@@ -6,8 +6,11 @@ import { afterAll, describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const IMAGE = 'postgres:18-alpine'
-const PASSWORD = 'pw-never-printed-9731'
+// A Postgres the suite may create and drop its own database in, as CI starts the runner image's: set only there, so the tests never touch an existing database.
+const SERVER = process.env.DB_TOOLS_TEST_SERVER
+const PASSWORD = SERVER === undefined ? 'pw-never-printed-9731' : decodeURIComponent(new URL(SERVER).password)
 const CONTAINER = `db-tools-test-${process.pid}`
+const DATABASE = `db_tools_test_${process.pid}`
 const PORT = /:(\d+)$/m
 const SCHEMA = `
   create table users (id serial primary key, name text not null, email text, password_hash text);
@@ -22,21 +25,34 @@ function docker(...args: string[]) {
   return { ok: result.exitCode === 0, out: result.stdout.toString().trim() }
 }
 
-// A throwaway Postgres in docker on a free port, skipped with a message when docker or the image is missing.
-let url = ''
-let reason = ''
-
-if (Bun.which('docker') === null)
-  reason = 'docker is not installed'
-else if (!docker('image', 'inspect', IMAGE).ok && !docker('pull', IMAGE).ok)
-  reason = `docker cannot provide ${IMAGE}`
-else if (!docker('run', '-d', '--rm', '--name', CONTAINER, '-e', `POSTGRES_PASSWORD=${PASSWORD}`, '-p', '127.0.0.1::5432', IMAGE).ok)
-  reason = 'docker cannot start a container'
-
-if (reason !== '') {
-  console.warn(`db integration tests skipped: ${reason}`)
+function psql(target: string, sql: string): boolean {
+  return Bun.spawnSync(['psql', target, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdout: 'pipe', stderr: 'pipe' }).exitCode === 0
 }
-else {
+
+// A throwaway database on DB_TOOLS_TEST_SERVER. Returns why it could not be had, or ''.
+function onServer(server: string): string {
+  const target = new URL(server)
+
+  target.pathname = `/${DATABASE}`
+  url = target.href
+
+  if (Bun.which('psql') === null)
+    return 'psql is not installed'
+
+  return psql(server, `create database ${DATABASE}`) && psql(url, SCHEMA) ? '' : `DB_TOOLS_TEST_SERVER could not take the ${DATABASE} database`
+}
+
+// A throwaway Postgres in docker on a free port. Returns why it could not be had, or ''.
+async function inDocker(): Promise<string> {
+  if (Bun.which('docker') === null)
+    return 'docker is not installed'
+
+  if (!docker('image', 'inspect', IMAGE).ok && !docker('pull', IMAGE).ok)
+    return `docker cannot provide ${IMAGE}`
+
+  if (!docker('run', '-d', '--rm', '--name', CONTAINER, '-e', `POSTGRES_PASSWORD=${PASSWORD}`, '-p', '127.0.0.1::5432', IMAGE).ok)
+    return 'docker cannot start a container'
+
   let seeded = false
 
   for (let attempt = 0; attempt < 60 && !seeded; attempt++) {
@@ -49,12 +65,20 @@ else {
 
   url = `postgres://postgres:${PASSWORD}@127.0.0.1:${port}/postgres`
 
-  if (!seeded)
-    reason = 'the throwaway Postgres never accepted the schema'
+  return seeded ? '' : 'the throwaway Postgres never accepted the schema'
 }
 
+// Skipped with a message when neither can be had.
+let url = ''
+const reason = SERVER === undefined ? await inDocker() : onServer(SERVER)
+
+if (reason !== '')
+  console.warn(`db integration tests skipped: ${reason}`)
+
 afterAll(() => {
-  if (Bun.which('docker') !== null)
+  if (SERVER !== undefined)
+    psql(SERVER, `drop database if exists ${DATABASE} with (force)`)
+  else if (Bun.which('docker') !== null)
     docker('rm', '-f', CONTAINER)
 })
 
