@@ -16,7 +16,9 @@ beforeEach(async () => {
   await chmod(dir, 0o755)
 })
 
+// A test may lock a folder away, which rm could not then enter.
 afterEach(async () => {
+  await $`chmod -R u+rwx ${dir}`.quiet()
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -76,22 +78,29 @@ describe('audit', () => {
     await write('api/.env.local', `TOKEN=${VALUE}\n`, 0o600)
     await write('api/.env', `TOKEN=${VALUE}\n`, 0o600)
     await write('compose.yaml', `    environment:\n      APP_SECRET: ${VALUE}\n`, 0o644)
+    await write('docker-compose-prod.yml', `      APP_SECRET: ${VALUE}\n`, 0o644)
     await write('stack/compose.prod.yaml', `      APP_SECRET: ${VALUE}\n`, 0o600)
     await write('node_modules/x/.env', 'A=1\n', 0o644)
     await $`git add -f api/.env.local`.cwd(dir).quiet()
 
-    expect(await audit([dir])).toEqual([
+    expect((await audit([dir])).exposed).toEqual([
       { path: join(dir, '.env'), readable: true, tracked: false },
       { path: join(dir, 'api/.env.local'), readable: false, tracked: true },
       { path: join(dir, 'compose.yaml'), readable: true, tracked: false, secrets: ['APP_SECRET'] },
+      { path: join(dir, 'docker-compose-prod.yml'), readable: true, tracked: false, secrets: ['APP_SECRET'] },
     ])
   })
 
-  test('a folder whose own mode shuts others out hides what it holds', async () => {
+  test('a folder whose own mode shuts others out hides what it holds, and one it cannot list is named', async () => {
     await write('private/.env', 'A=1\n', 0o644)
     await chmod(join(dir, 'private'), 0o700)
 
-    expect(await audit([dir])).toEqual([])
+    expect(await audit([dir])).toEqual({ exposed: [], unread: [] })
+
+    await mkdir(join(dir, 'locked'))
+    await chmod(join(dir, 'locked'), 0o000)
+
+    expect((await audit([dir])).unread).toEqual(process.getuid?.() === 0 ? [] : [join(dir, 'locked')])
   })
 })
 
@@ -105,7 +114,7 @@ describe('ev audit', () => {
     expect(result.code).toBe(1)
     expect(result.out).toBe('.env\n  readable by any account: chmod o-rwx .env\ncompose.yml\n  writes out DB_PASSWORD: move the values into a .env beside it\n  readable by any account: chmod o-rwx compose.yml\n')
     expect(result.out + result.err).not.toContain(VALUE)
-    expect(JSON.parse(ev(['audit', '--json']).out)).toHaveLength(2)
+    expect((JSON.parse(ev(['audit', '--json']).out) as { exposed: unknown[] }).exposed).toHaveLength(2)
   })
 
   test('exits 0 when nothing is exposed, 2 on a path that is no folder', async () => {

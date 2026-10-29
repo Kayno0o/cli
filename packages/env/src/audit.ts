@@ -16,7 +16,7 @@ const MAX_DEPTH = 5
 const SKIPPED = new Set(['node_modules', '.git', 'vendor'])
 const ENV_FILE = /^\.env(?:\..+)?$/
 const TEMPLATE = /\.(?:example|sample|template|dist)$/
-const COMPOSE_FILE = /^(?:docker-)?compose(?:\.[\w-]+)*\.ya?ml$/
+const COMPOSE_FILE = /^(?:docker-)?compose[\w.-]*\.ya?ml$/
 // An environment entry, `KEY: value` or `- KEY=value`, with its value written out.
 const ENTRY = /^\s*(?:-\s*)?["']?([A-Z0-9_]+)["']?\s*[:=]\s*["']?([^"'\s#]+)/
 const SECRET_NAME = /(?:PASSWORD|PASSWD|SECRET|TOKEN|KEY)$/
@@ -54,14 +54,16 @@ async function tracked(path: string): Promise<boolean> {
   return (await $`git ls-files --error-unmatch -- ${path}`.cwd(dirname(path)).quiet().nothrow()).exitCode === 0
 }
 
-// The .env* and compose files under root, down to MAX_DEPTH folders, skipping dependency and git folders and following no link.
-async function* candidates(root: string, depth = 0): AsyncGenerator<string> {
+// The .env* and compose files under root, down to MAX_DEPTH folders, skipping dependency and git folders and following no link; a folder it cannot read goes to `unread`.
+async function* candidates(root: string, unread: string[], depth = 0): AsyncGenerator<string> {
   let found: Dirent[]
 
   try {
     found = await readdir(root, { withFileTypes: true })
   }
   catch {
+    unread.push(root)
+
     return
   }
 
@@ -69,18 +71,19 @@ async function* candidates(root: string, depth = 0): AsyncGenerator<string> {
     const path = join(root, entry.name)
 
     if (entry.isDirectory() && depth < MAX_DEPTH && !SKIPPED.has(entry.name))
-      yield* candidates(path, depth + 1)
+      yield* candidates(path, unread, depth + 1)
     else if (entry.isFile() && !TEMPLATE.test(entry.name) && (ENV_FILE.test(entry.name) || COMPOSE_FILE.test(entry.name)))
       yield path
   }
 }
 
 // The .env files any account can read or git tracks, and the compose files writing secrets out that any account can read: tracked dev composes with throwaway passwords are left out as too common.
-export async function audit(roots: string[]): Promise<Exposure[]> {
+export async function audit(roots: string[]): Promise<{ exposed: Exposure[], unread: string[] }> {
   const exposed: Exposure[] = []
+  const unread: string[] = []
 
   for (const root of roots) {
-    for await (const path of candidates(root)) {
+    for await (const path of candidates(root, unread)) {
       const readable = await openToOthers(path)
       const name = path.slice(path.lastIndexOf('/') + 1)
 
@@ -100,5 +103,5 @@ export async function audit(roots: string[]): Promise<Exposure[]> {
     }
   }
 
-  return exposed.sort((a, b) => a.path.localeCompare(b.path))
+  return { exposed: exposed.sort((a, b) => a.path.localeCompare(b.path)), unread }
 }
