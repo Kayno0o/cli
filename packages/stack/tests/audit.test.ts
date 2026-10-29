@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { capture } from '@kaynooo/cli-kit/test'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { render } from '../src/audit/render'
-import { audit as runAudit } from '../src/audit/run'
+import { loadConfig, audit as runAudit } from '../src/audit/run'
 import { audit } from '../src/commands/audit'
 
 const made: string[] = []
@@ -154,6 +154,15 @@ describe('audit', () => {
       'warn post-deploy: api: post-deploy command targets service "worker", absent from compose.yaml',
       'warn health: service "api" is restarted by a release but declares no healthcheck, so --wait will not gate it',
     ])
+  })
+
+  test('no registry leaves images alone, and a config without a default export fails', async () => {
+    const model: ComposeModel = { services: { db: { image: 'postgres:18' } } }
+    const result = await run({ 'release.config.ts': 'export default { deploySyncFiles: [\'./compose.yaml\'], releases: [] }', 'compose.yaml': COMPOSE, '.gitignore': IGNORE }, { 'compose.yaml': model })
+
+    expect(messages(result).filter(line => line.includes('image'))).toEqual([])
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(loadConfig(project({ 'release.config.ts': 'export const x = 1' }))).rejects.toThrow('release.config.ts has no default export')
   })
 
   test('routing belongs in overlays, and composeArgs would drop them', async () => {

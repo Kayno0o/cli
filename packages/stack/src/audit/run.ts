@@ -1,6 +1,7 @@
 import type { AuditOptions, AuditResult, ComposeModel, Finding, ReleaseConfig } from './types'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { fail } from '@kaynooo/cli-kit'
 import { buildFindings, composeLayout, envFindings, envRefs, gatedServices, gitignoreFindings, healthFindings, imageFindings, layoutFindings, postDeployFindings, restartFindings, routingFindings, syncFindings, versionFindings } from './checks'
 import { nuxtFindings } from './nuxt'
 
@@ -32,7 +33,12 @@ export async function loadConfig(root: string): Promise<ReleaseConfig> {
     })
   }
 
-  return ((await import(join(root, CONFIG_FILE))) as { default?: ReleaseConfig }).default ?? {}
+  const config = ((await import(join(root, CONFIG_FILE))) as { default?: ReleaseConfig }).default
+
+  if (config === undefined)
+    fail(`${CONFIG_FILE} has no default export`)
+
+  return config
 }
 
 // The base alone, then the base with each overlay, because an overlay is only meaningful merged. Only the base model feeds the checks.

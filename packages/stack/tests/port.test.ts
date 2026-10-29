@@ -59,5 +59,9 @@ describe('stack port', () => {
     await expect(capture(async () => port([]))).rejects.toThrow('a name is needed')
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
     await expect(capture(async () => port(['--min', '5000', '--max', '4000', 'x']))).rejects.toThrow('--max takes a whole number from 5000')
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(capture(async () => port(['--max', '99999', 'x']))).rejects.toThrow('--max goes up to 65535')
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(capture(async () => port(['--min', '0', 'x']))).rejects.toThrow('--min takes a whole number from 1')
   })
 })

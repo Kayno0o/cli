@@ -115,6 +115,11 @@ export function versionFindings(refs: EnvRef[], releases: Release[]): Finding[] 
 
 export function imageFindings(config: ReleaseConfig, releases: Release[], model: ComposeModel | undefined): Finding[] {
   const registry = config.registry ?? ''
+
+  // Without a registry every image would match, so there is nothing to tell apart.
+  if (registry === '')
+    return []
+
   const declared = new Set(releases.filter(release => release.image !== undefined && release.image !== '').map(release => `${registry}/${release.image}`))
   const findings: Finding[] = []
 

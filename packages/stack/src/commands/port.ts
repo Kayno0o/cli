@@ -23,8 +23,12 @@ export async function port(args: string[]): Promise<number> {
   if (name === undefined)
     fail('a name is needed')
 
-  const min = wholeNumber(parsed.values.min, 'min', MIN_PORT, 0)
+  const min = wholeNumber(parsed.values.min, 'min', MIN_PORT)
   const max = wholeNumber(parsed.values.max, 'max', MAX_PORT, min)
+
+  if (max > MAX_PORT)
+    fail(`--max goes up to ${MAX_PORT}, not ${max}`)
+
   const number = stringToPort(name, min, max)
 
   console.log(number)
