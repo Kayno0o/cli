@@ -41,7 +41,8 @@ else {
 
   for (let attempt = 0; attempt < 60 && !seeded; attempt++) {
     await Bun.sleep(500)
-    seeded = docker('exec', CONTAINER, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', SCHEMA).ok
+    // Over TCP: the image's init server answers on the socket alone, then restarts, so a socket seed can land before the real server is up.
+    seeded = docker('exec', CONTAINER, 'psql', '-h', '127.0.0.1', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', SCHEMA).ok
   }
 
   const port = docker('port', CONTAINER, '5432/tcp').out.match(PORT)?.[1]
@@ -53,7 +54,8 @@ else {
 }
 
 afterAll(() => {
-  docker('rm', '-f', CONTAINER)
+  if (Bun.which('docker') !== null)
+    docker('rm', '-f', CONTAINER)
 })
 
 const cwd = mkdtempSync(join(tmpdir(), 'db-tools-'))
