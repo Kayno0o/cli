@@ -1,5 +1,5 @@
-// eslint-disable-next-line no-control-regex
-const ANSI = /\x1B\[[\d;?]*[A-Z]/gi
+import { stripAnsi } from '@kaynooo/cli-kit'
+
 const HEX_LITERAL = /\b0x[0-9a-f]+\b/gi
 const PATH = /(?:\.{1,2}\/|\/)?[\w.@~-]+(?:\/[\w.@~-]+)+/g
 const FILE = /\b[\w@~-]+(?:\.[\w-]+)*\.[a-z]\w{0,5}\b/gi
@@ -8,10 +8,6 @@ const DURATION = /\b\d+(?:\.\d+)?\s?(?:ms|µs|ns|[smh])\b/g
 const PERCENT = /\b\d+(?:\.\d+)?%/g
 const NUMBER = /\d+(?:\.\d+)?/g
 const IMPORTANT = /error|fail|warn|panic|exception|fatal|✗|✘|^\s+at\s+\S|^\s*File ".*", line \d+|^\s*\d+: .+ at /i
-
-export function stripAnsi(line: string): string {
-  return line.replaceAll(ANSI, '')
-}
 
 // Whether the line carries an error, failure, warning or stack frame, which folding never drops.
 export function isImportant(line: string): boolean {
