@@ -1,5 +1,5 @@
+import { upTo } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
-import { upTo } from './format'
 
 // Every Forgejo call goes through tea, which owns the OAuth login and fills {owner}/{repo} from the cwd's origin, or from --repo.
 function repoFlag(repo: string | undefined): string[] {

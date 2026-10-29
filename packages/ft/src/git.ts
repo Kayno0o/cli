@@ -1,5 +1,5 @@
+import { fail } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
-import { fail } from './args'
 
 const ORIGIN_PREFIX = /^origin\//
 

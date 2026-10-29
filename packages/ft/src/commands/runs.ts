@@ -1,5 +1,5 @@
-import { parse, repoOption, wholeNumber } from '../args'
-import { formatAge, formatSeconds, table, truncate, upTo } from '../format'
+import { formatAge, formatSeconds, parse, table, truncate, upTo, wholeNumber } from '@kaynooo/cli-kit'
+import { repoOption } from '../args'
 import { resolveCommit } from '../git'
 import { recentRuns, runSeconds, runsOn } from '../runs'
 

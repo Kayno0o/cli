@@ -25,5 +25,8 @@
   },
   "scripts": {
     "ft": "$npm_execpath src/cli.ts"
+  },
+  "dependencies": {
+    "@kaynooo/cli-kit": "workspace:^"
   }
 }

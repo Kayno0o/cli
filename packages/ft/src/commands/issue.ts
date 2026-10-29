@@ -1,8 +1,8 @@
 import type { Issue, IssueComment } from '../issues'
-import { fail, issueNumber, issueNumbers, parse, repoOption } from '../args'
+import { fail, formatAge, parse } from '@kaynooo/cli-kit'
+import { issueNumber, issueNumbers, repoOption } from '../args'
 import { boxes, numberedBody, setBoxes } from '../checklist'
 import { latestClaim } from '../claims'
-import { formatAge } from '../format'
 import { git, resolveCommit } from '../git'
 import { close, comment, commentsOf, getIssue, setBody } from '../issues'
 

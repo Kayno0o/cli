@@ -1,6 +1,6 @@
 import { lookup } from 'node:dns/promises'
+import { parse } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
-import { parse } from '../args'
 import { git } from '../git'
 import { canonicalRemote, parseSshRemote, reachesHost } from '../remote'
 

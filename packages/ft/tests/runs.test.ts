@@ -1,7 +1,6 @@
 import type { Run } from '../src/runs'
 import { describe, expect, test } from 'bun:test'
 import { judge } from '../src/commands/ci'
-import { formatAge, formatSeconds } from '../src/format'
 import { newestPerWorkflow, overall } from '../src/runs'
 
 function run(id: number, status: string, workflow = 'test.yml', event = 'push'): Run {
@@ -39,17 +38,5 @@ describe('overall', () => {
     expect(overall([run(1, 'success'), run(2, 'waiting')])).toBe('waiting')
     expect(overall([run(1, 'success'), run(2, 'skipped')])).toBe('success')
     expect(overall([run(1, 'skipped')])).toBe('skipped')
-  })
-})
-
-describe('format', () => {
-  test('gives the largest unit and the next one when not zero', () => {
-    expect(formatSeconds(0)).toBe('0s')
-    expect(formatSeconds(57)).toBe('57s')
-    expect(formatSeconds(808)).toBe('13m 28s')
-    expect(formatSeconds(3605)).toBe('1h')
-    expect(formatSeconds(90_000)).toBe('1d 1h')
-    expect(formatAge(Date.now() - 3 * 3600_000 - 60_000)).toBe('3h ago')
-    expect(formatAge('not a date')).toBe('-')
   })
 })

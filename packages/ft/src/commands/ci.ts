@@ -1,5 +1,5 @@
 import type { Run } from '../runs'
-import { fail, parse, wholeNumber } from '../args'
+import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
 import { defaultBranch, git, gitOk, resolveCommit, tagsAt } from '../git'
 import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, runsOn, stallReason } from '../runs'
 

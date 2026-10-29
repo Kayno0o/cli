@@ -1,5 +1,6 @@
 import type { Job } from '../runs'
-import { fail, parse, repoOption, wholeNumber } from '../args'
+import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { repoOption } from '../args'
 import { excerpt, logLines } from '../log'
 import { jobLog, jobsOf, runById } from '../runs'
 

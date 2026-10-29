@@ -1,5 +1,6 @@
 import type { Run } from '../runs'
-import { fail, parse, repoOption, wholeNumber } from '../args'
+import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { repoOption } from '../args'
 import { failureReport, FINISHED, overall, recentRuns, stallReason } from '../runs'
 
 const usage = `ft watch [--after <id>]
