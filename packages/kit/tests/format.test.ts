@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { formatAge, formatSeconds, table } from '../src/format'
+import { formatAge, formatDuration, formatSeconds, table } from '../src/format'
 
 describe('format', () => {
   test('gives the largest unit and the next one when not zero', () => {
@@ -14,5 +14,16 @@ describe('format', () => {
 
   test('pads every column but the last', () => {
     expect(table([['a', 'long', 'x'], ['bb', 'c', 'y']])).toBe('a   long  x\nbb  c     y')
+  })
+
+  test('formatDuration keeps a decimal under a minute', () => {
+    expect(formatDuration(40)).toBe('0.0s')
+    expect(formatDuration(1250)).toBe('1.3s')
+    expect(formatDuration(59_900)).toBe('59.9s')
+    expect(formatDuration(75_000)).toBe('1m 15s')
+  })
+
+  test('table flattens line breaks and cuts cells when given a width', () => {
+    expect(table([['a', 'one\n  two three'], ['bb', 'x']], { cellWidth: 8 })).toBe('a   one two…\nbb  x')
   })
 })

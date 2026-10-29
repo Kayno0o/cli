@@ -1,4 +1,5 @@
 import type { ParseArgsOptionDescriptor } from 'node:util'
+import process from 'node:process'
 import { parseArgs } from 'node:util'
 
 export type Options = Record<string, ParseArgsOptionDescriptor & { description: string }>
@@ -21,14 +22,22 @@ export function helpText(usage: string, options: Options): string {
   return [usage, '', ...rows.map(([flag, description]) => `  ${flag.padEnd(width)}  ${description}`)].join('\n')
 }
 
+export interface ParseSettings {
+  // Stops at the first `--` and hands what follows back untouched as `rest`, for a command that runs another (`out -n 200 -- <cmd>`).
+  rest?: boolean
+}
+
 // Parses a command's arguments, printing its help and returning undefined on --help.
-export function parse<const T extends Options>(args: string[], usage: string, options: T) {
+export function parse<const T extends Options>(args: string[], usage: string, options: T, settings: ParseSettings = {}) {
   const all = { ...options, help: { type: 'boolean', short: 'h', description: 'show this help' } } as const
+  const separator = settings.rest === true ? args.indexOf('--') : -1
+  const own = separator === -1 ? args : args.slice(0, separator)
+  const rest = separator === -1 ? undefined : args.slice(separator + 1)
 
   let parsed
 
   try {
-    parsed = parseArgs({ args, options: all, allowPositionals: true, strict: true })
+    parsed = parseArgs({ args: own, options: all, allowPositionals: true, strict: true })
   }
   catch (error) {
     fail(`${error instanceof Error ? error.message : String(error)}\n\n${helpText(usage, all)}`)
@@ -40,7 +49,7 @@ export function parse<const T extends Options>(args: string[], usage: string, op
     return undefined
   }
 
-  return parsed
+  return { ...parsed, rest }
 }
 
 export function wholeNumber(value: string | undefined, name: string, fallback: number, min = 1): number {
@@ -53,4 +62,26 @@ export function wholeNumber(value: string | undefined, name: string, fallback: n
     fail(`--${name} takes a whole number from ${min}, not ${value}`)
 
   return number
+}
+
+export interface InputSettings {
+  // What to say when stdin is a terminal, as nothing is piped.
+  noStdin?: string
+}
+
+// Text from a file, or from stdin when the path is `-`. A missing file or a stdin left on the terminal ends the command.
+export async function readInput(path: string, { noStdin = 'nothing is piped on stdin' }: InputSettings = {}): Promise<string> {
+  if (path === '-') {
+    if (process.stdin.isTTY)
+      fail(noStdin)
+
+    return Bun.stdin.text()
+  }
+
+  const file = Bun.file(path)
+
+  if (!await file.exists())
+    fail(`no file ${path}`)
+
+  return file.text()
 }

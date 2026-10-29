@@ -13,7 +13,8 @@
   },
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test": "./src/test.ts"
   },
   "files": ["src"],
   "engines": {

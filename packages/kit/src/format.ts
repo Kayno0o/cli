@@ -20,6 +20,11 @@ export function formatSeconds(total: number): string {
   return next === undefined || next.startsWith('0') ? amounts[first] ?? '0s' : `${amounts[first]} ${next}`
 }
 
+// Like formatSeconds from a duration in milliseconds, but under a minute with one decimal so a fast step reads `0.3s`, not `0s`.
+export function formatDuration(ms: number): string {
+  return ms < 60_000 ? `${(Math.max(0, ms) / 1000).toFixed(1)}s` : formatSeconds(ms / 1000)
+}
+
 // The text up to the first separator, or all of it.
 export function upTo(text: string, separator: string): string {
   const end = text.indexOf(separator)
@@ -42,13 +47,21 @@ export function truncate(text: string, width: number): string {
   return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 1))}…`
 }
 
-export function table(rows: string[][]): string {
+const LINE_BREAKS = /\s*\n\s*/g
+
+export interface TableSettings {
+  // Flattens each cell's line breaks to a space and cuts it to this many characters.
+  cellWidth?: number
+}
+
+export function table(rows: string[][], { cellWidth }: TableSettings = {}): string {
+  const cells = cellWidth === undefined ? rows : rows.map(row => row.map(cell => truncate(cell.replaceAll(LINE_BREAKS, ' '), cellWidth)))
   const widths: number[] = []
 
-  for (const row of rows) {
+  for (const row of cells) {
     for (const [index, cell] of row.entries())
       widths[index] = Math.max(widths[index] ?? 0, cell.length)
   }
 
-  return rows.map(row => row.map((cell, index) => index === row.length - 1 ? cell : cell.padEnd(widths[index] ?? 0)).join('  ').trimEnd()).join('\n')
+  return cells.map(row => row.map((cell, index) => index === row.length - 1 ? cell : cell.padEnd(widths[index] ?? 0)).join('  ').trimEnd()).join('\n')
 }
