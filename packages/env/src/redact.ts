@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
 import process from 'node:process'
-import { Exit, parse } from '@kaynooo/cli-kit'
+import { parse, readInput, runMain } from '@kaynooo/cli-kit'
+import { version } from '../package.json'
 import { loadKnown } from './files'
 import { check, Redactor } from './redactor'
 
@@ -24,7 +25,7 @@ async function run(args: string[]): Promise<number> {
   const known = parsed.values['no-env'] === true ? undefined : await loadKnown()
 
   if (parsed.values.check === true) {
-    const findings = check(await Bun.stdin.text(), known)
+    const findings = check(await readInput('-'), known)
 
     for (const { file, line, kind } of findings)
       console.log(`${file}:${line}: ${kind}`)
@@ -43,10 +44,4 @@ async function run(args: string[]): Promise<number> {
   return 0
 }
 
-try {
-  process.exitCode = await run(process.argv.slice(2))
-}
-catch (error) {
-  console.error(`redact: ${error instanceof Error ? error.message : String(error)}`)
-  process.exitCode = error instanceof Exit ? error.code : 1
-}
+process.exitCode = await runMain({ name: 'redact', version, run })

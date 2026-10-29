@@ -1,5 +1,4 @@
-import process from 'node:process'
-import { fail, parse } from '@kaynooo/cli-kit'
+import { fail, parse, readInput } from '@kaynooo/cli-kit'
 import { entries, lastLine, removeKey, setLine } from '../dotenv'
 import { readEnv, writeEnv } from '../files'
 import { maskValue } from '../mask'
@@ -20,24 +19,12 @@ const mvUsage = `ev mv KEY --from <file> --to <file>
 Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force.`
 
 async function readValue(from: string | undefined): Promise<string> {
-  if (from === undefined && process.stdin.isTTY)
-    fail('pipe the value on stdin or give -F <file>, it is never taken from the command line')
-
-  const input = from === undefined ? await Bun.stdin.text() : await readFile(from)
+  const input = await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
 
   if (input === '')
     fail('the value is empty, nothing was written')
 
   return input.replace(TRAILING_NEWLINE, '')
-}
-
-async function readFile(path: string): Promise<string> {
-  const file = Bun.file(path)
-
-  if (!await file.exists())
-    fail(`${path} does not exist`)
-
-  return file.text()
 }
 
 async function readOrEmpty(path: string) {
