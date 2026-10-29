@@ -98,7 +98,8 @@ describe('fix', () => {
     expect(out).not.toContain('changed')
   })
 
-  test('formats the folder\'s own justfile only, not a parent\'s', async () => {
+  // The CI image has no just.
+  test.skipIf(Bun.which('just') === null)('formats the folder\'s own justfile only, not a parent\'s', async () => {
     const sub = join(dir, 'sub')
 
     mkdirSync(sub)
