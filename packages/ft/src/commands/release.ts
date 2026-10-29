@@ -1,15 +1,15 @@
 import { basename, join, resolve } from 'node:path'
 import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
-import { defaultBranch, git, tagsAt } from '../git'
-import { recentRuns } from '../runs'
+import { defaultBranch, git, gitOk, tagsAt } from '../git'
+import { newestPerWorkflow, recentRuns } from '../runs'
 import { watchRuns } from './watch'
 
 const usage = `ft release <patch|minor|major|x.y.z>
 ft release --tagged
 
-Cuts a release from the default branch: \`bun pm version\` commits and tags the bump, one atomic push sends the branch, with any commits origin lacks, and its tag, then it waits for the runs the push started and for the registry to serve the version.
---tagged releases a version commit already tagged at HEAD instead, for repos bumping with their own script.
+Cuts a release from the default branch: first the commit it sits on is pushed and its runs waited for, so failing tests stop it before anything is bumped or tagged. Then \`bun pm version\` commits and tags the bump, one atomic push sends the branch and its tag, and it waits for the runs the push started and for the registry to serve the version.
+--tagged releases a version commit already tagged at HEAD instead, for repos bumping with their own script; the runs waited for first are then those of the commit below it.
 --package releases one workspace package of a monorepo on its own, tagged \`<folder>-v<version>\` (\`ft release patch -p ft\` tags packages/ft as ft-v0.3.0).
 A refused push drops the bump commit and its tag, so a retry starts clean.`
 
@@ -24,6 +24,8 @@ const LEVELS = new Set(['patch', 'minor', 'major', 'prepatch', 'preminor', 'prem
 const VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/
 const REGISTRY_TRIES = 12
 const REGISTRY_POLL = 5000
+// How long a pushed commit may go without a run before the release goes on: a push touching only ignored paths starts none.
+const NO_RUN = 3 * 60_000
 
 interface Manifest { name?: string, version?: string, private?: boolean }
 
@@ -72,6 +74,20 @@ async function waitForRegistry(name: string, version: string): Promise<boolean> 
   return false
 }
 
+// Pushes the commit a release sits on when origin lacks it and waits for its own runs, so a red run stops the release before a tag exists that would never publish.
+async function testsPass(sha: string, branch: string, timeout: number): Promise<boolean> {
+  if (!await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`])) {
+    const push = await $`git push origin ${`${sha}:refs/heads/${branch}`}`.quiet().nothrow()
+
+    if (push.exitCode !== 0)
+      fail(`origin refused the push of ${sha.slice(0, 7)}, so nothing was bumped:\n${push.stderr.toString().trim()}`, 1)
+
+    console.log(`pushed ${branch} at ${sha.slice(0, 7)}, waiting for its runs before the bump`)
+  }
+
+  return await watchRuns(runs => newestPerWorkflow(runs.filter(run => run.commit_sha === sha)), timeout, undefined, NO_RUN) === 0
+}
+
 export async function release(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
@@ -102,9 +118,15 @@ export async function release(args: string[]): Promise<number> {
 
   await git(['fetch', '-q', 'origin', branch])
 
-  // Unpushed commits ride along, the tag workflow testing them before it publishes; a push origin would refuse is caught before the bump.
+  // A push origin would refuse is caught before the bump.
   if ((await $`git merge-base --is-ancestor ${`origin/${branch}`} HEAD`.quiet().nothrow()).exitCode !== 0)
     fail(`origin/${branch} has commits HEAD lacks: pull first`)
+
+  // With --tagged, HEAD is the version commit and the tests run on the one below it.
+  const base = await git(['rev-parse', tagged ? 'HEAD~1' : 'HEAD'])
+
+  if (!await testsPass(base, branch, timeout))
+    fail(`the runs on ${base.slice(0, 7)} failed, so nothing was bumped or tagged: fix them and release again`, 1)
 
   if (level !== undefined) {
     const bump = dir === undefined

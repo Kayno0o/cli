@@ -34,6 +34,10 @@ if (command === 'api') {
 
   if (run !== null)
     console.log(JSON.stringify(state.runs?.find(each => each.id === Number(run[1])) ?? { message: 'not found', url: '' }))
+  else if (/^actions\\/runs\\/\\d+\\/jobs$/.test(path))
+    console.log('[]')
+  else if (path.startsWith('actions/runs?'))
+    console.log(JSON.stringify({ workflow_runs: state.runs ?? [] }))
   else if (path.startsWith('issues?'))
     console.log(JSON.stringify(state.issues.filter(each => each.state === 'open').map(view)))
   else if (found === undefined)

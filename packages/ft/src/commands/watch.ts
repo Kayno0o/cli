@@ -14,19 +14,21 @@ const options = {
   ...repoOption,
 } as const
 
-const POLL = 10_000
+// Mutable so a test can poll faster.
+export const timing = { poll: 10_000 }
 const LIMIT = 20
 const STALLED = 3 * 60_000
 
 // Polls until the picked runs are all finished, printing each status change; a failure prints its jobs' log excerpts.
-export async function watchRuns(pick: (runs: Run[]) => Run[], timeoutMinutes: number, repo?: string): Promise<number> {
+// With `idle`, picking no run for that many milliseconds counts as a pass: a push touching only ignored paths starts none.
+export async function watchRuns(pick: (runs: Run[]) => Run[], timeoutMinutes: number, repo?: string, idle?: number): Promise<number> {
   const started = Date.now()
   const reported = new Map<number, string>()
   let moving = started
 
   for (;;) {
     // Sleeping first gives a push's runs time to all appear, so one finishing early is not taken for the lot.
-    await Bun.sleep(POLL)
+    await Bun.sleep(timing.poll)
 
     if (Date.now() - started > timeoutMinutes * 60_000)
       fail(`the runs did not finish in ${timeoutMinutes} minutes`)
@@ -49,8 +51,15 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeoutMinutes: nu
       reported.set(run.id, run.status)
     }
 
-    if (runs.length === 0)
+    if (runs.length === 0) {
+      if (idle !== undefined && Date.now() - started > idle) {
+        console.log('no run started, so nothing was waited for')
+
+        return 0
+      }
+
       continue
+    }
 
     const status = overall(runs)
 

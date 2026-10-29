@@ -16,7 +16,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft ci [ref]` | waits for the push runs covering a commit on the default branch and prints each failed test's output |
 | `ft watch` | waits for the runs in progress, or `--after <id>` those newer than a run |
 | `ft logs <run>` | what the failed jobs of a run say went wrong, `--full` for whole logs |
-| `ft release <level>` | `bun pm version`, one atomic push of branch and tag, then waits for the runs and the registry; `-p <folder>` releases one workspace package as `<folder>-v<version>` |
+| `ft release <level>` | waits for the runs on HEAD, pushing it first when origin lacks it, then `bun pm version`, one atomic push of branch and tag, and waits for the runs and the registry; `-p <folder>` releases one workspace package as `<folder>-v<version>` |
 | `ft board` | open issues: available, taken by a live session, or claimed with no live session here, each claim with its boxes left and a stale one with its latest note (`-q <regex>` on titles, `--state available\|taken\|away`, `-L`, `--json`) |
 | `ft take <n>...` / `ft drop <n>...` | claims or gives back issues for the calling Claude Code session, `--lane` as `lane-<s>-<n>` |
 | `ft issue <n>...` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `-b` only the raw description to edit, `--json`) |
@@ -42,7 +42,7 @@ With an admin login, a queued run is checked against the runners: a job whose `r
 
 ## Releases
 
-`ft release patch|minor|major` releases from the default branch, pushing any commits origin lacks along with the bump, which the tag workflow tests before it publishes. A refused push drops the bump commit and tag. A repo with its own bump script runs it, then `ft release --tagged`. In a monorepo, `ft release patch -p ft` bumps `packages/ft` alone, refreshes `bun.lock`, and commits and tags it `ft-v<version>`, so each package releases on its own.
+`ft release patch|minor|major` releases from the default branch. It first pushes any commits origin lacks and waits for their runs, so failing tests stop it before a tag exists that would never publish; a push starting no run within 3 minutes lets it go on. A refused push drops the bump commit and tag. A repo with its own bump script runs it, then `ft release --tagged`. In a monorepo, `ft release patch -p ft` bumps `packages/ft` alone, refreshes `bun.lock`, and commits and tags it `ft-v<version>`, so each package releases on its own.
 
 ## Issue claims
 
