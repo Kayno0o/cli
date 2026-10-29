@@ -1,6 +1,6 @@
 import type { Named } from '../git'
 import type { Issue, IssueComment } from '../issues'
-import { fail, formatAge, parse } from '@kaynooo/cli-kit'
+import { fail, formatAge, parse, readInput } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
 import { boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { latestClaim } from '../claims'
@@ -112,16 +112,7 @@ async function noteText(values: { message?: string | undefined, file?: string | 
   if (values.message !== undefined && values.file !== undefined)
     fail('give the comment once, as text or with -F')
 
-  let text = values.message
-
-  if (values.file !== undefined) {
-    const file = values.file === '-' ? Bun.stdin : Bun.file(values.file)
-
-    if (values.file !== '-' && !await file.exists())
-      fail(`no file ${values.file}`)
-
-    text = await file.text()
-  }
+  const text = values.file === undefined ? values.message : await readInput(values.file)
 
   return text?.trim() === '' ? undefined : text?.trim()
 }

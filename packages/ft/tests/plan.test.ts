@@ -1,7 +1,12 @@
+import { runCli } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { plan } from '../src/commands/plan'
 import { addLines } from '../src/plan'
 import { withFakeTea } from './fake-tea'
+
+async function runPlan(args: string[]): Promise<number> {
+  return runCli({ name: 'ft', version: '0', about: '', commands: { plan } }, ['plan', ...args])
+}
 
 const BODY = 'Release 1.72.\n\nBugs:\n- [ ] #1 one\n- [x] #2 two\n\nLarge features:\n- [ ] #3 three\n'
 
@@ -30,7 +35,7 @@ describe('plan', () => {
       { number: 5, title: 'five', body: '', state: 'open' },
     ]
     const state = await withFakeTea({ issues }, async () => {
-      expect(await plan(['add', '10', '1', '5', '--section', 'Bugs:'])).toBe(0)
+      expect(await runPlan(['add', '10', '1', '5', '--section', 'Bugs:'])).toBe(0)
     })
 
     expect(state.issues[0]?.body).toBe('Release 1.72.\n\nBugs:\n- [ ] #1 one\n- [x] #2 two\n- [ ] #5 five\n\nLarge features:\n- [ ] #3 three\n')
@@ -42,7 +47,7 @@ describe('plan', () => {
       { number: 11, title: 'next', body: 'Next.\n\n- [ ] #3 three\n', state: 'open' },
     ]
     const state = await withFakeTea({ issues }, async () => {
-      expect(await plan(['carry', '10', '11', '--section', 'Carried from 1.71.0:'])).toBe(0)
+      expect(await runPlan(['carry', '10', '11', '--section', 'Carried from 1.71.0:'])).toBe(0)
     })
 
     expect(state.issues[1]?.body).toBe('Next.\n\n- [ ] #3 three\n\nCarried from 1.71.0:\n- [ ] #1 one\n')

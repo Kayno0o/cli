@@ -1,13 +1,18 @@
+import type { Command } from '@kaynooo/cli-kit'
 import { fail, parse } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
 import { editBody, getIssue } from '../issues'
 import { addLines, listedIssues, openLines } from '../plan'
 
-const usage = `ft plan add <plan> <n>... [--section "Bugs:"]
-ft plan carry <from> <to> [--section "Carried from 1.71.0:"]
+const addUsage = `ft plan add <plan> <n>... [--section "Bugs:"]
 
-add: lists each issue <n> as \`- [ ] #<n> <title>\` in the checklist of issue <plan>, skipping those already listed.
-carry: copies the unticked \`#<n>\` lines of issue <from> into issue <to>, skipping those <to> already lists.
+Lists each issue <n> as \`- [ ] #<n> <title>\` in the checklist of issue <plan>, skipping those already listed.
+Lines go under --section, created at the end of the body when missing, or else after the checklist's last box.
+The body is read again just before it is written, so an edit made meanwhile is kept.`
+
+const carryUsage = `ft plan carry <from> <to> [--section "Carried from 1.71.0:"]
+
+Copies the unticked \`#<n>\` lines of issue <from> into issue <to>, skipping those <to> already lists.
 Lines go under --section, created at the end of the body when missing, or else after the checklist's last box.
 The body is read again just before it is written, so an edit made meanwhile is kept.`
 
@@ -16,32 +21,28 @@ const options = {
   ...repoOption,
 } as const
 
-export async function plan(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+export const plan: Command = {
+  summary: 'add issues to a release plan\'s checklist, or carry its unticked lines to the next plan',
+  commands: {
+    add: { run: add, summary: 'list issues in a plan\'s checklist' },
+    carry: { run: carry, summary: 'copy a plan\'s unticked lines into the next plan' },
+  },
+}
+
+async function add(args: string[]): Promise<number> {
+  const parsed = parse(args, addUsage, options)
 
   if (parsed === undefined)
     return 0
 
-  const { values, positionals } = parsed
-  const [action, ...rest] = positionals
-
-  if (action === 'add')
-    return add(rest, values.section, values.repo)
-
-  if (action === 'carry')
-    return carry(rest, values.section, values.repo)
-
-  fail(`ft plan add or ft plan carry\n\n${usage}`)
-}
-
-async function add(rest: string[], section: string | undefined, repo: string | undefined): Promise<number> {
-  const [target, ...listed] = rest
-  const planNumber = issueNumber(target, usage)
+  const { section, repo } = parsed.values
+  const [target, ...listed] = parsed.positionals
+  const planNumber = issueNumber(target, addUsage)
 
   if (listed.length === 0)
-    fail(`name the issues to add\n\n${usage}`)
+    fail(`name the issues to add\n\n${addUsage}`)
 
-  const numbers = issueNumbers(listed, usage)
+  const numbers = issueNumbers(listed, addUsage)
   const titled = await Promise.all(numbers.map(async number => ({ number, title: (await getIssue(number, repo)).title })))
   let added: string[] = []
 
@@ -59,9 +60,15 @@ async function add(rest: string[], section: string | undefined, repo: string | u
   return 0
 }
 
-async function carry(rest: string[], section: string | undefined, repo: string | undefined): Promise<number> {
-  const from = issueNumber(rest[0], usage)
-  const to = issueNumber(rest[1], usage)
+async function carry(args: string[]): Promise<number> {
+  const parsed = parse(args, carryUsage, options)
+
+  if (parsed === undefined)
+    return 0
+
+  const { section, repo } = parsed.values
+  const from = issueNumber(parsed.positionals[0], carryUsage)
+  const to = issueNumber(parsed.positionals[1], carryUsage)
   const source = openLines((await getIssue(from, repo)).body)
   let added: string[] = []
 
