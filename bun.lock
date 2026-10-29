@@ -19,6 +19,16 @@
         "@kaynooo/cli-kit": "workspace:^",
       },
     },
+    "packages/db": {
+      "name": "@kaynooo/db-tools",
+      "version": "0.0.0",
+      "bin": {
+        "db": "./src/cli.ts",
+      },
+      "dependencies": {
+        "@kaynooo/cli-kit": "workspace:^",
+      },
+    },
     "packages/env": {
       "name": "@kaynooo/env-tools",
       "version": "0.0.0",
@@ -95,6 +105,8 @@
     "@kaynooo/check-tools": ["@kaynooo/check-tools@workspace:packages/check"],
 
     "@kaynooo/cli-kit": ["@kaynooo/cli-kit@workspace:packages/kit"],
+
+    "@kaynooo/db-tools": ["@kaynooo/db-tools@workspace:packages/db"],
 
     "@kaynooo/env-tools": ["@kaynooo/env-tools@workspace:packages/env"],
 

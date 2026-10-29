@@ -1,0 +1,32 @@
+{
+  "name": "@kaynooo/db-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "db: run read-only SQL against Postgres from the terminal without ever showing the connection credentials.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/db#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/db"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": ["postgres", "sql", "read-only", "cli", "bun"],
+  "bin": {
+    "db": "./src/cli.ts"
+  },
+  "files": ["src"],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "db": "$npm_execpath src/cli.ts"
+  },
+  "dependencies": {
+    "@kaynooo/cli-kit": "workspace:^"
+  }
+}
