@@ -1,0 +1,4 @@
+src/a.ts(1,7): error TS2322: Type 'string' is not assignable to type 'number'.
+src/b.ts(10,3): error TS2345: Argument of type '{ a: number; }' is not assignable to parameter of type 'Options'.
+  Property 'b' is missing in type '{ a: number; }' but required in type 'Options'.
+src/c.ts(4,1): error TS2304: Cannot find name 'foo'.

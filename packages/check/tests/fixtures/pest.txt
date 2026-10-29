@@ -1,0 +1,21 @@
+
+   PASS  Tests\Unit\ExampleTest
+  ✓ that true is true
+
+   FAIL  Tests\Feature\MailerTest
+  ⨯ it sends a mail
+
+  ---
+
+  • Tests\Feature\MailerTest > it sends a mail
+  Failed asserting that false is true.
+
+  at tests/Feature/MailerTest.php:9
+      5▕ it('sends a mail', function () {
+      6▕     $mailer = new Mailer();
+      9▕     expect(false)->toBeTrue();
+
+
+  Tests:    1 failed, 1 passed (2 assertions)
+  Duration: 0.05s
+

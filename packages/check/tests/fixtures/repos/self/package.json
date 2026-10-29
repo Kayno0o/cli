@@ -1,0 +1,7 @@
+{
+  "name": "self-fixture",
+  "scripts": {
+    "check": "check --only lint",
+    "lint": "echo linted"
+  }
+}

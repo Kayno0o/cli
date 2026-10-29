@@ -1,0 +1,19 @@
+Note: Using configuration file /repo/phpstan.neon.
+ 20/20 [============================] 100%
+
+ ------ ------------------------------------------------------------
+  Line   src/Service/Mailer.php
+ ------ ------------------------------------------------------------
+  42     Call to an undefined method App\Service\Mailer::sendNow().
+  57     Parameter #1 $user of method App\Service\Mailer::send() expects
+         App\Entity\User, null given.
+ ------ ------------------------------------------------------------
+
+ ------ ------------------------------------------------------------
+  Line   src/Entity/User.php
+ ------ ------------------------------------------------------------
+  12     Property App\Entity\User::$name has no type specified.
+ ------ ------------------------------------------------------------
+
+ [ERROR] Found 3 errors
+

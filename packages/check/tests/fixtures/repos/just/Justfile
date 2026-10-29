@@ -1,0 +1,12 @@
+set shell := ["sh", "-c"]
+
+build:
+    echo build
+
+lint:
+    echo linted
+
+test target='all':
+    echo tested
+
+typecheck := "no"

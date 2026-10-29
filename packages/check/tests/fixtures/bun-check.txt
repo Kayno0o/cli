@@ -1,0 +1,22 @@
+<error file="a.test.ts" line="1" column="30" code="TS2307">
+Cannot find module 'bun:test' or its corresponding type declarations.
+<source>
+1 | import { expect, test } from 'bun:test'
+                                 ^^^^^^^^^^
+2 | 
+3 | test('one', () => {
+</source>
+</error>
+<error file="a.ts" line="1" column="7" code="TS2322">
+Type 'string' is not assignable to type 'number'.
+<source>
+1 | const x: number = 'a'
+          ^
+2 | export { x }
+</source>
+</error>
+note: Bun's type definitions (console, fetch, Bun, bun:test) are not installed. Run: bun add -d @types/bun
+Found 2 errors in 2 files, checked 84 files [66.20ms]
+
+  1  a.test.ts:1
+  1  a.ts:1

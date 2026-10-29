@@ -1,0 +1,29 @@
+{
+  "name": "@kaynooo/check-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "check: runs a repo's check, typecheck, lint and test steps and shows only what failed, with each full output saved to a file.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/check#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/check"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": ["check", "lint", "typecheck", "test", "claude-code"],
+  "bin": {
+    "check": "./src/cli.ts"
+  },
+  "files": ["src"],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "dependencies": {
+    "@kaynooo/cli-kit": "workspace:^"
+  }
+}

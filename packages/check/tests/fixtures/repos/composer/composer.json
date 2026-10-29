@@ -1,0 +1,8 @@
+{
+  "name": "acme/composer-fixture",
+  "scripts": {
+    "lint": "phpstan analyse",
+    "test": ["@php vendor/bin/pest"],
+    "post-install-cmd": "echo hi"
+  }
+}

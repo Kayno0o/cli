@@ -1,0 +1,9 @@
+{
+  "name": "js-fixture",
+  "scripts": {
+    "check": "echo types fine",
+    "lint": "echo 'src/a.ts(1,7): error TS2322: bad' && exit 1",
+    "test": "echo tests fine",
+    "build": "echo not a step"
+  }
+}
