@@ -20,9 +20,9 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft board` | open issues: available, taken by a live session, or claimed with no live session here, each claim with its boxes left and a stale one with its latest note (`-q <regex>` on titles, `--state available\|taken\|away`, `-L`, `--json`) |
 | `ft take <n>...` / `ft drop <n>...` | claims or gives back issues for the calling Claude Code session, `--lane` as `lane-<s>-<n>` |
 | `ft issue <n>...` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `--json`) |
-| `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks, `-m <text>` or `-F <file>` comments too |
+| `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks, `-m <text>` or `-F <file>` comments too; `--closed` ticks instead every `- [ ] #<n>` line of a release plan whose issue is closed |
 | `ft comment <n> [text]` | comments on an issue, from `-F <file>` or stdin when no text is given, so a heredoc needs no escaping |
-| `ft fixed <n> [sha]...` | comments `Fixed in <a>, <b> and <c>: <subject>` and closes; with no sha it takes the commits on origin's default branch naming `#<n>` and says which; refuses while boxes are left unless `--tick` ticks them first |
+| `ft fixed <n> [sha]...` | comments `Fixed in <a>, <b> and <c>: <subject>` and closes; with no sha it takes the commits on origin's default branch naming `#<n>` and says which; refuses while boxes are left unless `--tick` ticks them first; then ticks its `- [ ] #<n>` line in every open issue listing it, and names those |
 | `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches |
 
 `ft <command> --help` lists each command's options. Waiting commands exit 0 when the runs pass, 1 when one fails, 2 on a timeout, a stalled queue or bad usage.

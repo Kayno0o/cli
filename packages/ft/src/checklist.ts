@@ -78,3 +78,28 @@ export function setBoxes(body: string, picks: string[], done: boolean): Ticked {
 
   return { body: lines.join('\n'), changed }
 }
+
+const REFERENCE = /^#(\d+)(?!\d)/
+
+export interface Reference { box: Box, issue: number }
+
+// The boxes that open with an issue reference, as a release plan lists `- [ ] #12 title`.
+export function referencedBoxes(body: string): Reference[] {
+  const found: Reference[] = []
+
+  for (const box of boxes(body)) {
+    const match = REFERENCE.exec(box.text)
+
+    if (match?.[1] !== undefined)
+      found.push({ box, issue: Number(match[1]) })
+  }
+
+  return found
+}
+
+// Ticks the unticked boxes referencing an issue that `wanted` accepts.
+export function tickReferences(body: string, wanted: (issue: number) => boolean): Ticked {
+  const picks = referencedBoxes(body).filter(({ box, issue }) => !box.done && wanted(issue)).map(({ box }) => String(box.number))
+
+  return setBoxes(body, picks, true)
+}

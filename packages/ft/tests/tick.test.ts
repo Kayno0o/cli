@@ -2,6 +2,22 @@ import { describe, expect, test } from 'bun:test'
 import { tick } from '../src/commands/issue'
 import { withFakeTea } from './fake-tea'
 
+describe('tick --closed', () => {
+  test('ticks the boxes listing a closed issue and leaves the open ones', async () => {
+    const issues = [
+      { number: 1, title: 'plan', body: '- [ ] #2 two\n- [ ] #3 three\n- [ ] #20 twenty\n- [x] #4 four\n- [ ] #99 gone', state: 'open' },
+      { number: 2, title: 'two', body: '', state: 'closed' },
+      { number: 3, title: 'three', body: '', state: 'open' },
+      { number: 20, title: 'twenty', body: '', state: 'closed' },
+    ]
+    const state = await withFakeTea({ issues }, async () => {
+      expect(await tick(['1', '--closed'])).toBe(0)
+    })
+
+    expect(state.issues[0]?.body).toBe('- [x] #2 two\n- [ ] #3 three\n- [x] #20 twenty\n- [x] #4 four\n- [ ] #99 gone')
+  })
+})
+
 describe('tick', () => {
   test('rewrites the body without tea\'s --description-file, which tea 0.15 lacks', async () => {
     const state = await withFakeTea({ issues: [{ number: 5, title: 'x', body: '- [ ] one\n- [ ] two `$HOME`', state: 'open' }] }, async () => {

@@ -2,10 +2,10 @@ import type { Named } from '../git'
 import type { Issue, IssueComment } from '../issues'
 import { fail, formatAge, parse } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
-import { boxes, numberedBody, setBoxes } from '../checklist'
+import { boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { latestClaim } from '../claims'
 import { commitsNaming, defaultBranch, git, resolveCommit } from '../git'
-import { close, comment, commentsOf, getIssue, setBody } from '../issues'
+import { close, comment, commentsOf, editBody, getIssue, openIssues, setBody } from '../issues'
 
 const issueUsage = `ft issue <n>...
 
@@ -115,12 +115,31 @@ async function noteText(values: { message?: string | undefined, file?: string | 
   return text?.trim() === '' ? undefined : text?.trim()
 }
 
+async function isClosed(number: number, repo: string | undefined): Promise<boolean> {
+  try {
+    return (await getIssue(number, repo)).state === 'closed'
+  }
+  catch {
+    return false
+  }
+}
+
+// The issues a body lists in unticked boxes that are closed; one that cannot be read, such as another repo's, counts as open.
+async function closedReferences(body: string, repo: string | undefined): Promise<Set<number>> {
+  const listed = [...new Set(referencedBoxes(body).filter(({ box }) => !box.done).map(({ issue }) => issue))]
+  const states = await Promise.all(listed.map(async issue => isClosed(issue, repo)))
+
+  return new Set(listed.filter((_, at) => states[at] === true))
+}
+
 const tickUsage = `ft tick <n> <box>...
 
-Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box, then posts the -m or -F comment.`
+Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box, then posts the -m or -F comment.
+With --closed, ticks instead every box opening with \`#<issue>\` whose issue is closed, as a release plan lists them.`
 
 const tickOptions = {
   undo: { type: 'boolean', short: 'u', description: 'untick them instead' },
+  closed: { type: 'boolean', description: 'tick the boxes listing a closed issue, no box to name' },
   ...noteOptions,
   ...repoOption,
 } as const
@@ -135,23 +154,31 @@ export async function tick(args: string[]): Promise<number> {
   const number = issueNumber(positionals[0], tickUsage)
   const picks = positionals.slice(1)
 
-  if (picks.length === 0)
+  if (values.closed === true && (picks.length > 0 || values.undo === true))
+    fail(`--closed takes no boxes and no --undo\n\n${tickUsage}`)
+
+  if (picks.length === 0 && values.closed !== true)
     fail(`name the boxes to tick\n\n${tickUsage}`)
 
   const note = await noteText(values)
   const found = await getIssue(number, values.repo)
   const done = values.undo !== true
+  const closed = values.closed === true ? await closedReferences(found.body, values.repo) : undefined
   let result
 
   try {
-    result = setBoxes(found.body, picks, done)
+    result = closed === undefined ? setBoxes(found.body, picks, done) : tickReferences(found.body, issue => closed.has(issue))
   }
   catch (error) {
     fail(`#${number}: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  if (result.changed.length > 0)
-    await setBody(number, result.body, values.repo)
+  if (result.changed.length > 0) {
+    if (closed === undefined)
+      await setBody(number, result.body, values.repo)
+    else
+      await editBody(number, body => tickReferences(body, issue => closed.has(issue)).body, values.repo)
+  }
 
   for (const box of result.changed)
     console.log(`${done ? 'ticked' : 'unticked'} ${box.number}: ${box.text}`)
@@ -201,7 +228,7 @@ const fixedUsage = `ft fixed <n> [commit]...
 
 Comments "Fixed in <sha>: <message>" on issue <n> and closes it, naming each commit given as "Fixed in <a>, <b> and <c>".
 Without a commit it takes those on origin's default branch whose message names #<n>, and says which, or HEAD when none does.
-The message defaults to the subject of the first commit. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.`
+The message defaults to the subject of the first commit. Every open issue listing \`- [ ] #<n>\` in its checklist gets that line ticked. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.`
 
 const fixedOptions = {
   message: { type: 'string', short: 'm', description: 'the line after "Fixed in <sha>:"' },
@@ -247,6 +274,17 @@ async function fixingCommits(number: number, given: string[]): Promise<Named[]> 
   return [{ sha, subject: await git(['log', '-1', '--format=%s', sha]) }]
 }
 
+// Ticks the line listing a closed issue in every open issue's checklist, as a release plan does.
+async function tickListings(closed: number, repo: string | undefined): Promise<void> {
+  for (const listing of await openIssues(undefined, repo)) {
+    if (!referencedBoxes(listing.body).some(({ box, issue }) => issue === closed && !box.done))
+      continue
+
+    if (await editBody(listing.number, body => tickReferences(body, issue => issue === closed).body, repo))
+      console.log(`ticked #${closed} in #${listing.number}`)
+  }
+}
+
 export async function fixed(args: string[]): Promise<number> {
   const parsed = parse(args, fixedUsage, fixedOptions)
 
@@ -276,6 +314,7 @@ export async function fixed(args: string[]): Promise<number> {
   await comment(number, `Fixed in ${shas}: ${values.message ?? commits[0]?.subject ?? ''}`, values.repo)
   await close(number, values.repo)
   console.log(`closed #${number}: fixed in ${shas}`)
+  await tickListings(number, values.repo)
 
   return 0
 }

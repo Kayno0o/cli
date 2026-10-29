@@ -50,6 +50,19 @@ export async function setBody(number: number, body: string, repo?: string): Prom
   await tea(['issues', 'edit', String(number), '-d', body], repo)
 }
 
+// Re-reads the body right before writing it, so an edit made since the caller last looked is not overwritten.
+export async function editBody(number: number, change: (body: string) => string, repo?: string): Promise<boolean> {
+  const { body } = await getIssue(number, repo)
+  const next = change(body)
+
+  if (next === body)
+    return false
+
+  await setBody(number, next, repo)
+
+  return true
+}
+
 export async function comment(number: number, body: string, repo?: string): Promise<void> {
   await tea(['comment', String(number), body], repo)
 }

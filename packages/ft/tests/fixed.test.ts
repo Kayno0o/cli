@@ -55,6 +55,18 @@ describe('fixed', () => {
     })
   })
 
+  test('ticks the line listing the issue in every open issue\'s checklist', async () => {
+    const plan = '- [ ] #7 seven\n- [ ] #70 seventy\n- [ ] #8 eight\n- [ ] see #7 later'
+
+    await withClone(['one'], async () => {
+      const state = await withFakeTea({ issues: [{ number: 7, title: 'seven', body: 'done', state: 'open' }, { number: 9, title: 'plan', body: plan, state: 'open' }] }, async () => {
+        expect(await fixed(['7', 'HEAD'])).toBe(0)
+      })
+
+      expect(state.issues[1]?.body).toBe('- [x] #7 seven\n- [ ] #70 seventy\n- [ ] #8 eight\n- [ ] see #7 later')
+    })
+  })
+
   test('names the commits given, and refuses boxes left without --tick', async () => {
     await withClone(['one', 'two'], async (shas) => {
       const state = await withFakeTea({ issues }, async () => {
