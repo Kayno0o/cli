@@ -1,0 +1,24 @@
+# out
+
+Shortens noisy command output for Claude Code: installs, builds, test runners and linters print hundreds of lines a session mostly does not need, and `out` folds them while keeping what matters.
+
+```sh
+bun install -g @kaynooo/out-tools
+out -- bun install
+```
+
+## Behaviour
+
+- Output of at most 150 lines (`-n <lines>` changes it) passes through byte for byte, stdout and stderr to their own streams.
+- Longer output is captured (both streams, in arrival order) and printed folded, after a header with the line count, how many lines were left out and the path of the full log.
+- Lines alike in shape (ANSI codes stripped; numbers, hashes, durations, percentages, paths and file names normalized) fold into one line with a count and the last line: `[1/300] compiling a.ts (x300, last: [300/300] compiling z.ts)`.
+- A block of 2 to 20 lines repeated back to back is shown once, followed by `(block repeated N times)`.
+- A line or block seen earlier is replaced by `(same as line N)`, N being a line of the full log, and the header lists the most repeated messages with their counts.
+- Carriage-return progress (spinners, bars) keeps only the final state of each line.
+- The head and tail are kept, and lines with `error`, `fail`, `warn`, `panic`, `exception`, `fatal` or a stack frame stay even in the folded middle.
+- The exit code is always the wrapped command's.
+- Full logs go to `$TMPDIR/out-logs-<uid>/`, and logs older than a day are removed on the next fold.
+
+## Wrapping from a hook
+
+The package exports the pure functions a Claude Code PreToolUse hook needs: `shouldWrap(command)` is true when every part of a command line is a listed noisy command (installs, builds, test runners, linters, `docker build`/`docker compose build|pull`, `just <recipe>`), with no pipe, redirect, background, substitution, `--json` or `--help`. `wrap(command)` returns `out -- <command>`, through `sh -c '...'` for `&&` chains and leading `VAR=value` assignments.
