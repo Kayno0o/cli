@@ -9,6 +9,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/db-tools`](packages/db) | `db` | read-only SQL against Postgres that never shows the connection credentials, writes handed back as SQL |
 | [`@kaynooo/check-tools`](packages/check) | `check`, `fix` | a repo's check, typecheck, lint and test steps, or its fixers and formatters, showing only what failed |
 | [`@kaynooo/pkg-tools`](packages/pkg) | `pkg` | an npm package checked before it is added: guessed names, versions under two weeks old, install scripts |
+| [`@kaynooo/stack-tools`](packages/stack) | `stack` | a stable port per service name, and a compose release setup audited against its `release.config.ts` |
 | [`@kaynooo/out-tools`](packages/out) | `out` | noisy command output folded, errors kept, the full log saved to a file |
 | `packages/kit` (private) | - | argument parsing with `--help`, the command dispatcher, input, process and formatting helpers every CLI here shares, bundled into each |
 

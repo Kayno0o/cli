@@ -1,0 +1,36 @@
+import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { isListening, MAX_PORT, MIN_PORT, stringToPort } from '../port'
+
+const usage = `stack port <name>
+
+Prints the port a name always hashes to (FNV-1a, ${MIN_PORT}-${MAX_PORT} by default), so a service keeps the same port on every machine.
+Says on stderr when something already listens on it; the exit code stays 0.`
+
+const options = {
+  min: { type: 'string', description: `lowest port (${MIN_PORT})` },
+  max: { type: 'string', description: `highest port (${MAX_PORT})` },
+} as const
+
+// eslint-disable-next-line ts/require-await -- commands are async by contract
+export async function port(args: string[]): Promise<number> {
+  const parsed = parse(args, usage, options)
+
+  if (parsed === undefined)
+    return 0
+
+  const [name] = parsed.positionals
+
+  if (name === undefined)
+    fail('a name is needed')
+
+  const min = wholeNumber(parsed.values.min, 'min', MIN_PORT, 0)
+  const max = wholeNumber(parsed.values.max, 'max', MAX_PORT, min)
+  const number = stringToPort(name, min, max)
+
+  console.log(number)
+
+  if (isListening(number))
+    console.error(`port ${number} is already in use on this machine`)
+
+  return 0
+}

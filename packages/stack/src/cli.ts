@@ -1,0 +1,17 @@
+#!/usr/bin/env bun
+
+import process from 'node:process'
+import { runCli } from '@kaynooo/cli-kit'
+import { version } from '../package.json'
+import { audit } from './commands/audit'
+import { port } from './commands/port'
+
+process.exitCode = await runCli({
+  name: 'stack',
+  version,
+  about: 'a stable port per service name, and a compose release audit',
+  commands: {
+    port: { run: port, summary: 'the port a name always hashes to, with a warning when something already listens on it' },
+    audit: { run: audit, summary: 'cross-check release.config.ts against its compose files' },
+  },
+})
