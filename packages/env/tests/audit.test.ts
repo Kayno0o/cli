@@ -4,7 +4,7 @@ import process from 'node:process'
 import { $ } from 'bun'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { audit, inlineSecrets } from '../src/audit'
-import { composeEntry } from '../src/fix'
+import { composeEntry, shutOthersOut } from '../src/fix'
 
 const CLI = new URL('../src/ev.ts', import.meta.url).pathname
 const VALUE = 'hunter2-never-printed'
@@ -124,6 +124,19 @@ describe('ev audit', () => {
     expect(ev(['audit'])).toMatchObject({ code: 0, out: 'no exposed .env file nor compose file writing a secret out\n' })
     expect(ev(['audit', 'nope']).code).toBe(2)
   })
+
+  test.skipIf(process.getuid?.() === 0)('names up to three folders it cannot read, and only counts more', async () => {
+    for (const name of ['a', 'b', 'c', 'd']) {
+      await mkdir(join(dir, name))
+      await chmod(join(dir, name), 0o000)
+    }
+
+    expect(ev(['audit']).err).toBe('could not read 4 folders, so they were not audited (--json lists them)\n')
+
+    await chmod(join(dir, 'd'), 0o755)
+
+    expect(ev(['audit']).err.split('\n').filter(Boolean)).toHaveLength(3)
+  })
 })
 
 /* eslint-disable no-template-curly-in-string -- compose references are what these tests are about */
@@ -144,6 +157,16 @@ describe('composeEntry', () => {
     expect(composeEntry('      KEY: |')).toMatchObject({ unmovable: expect.any(String) })
     expect(composeEntry('      KEY: "a\\tb"')).toMatchObject({ unmovable: expect.any(String) })
     expect(composeEntry('    image: alpine')).toBeUndefined()
+  })
+})
+
+describe('shutOthersOut', () => {
+  // As root the chmod would go through and change the real file.
+  test.skipIf(process.getuid?.() === 0)('answers false on a file another account owns, leaving it as it was', async () => {
+    const before = (await stat('/etc/passwd')).mode
+
+    expect(await shutOthersOut('/etc/passwd')).toBe(false)
+    expect((await stat('/etc/passwd')).mode).toBe(before)
   })
 })
 

@@ -13,6 +13,8 @@ export interface ComposeFix {
   env: string
   moved: string[]
   left: Left[]
+  // The compose file or .env another account owns, so its mode could not be changed.
+  open: string[]
   // How `docker compose config` compared before and after: undefined when nothing moved.
   check?: 'same' | 'rolled back' | 'no docker' | 'fails before'
 }
@@ -112,8 +114,19 @@ async function resolved(path: string): Promise<string | undefined> {
   return code === 0 ? out : undefined
 }
 
-export async function shutOthersOut(path: string): Promise<void> {
-  await chmod(path, (await stat(path)).mode & 0o770)
+// False when another account owns the file, so only it or root can change its mode.
+export async function shutOthersOut(path: string): Promise<boolean> {
+  try {
+    await chmod(path, (await stat(path)).mode & 0o770)
+
+    return true
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EPERM')
+      return false
+
+    throw error
+  }
 }
 
 // Moves each inline secret of a compose file into the .env beside it, swapping the value for `${KEY}`, then shuts others out of both. A key the .env sets to another value stays put, and a move `docker compose config` resolves differently is put back.
@@ -123,7 +136,7 @@ export async function fixCompose(path: string): Promise<ComposeFix> {
   const envBefore = await Bun.file(env).exists() ? await Bun.file(env).text() : undefined
   const dotenv = parseDotenv(envBefore ?? '')
   const known = entries(dotenv)
-  const fix: ComposeFix = { path, env, moved: [], left: [] }
+  const fix: ComposeFix = { path, env, moved: [], left: [], open: [] }
 
   const lines = compose.split('\n').map((line) => {
     const entry = composeEntry(line)
@@ -175,10 +188,10 @@ export async function fixCompose(path: string): Promise<ComposeFix> {
   if (fix.moved.length > 0)
     await move(fix, compose, lines.join('\n'), envBefore, serializeDotenv(dotenv))
 
-  await shutOthersOut(path)
-
-  if (await Bun.file(env).exists())
-    await shutOthersOut(env)
+  for (const file of [path, env]) {
+    if (await Bun.file(file).exists() && !await shutOthersOut(file))
+      fix.open.push(file)
+  }
 
   return fix
 }

@@ -20,6 +20,7 @@ const options = {
 } as const
 
 const SHELL_SAFE = /^[\w./-]+$/
+const MAX_UNREAD_LISTED = 3
 
 const CHECKS: Record<NonNullable<ComposeFix['check']>, string> = {
   'same': 'docker compose config resolves the same',
@@ -52,14 +53,12 @@ async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: Comp
 
   for (const { path, readable, tracked, secrets } of exposed) {
     const fix = secrets === undefined ? undefined : await fixCompose(path)
-
-    if (fix === undefined && readable)
-      await shutOthersOut(path)
+    const open = fix?.open ?? (readable && !await shutOthersOut(path) ? [path] : [])
 
     if (fix !== undefined)
       fixed.push(fix)
 
-    left ||= tracked || (fix?.left.length ?? 0) > 0
+    left ||= tracked || open.length > 0 || (fix?.left.length ?? 0) > 0
 
     if (json)
       continue
@@ -68,7 +67,8 @@ async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: Comp
       ...fix === undefined || fix.moved.length === 0 ? [] : [`moved ${fix.moved.join(', ')} into ${shown(fix.env)}`],
       ...fix?.left.map(({ key, why }) => `left ${key} in place: ${why}`) ?? [],
       ...fix?.check === undefined ? [] : [CHECKS[fix.check]],
-      ...readable ? ['now unreadable by other accounts'] : [],
+      ...open.map(file => `another account owns ${file === path ? 'it' : shown(file)}, so it stays readable: sudo chmod o-rwx ${quoted(shown(file))}`),
+      ...readable && !open.includes(path) ? ['now unreadable by other accounts'] : [],
       ...tracked ? [`tracked by git: git rm --cached ${quoted(shown(path))}, then ignore it`] : [],
     ]
 
@@ -94,7 +94,11 @@ export async function audit(args: string[]): Promise<number> {
   const { exposed, unread } = await findExposed(roots)
   const json = parsed.values.json === true
 
-  if (!json) {
+  // Container data folders owned by another account often run to dozens, so past a few they are only counted.
+  if (!json && unread.length > MAX_UNREAD_LISTED) {
+    console.error(`could not read ${unread.length} folders, so they were not audited (--json lists them)`)
+  }
+  else if (!json) {
     for (const dir of unread)
       console.error(`could not read ${dir}, so it was not audited`)
   }
