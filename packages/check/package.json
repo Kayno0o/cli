@@ -12,22 +12,12 @@
     "directory": "packages/check"
   },
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
-  "keywords": [
-    "check",
-    "fix",
-    "lint",
-    "format",
-    "typecheck",
-    "test",
-    "claude-code"
-  ],
+  "keywords": ["check", "fix", "lint", "format", "typecheck", "test", "claude-code"],
   "bin": {
     "check": "./dist/cli.js",
     "fix": "./dist/fix-cli.js"
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "engines": {
     "bun": ">=1.4.3"
   },
