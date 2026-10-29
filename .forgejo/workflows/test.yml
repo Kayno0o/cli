@@ -7,6 +7,8 @@ on:
   push:
     branches: [main]
     paths-ignore: ['**.md']
+  # Reruns the suite by hand, as from the repo's Actions page, after the runner image changes.
+  workflow_dispatch:
 
 jobs:
   test:
