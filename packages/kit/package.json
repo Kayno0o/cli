@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-kit",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "What every agent-tools CLI shares: argument parsing with --help, a command dispatcher, and table and age formatting.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
