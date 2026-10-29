@@ -32,7 +32,7 @@
     },
     "packages/env": {
       "name": "@kaynooo/env-tools",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "bin": {
         "ev": "./dist/ev.js",
         "redact": "./dist/redact.js",
