@@ -1,0 +1,6 @@
+{
+  "status": 404,
+  "body": {
+    "error": "package definitely-not-a-pkg-zzq not found"
+  }
+}

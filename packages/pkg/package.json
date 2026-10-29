@@ -1,0 +1,34 @@
+{
+  "name": "@kaynooo/pkg-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "pkg: check an npm package before it is added, for a guessed name, a version under two weeks old and install scripts.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/pkg#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/pkg"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": ["npm", "package", "typosquat", "supply-chain", "dependencies"],
+  "bin": {
+    "pkg": "./src/cli.ts"
+  },
+  "files": ["src"],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "pkg": "$npm_execpath src/cli.ts",
+    "popular": "$npm_execpath scripts/popular.ts",
+    "record": "$npm_execpath scripts/record.ts"
+  },
+  "dependencies": {
+    "@kaynooo/cli-kit": "workspace:^"
+  }
+}

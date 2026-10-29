@@ -54,6 +54,16 @@
       "name": "@kaynooo/cli-kit",
       "version": "0.1.0",
     },
+    "packages/pkg": {
+      "name": "@kaynooo/pkg-tools",
+      "version": "0.0.0",
+      "bin": {
+        "pkg": "./src/cli.ts",
+      },
+      "dependencies": {
+        "@kaynooo/cli-kit": "workspace:^",
+      },
+    },
   },
   "packages": {
     "@cacheable/memory": ["@cacheable/memory@2.2.0", "", { "dependencies": { "@cacheable/utils": "^2.5.0", "@keyv/bigmap": "^1.3.1", "hookified": "^1.15.1", "keyv": "^5.6.0" } }, "sha512-CTLKqLItRCEixEAewD3/j9DB3/o96gpTPD4eJ1v+DGOlxZRZncRQkGYqqnAGCscYd6RNeXfGeiuCphsPtqyIfQ=="],
@@ -113,6 +123,8 @@
     "@kaynooo/eslint": ["@kaynooo/eslint@7.0.4", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/7.0.4/eslint-7.0.4.tgz", { "dependencies": { "@e18e/eslint-plugin": "^0.8.0", "@eslint-community/eslint-plugin-eslint-comments": "^4.7.2", "@eslint/markdown": "^8.0.3", "@stylistic/eslint-plugin": "^5.10.0", "@typescript-eslint/eslint-plugin": "^8.67.0", "@typescript-eslint/parser": "^8.67.0", "eslint-config-flat-gitignore": "^2.3.0", "eslint-flat-config-utils": "^3.2.0", "eslint-merge-processors": "^2.0.0", "eslint-plugin-antfu": "^3.2.3", "eslint-plugin-better-tailwindcss": "^4.7.0", "eslint-plugin-format": "^2.0.1", "eslint-plugin-import-lite": "^0.6.0", "eslint-plugin-jsonc": "^3.4.1", "eslint-plugin-no-only-tests": "^3.4.0", "eslint-plugin-perfectionist": "^5.10.1", "eslint-plugin-regexp": "^3.2.0", "eslint-plugin-toml": "^1.5.0", "eslint-plugin-unicorn": "^73.0.0", "eslint-plugin-unused-imports": "^4.4.1", "eslint-plugin-yml": "^3.8.1", "globals": "^17.11.0", "toml-eslint-parser": "^1.0.3", "yaml-eslint-parser": "^2.1.0" }, "peerDependencies": { "eslint": "^10.7.0" }, "bin": { "keslint": "dist/bin.js" } }, "sha512-TF1Bgvz5l1eD3IHrUvX2ESZ8WR8gSn6CFgK/GxNX1+H94yHzqKyPJ0aDQuNOT+sg82HCD7c7OIuBGPT/xgahcg=="],
 
     "@kaynooo/forgejo-tools": ["@kaynooo/forgejo-tools@workspace:packages/ft"],
+
+    "@kaynooo/pkg-tools": ["@kaynooo/pkg-tools@workspace:packages/pkg"],
 
     "@keyv/bigmap": ["@keyv/bigmap@1.3.1", "", { "dependencies": { "hashery": "^1.4.0", "hookified": "^1.15.0" }, "peerDependencies": { "keyv": "^5.6.0" } }, "sha512-WbzE9sdmQtKy8vrNPa9BRnwZh5UF4s1KTmSK0KUVLo3eff5BlQNNWDnFOouNpKfPKDnms9xynJjsMYjMaT/aFQ=="],
 

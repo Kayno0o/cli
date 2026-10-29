@@ -1,0 +1,150 @@
+import type { Packument, Version } from './registry'
+import { nearMisses } from './nearmiss'
+
+export const DEFAULT_MIN_AGE_DAYS = 14
+const DAY = 86_400_000
+const INSTALL_SCRIPTS = ['preinstall', 'install', 'postinstall'] as const
+const GIT_PREFIX = /^git\+/
+const VERSION_SEPARATOR = /(?<=.)@/
+
+export interface Spec {
+  name: string
+  request?: string | undefined
+}
+
+export interface Release {
+  version: string
+  published?: string | undefined
+}
+
+export interface Report {
+  name: string
+  registry: string
+  exists: boolean
+  description?: string | undefined
+  requested?: string | undefined
+  // The version the request resolves to, absent when nothing matches it.
+  version?: string | undefined
+  published?: string | undefined
+  latest?: Release | undefined
+  // The highest stable version at least the minimum age old.
+  safe?: Release | undefined
+  downloads?: number | undefined
+  license?: string | undefined
+  repository?: string | undefined
+  deprecated?: string | undefined
+  installScripts: Record<string, string>
+  nearMisses: string[]
+  warnings: string[]
+  // True when the package is missing, the version does not resolve or it is too fresh.
+  blocked: boolean
+}
+
+// Splits `name`, `name@1.2.3`, `@scope/name` and `@scope/name@latest`.
+export function parseSpec(text: string): Spec {
+  const at = text.search(VERSION_SEPARATOR)
+
+  return at === -1 ? { name: text } : { name: text.slice(0, at), request: text.slice(at + 1) }
+}
+
+function isStable(version: string): boolean {
+  return !version.includes('-')
+}
+
+// An exact version, a dist-tag, or the highest version a range matches.
+function resolve(packument: Packument, request: string | undefined): string | undefined {
+  const tags = packument['dist-tags'] ?? {}
+  const versions = Object.keys(packument.versions ?? {})
+  const wanted = request === undefined || request === '' ? 'latest' : request
+
+  if (tags[wanted] !== undefined)
+    return tags[wanted]
+
+  if (versions.includes(wanted))
+    return wanted
+
+  return versions.filter(version => Bun.semver.satisfies(version, wanted)).sort(Bun.semver.order).at(-1)
+}
+
+function licenseOf(license: string | { type?: string } | undefined): string | undefined {
+  return typeof license === 'string' ? license : license?.type
+}
+
+function repositoryOf(packument: Packument): string | undefined {
+  const repository = typeof packument.repository === 'string' ? packument.repository : packument.repository?.url
+
+  return repository?.replace(GIT_PREFIX, '') ?? packument.homepage
+}
+
+function ageDays(published: string | undefined, now: number): number | undefined {
+  const at = Date.parse(published ?? '')
+
+  return Number.isNaN(at) ? undefined : (now - at) / DAY
+}
+
+function installScriptsOf(version: Version | undefined): Record<string, string> {
+  return Object.fromEntries(INSTALL_SCRIPTS.flatMap(name => version?.scripts?.[name] === undefined ? [] : [[name, version.scripts[name]]]))
+}
+
+function safeRelease(packument: Packument, now: number, minAgeDays: number): Release | undefined {
+  const old = Object.keys(packument.versions ?? {}).filter(version => isStable(version) && (ageDays(packument.time?.[version], now) ?? 0) >= minAgeDays && packument.time?.[version] !== undefined)
+  const version = old.sort(Bun.semver.order).at(-1)
+
+  return version === undefined ? undefined : { version, published: packument.time?.[version] }
+}
+
+export function analyze(input: { spec: Spec, packument: Packument | undefined, downloads?: number | undefined, registry: string, now?: number | undefined, minAgeDays?: number | undefined }): Report {
+  const { spec, packument, registry, now = Date.now(), minAgeDays = DEFAULT_MIN_AGE_DAYS } = input
+  const report: Report = { name: spec.name, registry, exists: packument !== undefined, requested: spec.request, installScripts: {}, nearMisses: nearMisses(spec.name), warnings: [], blocked: false, downloads: input.downloads }
+
+  if (report.nearMisses.length > 0)
+    report.warnings.push(`name looks like ${report.nearMisses.join('; ')}, check it is the package meant`)
+
+  if (packument === undefined) {
+    report.blocked = true
+    report.warnings.unshift(`${spec.name} is not on ${registry}, the name may be guessed`)
+
+    return report
+  }
+
+  const latest = packument['dist-tags']?.latest
+  const version = resolve(packument, spec.request)
+  const entry = version === undefined ? undefined : packument.versions?.[version]
+
+  report.description = packument.description
+  report.license = licenseOf(entry?.license) ?? licenseOf(packument.license)
+  report.repository = repositoryOf(packument)
+  report.latest = latest === undefined ? undefined : { version: latest, published: packument.time?.[latest] }
+  report.safe = safeRelease(packument, now, minAgeDays)
+  report.version = version
+  report.published = version === undefined ? undefined : packument.time?.[version]
+  report.installScripts = installScriptsOf(entry)
+  report.deprecated = entry?.deprecated
+
+  if (version === undefined) {
+    report.blocked = true
+    report.warnings.push(`no version of ${spec.name} matches ${spec.request}`)
+
+    return report
+  }
+
+  const age = ageDays(report.published, now)
+
+  if (age === undefined) {
+    report.warnings.push(`${registry} gives no publish date for ${version}, its age cannot be checked`)
+  }
+  else if (age < minAgeDays) {
+    report.blocked = true
+    report.warnings.push(`${version} was published ${age < 1 ? 'less than a day' : `${Math.floor(age)} day${Math.floor(age) === 1 ? '' : 's'}`} ago, under ${minAgeDays} days${report.safe === undefined ? ', and no older stable version exists' : `, use ${spec.name}@${report.safe.version}`}`)
+  }
+
+  const scripts = Object.keys(report.installScripts)
+
+  if (scripts.length > 0)
+    report.warnings.push(`${version} runs ${scripts.join(', ')} at install`)
+
+  if (report.deprecated !== undefined)
+    report.warnings.push(`${version} is deprecated: ${report.deprecated}`)
+
+  return report
+}

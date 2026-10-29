@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "downloads": 399137304,
+    "start": "2026-10-22",
+    "end": "2026-10-28",
+    "package": "esbuild"
+  }
+}
