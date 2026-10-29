@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/stack-tools",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "stack: a stable port per service name, and an audit of a compose release setup against its release.config.ts.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
