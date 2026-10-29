@@ -7,6 +7,7 @@ import { board, drop, take } from './commands/board'
 import { ci } from './commands/ci'
 import { commentOn, fixed, issue, tick } from './commands/issue'
 import { logs } from './commands/logs'
+import { plan } from './commands/plan'
 import { release } from './commands/release'
 import { remote } from './commands/remote'
 import { runs } from './commands/runs'
@@ -29,6 +30,7 @@ process.exitCode = await runCli({
     tick: { run: tick, summary: 'tick checklist boxes of an issue, -m to comment too' },
     comment: { run: commentOn, summary: 'comment on an issue, from stdin when no text is given' },
     fixed: { run: fixed, summary: 'comment "Fixed in <sha>" and close an issue' },
+    plan: { run: plan, summary: 'add issues to a release plan\'s checklist, or carry its unticked lines to the next plan' },
     remote: { run: remote, summary: 'check or fix an origin using an ssh alias tea cannot match' },
   },
   aliases: { show: 'issue', view: 'issue' },

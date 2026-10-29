@@ -23,6 +23,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks, `-m <text>` or `-F <file>` comments too; `--closed` ticks instead every `- [ ] #<n>` line of a release plan whose issue is closed |
 | `ft comment <n> [text]` | comments on an issue, from `-F <file>` or stdin when no text is given, so a heredoc needs no escaping |
 | `ft fixed <n> [sha]...` | comments `Fixed in <a>, <b> and <c>: <subject>` and closes; with no sha it takes the commits on origin's default branch naming `#<n>` and says which; refuses while boxes are left unless `--tick` ticks them first; then ticks its `- [ ] #<n>` line in every open issue listing it, and names those |
+| `ft plan add <plan> <n>...` / `ft plan carry <from> <to>` | adds `- [ ] #<n> <title>` lines to a release plan's checklist, or copies one plan's unticked `#<n>` lines into the next, both under `--section "Bugs:"` (created when missing) and skipping issues already listed |
 | `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches |
 
 `ft <command> --help` lists each command's options. Waiting commands exit 0 when the runs pass, 1 when one fails, 2 on a timeout, a stalled queue or bad usage.
