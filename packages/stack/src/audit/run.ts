@@ -6,11 +6,11 @@ import { nuxtFindings } from './nuxt'
 
 export const CONFIG_FILE = 'release.config.ts'
 
-const RELEASE_PACKAGE = '@acme/release'
+const DEFINE_CONFIG_IMPORT = /import\s*\{[^}]*\bdefineConfig\b[^}]*\}\s*from\s*['"]([^'"]+)['"]/
 
-function installed(root: string): boolean {
+function installed(specifier: string, root: string): boolean {
   try {
-    Bun.resolveSync(RELEASE_PACKAGE, root)
+    Bun.resolveSync(specifier, root)
 
     return true
   }
@@ -19,13 +19,15 @@ function installed(root: string): boolean {
   }
 }
 
-// The config imports `defineConfig` from a private package that is often not installed where the audit runs, and Bun would then try to download it. It only returns its argument, so a stand-in replaces it when it cannot be resolved.
+// The config imports `defineConfig` from the release tool's package, often private and not installed where the audit runs, and Bun would then try to download it. It only returns its argument, so a stand-in replaces it when it cannot be resolved.
 export async function loadConfig(root: string): Promise<ReleaseConfig> {
-  if (!installed(root)) {
+  const specifier = DEFINE_CONFIG_IMPORT.exec(await Bun.file(join(root, CONFIG_FILE)).text())?.[1]
+
+  if (specifier !== undefined && !installed(specifier, root)) {
     Bun.plugin({
       name: 'release-stand-in',
       setup(build) {
-        build.module(RELEASE_PACKAGE, () => ({ exports: { defineConfig: (config: ReleaseConfig) => config }, loader: 'object' }))
+        build.module(specifier, () => ({ exports: { defineConfig: (config: ReleaseConfig) => config }, loader: 'object' }))
       },
     })
   }

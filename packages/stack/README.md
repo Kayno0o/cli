@@ -29,4 +29,4 @@ The checks, in the order they are reported:
 
 Exit codes: 0 no error (warnings allowed), 1 at least one error, 2 no `release.config.ts`. `--json` prints `{ root, composeFiles, findings }` where a finding is `{ level, check, message }`.
 
-It needs docker for `docker compose config`. The config imports `defineConfig` from `@acme/release`; when that private package is not installed a stand-in that returns its argument is used.
+It needs docker for `docker compose config`. When the package `release.config.ts` imports `defineConfig` from is not installed, a stand-in that returns its argument is used.
