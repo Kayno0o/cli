@@ -247,7 +247,7 @@ describe('ev audit --fix', () => {
     expect((await stat(join(dir, '.env'))).mode & 0o777).toBe(0o640)
   })
 
-  test.skipIf(Bun.which('docker') === null)('puts everything back when docker compose config resolves differently once moved', async () => {
+  test.skipIf(Bun.which('docker') === null)('puts everything back when docker compose config resolves differently once moved, naming the service env_file would hand it to', async () => {
     const compose = [
       'services:',
       '  app:',
@@ -265,7 +265,7 @@ describe('ev audit --fix', () => {
 
     const result = ev(['audit', '--fix'])
 
-    expect(result).toMatchObject({ code: 1, out: 'compose.yml\n  left DB_PASSWORD in place: docker compose config resolved differently once moved, so it was put back\n  docker compose config resolved differently, so everything was put back\n  now unreadable by other accounts\n' })
+    expect(result).toMatchObject({ code: 1, out: 'compose.yml\n  left DB_PASSWORD in place: other loads the .env through env_file and would gain it, so it was put back\n  docker compose config resolved differently, so everything was put back\n  now unreadable by other accounts\n' })
     expect(await Bun.file(join(dir, 'compose.yml')).text()).toBe(compose)
     expect(await Bun.file(join(dir, '.env')).text()).toBe('KEEP=1\n')
   })

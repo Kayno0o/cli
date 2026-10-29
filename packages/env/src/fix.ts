@@ -108,10 +108,22 @@ function envLine(key: string, value: string): string | undefined {
 
 // What `docker compose config` resolves the file to, never printed; undefined when it fails.
 async function resolved(path: string): Promise<string | undefined> {
-  const run = Bun.spawn(['docker', 'compose', '-f', path, 'config'], { cwd: dirname(path), stdout: 'pipe', stderr: 'ignore', stdin: 'ignore' })
+  const run = Bun.spawn(['docker', 'compose', '-f', path, 'config', '--format', 'json'], { cwd: dirname(path), stdout: 'pipe', stderr: 'ignore', stdin: 'ignore' })
   const [out, code] = await Promise.all([new Response(run.stdout).text(), run.exited])
 
   return code === 0 ? out : undefined
+}
+
+interface Resolved {
+  services?: Record<string, { environment?: Record<string, unknown> }>
+}
+
+// The services a key reached only once moved: they load the .env through env_file.
+function gainedBy(before: string, after: string, key: string): string[] {
+  const services = (config: string) => Object.entries((JSON.parse(config) as Resolved).services ?? {})
+  const had = new Set(services(before).filter(([, service]) => service.environment?.[key] !== undefined).map(([name]) => name))
+
+  return services(after).filter(([name, service]) => service.environment?.[key] !== undefined && !had.has(name)).map(([name]) => name)
 }
 
 // False when another account owns the file, so only it or root can change its mode.
@@ -230,7 +242,9 @@ async function move(fix: ComposeFix, compose: string, composeAfter: string, envB
     return
   }
 
-  if (await resolved(path) === before) {
+  const after = await resolved(path)
+
+  if (after === before) {
     fix.check = 'same'
 
     return
@@ -244,6 +258,10 @@ async function move(fix: ComposeFix, compose: string, composeAfter: string, envB
     await writeFile(env, envBefore)
 
   fix.check = 'rolled back'
-  fix.left.push(...fix.moved.map(key => ({ key, why: 'docker compose config resolved differently once moved, so it was put back' })))
+  fix.left.push(...fix.moved.map((key) => {
+    const gained = after === undefined ? [] : gainedBy(before, after, key)
+
+    return { key, why: gained.length > 0 ? `${gained.join(', ')} ${gained.length > 1 ? 'load' : 'loads'} the .env through env_file and would gain it, so it was put back` : 'docker compose config resolved differently once moved, so it was put back' }
+  }))
   fix.moved = []
 }
