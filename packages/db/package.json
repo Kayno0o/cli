@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/db-tools",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "db: run read-only SQL against Postgres from the terminal without ever showing the connection credentials.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
