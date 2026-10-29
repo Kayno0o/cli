@@ -1,5 +1,4 @@
-import process from 'node:process'
-import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, parse, readInput, wholeNumber } from '@kaynooo/cli-kit'
 import { connectionOptions, DEFAULT_ENV, DEFAULT_LIMIT, outputOptions } from '../args'
 import { inspect } from '../guard'
 import { render, shape } from '../output'
@@ -13,12 +12,13 @@ const options = { ...connectionOptions, ...outputOptions } as const
 
 export const WRITE_EXIT = 3
 
+const NO_SQL = 'no SQL given: pass it as an argument or on stdin'
+
 export async function readSql(positionals: string[]): Promise<string> {
-  const piped = positionals.length === 0 && !process.stdin.isTTY
-  const sql = piped ? await Bun.stdin.text() : positionals.join(' ')
+  const sql = positionals.length === 0 ? await readInput('-', { noStdin: NO_SQL }) : positionals.join(' ')
 
   if (sql.trim() === '')
-    fail('no SQL given: pass it as an argument or on stdin')
+    fail(NO_SQL)
 
   return sql
 }

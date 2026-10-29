@@ -6,12 +6,6 @@ import { version } from '../package.json'
 import { query } from './commands/query'
 import { describe, tables } from './commands/schema'
 
-const OWN = ['query', 'tables', 'describe', 'help', '--help', '-h', '--version', '-v']
-
-const [first] = process.argv.slice(2)
-// `db "select 1"` and `db -n 5 "select 1"` are `db query ...`.
-const argv = first === undefined || OWN.includes(first) ? process.argv.slice(2) : ['query', ...process.argv.slice(2)]
-
 process.exitCode = await runCli({
   name: 'db',
   version,
@@ -21,4 +15,5 @@ process.exitCode = await runCli({
     tables: { run: tables, summary: 'list tables and views with an estimated row count' },
     describe: { run: describe, summary: 'columns of a table with type, nullability, default and primary key' },
   },
-}, argv)
+  defaultCommand: 'query',
+})

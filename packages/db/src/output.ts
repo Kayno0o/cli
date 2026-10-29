@@ -1,5 +1,5 @@
 import type { Row } from './run'
-import { table, truncate } from '@kaynooo/cli-kit'
+import { table } from '@kaynooo/cli-kit'
 import { maskRows } from './mask'
 
 export interface Shown {
@@ -11,7 +11,6 @@ export interface Shown {
 }
 
 const CELL_WIDTH = 80
-const LINE_BREAKS = /\s*\n\s*/g
 
 export function cell(value: unknown): string {
   if (value === null || value === undefined)
@@ -50,8 +49,8 @@ export function render(shown: Shown, json: boolean): string {
 
   const lines = [table([
     shown.columns,
-    ...shown.rows.map(row => shown.columns.map(column => truncate(cell(row[column]).replaceAll(LINE_BREAKS, ' '), CELL_WIDTH))),
-  ])]
+    ...shown.rows.map(row => shown.columns.map(column => cell(row[column]))),
+  ], { cellWidth: CELL_WIDTH })]
 
   if (shown.omitted > 0)
     lines.push(`... ${shown.omitted} more ${shown.omitted === 1 ? 'row' : 'rows'} not shown (${shown.total} in all, -n raises the cap)`)
