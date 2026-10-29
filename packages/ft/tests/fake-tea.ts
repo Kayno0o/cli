@@ -8,7 +8,7 @@ export interface FakeState { issues: FakeIssue[], comments?: Record<number, stri
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 
 const file = process.env.FAKE_TEA_STATE
 const state = JSON.parse(readFileSync(file, 'utf8'))
@@ -66,7 +66,9 @@ else {
   process.exit(1)
 }
 
-writeFileSync(file, JSON.stringify(state))
+// Calls run in parallel, so a rename keeps a reader from seeing the file half written.
+writeFileSync(file + process.pid, JSON.stringify(state))
+renameSync(file + process.pid, file)
 `
 
 // What a rejected promise says, or an empty string when it resolved.
