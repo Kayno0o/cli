@@ -155,6 +155,8 @@ function statementWrites(statement: Token[]): string[] {
       reasons.push(`calls ${token.text}`)
     else if (token.text === 'for' && LOCK_KIND.test(statement[index + 1]?.text ?? ''))
       reasons.push('takes row locks with FOR UPDATE or SHARE')
+    else if (token.text === 'comment' && statement[index + 1]?.text === 'on')
+      reasons.push('uses COMMENT ON')
   }
 
   return reasons

@@ -69,5 +69,7 @@ describe('writes', () => {
     expect(writes('select 1; truncate logs')).toEqual(['uses TRUNCATE'])
     expect(writes('select nextval(\'s\')')).toEqual(['calls nextval'])
     expect(writes('\\copy t from \'x.csv\'')).toEqual(['uses COPY'])
+    expect(writes('comment on table t is \'x\'')).toEqual(['uses COMMENT ON'])
+    expect(writes('select comment from posts')).toEqual([])
   })
 })
