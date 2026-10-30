@@ -30,6 +30,22 @@ bun run check && bun run lint && bun run test
 
 Each CLI releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow builds that folder (`bun run build`, a Bun bundle per bin with `packages/kit` inlined) and publishes it. Kit is never published: a kit change reaches a CLI with that CLI's next release.
 
-## Claude Code mod
+## Claude Code
 
-The `agent-tools` mod (in the user's dotfiles, `zshrc/dotfiles/claude/mods/agent-tools`) wires these in: it refuses Read, Edit, Write and Bash calls on `.env` files with a pointer to `ev` and `redact`, and runs noisy builds, installs, tests and linters through `out` once it is installed.
+Two ways wire the bins into Claude Code, never both on one host:
+
+- **The `agent-tools-hooks` plugin** in this repo, for any host: `guard hook` answers each event, refusing a Bash call that breaks a rule (with the command to run instead, the pinned package manager included), an install `pkg` refuses and a Read, Edit or Write of an env file, letting `git push` through only when the latest prompt asked for one, and listing the installed bins at session start. A hook cannot swap the command Claude runs without approving it too, so nothing runs through `out` here.
+- **The `agent-tools` mod** in the user's dotfiles (`zshrc/dotfiles/claude/mods/agent-tools`): the same rules through `guard check`, plus the install rewritten to the pinned manager and noisy runs through `out`.
+
+### A host without the dotfiles
+
+```sh
+# the @kaynooo scope resolves from this registry, which answers without a token
+printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml
+bun install -g @kaynooo/forgejo-tools @kaynooo/env-tools @kaynooo/db-tools @kaynooo/check-tools @kaynooo/pkg-tools @kaynooo/stack-tools @kaynooo/out-tools @kaynooo/edit-tools @kaynooo/base-tools @kaynooo/git-tools @kaynooo/wait-tools @kaynooo/gitlab-tools @kaynooo/guard-tools
+claude plugin install agent-tools-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git
+```
+
+The hooks need `guard-tools` 0.2.0 or later, the first with `guard hook`. Claude Code caches a plugin by its version, so a change under `plugin/` bumps `plugin/.claude-plugin/plugin.json` to reach the hosts.
+
+`~/.bun/bin` must be on the PATH Claude Code starts with, or the hooks find no `guard`: Claude Code then reports a hook error on each call and lets it through. In a session, `/plugin marketplace add https://git.kaynooo.fr/kaynooo/agent-tools.git` then `/plugin install agent-tools-hooks@agent-tools` does the same as the last line.
