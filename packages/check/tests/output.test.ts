@@ -76,6 +76,23 @@ describe('failureExcerpt', () => {
     expect(text).not.toContain('Runtime:')
   })
 
+  test('paratest: from the first error listing, failures included', async () => {
+    const text = failureExcerpt(await fixture('paratest.txt'))
+
+    expect(text).toStartWith('There was 1 error:')
+    expect(text).toContain('InvoiceTest::testExport')
+    expect(text).toContain('NotificationTest::testEachRecipientGetsTheStatusIcon')
+    expect(text).not.toContain('Processes:')
+  })
+
+  test('paratest: a crashed worker from its exception block', async () => {
+    const text = failureExcerpt(await fixture('paratest-crash.txt'))
+
+    expect(text).toStartWith('In WorkerCrashedException.php line 41:')
+    expect(text).toContain('Allowed memory size of 134217728 bytes exhausted')
+    expect(text).not.toContain('Runtime:')
+  })
+
   test('pest: from the first failing file', async () => {
     const text = failureExcerpt(await fixture('pest.txt'))
 

@@ -1,0 +1,19 @@
+ParaTest v7.16.1 upon PHPUnit 12.5.8 by Sebastian Bergmann and contributors.
+
+Processes:     6
+Runtime:       PHP 8.4.18
+Configuration: /app/phpunit.xml.dist
+
+...............................................................  63 / 130 ( 48%)
+
+In WorkerCrashedException.php line 41:
+
+  The test "PARATEST='1' TEST_TOKEN='3' UNIQUE_TEST_TOKEN='3_6a1f' /usr/local/bin/php '/app/vendor/bin/phpunit' '--do-not-cache-result' '/app/tests/Functional/Api/InvoiceTest.php'" failed.
+
+  Exit Code: 255(Unknown error)
+
+  Output:
+  ================
+  PHP Fatal error:  Allowed memory size of 134217728 bytes exhausted in /app/src/Service/InvoiceExporter.php on line 88
+
+paratest [-h|--help] [--processes PROCESSES] [--] [<path>]

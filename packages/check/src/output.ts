@@ -16,7 +16,7 @@ const ESLINT_PROBLEM = /^\s+\d+:\d+\s+(?:error|warning)\s/
 const ESLINT_SUMMARY = /^(?:✖ )?\d+ problems? \(/
 const PHPSTAN_TABLE = /^\s*-{3,} -{3,}/
 const PHPSTAN_NOISE = /^\s*\[OK\]/
-const PHP_FAILURES = /^(?:There w(?:as|ere) \d+ (?:failure|error|risky|warning)|\s+(?:FAIL|FAILED)\s+\S)/
+const PHP_FAILURES = /^(?:There w(?:as|ere) \d+ (?:failure|error|risky|warning)|\s+(?:FAIL|FAILED)\s+\S|In \S+\.php line \d+:$)/
 const MAX_TESTS = 10
 const MAX_LINES = 100
 const TAIL = 30
@@ -125,7 +125,7 @@ export const phpstan: Parser = (lines) => {
   return start === -1 ? undefined : lines.slice(start).filter(line => !PHPSTAN_NOISE.test(line))
 }
 
-// PHPUnit's failure listing and Pest's FAIL blocks, to the end of the output.
+// PHPUnit's and ParaTest's failure listing, Pest's FAIL blocks and a Symfony console exception (how ParaTest reports a crashed worker), to the end of the output.
 export const php: Parser = (lines) => {
   const start = lines.findIndex(line => PHP_FAILURES.test(line))
 
