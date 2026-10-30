@@ -32,7 +32,7 @@
     },
     "packages/edit": {
       "name": "@kaynooo/edit-tools",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "sub": "./dist/cli.js",
       },
