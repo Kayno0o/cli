@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const CLIS = ['ft', 'env', 'db', 'check', 'pkg', 'out', 'stack']
+const CLIS = ['ft', 'env', 'db', 'check', 'pkg', 'out', 'stack', 'edit']
 
 interface Manifest { version: string, bin: Record<string, string> }
 

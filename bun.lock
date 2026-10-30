@@ -30,6 +30,16 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/edit": {
+      "name": "@kaynooo/edit-tools",
+      "version": "0.1.0",
+      "bin": {
+        "sub": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/env": {
       "name": "@kaynooo/env-tools",
       "version": "0.3.3",
@@ -138,6 +148,8 @@
     "@kaynooo/cli-kit": ["@kaynooo/cli-kit@workspace:packages/kit"],
 
     "@kaynooo/db-tools": ["@kaynooo/db-tools@workspace:packages/db"],
+
+    "@kaynooo/edit-tools": ["@kaynooo/edit-tools@workspace:packages/edit"],
 
     "@kaynooo/env-tools": ["@kaynooo/env-tools@workspace:packages/env"],
 
