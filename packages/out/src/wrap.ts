@@ -1,3 +1,5 @@
+import { isPlain, splitCommand } from '@kaynooo/cli-kit'
+
 const ASSIGNMENT = /^\w+=/
 const EXCLUDED = /(?:^|\s)(?:--json|--help|--version|-h)(?:\s|$)/
 const WORDS = /\s+/
@@ -88,77 +90,30 @@ interface Scan {
   pipes: number[]
 }
 
-// Splits on && || ; and newlines outside quotes.
+// Splits on && || ; and newlines outside quotes and heredocs, a pipe keeping its stages in one segment.
 function scan(command: string): Scan {
   const segments: string[] = []
   const pipes: number[] = []
   let current = ''
-  let quote: string | undefined
   let plain = true
 
-  for (let i = 0; i < command.length; i++) {
-    const char = command[i] ?? ''
-    const next = command[i + 1]
+  for (const piece of splitCommand(command)) {
+    current += piece.text
+    plain &&= isPlain(piece.text) && piece.separator !== '&'
 
-    if (quote !== undefined) {
-      if (char === '\\' && quote === '"') {
-        current += char + (next ?? '')
-        i++
-
-        continue
-      }
-
-      if (char === quote)
-        quote = undefined
-      else if (quote === '"' && (char === '`' || (char === '$' && next === '(')))
-        plain = false
-
-      current += char
-
-      continue
-    }
-
-    if (char === '\\') {
-      current += char + (next ?? '')
-      i++
-
-      continue
-    }
-
-    if (char === '\'' || char === '"') {
-      quote = char
-      current += char
-
-      continue
-    }
-
-    if ((char === '&' && next === '&') || (char === '|' && next === '|')) {
-      segments.push(current)
-      current = ''
-      i++
-
-      continue
-    }
-
-    if (char === ';' || char === '\n') {
-      segments.push(current)
-      current = ''
-
-      continue
-    }
-
-    if (char === '|')
-      pipes.push(i)
-
-    if (char === '|' || char === '&' || char === '<' || char === '>' || char === '`' || char === '(' || char === ')' || (char === '$' && next === '('))
+    if (piece.separator === '|') {
+      pipes.push(piece.end)
+      current += '|'
       plain = false
 
-    current += char
+      continue
+    }
+
+    segments.push(current)
+    current = ''
   }
 
-  segments.push(current)
-
-  return { segments: segments.map(segment => segment.trim()).filter(segment => segment !== ''), plain: plain && quote === undefined, pipes }
+  return { segments: segments.map(segment => segment.trim()).filter(segment => segment !== ''), plain, pipes }
 }
 
 function isFilter(stage: string): boolean {

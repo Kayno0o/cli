@@ -92,6 +92,21 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/guard": {
+      "name": "@kaynooo/guard-tools",
+      "version": "0.0.0",
+      "bin": {
+        "guard": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/db-tools": "workspace:*",
+        "@kaynooo/env-tools": "workspace:*",
+        "@kaynooo/git-tools": "workspace:*",
+        "@kaynooo/out-tools": "workspace:*",
+        "@kaynooo/pkg-tools": "workspace:*",
+      },
+    },
     "packages/kit": {
       "name": "@kaynooo/cli-kit",
       "version": "0.1.0",
@@ -203,6 +218,8 @@
     "@kaynooo/git-tools": ["@kaynooo/git-tools@workspace:packages/git"],
 
     "@kaynooo/gitlab-tools": ["@kaynooo/gitlab-tools@workspace:packages/gitlab"],
+
+    "@kaynooo/guard-tools": ["@kaynooo/guard-tools@workspace:packages/guard"],
 
     "@kaynooo/out-tools": ["@kaynooo/out-tools@workspace:packages/out"],
 

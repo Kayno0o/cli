@@ -16,7 +16,8 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/git-tools`](packages/git) | `gst`, `gc` | a repository's state in one call; a commit of exactly the paths given, its message checked before anything is staged |
 | [`@kaynooo/wait-tools`](packages/wait) | `waitfor` | a wait on a log line, a listening port or a URL answering, ending early on an error line, instead of sleep and polling loops |
 | [`@kaynooo/gitlab-tools`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
-| `packages/kit` (private) | - | argument parsing with `--help`, the command dispatcher, input, process and formatting helpers every CLI here shares, bundled into each |
+| [`@kaynooo/guard-tools`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers), each refusal naming the route |
+| `packages/kit` (private) | - | argument parsing with `--help`, the command dispatcher, the shell command parser every guard reads with, input, process and formatting helpers every CLI here shares, bundled into each |
 
 ## Development
 

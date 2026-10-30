@@ -7,8 +7,6 @@ const MODS = join(homedir(), 'zshrc/dotfiles/claude/mods')
 
 // The Claude Code mods carry copies of these sources, a first comment line naming the original.
 const COPIES = [
-  ['packages/out/src/wrap.ts', 'agent-tools/hooks/wrap.ts'],
-  ['packages/db/src/guard.ts', 'guards/hooks/sql-guard.ts'],
   ['packages/git/src/status.ts', 'git-facts/hooks/status.ts'],
 ] as const
 

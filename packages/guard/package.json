@@ -1,0 +1,46 @@
+{
+  "name": "@kaynooo/guard-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "guard: the safety rules a Claude Code Bash call is held to (git, remote machines, SQL writes, env files, package managers, commit messages), each refusal naming the route.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/guard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/guard"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": [
+    "claude-code",
+    "cli",
+    "guard",
+    "hooks",
+    "safety"
+  ],
+  "bin": {
+    "guard": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "guard": "$npm_execpath src/cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*",
+    "@kaynooo/db-tools": "workspace:*",
+    "@kaynooo/env-tools": "workspace:*",
+    "@kaynooo/git-tools": "workspace:*",
+    "@kaynooo/out-tools": "workspace:*",
+    "@kaynooo/pkg-tools": "workspace:*"
+  }
+}
