@@ -1,0 +1,41 @@
+{
+  "name": "@kaynooo/gitlab-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "gl: GitLab pipelines waited on and their failed jobs' traces read from the terminal, through glab.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/gitlab#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/gitlab"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": [
+    "gitlab",
+    "glab",
+    "ci",
+    "pipelines",
+    "claude-code"
+  ],
+  "bin": {
+    "gl": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "gl": "$npm_execpath src/cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
