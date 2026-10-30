@@ -1,4 +1,4 @@
-// What each agent-tools bin is for, as the prompt lists the installed ones; the zshrc agent-tools mod carries a copy.
+// What each agent-tools bin is for, as the prompt lists the installed ones; the zshrc agent-tools mod carries a copy, kept in step by hand until zshrc#111.
 export const BINS: Record<string, string> = {
   check: '`check`: runs the repo\'s check, typecheck, lint and test steps and prints only what failed, each full log saved to a file; validate a change with it rather than chaining the scripts (`--only lint,test`, `--list`).',
   fix: '`fix`: runs the repo\'s fixers and formatters (its fix, lint:fix and format scripts, just fmt, go fmt, cargo fmt, ruff) and lists the files they changed.',
@@ -14,7 +14,7 @@ export const BINS: Record<string, string> = {
   gc: '`gc <title> [-m <line>]... [--ticket <line>]... -- <path>...`: commits exactly those paths, refusing with nothing staged when the message breaks a commit rule, a path has no change or other files are already staged; use it instead of chaining git add, status and commit.',
   waitfor: '`waitfor --file <log> --until <regex> [--fail <regex>]`, `--port <n>`, `--url <url>` (`-t 5m`): waits until the line shows, the port listens or the URL answers 2xx, exits 1 on a --fail line with the lines around it, 2 on a timeout with the last lines; use it instead of sleep and tail or polling loops.',
   gl: '`gl ci [ref]` waits for the GitLab pipeline covering a commit and prints each failed job\'s tests (exit 0/1/2), `gl runs`, `gl logs <pipeline> [-j job] [--full]`; use it instead of `glab ci` or `glab api .../pipelines/<id>/jobs` polled in a sleep loop.',
-  out: '`out -- <cmd>`: folds long output, keeping the errors and saving the full log; noisy builds, installs, tests and linters already go through it.',
+  out: '`out -- <cmd>`: folds long output, keeping the errors and saving the full log; run noisy builds, installs, tests and linters through it.',
 }
 
 export function binsSection(installed: Set<string>): string | undefined {

@@ -1,4 +1,7 @@
 import type { HookInput, Machine } from '../src/hook'
+import { existsSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { hook } from '../src/hook'
 
@@ -128,8 +131,10 @@ describe('session-start', () => {
 })
 
 describe('the bin', () => {
+  const state = mkdtempSync(join(tmpdir(), 'guard-hook-'))
+
   async function run(args: string[], stdin: string) {
-    const proc = Bun.spawn(['bun', `${import.meta.dir}/../src/cli.ts`, 'hook', ...args], { stdin: new TextEncoder().encode(stdin), stdout: 'pipe', stderr: 'pipe' })
+    const proc = Bun.spawn(['bun', `${import.meta.dir}/../src/cli.ts`, 'hook', ...args], { stdin: new TextEncoder().encode(stdin), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, XDG_STATE_HOME: state } })
 
     return { code: await proc.exited, stdout: await new Response(proc.stdout).text() }
   }
@@ -139,6 +144,18 @@ describe('the bin', () => {
 
     expect(code).toBe(0)
     expect((JSON.parse(stdout) as { hookSpecificOutput: { permissionDecision: string } }).hookSpecificOutput.permissionDecision).toBe('deny')
+  })
+
+  test('keeps the push asked for in the state directory between runs', async () => {
+    const push = JSON.stringify({ ...bash('git push'), cwd: import.meta.dir })
+
+    await run(['user-prompt-submit'], JSON.stringify(prompt('push it')))
+    expect(existsSync(`${state}/guard/push-asked/abc-123`)).toBe(true)
+    expect(await run(['pre-tool-use'], push)).toEqual({ code: 0, stdout: '' })
+
+    await run(['user-prompt-submit'], JSON.stringify(prompt('thanks')))
+    expect(existsSync(`${state}/guard/push-asked/abc-123`)).toBe(false)
+    expect((await run(['pre-tool-use'], push)).stdout).toContain('deny')
   })
 
   test('fails with 1, never the 2 that blocks, on a wrong event or input', async () => {
