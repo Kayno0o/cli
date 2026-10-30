@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/wait-tools",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "waitfor: waits for a log line, a listening port or a URL answering, for Claude Code, instead of sleep and polling loops.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
