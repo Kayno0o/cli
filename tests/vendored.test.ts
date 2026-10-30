@@ -8,6 +8,7 @@ const MODS = join(homedir(), 'zshrc/dotfiles/claude/mods')
 // The Claude Code mods carry copies of these sources, a first comment line naming the original.
 const COPIES = [
   ['packages/git/src/status.ts', 'git-facts/hooks/status.ts'],
+  ['packages/kit/src/shell.ts', 'guards/hooks/shell.ts'],
 ] as const
 
 // Only where the mods live, ~/zshrc, so CI skips it.
