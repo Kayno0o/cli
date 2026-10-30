@@ -1,0 +1,47 @@
+{
+  "name": "@kaynooo/git-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "gst and gc: a repository's state in one call, and a commit of exactly the paths given, its message checked before anything is staged.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/git#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/git"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": [
+    "claude-code",
+    "cli",
+    "git",
+    "status",
+    "commit"
+  ],
+  "exports": {
+    "./message": "./src/message.ts"
+  },
+  "bin": {
+    "gst": "./dist/gst.js",
+    "gc": "./dist/gc.js"
+  },
+  "files": [
+    "dist",
+    "src/message.ts"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/gst.ts src/gc.ts --target bun --outdir dist",
+    "gst": "$npm_execpath src/gst.ts",
+    "gc": "$npm_execpath src/gc.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}

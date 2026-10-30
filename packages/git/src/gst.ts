@@ -1,0 +1,58 @@
+#!/usr/bin/env bun
+
+import type { Change } from './status'
+import process from 'node:process'
+import { fail, parse, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { version } from '../package.json'
+import { git } from './git'
+import { parseStatus, summary } from './status'
+
+const USAGE = 'gst [--log N]: the repository\'s branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked'
+
+const OPTIONS = {
+  log: { type: 'string', short: 'l', description: 'add the last N commits as <sha7> <title>' },
+} as const
+
+function group(title: string, lines: string[]): string[] {
+  return lines.length === 0 ? [] : [`${title}:`, ...lines.map(line => `  ${line}`)]
+}
+
+function staged({ index, from, path }: Change): string {
+  return `${index} ${from === undefined ? '' : `${from} -> `}${path}`
+}
+
+async function main(argv: string[]): Promise<number> {
+  const parsed = parse(argv, USAGE, OPTIONS)
+
+  if (parsed === undefined)
+    return 0
+
+  if (parsed.positionals.length > 0)
+    fail(`gst takes no paths\n\n${USAGE}`)
+
+  const count = parsed.values.log === undefined ? 0 : wholeNumber(parsed.values.log, 'log', 1)
+  const [read, head, log] = await Promise.all([
+    git(['status', '--porcelain=v2', '--branch']),
+    git(['log', '-1', '--format=%h%x00%s']),
+    count === 0 ? undefined : git(['log', `-${count}`, '--format=%h %s']),
+  ])
+  const status = read.code === 0 ? parseStatus(read.stdout) : null
+
+  if (status === null)
+    fail(read.stderr.trim() || 'not inside a git repository', 1)
+
+  const lines = [
+    summary(status, head.code === 0 ? head.stdout : ''),
+    ...group('staged', status.changes.filter(change => change.index !== '.').map(staged)),
+    ...group('unstaged', status.changes.filter(change => change.worktree !== '.').map(change => `${change.worktree} ${change.path}`)),
+    ...group('untracked', status.untracked),
+    ...group('conflicted', status.conflicted),
+    ...group('commits', log?.code === 0 ? log.stdout.trimEnd().split('\n').filter(Boolean) : []),
+  ]
+
+  console.log(lines.join('\n'))
+
+  return 0
+}
+
+process.exitCode = await runMain({ name: 'gst', version, run: main })

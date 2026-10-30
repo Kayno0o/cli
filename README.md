@@ -13,6 +13,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/out-tools`](packages/out) | `out` | noisy command output folded, errors kept, the full log saved to a file |
 | [`@kaynooo/edit-tools`](packages/edit) | `sub` | text replaced in files, written only when every replacement matches as often as expected |
 | [`@kaynooo/base-tools`](packages/base) | `base` | a command run at HEAD or another ref in a temporary worktree, instead of a `git stash` round trip |
+| [`@kaynooo/git-tools`](packages/git) | `gst`, `gc` | a repository's state in one call; a commit of exactly the paths given, its message checked before anything is staged |
 | `packages/kit` (private) | - | argument parsing with `--help`, the command dispatcher, input, process and formatting helpers every CLI here shares, bundled into each |
 
 ## Development
