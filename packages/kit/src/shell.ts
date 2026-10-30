@@ -12,6 +12,7 @@ const LEADING_TABS = /^\t+/
 const OPENERS = /^[({]+/
 const CLOSERS = /[)}]+$/
 const HEREDOC = /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([^\s;&|<>()-][^\s;&|<>()]*))/
+const SUBSTITUTION = /\$\(([^()]*)\)|`([^`]*)`/g
 // Programs that run the command following them, which is the one that counts.
 const WRAPPERS = new Set(['command', 'env', 'sudo', 'exec', 'nohup', 'time'])
 
@@ -156,6 +157,40 @@ export function isPlain(text: string): boolean {
   }
 
   return quote === null
+}
+
+// The text the shell still expands: single-quoted spans and escaped characters dropped.
+function expandable(text: string): string {
+  let kept = ''
+  let quote: string | null = null
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i] ?? ''
+
+    if (quote === '\'') {
+      if (char === '\'')
+        quote = null
+    }
+    else if (char === '\\') {
+      i++
+    }
+    else if (char === '\'' && quote === null) {
+      quote = char
+    }
+    else {
+      if (char === '"')
+        quote = quote === null ? char : null
+
+      kept += char
+    }
+  }
+
+  return kept
+}
+
+// The commands each piece runs through `$(...)` or backquotes, inside double quotes and unquoted heredoc bodies too; a nested one is found by reading the result in turn.
+export function substitutions(command: string): string[] {
+  return splitCommand(command).flatMap(piece => [...`${expandable(piece.command)}\n${piece.expanded}`.matchAll(SUBSTITUTION)].map(([, dollar, backquote]) => dollar ?? backquote ?? ''))
 }
 
 // A word as the shell would pass it; `isProse` when a quoted part of it holds whitespace, a message or a pattern rather than a path.

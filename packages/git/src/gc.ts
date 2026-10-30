@@ -10,7 +10,7 @@ const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: comm
 
 const OPTIONS = {
   message: { type: 'string', short: 'm', multiple: true, description: 'a line on what changed, at most two' },
-  ticket: { type: 'string', multiple: true, description: 'a ticket line, `#<n> - <title>` copied verbatim from the ticket' },
+  ticket: { type: 'string', multiple: true, description: 'a ticket line, `#<n> - <title>` (`owner/repo#<n> - <title>` across repositories) copied verbatim from the ticket' },
 } as const
 
 const RENAME = /^[RC]\d*$/
@@ -70,7 +70,7 @@ async function main(argv: string[]): Promise<number> {
   const wrong = tickets.find(line => !TICKET.test(line))
 
   if (wrong !== undefined)
-    fail(`a ticket line reads \`#<n> - <title>\`, copied verbatim from the ticket, not: ${wrong}`, 1)
+    fail(`a ticket line reads \`#<n> - <title>\` or \`owner/repo#<n> - <title>\`, copied verbatim from the ticket, not: ${wrong}`, 1)
 
   if (title === '')
     fail(`the title is empty\n\n${USAGE}`)

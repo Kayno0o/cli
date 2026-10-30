@@ -2,7 +2,8 @@ const CONVENTIONAL = /^[a-z]+(?:\([^()\n]+\))?!?: \S/
 // Titles git writes itself.
 const GIT_MADE = /^(?:Merge |Revert "|fixup! |squash! |amend! )/
 
-export const TICKET = /^#\d+ - /
+// `#12 - <title>`, or `owner/repo#12 - <title>` for a ticket of another repository.
+export const TICKET = /^(?:[\w.-]+\/[\w.-]+)?#\d+ - /
 // A breaking change is the one place a body gives full details.
 const BREAKING = /^BREAKING[ -]CHANGE: /
 const BREAKING_TITLE = /^[a-z]+(?:\([^()\n]+\))?!: /

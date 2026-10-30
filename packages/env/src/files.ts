@@ -5,7 +5,9 @@ import { fail } from '@kaynooo/cli-kit'
 import { entries, parseDotenv, serializeDotenv } from './dotenv'
 import { isSecretKey, knownSecrets, urlPasswords } from './mask'
 
-const ENV_FILE = /^\.env(?:\..+)?$/
+// A dotenv file's name, and the templates among them that hold no values.
+export const ENV_FILE = /^\.env(?:\..+)?$/
+export const TEMPLATE = /\.(?:example|sample|template|dist|defaults)$/
 
 // The .env* files of a folder, sorted.
 export async function envFiles(folder = process.cwd()): Promise<string[]> {

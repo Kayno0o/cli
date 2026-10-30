@@ -63,7 +63,47 @@ describe('commit messages', () => {
 })
 
 describe('SQL', () => {
-  cases('sql', ['docker compose exec db psql -U app -c "DELETE FROM users WHERE id = 3"', 'psql app <<\'EOF\'\nALTER TABLE users ADD COLUMN x int;\nEOF', 'echo "TRUNCATE logs" | psql app', 'psql app -f fix.sql', 'php artisan migrate', 'dropdb app'], ['psql app -c "SELECT created_at, updated_at FROM t"', 'psql booki_test -c "DELETE FROM users"', 'php bin/console doctrine:migrations:status', 'pg_restore -l dump.backup'], { [`${REPO}/fix.sql`]: 'INSERT INTO t VALUES (1);' })
+  const refused = [
+    'docker compose exec db psql -U app -c "DELETE FROM users WHERE id = 3"',
+    'psql app -c "update users set name = \'x\'"',
+    'psql app <<\'EOF\'\nALTER TABLE users ADD COLUMN x int;\nEOF',
+    'echo "TRUNCATE logs" | psql app',
+    'psql app -f fix.sql',
+    'docker compose exec php bin/console doctrine:migrations:migrate -n',
+    'php artisan migrate',
+    'dropdb app',
+    // leaving the shot stack again, or a directory merely named like it, is no shot stack
+    'cd ~/w/.worktrees/booki-docker/shot && cd ~/w/booki-docker && docker compose exec db psql -c "DELETE FROM t"',
+    'cd ~/w/.worktrees/booki-docker/screenshot && psql app -c "DELETE FROM t"',
+    // writes a quote, a DO body or a MySQL version comment would hide
+    'psql app -c \'DO $$ BEGIN DELETE FROM t; END $$\'',
+    'mysql app -e "SELECT 1 /*!50000 ; DROP TABLE t */"',
+    'psql app -c "SET ROLE admin"',
+  ]
+  const allowed = [
+    'docker compose exec db psql -U app -c "SELECT * FROM users WHERE status = \'deleted\'"',
+    'psql app -c "SELECT created_at, updated_at FROM t"',
+    'psql booki_test -c "DELETE FROM users"',
+    'docker compose -f compose.test.yaml exec db psql -c "DROP TABLE x"',
+    'docker compose exec php bin/console doctrine:migrations:migrate --env=test',
+    'php bin/console doctrine:migrations:status',
+    'php bin/console doctrine:fixtures:load -e test -n',
+    'psql app -c "select 1" | rg drop',
+    'rg -n "insert into" src ; psql --version',
+    'psql app -c "select * from t where x = \'update t set y\'"',
+    'psql -c \'select * from "grant"\'',
+    'pg_restore -l dump.backup',
+    // session settings, exports and names that look like keywords
+    'psql app -c "SET search_path TO app; SELECT * FROM t"',
+    'psql app -c \'\\copy t to x.csv\'',
+    'mysql app -e "SELECT `drop` FROM t"',
+    // the disposable shot stack git-diff captures on: its directory, compose project or container
+    'cd ~/w/.worktrees/booki-docker/shot && docker compose exec -T igesa-db psql -U booki booki -c "UPDATE booking SET x = 1"',
+    'docker compose --project-directory ~/w/.worktrees/booki-docker/shot exec db psql -c "DELETE FROM t"',
+    'docker exec booki-docker--shot-igesa-db-1 psql -U booki -c "DELETE FROM t"',
+  ]
+
+  cases('sql', refused, allowed, { [`${REPO}/fix.sql`]: 'INSERT INTO t VALUES (1);' })
 })
 
 describe('env files', () => {
@@ -100,10 +140,55 @@ describe('package managers', () => {
     }
   })
 
+  test('turns a clean install into a frozen one', async () => {
+    expect((await checkCommand('CI=1 npm ci', context({ [`${REPO}/bun.lock`]: '' }))).command).toBe('CI=1 bun install --frozen-lockfile')
+  })
+
+  test('installs with the pinned manager on a bare yarn', async () => {
+    expect((await checkCommand('yarn', context({ [`${REPO}/bun.lock`]: '' }))).command).toBe('bun install')
+  })
+
+  test('refuses a flag that may aim the install elsewhere', async () => {
+    for (const command of ['pnpm -w add zod', 'sudo pnpm add zod'])
+      expect(await rules(command, { [`${REPO}/package-lock.json`]: '' })).toEqual(['package-manager'])
+
+    expect(await rules('bun --cwd client add zod', { [`${REPO}/client/pnpm-lock.yaml`]: '' })).toEqual(['package-manager'])
+  })
+
+  test('refuses a third manager beside two lockfiles', async () => {
+    expect(await rules('npm install', { ...pnpm, [`${REPO}/bun.lock`]: '' })).toEqual(['package-manager'])
+  })
+
+  for (const [command, files] of [['pnpm add zod', pnpm], ['bun test && yarn lint', pnpm], ['npm install', {}]] as const) {
+    test(`runs ${command} as typed`, async () => {
+      const verdict = await checkCommand(command, context(files))
+
+      expect(verdict.violations).toEqual([])
+      expect(verdict.command).toBe(command)
+    })
+  }
+
   test('leaves an install written in a heredoc as typed', async () => {
     const command = 'cat > README.md <<\'EOF\'\nnpm install foo\nEOF'
 
     expect((await checkCommand(command, context(pnpm))).command).toBe(command)
+  })
+})
+
+describe('substitutions', () => {
+  cases('remote', ['echo $(ssh prod uptime)', 'echo "up: `ssh prod uptime`"'], ['echo \'$(ssh prod uptime)\''])
+  cases('git', ['cat <<EOF\n$(git stash)\nEOF', 'x=`git stash`'], ['cat <<\'EOF\'\n$(git stash)\nEOF'])
+  cases('sql', ['echo "$(psql app -c \'DELETE FROM t\')"'], [])
+})
+
+describe('the bin', () => {
+  test('hands a hook its verdict as JSON, exiting 1 on a broken rule', async () => {
+    const run = Bun.spawn(['bun', `${import.meta.dir}/../src/cli.ts`, 'check', '--json', '--no-wrap', '--cwd', import.meta.dir, '-'], { stdin: new TextEncoder().encode('git stash'), stdout: 'pipe' })
+    const verdict = JSON.parse(await new Response(run.stdout).text()) as Record<string, unknown>
+
+    expect(await run.exited).toBe(1)
+    expect(Object.keys(verdict).sort()).toEqual(['command', 'notes', 'packages', 'violations'])
+    expect(verdict.violations).toEqual([expect.objectContaining({ rule: 'git' })])
   })
 })
 

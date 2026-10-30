@@ -2,6 +2,7 @@ import type { Dirent } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { $ } from 'bun'
+import { ENV_FILE, TEMPLATE } from './files'
 import { urlPasswords } from './mask'
 
 export interface Exposure {
@@ -14,8 +15,6 @@ export interface Exposure {
 
 const MAX_DEPTH = 5
 const SKIPPED = new Set(['node_modules', '.git', 'vendor'])
-const ENV_FILE = /^\.env(?:\..+)?$/
-const TEMPLATE = /\.(?:example|sample|template|dist)$/
 const COMPOSE_FILE = /^(?:docker-)?compose[\w.-]*\.ya?ml$/
 // An environment entry, `KEY: value` or `- KEY=value`, with its value written out.
 const ENTRY = /^\s*(?:-\s*)?["']?([A-Z0-9_]+)["']?\s*[:=]\s*["']?([^"'\s#]+)/

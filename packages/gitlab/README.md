@@ -20,7 +20,7 @@ Needs [glab](https://gitlab.com/gitlab-org/cli) logged in (`glab auth login`). E
 ## Behaviour
 
 - `gl ci` follows the commit's newest pipeline on the branch (`-b`, by default the one `origin/HEAD` names). GitLab runs a push's pipeline on its last commit only and cancels a redundant one, so a commit without a pipeline of its own, or whose own was cancelled or skipped, is covered by the next first-parent commit's.
-- Exit codes of `gl ci`: 0 passed (or stopped at a manual job, its earlier stages passed), 1 failed, 2 a timeout (`-t` minutes, 30), no pipeline after 3 minutes, jobs waiting on a runner for 10 minutes while none runs, or a commit not on the branch.
+- Exit codes of `gl ci`: 0 passed (or stopped at a manual job, its earlier stages passed), 1 failed, 2 a timeout (`-t`, 30m by default, a bare number in minutes), no pipeline after 3 minutes, jobs waiting on a runner for 10 minutes while none runs, or a commit not on the branch.
 - A failed job's excerpt is each failed PHPUnit or paratest test (ten at most, fifteen lines each, dependency frames left out) and the verdict, else the last 40 lines of the script section that failed; the runner's `ERROR: Job failed` line closes it. Jobs allowed to fail are left out unless `-j` names them.
 - Traces are shown as a terminal would: timestamps, colours, section markers and lines a carriage return overwrote are dropped.
 - Read-only: gl never retries, cancels or plays a job.

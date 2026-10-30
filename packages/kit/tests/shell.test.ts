@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { isPlain, parseCommand, splitCommand, tokenize, words } from '../src/shell'
+import { isPlain, parseCommand, splitCommand, substitutions, tokenize, words } from '../src/shell'
 
 describe('splitCommand', () => {
   test('splits on separators outside quotes, keeping each one', () => {
@@ -28,6 +28,12 @@ describe('words', () => {
   test('removes quotes and marks quoted whitespace as prose', () => {
     expect(tokenize('git commit -m "a b" \'c\'')).toEqual(['git', 'commit', '-m', 'a b', 'c'])
     expect(words('cat ".env" "a .env"').map(word => word.isProse)).toEqual([false, false, true])
+  })
+})
+
+describe('substitutions', () => {
+  test('finds what the shell runs, in double quotes and unquoted heredocs, never in single quotes', () => {
+    expect(substitutions('echo "$(ssh a)" `git stash` \'$(no)\' \\$(no) && cat <<EOF\n$(rm x)\nEOF\ncat <<\'EOF\'\n$(no)\nEOF')).toEqual(['ssh a', 'git stash', 'rm x'])
   })
 })
 

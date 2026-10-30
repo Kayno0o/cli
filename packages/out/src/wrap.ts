@@ -1,8 +1,7 @@
-import { isPlain, splitCommand } from '@kaynooo/cli-kit'
+import { isPlain, splitCommand, tokenize } from '@kaynooo/cli-kit'
 
 const ASSIGNMENT = /^\w+=/
 const EXCLUDED = /(?:^|\s)(?:--json|--help|--version|-h)(?:\s|$)/
-const WORDS = /\s+/
 const BUN_SCRIPT = /^(?:build|check|lint|typecheck|types|test|ci|verify|compile)(?::|$)/
 const BUN_TOOLS = new Set(['tsc', 'tsgo', 'eslint', 'keslint', 'vitest', 'jest', 'prettier', 'playwright', 'biome', 'vue-tsc'])
 const BUN_SUBCOMMANDS = new Set(['install', 'i', 'add', 'remove', 'rm', 'update', 'test', 'check', 'lint', 'build'])
@@ -118,7 +117,7 @@ function scan(command: string): Scan {
 
 function isFilter(stage: string): boolean {
   const { segments, plain } = scan(stage)
-  const [bin, ...args] = stage.split(WORDS)
+  const [bin, ...args] = tokenize(stage)
 
   if (!plain || segments.length !== 1 || bin === undefined || !FILTERS.has(bin))
     return false
@@ -148,7 +147,7 @@ function listed(words: string[]): boolean {
 }
 
 function listedSegment(segment: string): boolean {
-  return !EXCLUDED.test(segment) && listed(segment.split(WORDS))
+  return !EXCLUDED.test(segment) && listed(tokenize(segment))
 }
 
 // A `cd` ahead of the real command is harmless to wrap.

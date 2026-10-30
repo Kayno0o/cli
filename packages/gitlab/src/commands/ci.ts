@@ -1,5 +1,5 @@
 import type { Pipeline } from '../pipelines'
-import { Exit, fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, Exit, fail, parse } from '@kaynooo/cli-kit'
 import { cwdGone, defaultBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
 import { failureReport, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
@@ -11,7 +11,7 @@ Exits 0 when it passes, 1 when it fails, 2 on a timeout, jobs no runner picks up
 
 const options = {
   branch: { type: 'string', short: 'b', description: 'branch the commit is on, by default the one origin/HEAD names' },
-  timeout: { type: 'string', short: 't', description: 'minutes before giving up (30)' },
+  timeout: { type: 'string', short: 't', description: 'how long before giving up (30m), a bare number in minutes' },
 } as const
 
 const POLL = 15_000
@@ -38,7 +38,7 @@ export async function ci(args: string[]): Promise<number> {
 
   const { values, positionals } = parsed
   const branch = values.branch ?? await defaultBranch()
-  const giveUp = wholeNumber(values.timeout, 'timeout', 30) * 60_000
+  const giveUp = duration(values.timeout, 'timeout', 30 * 60_000, 'm')
   const sha = await resolveCommit(positionals[0] ?? `origin/${branch}`)
   const short = sha.slice(0, 7)
 
