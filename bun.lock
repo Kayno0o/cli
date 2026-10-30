@@ -84,7 +84,7 @@
     },
     "packages/gitlab": {
       "name": "@kaynooo/gitlab-tools",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "gl": "./dist/cli.js",
       },
