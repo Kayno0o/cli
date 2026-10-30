@@ -183,7 +183,8 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
   })
 
   // A docker that answers `compose ps` and `inspect` as a project running this Postgres as its `database` service would.
-  const compose = (() => {
+  // Built only once the throwaway database exists, as its URL stays empty while the suite is skipped.
+  const compose = reason !== '' ? { path: '', loopback: false, password: '' } : (() => {
     const target = new URL(url)
     const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
     const ps = { ID: 'abc123', Service: 'database', State: 'running', Image: 'postgres:18-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: Number(target.port) }] }
