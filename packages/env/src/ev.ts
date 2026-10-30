@@ -6,7 +6,7 @@ import { version } from '../package.json'
 import { audit } from './commands/audit'
 import { diff, missing } from './commands/compare'
 import { mv, set, unset } from './commands/edit'
-import { get, list } from './commands/read'
+import { get, grep, list, show } from './commands/read'
 
 process.exitCode = await runCli({
   name: 'ev',
@@ -15,6 +15,8 @@ process.exitCode = await runCli({
   commands: {
     list: { run: list, summary: 'every key of the .env* files, secrets masked' },
     get: { run: get, summary: 'one key\'s masked value' },
+    grep: { run: grep, summary: 'the keys matching a regex, values masked' },
+    show: { run: show, summary: 'an env file at a git revision, values masked' },
     set: { run: set, summary: 'set a key, the value read from stdin or -F' },
     unset: { run: unset, summary: 'remove a key from a file' },
     mv: { run: mv, summary: 'move a key from one file to another' },

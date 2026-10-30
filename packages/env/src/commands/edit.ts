@@ -8,7 +8,7 @@ const TRAILING_NEWLINE = /\r?\n$/
 
 const setUsage = `ev set KEY [file]
 
-Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line.`
+Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; --empty sets it to an empty value.`
 
 const unsetUsage = `ev unset KEY [file]
 
@@ -22,7 +22,7 @@ async function readValue(from: string | undefined): Promise<string> {
   const input = await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
 
   if (input === '')
-    fail('the value is empty, nothing was written')
+    fail('the value is empty, nothing was written: --empty sets an empty value')
 
   return input.replace(TRAILING_NEWLINE, '')
 }
@@ -32,7 +32,10 @@ async function readOrEmpty(path: string) {
 }
 
 export async function set(args: string[]): Promise<number> {
-  const parsed = parse(args, setUsage, { file: { type: 'string', short: 'F', description: 'read the value from this file instead of stdin' } })
+  const parsed = parse(args, setUsage, {
+    file: { type: 'string', short: 'F', description: 'read the value from this file instead of stdin' },
+    empty: { type: 'boolean', description: 'set an empty value, reading nothing' },
+  })
 
   if (parsed === undefined)
     return 0
@@ -42,7 +45,10 @@ export async function set(args: string[]): Promise<number> {
   if (key === undefined)
     fail(`missing KEY\n\n${setUsage}`)
 
-  const value = await readValue(parsed.values.file)
+  if (parsed.values.empty === true && parsed.values.file !== undefined)
+    fail('--empty and -F exclude each other')
+
+  const value = parsed.values.empty === true ? '' : await readValue(parsed.values.file)
   const file = await readOrEmpty(target)
 
   setLine(file, key, value)

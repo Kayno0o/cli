@@ -25,3 +25,21 @@ describe('touchesEnv', () => {
     })
   }
 })
+
+describe('touchesEnv, the shapes that once got through', () => {
+  const refused = ['git show HEAD~1:api/.env', 'git show HEAD:.env', 'git diff HEAD -- .env', 'git log -p -- api/.env.local', 'rg KEY .env*', 'bat .env', 'sed -n 1,20p api/.env', 'docker compose exec -T php printenv', 'docker compose exec php env | grep DB', 'docker exec app env', 'docker-compose exec php printenv DATABASE_URL', 'docker compose config', 'docker compose -f compose.yaml config | grep PASSWORD', 'docker inspect app', 'docker container inspect app', 'docker inspect -f \'{{json .Config.Env}}\' app', 'docker compose exec php env | redact; docker compose exec php env', 'cat <<EOF\n$(cat .env)\nEOF']
+
+  for (const command of refused) {
+    test(`refuses ${command}`, () => {
+      expect(touchesEnv(command)).toBe(true)
+    })
+  }
+
+  const allowed = ['docker compose exec -T php printenv | redact', 'docker compose exec php env | grep DB | redact', 'docker compose config | redact', 'docker compose config --services', 'docker inspect -f \'{{.State.Status}}\' app', 'docker compose exec php bin/phpunit', 'docker compose ps', 'ev list | redact', 'ev get A .env.local | redact', 'ev show HEAD:.env', 'ev grep ^DB_ .env', 'cat > a.md <<\'EOF\'\nnever cat .env\necho "$(cat .env)"\nEOF\ncat > b.md <<\'EOF\'\ngit show HEAD:.env\nEOF\nbun test']
+
+  for (const command of allowed) {
+    test(`lets ${command} through`, () => {
+      expect(touchesEnv(command)).toBe(false)
+    })
+  }
+})

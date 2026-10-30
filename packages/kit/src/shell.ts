@@ -1,5 +1,5 @@
-// `text` is the piece as written, `command` the same less its heredoc bodies, which are data and never commands; `separator` is what ends it (`|`, `&&`, `;`, a newline...), empty for the last.
-export interface Piece { text: string, start: number, end: number, command: string, separator: string }
+// `text` is the piece as written, `command` the same less its heredoc bodies, which are data and never commands; `separator` is what ends it (`|`, `&&`, `;`, a newline...), empty for the last; `expanded` holds the bodies of its unquoted heredocs, where the shell still runs `$(...)`.
+export interface Piece { text: string, start: number, end: number, command: string, separator: string, expanded: string }
 export interface Invocation { program: string, args: string[], assignments: string[], isWrapped: boolean }
 
 const SEPARATORS = new Set(['\n', ';', '|'])
@@ -68,8 +68,8 @@ function withoutRanges(command: string, start: number, end: number, ranges: read
 // Splits on the shell separators outside quotes and heredocs, so the `;` and `|` of an inline script stay in its piece, each piece keeping where it sits in the command.
 export function splitCommand(command: string): Piece[] {
   const bounds: [number, number, string][] = []
-  const bodies: [number, number][] = []
-  let heredocs: { word: string, stripsTabs: boolean }[] = []
+  const bodies: [number, number, boolean][] = []
+  let heredocs: { word: string, stripsTabs: boolean, isQuoted: boolean }[] = []
   let start = 0
   let quote: string | null = null
 
@@ -98,7 +98,7 @@ export function splitCommand(command: string): Piece[] {
     const heredoc = char === '<' && command[i + 1] === '<' && command[i + 2] !== '<' ? HEREDOC.exec(command.slice(i)) : null
 
     if (heredoc) {
-      heredocs.push({ word: heredoc[2] ?? heredoc[3] ?? heredoc[4] ?? '', stripsTabs: heredoc[1] === '-' })
+      heredocs.push({ word: heredoc[2] ?? heredoc[3] ?? heredoc[4] ?? '', stripsTabs: heredoc[1] === '-', isQuoted: heredoc[4] === undefined })
       i += heredoc[0].length - 1
 
       continue
@@ -107,7 +107,7 @@ export function splitCommand(command: string): Piece[] {
     if (char === '\n' && heredocs.length > 0) {
       const end = heredocEnd(command, i, heredocs)
 
-      bodies.push([i, end])
+      bodies.push([i, end, heredocs.some(each => !each.isQuoted)])
       heredocs = []
       i = end - 1
 
@@ -125,7 +125,16 @@ export function splitCommand(command: string): Piece[] {
   }
   bounds.push([start, command.length, ''])
 
-  return bounds.map(([from, to, separator]) => ({ text: command.slice(from, to), start: from, end: to, command: withoutRanges(command, from, to, bodies), separator }))
+  const ranges = bodies.map(([from, to]): [number, number] => [from, to])
+
+  return bounds.map(([from, to, separator]) => ({
+    text: command.slice(from, to),
+    start: from,
+    end: to,
+    command: withoutRanges(command, from, to, ranges),
+    separator,
+    expanded: bodies.filter(([body, , expands]) => expands && body >= from && body < to).map(([body, bodyEnd]) => command.slice(body, bodyEnd)).join(''),
+  }))
 }
 
 // True when the text holds no redirect, substitution, subshell or group outside single quotes, and closes every quote it opens.

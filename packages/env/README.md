@@ -12,7 +12,9 @@ bun install -g @kaynooo/env-tools
 | --- | --- |
 | `ev list [file]` | every key of the folder's `.env*` files (or one file), secrets masked |
 | `ev get KEY [file]` | one key's masked value, from every file that sets it or from one |
-| `ev set KEY [file]` | sets a key in `.env` (or the file), the value read from stdin or `-F <file>` so it never appears in a command line |
+| `ev grep [-i] <regex> [file...]` | the keys matching the regex (matched against the key, never the value), values masked |
+| `ev show <rev>:<file>` | an env file as a git revision holds it, values masked |
+| `ev set KEY [file]` | sets a key in `.env` (or the file), the value read from stdin or `-F <file>` so it never appears in a command line, `--empty` for an empty value |
 | `ev unset KEY [file]` | removes a key |
 | `ev mv KEY --from <file> --to <file>` | moves a key's line as written, `--force` to replace one the target has |
 | `ev diff <a> <b>` | names the keys set in one file and not the other, exit 1 when they differ |

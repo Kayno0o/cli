@@ -97,8 +97,11 @@ describe('ev', () => {
     expect(await read('.env.new')).toBe('A="two words"\nB=b\n')
   })
 
-  test('set refuses an empty value', async () => {
-    expect(ev(['set', 'A'], '').code).toBe(2)
+  test('set refuses an empty value unless --empty says so', async () => {
+    expect(ev(['set', 'A'], '').err).toContain('--empty')
+    expect(ev(['set', 'A', '--empty']).code).toBe(0)
+    expect(await read('.env')).toBe('A=\n')
+    expect(ev(['set', 'A', '--empty', '-F', 'x']).code).toBe(2)
   })
 
   test('unset removes a key only', async () => {
@@ -148,5 +151,39 @@ describe('ev', () => {
     await write('.env', 'A=1\nC=3\n')
     expect(ev(['missing']).code).toBe(0)
     expect(ev(['diff', '.env', '.env.example']).code).toBe(0)
+  })
+
+  test('grep matches keys only and masks their values', async () => {
+    await write('.env', ENV)
+    await write('.env.local', 'DB_PASSWORD=supersecret\n')
+
+    const { code, out } = ev(['grep', '^DATABASE_|password', '-i'])
+
+    expect(code).toBe(0)
+    expect(out).toContain('postgres://app:***@db:5432/app')
+    expect(out).toContain('DB_PASSWORD')
+    expect(out).not.toContain('supersecret')
+    expect(out).not.toContain('PORT')
+    expect(ev(['grep', 'hunter22']).code).toBe(1)
+    expect(ev(['grep', '(']).code).toBe(2)
+  })
+
+  test('show reads an env file at a git revision, masked', async () => {
+    const git = (...args: string[]) => Bun.spawnSync(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: dir })
+
+    await write('.env', ENV)
+    git('init', '-q')
+    git('add', '-f', '.env')
+    git('commit', '-qm', 'x')
+    await write('.env', 'PORT=1\n')
+
+    const { code, out } = ev(['show', 'HEAD:.env'])
+
+    expect(code).toBe(0)
+    expect(out).toContain('tok***(20)')
+    expect(out).toContain('3000')
+    expect(out).not.toContain('hunter22')
+    expect(ev(['show', 'HEAD:nope']).code).toBe(1)
+    expect(ev(['show', '.env']).code).toBe(2)
   })
 })
