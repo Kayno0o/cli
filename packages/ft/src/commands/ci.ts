@@ -1,5 +1,5 @@
 import type { Run } from '../runs'
-import { duration, fail, formatDuration, parse } from '@kaynooo/cli-kit'
+import { duration, Exit, fail, formatDuration, parse } from '@kaynooo/cli-kit'
 import { cwdGone, defaultBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
 
@@ -112,6 +112,10 @@ export async function ci(args: string[]): Promise<number> {
       runs = await covering()
     }
     catch (error) {
+      // a refusal, such as a commit not on the branch, ends the wait at once
+      if (error instanceof Exit)
+        throw error
+
       if (cwdGone())
         fail(`the working directory was removed while waiting for CI on ${short}${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
 

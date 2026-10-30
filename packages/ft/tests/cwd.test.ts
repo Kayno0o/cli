@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
+import { ci } from '../src/commands/ci'
 import { cwdGone, git, leaveWorktree } from '../src/git'
 import { refreshed } from '../src/runs'
 import { refusal, withFakeTea } from './fake-tea'
@@ -45,5 +46,28 @@ describe('refreshed', () => {
     await withFakeTea({ issues: [], runs: [run(1, 'success')] }, async () => {
       expect(await refreshed(stale)).toBeUndefined()
     })
+  })
+})
+
+describe('ft ci on a commit origin lacks', () => {
+  test('refuses at once instead of polling until the timeout', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'ft-ci-')))
+    const home = process.cwd()
+
+    try {
+      await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${root}/clone 2>/dev/null && git -C ${root}/clone -c user.name=t -c user.email=t@t commit -q --allow-empty -m one && git -C ${root}/clone push -q origin main && git -C ${root}/clone -c user.name=t -c user.email=t@t commit -q --allow-empty -m two`.quiet()
+      process.chdir(`${root}/clone`)
+
+      const started = Date.now()
+
+      await withFakeTea({ issues: [], runs: [] }, async () => {
+        expect(await refusal(ci(['HEAD', '--timeout', '1m']))).toContain('is not on origin/main: push it first')
+      })
+      expect(Date.now() - started).toBeLessThan(10_000)
+    }
+    finally {
+      process.chdir(home)
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })
