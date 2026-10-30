@@ -1,0 +1,41 @@
+{
+  "name": "@kaynooo/base-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "base: a command run at HEAD or another ref in a temporary worktree, the working tree left untouched.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/base#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/base"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": [
+    "claude-code",
+    "cli",
+    "git",
+    "worktree",
+    "stash"
+  ],
+  "bin": {
+    "base": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "base": "$npm_execpath src/cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
