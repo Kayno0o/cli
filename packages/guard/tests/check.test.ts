@@ -176,9 +176,9 @@ describe('package managers', () => {
 })
 
 describe('substitutions', () => {
-  cases('remote', ['echo $(ssh prod uptime)', 'echo "up: `ssh prod uptime`"'], ['echo \'$(ssh prod uptime)\''])
+  cases('remote', ['echo $(ssh prod uptime)', 'echo "up: `ssh prod uptime`"', 'echo $(ssh h $(echo a))', 'echo $(echo $(ssh h))', 'echo $(ssh h; echo $(id))'], ['echo \'$(ssh prod uptime)\''])
   cases('git', ['cat <<EOF\n$(git stash)\nEOF', 'x=`git stash`'], ['cat <<\'EOF\'\n$(git stash)\nEOF'])
-  cases('sql', ['echo "$(psql app -c \'DELETE FROM t\')"'], [])
+  cases('sql', ['echo "$(psql app -c \'DELETE FROM t\')"', 'echo $(psql app -c \'DELETE FROM t\')'], [])
 })
 
 describe('the bin', () => {

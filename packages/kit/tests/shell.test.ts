@@ -35,6 +35,11 @@ describe('substitutions', () => {
   test('finds what the shell runs, in double quotes and unquoted heredocs, never in single quotes', () => {
     expect(substitutions('echo "$(ssh a)" `git stash` \'$(no)\' \\$(no) && cat <<EOF\n$(rm x)\nEOF\ncat <<\'EOF\'\n$(no)\nEOF')).toEqual(['ssh a', 'git stash', 'rm x'])
   })
+
+  test('reads the outermost one whole, nested substitutions and quoted parentheses included', () => {
+    expect(substitutions('echo $(ssh h $(echo a)) $(psql -c \'DELETE FROM t WHERE x = ")"\')')).toEqual(['ssh h $(echo a)', 'psql -c \'DELETE FROM t WHERE x = ")"\''])
+    expect(substitutions('cat <<EOF\ndon\'t $(git stash)\nEOF')).toEqual(['git stash'])
+  })
 })
 
 describe('isPlain', () => {

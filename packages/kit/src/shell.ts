@@ -12,7 +12,6 @@ const LEADING_TABS = /^\t+/
 const OPENERS = /^[({]+/
 const CLOSERS = /[)}]+$/
 const HEREDOC = /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([^\s;&|<>()-][^\s;&|<>()]*))/
-const SUBSTITUTION = /\$\(([^()]*)\)|`([^`]*)`/g
 // Programs that run the command following them, which is the one that counts.
 const WRAPPERS = new Set(['command', 'env', 'sudo', 'exec', 'nohup', 'time'])
 
@@ -159,9 +158,50 @@ export function isPlain(text: string): boolean {
   return quote === null
 }
 
-// The text the shell still expands: single-quoted spans and escaped characters dropped.
-function expandable(text: string): string {
-  let kept = ''
+// The index of the `)` closing the `(` at `open`, past nested parentheses and quotes; the text's end when it never closes.
+function closingParen(text: string, open: number): number {
+  let depth = 0
+  let quote: string | null = null
+
+  for (let i = open; i < text.length; i++) {
+    const char = text[i] ?? ''
+
+    if (char === '\\' && quote !== '\'') {
+      i++
+    }
+    else if (quote !== null) {
+      if (char === quote)
+        quote = null
+    }
+    else if (char === '\'' || char === '"') {
+      quote = char
+    }
+    else if (char === '(') {
+      depth++
+    }
+    else if (char === ')' && --depth === 0) {
+      return i
+    }
+  }
+
+  return text.length
+}
+
+// The index of the backquote closing the one at `open`, past escaped characters; the text's end when it never closes.
+function closingBackquote(text: string, open: number): number {
+  for (let i = open + 1; i < text.length; i++) {
+    if (text[i] === '\\')
+      i++
+    else if (text[i] === '`')
+      return i
+  }
+
+  return text.length
+}
+
+// The bodies of the outermost `$(...)` and backquotes; quotes only count where `isQuoting`, as a heredoc body holds them as plain text.
+function bodies(text: string, isQuoting: boolean): string[] {
+  const found: string[] = []
   let quote: string | null = null
 
   for (let i = 0; i < text.length; i++) {
@@ -174,23 +214,32 @@ function expandable(text: string): string {
     else if (char === '\\') {
       i++
     }
-    else if (char === '\'' && quote === null) {
-      quote = char
-    }
-    else {
-      if (char === '"')
-        quote = quote === null ? char : null
+    else if (char === '$' && text[i + 1] === '(') {
+      const end = closingParen(text, i + 1)
 
-      kept += char
+      found.push(text.slice(i + 2, end))
+      i = end
+    }
+    else if (char === '`') {
+      const end = closingBackquote(text, i)
+
+      found.push(text.slice(i + 1, end))
+      i = end
+    }
+    else if (isQuoting && char === '"') {
+      quote = quote === null ? char : null
+    }
+    else if (isQuoting && char === '\'' && quote === null) {
+      quote = char
     }
   }
 
-  return kept
+  return found
 }
 
-// The commands each piece runs through `$(...)` or backquotes, inside double quotes and unquoted heredoc bodies too; a nested one is found by reading the result in turn.
+// The commands each piece runs through `$(...)` or backquotes, inside double quotes and unquoted heredoc bodies too; a nested one is found by reading each result in turn.
 export function substitutions(command: string): string[] {
-  return splitCommand(command).flatMap(piece => [...`${expandable(piece.command)}\n${piece.expanded}`.matchAll(SUBSTITUTION)].map(([, dollar, backquote]) => dollar ?? backquote ?? ''))
+  return splitCommand(command).flatMap(piece => [...bodies(piece.command, true), ...bodies(piece.expanded, false)])
 }
 
 // A word as the shell would pass it; `isProse` when a quoted part of it holds whitespace, a message or a pattern rather than a path.
