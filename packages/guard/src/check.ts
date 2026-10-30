@@ -16,6 +16,8 @@ export interface Context {
   home: string
   // Whether the user's latest prompt asked for a push.
   isPushAsked: boolean
+  // Whether the caller runs the command the verdict returns, so a mapped install is rewritten rather than refused.
+  canRewrite: boolean
   // Whether `out` is installed, so a noisy command runs through it.
   canWrap: boolean
   // A file's text, null when it cannot be read.
@@ -111,18 +113,20 @@ export async function checkCommand(command: string, context: Context): Promise<V
   add('env', touchesEnv(command) ? USE_EV : null)
 
   const found = mismatches(command, context)
-  const unmapped = found.find(mismatch => mismatch.rewrite === null)
+  const refused = found.find(mismatch => mismatch.rewrite === null || !context.canRewrite)
+  const rewrite = refused?.rewrite ?? null
+  const route = rewrite === null ? 'Run it with the pinned manager instead.' : `Run \`${rewrite.trim()}\` instead.`
 
-  add('package-manager', unmapped === undefined ? null : `${unmapped.reason} Run it with the pinned manager instead.`)
+  add('package-manager', refused === undefined ? null : `${refused.reason} ${route}`)
 
   let rewritten = command
 
-  if (unmapped === undefined && found.length > 0) {
+  if (refused === undefined && found.length > 0) {
     rewritten = replacePieces(command, new Map(found.map(mismatch => [mismatch.piece, mismatch.rewrite ?? ''])))
     notes.push(...found.map(mismatch => `${mismatch.reason} It ran as \`${mismatch.rewrite?.trim()}\` instead.`))
   }
 
-  if (context.canWrap && shouldWrap(rewritten))
+  if (context.canRewrite && context.canWrap && shouldWrap(rewritten))
     rewritten = wrap(rewritten)
 
   return { violations, command: violations.length > 0 ? command : rewritten, notes: violations.length > 0 ? [] : notes, packages: addedPackages(command) }

@@ -30,3 +30,12 @@ Every rule reads the command with one shell parser (`packages/kit/src/shell.ts`)
 - `--json` prints `{ violations: [{ rule, message }], command, notes, packages }` for a hook: `command` is what to run instead, `notes` what a rewrite changed, `packages` the registry packages the command adds, for `pkg` to check first.
 - `guard path <path>...` checks the paths a Read, Edit or Write would open.
 - Exit codes: 0 clean, 1 a rule broken, 2 a usage error.
+
+## Claude Code hooks
+
+`guard hook <event>` speaks Claude Code's hook protocol, the event JSON on stdin and the reply JSON on stdout; the `agent-tools-hooks` plugin at the repo root registers it (see the root README).
+
+- `pre-tool-use`: a Bash call breaking a rule is denied with the routes, an install with the wrong manager with the command to run instead, an install `pkg` refuses with its report; a Read, Edit or Write of an env file is denied.
+- `user-prompt-submit`: a prompt naming a push lets `git push` through until the next prompt; the state sits in `$XDG_STATE_HOME/guard/push-asked/<session>`.
+- `session-start`: the installed agent-tools bins, one line each, handed to Claude as context.
+- Nothing printed lets the call go ahead. Any failure exits 1, which Claude Code reports without blocking, never 2, which would block.

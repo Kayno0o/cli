@@ -9,6 +9,7 @@ function context(files: Record<string, string> = {}, settings: Partial<Context> 
     cwd: REPO,
     home: '/home/me',
     isPushAsked: false,
+    canRewrite: true,
     canWrap: false,
     read: path => files[path] ?? null,
     exists: path => path in files,
@@ -125,6 +126,13 @@ describe('package managers', () => {
     expect(verdict.command).toBe('pnpm add --save-dev vitest && npm test')
     expect(verdict.notes.join('')).toContain('pinned to pnpm')
     expect(verdict.packages).toEqual(['vitest'])
+  })
+
+  test('refuses the install with its translation when the caller cannot rewrite', async () => {
+    const verdict = await checkCommand('npm i -D vitest', context(pnpm, { canRewrite: false, canWrap: true }))
+
+    expect(verdict.violations).toEqual([{ rule: 'package-manager', message: expect.stringContaining('Run `pnpm add --save-dev vitest` instead.') }])
+    expect(verdict.command).toBe('npm i -D vitest')
   })
 
   test('the lockfile nearest to the directory a cd reaches decides', async () => {
