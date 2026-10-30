@@ -184,19 +184,21 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
 
   // A docker that answers `compose ps` and `inspect` as a project running this Postgres as its `database` service would.
   // Built only once the throwaway database exists, as its URL stays empty while the suite is skipped.
-  const compose = reason !== '' ? { path: '', loopback: false, password: '' } : (() => {
-    const target = new URL(url)
-    const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
-    const ps = { ID: 'abc123', Service: 'database', State: 'running', Image: 'postgres:18-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: Number(target.port) }] }
-    const inspect = [{ Id: 'abc123def', Name: '/app-database-1', Config: { Env: [`POSTGRES_USER=${decodeURIComponent(target.username)}`, `POSTGRES_PASSWORD=${decodeURIComponent(target.password)}`, `POSTGRES_DB=${target.pathname.slice(1)}`, 'PG_MAJOR=18'] }, NetworkSettings: { Networks: { app: { IPAddress: '10.0.0.2', Aliases: ['database'] } } } }]
+  const compose = reason !== ''
+    ? { path: '', loopback: false, password: '' }
+    : (() => {
+      const target = new URL(url)
+      const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
+      const ps = { ID: 'abc123', Service: 'database', State: 'running', Image: 'postgres:18-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: Number(target.port) }] }
+      const inspect = [{ Id: 'abc123def', Name: '/app-database-1', Config: { Env: [`POSTGRES_USER=${decodeURIComponent(target.username)}`, `POSTGRES_PASSWORD=${decodeURIComponent(target.password)}`, `POSTGRES_DB=${target.pathname.slice(1)}`, 'PG_MAJOR=18'] }, NetworkSettings: { Networks: { app: { IPAddress: '10.0.0.2', Aliases: ['database'] } } } }]
 
-    writeFileSync(join(bin, 'ps.json'), `${JSON.stringify(ps)}\n`)
-    writeFileSync(join(bin, 'inspect.json'), JSON.stringify(inspect))
-    writeFileSync(join(bin, 'docker'), `#!/bin/sh\ncase "$1" in compose) cat "${bin}/ps.json" ;; inspect) cat "${bin}/inspect.json" ;; *) exit 1 ;; esac\n`)
-    chmodSync(join(bin, 'docker'), 0o755)
+      writeFileSync(join(bin, 'ps.json'), `${JSON.stringify(ps)}\n`)
+      writeFileSync(join(bin, 'inspect.json'), JSON.stringify(inspect))
+      writeFileSync(join(bin, 'docker'), `#!/bin/sh\ncase "$1" in compose) cat "${bin}/ps.json" ;; inspect) cat "${bin}/inspect.json" ;; *) exit 1 ;; esac\n`)
+      chmodSync(join(bin, 'docker'), 0o755)
 
-    return { path: `${bin}:${process.env.PATH ?? ''}`, loopback: target.hostname === '127.0.0.1', password: decodeURIComponent(target.password) }
-  })()
+      return { path: `${bin}:${process.env.PATH ?? ''}`, loopback: target.hostname === '127.0.0.1', password: decodeURIComponent(target.password) }
+    })()
 
   test.skipIf(!compose.loopback)('reads the compose project\'s Postgres service without a URL', async () => {
     const result = await db(['tables'], { PATH: compose.path })
