@@ -1,0 +1,33 @@
+> XDEBUG_MODE=off vendor/bin/paratest --processes=6
+ParaTest v7.16.1 upon PHPUnit 12.5.8 by Sebastian Bergmann and contributors.
+
+Processes:     6
+Runtime:       PHP 8.4.18
+Configuration: /app/phpunit.xml.dist
+
+...............................................................  63 / 130 ( 48%)
+F..............................................................  126 / 130 ( 97%)
+.E..                                                            130 / 130 (100%)
+
+Time: 00:09.016, Memory: 22.00 MB
+
+There was 1 error:
+
+1) App\Tests\Functional\Api\InvoiceTest::testExport
+Error: Call to a member function getId() on null
+
+/app/src/Service/InvoiceExporter.php:42
+/app/tests/Functional/Api/InvoiceTest.php:31
+
+--
+
+There was 1 failure:
+
+1) App\Tests\Functional\Api\Ticket\NotificationTest::testEachRecipientGetsTheStatusIcon
+Failed asserting that an array contains '#0000ff'.
+
+/app/tests/Functional/Api/Ticket/NotificationTest.php:678
+
+ERRORS!
+Tests: 130, Assertions: 365, Errors: 1, Failures: 1.
+Script XDEBUG_MODE=off vendor/bin/paratest --processes=6 handling the test event returned with error code 2

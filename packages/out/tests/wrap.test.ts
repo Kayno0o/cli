@@ -19,6 +19,17 @@ describe('shouldWrap', () => {
     'composer install',
     'eslint .',
     'pytest -q',
+    'docker compose exec -T php vendor/bin/phpunit --filter Foo',
+    'docker compose exec php php bin/phpunit',
+    'docker compose -f compose.test.yaml run --rm -e APP_ENV=test php bin/phpunit',
+    'docker exec -it -u www-data app vendor/bin/pest',
+    'docker compose exec php composer install',
+    'php -d memory_limit=-1 vendor/bin/phpstan analyse',
+    'XDEBUG_MODE=off vendor/bin/paratest -p8',
+    'bunx vue-tsc --noEmit',
+    'bunx --bun nuxi typecheck',
+    'vendor/bin/php-cs-fixer fix --dry-run',
+    'vendor/bin/rector process --dry-run',
   ])('wraps %s', (command) => {
     expect(shouldWrap(command)).toBe(true)
   })
@@ -34,7 +45,15 @@ describe('shouldWrap', () => {
     'bun test | jq .',
     'bun test > out.txt',
     'bun test &',
-    'bun test 2>&1 | tail -5',
+    'bun test | tail -5 > log.txt',
+    'bun test | grep -c pass',
+    'bun test | grep -vq pass',
+    'bun test | tail -5 && git status',
+    'docker compose exec php bin/console cache:clear',
+    'docker compose exec php sh -c "vendor/bin/phpunit"',
+    'docker compose up -d',
+    'php bin/console about',
+    'bunx nuxi dev',
     'echo $(bun test)',
     'bun test && git status',
     'cd packages',
@@ -50,6 +69,15 @@ describe('shouldWrap', () => {
   test('ignores operators inside quotes', () => {
     expect(shouldWrap('bun test -t "a && b | c"')).toBe(true)
   })
+
+  test.each([
+    'bun test 2>&1 | tail -40',
+    'docker compose exec -T php vendor/bin/phpunit | grep -E "FAIL|Tests:"',
+    'bun run test 2>&1 | grep -v skip | head -20',
+    'bun test | grep -C3 FAIL',
+  ])('wraps %s, its final filters dropped', (command) => {
+    expect(shouldWrap(command)).toBe(true)
+  })
 })
 
 describe('wrap', () => {
@@ -62,5 +90,10 @@ describe('wrap', () => {
     expect(wrap('bun run check && bun run test')).toBe('out -- sh -c \'bun run check && bun run test\'')
     expect(wrap('FORCE_COLOR=0 bun test')).toBe('out -- sh -c \'FORCE_COLOR=0 bun test\'')
     expect(wrap('cd a && bun test -t \'x\'')).toBe('out -- sh -c \'cd a && bun test -t \'\\\'\'x\'\\\'\'\'')
+  })
+
+  test('drops a final tail, head or grep and the 2>&1 feeding it', () => {
+    expect(wrap('bun test 2>&1 | tail -40')).toBe('out -- bun test')
+    expect(wrap('cd a && bun run test 2>&1 | grep -v skip | head -20')).toBe('out -- sh -c \'cd a && bun run test\'')
   })
 })
