@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -178,6 +178,56 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
 
   test('reads another key with --env, and says when it is unset', async () => {
     expect((await db(['-e', 'OTHER_URL', 'select 1 as one'], { OTHER_URL: url })).out).toContain('one')
-    expect((await db(['select 1'], {})).err).toContain('DATABASE_URL is not set')
+    expect((await db(['-e', 'OTHER_URL', 'select 1'], {})).err).toContain('OTHER_URL is not set')
+    expect((await db(['select 1'], {})).err).toContain('no DATABASE_URL and no running Postgres service')
+  })
+
+  // A docker that answers `compose ps` and `inspect` as a project running this Postgres as its `database` service would.
+  const compose = (() => {
+    const target = new URL(url)
+    const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
+    const ps = { ID: 'abc123', Service: 'database', State: 'running', Image: 'postgres:18-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: Number(target.port) }] }
+    const inspect = [{ Id: 'abc123def', Name: '/app-database-1', Config: { Env: [`POSTGRES_USER=${decodeURIComponent(target.username)}`, `POSTGRES_PASSWORD=${decodeURIComponent(target.password)}`, `POSTGRES_DB=${target.pathname.slice(1)}`, 'PG_MAJOR=18'] }, NetworkSettings: { Networks: { app: { IPAddress: '10.0.0.2', Aliases: ['database'] } } } }]
+
+    writeFileSync(join(bin, 'ps.json'), `${JSON.stringify(ps)}\n`)
+    writeFileSync(join(bin, 'inspect.json'), JSON.stringify(inspect))
+    writeFileSync(join(bin, 'docker'), `#!/bin/sh\ncase "$1" in compose) cat "${bin}/ps.json" ;; inspect) cat "${bin}/inspect.json" ;; *) exit 1 ;; esac\n`)
+    chmodSync(join(bin, 'docker'), 0o755)
+
+    return { path: `${bin}:${process.env.PATH ?? ''}`, loopback: target.hostname === '127.0.0.1', password: decodeURIComponent(target.password) }
+  })()
+
+  test.skipIf(!compose.loopback)('reads the compose project\'s Postgres service without a URL', async () => {
+    const result = await db(['tables'], { PATH: compose.path })
+
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('users')
+    expect(result.out + result.err).not.toContain(compose.password)
+  })
+
+  test.skipIf(!compose.loopback)('reaches a URL naming the service as its host, Doctrine parameters dropped', async () => {
+    const doctrine = new URL(url)
+
+    doctrine.hostname = 'database'
+    doctrine.port = '5432'
+    doctrine.search = '?serverVersion=18&charset=utf8'
+
+    const result = await db(['select count(*) as n from users'], { PATH: compose.path, DATABASE_URL: doctrine.href })
+
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('150')
+  })
+
+  test.skipIf(!compose.loopback)('lists the databases and reads another with --database', async () => {
+    const list = await db(['dbs', '-s', 'database'], { PATH: compose.path })
+
+    expect(list.code).toBe(0)
+    expect(list.out).toContain('postgres')
+    expect(list.out).toContain('true')
+
+    const other = await db(['-s', 'database', '-d', 'postgres', 'select current_database() as current'], { PATH: compose.path })
+
+    expect(other.out).toContain('postgres')
+    expect((await db(['-s', 'nope', 'select 1'], { PATH: compose.path })).err).toContain('no running service nope')
   })
 })

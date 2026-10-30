@@ -1,5 +1,5 @@
 import { fail, parse, readInput, wholeNumber } from '@kaynooo/cli-kit'
-import { connectionOptions, DEFAULT_ENV, DEFAULT_LIMIT, outputOptions } from '../args'
+import { connectionOptions, DEFAULT_LIMIT, outputOptions } from '../args'
 import { inspect } from '../guard'
 import { render, shape } from '../output'
 import { connectionUrl, readRows } from '../run'
@@ -43,7 +43,7 @@ export async function query(args: string[]): Promise<number> {
   if (verdict.statements > 1)
     fail('one statement at a time')
 
-  const rows = await readRows(connectionUrl(values.env ?? DEFAULT_ENV), sql)
+  const rows = await readRows(await connectionUrl(values), sql)
 
   console.log(render(shape(rows, limit, values.raw === true), values.json === true))
 
