@@ -26,6 +26,22 @@ export function boxes(body: string): Box[] {
 
 const INDENT = /^\s*/
 
+// New unticked boxes after the body's last box, indented like it, or at the end of a body without any.
+export function appendBoxes(body: string, texts: string[]): string {
+  const end = body.includes('\r\n') ? '\r' : ''
+  const last = boxes(body).at(-1)
+  const lines = body.split('\n')
+  const indent = last === undefined ? '' : INDENT.exec(lines[last.line] ?? '')?.[0] ?? ''
+  const added = texts.map(text => `${indent}- [ ] ${text}${end}`)
+
+  if (last === undefined)
+    return body.trim() === '' ? added.join('\n') : `${body.trimEnd()}${end}\n${end}\n${added.join('\n')}`
+
+  lines.splice(last.line + 1, 0, ...added)
+
+  return lines.join('\n')
+}
+
 // The body as it reads, each box line carrying its number as `ft tick` takes it in place of the list marker.
 export function numberedBody(body: string): string {
   const lines = body.replaceAll('\r\n', '\n').split('\n')

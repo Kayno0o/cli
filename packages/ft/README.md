@@ -20,11 +20,13 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft board` | open issues: available, taken by a live session, or claimed with no live session here, each claim with its boxes left and a stale one with its latest note (`-q <regex>` on titles, `--state available\|taken\|away`, `-L`, `--json`) |
 | `ft take <n>...` / `ft drop <n>...` | claims or gives back issues for the calling Claude Code session, `--lane` as `lane-<s>-<n>` |
 | `ft issue <n>...` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `-b` only the raw description to edit, `--json`) |
-| `ft new -t <title>` | creates an issue and prints its number and url; `-F <file>` (`-F -` for stdin) is the description, `-L a,b` the labels |
-| `ft edit <n>` | replaces the title (`-t`) and/or the description (`-F <file>`, `-F -` for stdin) |
+| `ft new -t <title>` | creates an issue and prints its number and url; `-F <file>` (`-F -` for stdin) is the description, `-L a,b` the labels, refused before anything is created when the repository lacks one |
+| `ft edit <n>` | replaces the title (`-t`) and/or the description (`-F <file>`, `-F -` for stdin); `--append` adds the `-F` text after the description instead, `--add-box <text>` (repeatable) an unticked box after the last one |
 | `ft tick <n> <box>...` | ticks boxes by number or text, `--undo` unticks, `-m <text>` or `-F <file>` comments too; `--closed` ticks instead every `- [ ] #<n>` line of a release plan whose issue is closed |
 | `ft comment <n> [text]` | comments on an issue, from `-F <file>` or stdin when no text is given, so a heredoc needs no escaping |
 | `ft fixed <n> [sha]...` | comments `Fixed in <a>, <b> and <c>: <subject>` and closes; with no sha it takes the commits on origin's default branch naming `#<n>` and says which; refuses while boxes are left unless `--tick` ticks them first; then ticks its `- [ ] #<n>` line in every open issue listing it, and names those |
+| `ft close <n>... [-m reason]` | closes issues no commit fixed (a duplicate, one dropped), posting the reason first; `ft reopen` reopens them the same way |
+| `ft label <n> [+]a -b` | adds the labels named bare or with `+`, removes those named with `-`, refusing one the repository lacks, and prints the issue's labels |
 | `ft plan add <plan> <n>...` / `ft plan carry <from> <to>` | adds `- [ ] #<n> <title>` lines to a release plan's checklist, or copies one plan's unticked `#<n>` lines into the next, both under `--section "Bugs:"` (created when missing) and skipping issues already listed |
 | `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches |
 

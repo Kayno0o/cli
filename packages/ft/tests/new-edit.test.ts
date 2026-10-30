@@ -25,7 +25,7 @@ describe('ft new', () => {
     const log = console.log
 
     await withFile(BODY, async (path) => {
-      const state = await withFakeTea({ issues: [{ number: 4, title: 'old', body: '', state: 'open' }] }, async () => {
+      const state = await withFakeTea({ issues: [{ number: 4, title: 'old', body: '', state: 'open' }], labels: ['bug', 'ui'] }, async () => {
         console.log = (line: string) => lines.push(line)
 
         try {
@@ -58,7 +58,7 @@ describe('ft edit', () => {
       expect(state.issues[0]).toMatchObject({ title: 'Renamed', body: '# New body\n\n- [ ] x `$y`' })
     })
 
-    expect(await refusal(edit(['6']))).toContain('nothing to change')
+    expect(await refusal(edit(['6']))).toContain('nothing to change: give -t, -F or --add-box')
   })
 })
 

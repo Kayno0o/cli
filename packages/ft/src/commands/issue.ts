@@ -2,10 +2,11 @@ import type { Named } from '../git'
 import type { Issue, IssueComment } from '../issues'
 import { fail, formatAge, parse, readInput } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
-import { boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
+import { appendBoxes, boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { latestClaim } from '../claims'
 import { commitsNaming, defaultBranch, git, resolveCommit } from '../git'
 import { close, comment, commentsOf, createIssue, editBody, editIssue, getIssue, openIssues, setBody } from '../issues'
+import { checkLabels } from './triage'
 
 const issueUsage = `ft issue <n>...
 
@@ -136,7 +137,7 @@ async function closedReferences(body: string, repo: string | undefined): Promise
 
 const newUsage = `ft new -t <title> [-F <file>]
 
-Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it.`
+Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it. A label the repository lacks is refused before anything is created.`
 
 const newOptions = {
   title: { type: 'string', short: 't', description: 'the issue title' },
@@ -157,6 +158,9 @@ export async function newIssue(args: string[]): Promise<number> {
     fail(`give the issue a title with -t\n\n${newUsage}`)
 
   const body = await noteText({ file: values.file })
+
+  await checkLabels((values.labels ?? '').split(',').map(name => name.trim()).filter(name => name !== ''), values.repo)
+
   const created = await createIssue(values.title.trim(), body ?? '', values.labels, values.repo)
 
   console.log(`#${created.number} ${created.html_url}`)
@@ -164,14 +168,17 @@ export async function newIssue(args: string[]): Promise<number> {
   return 0
 }
 
-const editUsage = `ft edit <n> [-t <title>] [-F <file>]
+const editUsage = `ft edit <n> [-t <title>] [-F <file> [--append]] [--add-box <text>]...
 
 Replaces the title and/or the description of issue <n>, the description from -F <file> or from stdin with -F -.
+--append adds the -F text after the description instead, and each --add-box an unticked box after the last one, the rest of the description untouched.
 \`ft issue <n> --body\` prints the description to edit.`
 
 const editOptions = {
-  title: { type: 'string', short: 't', description: 'the new title' },
-  file: { type: 'string', short: 'F', description: 'the new description: a file, - for stdin' },
+  'title': { type: 'string', short: 't', description: 'the new title' },
+  'file': { type: 'string', short: 'F', description: 'the new description: a file, - for stdin' },
+  'append': { type: 'boolean', short: 'a', description: 'add the -F text after the description instead of replacing it' },
+  'add-box': { type: 'string', multiple: true, description: 'add an unticked box after the last one, repeatable' },
   ...repoOption,
 } as const
 
@@ -183,15 +190,32 @@ export async function edit(args: string[]): Promise<number> {
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], editUsage)
-  const body = await noteText({ file: values.file })
+  const text = await noteText({ file: values.file })
+  const added = values['add-box'] ?? []
 
-  if (values.file !== undefined && body === undefined)
+  if (values.file !== undefined && text === undefined)
     fail('the description file is empty')
 
-  if (values.title === undefined && body === undefined)
-    fail(`nothing to change: give -t or -F\n\n${editUsage}`)
+  if (values.append === true && text === undefined)
+    fail('--append adds the -F text, give -F')
 
-  await editIssue(number, { ...values.title === undefined ? {} : { title: values.title.trim() }, ...body === undefined ? {} : { body } }, values.repo)
+  if (values.title === undefined && text === undefined && added.length === 0)
+    fail(`nothing to change: give -t, -F or --add-box\n\n${editUsage}`)
+
+  const change: { title?: string, body?: string } = values.title === undefined ? {} : { title: values.title.trim() }
+
+  if (text !== undefined && values.append !== true)
+    change.body = text
+  else if (text !== undefined || added.length > 0)
+    change.body = (await getIssue(number, values.repo)).body
+
+  if (text !== undefined && values.append === true)
+    change.body = `${(change.body ?? '').trimEnd()}\n\n${text}`
+
+  if (added.length > 0)
+    change.body = appendBoxes(change.body ?? '', added)
+
+  await editIssue(number, change, values.repo)
   console.log(`edited #${number}`)
 
   return 0

@@ -11,6 +11,7 @@ import { plan } from './commands/plan'
 import { release } from './commands/release'
 import { remote } from './commands/remote'
 import { runs } from './commands/runs'
+import { closeIssues, label, reopenIssues } from './commands/triage'
 import { watch } from './commands/watch'
 
 process.exitCode = await runCli({
@@ -32,6 +33,9 @@ process.exitCode = await runCli({
     tick: { run: tick, summary: 'tick checklist boxes of an issue, -m to comment too' },
     comment: { run: commentOn, summary: 'comment on an issue, from stdin when no text is given' },
     fixed: { run: fixed, summary: 'comment "Fixed in <sha>" and close an issue' },
+    close: { run: closeIssues, summary: 'close issues without a fix, -m posting the reason' },
+    reopen: { run: reopenIssues, summary: 'reopen closed issues, -m posting the reason' },
+    label: { run: label, summary: 'add +name and remove -name labels of an issue' },
     plan,
     remote: { run: remote, summary: 'check or fix an origin using an ssh alias tea cannot match' },
   },

@@ -99,3 +99,32 @@ export async function comment(number: number, body: string, repo?: string): Prom
 export async function close(number: number, repo?: string): Promise<void> {
   await tea(['issues', 'close', String(number)], repo)
 }
+
+export async function reopen(number: number, repo?: string): Promise<void> {
+  await tea(['issues', 'reopen', String(number)], repo)
+}
+
+export async function repoLabels(repo?: string): Promise<string[]> {
+  const names: string[] = []
+
+  for (let page = 1; ; page++) {
+    const batch = await repoApi<{ name: string }[]>(`labels?page=${page}&limit=${PAGE}`, repo)
+
+    names.push(...batch.map(each => each.name))
+
+    if (batch.length < PAGE)
+      return names
+  }
+}
+
+export async function editLabels(number: number, add: string[], remove: string[], repo?: string): Promise<void> {
+  const args = ['issues', 'edit', String(number)]
+
+  if (add.length > 0)
+    args.push('--add-labels', add.join(','))
+
+  if (remove.length > 0)
+    args.push('--remove-labels', remove.join(','))
+
+  await tea(args, repo)
+}

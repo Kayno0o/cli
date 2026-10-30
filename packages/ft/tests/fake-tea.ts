@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 
 export interface FakeIssue { number: number, title: string, body: string, state: string, labels?: { name: string }[] }
-export interface FakeState { issues: FakeIssue[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][] }
+export interface FakeState { issues: FakeIssue[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[] }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -38,6 +38,8 @@ if (command === 'api') {
     console.log('[]')
   else if (path.startsWith('actions/runs?'))
     console.log(JSON.stringify({ workflow_runs: state.runs ?? [] }))
+  else if (path.startsWith('labels?'))
+    console.log(JSON.stringify((state.labels ?? []).map(name => ({ name }))))
   else if (path.startsWith('issues?'))
     console.log(JSON.stringify(state.issues.filter(each => each.state === 'open').map(view)))
   else if (found === undefined)
@@ -52,6 +54,9 @@ else if (command === 'issues' && sub === 'edit') {
 
   found.body = flag('-d') ?? flag('--description') ?? found.body
   found.title = flag('-t') ?? flag('--title') ?? found.title
+  const removed = (flag('--remove-labels') ?? '').split(',')
+  const added = (flag('--add-labels') ?? '').split(',').filter(Boolean)
+  found.labels = [...(found.labels ?? []).filter(each => !removed.includes(each.name)), ...added.filter(name => !(found.labels ?? []).some(each => each.name === name)).map(name => ({ name }))]
 }
 else if (command === 'issues' && sub === 'create') {
   const created = { number: Math.max(0, ...state.issues.map(each => each.number)) + 1, title: flag('-t'), body: flag('-d') ?? '', state: 'open', labels: (flag('-L') ?? '').split(',').filter(Boolean).map(name => ({ name })) }
@@ -61,6 +66,9 @@ else if (command === 'issues' && sub === 'create') {
 }
 else if (command === 'issues' && sub === 'close') {
   issue(number).state = 'closed'
+}
+else if (command === 'issues' && sub === 'reopen') {
+  issue(number).state = 'open'
 }
 else if (command === 'comment') {
   state.comments = { ...state.comments, [sub]: [...(state.comments?.[sub] ?? []), args[2]] }
