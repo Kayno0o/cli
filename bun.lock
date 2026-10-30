@@ -82,6 +82,16 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/gitlab": {
+      "name": "@kaynooo/gitlab-tools",
+      "version": "0.0.0",
+      "bin": {
+        "gl": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/kit": {
       "name": "@kaynooo/cli-kit",
       "version": "0.1.0",
@@ -191,6 +201,8 @@
     "@kaynooo/forgejo-tools": ["@kaynooo/forgejo-tools@workspace:packages/ft"],
 
     "@kaynooo/git-tools": ["@kaynooo/git-tools@workspace:packages/git"],
+
+    "@kaynooo/gitlab-tools": ["@kaynooo/gitlab-tools@workspace:packages/gitlab"],
 
     "@kaynooo/out-tools": ["@kaynooo/out-tools@workspace:packages/out"],
 
