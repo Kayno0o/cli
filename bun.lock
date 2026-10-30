@@ -73,7 +73,7 @@
     },
     "packages/git": {
       "name": "@kaynooo/git-tools",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "gst": "./dist/gst.js",
         "gc": "./dist/gc.js",
