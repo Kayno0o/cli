@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { Exit, parse, readInput } from '../src'
+import { duration, Exit, parse, readInput } from '../src'
 
 const options = { lines: { type: 'string', short: 'n', description: 'lines' } } as const
 
@@ -27,5 +27,21 @@ describe('readInput', () => {
 
   test('refuses a missing file', async () => {
     expect(readInput('/no/such/file')).rejects.toThrow(new Exit('no file /no/such/file', 2))
+  })
+})
+
+describe('duration', () => {
+  test('reads a unit, or the default unit on a bare number', () => {
+    expect(duration('500ms', 't', 0)).toBe(500)
+    expect(duration('1.5s', 't', 0)).toBe(1500)
+    expect(duration('90', 't', 0)).toBe(90_000)
+    expect(duration('15', 't', 0, 'm')).toBe(900_000)
+    expect(duration('1h', 't', 0, 'm')).toBe(3_600_000)
+    expect(duration(undefined, 't', 42)).toBe(42)
+  })
+
+  test('refuses anything else', () => {
+    expect(() => duration('5 min', 'timeout', 0)).toThrow(new Exit('--timeout takes a duration such as 30s, 5m or 1h, not 5 min', 2))
+    expect(() => duration('0', 'timeout', 0)).toThrow(Exit)
   })
 })

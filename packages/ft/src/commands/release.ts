@@ -1,5 +1,5 @@
 import { basename, join, resolve } from 'node:path'
-import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, fail, parse } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { defaultBranch, git, gitOk, tagsAt } from '../git'
 import { newestPerWorkflow, recentRuns } from '../runs'
@@ -17,7 +17,7 @@ const options = {
   'tagged': { type: 'boolean', description: 'push the version commit and tag already at HEAD instead of bumping' },
   'package': { type: 'string', short: 'p', description: 'workspace folder to release, a path or a name under packages/' },
   'no-registry': { type: 'boolean', description: 'do not wait for the registry to serve the new version' },
-  'timeout': { type: 'string', short: 't', description: 'minutes to wait for the runs (15)' },
+  'timeout': { type: 'string', short: 't', description: 'how long to wait for the runs (15m), a bare number in minutes' },
 } as const
 
 const LEVELS = new Set(['patch', 'minor', 'major', 'prepatch', 'preminor', 'premajor', 'prerelease'])
@@ -104,7 +104,7 @@ export async function release(args: string[]): Promise<number> {
   if (level !== undefined && !LEVELS.has(level) && !VERSION.test(level))
     fail(`${level} is no level nor x.y.z version`)
 
-  const timeout = wholeNumber(values.timeout, 'timeout', 15)
+  const timeout = duration(values.timeout, 'timeout', 15 * 60_000, 'm')
   const dir = values.package === undefined ? undefined : await packageDir(values.package)
   const prefix = dir === undefined ? 'v' : `${basename(dir)}-v`
   const branch = await defaultBranch()

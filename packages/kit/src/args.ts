@@ -75,6 +75,23 @@ export function wholeNumber(value: string | undefined, name: string, fallback: n
   return number
 }
 
+const DURATION = /^(\d+(?:\.\d+)?)(ms|[smh])?$/
+const UNIT_MS = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 } as const
+
+// A duration such as `500ms`, `90s`, `5m` or `1h` in milliseconds, a bare number counting in `unit`.
+export function duration(value: string | undefined, name: string, fallback: number, unit: 's' | 'm' = 's'): number {
+  if (value === undefined)
+    return fallback
+
+  const match = DURATION.exec(value.trim())
+  const ms = match === null ? 0 : Number(match[1]) * UNIT_MS[(match[2] ?? unit) as keyof typeof UNIT_MS]
+
+  if (ms < 1)
+    fail(`--${name} takes a duration such as 30s, 5m or 1h, not ${value}`)
+
+  return ms
+}
+
 export interface InputSettings {
   // What to say when stdin is a terminal, as nothing is piped.
   noStdin?: string

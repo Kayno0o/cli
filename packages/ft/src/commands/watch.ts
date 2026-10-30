@@ -1,5 +1,5 @@
 import type { Run } from '../runs'
-import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, parse, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { failureReport, FINISHED, overall, recentRuns, stallReason } from '../runs'
 
@@ -10,7 +10,7 @@ Exits 0 when every one passed or was skipped, 1 when one failed or was cancelled
 
 const options = {
   after: { type: 'string', short: 'a', description: 'watch the runs newer than this run id, as `ft runs --json` gives it' },
-  timeout: { type: 'string', short: 't', description: 'minutes before giving up (15)' },
+  timeout: { type: 'string', short: 't', description: 'how long before giving up (15m), a bare number in minutes' },
   ...repoOption,
 } as const
 
@@ -21,7 +21,7 @@ const STALLED = 3 * 60_000
 
 // Polls until the picked runs are all finished, printing each status change; a failure prints its jobs' log excerpts.
 // With `idle`, picking no run for that many milliseconds counts as a pass: a push touching only ignored paths starts none.
-export async function watchRuns(pick: (runs: Run[]) => Run[], timeoutMinutes: number, repo?: string, idle?: number): Promise<number> {
+export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, repo?: string, idle?: number): Promise<number> {
   const started = Date.now()
   const reported = new Map<number, string>()
   let moving = started
@@ -30,8 +30,8 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeoutMinutes: nu
     // Sleeping first gives a push's runs time to all appear, so one finishing early is not taken for the lot.
     await Bun.sleep(timing.poll)
 
-    if (Date.now() - started > timeoutMinutes * 60_000)
-      fail(`the runs did not finish in ${timeoutMinutes} minutes`)
+    if (Date.now() - started > timeout)
+      fail(`the runs did not finish in ${formatDuration(timeout)}`)
 
     let runs: Run[]
 
@@ -91,7 +91,7 @@ export async function watch(args: string[]): Promise<number> {
     return 0
 
   const { values } = parsed
-  const timeout = wholeNumber(values.timeout, 'timeout', 15)
+  const timeout = duration(values.timeout, 'timeout', 15 * 60_000, 'm')
 
   if (values.after !== undefined) {
     const after = wholeNumber(values.after, 'after', 0, 0)
