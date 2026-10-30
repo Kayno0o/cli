@@ -9,6 +9,7 @@ const MODS = join(homedir(), 'zshrc/dotfiles/claude/mods')
 const COPIES = [
   ['packages/git/src/status.ts', 'git-facts/hooks/status.ts'],
   ['packages/kit/src/shell.ts', 'guards/hooks/shell.ts'],
+  ['packages/guard/src/bins.ts', 'agent-tools/hooks/bins.ts'],
 ] as const
 
 // Only where the mods live, ~/zshrc, so CI skips it.

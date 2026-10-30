@@ -1,4 +1,4 @@
-// What each agent-tools bin is for, as the prompt lists the installed ones; the zshrc agent-tools mod carries a copy, kept in step by hand until zshrc#111.
+// What each agent-tools bin is for, as the prompt lists the installed ones; the zshrc agent-tools mod carries a copy.
 export const BINS: Record<string, string> = {
   check: '`check`: runs the repo\'s check, typecheck, lint and test steps and prints only what failed, each full log saved to a file; validate a change with it rather than chaining the scripts (`--only lint,test`, `--list`).',
   fix: '`fix`: runs the repo\'s fixers and formatters (its fix, lint:fix and format scripts, just fmt, go fmt, cargo fmt, ruff) and lists the files they changed.',
