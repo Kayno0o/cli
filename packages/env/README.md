@@ -40,3 +40,7 @@ git diff --cached | redact --check
 - the values of secret-looking keys in the `.env*` files of the current folder (whole words only, from 6 characters), `--no-env` skips them
 
 `redact --check` prints nothing of the input: it lists `<file>:<line>: <kind>` for each secret found and exits 1. On a diff it reads the added lines only and names the new file's line numbers.
+
+## The parser and the guard
+
+`import { parseDotenv, entries } from '@kaynooo/env-tools/dotenv'` gives the dotenv parser ev reads with: quotes, `export` prefixes, comments and multiline values. `src/guard.ts` holds the env file rules the `guard` bin of `@kaynooo/guard-tools` runs, exported to it as `./guard` within the workspace only.

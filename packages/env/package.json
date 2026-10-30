@@ -13,11 +13,15 @@
   },
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
   "keywords": ["env", "dotenv", "secrets", "redact", "mask"],
+  "exports": {
+    "./dotenv": "./src/dotenv.ts",
+    "./guard": "./src/guard.ts"
+  },
   "bin": {
     "ev": "./dist/ev.js",
     "redact": "./dist/redact.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "src/dotenv.ts"],
   "engines": {
     "bun": ">=1.4.3"
   },
