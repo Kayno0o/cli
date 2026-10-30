@@ -19,6 +19,9 @@ const SCHEMA = `
   create view user_names as select name from users;
 `
 
+// The throwaway database, set by onServer or inDocker.
+let url = ''
+
 function docker(...args: string[]) {
   const result = Bun.spawnSync(['docker', ...args], { stdout: 'pipe', stderr: 'pipe' })
 
@@ -69,7 +72,6 @@ async function inDocker(): Promise<string> {
 }
 
 // Skipped with a message when neither can be had.
-let url = ''
 const reason = SERVER === undefined ? await inDocker() : onServer(SERVER)
 
 if (reason !== '')
