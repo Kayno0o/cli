@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/edit-tools",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "sub: text replaced in files for Claude Code, written only when every replacement matches as often as expected.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
