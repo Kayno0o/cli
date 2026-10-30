@@ -9,6 +9,16 @@
         "@types/bun": "^1.4.3",
       },
     },
+    "packages/base": {
+      "name": "@kaynooo/base-tools",
+      "version": "0.0.0",
+      "bin": {
+        "base": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/check": {
       "name": "@kaynooo/check-tools",
       "version": "0.2.3",
@@ -142,6 +152,8 @@
     "@humanwhocodes/module-importer": ["@humanwhocodes/module-importer@1.0.1", "", {}, "sha512-bxveV4V8v5Yb4ncFTT3rPSgZBOpCkjfK0y4oVVVJwIuDVBRMDXrPyXRL988i5ap9m9bnyEEjWfm5WkBmtffLfA=="],
 
     "@humanwhocodes/retry": ["@humanwhocodes/retry@0.4.3", "", {}, "sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ=="],
+
+    "@kaynooo/base-tools": ["@kaynooo/base-tools@workspace:packages/base"],
 
     "@kaynooo/check-tools": ["@kaynooo/check-tools@workspace:packages/check"],
 
