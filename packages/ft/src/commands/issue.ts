@@ -6,6 +6,7 @@ import { appendBoxes, boxes, numberedBody, referencedBoxes, setBoxes, tickRefere
 import { latestClaim } from '../claims'
 import { commitsNaming, defaultBranch, git, resolveCommit } from '../git'
 import { close, comment, commentsOf, createIssue, editBody, editIssue, getIssue, openIssues, setBody } from '../issues'
+import { findMilestone } from '../milestones'
 import { checkLabels } from './triage'
 
 const issueUsage = `ft issue <n>...
@@ -134,18 +135,27 @@ async function closedReferences(body: string, repo: string | undefined): Promise
   return new Set(listed.filter((_, at) => states[at] === true))
 }
 
-const newUsage = `ft new -t <title> [-F <file>]
+const newUsage = `ft new -t <title> [-F <file>] [-L a,b] [-m <milestone>]
 
-Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it. A label the repository lacks is refused before anything is created.
+Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it. A label or milestone the repository lacks is refused before anything is created.
 
-Exits 0 when it created the issue, 1 when Forgejo refuses, 2 on a usage error or a label the repository lacks.`
+Exits 0 when it created the issue, 1 when Forgejo refuses, 2 on a usage error or a label or milestone the repository lacks.`
 
 const newOptions = {
   title: { type: 'string', short: 't', description: 'the issue title' },
   file: { type: 'string', short: 'F', description: 'the description: a file, - for stdin' },
   labels: { type: 'string', short: 'L', description: 'comma-separated labels' },
+  milestone: { type: 'string', short: 'm', description: 'the milestone, a title or an id; the repository must have it' },
   ...repoOption,
 } as const
+
+// The title of the milestone a reference names, refused when the repository has none, or an empty string to clear it.
+async function milestoneTitle(reference: string | undefined, repo: string | undefined): Promise<string | undefined> {
+  if (reference === undefined)
+    return undefined
+
+  return reference.trim() === '' ? '' : (await findMilestone(reference.trim(), repo)).title
+}
 
 export async function newIssue(args: string[]): Promise<number> {
   const parsed = parse(args, newUsage, newOptions)
@@ -159,16 +169,18 @@ export async function newIssue(args: string[]): Promise<number> {
 
   await checkLabels((values.labels ?? '').split(',').map(name => name.trim()).filter(name => name !== ''), values.repo)
 
-  const created = await createIssue(values.title.trim(), body ?? '', values.labels, values.repo)
+  const milestone = await milestoneTitle(values.milestone, values.repo)
+  const created = await createIssue(values.title.trim(), body ?? '', values.labels, milestone === '' ? undefined : milestone, values.repo)
 
   console.log(`#${created.number} ${created.html_url}`)
 
   return 0
 }
 
-const editUsage = `ft edit <n> [-t <title>] [-F <file> [--append]] [--add-box <text>]...
+const editUsage = `ft edit <n> [-t <title>] [-F <file> [--append]] [--add-box <text>]... [-m <milestone>]
 
 Replaces the title and/or the description of issue <n>, the description from -F <file> or from stdin with -F -.
+-m moves it to a milestone given by title or id, and \`-m ''\` takes it out of its milestone.
 --append adds the -F text after the description instead, and each --add-box an unticked box after the last one, the rest of the description untouched.
 \`ft issue <n> --body\` prints the description to edit.
 
@@ -179,6 +191,7 @@ const editOptions = {
   'file': { type: 'string', short: 'F', description: 'the new description: a file, - for stdin' },
   'append': { type: 'boolean', short: 'a', description: 'add the -F text after the description instead of replacing it' },
   'add-box': { type: 'string', multiple: true, description: 'add an unticked box after the last one, repeatable' },
+  'milestone': { type: 'string', short: 'm', description: 'move the issue to this milestone, a title or an id; an empty value takes it out of its milestone' },
   ...repoOption,
 } as const
 
@@ -196,10 +209,14 @@ export async function edit(args: string[]): Promise<number> {
   if (values.append === true && text === undefined)
     fail('--append adds the -F text, give -F')
 
-  if (values.title === undefined && text === undefined && added.length === 0)
-    fail(`nothing to change: give -t, -F or --add-box\n\n${editUsage}`)
+  if (values.title === undefined && text === undefined && added.length === 0 && values.milestone === undefined)
+    fail(`nothing to change: give -t, -F, --add-box or -m\n\n${editUsage}`)
 
-  const change: { title?: string, body?: string } = values.title === undefined ? {} : { title: values.title.trim() }
+  const change: { title?: string, body?: string, milestone?: string } = values.title === undefined ? {} : { title: values.title.trim() }
+  const milestone = await milestoneTitle(values.milestone, values.repo)
+
+  if (milestone !== undefined)
+    change.milestone = milestone
 
   if (text !== undefined && values.append !== true)
     change.body = text

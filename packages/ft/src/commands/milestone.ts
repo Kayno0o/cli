@@ -1,0 +1,186 @@
+import type { Milestone } from '../milestones'
+import { capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
+import { repoOption } from '../args'
+import { openIssues } from '../issues'
+import { closeMilestone, createMilestone, dueDate, dueOn, findMilestone, listMilestones, progress } from '../milestones'
+import { liveSessions } from '../sessions'
+import { boardJson, boardRows, renderBoard } from './board'
+
+const TITLE_WIDTH = 60
+const LIST_LIMIT = 30
+
+function counts(milestone: Milestone): string {
+  return `${milestone.open_issues} open, ${milestone.closed_issues} closed`
+}
+
+const listUsage = `ft milestones
+
+Lists the repository's milestones, the open ones unless --state says otherwise, with the issues open and closed in each, the progress and the due date.
+
+Exits 0 when it listed them, 1 when Forgejo refuses, 2 on a usage error.`
+
+const listOptions = {
+  state: { type: 'string', description: 'open (the default), closed or all' },
+  ...limitOptions(LIST_LIMIT),
+  json: jsonOption('id, title, state, description, open, closed, due (YYYY-MM-DD or null)'),
+  ...repoOption,
+} as const
+
+export async function milestones(args: string[]): Promise<number> {
+  const parsed = parse(args, listUsage, listOptions)
+
+  const { values } = parsed
+  const state = values.state ?? 'open'
+
+  if (state !== 'open' && state !== 'closed' && state !== 'all')
+    fail(`--state takes open, closed or all, not ${state}`)
+
+  const limit = limitOf(values, LIST_LIMIT)
+  const found = await listMilestones(state, values.repo)
+
+  if (values.json === true) {
+    printJson(found.map(each => ({ id: each.id, title: each.title, state: each.state, description: each.description, open: each.open_issues, closed: each.closed_issues, due: dueDate(each) || null })))
+
+    return 0
+  }
+
+  if (found.length === 0) {
+    console.log(`no ${state === 'all' ? '' : `${state} `}milestone`)
+
+    return 0
+  }
+
+  const { shown, footer } = capped(found, limit)
+  const showState = state === 'all'
+  const rows = shown.map(each => [String(each.id), truncate(each.title, TITLE_WIDTH), `${each.open_issues} open`, `${each.closed_issues} closed`, progress(each), dueDate(each) === '' ? '' : `due ${dueDate(each)}`, ...showState ? [each.state] : []])
+
+  console.log(table(rows))
+
+  if (footer !== undefined)
+    console.log(footer)
+
+  return 0
+}
+
+const newUsage = `ft milestone new <title> [-d <text>] [--due <YYYY-MM-DD>]
+
+Creates a milestone through the API and prints its id. Without --due it has no due date.
+
+Exits 0 when it created the milestone, 1 when Forgejo refuses, 2 on a usage error.`
+
+const newOptions = {
+  description: { type: 'string', short: 'd', description: 'the milestone description' },
+  due: { type: 'string', description: 'the due date, YYYY-MM-DD' },
+  ...repoOption,
+} as const
+
+async function create(args: string[]): Promise<number> {
+  const parsed = parse(args, newUsage, newOptions)
+
+  const { values, positionals } = parsed
+  const title = positionals.join(' ').trim()
+
+  if (title === '')
+    fail(`give the milestone a title\n\n${newUsage}`)
+
+  const due = values.due === undefined ? undefined : dueOn(values.due)
+  const created = await createMilestone(title, values.description, due, values.repo)
+
+  console.log(`milestone ${created.id} ${created.title}${dueDate(created) === '' ? '' : `, due ${dueDate(created)}`}`)
+
+  return 0
+}
+
+const closeUsage = `ft milestone close <title|id> [--force]
+
+Closes a milestone, refused while issues are open in it, which it names. --force closes it with them left.
+
+Exits 0 when it closed the milestone, 1 when issues are open in it or Forgejo refuses, 2 on a usage error.`
+
+const closeOptions = {
+  force: { type: 'boolean', description: 'close it with issues left open' },
+  ...repoOption,
+} as const
+
+async function closeOne(args: string[]): Promise<number> {
+  const parsed = parse(args, closeUsage, closeOptions)
+
+  const { values, positionals } = parsed
+  const reference = positionals.join(' ').trim()
+
+  if (reference === '')
+    fail(`name the milestone to close\n\n${closeUsage}`)
+
+  const found = await findMilestone(reference, values.repo)
+
+  if (found.state === 'closed') {
+    console.log(`milestone ${found.title} is already closed`)
+
+    return 0
+  }
+
+  const open = await openIssues(undefined, values.repo, found.id)
+
+  if (open.length > 0 && values.force !== true)
+    fail(`milestone ${found.title} has ${open.length} open issue${open.length === 1 ? '' : 's'}:\n${open.map(issue => `  #${issue.number} ${truncate(issue.title, TITLE_WIDTH)}`).join('\n')}`, 1, `${runHint(`ft milestone close ${found.title} --force`, 'close it with them open')}, or move them with \`ft edit <n> -m <milestone>\``)
+
+  await closeMilestone(found.id, values.repo)
+  console.log(`closed milestone ${found.title}`)
+
+  return 0
+}
+
+const showUsage = `ft milestone <title|id>
+ft milestone new <title> [-d <text>] [--due <YYYY-MM-DD>]
+ft milestone close <title|id> [--force]
+
+Shows a milestone with its open issues as \`ft board\` does: available, taken by a session running here, or claimed by one gone, each with its boxes left, at most 30 of each kind (--full for all).
+\`ft milestone new\` and \`ft milestone close\` have their own --help; a milestone titled new or close is named by its id.
+
+Exits 0 when it showed the milestone, 1 when it cannot be read, 2 on a usage error or an unknown milestone.`
+
+const showOptions = {
+  ...limitOptions(LIST_LIMIT),
+  json: jsonOption('the milestone (id, title, state, description, open, closed, due) and its open issues as `ft board --json` lists them'),
+  ...repoOption,
+} as const
+
+async function show(args: string[]): Promise<number> {
+  const parsed = parse(args, showUsage, showOptions)
+
+  const { values, positionals } = parsed
+  const reference = positionals.join(' ').trim()
+
+  if (reference === '')
+    fail(`name the milestone, or see them all with \`ft milestones\`\n\n${showUsage}`)
+
+  const found = await findMilestone(reference, values.repo)
+  const [issues, sessions] = await Promise.all([openIssues(undefined, values.repo, found.id), liveSessions()])
+  const rows = await boardRows(issues, sessions, values.repo)
+
+  if (values.json === true) {
+    printJson({ id: found.id, title: found.title, state: found.state, description: found.description, open: found.open_issues, closed: found.closed_issues, due: dueDate(found) || null, issues: boardJson(rows) })
+
+    return 0
+  }
+
+  const facts = [found.state, counts(found), progress(found), dueDate(found) === '' ? '' : `due ${dueDate(found)}`].filter(fact => fact !== '')
+
+  console.log(`milestone ${found.title} (${facts.join(', ')})`)
+
+  if (found.description.trim() !== '')
+    console.log(found.description.trim())
+
+  console.log(`\n${renderBoard(rows, Date.now(), limitOf(values, LIST_LIMIT))}`)
+
+  return 0
+}
+
+export async function milestone(args: string[]): Promise<number> {
+  const [first, ...rest] = args
+
+  if (first === 'new')
+    return create(rest)
+
+  return first === 'close' ? closeOne(rest) : show(args)
+}

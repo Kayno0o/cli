@@ -58,7 +58,7 @@ describe('ft edit', () => {
       expect(state.issues[0]).toMatchObject({ title: 'Renamed', body: '# New body\n\n- [ ] x `$y`' })
     })
 
-    expect(await refusal(edit(['6']))).toContain('nothing to change: give -t, -F or --add-box')
+    expect(await refusal(edit(['6']))).toContain('nothing to change: give -t, -F, --add-box or -m')
   })
 })
 

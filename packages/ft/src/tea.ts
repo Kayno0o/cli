@@ -48,6 +48,25 @@ export async function repoApi<T>(path: string, repo?: string): Promise<T> {
   return api<T>(`repos/{owner}/{repo}/${path}`, repo)
 }
 
+// A write through `tea api`, each field sent as a string; the flags come before the path, where tea reads them.
+export async function repoWrite<T>(method: 'POST' | 'PATCH', path: string, fields: Record<string, string>, repo?: string): Promise<T> {
+  const full = `repos/{owner}/{repo}/${path}`
+  const flags = Object.entries(fields).flatMap(([name, value]) => ['-f', `${name}=${value}`])
+  let result
+
+  try {
+    result = await $`tea api ${repoFlag(repo)} -X ${method} ${flags} ${full}`.quiet().nothrow()
+  }
+  catch (error) {
+    throw spawnFailure(`tea api ${full}`, error)
+  }
+
+  if (result.exitCode !== 0)
+    throw new Error(`tea api ${full}: ${result.stderr.toString().trim() || `exit ${result.exitCode}`}`)
+
+  return parseJson<T>(full, result.stdout.toString())
+}
+
 export async function repoApiText(path: string, repo?: string): Promise<string> {
   return request(`repos/{owner}/{repo}/${path}`, repo)
 }

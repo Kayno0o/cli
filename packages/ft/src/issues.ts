@@ -1,7 +1,7 @@
 import type { Comment } from './claims'
 import { repoApi, tea } from './tea'
 
-export interface Issue { number: number, title: string, body: string, state: string, html_url: string, comments: number, labels: { name: string }[] }
+export interface Issue { number: number, title: string, body: string, state: string, html_url: string, comments: number, labels: { name: string }[], milestone?: { id: number, title: string } | null }
 export interface IssueComment extends Comment { user: { login: string } }
 
 const PAGE = 50
@@ -12,18 +12,26 @@ export async function getIssue(number: number, repo?: string): Promise<Issue> {
   return repoApi<Issue>(`issues/${number}`, repo)
 }
 
-export async function openIssues(labels: string | undefined, repo?: string): Promise<Issue[]> {
+async function listIssues(state: 'open' | 'closed', filter: string, repo?: string): Promise<Issue[]> {
   const issues: Issue[] = []
-  const filter = labels === undefined ? '' : `&labels=${encodeURIComponent(labels)}`
 
   for (let page = 1; ; page++) {
-    const batch = await repoApi<Issue[]>(`issues?state=open&type=issues&page=${page}&limit=${PAGE}${filter}`, repo)
+    const batch = await repoApi<Issue[]>(`issues?state=${state}&type=issues&page=${page}&limit=${PAGE}${filter}`, repo)
 
     issues.push(...batch)
 
     if (batch.length < PAGE)
       return issues
   }
+}
+
+// The open issues, narrowed to some labels and/or a milestone given by id.
+export async function openIssues(labels: string | undefined, repo?: string, milestone?: number): Promise<Issue[]> {
+  return listIssues('open', `${labels === undefined ? '' : `&labels=${encodeURIComponent(labels)}`}${milestone === undefined ? '' : `&milestones=${milestone}`}`, repo)
+}
+
+export async function closedIssues(milestone: number, repo?: string): Promise<Issue[]> {
+  return listIssues('closed', `&milestones=${milestone}`, repo)
 }
 
 export async function commentsOf(number: number, repo?: string): Promise<IssueComment[]> {
@@ -45,8 +53,8 @@ export async function commentsOfAll(issues: Issue[], repo?: string): Promise<Map
   return result
 }
 
-// `tea api` cannot write with an OAuth login, so writes go through tea's own commands, with `-d` as tea 0.15 has no description file.
-export async function editIssue(number: number, change: { title?: string, body?: string }, repo?: string): Promise<void> {
+// `tea api` cannot write issues with an OAuth login, so writes go through tea's own commands, with `-d` as tea 0.15 has no description file; an empty milestone clears it.
+export async function editIssue(number: number, change: { title?: string, body?: string, milestone?: string }, repo?: string): Promise<void> {
   const args = ['issues', 'edit', String(number)]
 
   if (change.title !== undefined)
@@ -54,6 +62,9 @@ export async function editIssue(number: number, change: { title?: string, body?:
 
   if (change.body !== undefined)
     args.push('-d', change.body)
+
+  if (change.milestone !== undefined)
+    args.push('-m', change.milestone)
 
   await tea(args, repo)
 }
@@ -63,11 +74,14 @@ export async function setBody(number: number, body: string, repo?: string): Prom
 }
 
 // tea prints the new issue in a boxed view no script can read, so it is found again by its title, the newest one winning.
-export async function createIssue(title: string, body: string, labels: string | undefined, repo?: string): Promise<Issue> {
+export async function createIssue(title: string, body: string, labels: string | undefined, milestone: string | undefined, repo?: string): Promise<Issue> {
   const args = ['issues', 'create', '-t', title, '-d', body]
 
   if (labels !== undefined)
     args.push('-L', labels)
+
+  if (milestone !== undefined)
+    args.push('-m', milestone)
 
   await tea(args, repo)
 

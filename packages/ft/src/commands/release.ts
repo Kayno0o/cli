@@ -1,8 +1,10 @@
 import { basename, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { duration, fail, formatDuration, parse, runHint } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, parse, runHint, warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { defaultBranch, git, gitOk, tagsAt } from '../git'
+import { closedIssues, openIssues } from '../issues'
+import { closeMilestone, listMilestones } from '../milestones'
 import { newestPerWorkflow, recentRuns } from '../runs'
 import { watchRuns } from './watch'
 
@@ -13,6 +15,7 @@ Cuts a release from the default branch: first the commit it sits on is pushed an
 --tagged releases a version commit already tagged at HEAD instead, for repos bumping with their own script; the runs waited for first are then those of the commit below it.
 --package releases one workspace package of a monorepo on its own, tagged \`<folder>-v<version>\` (\`ft release patch -p ft\` tags packages/ft as ft-v0.3.0).
 A refused push drops the bump commit and its tag, so a retry starts clean.
+Once released, an open milestone titled like the version (\`1.2.0\`, \`v1.2.0\` or the tag) has its closed issues listed and is closed; a failure there only warns.
 --dry-run checks the same and prints the plan: the version bump, the tag, the pushes and the runs and registry it would wait for, changing nothing.
 Exits 0 once released or planned, 1 when a run fails, origin refuses a push or the registry never serves the version, 2 on a timeout, a stalled queue, a refusal before anything ran (another branch, uncommitted changes, origin ahead) or a usage error.`
 
@@ -253,6 +256,7 @@ export async function release(args: string[]): Promise<number> {
 
   if (values['no-registry'] === true || pkg?.name === undefined || pkg.private === true) {
     console.log(`released ${tag}`)
+    await settleMilestone(version, tag)
 
     return 0
   }
@@ -261,6 +265,31 @@ export async function release(args: string[]): Promise<number> {
     fail(`the runs passed but the registry does not serve ${pkg.name}@${version}: read the publish job with \`ft logs\``, 1)
 
   console.log(`released ${pkg.name}@${version}`)
+  await settleMilestone(version, tag)
 
   return 0
+}
+
+// Lists the closed issues of the open milestone named like the released version (`1.2.0`, `v1.2.0` or the tag) and closes it; a failure only warns, as the release itself is done.
+export async function settleMilestone(version: string, tag: string): Promise<void> {
+  try {
+    const names = new Set([version, `v${version}`, tag])
+    const found = (await listMilestones('open')).find(each => names.has(each.title))
+
+    if (found === undefined)
+      return
+
+    const [done, left] = await Promise.all([closedIssues(found.id), openIssues(undefined, undefined, found.id)])
+
+    console.log(`milestone ${found.title}: ${done.length} closed issue${done.length === 1 ? '' : 's'}${done.length === 0 ? '' : `\n${done.map(issue => `  #${issue.number} ${issue.title}`).join('\n')}`}`)
+
+    if (left.length > 0)
+      warn(`${left.length} issue${left.length === 1 ? ' is' : 's are'} still open in it`, left.map(issue => `#${issue.number}`).join(' '))
+
+    await closeMilestone(found.id)
+    console.log(`closed milestone ${found.title}`)
+  }
+  catch (error) {
+    warn(`released, but the milestone ${version} could not be settled`, error instanceof Error ? error.message : String(error))
+  }
 }

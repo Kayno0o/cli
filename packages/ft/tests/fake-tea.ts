@@ -4,8 +4,9 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { Exit } from '@kaynooo/cli-kit'
 
-export interface FakeIssue { number: number, title: string, body: string, state: string, labels?: { name: string }[] }
-export interface FakeState { issues: FakeIssue[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[] }
+export interface FakeIssue { number: number, title: string, body: string, state: string, labels?: { name: string }[], milestone?: { id: number, title: string } | null | undefined }
+export interface FakeMilestone { id: number, title: string, state: string, description?: string, due_on?: string | null }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[] }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -16,6 +17,8 @@ const state = JSON.parse(readFileSync(file, 'utf8'))
 const args = process.argv.slice(2).filter((arg, at, all) => arg !== '--repo' && all[at - 1] !== '--repo')
 const flag = name => { const at = args.indexOf(name); return at === -1 ? undefined : args[at + 1] }
 const issue = number => state.issues.find(each => each.number === Number(number))
+const milestoneNamed = name => state.milestones?.find(each => each.title === name)
+const milestoneView = found => ({ description: '', due_on: null, ...found, open_issues: state.issues.filter(each => each.milestone?.id === found.id && each.state === 'open').length, closed_issues: state.issues.filter(each => each.milestone?.id === found.id && each.state === 'closed').length })
 const view = found => ({ labels: [], comments: state.comments?.[found.number]?.length ?? 0, html_url: 'https://forge/issues/' + found.number, ...found })
 
 state.calls = [...(state.calls ?? []), args]
@@ -28,7 +31,11 @@ if (args.includes('--description-file')) {
 const [command, sub, number] = args
 
 if (command === 'api') {
-  const path = sub.replace('repos/{owner}/{repo}/', '')
+  const path = args.at(-1).replace('repos/{owner}/{repo}/', '')
+  const method = flag('-X') ?? 'GET'
+  const fields = Object.fromEntries(args.flatMap((arg, at) => arg === '-f' ? [args[at + 1].split(/=(.*)/s).slice(0, 2)] : []))
+  const milestone = /^milestones\\/(\\d+)$/.exec(path)
+  const query = new URLSearchParams(path.split('?')[1] ?? '')
   const run = /^actions\\/runs\\/(\\d+)$/.exec(path)
   const one = /^issues\\/(\\d+)(\\/comments)?$/.exec(path)
   const found = one === null ? undefined : issue(one[1])
@@ -41,8 +48,22 @@ if (command === 'api') {
     console.log(JSON.stringify({ workflow_runs: state.runs ?? [] }))
   else if (path.startsWith('labels?'))
     console.log(JSON.stringify((state.labels ?? []).map(name => ({ name }))))
+  else if (path.startsWith('milestones?'))
+    console.log(JSON.stringify((state.milestones ?? []).filter(each => query.get('state') === 'all' || each.state === query.get('state')).map(milestoneView)))
+  else if (path === 'milestones' && method === 'POST') {
+    const created = { id: Math.max(0, ...(state.milestones ?? []).map(each => each.id)) + 1, state: 'open', description: '', due_on: null, ...fields }
+
+    state.milestones = [...(state.milestones ?? []), created]
+    console.log(JSON.stringify(milestoneView(created)))
+  }
+  else if (milestone !== null && method === 'PATCH') {
+    const target = state.milestones.find(each => each.id === Number(milestone[1]))
+
+    Object.assign(target, fields)
+    console.log(JSON.stringify(milestoneView(target)))
+  }
   else if (path.startsWith('issues?'))
-    console.log(JSON.stringify(state.issues.filter(each => each.state === 'open').map(view)))
+    console.log(JSON.stringify(state.issues.filter(each => each.state === query.get('state') && (!query.has('milestones') || each.milestone?.id === Number(query.get('milestones')))).map(view)))
   else if (found === undefined)
     console.log(JSON.stringify({ message: 'not found', url: '' }))
   else if (one[2] === undefined)
@@ -55,12 +76,16 @@ else if (command === 'issues' && sub === 'edit') {
 
   found.body = flag('-d') ?? flag('--description') ?? found.body
   found.title = flag('-t') ?? flag('--title') ?? found.title
+  const moved = flag('-m') ?? flag('--milestone')
+
+  if (moved !== undefined)
+    found.milestone = moved === '' ? null : milestoneNamed(moved)
   const removed = (flag('--remove-labels') ?? '').split(',')
   const added = (flag('--add-labels') ?? '').split(',').filter(Boolean)
   found.labels = [...(found.labels ?? []).filter(each => !removed.includes(each.name)), ...added.filter(name => !(found.labels ?? []).some(each => each.name === name)).map(name => ({ name }))]
 }
 else if (command === 'issues' && sub === 'create') {
-  const created = { number: Math.max(0, ...state.issues.map(each => each.number)) + 1, title: flag('-t'), body: flag('-d') ?? '', state: 'open', labels: (flag('-L') ?? '').split(',').filter(Boolean).map(name => ({ name })) }
+  const created = { number: Math.max(0, ...state.issues.map(each => each.number)) + 1, title: flag('-t'), body: flag('-d') ?? '', state: 'open', labels: (flag('-L') ?? '').split(',').filter(Boolean).map(name => ({ name })), milestone: flag('-m') === undefined ? null : milestoneNamed(flag('-m')) }
 
   state.issues.push(created)
   console.log('#' + created.number + ' ' + created.title + '\\nhttps://forge/issues/' + created.number)

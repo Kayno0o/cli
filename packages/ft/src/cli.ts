@@ -8,6 +8,7 @@ import { ci } from './commands/ci'
 import { digest } from './commands/digest'
 import { commentOn, edit, fixed, issue, newIssue, tick } from './commands/issue'
 import { logs } from './commands/logs'
+import { milestone, milestones } from './commands/milestone'
 import { plan } from './commands/plan'
 import { release } from './commands/release'
 import { remote } from './commands/remote'
@@ -41,6 +42,8 @@ process.exitCode = await runCli({
     reopen: { run: reopenIssues, summary: 'reopen closed issues, -m posting the reason' },
     label: { run: label, summary: 'add +name and remove -name labels of an issue' },
     plan,
+    milestones: { run: milestones, summary: 'milestones with their open and closed issues, progress and due date' },
+    milestone: { run: milestone, summary: 'show a milestone\'s issues like the board, `new` creates one, `close` closes it' },
     remote: { run: remote, summary: 'check or fix an origin using an ssh alias tea cannot match' },
   },
   aliases: { show: 'issue', view: 'issue' },
