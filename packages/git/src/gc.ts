@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import process from 'node:process'
-import { fail, parse, runMain } from '@kaynooo/cli-kit'
+import { fail, parse, runHint, runMain } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { git } from './git'
 import { commitMessageViolation, RULE, TICKET } from './message'
@@ -82,12 +82,12 @@ async function main(argv: string[]): Promise<number> {
   const unchanged = paths.filter((_, i) => changed[i] !== true)
 
   if (unchanged.length > 0)
-    fail(`nothing staged: no change to commit in ${unchanged.join(', ')} (unchanged, ignored or missing)`, 1)
+    fail(`nothing staged: no change to commit in ${unchanged.join(', ')} (unchanged, ignored or missing)`, 1, runHint('gst', 'see what changed'))
 
   const others = await stagedElsewhere(paths)
 
   if (others.length > 0)
-    fail(`nothing staged: the index already holds ${others.join(', ')}, which this commit would carry along; unstage them or name them too`, 1)
+    fail(`nothing staged: the index already holds ${others.join(', ')}, which this commit would carry along`, 1, runHint(`git restore --staged -- ${others.join(' ')}`, 'unstage them, or name them in the paths too'))
 
   await checked(['add', '--', ...paths])
 

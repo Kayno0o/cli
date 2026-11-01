@@ -1,7 +1,7 @@
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
 import type { Session } from '../sessions'
-import { Exit, fail, formatAge, jsonOption, parse, printJson, table, truncate } from '@kaynooo/cli-kit'
+import { Exit, fail, formatAge, jsonOption, parse, printHint, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -193,6 +193,10 @@ async function eachIssue(command: string, numbers: number[], step: (number: numb
         throw error
 
       console.error(`ft ${command}: ${error.message}`)
+
+      if (error.hint !== undefined)
+        printHint(error.hint)
+
       code = Math.max(code, error.code)
     }
   }
@@ -213,7 +217,7 @@ export async function take(args: string[]): Promise<number> {
     const [found, comments] = await Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])
 
     if (found.state === 'closed')
-      fail(`#${number} is closed`, 1)
+      fail(`#${number} is closed`, 1, runHint(`ft reopen ${number}`, 'reopen it'))
 
     const claim = latestClaim(comments)
     const current = standing(claim, sessions)
@@ -229,7 +233,7 @@ export async function take(args: string[]): Promise<number> {
       fail(`#${number} is taken by ${current.claim.holder}${current.session.name === current.claim.holder ? '' : ` in ${current.session.name}`}, which still runs (${current.session.status})`, 1)
 
     if (current.state === 'away' && values['take-stale'] !== true)
-      fail(`#${number} was taken by ${current.claim.holder} ${formatAge(current.claim.at)}, which no session here answers to: it may run on another machine, so pass --take-stale to take it over`, 1)
+      fail(`#${number} was taken by ${current.claim.holder} ${formatAge(current.claim.at)}, which no session here answers to: it may run on another machine`, 1, runHint(`ft take ${number} --take-stale`, 'take it over'))
 
     await comment(number, takenComment(name), values.repo)
     console.log(`took #${number} as ${name}: ${found.title}`)

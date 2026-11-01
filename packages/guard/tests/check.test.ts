@@ -217,6 +217,21 @@ describe('the bin', () => {
   })
 })
 
+describe('refusals name the command that resolves them', () => {
+  test.each([
+    ['git stash', 'base -- <cmd>'],
+    ['git add -A', 'gc \''],
+    ['git commit -am x', 'gc \''],
+    ['git push --tags', 'git push --atomic origin <branch> <tag>'],
+    ['sed -i s/a/b/ f.ts', 'sub --from'],
+    ['cat .env', 'ev list'],
+  ])('%s', async (command, route) => {
+    const [violation] = (await checkCommand(command, context({}, { isPushAsked: true }))).violations
+
+    expect(violation?.message).toContain(route)
+  })
+})
+
 describe('out', () => {
   test('routes a noisy command through out once it is installed', async () => {
     expect((await checkCommand('bun run lint', context({}, { canWrap: true }))).command).toBe('out -- bun run lint')

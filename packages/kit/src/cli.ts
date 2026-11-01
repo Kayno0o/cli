@@ -130,6 +130,18 @@ export function printError(prefix: string, message: string, hint?: string, cause
   console.error(`${head} ${message}${under('cause', cause, colors.dim)}${under('hint', hint, colors.yellow)}`)
 }
 
+// The hint of a refusal a command resolves with another command, worded alike everywhere: ``run `ft take 12 --take-stale` ``, then what it does when that is not obvious.
+export function runHint(command: string, effect?: string): string {
+  return `run \`${command}\`${effect === undefined ? '' : ` to ${effect}`}`
+}
+
+// A hint under a refusal a command prints itself, laid out as printError lays it.
+export function printHint(hint: string): void {
+  const colors = paint(process.stderr)
+
+  console.error(`  ${takesControlCodes(process.stderr) ? colors.yellow('hint') : 'hint:'} ${hint}`)
+}
+
 // An error as `{"error", "hint"?, "cause"?}` on stderr, for a command run with `--json`, so a caller parses its failures as it parses its output.
 export function printJsonError(message: string, hint?: string, cause?: string): void {
   console.error(JSON.stringify({ error: message, ...(hint === undefined ? {} : { hint }), ...(cause === undefined ? {} : { cause }) }))

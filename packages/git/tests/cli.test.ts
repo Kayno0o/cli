@@ -134,12 +134,14 @@ describe('gc', () => {
     file('b.ts')
 
     expect(gc('fix: a', '--', 'a.ts', 'base.ts').err).toContain('no change to commit in base.ts')
+    expect(gc('fix: a', '--', 'a.ts', 'base.ts').err).toContain('hint: run `gst` to see what changed')
 
     git('add', 'b.ts')
     const result = gc('fix: a', '--', 'a.ts')
 
     expect(result.code).toBe(1)
     expect(result.err).toContain('the index already holds b.ts')
+    expect(result.err).toContain('hint: run `git restore --staged -- b.ts` to unstage them')
     expect(git('status', '--porcelain')).toBe('A  b.ts\n?? a.ts')
   })
 

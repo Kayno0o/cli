@@ -1,6 +1,6 @@
 import type { Named } from '../git'
 import type { Issue, IssueComment } from '../issues'
-import { fail, formatAge, jsonOption, parse, printJson, readInput } from '@kaynooo/cli-kit'
+import { fail, formatAge, jsonOption, parse, printJson, readInput, runHint } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
 import { appendBoxes, boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { latestClaim } from '../claims'
@@ -380,7 +380,7 @@ export async function fixed(args: string[]): Promise<number> {
   const found = await getIssue(number, values.repo)
 
   if (found.state === 'closed')
-    fail(`#${number} is already closed`, 1)
+    fail(`#${number} is already closed`, 1, runHint(`ft reopen ${number}`, 'reopen it'))
 
   const left = boxes(found.body).filter(box => !box.done)
 
@@ -389,7 +389,7 @@ export async function fixed(args: string[]): Promise<number> {
     console.log(`ticked ${left.length} box${left.length === 1 ? '' : 'es'} of #${number}`)
   }
   else if (left.length > 0 && values.force !== true) {
-    fail(`#${number} has ${left.length} boxes left, tick them, pass --tick or pass --force:\n${left.map(box => `${String(box.number).padStart(3)} [ ] ${box.text}`).join('\n')}`, 1)
+    fail(`#${number} has ${left.length} boxes left:\n${left.map(box => `${String(box.number).padStart(3)} [ ] ${box.text}`).join('\n')}`, 1, `${runHint(`ft fixed ${number} --tick`, 'tick them and close')}, or ${runHint(`ft fixed ${number} --force`, 'close with them left')}`)
   }
 
   const shas = joinShas(commits.map(each => each.sha.slice(0, 7)))

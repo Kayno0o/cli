@@ -61,7 +61,7 @@ describe('ft ci on a commit origin lacks', () => {
       const started = Date.now()
 
       await withFakeTea({ issues: [], runs: [] }, async () => {
-        expect(await refusal(ci(['HEAD', '--timeout', '1m']))).toContain('is not on origin/main: push it first')
+        expect(await refusal(ci(['HEAD', '--timeout', '1m']))).toContain('is not on origin/main')
       })
       expect(Date.now() - started).toBeLessThan(10_000)
     }

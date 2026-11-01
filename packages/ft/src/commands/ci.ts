@@ -1,6 +1,6 @@
 import type { Run } from '../runs'
 import process from 'node:process'
-import { badge, duration, Exit, fail, formatDuration, paint, parse } from '@kaynooo/cli-kit'
+import { badge, duration, Exit, fail, formatDuration, paint, parse, runHint } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { cwdGone, defaultBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
@@ -82,7 +82,7 @@ export async function ci(args: string[]): Promise<number> {
     await git(['fetch', '-q', 'origin', branch])
 
     if (!await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`]))
-      fail(`${short} is not on origin/${branch}: push it first`)
+      fail(`${short} is not on origin/${branch}`, 2, runHint(`git push origin ${branch}`))
 
     const later = (await git(['rev-list', '--reverse', '--first-parent', `${sha}..origin/${branch}`])).split('\n').filter(Boolean)
 

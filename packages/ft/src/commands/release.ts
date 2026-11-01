@@ -1,6 +1,6 @@
 import { basename, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { duration, fail, formatDuration, parse } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, parse, runHint } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { defaultBranch, git, gitOk, tagsAt } from '../git'
 import { newestPerWorkflow, recentRuns } from '../runs'
@@ -194,16 +194,16 @@ export async function release(args: string[]): Promise<number> {
   const current = await git(['branch', '--show-current'])
 
   if (current !== branch)
-    fail(`a release is cut from ${branch}, not ${current || 'a detached HEAD'}`)
+    fail(`a release is cut from ${branch}, not ${current || 'a detached HEAD'}`, 2, runHint(`git switch ${branch}`))
 
   if (await git(['status', '--porcelain']) !== '')
-    fail('the tree has uncommitted changes: commit or stash them first')
+    fail('the tree has uncommitted changes', 2, runHint('gst', 'see them, then commit them with gc'))
 
   await git(['fetch', '-q', 'origin', branch])
 
   // A push origin would refuse is caught before the bump.
   if ((await $`git merge-base --is-ancestor ${`origin/${branch}`} HEAD`.quiet().nothrow()).exitCode !== 0)
-    fail(`origin/${branch} has commits HEAD lacks: pull first`)
+    fail(`origin/${branch} has commits HEAD lacks`, 2, runHint(`git pull --rebase origin ${branch}`))
 
   // With --tagged, HEAD is the version commit and the tests run on the one below it.
   const base = await git(['rev-parse', tagged ? 'HEAD~1' : 'HEAD'])
@@ -212,7 +212,7 @@ export async function release(args: string[]): Promise<number> {
     return printPlan({ level, dir, prefix, branch, base, timeout, registry: values['no-registry'] !== true })
 
   if (!await testsPass(base, branch, timeout))
-    fail(`the runs on ${base.slice(0, 7)} failed, so nothing was bumped or tagged: fix them and release again`, 1)
+    fail(`the runs on ${base.slice(0, 7)} failed, so nothing was bumped or tagged`, 1, runHint(`ft runs --sha ${base.slice(0, 7)}`, 'list the runs, then ft logs <id> reads the failure'))
 
   if (level !== undefined) {
     const bump = dir === undefined

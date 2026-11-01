@@ -1,7 +1,7 @@
 import type { Example } from '../src'
 import process from 'node:process'
 import { describe, expect, test } from 'bun:test'
-import { applyOutput, badUsage, fail, parse, runCli, runMain } from '../src'
+import { applyOutput, badUsage, fail, parse, printHint, runCli, runHint, runMain } from '../src'
 import { capture } from '../src/test'
 
 const cli = {
@@ -253,5 +253,20 @@ describe('the help screen', () => {
     }
 
     expect((await capture(async () => runMain({ name: 'demo', version: '1', run: example }, ['--help']))).out).toEndWith('show this help\n\nExamples:\n  demo a\n')
+  })
+})
+
+describe('runHint', () => {
+  test('words a runnable command as a hint, with what it does when given', async () => {
+    expect(runHint('ft take 12 --take-stale')).toBe('run `ft take 12 --take-stale`')
+    expect(runHint('ft take 12 --take-stale', 'take it over')).toBe('run `ft take 12 --take-stale` to take it over')
+
+    const hinted = { ...cli, commands: { own: { summary: 'own hint', run: async () => fail('held', 1, runHint('demo free')) } } }
+
+    expect((await capture(async () => runCli(hinted, ['own']))).err).toBe('error: demo own: held\n  hint: run `demo free`\n')
+  })
+
+  test('prints a hint under a refusal a command prints itself', async () => {
+    expect((await capture(async () => printHint(runHint('demo free')))).err).toBe('  hint: run `demo free`\n')
   })
 })

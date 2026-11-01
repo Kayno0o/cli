@@ -2,6 +2,7 @@ import { chmod, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { Exit } from '@kaynooo/cli-kit'
 
 export interface FakeIssue { number: number, title: string, body: string, state: string, labels?: { name: string }[] }
 export interface FakeState { issues: FakeIssue[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[] }
@@ -92,6 +93,18 @@ export async function refusal(pending: Promise<unknown>): Promise<string> {
   }
   catch (error) {
     return error instanceof Error ? error.message : String(error)
+  }
+}
+
+// The hint a refusal carries, or an empty string when it resolved or had none.
+export async function hintOf(pending: Promise<unknown>): Promise<string> {
+  try {
+    await pending
+
+    return ''
+  }
+  catch (error) {
+    return error instanceof Exit ? error.hint ?? '' : ''
   }
 }
 

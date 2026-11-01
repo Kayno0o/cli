@@ -5,7 +5,7 @@ import process from 'node:process'
 import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
 import { fixed, joinShas } from '../src/commands/issue'
-import { refusal, withFakeTea } from './fake-tea'
+import { hintOf, refusal, withFakeTea } from './fake-tea'
 
 // A clone of a bare origin holding one pushed commit per message, the shas returned oldest first.
 async function withClone(messages: string[], run: (shas: string[]) => Promise<void>): Promise<void> {
@@ -71,6 +71,7 @@ describe('fixed', () => {
     await withClone(['one', 'two'], async (shas) => {
       const state = await withFakeTea({ issues }, async () => {
         expect(await refusal(fixed(['7', 'HEAD~1', 'HEAD']))).toContain('1 boxes left')
+        expect(await hintOf(fixed(['7', 'HEAD~1', 'HEAD']))).toBe('run `ft fixed 7 --tick` to tick them and close, or run `ft fixed 7 --force` to close with them left')
         expect(await fixed(['7', 'HEAD~1', 'HEAD', '--force', '-m', 'done'])).toBe(0)
       })
 

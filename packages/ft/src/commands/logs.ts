@@ -1,5 +1,5 @@
 import type { Job } from '../runs'
-import { badge, fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, fail, parse, runHint, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { excerpt, logLines } from '../log'
 import { jobLog, jobsOf, runById } from '../runs'
@@ -32,14 +32,14 @@ export async function logs(args: string[]): Promise<number> {
   const { values, positionals } = parsed
 
   if (positionals[0] === undefined)
-    fail(`a run id is needed, as \`ft runs\` lists them\n\n${usage}`)
+    fail('a run id is needed', 2, runHint('ft runs', 'list them'))
 
   const run = await runById(wholeNumber(positionals[0], 'run id', 0), values.repo)
   const jobs = await jobsOf(run.id, values.repo)
   const picked = pickJobs(jobs, values.job)
 
   if (picked.length === 0)
-    fail(`run ${run.id} has no job ${values.job ?? ''}: ${jobs.map(job => job.name).join(', ')}`)
+    fail(`run ${run.id} has no job ${values.job ?? ''}: ${jobs.map(job => job.name).join(', ')}`, 2, runHint(`ft logs ${run.id}`, 'read every failed job'))
 
   console.log(`${run.workflow_id} run ${run.id} on ${run.prettyref} (${run.commit_sha.slice(0, 7)}): ${badge(run.status, process.stdout)}, ${run.html_url}`)
 
