@@ -177,8 +177,8 @@ function checkPositionals(given: string[], names: readonly string[]): void {
 
 // The arguments with a string option's value joined to it as `--name=value` when that value starts with a dash and names no option, which parseArgs would refuse as ambiguous: `sub --from "- item"`.
 function joinDashValues(args: readonly string[], options: Options): string[] {
-  const longOf = new Map(Object.entries(options).flatMap(([name, option]) => [[`--${name}`, name], ...(option.short === undefined ? [] : [[`-${option.short}`, name]])]))
-  const isOption = (arg: string) => arg === '--' || longOf.has(arg.split('=')[0] ?? '')
+  const longOf = new Map<string, string>(Object.entries(options).flatMap(([name, option]): [string, string][] => option.short === undefined ? [[`--${name}`, name]] : [[`--${name}`, name], [`-${option.short}`, name]]))
+  const isOption = (arg: string) => arg === '--' || longOf.has(arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg)
   const joined: string[] = []
 
   for (let i = 0; i < args.length; i++) {
