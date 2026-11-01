@@ -45,9 +45,6 @@ export function judge(runs: Run[], jobSkipped: boolean, tagged: boolean): Covera
 export async function ci(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
   const branch = values.branch ?? await defaultBranch()
   const giveUp = duration(values.timeout, 'timeout', 30 * 60_000, 'm')

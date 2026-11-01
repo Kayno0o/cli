@@ -37,9 +37,6 @@ export function pick<T extends { name: string }>(steps: T[], only: string | unde
 export async function check(args: string[], cwd = process.cwd()): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const found = await discover(cwd)
 
   if (found.length === 0)

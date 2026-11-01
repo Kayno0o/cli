@@ -60,7 +60,50 @@ describe('runCli', () => {
 
     expect((await capture(async () => runCli(withDefault, ['-n', '5', 'x']))).out).toBe('-n 5 x\n')
     expect((await capture(async () => runCli(withDefault, ['echo', 'x']))).out).toBe('x\n')
-    expect((await capture(async () => runCli(withDefault, ['--help']))).out).toStartWith('demo 1.2.3')
+  })
+
+  test('lists the default command\'s options in the help, without running it', async () => {
+    const ran: string[] = []
+    const withDefault = { ...cli, commands: { ...cli.commands, port: { summary: 'parses first', run: async (args: string[]) => {
+      parse(args, 'demo port [options]', { max: { type: 'string', description: 'highest port' } })
+      ran.push('port')
+
+      return 0
+    } } }, defaultCommand: 'port' }
+
+    expect((await capture(async () => runCli(withDefault, ['--help']))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo [<command>] [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n  port  parses first\n\nOptions of port: the command run when none is named\n      --max <value>  highest port\n  -h, --help         show this help\n\nRun demo <command> --help for its options.\n')
+    expect(ran).toEqual([])
+  })
+
+  test('ends a command on its --help with exit 0, printing the help alone', async () => {
+    const helped = { ...cli, commands: { port: { summary: 'parses first', run: async (args: string[]) => {
+      parse(args, 'demo port', {})
+      console.log('ran')
+
+      return 3
+    } } } }
+
+    expect(await capture(async () => runCli(helped, ['port', '--help']))).toEqual({ result: 0, out: 'Usage: demo port\n\nOptions:\n  -h, --help  show this help\n', err: '' })
+  })
+
+  test('names an error other than an Exit by its class, prints its cause\'s message under it, and redacts both', async () => {
+    class MigrationError extends Error {
+      override name = 'MigrationError'
+    }
+    const failing = { ...cli, commands: { sync: { summary: 'fails with a cause', run: async () => {
+      throw new MigrationError('sync failed for secret-row', { cause: new Error('duplicate key secret-row') })
+    } } } }
+
+    expect(await capture(async () => runCli(failing, ['sync']))).toEqual({ result: 1, out: '', err: 'error: demo sync: MigrationError: sync failed for secret-row\n  cause: duplicate key secret-row\n' })
+    expect((await capture(async () => runCli({ ...failing, redact: (text: string) => text.replaceAll('secret-row', '[redacted]') }, ['sync']))).err).toBe('error: demo sync: MigrationError: sync failed for [redacted]\n  cause: duplicate key [redacted]\n')
+  })
+
+  test('prints a cause that is not an Error as nothing, never the object itself', async () => {
+    const failing = { ...cli, commands: { sync: { summary: 'fails', run: async () => {
+      throw new Error('boom', { cause: { row: 'secret' } })
+    } } } }
+
+    expect((await capture(async () => runCli(failing, ['sync']))).err).toBe('error: demo sync: boom\n')
   })
 
   test('dispatches a group\'s subcommands', async () => {
@@ -123,7 +166,11 @@ describe('__complete', () => {
   })
 
   test('completes a single-command bin\'s options', async () => {
-    const run = async (args: string[]) => (parse(args, 'x', { only: { type: 'string', description: 'some' } }) === undefined ? 0 : 0)
+    const run = async (args: string[]) => {
+      parse(args, 'x', { only: { type: 'string', description: 'some' } })
+
+      return 0
+    }
 
     expect((await capture(async () => runMain({ name: 'x', version: '1', run }, ['__complete', '-']))).out).toBe('--only\tsome\n--help\tshow this help\n')
   })

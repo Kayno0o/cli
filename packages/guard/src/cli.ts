@@ -55,9 +55,6 @@ function report(violations: Violation[]) {
 async function check(args: string[]): Promise<number> {
   const parsed = parse(args, checkUsage, checkOptions)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
 
   if (positionals.length > 1)
@@ -89,9 +86,6 @@ async function check(args: string[]): Promise<number> {
 
 function path(args: string[]): number {
   const parsed = parse(args, pathUsage, pathOptions)
-
-  if (parsed === undefined)
-    return 0
 
   if (parsed.positionals.length === 0)
     fail(`give at least one path\n\n${pathUsage}`)
@@ -126,9 +120,6 @@ function machine(): Machine {
 
 async function hookCommand(args: string[]): Promise<number> {
   const parsed = parse(args, hookUsage, {})
-
-  if (parsed === undefined)
-    return 0
 
   const event = parsed.positionals[0] ?? ''
 

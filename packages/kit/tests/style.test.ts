@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { helpText, parse } from '../src/args'
+import { runMain } from '../src/cli'
 import { table } from '../src/format'
 import { marked, paint } from '../src/style'
 import { capture } from '../src/test'
@@ -41,7 +42,13 @@ describe('helpText', () => {
   })
 
   it('prints the help through parse on --help', async () => {
-    expect((await capture(() => parse(['--help'], 'demo', {}))).out).toBe('Usage: demo\n\nOptions:\n  -h, --help  show this help\n')
+    const run = async (args: string[]) => {
+      parse(args, 'demo', {})
+
+      return 1
+    }
+
+    expect(await capture(async () => runMain({ name: 'demo', version: '1', run }, ['--help']))).toEqual({ result: 0, out: 'Usage: demo\n\nOptions:\n  -h, --help  show this help\n', err: '' })
   })
 })
 

@@ -103,9 +103,6 @@ function writable(path: string): boolean {
 async function main(argv: string[]): Promise<number> {
   const parsed = parse(argv, USAGE, OPTIONS)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
   const files = [...new Set(positionals)]
 

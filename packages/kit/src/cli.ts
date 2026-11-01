@@ -1,7 +1,7 @@
 import type { Options } from './args'
 import type { Colors } from './style'
 import process from 'node:process'
-import { Completing, completion, Exit, UsageError, usageLine } from './args'
+import { Completing, completion, Exit, HelpShown, optionRows, UsageError, usageLine } from './args'
 import { paint, takesControlCodes } from './style'
 import { distance } from './text'
 
@@ -19,8 +19,10 @@ export interface Cli {
   commands: Record<string, Command>
   // Names sessions reach for that mean an existing command.
   aliases?: Record<string, string>
-  // The command that takes the arguments when the first one names no command, so `db "select 1"` runs `db query "select 1"`.
+  // The command that takes the arguments when the first one names no command, so `db "select 1"` runs `db query "select 1"`; `--help` lists its options under the commands.
   defaultCommand?: string
+  // Rewrites an error's message and cause before they print, for a CLI whose errors may quote what a log must not keep.
+  redact?: (text: string) => string
 }
 
 // A command the name starts, else one within two edits (one for a name under four letters).
@@ -44,53 +46,64 @@ interface Level {
   defaultCommand: string | undefined
 }
 
-function help({ path, header, commands }: Level, stream: { isTTY?: boolean }): string {
+// The level's help; a default command's options follow the commands, as they apply with no command named.
+async function help({ path, header, commands, defaultCommand }: Level, stream: { isTTY?: boolean }): Promise<string> {
   const colors = paint(stream)
   const width = Math.max(...Object.keys(commands).map(name => name.length))
   const prefix = path.join(' ')
+  const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]
+  const options = fallback !== undefined && 'run' in fallback ? await optionsOf(fallback.run) : undefined
 
   return [
     header(colors),
     '',
-    usageLine(`${prefix} ${colors.cyan('<command>')} [options]`, colors),
+    usageLine(`${prefix} ${defaultCommand === undefined ? colors.cyan('<command>') : `[${colors.cyan('<command>')}]`} [options]`, colors),
     '',
     colors.bold('Commands:'),
     ...Object.entries(commands).map(([name, { summary }]) => `  ${colors.cyan(name.padEnd(width))}  ${colors.dim(summary)}`),
+    ...options === undefined || Object.keys(options).length === 0 ? [] : ['', `${colors.bold(`Options of ${defaultCommand}:`)} ${colors.dim('the command run when none is named')}`, ...optionRows(options, colors)],
     '',
     `${colors.dim('Run')} ${prefix} ${colors.cyan('<command>')} --help ${colors.dim('for its options.')}`,
   ].join('\n')
 }
 
-// `error <prefix>: <message>` on stderr, the hint on its own line under it; plain words off a terminal.
-export function printError(prefix: string, message: string, hint?: string): void {
+// `error <prefix>: <message>` on stderr, the cause and the hint each on a line of their own under it; plain words off a terminal.
+export function printError(prefix: string, message: string, hint?: string, cause?: string): void {
   const colors = paint(process.stderr)
   const styled = takesControlCodes(process.stderr)
   const head = styled ? `${colors.red.bold('error')} ${colors.dim(`${prefix}:`)}` : `error: ${prefix}:`
+  const under = (label: string, text: string | undefined, tint: (text: string) => string) => text === undefined ? '' : `\n  ${styled ? tint(label) : `${label}:`} ${text}`
 
-  console.error(`${head} ${message}${hint === undefined ? '' : `\n  ${styled ? colors.yellow('hint') : 'hint:'} ${hint}`}`)
+  console.error(`${head} ${message}${under('cause', cause, colors.dim)}${under('hint', hint, colors.yellow)}`)
 }
 
-// What a thrown error prints as and exits with: an Exit its own code and hint, a UsageError pointed at the help, anything else 1.
-function reportThrown(prefix: string, error: unknown): number {
-  const help = error instanceof UsageError ? `run ${prefix} --help for its options` : undefined
+// What a thrown error prints as and exits with: an Exit its own code and hint, a UsageError pointed at the help, HelpShown nothing at all and 0, anything else 1.
+// An error other than an Exit is named unless a plain `Error` (`MigrationError: ...`), and its cause's message printed under it, never the cause itself.
+function reportThrown(prefix: string, error: unknown, redact: (text: string) => string = text => text): number {
+  if (error instanceof HelpShown)
+    return 0
 
-  printError(prefix, error instanceof Error ? error.message : String(error), error instanceof Exit ? error.hint ?? help : undefined)
+  const help = error instanceof UsageError ? `run ${prefix} --help for its options` : undefined
+  const named = error instanceof Error && !(error instanceof Exit) && error.name !== 'Error' ? `${error.name}: ${error.message}` : undefined
+  const cause = error instanceof Error && error.cause instanceof Error ? redact(error.cause.message) : undefined
+
+  printError(prefix, redact(named ?? (error instanceof Error ? error.message : String(error))), error instanceof Exit ? error.hint ?? help : undefined, cause)
 
   return error instanceof Exit ? error.code : 1
 }
 
-async function dispatch(level: Level, argv: string[], version: string): Promise<number> {
+async function dispatch(level: Level, argv: string[], { version, redact }: { version: string, redact: Cli['redact'] | undefined }): Promise<number> {
   const [name, ...args] = argv
   const prefix = level.path.join(' ')
 
   if (name === undefined && level.path.length > 1) {
-    console.error(help(level, process.stderr))
+    console.error(await help(level, process.stderr))
 
     return 2
   }
 
   if (name === undefined || name === 'help' || name === '--help' || name === '-h') {
-    console.log(help(level, process.stdout))
+    console.log(await help(level, process.stdout))
 
     return 0
   }
@@ -120,14 +133,14 @@ async function dispatch(level: Level, argv: string[], version: string): Promise<
   if ('commands' in command) {
     const { summary } = command
 
-    return dispatch({ path: [...level.path, name], header: colors => `${colors.bold(`${prefix} ${name}`)}  ${summary}`, commands: command.commands, aliases: command.aliases, defaultCommand: undefined }, rest, version)
+    return dispatch({ path: [...level.path, name], header: colors => `${colors.bold(`${prefix} ${name}`)}  ${summary}`, commands: command.commands, aliases: command.aliases, defaultCommand: undefined }, rest, { version, redact })
   }
 
   try {
     return await command.run(rest)
   }
   catch (error) {
-    return reportThrown(`${prefix} ${name}`, error)
+    return reportThrown(`${prefix} ${name}`, error, redact)
   }
 }
 
@@ -191,17 +204,18 @@ export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<nu
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(cli.commands, cli.aliases, cli.defaultCommand, argv.slice(1)))
 
-  return dispatch({ path: [cli.name], header: colors => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${cli.about}`, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand }, argv, cli.version)
+  return dispatch({ path: [cli.name], header: colors => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${cli.about}`, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand }, argv, { version: cli.version, redact: cli.redact })
 }
 
 export interface Main {
   name: string
   version: string
   run: (args: string[]) => Promise<number>
+  redact?: (text: string) => string
 }
 
 // Runs a CLI that is a single command: `--version` or `-v` alone prints the version, an `Exit` or any error prints as `error: <name>: <message>`. Returns the exit code.
-export async function runMain({ name, version, run }: Main, argv = process.argv.slice(2)): Promise<number> {
+export async function runMain({ name, version, run, redact }: Main, argv = process.argv.slice(2)): Promise<number> {
   if (argv[0] === COMPLETE)
     return printCandidates(leafCandidates(run, argv.slice(1)))
 
@@ -215,6 +229,6 @@ export async function runMain({ name, version, run }: Main, argv = process.argv.
     return await run(argv)
   }
   catch (error) {
-    return reportThrown(name, error)
+    return reportThrown(name, error, redact)
   }
 }

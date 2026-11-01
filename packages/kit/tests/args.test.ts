@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { duration, Exit, parse, readInput } from '../src'
+import { duration, Exit, HelpShown, parse, readInput, UsageError } from '../src'
 
 const options = { lines: { type: 'string', short: 'n', description: 'lines' } } as const
 
@@ -13,15 +13,48 @@ describe('parse', () => {
 
   test('hands what follows `--` back untouched, options included', () => {
     expect(parse(['-n', '5', 'x', '--', 'ls', '-n', '--help'], 'u', options, { rest: true })).toMatchObject({ values: { lines: '5' }, positionals: ['x'], rest: ['ls', '-n', '--help'] })
-    expect(parse(['-n', '5'], 'u', options, { rest: true })?.rest).toBeUndefined()
+    expect(parse(['-n', '5'], 'u', options, { rest: true }).rest).toBeUndefined()
   })
 
   test('takes `--no-<flag>` as false only when asked to', () => {
     const flags = { emoji: { type: 'boolean', default: true, description: 'emoji' } } as const
 
-    expect(parse(['--no-emoji'], 'u', flags, { allowNegative: true })?.values.emoji).toBe(false)
-    expect(parse([], 'u', flags, { allowNegative: true })?.values.emoji).toBe(true)
+    expect(parse(['--no-emoji'], 'u', flags, { allowNegative: true }).values.emoji).toBe(false)
+    expect(parse([], 'u', flags, { allowNegative: true }).values.emoji).toBe(true)
     expect(() => parse(['--no-emoji'], 'u', flags)).toThrow(Exit)
+  })
+
+  test('throws HelpShown after printing the help, so the command goes no further', () => {
+    expect(() => parse(['--help'], 'u', options)).toThrow(HelpShown)
+  })
+
+  test('takes the positionals named, a missing or an extra one a usage error', () => {
+    const [key, file] = parse(['K', 'x.env'], 'u', {}, { positionals: ['<key>', '[file]'] }).positionals
+
+    expect([key, file]).toEqual(['K', 'x.env'])
+    expect(parse(['K'], 'u', {}, { positionals: ['KEY', '[file]'] }).positionals).toEqual(['K'])
+    expect(() => parse([], 'u', {}, { positionals: ['<key>', '[file]'] })).toThrow(new UsageError('missing <key>'))
+    expect(() => parse(['a', 'b', 'c'], 'u', {}, { positionals: ['<key>', '[file]'] })).toThrow(new UsageError('unexpected argument c'))
+    expect(() => parse(['foo'], 'u', {}, { positionals: [] })).toThrow(new UsageError('unexpected argument foo'))
+  })
+
+  test('takes any number past a last name ending in ..., at least one when it is required', () => {
+    expect(parse(['a', 'b', 'c'], 'u', {}, { positionals: ['<out>', '[paths...]'] }).positionals).toEqual(['a', 'b', 'c'])
+    expect(parse([], 'u', {}, { positionals: ['[paths...]'] }).positionals).toEqual([])
+    expect(() => parse([], 'u', {}, { positionals: ['<paths...>'] })).toThrow(new UsageError('missing <paths...>'))
+  })
+
+  test('keeps a negative number a usage error, read as an option', () => {
+    expect(() => parse(['-1'], 'u', {}, { positionals: ['[n]'] })).toThrow(UsageError)
+  })
+
+  test('types the positionals by their names', () => {
+    const { positionals } = parse(['K'], 'u', {}, { positionals: ['<key>', '[file]', '[more...]'] })
+    const key: string = positionals[0]
+    const file: string | undefined = positionals[1]
+    const [, , ...more] = positionals
+
+    expect([key, file, more]).toEqual(['K', undefined, []])
   })
 })
 

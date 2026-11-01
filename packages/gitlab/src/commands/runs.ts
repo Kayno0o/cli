@@ -20,9 +20,6 @@ const TITLE_WIDTH = 70
 export async function runs(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { values } = parsed
   const limit = wholeNumber(values.limit, 'limit', 10)
   const found = values.sha === undefined

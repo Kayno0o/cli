@@ -19,9 +19,6 @@ function display(key: string, value: string): string {
 export async function list(args: string[]): Promise<number> {
   const parsed = parse(args, listUsage, {})
 
-  if (parsed === undefined)
-    return 0
-
   const [file] = parsed.positionals
   const names = file === undefined ? await envFiles() : [file]
 
@@ -43,9 +40,6 @@ export async function list(args: string[]): Promise<number> {
 
 export async function get(args: string[]): Promise<number> {
   const parsed = parse(args, getUsage, {})
-
-  if (parsed === undefined)
-    return 0
 
   const [key, file] = parsed.positionals
 
@@ -83,9 +77,6 @@ const REVISION = /^([^:]+):(.+)$/
 export async function grep(args: string[]): Promise<number> {
   const parsed = parse(args, grepUsage, { 'ignore-case': { type: 'boolean', short: 'i', description: 'match the key whatever its case' } })
 
-  if (parsed === undefined)
-    return 0
-
   const [source, ...files] = parsed.positionals
 
   if (source === undefined)
@@ -120,9 +111,6 @@ export async function grep(args: string[]): Promise<number> {
 
 export async function show(args: string[]): Promise<number> {
   const parsed = parse(args, showUsage, {})
-
-  if (parsed === undefined)
-    return 0
 
   const [target] = parsed.positionals
   const [, revision, path] = REVISION.exec(target ?? '') ?? []

@@ -37,9 +37,6 @@ export async function set(args: string[]): Promise<number> {
     empty: { type: 'boolean', description: 'set an empty value, reading nothing' },
   })
 
-  if (parsed === undefined)
-    return 0
-
   const [key, target = DEFAULT_FILE] = parsed.positionals
 
   if (key === undefined)
@@ -60,9 +57,6 @@ export async function set(args: string[]): Promise<number> {
 
 export async function unset(args: string[]): Promise<number> {
   const parsed = parse(args, unsetUsage, {})
-
-  if (parsed === undefined)
-    return 0
 
   const [key, target = DEFAULT_FILE] = parsed.positionals
 
@@ -86,9 +80,6 @@ export async function mv(args: string[]): Promise<number> {
     to: { type: 'string', description: 'the file to put KEY in, created when missing' },
     force: { type: 'boolean', description: 'replace KEY when the target already sets it' },
   })
-
-  if (parsed === undefined)
-    return 0
 
   const [key] = parsed.positionals
   const { from, to, force } = parsed.values

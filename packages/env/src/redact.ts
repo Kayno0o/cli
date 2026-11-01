@@ -19,9 +19,6 @@ const options = {
 async function run(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const known = parsed.values['no-env'] === true ? undefined : await loadKnown()
 
   if (parsed.values.check === true) {

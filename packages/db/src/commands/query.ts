@@ -26,9 +26,6 @@ export async function readSql(positionals: string[]): Promise<string> {
 export async function query(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
   const limit = wholeNumber(values.limit, 'limit', DEFAULT_LIMIT, 0)
   const sql = await readSql(positionals)

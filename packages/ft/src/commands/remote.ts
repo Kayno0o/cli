@@ -36,9 +36,6 @@ function originHost(url: string): string | undefined {
 export async function remote(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { values } = parsed
   const host = values.host ?? 'git.kaynooo.fr'
   const fetchUrl = await git(['remote', 'get-url', 'origin'])

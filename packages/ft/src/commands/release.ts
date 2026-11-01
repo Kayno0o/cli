@@ -91,9 +91,6 @@ async function testsPass(sha: string, branch: string, timeout: number): Promise<
 export async function release(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
   const level = positionals[0]
   const tagged = values.tagged === true

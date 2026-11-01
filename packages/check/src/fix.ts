@@ -134,9 +134,6 @@ function printChanged(changed: string[]): void {
 export async function fix(args: string[], cwd = process.cwd()): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   if (process.env[RUNNING] !== undefined)
     fail('a fixer called fix again, which would recurse: give its script another command')
 

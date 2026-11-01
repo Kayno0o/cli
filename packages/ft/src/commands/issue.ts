@@ -72,9 +72,6 @@ function issueJson(found: Issue, comments: IssueComment[]) {
 export async function issue(args: string[]): Promise<number> {
   const parsed = parse(args, issueUsage, issueOptions)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
   const numbers = issueNumbers(positionals, issueUsage)
 
@@ -149,9 +146,6 @@ const newOptions = {
 export async function newIssue(args: string[]): Promise<number> {
   const parsed = parse(args, newUsage, newOptions)
 
-  if (parsed === undefined)
-    return 0
-
   const { values } = parsed
 
   if (values.title === undefined || values.title.trim() === '')
@@ -184,9 +178,6 @@ const editOptions = {
 
 export async function edit(args: string[]): Promise<number> {
   const parsed = parse(args, editUsage, editOptions)
-
-  if (parsed === undefined)
-    return 0
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], editUsage)
@@ -235,9 +226,6 @@ const tickOptions = {
 
 export async function tick(args: string[]): Promise<number> {
   const parsed = parse(args, tickUsage, tickOptions)
-
-  if (parsed === undefined)
-    return 0
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], tickUsage)
@@ -295,9 +283,6 @@ const commentOptions = {
 
 export async function commentOn(args: string[]): Promise<number> {
   const parsed = parse(args, commentUsage, commentOptions)
-
-  if (parsed === undefined)
-    return 0
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], commentUsage)
@@ -376,9 +361,6 @@ async function tickListings(closed: number, repo: string | undefined): Promise<v
 
 export async function fixed(args: string[]): Promise<number> {
   const parsed = parse(args, fixedUsage, fixedOptions)
-
-  if (parsed === undefined)
-    return 0
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], fixedUsage)

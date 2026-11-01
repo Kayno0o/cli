@@ -24,9 +24,6 @@ function staged({ index, from, path }: Change): string {
 async function main(argv: string[]): Promise<number> {
   const parsed = parse(argv, USAGE, OPTIONS)
 
-  if (parsed === undefined)
-    return 0
-
   if (parsed.positionals.length > 0)
     fail(`gst takes no paths\n\n${USAGE}`)
 

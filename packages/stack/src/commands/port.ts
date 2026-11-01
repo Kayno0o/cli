@@ -15,9 +15,6 @@ const options = {
 export async function port(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const [name] = parsed.positionals
 
   if (name === undefined)

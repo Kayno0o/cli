@@ -22,9 +22,6 @@ const stateOptions = {
 async function setState(args: string[], usage: string, wanted: 'open' | 'closed'): Promise<number> {
   const parsed = parse(args, usage, stateOptions)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
 
   for (const number of issueNumbers(positionals, usage)) {
@@ -96,9 +93,6 @@ Adds the labels named bare or with +, removes those named with -, then prints th
 export async function label(args: string[]): Promise<number> {
   const changes = labelChanges(args)
   const parsed = parse(changes.rest, labelUsage, repoOption)
-
-  if (parsed === undefined)
-    return 0
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], labelUsage)

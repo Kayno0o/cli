@@ -28,6 +28,13 @@ export function badUsage(message: string): never {
   throw new UsageError(message)
 }
 
+// Thrown by parse once it has printed --help, so the command stops there; runCli and runMain end on it with exit 0, printing nothing more.
+export class HelpShown extends Exit {
+  constructor() {
+    super('help shown', 0)
+  }
+}
+
 // Thrown by parse while a bin answers `__complete`, so the command reached hands over its options before doing anything else.
 export class Completing {
   constructor(readonly options: Options) {}
@@ -45,6 +52,11 @@ export function usageLine(usage: string, colors = paint(process.stdout)): string
 }
 
 export function helpText(usage: string, options: Options, colors = paint(process.stdout)): string {
+  return [usageLine(usage, colors), '', colors.bold('Options:'), ...optionRows(options, colors)].join('\n')
+}
+
+// A line per option, `-n, --times <value>  how many`, aligned on the visible text.
+export function optionRows(options: Options, colors = paint(process.stdout)): string[] {
   const rows = Object.entries(options).map(([name, option]) => {
     const short = option.short === undefined ? '    ' : `${colors.cyan(`-${option.short}`)}, `
     const value = option.type === 'string' ? ` ${colors.dim('<value>')}` : ''
@@ -53,18 +65,25 @@ export function helpText(usage: string, options: Options, colors = paint(process
   })
   const width = Math.max(0, ...rows.map(row => row.width))
 
-  return [usageLine(usage, colors), '', colors.bold('Options:'), ...rows.map(row => `  ${row.flag}${' '.repeat(width - row.width)}  ${colors.dim(row.description)}`)].join('\n')
+  return rows.map(row => `  ${row.flag}${' '.repeat(width - row.width)}  ${colors.dim(row.description)}`)
 }
 
-export interface ParseSettings {
+// The positionals typed by their names: `<key>` or `KEY` a string, `[file]` an optional one, a name ending in `...` the rest.
+type Slots<Names extends readonly string[]> = Names extends readonly [infer First extends string, ...infer Others extends readonly string[]]
+  ? First extends `${string}...` | `${string}...]` ? string[] : First extends `[${string}` ? [string?, ...Slots<Others>] : [string, ...Slots<Others>]
+  : Names extends readonly [] ? [] : string[]
+
+export interface ParseSettings<Names extends readonly string[] = string[]> {
   // Stops at the first `--` and hands what follows back untouched as `rest`, for a command that runs another (`out -n 200 -- <cmd>`).
   rest?: boolean
   // Takes `--no-<flag>` as `false` for a boolean flag, as parseArgs' own `allowNegative` does.
   allowNegative?: boolean
+  // The positionals the command takes, by name as its usage writes them: `<key>` or `KEY` required, `[file]` optional, a last one ending in `...` taking any more. One missing or one too many is a usage error, and the positionals come back typed by these names.
+  positionals?: Names
 }
 
-// Parses a command's arguments, printing its help and returning undefined on --help.
-export function parse<const T extends Options>(args: string[], usage: string, options: T, settings: ParseSettings = {}) {
+// Parses a command's arguments; on --help, prints its help and throws HelpShown, which ends the command with exit 0.
+export function parse<const T extends Options, const Names extends readonly string[] = string[]>(args: string[], usage: string, options: T, settings: ParseSettings<Names> = {}) {
   const all = { ...options, help: { type: 'boolean', short: 'h', description: 'show this help' } } as const
 
   if (completion.active)
@@ -86,10 +105,24 @@ export function parse<const T extends Options>(args: string[], usage: string, op
   if ((parsed.values as { help?: boolean }).help === true) {
     console.log(helpText(usage, all))
 
-    return undefined
+    throw new HelpShown()
   }
 
-  return { ...parsed, rest }
+  if (settings.positionals !== undefined)
+    checkPositionals(parsed.positionals, settings.positionals)
+
+  return { ...parsed, positionals: parsed.positionals as Slots<Names>, rest }
+}
+
+function checkPositionals(given: string[], names: readonly string[]): void {
+  const variadic = names.at(-1)?.replace(']', '').endsWith('...') === true
+  const required = names.filter(name => !name.startsWith('[')).length
+
+  if (given.length < required)
+    badUsage(`missing ${names[given.length]}`)
+
+  if (!variadic && given.length > names.length)
+    badUsage(`unexpected argument ${given[names.length]}`)
 }
 
 // parseArgs' message, its first sentence alone and lowercased as the kit's own: `unknown option '--nope'`.

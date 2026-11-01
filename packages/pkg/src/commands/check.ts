@@ -62,9 +62,6 @@ export function render(report: Report, now = Date.now()): string {
 export async function check(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
 
   if (positionals.length === 0)

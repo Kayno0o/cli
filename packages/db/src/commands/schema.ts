@@ -34,9 +34,6 @@ order by c.table_schema, c.ordinal_position`
 async function show(args: string[], usage: string, work: (positionals: string[]) => { sql: string, params: unknown[] }): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
   const { sql, params } = work(positionals)
   const rows = await readRows(await connectionUrl(values), sql, params)

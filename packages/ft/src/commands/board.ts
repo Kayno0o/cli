@@ -82,9 +82,6 @@ const boardOptions = {
 export async function board(args: string[]): Promise<number> {
   const parsed = parse(args, boardUsage, boardOptions)
 
-  if (parsed === undefined)
-    return 0
-
   const { values } = parsed
   const state = values.state
 
@@ -202,9 +199,6 @@ async function eachIssue(command: string, numbers: number[], step: (number: numb
 export async function take(args: string[]): Promise<number> {
   const parsed = parse(args, takeUsage, takeOptions)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
   const numbers = issueNumbers(positionals, takeUsage)
   const sessions = await liveSessions()
@@ -250,9 +244,6 @@ const dropOptions = {
 
 export async function drop(args: string[]): Promise<number> {
   const parsed = parse(args, dropUsage, dropOptions)
-
-  if (parsed === undefined)
-    return 0
 
   const { values, positionals } = parsed
   const numbers = issueNumbers(positionals, dropUsage)

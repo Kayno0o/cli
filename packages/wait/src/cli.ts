@@ -46,9 +46,6 @@ function numbered(lines: Line[], marked?: Line): string {
 async function main(args: string[]): Promise<number> {
   const parsed = parse(args, USAGE, OPTIONS)
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals } = parsed
 
   if (positionals.length > 0)

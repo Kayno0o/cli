@@ -17,9 +17,6 @@ async function keys(path: string): Promise<Set<string>> {
 export async function diff(args: string[]): Promise<number> {
   const parsed = parse(args, diffUsage, {})
 
-  if (parsed === undefined)
-    return 0
-
   const [a, b] = parsed.positionals
 
   if (a === undefined || b === undefined)
@@ -42,9 +39,6 @@ export async function diff(args: string[]): Promise<number> {
 
 export async function missing(args: string[]): Promise<number> {
   const parsed = parse(args, missingUsage, { against: { type: 'string', description: 'the reference file (.env.example by default)' } })
-
-  if (parsed === undefined)
-    return 0
 
   const [file = '.env'] = parsed.positionals
   const against = parsed.values.against ?? '.env.example'

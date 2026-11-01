@@ -81,9 +81,6 @@ async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: Comp
 export async function audit(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const roots = (parsed.positionals.length > 0 ? parsed.positionals : ['.']).map(dir => resolve(dir))
 
   for (const dir of roots) {

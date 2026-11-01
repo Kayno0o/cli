@@ -53,9 +53,6 @@ function fileLine(line: string): string {
 async function main(argv: string[]): Promise<number> {
   const parsed = parse(argv, USAGE, OPTIONS, { rest: true })
 
-  if (parsed === undefined)
-    return 0
-
   const { values, positionals, rest = [] } = parsed
   const paths = [...new Set(rest)]
 

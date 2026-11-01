@@ -32,9 +32,6 @@ export const plan: Command = {
 async function add(args: string[]): Promise<number> {
   const parsed = parse(args, addUsage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { section, repo } = parsed.values
   const [target, ...listed] = parsed.positionals
   const planNumber = issueNumber(target, addUsage)
@@ -62,9 +59,6 @@ async function add(args: string[]): Promise<number> {
 
 async function carry(args: string[]): Promise<number> {
   const parsed = parse(args, carryUsage, options)
-
-  if (parsed === undefined)
-    return 0
 
   const { section, repo } = parsed.values
   const from = issueNumber(parsed.positionals[0], carryUsage)

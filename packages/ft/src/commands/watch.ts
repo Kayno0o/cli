@@ -87,9 +87,6 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
 export async function watch(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const { values } = parsed
   const timeout = duration(values.timeout, 'timeout', 15 * 60_000, 'm')
 

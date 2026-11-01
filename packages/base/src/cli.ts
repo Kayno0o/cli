@@ -51,9 +51,6 @@ async function main(argv: string[]): Promise<number> {
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
   const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true })
 
-  if (parsed === undefined)
-    return 0
-
   const given = bare ? argv : parsed.rest ?? []
 
   if (given.length === 0 || parsed.positionals.length > 0)

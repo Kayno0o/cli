@@ -20,9 +20,6 @@ const options = {
 export async function audit(args: string[], overrides: Partial<AuditOptions> = {}): Promise<number> {
   const parsed = parse(args, usage, options)
 
-  if (parsed === undefined)
-    return 0
-
   const root = resolve(parsed.positionals[0] ?? '.')
 
   if (!hasConfig(root)) {

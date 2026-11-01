@@ -12,9 +12,6 @@ async function main(argv: string[]): Promise<number> {
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
   const parsed = parse(bare ? [] : argv, USAGE, { lines: { type: 'string', short: 'n', description: 'longest output left untouched (default 150)' } }, { rest: true })
 
-  if (parsed === undefined)
-    return 0
-
   const command = bare ? argv : parsed.rest ?? []
 
   if (command.length === 0 || parsed.positionals.length > 0)
