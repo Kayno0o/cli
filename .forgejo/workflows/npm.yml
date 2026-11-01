@@ -33,3 +33,15 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
           PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
+
+      # The same tarball goes to npmjs: publishConfig.registry is dropped for this run so the registry flag is the only target.
+      - name: Publish to npmjs
+        run: |
+          trap 'rm -f ~/.npmrc' EXIT
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          cd "packages/${TAG%-v*}"
+          bun -e 'const f = Bun.file("package.json"); const p = await f.json(); delete p.publishConfig.registry; await Bun.write(f, JSON.stringify(p, null, 2) + "\n")'
+          bun publish --access public --registry https://registry.npmjs.org/
+        env:
+          TAG: ${{ github.ref_name }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
