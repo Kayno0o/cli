@@ -1,4 +1,4 @@
-.PHONY: build major minor patch
+.PHONY: build
 
 build:
 	bun run build
