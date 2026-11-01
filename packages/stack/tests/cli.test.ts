@@ -17,5 +17,6 @@ describe('stack', () => {
 
   test('port prints the same number as the old script', () => {
     expect(stack('port', 'hello').out).toBe('9377\n')
+    expect(JSON.parse(stack('port', 'hello', '--json').out)).toEqual({ name: 'hello', port: 9377, listening: false })
   })
 })

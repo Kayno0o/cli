@@ -137,6 +137,13 @@ describe('runMain', () => {
       throw new Error('crash')
     }), []))).toEqual({ result: 1, out: '', err: 'error: solo: crash\n' })
   })
+
+  test('prints the error as JSON when the command was given --json', async () => {
+    expect(await capture(async () => runMain(main(async () => badUsage('bad input')), ['--json']))).toEqual({ result: 2, out: '', err: '{"error":"bad input","hint":"run solo --help for its options"}\n' })
+    expect((await capture(async () => runMain(main(async () => fail('timed out', 2)), ['--json', 'x']))).err).toBe('{"error":"timed out"}\n')
+    expect((await capture(async () => runMain(main(async () => fail('timed out', 2)), ['--', '--json']))).err).toBe('error: solo: timed out\n')
+    expect((await capture(async () => runCli({ name: 'demo', version: '1.0.0', about: 'a demo', commands: { boom: { summary: 'fails', run: async () => fail('it broke', 4) } } }, ['boom', '--json']))).err).toBe('{"error":"it broke"}\n')
+  })
 })
 
 describe('__complete', () => {

@@ -10,7 +10,7 @@ gc 'fix(band): keep it visible' -m 'The band stays above a long prompt.' --ticke
 
 ## gst
 
-Prints one line with the branch, its upstream and how far ahead and behind it is as of the last fetch, the counts of changed, untracked and conflicted files and HEAD, then the paths grouped as `staged`, `unstaged`, `untracked` and `conflicted`, each with git's letter (`M`, `A`, `D`, `R old -> new`). `--log N` adds the last N commits as `<sha7> <title>`. It takes no index lock, so it runs beside another git command. Exit codes: 0, 1 outside a repository, 2 a usage error.
+Prints one line with the branch, its upstream and how far ahead and behind it is as of the last fetch, the counts of changed, untracked and conflicted files and HEAD, then the paths grouped as `staged`, `unstaged`, `untracked` and `conflicted`, each with git's letter (`M`, `A`, `D`, `R old -> new`). `--log N` adds the last N commits as `<sha7> <title>`. `--json` prints the same as `{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, commits}`, a change as `{status, path, from?}`. It takes no index lock, so it runs beside another git command. Exit codes: 0, 1 outside a repository, 2 a usage error.
 
 ## gc
 

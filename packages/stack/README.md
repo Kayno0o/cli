@@ -13,7 +13,7 @@ bun install -g @kaynooo/stack-tools
 | `stack port <name>` | prints the port the name always hashes to (FNV-1a, 1024-65535), so a service keeps the same port on every machine |
 | `stack audit [dir]` | cross-checks `release.config.ts` in `dir` (the current directory) against the compose files it syncs |
 
-`stack port` takes `--min` and `--max` to change the range. When something on this machine already listens on the port it says so on stderr; the number is still printed and the exit code stays 0.
+`stack port` takes `--min` and `--max` to change the range. When something on this machine already listens on the port it says so on stderr; the number is still printed and the exit code stays 0. `--json` prints `{name, port, listening}`.
 
 ## Audit
 

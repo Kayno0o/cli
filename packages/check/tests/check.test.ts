@@ -65,6 +65,16 @@ describe('check', () => {
     expect(lines[3]).toStartWith('ok    test')
   })
 
+  test('--json prints each step\'s outcome, what failed under a failing one', async () => {
+    const { result, out } = await capture(async () => check(['--json'], repo('js')))
+    const outcomes = JSON.parse(out) as { name: string, ok: boolean, log: string, failed?: string }[]
+
+    expect(result).toBe(1)
+    expect(outcomes.map(outcome => [outcome.name, outcome.ok, outcome.failed])).toEqual([['check', true, undefined], ['lint', false, 'src/a.ts(1,7): error TS2322: bad'], ['test', true, undefined]])
+    expect(outcomes[0]?.log).toEndWith('check.log')
+    expect(JSON.parse((await capture(async () => check(['--list', '--json'], repo('just')))).out)).toEqual([{ name: 'lint', command: 'just lint', source: 'Justfile' }])
+  })
+
   test('saves each step\'s full output to the file it prints', async () => {
     const { out } = await capture(async () => check(['--only', 'check'], repo('js')))
     const path = out.slice(0, out.indexOf('\n')).split('  ').at(-1) ?? ''

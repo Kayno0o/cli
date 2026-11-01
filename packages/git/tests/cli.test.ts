@@ -64,6 +64,19 @@ describe('gst', () => {
       `  ${sha} feat: first`,
       '',
     ].join('\n'))
+    expect(JSON.parse(gst('--log', '1', '--json').out)).toEqual({
+      branch: 'main',
+      oid: git('rev-parse', 'HEAD'),
+      upstream: null,
+      ahead: null,
+      behind: null,
+      head: { sha, title: 'feat: first' },
+      staged: [{ status: 'R', path: 'c.ts', from: 'a.ts' }],
+      unstaged: [{ status: 'M', path: 'b.ts' }],
+      untracked: ['new.ts'],
+      conflicted: [],
+      commits: [{ sha, title: 'feat: first' }],
+    })
   })
 
   test('outside a repository it says so', () => {

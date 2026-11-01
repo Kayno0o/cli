@@ -130,9 +130,21 @@ export function printError(prefix: string, message: string, hint?: string, cause
   console.error(`${head} ${message}${under('cause', cause, colors.dim)}${under('hint', hint, colors.yellow)}`)
 }
 
+// An error as `{"error", "hint"?, "cause"?}` on stderr, for a command run with `--json`, so a caller parses its failures as it parses its output.
+export function printJsonError(message: string, hint?: string, cause?: string): void {
+  console.error(JSON.stringify({ error: message, ...(hint === undefined ? {} : { hint }), ...(cause === undefined ? {} : { cause }) }))
+}
+
+// Whether the arguments ask for JSON, read before parsing so even a parse error prints as JSON.
+function wantsJson(argv: readonly string[]): boolean {
+  const end = argv.indexOf('--')
+
+  return (end === -1 ? argv : argv.slice(0, end)).includes('--json')
+}
+
 // What a thrown error prints as and exits with: an Exit its own code and hint, a UsageError pointed at the help, HelpShown nothing at all and 0, anything else 1.
 // An error other than an Exit is named unless a plain `Error` (`MigrationError: ...`), and its cause's message printed under it, never the cause itself.
-function reportThrown(prefix: string, error: unknown, redact: (text: string) => string = text => text): number {
+function reportThrown(prefix: string, error: unknown, redact: (text: string) => string = text => text, json = false): number {
   if (error instanceof HelpShown)
     return 0
 
@@ -140,7 +152,9 @@ function reportThrown(prefix: string, error: unknown, redact: (text: string) => 
   const named = error instanceof Error && !(error instanceof Exit) && error.name !== 'Error' ? `${error.name}: ${error.message}` : undefined
   const cause = error instanceof Error && error.cause instanceof Error ? redact(error.cause.message) : undefined
 
-  printError(prefix, redact(named ?? (error instanceof Error ? error.message : String(error))), error instanceof Exit ? error.hint ?? help : undefined, cause)
+  const report = json ? printJsonError : (message: string, hint?: string, causeText?: string) => printError(prefix, message, hint, causeText)
+
+  report(redact(named ?? (error instanceof Error ? error.message : String(error))), error instanceof Exit ? error.hint ?? help : undefined, cause)
 
   return error instanceof Exit ? error.code : 1
 }
@@ -202,7 +216,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
     return await command.run(rest)
   }
   catch (error) {
-    return reportThrown(`${prefix} ${name}`, error, redact)
+    return reportThrown(`${prefix} ${name}`, error, redact, wantsJson(rest))
   }
 }
 
@@ -291,6 +305,6 @@ export async function runMain({ name, version, run, redact }: Main, argv = proce
     return await run(argv)
   }
   catch (error) {
-    return reportThrown(name, error, redact)
+    return reportThrown(name, error, redact, wantsJson(argv))
   }
 }

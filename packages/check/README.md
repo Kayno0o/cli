@@ -7,6 +7,7 @@ bun install -g @kaynooo/check-tools
 check            # run every step found
 check --list     # print the steps and the commands that run them
 check --only lint,test
+check --json     # [{name, command, ok, ms, log, failed?}] once every step ran
 ```
 
 ## Steps
@@ -34,6 +35,7 @@ Exit code 0 when every step passed, 1 when one failed, 2 on bad usage or when no
 fix              # run every fixer that applies to this folder
 fix --list       # print them and their commands
 fix --only lint:fix,justfile
+fix --json       # {fixers, changed}, a skipped fixer as {name, command, skipped}
 ```
 
 The project's own `fix` script, recipe or target when it has one, else its `lint:fix` (or `lint-fix`) and `format` ones, found in the same sources as `check`'s steps. Then the formatters the folder's files call for:

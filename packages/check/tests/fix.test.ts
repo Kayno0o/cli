@@ -87,6 +87,18 @@ describe('fix', () => {
     expect(await Bun.file(join(dir, 'Makefile')).text()).toBe('.PHONY: a b\n\nb:\n\ttrue\n\na:\n\ttrue\n')
   })
 
+  test('--json prints each fixer\'s outcome and the files changed', async () => {
+    await repo()
+    scripts({ 'lint:fix': 'echo fixed > a.ts' })
+
+    const { result, out } = await capture(async () => fix(['--json'], dir))
+    const printed = JSON.parse(out) as { fixers: { name: string, ok: boolean }[], changed: string[] }
+
+    expect(result).toBe(0)
+    expect(printed.fixers.map(fixer => [fixer.name, fixer.ok])).toEqual([['lint:fix', true]])
+    expect(printed.changed).toEqual(['a.ts'])
+  })
+
   test('a failing fixer prints what it said and fails the run', async () => {
     scripts({ format: 'echo cannot parse src/a.ts && exit 3' })
 

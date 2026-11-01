@@ -2,19 +2,21 @@ import type { Step } from './steps'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import { fail, parse, table } from '@kaynooo/cli-kit'
-import { logDirectory, printOutcome, runStep } from './run'
+import { fail, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
+import { logDirectory, outcomeJson, printOutcome, runStep } from './run'
 import { discover, STEP_NAMES } from './steps'
 
 const usage = `check [--only <steps>] [--list]
 
 Runs the repo's check, typecheck, lint and test steps, from package.json scripts (through bun run), composer.json, a Justfile or a Makefile.
 A passing step is one line, a failing one shows only what failed, and each step's full output is saved to the file whose path ends its line.
-Exits 0 when every step passed, 1 when one failed, 2 on bad usage or when no step is found.`
+Exits 0 when every step passed, 1 when one failed, 2 on bad usage or when no step is found.
+--json prints [{name, command, ok, ms, log, failed?}] once every step ran, --list --json [{name, command, source}].`
 
 const options = {
   list: { type: 'boolean', short: 'l', description: 'print the steps found and the commands that run them, without running them' },
   only: { type: 'string', short: 'o', description: `comma separated steps to run, among ${STEP_NAMES.join(', ')}` },
+  json: jsonOption(),
 } as const
 
 const COMMA = /\s*,\s*/
@@ -44,8 +46,13 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
 
   const steps: Step[] = pick(found, parsed.values.only)
 
+  const json = parsed.values.json === true
+
   if (parsed.values.list === true) {
-    console.log(table(steps.map(step => [step.name, step.command, step.source])))
+    if (json)
+      printJson(steps.map(({ name, command, source }) => ({ name, command, source })))
+    else
+      console.log(table(steps.map(step => [step.name, step.command, step.source])))
 
     return 0
   }
@@ -55,17 +62,20 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   await mkdir(directory, { recursive: true })
 
   const width = Math.max(...steps.map(step => step.name.length))
-  let failed = 0
+  const outcomes: ReturnType<typeof outcomeJson>[] = []
 
   for (const step of steps) {
     const logFile = join(directory, `${step.name}.log`)
     const outcome = await runStep(step.command, cwd, logFile)
 
-    printOutcome(step.name, width, step.command, logFile, outcome)
+    if (!json)
+      printOutcome(step.name, width, step.command, logFile, outcome)
 
-    if (!outcome.ok)
-      failed++
+    outcomes.push(outcomeJson(step.name, step.command, logFile, outcome))
   }
 
-  return failed === 0 ? 0 : 1
+  if (json)
+    printJson(outcomes)
+
+  return outcomes.every(outcome => outcome.ok) ? 0 : 1
 }

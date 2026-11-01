@@ -2,7 +2,7 @@
 
 import type { Change } from './status'
 import process from 'node:process'
-import { fail, parse, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { git } from './git'
 import { parseStatus, summary } from './status'
@@ -11,6 +11,7 @@ const USAGE = 'gst [--log N]: the repository\'s branch, upstream, changed files 
 
 const OPTIONS = {
   log: { type: 'string', short: 'l', description: 'add the last N commits as <sha7> <title>' },
+  json: jsonOption('{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, commits}'),
 } as const
 
 function group(title: string, lines: string[]): string[] {
@@ -31,12 +32,34 @@ async function main(argv: string[]): Promise<number> {
   const [read, head, log] = await Promise.all([
     git(['status', '--porcelain=v2', '--branch']),
     git(['log', '-1', '--format=%h%x00%s']),
-    count === 0 ? undefined : git(['log', `-${count}`, '--format=%h %s']),
+    count === 0 ? undefined : git(['log', `-${count}`, '--format=%h%x00%s']),
   ])
   const status = read.code === 0 ? parseStatus(read.stdout) : null
 
   if (status === null)
     fail(read.stderr.trim() || 'not inside a git repository', 1)
+
+  const commits = log?.code === 0 ? log.stdout.trimEnd().split('\n').filter(Boolean).map(line => line.split('\0')) : []
+
+  if (parsed.values.json === true) {
+    const [sha, title] = head.code === 0 && head.stdout.trim() !== '' ? head.stdout.trim().split('\0') : []
+
+    printJson({
+      branch: status.branch,
+      oid: status.oid,
+      upstream: status.upstream,
+      ahead: status.aheadBehind?.ahead ?? null,
+      behind: status.aheadBehind?.behind ?? null,
+      head: sha === undefined ? null : { sha, title: title ?? '' },
+      staged: status.changes.filter(change => change.index !== '.').map(({ index, path, from }) => ({ status: index, path, ...(from === undefined ? {} : { from }) })),
+      unstaged: status.changes.filter(change => change.worktree !== '.').map(({ worktree, path }) => ({ status: worktree, path })),
+      untracked: status.untracked,
+      conflicted: status.conflicted,
+      commits: commits.map(([commitSha = '', commitTitle = '']) => ({ sha: commitSha, title: commitTitle })),
+    })
+
+    return 0
+  }
 
   const lines = [
     summary(status, head.code === 0 ? head.stdout : ''),
@@ -44,7 +67,7 @@ async function main(argv: string[]): Promise<number> {
     ...group('unstaged', status.changes.filter(change => change.worktree !== '.').map(change => `${change.worktree} ${change.path}`)),
     ...group('untracked', status.untracked),
     ...group('conflicted', status.conflicted),
-    ...group('commits', log?.code === 0 ? log.stdout.trimEnd().split('\n').filter(Boolean) : []),
+    ...group('commits', commits.map(parts => parts.join(' '))),
   ]
 
   console.log(lines.join('\n'))

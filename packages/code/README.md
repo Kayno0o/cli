@@ -20,6 +20,7 @@ todo-scan --stale
 - `--refs <symbol>` lists the lines naming the symbol as a whole word, grouped by file, one trimmed line each.
 - `--outline <file>...` lists the declarations at the top of each file and the members one level inside its classes, with their line numbers; a Markdown file lists its headings.
 - `--around <regex> -C <n>` prints the `n` (3) lines on each side of each matching line, spans that touch merged.
+- `--json` prints the spans as `[{path, from, to, lines}]`, `--refs` as `[{path, line, text}]` and `--outline` as `[{path, line, depth, text}]`, the lines never cut; a failure prints as `{"error"}` on stderr.
 - `--def`, `--refs` and `--around` look through the paths given, the files git keeps here by default (`git ls-files` with the untracked files `.gitignore` lets through), and outside a repository a walk leaving `node_modules`, `dist` and dot folders out; binary files and files over 2 MB are skipped.
 - The symbols are found by pattern, not by a type checker: a name declared twice in a file shows twice, and a symbol re-exported under another name is not followed.
 - Exits 1 when nothing is found or a file cannot be read, 2 on a usage error.

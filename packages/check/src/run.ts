@@ -21,6 +21,11 @@ export async function runStep(command: string, cwd: string, logFile: string, env
   return { ok: code === 0, ms: Date.now() - started, output }
 }
 
+// A step's outcome as --json prints it, what failed under `failed` for a failing one.
+export function outcomeJson(name: string, command: string, logFile: string, outcome: Outcome): { name: string, command: string, ok: boolean, ms: number, log: string, failed?: string } {
+  return { name, command, ok: outcome.ok, ms: outcome.ms, log: logFile, ...(outcome.ok ? {} : { failed: failureExcerpt(outcome.output) }) }
+}
+
 // One line for a passing step; for a failing one its command, then what failed, indented.
 export function printOutcome(name: string, width: number, command: string, logFile: string, outcome: Outcome): void {
   if (outcome.ok) {

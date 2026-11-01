@@ -2,7 +2,7 @@
 
 import type { Line } from './conditions'
 import process from 'node:process'
-import { duration, fail, formatDuration, paint, parse, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, jsonOption, paint, parse, printJson, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { version } from '../package.json'
 import { FileWatch, portProblem, urlCheck } from './conditions'
@@ -17,13 +17,15 @@ Exits 0 once met, 1 on a --fail line, 2 on a timeout or a usage error, each with
 const TASK_USAGE = `waitfor task [options] <task id | file>: waits for a Claude Code background task to end, then prints its exit code, its last lines and the (fail) and error: lines above them
 
 The task is the id a background Bash call returned, or the path of its .output file.
-Exits 0 when the task exited 0, 1 when it exited with another code, 2 on a timeout or a usage error.`
+Exits 0 when the task exited 0, 1 when it exited with another code, 2 on a timeout or a usage error.
+--json prints {task, path, code, ms, failures, tail}, each line as {number, text}.`
 
 const TIMEOUT = { type: 'string', short: 't', description: 'how long before giving up (5m): 30s, 5m, 1h, a bare number in seconds' } as const
 
 const TASK_OPTIONS = {
   lines: { type: 'string', short: 'n', description: 'how many of its last lines to print (20)' },
   timeout: TIMEOUT,
+  json: jsonOption(),
 } as const
 
 const OPTIONS = {
@@ -95,6 +97,12 @@ async function waitTask(args: string[]): Promise<number> {
 
   if (code === undefined)
     fail(`gave up after ${formatDuration(timeout)}: task ${task} is still running${last}`)
+
+  if (values.json === true) {
+    printJson({ task, path, code, ms: Date.now() - started, failures, tail })
+
+    return code === 0 ? 0 : 1
+  }
 
   const failed = failures.length === 0 ? '' : `\n(fail) and error: lines above them:\n${numbered(failures)}`
 

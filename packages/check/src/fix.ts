@@ -3,11 +3,11 @@ import type { Step } from './steps'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import { fail, parse, table } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
 import { changedFiles, dirtyFiles } from './changes'
 import { pick } from './check'
 import { declarePhony } from './makefile'
-import { logDirectory, printOutcome, runStep } from './run'
+import { logDirectory, outcomeJson, printOutcome, runStep } from './run'
 import { candidates, read } from './steps'
 
 const usage = `fix [--only <fixers>] [--list]
@@ -15,11 +15,13 @@ const usage = `fix [--only <fixers>] [--list]
 Runs the folder's fixers: the project's own \`fix\` script, else its \`lint:fix\` and \`format\` ones (package.json through bun run, composer.json, a Justfile or a Makefile), then the formatters its files call for: just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY.
 It looks at the folder itself only, so each package of a monorepo gets its own run.
 Prints one line per fixer, what a failing one said, then the files the run changed. Each fixer's full output is saved to the file whose path ends its line.
-Exits 0 when every fixer ran, 1 when one failed, 2 on bad usage or when nothing applies.`
+Exits 0 when every fixer ran, 1 when one failed, 2 on bad usage or when nothing applies.
+--json prints {fixers: [{name, command, ok, ms, log, failed?} or {name, command, skipped}], changed} once every fixer ran, changed null outside a git repository.`
 
 const options = {
   list: { type: 'boolean', short: 'l', description: 'print the fixers that apply and the commands that run them, without running them' },
   only: { type: 'string', short: 'o', description: 'comma separated fixers to run, by the names --list prints' },
+  json: jsonOption(),
 } as const
 
 export interface Fixer extends Step {
@@ -144,8 +146,14 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
 
   const picked = pick(found, parsed.values.only)
 
+  const json = parsed.values.json === true
+  const missing = (fixer: Fixer) => fixer.requires !== undefined && Bun.which(fixer.requires) === null
+
   if (parsed.values.list === true) {
-    console.log(table(picked.map(fixer => [fixer.name, fixer.command, fixer.requires !== undefined && Bun.which(fixer.requires) === null ? `${fixer.source}, needs ${fixer.requires}` : fixer.source])))
+    if (json)
+      printJson(picked.map(fixer => ({ name: fixer.name, command: fixer.command, source: fixer.source, ...(missing(fixer) ? { needs: fixer.requires } : {}) })))
+    else
+      console.log(table(picked.map(fixer => [fixer.name, fixer.command, missing(fixer) ? `${fixer.source}, needs ${fixer.requires}` : fixer.source])))
 
     return 0
   }
@@ -156,11 +164,15 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
 
   const width = Math.max(...picked.map(fixer => fixer.name.length))
   const before = await dirtyFiles(cwd)
+  const ran: (ReturnType<typeof outcomeJson> | { name: string, command: string, skipped: string })[] = []
   let failed = 0
 
   for (const fixer of picked) {
-    if (fixer.requires !== undefined && Bun.which(fixer.requires) === null) {
-      console.log(`skip  ${fixer.name.padEnd(width)}  ${fixer.requires} is not installed`)
+    if (missing(fixer)) {
+      if (!json)
+        console.log(`skip  ${fixer.name.padEnd(width)}  ${fixer.requires} is not installed`)
+
+      ran.push({ name: fixer.name, command: fixer.command, skipped: `${fixer.requires} is not installed` })
 
       continue
     }
@@ -168,7 +180,10 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
     const logFile = join(directory, `fix-${fixer.name.replaceAll(':', '-')}.log`)
     const outcome = await runFixer(fixer, cwd, logFile)
 
-    printOutcome(fixer.name, width, fixer.command, logFile, outcome)
+    if (!json)
+      printOutcome(fixer.name, width, fixer.command, logFile, outcome)
+
+    ran.push(outcomeJson(fixer.name, fixer.command, logFile, outcome))
 
     if (!outcome.ok)
       failed++
@@ -176,8 +191,12 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
 
   const after = before && await dirtyFiles(cwd)
 
-  if (before !== undefined && after !== undefined)
-    printChanged(changedFiles(before, after))
+  const changed = before !== undefined && after !== undefined ? changedFiles(before, after) : null
+
+  if (json)
+    printJson({ fixers: ran, changed })
+  else if (changed !== null)
+    printChanged(changed)
 
   return failed === 0 ? 0 : 1
 }

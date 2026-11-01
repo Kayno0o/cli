@@ -1,4 +1,4 @@
-import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
 import { isListening, MAX_PORT, MIN_PORT, stringToPort } from '../port'
 
 const usage = `stack port <name>
@@ -9,6 +9,7 @@ Says on stderr when something already listens on it; the exit code stays 0.`
 const options = {
   min: { type: 'string', description: `lowest port (${MIN_PORT})` },
   max: { type: 'string', description: `highest port (${MAX_PORT})` },
+  json: jsonOption('{name, port, listening}'),
 } as const
 
 // eslint-disable-next-line ts/require-await -- commands are async by contract
@@ -27,6 +28,12 @@ export async function port(args: string[]): Promise<number> {
     fail(`--max goes up to ${MAX_PORT}, not ${max}`)
 
   const number = stringToPort(name, min, max)
+
+  if (parsed.values.json === true) {
+    printJson({ name, port: number, listening: isListening(number) })
+
+    return 0
+  }
 
   console.log(number)
 

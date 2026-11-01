@@ -3,7 +3,7 @@
 import type { Span } from './source'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badUsage, fail, parse, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, fail, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { listFiles, readText } from './files'
 import { around, definitions, outline, usages } from './source'
@@ -15,7 +15,8 @@ peek --def <symbol> [path...]          the whole declaration of the symbol, its 
 peek --refs <symbol> [path...]         the lines naming the symbol, grouped by file
 peek --outline <file>...               the declarations and class members, a Markdown file's headings
 peek --around <regex> [-C 3] [path...] the lines around each match, overlapping ones merged
-The paths default to the files git keeps here (.gitignore holds). Exits 1 when nothing is found.`
+The paths default to the files git keeps here (.gitignore holds). Exits 1 when nothing is found.
+--json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}], --outline as [{path, line, depth, text}], the lines never cut.`
 
 const OPTIONS = {
   def: { type: 'string', short: 'd', description: 'print the declaration of this symbol' },
@@ -23,6 +24,7 @@ const OPTIONS = {
   outline: { type: 'boolean', short: 'o', description: 'list the declarations of the files given' },
   around: { type: 'string', short: 'a', description: 'print the lines around the matches of this regular expression' },
   context: { type: 'string', short: 'C', description: 'lines on each side of an --around match (3)' },
+  json: jsonOption(),
 } as const
 
 const TARGET = /^(.+?):(\d+)(?:-(\d+))?$/
@@ -42,20 +44,36 @@ async function textOf(path: string): Promise<string> {
   return text
 }
 
-// The spans printed under a `path:from-to` header each, the line numbers padded to the widest.
-async function printSpans(spans: readonly Span[]): Promise<void> {
+// The spans printed under a `path:from-to` header each, the line numbers padded to the widest, or as JSON.
+async function printSpans(spans: readonly Span[], json: boolean): Promise<void> {
   const texts = new Map<string, string[]>()
-  const blocks: string[] = []
+  const read: (Span & { lines: string[] })[] = []
 
   for (const span of spans) {
     const lines = texts.get(span.path) ?? (await textOf(span.path)).split('\n')
-    const width = String(span.to).length
 
     texts.set(span.path, lines)
-    blocks.push([`${span.path}:${span.from}-${span.to}`, ...lines.slice(span.from - 1, span.to).map((line, i) => `${String(span.from + i).padStart(width)}  ${cut(line)}`)].join('\n'))
+    read.push({ ...span, lines: lines.slice(span.from - 1, span.to) })
   }
 
-  console.log(blocks.join('\n\n'))
+  if (json) {
+    printJson(read)
+
+    return
+  }
+
+  console.log(read.map(span => [`${span.path}:${span.from}-${span.to}`, ...span.lines.map((line, i) => `${String(span.from + i).padStart(String(span.to).length)}  ${cut(line)}`)].join('\n')).join('\n\n'))
+}
+
+// Rows under a header per file, the line numbers padded to the widest of the file.
+function printByFile(rows: readonly { path: string, line: number, text: string }[]): void {
+  const blocks = Map.groupBy(rows, row => row.path).entries().map(([path, ofPath]) => {
+    const width = String(ofPath.at(-1)?.line ?? 0).length
+
+    return [path, ...ofPath.map(row => `${String(row.line).padStart(width)}  ${row.text}`)].join('\n')
+  })
+
+  console.log([...blocks].join('\n\n'))
 }
 
 async function spanOf(target: string): Promise<Span> {
@@ -93,6 +111,7 @@ function regex(source: string): RegExp {
 async function main(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[target...]'] })
   const modes = [values.def, values.refs, values.outline, values.around].filter(mode => mode !== undefined && mode !== false)
+  const json = values.json === true
 
   if (modes.length > 1)
     badUsage('give one of --def, --refs, --outline and --around')
@@ -109,27 +128,27 @@ async function main(args: string[]): Promise<number> {
     if (spans.length === 0)
       fail(`no declaration of ${values.def} found`, 1)
 
-    await printSpans(spans)
+    await printSpans(spans, json)
 
     return 0
   }
 
   if (values.refs !== undefined) {
-    const blocks: string[] = []
+    const rows: { path: string, line: number, text: string }[] = []
 
     for await (const { path, text } of sources(positionals)) {
       const lines = text.split('\n')
-      const found = usages(text, values.refs)
-      const width = String(found.at(-1) ?? 0).length
 
-      if (found.length > 0)
-        blocks.push([path, ...found.map(line => `${String(line).padStart(width)}  ${cut((lines[line - 1] ?? '').trim())}`)].join('\n'))
+      rows.push(...usages(text, values.refs).map(line => ({ path, line, text: (lines[line - 1] ?? '').trim() })))
     }
 
-    if (blocks.length === 0)
+    if (rows.length === 0)
       fail(`nothing names ${values.refs}`, 1)
 
-    console.log(blocks.join('\n\n'))
+    if (json)
+      printJson(rows)
+    else
+      printByFile(rows.map(row => ({ ...row, text: cut(row.text) })))
 
     return 0
   }
@@ -138,16 +157,15 @@ async function main(args: string[]): Promise<number> {
     if (positionals.length === 0)
       badUsage('give the files to outline')
 
-    const blocks: string[] = []
+    const rows: { path: string, line: number, depth: number, text: string }[] = []
 
-    for (const path of positionals) {
-      const entries = outline(await textOf(path), path)
-      const width = String(entries.at(-1)?.line ?? 0).length
+    for (const path of positionals)
+      rows.push(...outline(await textOf(path), path).map(entry => ({ path, ...entry })))
 
-      blocks.push([path, ...entries.map(entry => `${String(entry.line).padStart(width)}  ${'  '.repeat(entry.depth)}${entry.text}`)].join('\n'))
-    }
-
-    console.log(blocks.join('\n\n'))
+    if (json)
+      printJson(rows)
+    else
+      printByFile(rows.map(row => ({ ...row, text: `${'  '.repeat(row.depth)}${row.text}` })))
 
     return 0
   }
@@ -163,7 +181,7 @@ async function main(args: string[]): Promise<number> {
     if (spans.length === 0)
       fail(`no line matches ${values.around}`, 1)
 
-    await printSpans(spans)
+    await printSpans(spans, json)
 
     return 0
   }
@@ -171,7 +189,7 @@ async function main(args: string[]): Promise<number> {
   if (positionals.length === 0)
     badUsage('give the files or spans to print')
 
-  await printSpans(await Promise.all(positionals.map(spanOf)))
+  await printSpans(await Promise.all(positionals.map(spanOf)), json)
 
   return 0
 }

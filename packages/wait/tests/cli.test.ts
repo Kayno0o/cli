@@ -164,6 +164,10 @@ describe('waitfor task', () => {
     expect(result.out).toContain('task b1x2 exited with code 1')
     expect(result.out).toContain('(fail) and error: lines above them:\n   5  (fail) cli > parses [2ms]\n  10  error: expect(received).toBe(expected)\n')
     expect(result.out).toEndWith('  28  line 28\n  29  line 29\n  30  line 30\n')
+
+    const json = JSON.parse((await waitfor(['task', 'b1x2', '-n', '1', '--json'], undefined, env)).out) as { code: number, failures: unknown[], tail: unknown[] }
+
+    expect([json.code, json.failures.length, json.tail]).toEqual([1, 2, [{ number: 30, text: 'line 30' }]])
   })
 
   test('times out with 2 and the last lines', async () => {
