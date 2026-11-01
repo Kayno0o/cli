@@ -47,3 +47,27 @@ export function warn(text: string, detail?: string): void {
 export function problem(text: string, detail?: string): void {
   console.error(marked('problem', text, process.stderr, detail))
 }
+
+export type Role = 'accent' | 'id' | 'path' | 'label' | 'value'
+
+// The tint each kind of data is drawn in, so every CLI colours the same things the same way.
+const ROLES: Record<Role, (colors: Colors) => (text: string) => string> = {
+  accent: colors => colors.cyan,
+  id: colors => colors.yellow,
+  path: colors => colors.blue,
+  label: colors => colors.dim,
+  value: colors => colors.bold,
+}
+
+// `role('id', process.stdout)('#49')`: plain text on a stream that takes no control codes.
+export function role(name: Role, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): (text: string) => string {
+  return ROLES[name](paint(stream, env))
+}
+
+// A clickable OSC 8 link on a terminal; elsewhere `text (url)`, or the text alone when it is the url.
+export function link(text: string, url: string, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
+  if (takesControlCodes(stream, env))
+    return `\x1B]8;;${url}\x1B\\${text}\x1B]8;;\x1B\\`
+
+  return text === url ? text : `${text} (${url})`
+}

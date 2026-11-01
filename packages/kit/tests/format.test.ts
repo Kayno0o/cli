@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { formatAge, formatDuration, formatSeconds, table } from '../src/format'
+import { formatAge, formatChange, formatDelta, formatDuration, formatPercent, formatSeconds, table } from '../src/format'
 
 describe('format', () => {
   test('gives the largest unit and the next one when not zero', () => {
@@ -25,5 +25,35 @@ describe('format', () => {
 
   test('table flattens line breaks and cuts cells when given a width', () => {
     expect(table([['a', 'one\n  two three'], ['bb', 'x']], { cellWidth: 8 })).toBe('a   one two…\nbb  x')
+  })
+})
+
+describe('table layout', () => {
+  test('pads on the visible width, wide characters and colours included', () => {
+    expect(table([['日本', 'x'], ['\x1B[31mab\x1B[0m', 'y']])).toBe('日本  x\n\x1B[31mab\x1B[0m    y')
+  })
+
+  test('right-aligns the columns asked for', () => {
+    expect(table([['a', '1'], ['bb', '100']], { align: ['left', 'right'] })).toBe('a     1\nbb  100')
+  })
+
+  test('narrows the widest column to fit a width', () => {
+    expect(table([['id', 'a very long title indeed'], ['x', 'short']], { fit: 20 })).toBe('id  a very long tit…\nx   short')
+  })
+})
+
+describe('changes', () => {
+  test('formats percentages and signed deltas', () => {
+    expect(formatPercent(0.625)).toBe('63%')
+    expect(formatDelta(3)).toBe('+3')
+    expect(formatDelta(-3)).toBe('-3')
+    expect(formatDelta(-0.2)).toBe('0')
+  })
+
+  test('paints a change by whether it improved', () => {
+    expect(formatChange(10, 6, { stream: {}, env: {} })).toBe('-40%')
+    expect(formatChange(0, 6, { stream: {} })).toBe('-')
+    expect(formatChange(10, 6, { stream: { isTTY: true }, env: {} })).toBe('\x1B[32m-40%\x1B[39m')
+    expect(formatChange(10, 6, { better: 'higher', stream: { isTTY: true }, env: {} })).toBe('\x1B[31m-40%\x1B[39m')
   })
 })

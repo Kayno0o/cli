@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { helpText, parse } from '../src/args'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
-import { marked, paint } from '../src/style'
+import { link, marked, paint, role } from '../src/style'
 import { capture } from '../src/test'
 import { stripAnsi } from '../src/text'
 
@@ -55,5 +55,18 @@ describe('helpText', () => {
 describe('table', () => {
   it('prints the header row as the rest off a terminal', () => {
     expect(table([['name', 'age'], ['ada', '36']], { header: true })).toBe('name  age\nada   36')
+  })
+})
+
+describe('role and link', () => {
+  it('tints by role on a terminal only', () => {
+    expect(role('id', TERMINAL, {})('#49')).toBe('\x1B[33m#49\x1B[39m')
+    expect(role('id', {}, {})('#49')).toBe('#49')
+  })
+
+  it('links with OSC 8 on a terminal, and spells the url out elsewhere', () => {
+    expect(link('#49', 'https://x/49', TERMINAL, {})).toBe('\x1B]8;;https://x/49\x1B\\#49\x1B]8;;\x1B\\')
+    expect(link('#49', 'https://x/49', {}, {})).toBe('#49 (https://x/49)')
+    expect(link('https://x', 'https://x', {}, {})).toBe('https://x')
   })
 })
