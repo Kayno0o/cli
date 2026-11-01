@@ -1,5 +1,5 @@
 import type { Run } from '../runs'
-import { duration, fail, formatDuration, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, duration, fail, formatDuration, parse, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { failureReport, FINISHED, overall, recentRuns, stallReason } from '../runs'
 
@@ -46,7 +46,7 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
 
     for (const run of runs) {
       if (reported.get(run.id) !== run.status)
-        console.log(`${run.workflow_id} run ${run.id} on ${run.prettyref}: ${run.status}`)
+        console.log(`${run.workflow_id} run ${run.id} on ${run.prettyref}: ${badge(run.status, process.stdout)}`)
 
       reported.set(run.id, run.status)
     }

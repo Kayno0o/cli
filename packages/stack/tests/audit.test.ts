@@ -79,7 +79,7 @@ describe('audit', () => {
     const result = await run({ 'release.config.ts': CONFIG(), 'compose.yaml': COMPOSE, '.gitignore': IGNORE }, { 'compose.yaml': HEALTHY })
 
     expect(result.findings).toEqual([])
-    expect(render(result)).toMatch(/^ok stack-audit-\w+: compose compose\.yaml and release\.config\.ts agree\.$/)
+    expect(render(result)).toMatch(/^ok: stack-audit-\w+: compose compose\.yaml and release\.config\.ts agree\.$/)
   })
 
   test('reports a missing sync file, build inputs and secrets', async () => {
@@ -226,8 +226,8 @@ describe('stack audit', () => {
     const failing = await capture(async () => audit([root], { loadCompose: models({ 'compose.yaml': HEALTHY }) }))
 
     expect(failing.result).toBe(1)
-    expect(failing.out).toContain('Errors\n  x [version] versionEnv API_VERSION is never interpolated by a compose file')
-    expect(failing.out).toContain('Warnings\n  ! [gitignore] .release-logs/ is not in .gitignore')
+    expect(failing.out).toContain('Errors\n  error: [version] versionEnv API_VERSION is never interpolated by a compose file')
+    expect(failing.out).toContain('Warnings\n  warning: [gitignore] .release-logs/ is not in .gitignore')
     expect(failing.out).toContain('1 error(s), 2 warning(s)')
 
     const quiet = project({ 'release.config.ts': CONFIG(), 'compose.yaml': COMPOSE, '.gitignore': '.release-logs\n' })

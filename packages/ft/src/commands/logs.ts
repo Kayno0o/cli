@@ -1,5 +1,5 @@
 import type { Job } from '../runs'
-import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, fail, parse, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { excerpt, logLines } from '../log'
 import { jobLog, jobsOf, runById } from '../runs'
@@ -39,12 +39,12 @@ export async function logs(args: string[]): Promise<number> {
   if (picked.length === 0)
     fail(`run ${run.id} has no job ${values.job ?? ''}: ${jobs.map(job => job.name).join(', ')}`)
 
-  console.log(`${run.workflow_id} run ${run.id} on ${run.prettyref} (${run.commit_sha.slice(0, 7)}): ${run.status}, ${run.html_url}`)
+  console.log(`${run.workflow_id} run ${run.id} on ${run.prettyref} (${run.commit_sha.slice(0, 7)}): ${badge(run.status, process.stdout)}, ${run.html_url}`)
 
   for (const job of picked) {
     const log = await jobLog(job.id, values.repo)
 
-    console.log(`\njob ${job.name}: ${job.status}\n${values.full === true ? logLines(log).join('\n') : excerpt(log)}`)
+    console.log(`\njob ${job.name}: ${badge(job.status, process.stdout)}\n${values.full === true ? logLines(log).join('\n') : excerpt(log)}`)
   }
 
   return 0

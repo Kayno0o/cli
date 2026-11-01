@@ -1,4 +1,4 @@
-import { formatSeconds, jsonOption, parse, printJson, table, truncate, upTo, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, formatSeconds, jsonOption, parse, printJson, table, truncate, upTo, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { resolveCommit } from '../git'
 import { recentRuns, runSeconds, runsOn, startedAge } from '../runs'
@@ -41,8 +41,8 @@ export async function runs(args: string[]): Promise<number> {
 
   console.log(table([
     ['ID', 'STATUS', 'WORKFLOW', 'REF', 'EVENT', 'TOOK', 'STARTED', 'TITLE'],
-    ...list.map(run => [String(run.id), run.status, run.workflow_id, run.prettyref, run.event, run.duration > 0 ? formatSeconds(runSeconds(run)) : '-', startedAge(run), truncate(upTo(run.title, '\n'), TITLE_WIDTH)]),
-  ]))
+    ...list.map(run => [String(run.id), badge(run.status, process.stdout), run.workflow_id, run.prettyref, run.event, run.duration > 0 ? formatSeconds(runSeconds(run)) : '-', startedAge(run), truncate(upTo(run.title, '\n'), TITLE_WIDTH)]),
+  ], { header: true }))
 
   return 0
 }
