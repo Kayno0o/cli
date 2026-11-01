@@ -1,4 +1,4 @@
-import { formatSeconds, parse, table, truncate, upTo, wholeNumber } from '@kaynooo/cli-kit'
+import { formatSeconds, jsonOption, parse, printJson, table, truncate, upTo, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { resolveCommit } from '../git'
 import { recentRuns, runSeconds, runsOn, startedAge } from '../runs'
@@ -11,7 +11,7 @@ const options = {
   limit: { type: 'string', short: 'n', description: 'how many runs (10)' },
   sha: { type: 'string', short: 's', description: 'only the runs of this commit' },
   workflow: { type: 'string', short: 'w', description: 'only this workflow file, e.g. test.yml' },
-  json: { type: 'boolean', description: 'print JSON' },
+  json: jsonOption(),
   ...repoOption,
 } as const
 
@@ -28,7 +28,7 @@ export async function runs(args: string[]): Promise<number> {
   const list = found.filter(run => values.workflow === undefined || run.workflow_id === values.workflow).slice(0, limit)
 
   if (values.json === true) {
-    console.log(JSON.stringify(list.map(run => ({ id: run.id, number: run.index_in_repo, status: run.status, workflow: run.workflow_id, ref: run.prettyref, event: run.event, sha: run.commit_sha, seconds: runSeconds(run), started: run.started, title: run.title, url: run.html_url })), null, 2))
+    printJson(list.map(run => ({ id: run.id, number: run.index_in_repo, status: run.status, workflow: run.workflow_id, ref: run.prettyref, event: run.event, sha: run.commit_sha, seconds: runSeconds(run), started: run.started, title: run.title, url: run.html_url })))
 
     return 0
   }

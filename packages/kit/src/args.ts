@@ -6,6 +6,11 @@ import { paint } from './style'
 
 export type Options = Record<string, ParseArgsOptionDescriptor & { description: string }>
 
+// The `--json` flag every CLI words alike: `print JSON`, then what it holds when given.
+export function jsonOption(holds?: string) {
+  return { type: 'boolean', description: holds === undefined ? 'print JSON' : `print JSON: ${holds}` } as const
+}
+
 // Thrown to end a command with this exit code and message, which runCli prints as `error: <cli> <command>: <message>`, the hint on a line of its own.
 export class Exit extends Error {
   constructor(message: string, readonly code: number, readonly hint?: string) {

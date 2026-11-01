@@ -1,7 +1,7 @@
 import type { Report } from '../analyze'
 import type { RegistryConfig } from '../config'
 import type { Fetcher } from '../registry'
-import { fail, formatAge, parse, table, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, formatAge, jsonOption, parse, printJson, table, wholeNumber } from '@kaynooo/cli-kit'
 import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
 import { loadConfigs, registryFor } from '../config'
 import { fetchDownloads, fetchPackument, isPublic } from '../registry'
@@ -12,7 +12,7 @@ Checks npm packages before they are added: whether the name exists, the latest a
 Exits 1 when a package is missing or the version asked for is under the minimum age.`
 
 const options = {
-  'json': { type: 'boolean', description: 'print JSON' },
+  'json': jsonOption(),
   'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS})` },
 } as const
 
@@ -71,7 +71,7 @@ export async function check(args: string[]): Promise<number> {
   const reports = await Promise.all(positionals.map(async text => checkPackage(text, context)))
 
   if (values.json === true)
-    console.log(JSON.stringify(reports.length === 1 ? reports[0] : reports, null, 2))
+    printJson(reports.length === 1 ? reports[0] : reports)
   else
     console.log(reports.map(report => render(report)).join('\n\n'))
 

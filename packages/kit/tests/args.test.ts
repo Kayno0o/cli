@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { duration, Exit, HelpShown, parse, readInput, UsageError } from '../src'
+import { duration, Exit, HelpShown, jsonOption, parse, readInput, UsageError } from '../src'
 
 const options = { lines: { type: 'string', short: 'n', description: 'lines' } } as const
 
@@ -84,5 +84,13 @@ describe('duration', () => {
   test('refuses anything else', () => {
     expect(() => duration('5 min', 'timeout', 0)).toThrow(new Exit('--timeout takes a duration such as 30s, 5m or 1h, not 5 min', 2))
     expect(() => duration('0', 'timeout', 0)).toThrow(Exit)
+  })
+})
+
+describe('jsonOption', () => {
+  test('words the flag alike, naming what it holds when given', () => {
+    expect(jsonOption()).toEqual({ type: 'boolean', description: 'print JSON' })
+    expect(jsonOption('{ findings }')).toEqual({ type: 'boolean', description: 'print JSON: { findings }' })
+    expect(parse(['--json'], 'u', { json: jsonOption() }).values.json).toBe(true)
   })
 })

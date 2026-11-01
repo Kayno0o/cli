@@ -1,6 +1,7 @@
 import type { Colors } from './style'
 import process from 'node:process'
 import { formatDuration } from './format'
+import { holdSignals } from './process'
 import { marked, paint, takesControlCodes } from './style'
 
 export interface Progress {
@@ -35,7 +36,6 @@ const BAR_WIDTH = 20
 const CLEAR_LINE = '\r\x1B[2K'
 // What the console prints with, to the terminal the line is drawn on or the other.
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug', 'dir', 'dirxml', 'table', 'trace', 'group', 'groupCollapsed', 'count', 'timeEnd', 'timeLog', 'assert'] as const
-const SIGNALS = ['SIGINT', 'SIGTERM'] as const
 
 // A piece of the line and how it is tinted, so the line can be cut to the terminal's width on its visible text.
 interface Part { text: string, tint: (colors: Colors) => (text: string) => string }
@@ -81,27 +81,19 @@ export function progressLine(stream: ProgressStream = process.stderr, env: Env =
   const timer = setInterval(draw, FRAME_MS)
   const restore = interceptOutput(clear)
   const onExit = () => clear()
-  const stop = () => {
+  // Interrupted, the line goes before the shell's prompt comes back.
+  const signals = holdSignals(stop)
+
+  function stop() {
     clearInterval(timer)
     clear()
     restore()
     process.off('exit', onExit)
-
-    for (const signal of SIGNALS)
-      process.off(signal, onSignal)
-  }
-
-  // Interrupted, the line goes before the shell's prompt comes back, and the signal is raised again to end the process as it would have.
-  function onSignal(signal: NodeJS.Signals) {
-    stop()
-    process.kill(process.pid, signal)
+    signals.release()
   }
 
   timer.unref()
   process.on('exit', onExit)
-
-  for (const signal of SIGNALS)
-    process.on(signal, onSignal)
 
   return {
     // A new step is drawn at once, its clock started again; a count moving on waits for the next frame, so a burst of updates writes one.

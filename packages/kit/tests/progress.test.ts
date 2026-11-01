@@ -154,7 +154,7 @@ describe('the progress line', () => {
   it('leaves what the caller put in the console meanwhile, and its listeners once stopped', () => {
     const { stream } = terminal()
     const warn: unknown = Reflect.get(console, 'warn')
-    const listeners = ['exit', 'SIGINT', 'SIGTERM'].map(event => process.listenerCount(event))
+    const listeners = ['exit', 'SIGINT', 'SIGTERM', 'SIGHUP'].map(event => process.listenerCount(event))
     const line = progressLine(stream, {})
     const replaced = () => undefined
 
@@ -163,7 +163,7 @@ describe('the progress line', () => {
 
     try {
       expect(Reflect.get(console, 'warn') as unknown).toBe(replaced)
-      expect(['exit', 'SIGINT', 'SIGTERM'].map(event => process.listenerCount(event))).toEqual(listeners)
+      expect(['exit', 'SIGINT', 'SIGTERM', 'SIGHUP'].map(event => process.listenerCount(event))).toEqual(listeners)
     }
     finally {
       Reflect.set(console, 'warn', warn)

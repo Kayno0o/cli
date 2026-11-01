@@ -1,3 +1,5 @@
+import { jsonOption } from '@kaynooo/cli-kit'
+
 export const DEFAULT_ENV = 'DATABASE_URL'
 export const DEFAULT_LIMIT = 100
 
@@ -10,5 +12,5 @@ export const connectionOptions = {
 export const outputOptions = {
   limit: { type: 'string', short: 'n', description: `rows shown (${DEFAULT_LIMIT})` },
   raw: { type: 'boolean', description: 'show columns masked by default (emails, phones, tokens, password hashes)' },
-  json: { type: 'boolean', description: 'print JSON' },
+  json: jsonOption(),
 } as const

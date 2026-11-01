@@ -1,7 +1,7 @@
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
 import type { Session } from '../sessions'
-import { Exit, fail, formatAge, parse, table, truncate } from '@kaynooo/cli-kit'
+import { Exit, fail, formatAge, jsonOption, parse, printJson, table, truncate } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -75,7 +75,7 @@ const boardOptions = {
   labels: { type: 'string', short: 'L', description: 'only issues with these labels, comma separated' },
   query: { type: 'string', short: 'q', description: 'only issues whose title matches this, a case-insensitive regex such as dom|eager' },
   state: { type: 'string', description: 'only issues in this state: available, taken or away (claimed, no live session here)' },
-  json: { type: 'boolean', description: 'print JSON: number, title, labels, state, holder, since, session, boxesTotal, boxesLeft and note (author, at, body of the latest comment that is not a claim)' },
+  json: jsonOption('number, title, labels, state, holder, since, session, boxesTotal, boxesLeft and note (author, at, body of the latest comment that is not a claim)'),
   ...repoOption,
 } as const
 
@@ -107,7 +107,7 @@ export async function board(args: string[]): Promise<number> {
   }).filter(row => state === undefined || row.standing.state === state)
 
   if (values.json === true) {
-    console.log(JSON.stringify(rows.map(({ issue, standing: { state, ...rest }, comments: own }) => {
+    printJson(rows.map(({ issue, standing: { state, ...rest }, comments: own }) => {
       const list = boxes(issue.body)
       const note = latestNote(own)
 
@@ -123,7 +123,7 @@ export async function board(args: string[]): Promise<number> {
         boxesLeft: list.filter(box => !box.done).length,
         note: note === undefined ? undefined : { author: note.user.login, at: note.created_at, body: note.body },
       }
-    }), null, 2))
+    }))
 
     return 0
   }

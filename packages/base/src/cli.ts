@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
+import type { HeldSignals } from '@kaynooo/cli-kit'
 import type { Subprocess } from 'bun'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import { exitCodeOf, fail, parse, runMain } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, parse, runMain } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { addWorktree, checkout, copyKept, keptPaths, linkedEntries, linkEntries, removeWorktree, resolveRef, runsInContainer } from './worktree'
 
@@ -16,24 +17,16 @@ const OPTIONS = {
   'no-link': { type: 'boolean', description: 'do not link the ignored env files, node_modules, vendor and .venv of the checkout' },
 } as const
 
-const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
-
 const WHITESPACE = /\s/
 
-// Signals are held from the worktree's creation to its removal: one arriving before the command starts skips it, one during it is passed on to it.
-const running: { child?: Subprocess, signal?: NodeJS.Signals } = {}
+async function runIn(dir: string, command: string[], signals: HeldSignals): Promise<number> {
+  if (signals.signal !== undefined)
+    return exitCodeOf(null, signals.signal)
 
-function forward(signal: NodeJS.Signals) {
-  running.signal = signal
-  running.child?.kill(signal)
-}
-
-async function runIn(dir: string, command: string[]): Promise<number> {
-  if (running.signal !== undefined)
-    return exitCodeOf(null, running.signal)
+  let child: Subprocess
 
   try {
-    running.child = Bun.spawn(command, { cwd: dir, stdio: ['inherit', 'inherit', 'inherit'] })
+    child = Bun.spawn(command, { cwd: dir, stdio: ['inherit', 'inherit', 'inherit'] })
   }
   catch (error) {
     console.error(`base: cannot run ${command[0]}: ${error instanceof Error ? error.message : String(error)}`)
@@ -41,9 +34,10 @@ async function runIn(dir: string, command: string[]): Promise<number> {
     return 127
   }
 
-  await running.child.exited
+  signals.forward(child)
+  await child.exited
 
-  return exitCodeOf(running.child.exitCode, running.child.signalCode ?? null)
+  return exitCodeOf(child.exitCode, child.signalCode ?? null)
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -70,9 +64,8 @@ async function main(argv: string[]): Promise<number> {
   let links: string[] = []
   let code: number
 
-  for (const signal of SIGNALS)
-    process.on(signal, forward)
-
+  // Signals are held from the worktree's creation to its removal: one arriving before the command starts skips it, one during it is passed on to it.
+  const signals = holdSignals()
   const dir = await addWorktree(root, sha)
 
   try {
@@ -84,13 +77,11 @@ async function main(argv: string[]): Promise<number> {
     if (!existsSync(runDir))
       fail(`${prefix} does not exist at ${ref}`)
 
-    code = await runIn(runDir, command)
+    code = await runIn(runDir, command, signals)
   }
   finally {
     await removeWorktree(root, dir, links)
-
-    for (const signal of SIGNALS)
-      process.off(signal, forward)
+    signals.release()
   }
 
   console.error(`base: ran at ${ref} (${sha.slice(0, 7)}), exit ${code}`)

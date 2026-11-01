@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import process from 'node:process'
-import { fail, parse, readInput, runCli, runCommand } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, readInput, runCli, runCommand } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { checkCommand, checkPath } from './check'
 import { EVENTS, hook } from './hook'
@@ -18,7 +18,7 @@ Prints each broken rule with the route to take instead and exits 1, prints nothi
 The command is read from stdin with - or when none is given; a rule may rewrite it instead (the pinned package manager, a noisy run through out), printed as \`runs as: <command>\`.`
 
 const checkOptions = {
-  'json': { type: 'boolean', description: 'print {violations, command, notes, packages} for a hook' },
+  'json': jsonOption('{violations, command, notes, packages} for a hook'),
   'cwd': { type: 'string', description: 'the directory the command runs in (default: here)' },
   'push-asked': { type: 'boolean', description: 'the user asked for a push, so git push may run' },
   'no-wrap': { type: 'boolean', description: 'never route a noisy command through out' },
@@ -29,7 +29,7 @@ const pathUsage = `guard path [--json] <path>...
 Checks the paths a file tool would read, edit or write: env files are refused.`
 
 const pathOptions = {
-  json: { type: 'boolean', description: 'print {violations} for a hook' },
+  json: jsonOption('{violations} for a hook'),
 } as const
 
 const hookUsage = `guard hook <${EVENTS.join('|')}>

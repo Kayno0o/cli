@@ -2,7 +2,7 @@ import type { AuditOptions } from '../audit/types'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import process from 'node:process'
-import { parse } from '@kaynooo/cli-kit'
+import { jsonOption, parse, printJson } from '@kaynooo/cli-kit'
 import { dockerCompose } from '../audit/compose'
 import { errorsOf, render } from '../audit/render'
 import { CONFIG_FILE, hasConfig, loadConfig, audit as runAudit } from '../audit/run'
@@ -13,7 +13,7 @@ Cross-checks ${CONFIG_FILE} in dir (the current directory) against the compose f
 Needs docker for \`docker compose config\`. Exits 1 on errors, 0 otherwise, 2 when there is no ${CONFIG_FILE}.`
 
 const options = {
-  json: { type: 'boolean', description: 'print { root, composeFiles, findings } as JSON' },
+  json: jsonOption('{ root, composeFiles, findings }'),
 } as const
 
 // The compose loader is a parameter so a test audits without docker.
@@ -30,7 +30,10 @@ export async function audit(args: string[], overrides: Partial<AuditOptions> = {
 
   const result = await runAudit(await loadConfig(root), { root, loadCompose: dockerCompose, env: process.env, home: homedir(), ...overrides })
 
-  console.log(parsed.values.json === true ? JSON.stringify(result, undefined, 2) : render(result))
+  if (parsed.values.json === true)
+    printJson(result)
+  else
+    console.log(render(result))
 
   return errorsOf(result).length > 0 ? 1 : 0
 }

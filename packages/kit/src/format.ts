@@ -120,6 +120,11 @@ function narrow(rows: string[][], widths: number[], limit: number): string[][] {
   return rows.map(row => row.map((cell, index) => textWidth(cell) > (widths[index] ?? 0) ? truncate(cell, widths[index] ?? 0) : cell))
 }
 
+// What a `--json` flag prints: the value indented by two spaces, on stdout.
+export function printJson(value: unknown): void {
+  console.log(JSON.stringify(value, undefined, 2))
+}
+
 // `0.62` as `62%`.
 export function formatPercent(ratio: number, digits = 0): string {
   return `${(ratio * 100).toFixed(digits)}%`

@@ -1,6 +1,6 @@
 import type { Named } from '../git'
 import type { Issue, IssueComment } from '../issues'
-import { fail, formatAge, parse, readInput } from '@kaynooo/cli-kit'
+import { fail, formatAge, jsonOption, parse, printJson, readInput } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
 import { appendBoxes, boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { latestClaim } from '../claims'
@@ -17,7 +17,7 @@ const issueOptions = {
   todo: { type: 'boolean', short: 't', description: 'only the header and the boxes left to tick' },
   comments: { type: 'boolean', short: 'c', description: 'add the comments, each with its author and age' },
   body: { type: 'boolean', short: 'b', description: 'only the raw description, without numbered boxes' },
-  json: { type: 'boolean', description: 'print JSON: number, title, state, url, labels, claim, boxes, body and comments, an array for several issues' },
+  json: jsonOption('number, title, state, url, labels, claim, boxes, body and comments, an array for several issues'),
   ...repoOption,
 } as const
 
@@ -88,7 +88,7 @@ export async function issue(args: string[]): Promise<number> {
   if (values.json === true) {
     const json = read.map(([found, comments]) => issueJson(found, comments))
 
-    console.log(JSON.stringify(json.length === 1 ? json[0] : json, null, 2))
+    printJson(json.length === 1 ? json[0] : json)
 
     return 0
   }

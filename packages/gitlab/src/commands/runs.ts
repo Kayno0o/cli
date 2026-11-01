@@ -1,4 +1,4 @@
-import { formatAge, formatSeconds, parse, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { formatAge, formatSeconds, jsonOption, parse, printJson, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { resolveCommit, subjects } from '../git'
 import { FINISHED, pipelinesOn, recentPipelines } from '../pipelines'
@@ -11,7 +11,7 @@ const options = {
   limit: { type: 'string', short: 'n', description: 'how many pipelines (10, at most 100)' },
   sha: { type: 'string', short: 's', description: 'only the pipelines of this commit' },
   branch: { type: 'string', short: 'b', description: 'only the pipelines of this branch or tag' },
-  json: { type: 'boolean', description: 'print JSON' },
+  json: jsonOption(),
   ...repoOption,
 } as const
 
@@ -29,7 +29,7 @@ export async function runs(args: string[]): Promise<number> {
   const titles = await subjects([...new Set(list.map(pipeline => pipeline.sha))])
 
   if (values.json === true) {
-    console.log(JSON.stringify(list.map(pipeline => ({ id: pipeline.id, number: pipeline.iid, status: pipeline.status, ref: pipeline.ref, source: pipeline.source, sha: pipeline.sha, created: pipeline.created_at, updated: pipeline.updated_at, title: titles.get(pipeline.sha) ?? null, url: pipeline.web_url })), null, 2))
+    printJson(list.map(pipeline => ({ id: pipeline.id, number: pipeline.iid, status: pipeline.status, ref: pipeline.ref, source: pipeline.source, sha: pipeline.sha, created: pipeline.created_at, updated: pipeline.updated_at, title: titles.get(pipeline.sha) ?? null, url: pipeline.web_url })))
 
     return 0
   }

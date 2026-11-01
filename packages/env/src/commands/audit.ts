@@ -3,7 +3,7 @@ import type { ComposeFix } from '../fix'
 import { stat } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, parse } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
 import { audit as findExposed } from '../audit'
 import { fixCompose, shutOthersOut } from '../fix'
 
@@ -15,7 +15,7 @@ With --fix, moves each secret a listed compose file writes out into the .env bes
 Exits 1 when it finds one (with --fix, when one is left), 0 otherwise.`
 
 const options = {
-  json: { type: 'boolean', description: 'print the findings and the folders it could not read as JSON' },
+  json: jsonOption('the findings and the folders it could not read'),
   fix: { type: 'boolean', description: 'move inline compose secrets into a .env and shut other accounts out' },
 } as const
 
@@ -104,13 +104,13 @@ export async function audit(args: string[]): Promise<number> {
     const { fixed, left } = await fixAll(exposed, json)
 
     if (json)
-      console.log(JSON.stringify({ fixed, exposed: (await findExposed(roots)).exposed, unread }, null, 2))
+      printJson({ fixed, exposed: (await findExposed(roots)).exposed, unread })
 
     return left ? 1 : 0
   }
 
   if (json) {
-    console.log(JSON.stringify({ exposed, unread }, null, 2))
+    printJson({ exposed, unread })
 
     return exposed.length > 0 ? 1 : 0
   }

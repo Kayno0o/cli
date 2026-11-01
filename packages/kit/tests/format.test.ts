@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { formatAge, formatChange, formatDelta, formatDuration, formatPercent, formatSeconds, table } from '../src/format'
+import { formatAge, formatChange, formatDelta, formatDuration, formatPercent, formatSeconds, printJson, table } from '../src/format'
 
 describe('format', () => {
   test('gives the largest unit and the next one when not zero', () => {
@@ -55,5 +55,23 @@ describe('changes', () => {
     expect(formatChange(0, 6, { stream: {} })).toBe('-')
     expect(formatChange(10, 6, { stream: { isTTY: true }, env: {} })).toBe('\x1B[32m-40%\x1B[39m')
     expect(formatChange(10, 6, { better: 'higher', stream: { isTTY: true }, env: {} })).toBe('\x1B[31m-40%\x1B[39m')
+  })
+})
+
+describe('printJson', () => {
+  test('prints the value indented on stdout', () => {
+    const log = console.log
+    const printed: unknown[] = []
+
+    console.log = (text: unknown) => void printed.push(text)
+
+    try {
+      printJson({ a: [1] })
+    }
+    finally {
+      console.log = log
+    }
+
+    expect(printed).toEqual(['{\n  "a": [\n    1\n  ]\n}'])
   })
 })
