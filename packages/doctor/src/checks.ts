@@ -22,7 +22,7 @@ export interface Host {
 export const TOOLS: Record<string, string[]> = {
   '@kaynooo/base-tools': ['base', 'proof'],
   '@kaynooo/check-tools': ['check', 'fix'],
-  '@kaynooo/code-tools': ['peek', 'todo-scan'],
+  '@kaynooo/code-tools': ['peek', 'todo-scan', 'hotspots'],
   '@kaynooo/db-tools': ['db'],
   '@kaynooo/doctor-tools': ['doctor'],
   '@kaynooo/edit-tools': ['sub'],
