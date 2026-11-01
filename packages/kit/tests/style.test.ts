@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { helpText, parse } from '../src/args'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
-import { link, marked, paint, role } from '../src/style'
+import { badge, link, marked, paint, role, statusOf } from '../src/style'
 import { capture } from '../src/test'
 import { stripAnsi } from '../src/text'
 
@@ -68,5 +68,24 @@ describe('role and link', () => {
     expect(link('#49', 'https://x/49', TERMINAL, {})).toBe('\x1B]8;;https://x/49\x1B\\#49\x1B]8;;\x1B\\')
     expect(link('#49', 'https://x/49', {}, {})).toBe('#49 (https://x/49)')
     expect(link('https://x', 'https://x', {}, {})).toBe('https://x')
+  })
+})
+
+describe('badge', () => {
+  it('marks and tints a known status on a terminal, keeping the word it was given', () => {
+    expect(badge('success', TERMINAL, {})).toBe('\x1B[32m✓ success\x1B[39m')
+    expect(badge('failed', TERMINAL, {})).toBe('\x1B[31m✗ failed\x1B[39m')
+    expect(badge('in_progress', TERMINAL, {})).toBe('\x1B[36m● in_progress\x1B[39m')
+    expect(badge('waiting', TERMINAL, {})).toBe('\x1B[33m○ waiting\x1B[39m')
+    expect(badge('cancelled', TERMINAL, {})).toBe('\x1B[2m- cancelled\x1B[22m')
+  })
+
+  it('leaves the word alone off a terminal, and a word of no known status everywhere', () => {
+    expect(badge('success', {}, {})).toBe('success')
+    expect(badge('mystery', TERMINAL, {})).toBe('mystery')
+  })
+
+  it('reads the words CI services use, in any case', () => {
+    expect(['Success', 'failure', 'pending', 'canceled', 'running'].map(statusOf)).toEqual(['passed', 'failed', 'queued', 'skipped', 'running'])
   })
 })

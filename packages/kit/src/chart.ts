@@ -59,3 +59,30 @@ export function barChart(rows: [label: string, value: number][], { width = 24, f
 
   return rows.map(([label, value]) => `${label}${' '.repeat(labels - textWidth(label))}  ${bar(largest === 0 ? 0 : value / largest, { width, stream, env })}  ${' '.repeat(values - textWidth(format(value)))}${format(value)}`).join('\n')
 }
+
+export interface TreeNode {
+  label: string
+  children?: TreeNode[]
+}
+
+// Each root on a line of its own and its children under it, hung on dimmed `├─`, `└─` and `│` branches.
+export function tree(roots: TreeNode[], { stream = process.stdout, env = process.env }: KeyValueSettings = {}): string {
+  const colors = paint(stream, env)
+  const lines: string[] = []
+
+  function branch(nodes: TreeNode[], indent: string) {
+    for (const [index, { label, children = [] }] of nodes.entries()) {
+      const last = index === nodes.length - 1
+
+      lines.push(`${colors.dim(`${indent}${last ? '└─' : '├─'}`)} ${label}`)
+      branch(children, `${indent}${last ? '   ' : '│  '}`)
+    }
+  }
+
+  for (const { label, children = [] } of roots) {
+    lines.push(label)
+    branch(children, '')
+  }
+
+  return lines.join('\n')
+}

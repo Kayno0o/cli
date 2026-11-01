@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bar, barChart, keyValue, sparkline } from '../src/chart'
+import { bar, barChart, keyValue, sparkline, tree } from '../src/chart'
 
 describe('chart', () => {
   test('sparkline scales between the smallest and largest value', () => {
@@ -23,5 +23,17 @@ describe('chart', () => {
 
   test('barChart scales to the largest value and right-aligns the numbers', () => {
     expect(barChart([['ft', 40], ['db', 4]], { width: 10, stream: {}, env: {} })).toBe('ft  ██████████  40\ndb  █░░░░░░░░░   4')
+  })
+})
+
+describe('tree', () => {
+  const roots = [{ label: 'packages', children: [{ label: 'kit', children: [{ label: 'src' }, { label: 'tests' }] }, { label: 'ft' }] }, { label: 'README.md' }]
+
+  test('hangs each child on a branch under its parent', () => {
+    expect(tree(roots, { stream: {}, env: {} })).toBe('packages\n├─ kit\n│  ├─ src\n│  └─ tests\n└─ ft\nREADME.md')
+  })
+
+  test('dims the branches on a terminal', () => {
+    expect(tree([{ label: 'a', children: [{ label: 'b' }] }], { stream: { isTTY: true }, env: {} })).toBe('a\n\x1B[2m└─\x1B[22m b')
   })
 })

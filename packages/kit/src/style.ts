@@ -64,6 +64,36 @@ export function role(name: Role, stream: { isTTY?: boolean }, env: Record<string
   return ROLES[name](paint(stream, env))
 }
 
+export type Status = 'passed' | 'failed' | 'running' | 'queued' | 'skipped'
+
+// What each status draws, and the words CI services report it by.
+const STATUSES: Record<Status, { symbol: string, words: string[], paint: (colors: Colors) => (text: string) => string }> = {
+  passed: { symbol: '✓', words: ['passed', 'success', 'succeeded', 'ok'], paint: colors => colors.green },
+  failed: { symbol: '✗', words: ['failed', 'failure', 'error', 'errored'], paint: colors => colors.red },
+  running: { symbol: '●', words: ['running', 'in_progress', 'started'], paint: colors => colors.cyan },
+  queued: { symbol: '○', words: ['queued', 'waiting', 'pending', 'created', 'blocked', 'scheduled'], paint: colors => colors.yellow },
+  skipped: { symbol: '-', words: ['skipped', 'cancelled', 'canceled', 'manual'], paint: colors => colors.dim },
+}
+
+const STATUS_OF = new Map(Object.entries(STATUSES).flatMap(([status, { words }]) => words.map(word => [word, status as Status])))
+
+// The status a word such as `success` or `in_progress` stands for, undefined for one it does not know.
+export function statusOf(word: string): Status | undefined {
+  return STATUS_OF.get(word.toLowerCase())
+}
+
+// `✓ success` in green, `✗ failure` in red, `● running`, `○ waiting` or `- skipped` on a terminal; the word alone elsewhere, and a word of no known status as given.
+export function badge(word: string, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
+  const status = statusOf(word)
+
+  if (status === undefined || !takesControlCodes(stream, env))
+    return word
+
+  const { symbol, paint: tint } = STATUSES[status]
+
+  return tint(paint(stream, env))(`${symbol} ${word}`)
+}
+
 // A clickable OSC 8 link on a terminal; elsewhere `text (url)`, or the text alone when it is the url.
 export function link(text: string, url: string, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
   if (takesControlCodes(stream, env))
