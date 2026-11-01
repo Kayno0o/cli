@@ -16,6 +16,30 @@ pkg left-pad@1.3.0 @types/node --json
 
 `pkg` exits 1 when a package is missing, the request matches no version, or the resolved version is too fresh, 2 on a usage error; other warnings exit 0. `--json` prints one report, or an array for several names, `--min-age <days>` changes the 14 days.
 
+## Config: licence allowlist and advisory threshold
+
+`pkg` reads its own settings from a `.pkgrc.json` in the current folder or any folder above it, then from `~/.config/pkg/config.json`; each key comes from the nearest file that sets it, and comments are allowed.
+
+```json
+{ "licenses": ["MIT", "ISC", "Apache-2.0", "BSD-3-Clause"], "blockSeverity": "high" }
+```
+
+- `licenses` is the allowlist of SPDX ids, compared without regard to case. An expression is allowed when one side of an `OR` is and every term of an `AND` is; a `WITH` exception is ignored. With an allowlist set, `pkg check` refuses a package whose licence is outside it or missing (a legacy `SEE LICENSE IN` or `UNLICENSED` counts as outside), so the `bun add` the guard checks through `pkg check` is refused with it. Without the key the licence is only printed.
+- `blockSeverity` (`low`, `moderate`, `high` or `critical`) makes `pkg check` ask the registry for the advisories of the exact `name@version` and refuse it when one is at that severity or above. The request is the one `bun audit` makes: a `POST` of `{"name": ["version"]}` to `<registry>/-/npm/v1/security/advisories/bulk`. A registry without that endpoint (a private one, say) answers nothing and the version is not refused for it.
+
+## Auditing a lockfile
+
+```sh
+pkg audit
+pkg audit ~/Workspace/app --audit-level high --ignore GHSA-238p-pmpm-9mq7 --json
+```
+
+`pkg audit [dir]` reads the `bun.lock` of the folder and runs the checks of `pkg check` on every registry package it pins (workspace, git and link sources left out): the age of the version, install scripts, a deprecated version, a near miss of a popular name and the licence allowlist. It also lists the known advisories of every pinned version, each with its GHSA, severity and the version that fixes it when the range ends at one. Findings come grouped per package, each package looked up on the registry once per run, and all advisories fetched in one request per registry.
+
+- `--audit-level <low|moderate|high|critical>` (`low`) keeps only the advisories at that severity or above, and `--ignore <GHSA or id>` (repeatable) skips an advisory; `blockSeverity` is for `pkg check` and does not apply here.
+- `--json` prints the packages with a finding as `[{name, version, license, blocked, warnings, advisories}]`; `--min-age <days>` changes the 14 days.
+- It exits 1 when a package is missing, too fresh or outside the allowlist, or an advisory remains after the level and the ignores; install scripts and near misses alone exit 0.
+
 ## Moving consumers onto a release
 
 ```sh

@@ -154,3 +154,59 @@ export async function loadConfigs(cwd = process.cwd(), env: Record<string, strin
 
   return configs
 }
+
+export const SEVERITIES = ['low', 'moderate', 'high', 'critical'] as const
+
+export type Severity = typeof SEVERITIES[number]
+
+// What pkg's own config file sets: the SPDX licences allowed, and the advisory severity at which a package is refused.
+export interface PkgSettings {
+  licenses?: string[] | undefined
+  blockSeverity?: Severity | undefined
+}
+
+const SETTINGS_FILE = '.pkgrc.json'
+
+export function isSeverity(value: unknown): value is Severity {
+  return SEVERITIES.includes(value as Severity)
+}
+
+// The settings in one config file's text, a key of the wrong shape left out.
+export function parseSettings(text: string): PkgSettings {
+  const raw = Bun.JSONC.parse(text) as { licenses?: unknown, blockSeverity?: unknown } | null
+  const settings: PkgSettings = {}
+
+  if (Array.isArray(raw?.licenses) && raw.licenses.every(each => typeof each === 'string'))
+    settings.licenses = raw.licenses
+
+  if (isSeverity(raw?.blockSeverity))
+    settings.blockSeverity = raw.blockSeverity
+
+  return settings
+}
+
+// The `.pkgrc.json` files from the directory up to the root, then ~/.config/pkg/config.json, each key taken from the nearest file that sets it.
+export async function loadSettings(cwd = process.cwd(), home = homedir()): Promise<PkgSettings> {
+  const files: string[] = []
+
+  for (let dir = cwd; !files.includes(join(dir, SETTINGS_FILE)); dir = dirname(dir))
+    files.push(join(dir, SETTINGS_FILE))
+
+  files.push(join(home, '.config', 'pkg', 'config.json'))
+
+  const settings: PkgSettings = {}
+
+  for (const file of files) {
+    const text = await readIfThere(file)
+
+    if (text === undefined)
+      continue
+
+    const found = parseSettings(text)
+
+    settings.licenses ??= found.licenses
+    settings.blockSeverity ??= found.blockSeverity
+  }
+
+  return settings
+}

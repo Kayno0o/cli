@@ -11,6 +11,7 @@ process.exitCode = await runCli({
   defaultCommand: 'check',
   commands: {
     check: { summary: 'check packages before they are added (`pkg <name>` alone runs it)', run: async args => (await import('./commands/check')).check(args) },
+    audit: { summary: 'check every package a bun.lock pins, with its known advisories', run: async args => (await import('./commands/audit')).audit(args) },
     bump: { summary: 'wait for a release on the registry, then bun add it in every consumer', run: async args => (await import('./commands/bump')).bump(args) },
     consumers: { summary: 'list the folders depending on a package, with the version each asks for', run: async args => (await import('./commands/consumers')).consumers(args) },
   },

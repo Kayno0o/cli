@@ -1,16 +1,19 @@
-import type { Report } from '../analyze'
-import type { RegistryConfig } from '../config'
+import type { AnalyzeInput, Report } from '../analyze'
+import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher } from '../registry'
 import { fail, formatAge, jsonOption, parse, printJson, table, wholeNumber } from '@kaynooo/cli-kit'
+import { advisoriesFor, fetchAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
-import { loadConfigs, registryFor } from '../config'
+import { loadConfigs, loadSettings, registryFor } from '../config'
 import { fetchDownloads, fetchPackument, isPublic } from '../registry'
 
 const usage = `pkg [check] <name>[@version]...
 
 Checks npm packages before they are added: whether the name exists, the latest and the newest version at least two weeks old, weekly downloads, licence, repository, install scripts and a near miss of a popular name.
 
-Exits 0 when every package passes, 1 when one is missing or the version asked for is under the minimum age, 2 on a usage error.`
+A \`.pkgrc.json\` (or ~/.config/pkg/config.json) with \`licenses\` (SPDX ids) refuses a licence outside the list or a missing one, and \`blockSeverity\` (low, moderate, high, critical) refuses a version with an advisory at that level or above.
+
+Exits 0 when every package passes, 1 when one is missing, the version asked for is under the minimum age, its licence is outside the allowlist or an advisory reaches the threshold, 2 on a usage error.`
 
 const options = {
   'json': jsonOption(),
@@ -22,6 +25,7 @@ interface Context {
   fetcher?: Fetcher | undefined
   now?: number | undefined
   minAgeDays: number
+  settings?: PkgSettings | undefined
 }
 
 // Looks one package up on the registry its name is installed from, which a scoped .npmrc or bunfig.toml may move off npmjs.org.
@@ -31,7 +35,16 @@ export async function checkPackage(text: string, context: Context): Promise<Repo
   const packument = await fetchPackument(spec.name, registry, context.fetcher)
   const downloads = packument !== undefined && isPublic(registry) ? await fetchDownloads(spec.name, context.fetcher) : undefined
 
-  return analyze({ spec, packument, downloads, registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays })
+  const input: AnalyzeInput = { spec, packument, downloads, registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings?.licenses }
+  const report = analyze(input)
+  const { blockSeverity } = context.settings ?? {}
+
+  if (blockSeverity === undefined || report.version === undefined)
+    return report
+
+  const found = await fetchAdvisories({ [spec.name]: [report.version] }, registry, context.fetcher)
+
+  return analyze({ ...input, blockSeverity, advisories: advisoriesFor(found[spec.name], report.version) })
 }
 
 function when(release: { published?: string | undefined } | undefined, now: number): string {
@@ -68,7 +81,7 @@ export async function check(args: string[]): Promise<number> {
   if (positionals.length === 0)
     fail(`a package name is needed\n\n${usage}`)
 
-  const context: Context = { configs: await loadConfigs(), minAgeDays: wholeNumber(values['min-age'], 'min-age', DEFAULT_MIN_AGE_DAYS, 0) }
+  const context: Context = { configs: await loadConfigs(), settings: await loadSettings(), minAgeDays: wholeNumber(values['min-age'], 'min-age', DEFAULT_MIN_AGE_DAYS, 0) }
   const reports = await Promise.all(positionals.map(async text => checkPackage(text, context)))
 
   if (values.json === true)

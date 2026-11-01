@@ -1,4 +1,8 @@
+import type { VersionAdvisory } from './advisories'
+import type { Severity } from './config'
 import type { Packument, Version } from './registry'
+import { filterAdvisories } from './advisories'
+import { isLicenseAllowed } from './licenses'
 import { nearMisses } from './nearmiss'
 
 export const DEFAULT_MIN_AGE_DAYS = 14
@@ -35,8 +39,9 @@ export interface Report {
   deprecated?: string | undefined
   installScripts: Record<string, string>
   nearMisses: string[]
+  advisories: VersionAdvisory[]
   warnings: string[]
-  // True when the package is missing, the version does not resolve or it is too fresh.
+  // True when the package is missing, the version does not resolve, it is too fresh, its licence is outside the allowlist or an advisory reaches the severity threshold.
   blocked: boolean
 }
 
@@ -93,9 +98,23 @@ function safeRelease(packument: Packument, now: number, minAgeDays: number): Rel
   return version === undefined ? undefined : { version, published: packument.time?.[version] }
 }
 
-export function analyze(input: { spec: Spec, packument: Packument | undefined, downloads?: number | undefined, registry: string, now?: number | undefined, minAgeDays?: number | undefined }): Report {
+export interface AnalyzeInput {
+  spec: Spec
+  packument: Packument | undefined
+  downloads?: number | undefined
+  registry: string
+  now?: number | undefined
+  minAgeDays?: number | undefined
+  // The SPDX ids allowed; a licence outside them, or none, blocks.
+  licenses?: string[] | undefined
+  // The advisories hitting the resolved version, and the severity at which one blocks.
+  advisories?: VersionAdvisory[] | undefined
+  blockSeverity?: Severity | undefined
+}
+
+export function analyze(input: AnalyzeInput): Report {
   const { spec, packument, registry, now = Date.now(), minAgeDays = DEFAULT_MIN_AGE_DAYS } = input
-  const report: Report = { name: spec.name, registry, exists: packument !== undefined, requested: spec.request, installScripts: {}, nearMisses: nearMisses(spec.name), warnings: [], blocked: false, downloads: input.downloads }
+  const report: Report = { name: spec.name, registry, exists: packument !== undefined, requested: spec.request, installScripts: {}, nearMisses: nearMisses(spec.name), advisories: input.advisories ?? [], warnings: [], blocked: false, downloads: input.downloads }
 
   if (report.nearMisses.length > 0)
     report.warnings.push(`name looks like ${report.nearMisses.join('; ')}, check it is the package meant`)
@@ -145,6 +164,28 @@ export function analyze(input: { spec: Spec, packument: Packument | undefined, d
 
   if (report.deprecated !== undefined)
     report.warnings.push(`${version} is deprecated: ${report.deprecated}`)
+
+  if (input.licenses !== undefined) {
+    const isMissing = report.license === undefined || report.license === ''
+
+    if (isMissing) {
+      report.blocked = true
+      report.warnings.push(`${version} declares no licence, and the allowlist needs one`)
+    }
+    else if (!isLicenseAllowed(report.license ?? '', input.licenses)) {
+      report.blocked = true
+      report.warnings.push(`licence ${report.license} is not in the allowlist (${input.licenses.join(', ')})`)
+    }
+  }
+
+  if (input.blockSeverity !== undefined) {
+    const blocking = filterAdvisories(report.advisories, input.blockSeverity)
+
+    if (blocking.length > 0) {
+      report.blocked = true
+      report.warnings.push(`${version} has ${blocking.length} advisor${blocking.length === 1 ? 'y' : 'ies'} at ${input.blockSeverity} or above: ${blocking.map(each => each.ghsa ?? each.id).join(', ')}`)
+    }
+  }
 
   return report
 }
