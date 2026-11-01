@@ -71,7 +71,7 @@ async function bashCall(command: string, input: HookInput, machine: Machine): Pr
   if (verdict.violations.length > 0 || verdict.packages.length === 0 || !machine.has('pkg'))
     return deny(verdict.violations)
 
-  const checked = await machine.run(['pkg', ...verdict.packages], cwd)
+  const checked = await machine.run(['pkg', 'check', ...verdict.packages], cwd)
 
   return checked.code === 1 ? deny([{ rule: 'pkg', message: `pkg refused what this adds, so it was not run:\n${checked.text.trim()}` }]) : null
 }

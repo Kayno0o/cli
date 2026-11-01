@@ -6,7 +6,7 @@ import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
 import { loadConfigs, registryFor } from '../config'
 import { fetchDownloads, fetchPackument, isPublic } from '../registry'
 
-const usage = `pkg <name>[@version]...
+const usage = `pkg [check] <name>[@version]...
 
 Checks npm packages before they are added: whether the name exists, the latest and the newest version at least two weeks old, weekly downloads, licence, repository, install scripts and a near miss of a popular name.
 Exits 1 when a package is missing or the version asked for is under the minimum age.`

@@ -20,7 +20,7 @@ describe('pkg', () => {
   })
 
   test('needs a package name', () => {
-    const result = pkg()
+    const result = pkg('check')
 
     expect(result.code).toBe(2)
     expect(result.err).toContain('a package name is needed')

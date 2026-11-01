@@ -67,7 +67,7 @@ describe('pre-tool-use on Bash', () => {
     const passing = machine()
 
     expect(await hook('pre-tool-use', bash('bun add left-pad'), passing)).toBeNull()
-    expect(passing.ran).toEqual([['pkg', 'left-pad']])
+    expect(passing.ran).toEqual([['pkg', 'check', 'left-pad']])
   })
 
   test('skips pkg when it is not installed', async () => {

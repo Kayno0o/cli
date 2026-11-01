@@ -8,7 +8,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/env-tools`](packages/env) | `ev`, `redact` | .env files listed and edited with secrets masked; secrets masked in any piped output |
 | [`@kaynooo/db-tools`](packages/db) | `db` | read-only SQL against Postgres that never shows the connection credentials, writes handed back as SQL |
 | [`@kaynooo/check-tools`](packages/check) | `check`, `fix` | a repo's check, typecheck, lint and test steps, or its fixers and formatters, showing only what failed |
-| [`@kaynooo/pkg-tools`](packages/pkg) | `pkg` | an npm package checked before it is added: guessed names, versions under two weeks old, install scripts |
+| [`@kaynooo/pkg-tools`](packages/pkg) | `pkg` | an npm package checked before it is added: guessed names, versions under two weeks old, install scripts; `pkg bump` moves every consumer repo onto a release once the registry serves it |
 | [`@kaynooo/stack-tools`](packages/stack) | `stack` | a stable port per service name, and a compose release setup audited against its `release.config.ts` |
 | [`@kaynooo/out-tools`](packages/out) | `out` | noisy command output folded, errors kept, the full log saved to a file |
 | [`@kaynooo/edit-tools`](packages/edit) | `sub` | text replaced in files, written only when every replacement matches as often as expected |
