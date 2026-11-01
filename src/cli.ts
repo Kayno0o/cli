@@ -5,7 +5,7 @@ import type { ChangelogOptions, ResolvedChangelogOptions } from './types'
 import { $ } from 'bun'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
+import { parse, runCli } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { sendDiscordWebhook } from '@kaynooo/utils'
 import { colors } from '@kaynooo/utils/tools/colors'
@@ -96,13 +96,7 @@ async function printManualRelease(config: ResolvedChangelogOptions, md: string, 
 }
 
 async function release(argv: string[]) {
-  const parsed = parse(argv, 'usage: changelogitea release [options]', shared, { allowNegative: true })
-
-  if (parsed === undefined)
-    return 0
-
-  if (parsed.positionals.length)
-    badUsage(`unexpected argument ${parsed.positionals[0]}`)
+  const parsed = parse(argv, 'usage: changelogitea release [options]', shared, { allowNegative: true, positionals: [] })
 
   const options = await withToken(toOptions(parsed.values))
   let generated: { config: ResolvedChangelogOptions, md: string } | undefined
@@ -193,16 +187,7 @@ async function release(argv: string[]) {
 }
 
 async function undo(argv: string[]) {
-  const parsed = parse(argv, 'usage: changelogitea undo [tag] [options]', undoFlags)
-
-  if (parsed === undefined)
-    return 0
-
-  const { values: args, positionals } = parsed
-
-  if (positionals.length > 1)
-    badUsage(`unexpected argument ${positionals[1]}`)
-
+  const { values: args, positionals } = parse(argv, 'usage: changelogitea undo [tag] [options]', undoFlags, { positionals: ['[tag]'] })
   let tag = positionals[0]
   const options = await withToken(toOptions(args))
 
