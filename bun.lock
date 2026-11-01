@@ -26,9 +26,11 @@
       "bin": {
         "check": "./dist/cli.js",
         "fix": "./dist/fix-cli.js",
+        "errs": "./dist/errs-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/out-tools": "workspace:*",
       },
     },
     "packages/code": {

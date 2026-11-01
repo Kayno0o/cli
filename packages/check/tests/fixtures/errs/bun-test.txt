@@ -1,0 +1,30 @@
+bun test v1.4.4 (38afee6c8)
+
+a.test.ts:
+1 | import { expect, test } from 'bun:test'
+2 | 
+3 | test('adds numbers', () => {
+4 |   expect(1 + 1).toBe(3)
+                    ^
+error: expect(received).toBe(expected)
+
+Expected: 3
+Received: 2
+
+      at <anonymous> (/repo/a.test.ts:4:17)
+(fail) adds numbers [0.25ms]
+3 | test('adds numbers', () => {
+4 |   expect(1 + 1).toBe(3)
+5 | })
+6 | 
+7 | test('throws', () => {
+8 |   throw new Error('boom')
+                            ^
+error: boom
+      at <anonymous> (/repo/a.test.ts:8:25)
+(fail) throws [0.05ms]
+
+ 1 pass
+ 2 fail
+ 2 expect() calls
+Ran 3 tests across 1 file. [14.00ms]

@@ -51,3 +51,18 @@ The project's own `fix` script, recipe or target when it has one, else its `lint
 It looks at the folder itself only, so each package of a monorepo gets its own run. A fixer whose binary is missing is skipped with a `skip` line. Lines and logs read like `check`'s, then the files the run changed are listed, leaving out those already dirty before it, when the folder is in a git repository. A script that calls `fix` again fails instead of recursing.
 
 Exit code 0 when every fixer ran, 1 when one failed, 2 on bad usage or when nothing applies.
+
+## errs
+
+```sh
+errs build.log                  # a log file, or - for stdin
+tsgo -p . 2>&1 | errs
+errs -- bun test                # run a command, parse its output
+errs --json -- keslint src      # {errors, unrecognised, log?, code?}
+```
+
+Turns tsc, tsgo and vue-tsc (plain and pretty), bun check, eslint and keslint (stylish) and bun test logs into one `file:line:col: message (rule)` line per error, so a session reads the failures without the log. A failed bun test reads `file:line:col: <test name>: <assertion> (expected X, received Y)`, located at the first stack frame of its error, and an eslint warning is prefixed `warning:`. Absolute paths under the current folder are printed relative.
+
+`--json` prints `{errors: [{tool, file, line, column, rule?, severity, message, test?}], unrecognised, log?, code?}`. Lines no format recognised are never dropped silently: their count goes to stderr, with the path of the full log. A command run after `--` has its whole output saved with the same log writer as `out`, and `log` is that file (the file given when a log is read, nothing for stdin). A first argument that is neither an option nor an existing file starts the command, so the `--` is optional.
+
+Exit code 0 when no error was found and the command, if any, passed, 1 when errors were found or the command failed, 2 on bad usage.

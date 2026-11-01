@@ -1,0 +1,13 @@
+
+/repo/src/scratch-lint.ts
+  1:1   error  Unexpected var, use let or const instead     no-var
+  1:5   error  'unused' is assigned a value but never used  unused-imports/no-unused-vars
+  2:13  error  Strings must use singlequote                 style/quotes
+  2:18  error  Extra semicolon                              style/semi
+  3:22  error  Unexpected any. Specify a different type     ts/no-explicit-any
+  4:9   error  Expected '===' and instead saw '=='          eqeqeq
+  4:13  error  Expect newline after if                      antfu/if-newline
+
+✖ 7 problems (7 errors, 0 warnings)
+  4 errors and 0 warnings potentially fixable with the `--fix` option.
+

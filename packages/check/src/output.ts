@@ -58,13 +58,24 @@ export const bunCheck: Parser = (lines) => {
     return undefined
 
   const errors = blocks.map((block) => {
-    const attributes = Object.fromEntries([...block.matchAll(BUN_CHECK_ATTRIBUTE)].map(match => [match[1] ?? '', match[2] ?? '']))
-    const message = block.replace(BUN_CHECK_SOURCE, '').split('\n').slice(1, -1).join('\n').trim()
+    const { file, line, column, code, message } = bunCheckFields(block)
 
-    return `${attributes.file}:${attributes.line}:${attributes.column} ${attributes.code}: ${message}`
+    return `${file}:${line}:${column} ${code}: ${message}`
   })
 
   return [...errors, ...lines.filter(line => BUN_CHECK_SUMMARY.test(line))]
+}
+
+function bunCheckFields(block: string): { file: string, line: string, column: string, code: string, message: string } {
+  const attributes = Object.fromEntries([...block.matchAll(BUN_CHECK_ATTRIBUTE)].map(match => [match[1] ?? '', match[2] ?? '']))
+
+  return {
+    file: attributes.file ?? '',
+    line: attributes.line ?? '',
+    column: attributes.column ?? '',
+    code: attributes.code ?? '',
+    message: block.replace(BUN_CHECK_SOURCE, '').split('\n').slice(1, -1).join('\n').trim(),
+  }
 }
 
 // tsc, tsgo and vue-tsc, plain (`file(1,2): error TS1`) or pretty (`file:1:2 - error TS1`), with the indented lines continuing a message and without the pretty code frames.
@@ -160,4 +171,183 @@ export function failureExcerpt(output: string): string {
   const shown = squeeze(parsed ?? lines.slice(-TAIL))
 
   return shown.length > MAX_LINES ? [...shown.slice(0, MAX_LINES), `... ${shown.length - MAX_LINES} more lines`].join('\n') : shown.join('\n')
+}
+
+export interface ToolError {
+  tool: 'tsc' | 'eslint' | 'bun check' | 'bun test'
+  file: string
+  line: number
+  column: number
+  rule?: string | undefined
+  severity: 'error' | 'warning'
+  message: string
+  test?: string
+}
+
+export interface ParsedErrors { errors: ToolError[], unrecognised: number }
+
+const TSC_PLAIN_ERROR = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/
+const TSC_PRETTY_ERROR = /^(.+?):(\d+):(\d+) - error (TS\d+): (.*)$/
+const TSC_SOURCE_LINE = /^\d+ /
+const ESLINT_FIELDS = /^ +(\d+):(\d+) +(error|warning) +(\S.*)$/
+const ESLINT_RULE = / {2,}(\S+)$/
+const BUN_TEST_EXPECTED = /^Expected: (.*)$/
+const BUN_TEST_RECEIVED = /^Received: (.*)$/
+const BUN_TEST_FRAME = /^\s+at (?:.*? \()?(.+?):(\d+):(\d+)\)?$/
+const BUN_TEST_FILE = /^\S+\.test\.[jt]sx?:$/
+const NOISE = /^(?:bun test v|Errors {2}Files$|Ran \d+ tests?|note: |\s*\d+ expect\(\) calls|\s+\d+\s+\S+:\d+$|\s*\d+ errors? and \d+ warnings? potentially fixable)/
+
+type Collector = (lines: string[], used: Set<number>) => ToolError[]
+
+// Blank lines and the headers and totals the tools print around their errors.
+function isNoise(line: string): boolean {
+  return line.trim() === '' || [NOISE, BUN_TEST_SUMMARY, BUN_CHECK_SUMMARY, TSC_SUMMARY, ESLINT_SUMMARY, BOUNDARY, BASH_ECHO].some(pattern => pattern.test(line))
+}
+
+const collectBunCheck: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+
+  for (let index = 0; index < lines.length; index++) {
+    if (!(lines[index] ?? '').startsWith('<error file='))
+      continue
+
+    const end = lines.findIndex((line, at) => at >= index && line === '</error>')
+
+    if (end === -1)
+      break
+
+    const { file, line, column, code, message } = bunCheckFields(lines.slice(index, end + 1).join('\n'))
+
+    errors.push({ tool: 'bun check', file, line: Number(line), column: Number(column), rule: code, severity: 'error', message: message.replaceAll(/\s*\n\s*/g, ' ') })
+
+    for (let at = index; at <= end; at++)
+      used.add(at)
+
+    index = end
+  }
+
+  return errors
+}
+
+// A failed test's location is the first stack frame under its `error:` line, its file's header when there is none.
+const collectBunTest: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+  const seen = new Set<string>()
+
+  for (const [index, line] of lines.entries()) {
+    if (!line.startsWith('(fail) '))
+      continue
+
+    used.add(index)
+
+    const test = line.slice('(fail) '.length).replace(DURATION, '')
+
+    if (seen.has(test))
+      continue
+
+    seen.add(test)
+
+    const start = lines.findLastIndex((text, at) => at < index && BOUNDARY.test(text)) + 1
+    const block = lines.slice(start, index)
+    const failure = block.findIndex(text => text.startsWith('error:'))
+
+    for (let at = start; at < index; at++)
+      used.add(at)
+
+    const frame = block.slice(Math.max(failure, 0)).map(text => BUN_TEST_FRAME.exec(text)).find(match => match !== null)
+    const header = lines.slice(0, index).findLast(text => BUN_TEST_FILE.test(text))
+    const expected = block.map(text => BUN_TEST_EXPECTED.exec(text)?.[1]).find(text => text !== undefined)
+    const received = block.map(text => BUN_TEST_RECEIVED.exec(text)?.[1]).find(text => text !== undefined)
+    const reason = failure === -1 ? 'failed' : (block[failure] ?? '').slice('error:'.length).trim()
+    const values = expected === undefined || received === undefined ? '' : ` (expected ${expected}, received ${received})`
+
+    errors.push({
+      tool: 'bun test',
+      file: frame?.[1] ?? header?.replace(':', '') ?? '',
+      line: Number(frame?.[2] ?? 0),
+      column: Number(frame?.[3] ?? 0),
+      severity: 'error',
+      message: `${reason}${values}`,
+      test,
+    })
+  }
+
+  return errors
+}
+
+// tsc, tsgo and vue-tsc, plain or pretty: an error line, the indented lines continuing its message and, pretty, its code frame.
+const collectTsc: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+  let current: ToolError | undefined
+  let pretty = false
+
+  for (const [index, line] of lines.entries()) {
+    if (used.has(index))
+      continue
+
+    const plain = TSC_PLAIN_ERROR.exec(line)
+    const match = plain ?? TSC_PRETTY_ERROR.exec(line)
+
+    if (match !== null) {
+      current = { tool: 'tsc', file: match[1] ?? '', line: Number(match[2]), column: Number(match[3]), rule: match[4], severity: 'error', message: match[5] ?? '' }
+      pretty = plain === null
+      errors.push(current)
+      used.add(index)
+    }
+    else if (current !== undefined && TSC_CONTINUATION.test(line) && !TSC_FRAME.test(line)) {
+      current.message += ` ${line.trim()}`
+      used.add(index)
+    }
+    else if (current !== undefined && pretty && (TSC_FRAME.test(line) || TSC_SOURCE_LINE.test(line))) {
+      used.add(index)
+    }
+    else if (!(pretty && line.trim() === '')) {
+      current = undefined
+    }
+  }
+
+  return errors
+}
+
+// ESLint's stylish format: a file's path line, then its problems.
+const collectEslint: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+  let file: number | undefined
+
+  for (const [index, line] of lines.entries()) {
+    if (used.has(index))
+      continue
+
+    const match = ESLINT_PROBLEM.test(line) ? ESLINT_FIELDS.exec(line) : null
+
+    if (match !== null && file !== undefined) {
+      const text = match[4] ?? ''
+      const rule = ESLINT_RULE.exec(text)
+
+      errors.push({ tool: 'eslint', file: (lines[file] ?? '').trim(), line: Number(match[1]), column: Number(match[2]), rule: rule?.[1], severity: match[3] === 'warning' ? 'warning' : 'error', message: rule === null ? text : text.slice(0, rule.index) })
+      used.add(index)
+      used.add(file)
+    }
+    else if (!isNoise(line)) {
+      file = index
+    }
+  }
+
+  return errors
+}
+
+const COLLECTORS: Collector[] = [collectBunCheck, collectBunTest, collectTsc, collectEslint]
+
+// Every error the known formats report, each format's in its own order, and how many non-blank lines none of them accounted for.
+export function parseErrors(output: string): ParsedErrors {
+  const lines = stripAnsi(output).split('\n')
+
+  if (BASH_ECHO.test(lines[0] ?? ''))
+    lines.shift()
+
+  const used = new Set<number>()
+  const errors = COLLECTORS.flatMap(collect => collect(lines, used))
+  const unrecognised = lines.filter((line, index) => !used.has(index) && !isNoise(line)).length
+
+  return { errors, unrecognised }
 }
