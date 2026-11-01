@@ -48,6 +48,8 @@ bun install -g @kaynooo/forgejo-tools @kaynooo/env-tools @kaynooo/db-tools @kayn
 claude plugin install agent-tools-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git
 ```
 
+Every package is also on npmjs, so a host that cannot reach git.kaynooo.fr installs the bins without the scope mapping: `bun install -g @kaynooo/guard-tools` and the others. The plugin still comes from the Forgejo marketplace.
+
 The hooks need `guard-tools` 0.2.0 or later, the first with `guard hook`. Claude Code caches a plugin by its version, so a change under `plugin/` bumps `plugin/.claude-plugin/plugin.json` to reach the hosts.
 
 `~/.bun/bin` must be on the PATH Claude Code starts with, or the hooks find no `guard`: Claude Code then reports a hook error on each call and lets it through. In a session, `/plugin marketplace add https://git.kaynooo.fr/kaynooo/agent-tools.git` then `/plugin install agent-tools-hooks@agent-tools` does the same as the last line.
