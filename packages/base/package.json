@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/base-tools",
   "type": "module",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "base: a command run at HEAD or another ref in a temporary worktree, the working tree left untouched.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
