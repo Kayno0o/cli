@@ -1,18 +1,18 @@
 #!/usr/bin/env bun
 
-import type { ParseArgsOptionsConfig } from 'node:util'
+import type { Options } from '@kaynooo/cli-kit'
 import type { ChangelogOptions, ResolvedChangelogOptions } from './types'
 import { $ } from 'bun'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseArgs } from 'node:util'
+import { fail, parse, runCli } from '@kaynooo/cli-kit'
 import { sendDiscordWebhook } from '@kaynooo/utils'
 import { colors } from '@kaynooo/utils/tools/colors'
 import { version } from '../package.json'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
 import { deleteLocalTag, deleteRemoteGitTag, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
 
-const flags = {
+const shared = {
   'token': { type: 'string', short: 't', description: 'Gitea token' },
   'from': { type: 'string', description: 'From tag' },
   'to': { type: 'string', description: 'To tag' },
@@ -30,35 +30,18 @@ const flags = {
   'discord-webhook': { type: 'string', description: 'Discord webhook to post the release to, defaults to DISCORD_WEBHOOK' },
   'dry': { type: 'boolean', description: 'Dry run' },
   'assets': { type: 'string', multiple: true, description: 'Files to upload as assets to the release, repeatable or comma separated; quote globs, e.g. --assets \'dist/*.js\'' },
-  'note': { type: 'boolean', description: 'undo: also delete the Gitea release note (skips the question)' },
-  'yes': { type: 'boolean', description: 'undo: skip confirmation prompts' },
-  'help': { type: 'boolean', short: 'h', description: 'Show this help' },
-  'version': { type: 'boolean', short: 'v', description: 'Show the version' },
-} as const satisfies Record<string, ParseArgsOptionsConfig[string] & { description: string }>
+} as const satisfies Options
 
-function printHelp() {
-  const rows = Object.entries(flags).map(([name, flag]) => {
-    const short = 'short' in flag ? `-${flag.short}, ` : '    '
-    const value = flag.type === 'string' ? ` <${name === 'assets' ? 'paths' : 'value'}>` : ''
+const undoFlags = {
+  ...shared,
+  note: { type: 'boolean', description: 'Also delete the Gitea release note (skips the question)' },
+  yes: { type: 'boolean', description: 'Skip confirmation prompts' },
+} as const satisfies Options
 
-    return [`  ${short}--${name}${value}`, flag.description] as const
-  })
-  const width = Math.max(...rows.map(([usage]) => usage.length)) + 2
-
-  console.log(`changelogitea v${version}
-
-Usage:
-  changelogitea [options]       Generate the release notes and publish them
-  changelogitea undo [tag]      Undo a release: delete the remote/local tag and reset the bump commit
-
-Options:
-${rows.map(([usage, description]) => usage.padEnd(width) + description).join('\n')}`)
-}
-
-const { values: args, positionals } = parseArgs({ args: process.argv.slice(2), options: flags, allowPositionals: true, allowNegative: true })
+type Flags = NonNullable<ReturnType<typeof parse<typeof shared>>>['values']
 
 // The flags as config options; an absent flag stays undefined so the config file keeps the say.
-function toOptions(): ChangelogOptions {
+function toOptions(args: Flags): ChangelogOptions {
   return {
     token: args.token,
     from: args.from,
@@ -112,9 +95,18 @@ async function printManualRelease(config: ResolvedChangelogOptions, md: string, 
   console.log()
 }
 
-async function release() {
-  const options = await withToken(toOptions())
+async function release(argv: string[]) {
+  const parsed = parse(argv, 'usage: changelogitea release [options]', shared, { allowNegative: true })
+
+  if (parsed === undefined)
+    return 0
+
+  if (parsed.positionals.length)
+    fail(`unexpected argument ${parsed.positionals[0]}`)
+
+  const options = await withToken(toOptions(parsed.values))
   let generated: { config: ResolvedChangelogOptions, md: string } | undefined
+  let code = 0
 
   try {
     console.log()
@@ -135,38 +127,38 @@ async function release() {
       console.log(colors.yellow(config.discordWebhook ? 'Dry run. Release and Discord post skipped.' : 'Dry run. Release skipped.'))
       await printManualRelease(config, md, 'Create it manually at')
 
-      return
+      return 0
     }
 
     if (typeof config.output === 'string') {
       await Bun.write(config.output, md)
       console.log(colors.yellow(`Saved to ${config.output}`))
 
-      return
+      return 0
     }
 
     if (!config.token) {
       console.error(colors.red('No Gitea token found, specify it via GITHUB_TOKEN env. Release skipped.'))
-      process.exitCode = 1
+      code = 1
       await printManualRelease(config, md, 'Create it manually at')
 
-      return
+      return 1
     }
 
     if (!await hasTagOnGitea(config.to, config)) {
       console.error(colors.yellow(`Current ref "${colors.bold(config.to)}" is not available as tags on Gitea. Release skipped.`))
-      process.exitCode = 1
+      code = 1
       await printManualRelease(config, md, 'Create it manually at')
 
-      return
+      return 1
     }
 
     if (!commits.length && await isRepoShallow()) {
       console.error(colors.yellow('The repo seems to be clone shallowly, which make changelog failed to generate. You might want to specify `fetch-depth: 0` in your CI config.'))
-      process.exitCode = 1
+      code = 1
       await printManualRelease(config, md, 'Create it manually at')
 
-      return
+      return 1
     }
 
     await sendRelease(config, md)
@@ -181,9 +173,11 @@ async function release() {
       }
       catch (e) {
         console.error(colors.red(`Released, but the Discord post failed: ${e}`))
-        process.exitCode = 1
+        code = 1
       }
     }
+
+    return code
   }
   catch (e) {
     console.error(colors.red(String(e)))
@@ -194,12 +188,23 @@ async function release() {
     if (generated)
       await printManualRelease(generated.config, generated.md, 'Failed to create the release. Create it manually at')
 
-    process.exit(1)
+    return 1
   }
 }
 
-async function undo(tag: string | undefined) {
-  const options = await withToken(toOptions())
+async function undo(argv: string[]) {
+  const parsed = parse(argv, 'usage: changelogitea undo [tag] [options]', undoFlags)
+
+  if (parsed === undefined)
+    return 0
+
+  const { values: args, positionals } = parsed
+
+  if (positionals.length > 1)
+    fail(`unexpected argument ${positionals[1]}`)
+
+  let tag = positionals[0]
+  const options = await withToken(toOptions(args))
 
   try {
     console.log()
@@ -211,7 +216,7 @@ async function undo(tag: string | undefined) {
       if (!tag) {
         console.log(colors.yellow('No tags found, nothing to undo.'))
 
-        return
+        return 0
       }
 
       console.log(colors.yellow(`No tag specified, using the latest tag "${colors.bold(tag)}".`))
@@ -274,7 +279,7 @@ async function undo(tag: string | undefined) {
     if (!actions.length) {
       console.log(colors.yellow(`Nothing to undo for "${tag}".`))
 
-      return
+      return 0
     }
 
     console.log()
@@ -286,13 +291,13 @@ async function undo(tag: string | undefined) {
     if (args.dry) {
       console.log(colors.yellow('Dry run. Nothing removed.'))
 
-      return
+      return 0
     }
 
     if (!args.yes && !ask('Proceed?')) {
       console.log(colors.yellow('Aborted.'))
 
-      return
+      return 0
     }
 
     if (deleteNote && release) {
@@ -318,6 +323,8 @@ async function undo(tag: string | undefined) {
       await softResetLastCommit()
       console.log(colors.green(`Reset commit ${commitToReset.hash.slice(0, 7)} (changes kept in working tree)`))
     }
+
+    return 0
   }
   catch (e) {
     console.error(colors.red(String(e)))
@@ -325,24 +332,17 @@ async function undo(tag: string | undefined) {
     if (e instanceof Error && e.stack)
       console.error(colors.dim(e.stack.split('\n').slice(1).join('\n')))
 
-    process.exit(1)
+    return 1
   }
 }
 
-if (args.help) {
-  printHelp()
-}
-else if (args.version) {
-  console.log(version)
-}
-else if (positionals[0] === 'undo') {
-  await undo(positionals[1])
-}
-else if (positionals.length) {
-  console.error(colors.red(`Unknown command "${positionals[0]}"`))
-  printHelp()
-  process.exitCode = 1
-}
-else {
-  await release()
-}
+process.exitCode = await runCli({
+  name: 'changelogitea',
+  version,
+  about: 'generate the release notes and publish them',
+  commands: {
+    release: { summary: 'generate the release notes and publish them (the default)', run: release },
+    undo: { summary: 'undo a release: delete the remote/local tag and reset the bump commit', run: undo },
+  },
+  defaultCommand: 'release',
+})
