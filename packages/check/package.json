@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/check-tools",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "check and fix: run a repo's check, typecheck, lint and test steps or its fixers, showing only what failed, with each full output saved to a file.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",

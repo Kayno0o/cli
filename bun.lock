@@ -21,7 +21,7 @@
     },
     "packages/check": {
       "name": "@kaynooo/check-tools",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "bin": {
         "check": "./dist/cli.js",
         "fix": "./dist/fix-cli.js",
