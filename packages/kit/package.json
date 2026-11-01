@@ -20,6 +20,8 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./progress": "./src/progress.ts",
+    "./prompt": "./src/prompt.ts",
     "./shell": "./src/shell.ts",
     "./test": "./src/test.ts"
   },
@@ -29,5 +31,8 @@
   },
   "publishConfig": {
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "dependencies": {
+    "@kaynooo/utils": "^2.30.1"
   }
 }
