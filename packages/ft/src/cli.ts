@@ -5,6 +5,7 @@ import { runCli } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { board, drop, take } from './commands/board'
 import { ci } from './commands/ci'
+import { digest } from './commands/digest'
 import { commentOn, edit, fixed, issue, newIssue, tick } from './commands/issue'
 import { logs } from './commands/logs'
 import { plan } from './commands/plan'
@@ -25,6 +26,7 @@ process.exitCode = await runCli({
     logs: { run: logs, summary: 'what the failed jobs of a run say went wrong' },
     release: { run: release, summary: 'bump, push branch and tag atomically, wait for runs and registry' },
     board: { run: board, summary: 'open issues: available, taken by a live session, or claimed by one gone' },
+    digest: { run: digest, summary: 'repo state for a cold start: held and abandoned claims, red CI, unpushed commits, dirty files, stale TODOs' },
     take: { run: take, summary: 'claim an issue for this Claude Code session' },
     drop: { run: drop, summary: 'give back an issue this session took' },
     issue: { run: issue, summary: 'an issue\'s claim, description and numbered boxes, -c comments' },

@@ -18,6 +18,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft logs <run>` | what the failed jobs of a run say went wrong, `--full` for whole logs |
 | `ft release <level>` | waits for the runs on HEAD, pushing it first when origin lacks it, then `bun pm version`, one atomic push of branch and tag, and waits for the runs and the registry; `-p <folder>` releases one workspace package as `<folder>-v<version>` |
 | `ft board` | open issues: available, taken by a live session, or claimed with no live session here, each claim with its boxes left and a stale one with its latest note (`-q <regex>` on titles, `--state available\|taken\|away`, `-L`, `--json`) |
+| `ft digest` | one screen for a session starting cold: the issues this session holds with their boxes left, claims no live session answers to, red or running CI on the default branch, unpushed commits, dirty files and TODO comments naming a closed issue (needs `todo-scan` on the PATH; empty sections left out, `--json`) |
 | `ft take <n>...` / `ft drop <n>...` | claims or gives back issues for the calling Claude Code session, `--lane` as `lane-<s>-<n>` |
 | `ft issue <n>...` | an issue's state, claim and description, its checklist boxes numbered in place (`-c` comments, `-t` only the boxes left, `-b` only the raw description to edit, `--json`) |
 | `ft new -t <title>` | creates an issue and prints its number and url; `-F <file>` (`-F -` for stdin) is the description, `-L a,b` the labels, refused before anything is created when the repository lacks one |
