@@ -120,6 +120,60 @@ describe('bumpConsumers', () => {
   })
 })
 
+describe('bumpConsumers --all-consumers', () => {
+  // Stubs bun add, check and gc, failing the programs named.
+  function stub(failing: string[] = []) {
+    const ran: [string[], string][] = []
+    const run = async (argv: string[], cwd: string): Promise<Ran> => {
+      ran.push([argv, cwd])
+
+      return Promise.resolve({ code: failing.includes(argv[0] ?? '') ? 1 : 0, text: failing.includes(argv[0] ?? '') ? `${argv[0]} broke\n` : '', output: '', chunks: [] } as unknown as Ran)
+    }
+
+    return { ran, run }
+  }
+
+  test('checks then commits through gc, adding the lockfile the folder has', async () => {
+    const { ran, run } = stub()
+    const { result, out } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run, isAll: true })))
+
+    expect(result).toBe(true)
+    expect(ran.map(([argv]) => argv[0])).toEqual(['bun', 'check', 'gc'])
+    expect(ran[2]).toEqual([['gc', `chore(deps): bump ${NAME} to 0.8.0`, '--', 'package.json', 'bun.lock'], join(root, 'kay')])
+    expect(out).toContain('kay 0.7.3 -> 0.8.0, checked and committed')
+    expect(out).toContain('summary 1 bumped and committed, 0 bumped and failing, 3 skipped')
+  })
+
+  test('leaves a folder whose check fails uncommitted and returns false', async () => {
+    const { ran, run } = stub(['check'])
+    const { result, err, out } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run, isAll: true })))
+
+    expect(result).toBe(false)
+    expect(ran.map(([argv]) => argv[0])).toEqual(['bun', 'check'])
+    expect(err).toContain('kay 0.7.3 -> 0.8.0, left uncommitted: check exited 1: check broke')
+    expect(out).toContain('summary 0 bumped and committed, 1 bumped and failing (kay), 3 skipped')
+  })
+
+  test('a monorepo package commits the lockfile at its root', async () => {
+    manifest('mono', { name: 'mono' })
+    manifest('mono/packages/b', { name: 'b', dependencies: { [NAME]: '0.7.0' } }, '')
+
+    const { ran, run } = stub()
+
+    await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run, isAll: true })))
+
+    expect(ran.find(([argv, cwd]) => argv[0] === 'gc' && cwd === join(root, 'mono/packages/b'))?.[0].slice(3)).toEqual(['package.json', '../../bun.lock'])
+  })
+
+  test('a dry run lists what would run and touches nothing', async () => {
+    const { ran, run } = stub()
+    const { out } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run, isAll: true, isDryRun: true })))
+
+    expect(ran).toEqual([])
+    expect(out).toContain(`kay would run bun add --dev --exact --no-cache ${NAME}@0.8.0, then check, then gc 'chore(deps): bump ${NAME} to 0.8.0'`)
+  })
+})
+
 describe('pkg consumers', () => {
   test('prints the consumers as a table and as JSON', () => {
     const run = (...args: string[]) => Bun.spawnSync([process.execPath, CLI, 'consumers', NAME, '--root', root, ...args], { stdout: 'pipe', stderr: 'pipe' }).stdout.toString()
