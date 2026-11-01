@@ -11,6 +11,7 @@ const LEADING_TILDE = /^~(?=\/|$)/
 const LEADING_TABS = /^\t+/
 const OPENERS = /^[({]+/
 const CLOSERS = /[)}]+$/
+const DOUBLE_QUOTED_ESCAPES = new Set(['$', '`', '"', '\\'])
 const HEREDOC = /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([^\s;&|<>()-][^\s;&|<>()]*))/
 // Programs that run the command following them, which is the one that counts.
 const WRAPPERS = new Set(['command', 'env', 'sudo', 'exec', 'nohup', 'time'])
@@ -276,7 +277,10 @@ export function words(text: string): Word[] {
 
     isStarted = true
 
-    if (char === '\\' && quote !== '\'')
+    // within double quotes a backslash escapes only `$`, a backtick, `"` and itself, and stays before anything else (`"v\d"`)
+    if (char === '\\' && quote === '"' && !DOUBLE_QUOTED_ESCAPES.has(text[i + 1] ?? ''))
+      current += char
+    else if (char === '\\' && quote !== '\'')
       current += text[++i] ?? ''
     else if (quote !== null && char === quote)
       quote = null
@@ -329,8 +333,11 @@ export function parseCommand(text: string): Invocation {
       break
     }
   }
-  // the closing of a subshell or a group, `(git stash)` or `{ cd x && npm i; }`, ends the last word
-  const last = (tokens.at(-1) ?? '').replace(CLOSERS, '')
+  // the closing of a subshell or a group, `(git stash)` or `{ cd x && npm i; }`, ends the last word; a closer inside quotes (`-e "f(g(x))"`) is the word's own
+  const closers = CLOSERS.exec(text.trimEnd())?.[0].length ?? 0
+  const word = tokens.at(-1) ?? ''
+  const trimmed = word.length - (CLOSERS.exec(word)?.[0].length ?? 0)
+  const last = word.slice(0, Math.max(trimmed, word.length - closers))
 
   if (tokens.length > 0)
     tokens.splice(-1, 1, ...(last === '' ? [] : [last]))

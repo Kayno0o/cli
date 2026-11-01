@@ -22,6 +22,12 @@ describe('parseCommand', () => {
   test('finds the program past wrappers, assignments and subshells', () => {
     expect(parseCommand('(FOO=1 sudo -E /usr/bin/git stash)')).toEqual({ program: 'git', args: ['stash'], assignments: ['FOO=1'], isWrapped: true })
   })
+
+  test('keeps the closers and backslashes a quoted last word holds', () => {
+    expect(parseCommand('bun -e "f(/v\\d+/)"').args).toEqual(['-e', 'f(/v\\d+/)'])
+    expect(parseCommand('(echo "f(x)")').args).toEqual(['f(x)'])
+    expect(parseCommand('echo "a \\"b\\" \\$c \\\\"').args).toEqual(['a "b" $c \\'])
+  })
 })
 
 describe('words', () => {
