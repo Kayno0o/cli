@@ -30,6 +30,8 @@ bun run check && bun run lint && bun run test
 
 Each CLI releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow builds that folder (`bun run build`, a Bun bundle per bin with `packages/kit` inlined) and publishes it. Kit is published like the CLIs (`just release kit minor`) for the libs outside this repo; the CLIs here take it as `workspace:*` and inline it, so a kit change reaches one of them with its next release.
 
+The same workflow then publishes the package to npmjs (`@kaynooo` org) with the `NPM_TOKEN` secret, a granular token with read and write on `@kaynooo` and the bypass 2FA option, through `npm publish` since `bun publish` finds no auth for npmjs. npm plans to end direct publishing for bypass-2FA tokens around January 2027: trusted publishing does not support Forgejo, so staged publishing is the fallback.
+
 ## Claude Code
 
 Two ways wire the bins into Claude Code, never both on one host:
