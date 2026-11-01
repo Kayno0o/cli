@@ -17,7 +17,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/wait-tools`](packages/wait) | `waitfor` | a wait on a log line, a listening port or a URL answering, ending early on an error line, instead of sleep and polling loops |
 | [`@kaynooo/gitlab-tools`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
 | [`@kaynooo/guard-tools`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers), each refusal naming the route |
-| `packages/kit` (private) | - | argument parsing with `--help`, the command dispatcher, the shell command parser every guard reads with, input, process and formatting helpers every CLI here shares, bundled into each |
+| [`@kaynooo/cli-kit`](packages/kit) | - | the CLI kit every @kaynooo CLI is built on: argument parsing with `--help`, the command dispatcher, prompts, the progress line, config loading, the shell command parser every guard reads with, and output helpers |
 
 ## Development
 
@@ -28,7 +28,7 @@ bun run check && bun run lint && bun run test
 
 ## Releasing
 
-Each CLI releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow builds that folder (`bun run build`, a Bun bundle per bin with `packages/kit` inlined) and publishes it. Kit is never published: a kit change reaches a CLI with that CLI's next release.
+Each CLI releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow builds that folder (`bun run build`, a Bun bundle per bin with `packages/kit` inlined) and publishes it. Kit is published like the CLIs (`just release kit minor`) for the libs outside this repo; the CLIs here take it as `workspace:*` and inline it, so a kit change reaches one of them with its next release.
 
 ## Claude Code
 
