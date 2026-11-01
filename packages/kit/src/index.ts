@@ -1,4 +1,5 @@
 export * from './args'
+export * from './chart'
 export * from './cli'
 export * from './config'
 export * from './format'
