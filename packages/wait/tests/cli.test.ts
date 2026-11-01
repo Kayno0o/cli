@@ -75,7 +75,7 @@ describe('waitfor --file', () => {
     const result = await waitfor(['-f', path, '-u', 'ready', '-t', '600ms'])
 
     expect(result.code).toBe(2)
-    expect(result.err).toBe(`waitfor: gave up after 0.6s: no line of ${path} matched --until\nlast lines of ${path}:\n  1  one\n  2  two\n`)
+    expect(result.err).toBe(`error: waitfor: gave up after 0.6s: no line of ${path} matched --until\nlast lines of ${path}:\n  1  one\n  2  two\n`)
   })
 
   test('says when the file never appeared', async () => {

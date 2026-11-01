@@ -1,5 +1,7 @@
+import type { Colors } from './style'
 import process from 'node:process'
-import { createColors } from '@kaynooo/utils/tools/colors'
+import { formatDuration } from './format'
+import { marked, paint, takesControlCodes } from './style'
 
 export interface Progress {
   step: string
@@ -16,8 +18,15 @@ interface ProgressStream {
 
 export interface ProgressLine {
   update: (progress: Progress) => void
+  // Clears the line and leaves nothing behind.
   stop: () => void
+  // Clears the line and leaves `✓ <text> <time since the line began>` in its place.
+  done: (text: string) => void
+  // Clears the line and leaves `✗ <text>` in its place.
+  failed: (text: string) => void
 }
+
+type Env = Record<string, string | undefined>
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const FRAME_MS = 80
@@ -28,21 +37,28 @@ const CLEAR_LINE = '\r\x1B[2K'
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug', 'dir', 'dirxml', 'table', 'trace', 'group', 'groupCollapsed', 'count', 'timeEnd', 'timeLog', 'assert'] as const
 const SIGNALS = ['SIGINT', 'SIGTERM'] as const
 
-// A terminal that draws in place: not a log or a pipe, and not asked for plain output by `NO_COLOR` or a dumb `TERM`.
-export function takesControlCodes(stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): boolean {
-  return stream.isTTY === true && env.NO_COLOR === undefined && env.NODE_DISABLE_COLORS === undefined && env.TERM !== 'dumb'
-}
+// A piece of the line and how it is tinted, so the line can be cut to the terminal's width on its visible text.
+interface Part { text: string, tint: (colors: Colors) => (text: string) => string }
 
 // One line on `stream`, redrawn in place while a task runs: a spinner, the step, a bar where its total is known, and the time since the step began.
-// Only on a terminal that takes control codes, so a log, CI or `NO_COLOR` gets the lines it always did; whatever else is printed meanwhile clears the line first, and the next frame draws it again under it.
-export function progressLine(stream: ProgressStream = process.stderr, env: Record<string, string | undefined> = process.env): ProgressLine | undefined {
-  if (!takesControlCodes(stream, env))
-    return undefined
+// Drawn only on a terminal that takes control codes, so a log, CI or `NO_COLOR` gets `done` and `failed` lines alone; whatever else is printed meanwhile clears the line first, and the next frame draws it again under it.
+export function progressLine(stream: ProgressStream = process.stderr, env: Env = process.env): ProgressLine {
+  if (!takesControlCodes(stream, env)) {
+    const begun = performance.now()
 
-  const paint = createColors({ stream })
+    return {
+      update: () => undefined,
+      stop: () => undefined,
+      done: text => stream.write(`${marked('ok', text, stream, formatDuration(performance.now() - begun), env)}\n`),
+      failed: text => stream.write(`${marked('problem', text, stream, undefined, env)}\n`),
+    }
+  }
+
+  const colors = paint(stream, env)
   // Its own write, taken before the line clears itself ahead of every other.
   const write = stream.write.bind(stream)
-  let started = performance.now()
+  const begun = performance.now()
+  let started = begun
   let current: Progress | undefined
   let frame = 0
   let drawn = false
@@ -56,11 +72,10 @@ export function progressLine(stream: ProgressStream = process.stderr, env: Recor
     if (current === undefined)
       return
 
-    const text = progressText(current, FRAMES[frame++ % FRAMES.length]!, performance.now() - started)
     // A terminal that does not say its width, as a pseudo-terminal may, answers 0.
     const width = (stream.columns === undefined || stream.columns === 0 ? 80 : stream.columns) - 1
 
-    write(`${CLEAR_LINE}${paint.cyan(text.slice(0, 1))}${text.slice(1, width)}`)
+    write(`${CLEAR_LINE}${fit(progressParts(current, FRAMES[frame++ % FRAMES.length]!, performance.now() - started), width, colors)}`)
     drawn = true
   }
   const timer = setInterval(draw, FRAME_MS)
@@ -101,20 +116,81 @@ export function progressLine(stream: ProgressStream = process.stderr, env: Recor
       }
     },
     stop,
+    done: (text) => {
+      stop()
+      write(`${marked('ok', text, stream, formatDuration(performance.now() - begun), env)}\n`)
+    },
+    failed: (text) => {
+      stop()
+      write(`${marked('problem', text, stream, undefined, env)}\n`)
+    },
+  }
+}
+
+// Runs one step under a spinner on a terminal, then leaves `✓ <label> <time>`, or `✗ <label>` and throws again; off a terminal those lines alone print, as `ok:` and `error:`.
+export async function task<T>(label: string, run: (update: (progress: Omit<Progress, 'step'>) => void) => Promise<T>, stream: ProgressStream = process.stderr, env: Env = process.env): Promise<T> {
+  const line = progressLine(stream, env)
+
+  line.update({ step: label })
+
+  try {
+    const result = await run(progress => line.update({ ...progress, step: label }))
+
+    line.done(label)
+
+    return result
+  }
+  catch (error) {
+    line.failed(label)
+
+    throw error
   }
 }
 
 // `⠹ prerendering ████████░░░░░░░░░░░░ 8/20 routes 4.2s`; a step with no total has no bar.
-export function progressText({ step, done, total, unit }: Progress, spinner: string, ms: number): string {
-  const counted = total !== undefined && total > 0 ? ` ${bar(Math.min(done ?? 0, total) / total)} ${Math.min(done ?? 0, total)}/${total}${unit === undefined ? '' : ` ${unit}`}` : ''
-
-  return `${spinner} ${step}${counted} ${(ms / 1000).toFixed(1)}s`
+export function progressText(progress: Progress, spinner: string, ms: number): string {
+  return progressParts(progress, spinner, ms).map(part => part.text).join('')
 }
 
-function bar(share: number): string {
-  const filled = Math.round(share * BAR_WIDTH)
+function progressParts({ step, done, total, unit }: Progress, spinner: string, ms: number): Part[] {
+  const parts: Part[] = [{ text: spinner, tint: colors => colors.cyan }, { text: ` ${step}`, tint: () => plain }]
 
-  return `${'█'.repeat(filled)}${'░'.repeat(BAR_WIDTH - filled)}`
+  if (total !== undefined && total > 0) {
+    const counted = Math.min(done ?? 0, total)
+    const filled = Math.round(counted / total * BAR_WIDTH)
+
+    parts.push(
+      { text: ' ', tint: () => plain },
+      { text: '█'.repeat(filled), tint: colors => colors.cyan },
+      { text: '░'.repeat(BAR_WIDTH - filled), tint: colors => colors.dim },
+      { text: ` ${counted}/${total}${unit === undefined ? '' : ` ${unit}`}`, tint: colors => colors.dim },
+    )
+  }
+
+  parts.push({ text: ` ${(ms / 1000).toFixed(1)}s`, tint: colors => colors.dim })
+
+  return parts
+}
+
+function plain(text: string): string {
+  return text
+}
+
+// The parts cut to `width` visible characters, each tinted after the cut so no escape is split.
+function fit(parts: Part[], width: number, colors: Colors): string {
+  let room = width
+  let line = ''
+
+  for (const { text, tint } of parts) {
+    const kept = [...text].slice(0, Math.max(room, 0)).join('')
+
+    room -= kept.length
+
+    if (kept !== '')
+      line += tint(colors)(kept)
+  }
+
+  return line
 }
 
 // Clears the line before anything the console or a stream writes, the caller's own code meanwhile included, and answers how to put them back.

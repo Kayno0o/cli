@@ -1,3 +1,6 @@
+import process from 'node:process'
+import { paint } from './style'
+
 const UNITS = [['d', 86_400], ['h', 3600], ['m', 60], ['s', 1]] as const
 
 // Renders as "13m 28s": the largest unit and the next one, dropped when zero.
@@ -52,9 +55,11 @@ const LINE_BREAKS = /\s*\n\s*/g
 export interface TableSettings {
   // Flattens each cell's line breaks to a space and cuts it to this many characters.
   cellWidth?: number
+  // Takes the first row for column names, bold on a terminal.
+  header?: boolean
 }
 
-export function table(rows: string[][], { cellWidth }: TableSettings = {}): string {
+export function table(rows: string[][], { cellWidth, header = false }: TableSettings = {}): string {
   const cells = cellWidth === undefined ? rows : rows.map(row => row.map(cell => truncate(cell.replaceAll(LINE_BREAKS, ' '), cellWidth)))
   const widths: number[] = []
 
@@ -63,5 +68,8 @@ export function table(rows: string[][], { cellWidth }: TableSettings = {}): stri
       widths[index] = Math.max(widths[index] ?? 0, cell.length)
   }
 
-  return cells.map(row => row.map((cell, index) => index === row.length - 1 ? cell : cell.padEnd(widths[index] ?? 0)).join('  ').trimEnd()).join('\n')
+  const colors = paint(process.stdout)
+  const lines = cells.map(row => row.map((cell, index) => index === row.length - 1 ? cell : cell.padEnd(widths[index] ?? 0)).join('  ').trimEnd())
+
+  return lines.map((line, index) => header && index === 0 ? colors.bold(line) : line).join('\n')
 }

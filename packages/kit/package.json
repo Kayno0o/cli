@@ -33,6 +33,6 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "dependencies": {
-    "@kaynooo/utils": "^2.30.1"
+    "@kaynooo/utils": "^2.31.0"
   }
 }

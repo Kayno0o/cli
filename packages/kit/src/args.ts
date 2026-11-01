@@ -1,18 +1,31 @@
 import type { ParseArgsOptionDescriptor } from 'node:util'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
+import { upTo } from './format'
+import { paint } from './style'
 
 export type Options = Record<string, ParseArgsOptionDescriptor & { description: string }>
 
-// Thrown to end a command with this exit code and message, which runCli prints as `<cli> <command>: <message>`.
+// Thrown to end a command with this exit code and message, which runCli prints as `error: <cli> <command>: <message>`, the hint on a line of its own.
 export class Exit extends Error {
-  constructor(message: string, readonly code: number) {
+  constructor(message: string, readonly code: number, readonly hint?: string) {
     super(message)
   }
 }
 
-export function fail(message: string, code = 2): never {
-  throw new Exit(message, code)
+export function fail(message: string, code = 2, hint?: string): never {
+  throw new Exit(message, code, hint)
+}
+
+// An Exit for arguments the command cannot take, which runCli points at the command's --help.
+export class UsageError extends Exit {
+  constructor(message: string) {
+    super(message, 2)
+  }
+}
+
+export function badUsage(message: string): never {
+  throw new UsageError(message)
 }
 
 // Thrown by parse while a bin answers `__complete`, so the command reached hands over its options before doing anything else.
@@ -22,11 +35,25 @@ export class Completing {
 
 export const completion = { active: false }
 
-export function helpText(usage: string, options: Options): string {
-  const rows = Object.entries(options).map(([name, option]) => [`${option.short === undefined ? '    ' : `-${option.short}, `}--${name}${option.type === 'string' ? ' <value>' : ''}`, option.description] as const)
-  const width = Math.max(0, ...rows.map(([flag]) => flag.length))
+// Optional parts of a usage line, `[options]` or `[tag]`, dimmed in the help.
+const OPTIONAL = /\[[^\]]+\]/g
+const USAGE_PREFIX = /^usage:\s*/i
 
-  return [usage, '', ...rows.map(([flag, description]) => `  ${flag.padEnd(width)}  ${description}`)].join('\n')
+// `Usage: <usage>`, the usage given with or without its own `usage:`, optional parts dimmed.
+export function usageLine(usage: string, colors = paint(process.stdout)): string {
+  return `${colors.bold('Usage:')} ${usage.replace(USAGE_PREFIX, '').replaceAll(OPTIONAL, part => colors.dim(part))}`
+}
+
+export function helpText(usage: string, options: Options, colors = paint(process.stdout)): string {
+  const rows = Object.entries(options).map(([name, option]) => {
+    const short = option.short === undefined ? '    ' : `${colors.cyan(`-${option.short}`)}, `
+    const value = option.type === 'string' ? ` ${colors.dim('<value>')}` : ''
+
+    return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? ' <value>'.length : 0), description: option.description }
+  })
+  const width = Math.max(0, ...rows.map(row => row.width))
+
+  return [usageLine(usage, colors), '', colors.bold('Options:'), ...rows.map(row => `  ${row.flag}${' '.repeat(width - row.width)}  ${colors.dim(row.description)}`)].join('\n')
 }
 
 export interface ParseSettings {
@@ -53,7 +80,7 @@ export function parse<const T extends Options>(args: string[], usage: string, op
     parsed = parseArgs({ args: own, options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
   }
   catch (error) {
-    fail(`${error instanceof Error ? error.message : String(error)}\n\n${helpText(usage, all)}`)
+    badUsage(parseError(error))
   }
 
   if ((parsed.values as { help?: boolean }).help === true) {
@@ -65,6 +92,13 @@ export function parse<const T extends Options>(args: string[], usage: string, op
   return { ...parsed, rest }
 }
 
+// parseArgs' message, its first sentence alone and lowercased as the kit's own: `unknown option '--nope'`.
+function parseError(error: unknown): string {
+  const message = upTo(error instanceof Error ? error.message : String(error), '. ')
+
+  return `${message.charAt(0).toLowerCase()}${message.slice(1)}`
+}
+
 export function wholeNumber(value: string | undefined, name: string, fallback: number, min = 1): number {
   if (value === undefined)
     return fallback
@@ -72,7 +106,7 @@ export function wholeNumber(value: string | undefined, name: string, fallback: n
   const number = Number(value)
 
   if (!Number.isInteger(number) || number < min)
-    fail(`--${name} takes a whole number from ${min}, not ${value}`)
+    badUsage(`--${name} takes a whole number from ${min}, not ${value}`)
 
   return number
 }
@@ -89,7 +123,7 @@ export function duration(value: string | undefined, name: string, fallback: numb
   const ms = match === null ? 0 : Number(match[1]) * UNIT_MS[(match[2] ?? unit) as keyof typeof UNIT_MS]
 
   if (ms < 1)
-    fail(`--${name} takes a duration such as 30s, 5m or 1h, not ${value}`)
+    badUsage(`--${name} takes a duration such as 30s, 5m or 1h, not ${value}`)
 
   return ms
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { fail, parse, runCli, runMain } from '../src'
+import { badUsage, fail, parse, runCli, runMain } from '../src'
 import { capture } from '../src/test'
 
 const cli = {
@@ -21,7 +21,7 @@ const cli = {
 
           return 0
         } },
-        bad: { summary: 'fails', run: async () => fail('nope') },
+        bad: { summary: 'fails', run: async () => badUsage('nope') },
       },
       aliases: { new: 'add' },
     },
@@ -37,15 +37,22 @@ describe('runCli', () => {
 
   test('prints the version and the help', async () => {
     expect((await capture(async () => runCli(cli, ['-v']))).out).toBe('1.2.3\n')
-    expect((await capture(async () => runCli(cli, []))).out).toStartWith('demo 1.2.3: a demo')
+    expect((await capture(async () => runCli(cli, []))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo <command> [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n\nRun demo <command> --help for its options.\n')
   })
 
   test('names the command an Exit came from and uses its code', async () => {
-    expect(await capture(async () => runCli(cli, ['boom']))).toEqual({ result: 4, out: '', err: 'demo boom: it broke\n' })
+    expect(await capture(async () => runCli(cli, ['boom']))).toEqual({ result: 4, out: '', err: 'error: demo boom: it broke\n' })
   })
 
   test('points a typo at the command meant', async () => {
-    expect(await capture(async () => runCli(cli, ['ech']))).toEqual({ result: 2, out: '', err: 'demo: no command ech, did you mean echo?\n' })
+    expect(await capture(async () => runCli(cli, ['ech']))).toEqual({ result: 2, out: '', err: 'error: demo: no command ech\n  hint: did you mean echo?\n' })
+  })
+
+  test('gives a usage error a hint at the help, an Exit its own hint, and a failure none', async () => {
+    const hinted = { ...cli, commands: { own: { summary: 'own hint', run: async () => fail('no remote', 1, 'add one with git remote add') } } }
+
+    expect((await capture(async () => runCli(hinted, ['own']))).err).toBe('error: demo own: no remote\n  hint: add one with git remote add\n')
+    expect((await capture(async () => runCli(cli, ['nope']))).err).toBe('error: demo: no command nope\n  hint: run demo --help for its commands\n')
   })
 
   test('hands the arguments to the default command when the first names none', async () => {
@@ -59,10 +66,10 @@ describe('runCli', () => {
   test('dispatches a group\'s subcommands', async () => {
     expect((await capture(async () => runCli(cli, ['plan', 'add', '1', '2']))).out).toBe('add 1 2\n')
     expect((await capture(async () => runCli(cli, ['plan', 'new', '3']))).out).toBe('add 3\n')
-    expect(await capture(async () => runCli(cli, ['plan', 'bad']))).toEqual({ result: 2, out: '', err: 'demo plan bad: nope\n' })
-    expect((await capture(async () => runCli(cli, ['plan', '--help']))).out).toStartWith('demo plan: a group')
+    expect(await capture(async () => runCli(cli, ['plan', 'bad']))).toEqual({ result: 2, out: '', err: 'error: demo plan bad: nope\n  hint: run demo plan bad --help for its options\n' })
+    expect((await capture(async () => runCli(cli, ['plan', '--help']))).out).toStartWith('demo plan  a group')
     expect((await capture(async () => runCli(cli, ['plan']))).result).toBe(2)
-    expect((await capture(async () => runCli(cli, ['plan', 'ad']))).err).toBe('demo plan: no command ad, did you mean add?\n')
+    expect((await capture(async () => runCli(cli, ['plan', 'ad']))).err).toBe('error: demo plan: no command ad\n  hint: did you mean add?\n')
   })
 })
 
@@ -79,10 +86,11 @@ describe('runMain', () => {
   })
 
   test('turns an Exit or an error into a message and an exit code', async () => {
-    expect(await capture(async () => runMain(main(async () => fail('bad input', 2)), []))).toEqual({ result: 2, out: '', err: 'solo: bad input\n' })
+    expect(await capture(async () => runMain(main(async () => badUsage('bad input')), []))).toEqual({ result: 2, out: '', err: 'error: solo: bad input\n  hint: run solo --help for its options\n' })
+    expect((await capture(async () => runMain(main(async () => fail('timed out', 2)), []))).err).toBe('error: solo: timed out\n')
     expect(await capture(async () => runMain(main(async () => {
       throw new Error('crash')
-    }), []))).toEqual({ result: 1, out: '', err: 'solo: crash\n' })
+    }), []))).toEqual({ result: 1, out: '', err: 'error: solo: crash\n' })
   })
 })
 

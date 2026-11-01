@@ -1,6 +1,8 @@
 import type { Options } from './args'
+import type { Colors } from './style'
 import process from 'node:process'
-import { Completing, completion, Exit } from './args'
+import { Completing, completion, Exit, UsageError, usageLine } from './args'
+import { paint, takesControlCodes } from './style'
 import { distance } from './text'
 
 export type Command = { summary: string } & (
@@ -36,23 +38,45 @@ export function closest(name: string, names: string[]): string | undefined {
 interface Level {
   // The words typed to reach this level, `ft plan`.
   path: string[]
-  header: string
+  header: (colors: Colors) => string
   commands: Record<string, Command>
   aliases: Record<string, string> | undefined
   defaultCommand: string | undefined
 }
 
-function help({ path, header, commands }: Level): string {
+function help({ path, header, commands }: Level, stream: { isTTY?: boolean }): string {
+  const colors = paint(stream)
   const width = Math.max(...Object.keys(commands).map(name => name.length))
   const prefix = path.join(' ')
 
   return [
-    header,
+    header(colors),
     '',
-    `usage: ${prefix} <command> [options], ${prefix} <command> --help for its options`,
+    usageLine(`${prefix} ${colors.cyan('<command>')} [options]`, colors),
     '',
-    ...Object.entries(commands).map(([name, { summary }]) => `  ${name.padEnd(width)}  ${summary}`),
+    colors.bold('Commands:'),
+    ...Object.entries(commands).map(([name, { summary }]) => `  ${colors.cyan(name.padEnd(width))}  ${colors.dim(summary)}`),
+    '',
+    `${colors.dim('Run')} ${prefix} ${colors.cyan('<command>')} --help ${colors.dim('for its options.')}`,
   ].join('\n')
+}
+
+// `error <prefix>: <message>` on stderr, the hint on its own line under it; plain words off a terminal.
+export function printError(prefix: string, message: string, hint?: string): void {
+  const colors = paint(process.stderr)
+  const styled = takesControlCodes(process.stderr)
+  const head = styled ? `${colors.red.bold('error')} ${colors.dim(`${prefix}:`)}` : `error: ${prefix}:`
+
+  console.error(`${head} ${message}${hint === undefined ? '' : `\n  ${styled ? colors.yellow('hint') : 'hint:'} ${hint}`}`)
+}
+
+// What a thrown error prints as and exits with: an Exit its own code and hint, a UsageError pointed at the help, anything else 1.
+function reportThrown(prefix: string, error: unknown): number {
+  const help = error instanceof UsageError ? `run ${prefix} --help for its options` : undefined
+
+  printError(prefix, error instanceof Error ? error.message : String(error), error instanceof Exit ? error.hint ?? help : undefined)
+
+  return error instanceof Exit ? error.code : 1
 }
 
 async function dispatch(level: Level, argv: string[], version: string): Promise<number> {
@@ -60,13 +84,13 @@ async function dispatch(level: Level, argv: string[], version: string): Promise<
   const prefix = level.path.join(' ')
 
   if (name === undefined && level.path.length > 1) {
-    console.error(help(level))
+    console.error(help(level, process.stderr))
 
     return 2
   }
 
   if (name === undefined || name === 'help' || name === '--help' || name === '-h') {
-    console.log(help(level))
+    console.log(help(level, process.stdout))
 
     return 0
   }
@@ -88,21 +112,22 @@ async function dispatch(level: Level, argv: string[], version: string): Promise<
   if (command === undefined) {
     const meant = closest(name, Object.keys(level.commands))
 
-    console.error(meant === undefined ? `${prefix}: no command ${name}\n\n${help(level)}` : `${prefix}: no command ${name}, did you mean ${meant}?`)
+    printError(prefix, `no command ${name}`, meant === undefined ? `run ${prefix} --help for its commands` : `did you mean ${meant}?`)
 
     return 2
   }
 
-  if ('commands' in command)
-    return dispatch({ path: [...level.path, name], header: `${prefix} ${name}: ${command.summary}`, commands: command.commands, aliases: command.aliases, defaultCommand: undefined }, rest, version)
+  if ('commands' in command) {
+    const { summary } = command
+
+    return dispatch({ path: [...level.path, name], header: colors => `${colors.bold(`${prefix} ${name}`)}  ${summary}`, commands: command.commands, aliases: command.aliases, defaultCommand: undefined }, rest, version)
+  }
 
   try {
     return await command.run(rest)
   }
   catch (error) {
-    console.error(`${prefix} ${name}: ${error instanceof Error ? error.message : String(error)}`)
-
-    return error instanceof Exit ? error.code : 1
+    return reportThrown(`${prefix} ${name}`, error)
   }
 }
 
@@ -166,7 +191,7 @@ export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<nu
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(cli.commands, cli.aliases, cli.defaultCommand, argv.slice(1)))
 
-  return dispatch({ path: [cli.name], header: `${cli.name} ${cli.version}: ${cli.about}`, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand }, argv, cli.version)
+  return dispatch({ path: [cli.name], header: colors => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${cli.about}`, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand }, argv, cli.version)
 }
 
 export interface Main {
@@ -175,7 +200,7 @@ export interface Main {
   run: (args: string[]) => Promise<number>
 }
 
-// Runs a CLI that is a single command: `--version` or `-v` alone prints the version, an `Exit` or any error prints `<name>: <message>`. Returns the exit code.
+// Runs a CLI that is a single command: `--version` or `-v` alone prints the version, an `Exit` or any error prints as `error: <name>: <message>`. Returns the exit code.
 export async function runMain({ name, version, run }: Main, argv = process.argv.slice(2)): Promise<number> {
   if (argv[0] === COMPLETE)
     return printCandidates(leafCandidates(run, argv.slice(1)))
@@ -190,8 +215,6 @@ export async function runMain({ name, version, run }: Main, argv = process.argv.
     return await run(argv)
   }
   catch (error) {
-    console.error(`${name}: ${error instanceof Error ? error.message : String(error)}`)
-
-    return error instanceof Exit ? error.code : 1
+    return reportThrown(name, error)
   }
 }

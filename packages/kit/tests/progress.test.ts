@@ -1,7 +1,9 @@
 import { join } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'bun:test'
-import { progressLine, progressText, takesControlCodes } from '../src/progress'
+import { progressLine, progressText, task } from '../src/progress'
+import { takesControlCodes } from '../src/style'
+import { stripAnsi } from '../src/text'
 
 const CLEAR_LINE = '\r\x1B[2K'
 
@@ -23,13 +25,19 @@ describe('takesControlCodes', () => {
 })
 
 describe('the progress line', () => {
-  it('is drawn on a terminal alone, never in a log, under NO_COLOR or on a dumb terminal', () => {
-    const { stream } = terminal()
+  it('is drawn on a terminal alone, never in a log, under NO_COLOR or on a dumb terminal, which get the result line alone', () => {
+    for (const [isTTY, env] of [[false, {}], [true, { NO_COLOR: '1' }], [true, { NODE_DISABLE_COLORS: '1' }], [true, { TERM: 'dumb' }]] as const) {
+      const { written, stream } = terminal()
+      const line = progressLine({ ...stream, isTTY }, env)
 
-    expect(progressLine({ ...stream, isTTY: false }, {})).toBeUndefined()
-    expect(progressLine(stream, { NO_COLOR: '1' })).toBeUndefined()
-    expect(progressLine(stream, { NODE_DISABLE_COLORS: '1' })).toBeUndefined()
-    expect(progressLine(stream, { TERM: 'dumb' })).toBeUndefined()
+      line.update({ step: 'bundling', done: 1, total: 2 })
+      line.done('built')
+      line.failed('broke')
+
+      expect(written).toHaveLength(2)
+      expect(written[0]).toMatch(/^ok: built \d+\.\ds\n$/)
+      expect(written[1]).toBe('error: broke\n')
+    }
   })
 
   it('shows a bar and a count where the total is known, and the time alone where it is not', () => {
@@ -41,7 +49,7 @@ describe('the progress line', () => {
 
   it('redraws one line in place, cut to the terminal\'s width', () => {
     const { written, stream } = terminal(20)
-    const line = progressLine(stream, {})!
+    const line = progressLine(stream, {})
 
     try {
       line.update({ step: 'prerendering', done: 1, total: 4, unit: 'routes' })
@@ -66,7 +74,7 @@ describe('the progress line', () => {
 
   it('draws a new step at once, its clock started again, and a count moving on with the next frame', async () => {
     const { written, stream } = terminal()
-    const line = progressLine(stream, {})!
+    const line = progressLine(stream, {})
 
     try {
       line.update({ step: 'bundling' })
@@ -81,13 +89,13 @@ describe('the progress line', () => {
         line.update({ step: 'prerendering', done, total: 50, unit: 'routes' })
 
       expect(written.slice(drawn)).toHaveLength(1)
-      expect(written.at(-1)).toEndWith(' 0/50 routes 0.0s')
+      expect(stripAnsi(written.at(-1)!)).toEndWith(' 0/50 routes 0.0s')
 
       // The count shows with the next frame of the spinner's timer.
-      for (const limit = Date.now() + 5000; !written.at(-1)!.includes(' 50/50 routes ') && Date.now() < limit;)
+      for (const limit = Date.now() + 5000; !stripAnsi(written.at(-1)!).includes(' 50/50 routes ') && Date.now() < limit;)
         await Bun.sleep(10)
 
-      expect(written.at(-1)).toContain(' 50/50 routes ')
+      expect(stripAnsi(written.at(-1)!)).toContain(' 50/50 routes ')
     }
     finally {
       line.stop()
@@ -96,7 +104,7 @@ describe('the progress line', () => {
 
   it('takes a terminal that says it is 0 columns wide, as a pseudo-terminal may, for 80', () => {
     const { written, stream } = terminal(0)
-    const line = progressLine(stream, {})!
+    const line = progressLine(stream, {})
     const step = 'a step named at length '.repeat(5)
 
     line.update({ step })
@@ -118,7 +126,7 @@ describe('the progress line', () => {
     console.log = stub
 
     try {
-      const line = progressLine(stream, {})!
+      const line = progressLine(stream, {})
 
       line.update({ step: 'bundling' })
       console.log('built')
@@ -147,7 +155,7 @@ describe('the progress line', () => {
     const { stream } = terminal()
     const warn: unknown = Reflect.get(console, 'warn')
     const listeners = ['exit', 'SIGINT', 'SIGTERM'].map(event => process.listenerCount(event))
-    const line = progressLine(stream, {})!
+    const line = progressLine(stream, {})
     const replaced = () => undefined
 
     console.warn = replaced
@@ -169,5 +177,58 @@ describe('the progress line', () => {
 
     expect(child.signalCode).toBe('SIGINT')
     expect(stdout.trim().split('\n').map(text => JSON.parse(text) as string).at(-1)).toBe(CLEAR_LINE)
+  })
+})
+
+describe('the line\'s end', () => {
+  it('leaves a ✓ line with the time once done, and a ✗ line once failed', () => {
+    const { written, stream } = terminal()
+    const line = progressLine(stream, {})
+
+    line.update({ step: 'bundling' })
+    line.done('built 2 pages')
+
+    expect(stripAnsi(written.at(-1)!)).toMatch(/^✓ built 2 pages \d+\.\ds\n$/)
+
+    const other = terminal()
+    const failing = progressLine(other.stream, {})
+
+    failing.update({ step: 'prerendering' })
+    failing.failed('prerendering failed')
+
+    expect(stripAnsi(other.written.at(-1)!)).toBe('✗ prerendering failed\n')
+  })
+})
+
+describe('task', () => {
+  it('returns what the step returns and leaves its ✓ line', async () => {
+    const { written, stream } = terminal()
+
+    expect(await task('bundling', async (update) => {
+      update({ done: 1, total: 2 })
+
+      return 7
+    }, stream, {})).toBe(7)
+    expect(stripAnsi(written.at(-1)!)).toMatch(/^✓ bundling \d+\.\ds\n$/)
+  })
+
+  it('leaves a ✗ line and throws again when the step does', async () => {
+    const { written, stream } = terminal()
+
+    expect(task('bundling', async () => {
+      throw new Error('broke')
+    }, stream, {})).rejects.toThrow('broke')
+    await Bun.sleep(0)
+    expect(stripAnsi(written.at(-1)!)).toBe('✗ bundling\n')
+  })
+
+  it('prints the plain lines alone off a terminal', async () => {
+    const { written, stream } = terminal()
+    const piped = { ...stream, isTTY: false }
+
+    await task('bundling', async () => undefined, piped, {})
+
+    expect(written).toHaveLength(1)
+    expect(written[0]).toMatch(/^ok: bundling \d+\.\ds\n$/)
   })
 })

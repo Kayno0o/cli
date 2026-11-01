@@ -13,7 +13,7 @@ describe('gl', () => {
   test('lists its commands, prints its version and a command\'s help', () => {
     expect(gl('--help').out).toContain('logs')
     expect(gl('--version').out.trim()).toBe(version)
-    expect(gl('ci', '--help').out).toStartWith('gl ci [ref]')
+    expect(gl('ci', '--help').out).toStartWith('Usage: gl ci [ref]')
   })
 
   test('asks for a pipeline id before calling GitLab', () => {
