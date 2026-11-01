@@ -5,7 +5,7 @@ import process from 'node:process'
 import { capture } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
-import { commitPackageBump, release, taggedVersion } from '../src/commands/release'
+import { commitPackageBump, nextVersion, release, taggedVersion } from '../src/commands/release'
 import { timing } from '../src/commands/watch'
 import { withFakeTea } from './fake-tea'
 
@@ -19,6 +19,13 @@ describe('taggedVersion', () => {
     expect(taggedVersion('env-v0.1.0', 'ft-v')).toBeUndefined()
     expect(taggedVersion('ft-v0.3.0', 'v')).toBeUndefined()
     expect(taggedVersion('vnext', 'v')).toBeUndefined()
+  })
+})
+
+describe('nextVersion', () => {
+  test('bumps as bun pm version does', () => {
+    expect(['patch', 'minor', 'major', 'prepatch', 'preminor', 'premajor', 'prerelease', '3.0.0'].map(level => nextVersion('1.2.3', level))).toEqual(['1.2.4', '1.3.0', '2.0.0', '1.2.4-0', '1.3.0-0', '2.0.0-0', '1.2.4-0', '3.0.0'])
+    expect(['patch', 'minor', 'prerelease'].map(level => nextVersion('1.3.0-beta.1', level))).toEqual(['1.3.0', '1.3.0', '1.3.0-beta.2'])
   })
 })
 
@@ -50,6 +57,48 @@ describe('commitPackageBump', () => {
 })
 
 describe('release', () => {
+  test('--dry-run prints the plan and pushes, commits and tags nothing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
+    const origin = join(root, 'origin.git')
+    const work = join(root, 'work')
+    const home = process.cwd()
+
+    try {
+      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.quiet()
+      process.chdir(work)
+      await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
+      await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.quiet()
+      await Bun.write(join(work, 'a.ts'), 'export {}\n')
+      await $`git add a.ts && git commit -q -m feat`.quiet()
+
+      const sha = (await $`git rev-parse HEAD`.text()).trim()
+      const pushed = (await $`git rev-parse origin/main`.text()).trim()
+      const { result, out } = await capture(async () => release(['minor', '--dry-run']))
+
+      expect(result).toBe(0)
+      expect(out).toBe(`would release a 1.0.0 -> 1.1.0, tagged v1.1.0\n  1. push main at ${sha.slice(0, 7)}, which origin lacks, then wait for its runs\n  2. bun pm version minor, which commits and tags v1.1.0\n  3. push main and v1.1.0 in one atomic push, then wait for the runs it starts (15m at most)\n  4. wait for the registry to serve a@1.1.0\ndry run: nothing was pushed, committed or tagged\n`)
+      expect((await $`git tag`.text()).trim()).toBe('')
+      expect((await $`git ls-remote --tags origin`.text()).trim()).toBe('')
+      expect((await $`git rev-parse origin/main HEAD`.text()).trim().split('\n')).toEqual([pushed, sha])
+      expect((await $`git status --porcelain`.text()).trim()).toBe('')
+
+      await $`git tag -a v1.0.1 -m v1.0.1`.quiet()
+      expect((await capture(async () => release(['--tagged', '--dry-run', '--no-registry']))).out).toStartWith('would release a 1.0.1, tagged v1.0.1\n')
+      await $`git tag -d v1.0.1`.quiet()
+      // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+      await expect(capture(async () => release(['--tagged', '--dry-run']))).rejects.toThrow('HEAD carries no v* tag')
+
+      await Bun.write(join(work, 'b.ts'), 'export {}\n')
+      await $`git add b.ts`.quiet()
+      // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+      await expect(capture(async () => release(['patch', '--dry-run']))).rejects.toThrow('the tree has uncommitted changes')
+    }
+    finally {
+      process.chdir(home)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test('stops before the bump when the runs on the commit fail, leaving no tag', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
     const origin = join(root, 'origin.git')

@@ -44,7 +44,7 @@ With an admin login, a queued run is checked against the runners: a job whose `r
 
 ## Releases
 
-`ft release patch|minor|major` releases from the default branch. It first pushes any commits origin lacks and waits for their runs, so failing tests stop it before a tag exists that would never publish; a push starting no run within 3 minutes lets it go on. A refused push drops the bump commit and tag. A repo with its own bump script runs it, then `ft release --tagged`. In a monorepo, `ft release patch -p ft` bumps `packages/ft` alone, refreshes `bun.lock`, and commits and tags it `ft-v<version>`, so each package releases on its own.
+`ft release patch|minor|major` releases from the default branch. It first pushes any commits origin lacks and waits for their runs, so failing tests stop it before a tag exists that would never publish; a push starting no run within 3 minutes lets it go on. A refused push drops the bump commit and tag. A repo with its own bump script runs it, then `ft release --tagged`. In a monorepo, `ft release patch -p ft` bumps `packages/ft` alone, refreshes `bun.lock`, and commits and tags it `ft-v<version>`, so each package releases on its own. `--dry-run` makes the same checks, then prints the bump (`1.0.0 -> 1.1.0`), the tag, whether HEAD is pushed first, the pushes and the runs and registry it would wait for, and changes nothing.
 
 ## Issue claims
 
