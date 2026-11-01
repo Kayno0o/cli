@@ -63,8 +63,12 @@ describe('checkTool', () => {
 describe('checkTea', () => {
   const logins = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'forge', url: 'https://git.kaynooo.fr' }]) } }
 
-  test('passes a login reaching the forge', async () => {
+  test('passes a login reaching the forge, by its public or its private name', async () => {
     expect(await checkTea(fakeHost({ ...logins, 'tea api --login forge version': { stdout: '{"version":"16.0.6"}' } }))).toEqual({ check: 'tea', ok: true, detail: 'logged in to git.kaynooo.fr as forge, Forgejo 16.0.6' })
+
+    const publicLogin = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'pub', url: 'https://git.kaynooo.fr' }]) }, 'tea api --login pub version': { stdout: '{"version":"16.0.6"}' } }
+
+    expect(await checkTea(fakeHost(publicLogin))).toMatchObject({ ok: true, detail: 'logged in to git.kaynooo.fr as pub, Forgejo 16.0.6' })
   })
 
   test('fails without tea, without a login to the forge, or when the forge does not answer', async () => {

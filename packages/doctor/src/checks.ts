@@ -39,8 +39,10 @@ export const TOOLS: Record<string, string[]> = {
 }
 
 export const FORGE = 'git.kaynooo.fr'
+// The same Forgejo under the private name its owner's network reaches it by, which a login may use instead.
+const FORGE_HOSTS = new Set([FORGE, 'git.kaynooo.fr'])
 const PLUGIN = 'agent-tools-hooks@agent-tools'
-const MARKETPLACE = 'https://git.kaynooo.fr/kaynooo/agent-tools.git'
+const MARKETPLACE = `https://${FORGE}/kaynooo/agent-tools.git`
 const LEADING_TILDE = /^~(?=\/|$)/
 
 interface Manifest { version?: string, engines?: { bun?: string } }
@@ -101,7 +103,7 @@ export async function checkTea(host: Host): Promise<Result> {
 
   const logins = await host.run(['tea', 'login', 'list', '-o', 'json'])
   const parsed = logins.code === 0 ? readJsonText<{ name: string, url: string }[]>(logins.stdout) : undefined
-  const login = parsed?.find(each => URL.canParse(each.url) && new URL(each.url).host === FORGE)
+  const login = parsed?.find(each => URL.canParse(each.url) && FORGE_HOSTS.has(new URL(each.url).host))
 
   if (login === undefined)
     return { check: 'tea', ok: false, detail: `no login to ${FORGE}`, fix: `tea login add --url https://${FORGE} --oauth` }
@@ -109,10 +111,12 @@ export async function checkTea(host: Host): Promise<Result> {
   const version = await host.run(['tea', 'api', '--login', login.name, 'version'])
   const served = version.code === 0 ? readJsonText<{ version?: string }>(version.stdout)?.version : undefined
 
-  if (served === undefined)
-    return { check: 'tea', ok: false, detail: `${FORGE} did not answer: ${firstLine(version.stderr || version.stdout)}`, fix: `tea login edit ${login.name} --token <token>, or check the network` }
+  const forge = new URL(login.url).host
 
-  return { check: 'tea', ok: true, detail: `logged in to ${FORGE} as ${login.name}, Forgejo ${served}` }
+  if (served === undefined)
+    return { check: 'tea', ok: false, detail: `${forge} did not answer: ${firstLine(version.stderr || version.stdout)}`, fix: `tea login edit ${login.name} --token <token>, or check the network` }
+
+  return { check: 'tea', ok: true, detail: `logged in to ${forge} as ${login.name}, Forgejo ${served}` }
 }
 
 // The hooks wired one way exactly: the agent-tools-hooks plugin or the dotfiles' agent-tools mod, never both.
