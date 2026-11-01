@@ -43,6 +43,13 @@ describe('sub', () => {
     expect(result.out).toBe('a.ts: 1 replacement on line 2, +1 -1\n')
   })
 
+  test('takes a --from and --to starting with a dash, a Markdown list item', () => {
+    file('a.md', '- one\n- two\n')
+
+    expect(sub(['--from', '- one', '--to', '- first', 'a.md']).code).toBe(0)
+    expect(read('a.md')).toBe('- first\n- two\n')
+  })
+
   test('takes --from literally, regex characters and $ included', () => {
     file('a.ts', 'x.*$1\n')
 

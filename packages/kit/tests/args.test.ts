@@ -16,6 +16,15 @@ describe('parse', () => {
     expect(parse(['-n', '5'], 'u', options, { rest: true }).rest).toBeUndefined()
   })
 
+  test('takes a string option\'s value starting with a dash, unless it names an option', () => {
+    const edit = { from: { type: 'string', short: 'f', description: 'from' }, all: { type: 'boolean', description: 'all' } } as const
+
+    expect(parse(['--from', '- item', '-f', '-x', 'a.md'], 'u', { ...edit, from: { ...edit.from, multiple: true } })).toMatchObject({ values: { from: ['- item', '-x'] }, positionals: ['a.md'] })
+    expect(parse(['-n', '-3'], 'u', options).values.lines).toBe('-3')
+    expect(() => parse(['--from', '--all'], 'u', edit)).toThrow(UsageError)
+    expect(parse(['--', '--from', '-x'], 'u', edit).positionals).toEqual(['--from', '-x'])
+  })
+
   test('takes `--no-<flag>` as false only when asked to', () => {
     const flags = { emoji: { type: 'boolean', default: true, description: 'emoji' } } as const
 

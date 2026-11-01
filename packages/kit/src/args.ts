@@ -142,7 +142,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   let parsed
 
   try {
-    parsed = parseArgs({ args: own, options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
+    parsed = parseArgs({ args: joinDashValues(own, all), options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
   }
   catch (error) {
     badUsage(parseError(error))
@@ -173,6 +173,33 @@ function checkPositionals(given: string[], names: readonly string[]): void {
 
   if (!variadic && given.length > names.length)
     badUsage(`unexpected argument ${given[names.length]}`)
+}
+
+// The arguments with a string option's value joined to it as `--name=value` when that value starts with a dash and names no option, which parseArgs would refuse as ambiguous: `sub --from "- item"`.
+function joinDashValues(args: readonly string[], options: Options): string[] {
+  const longOf = new Map(Object.entries(options).flatMap(([name, option]) => [[`--${name}`, name], ...(option.short === undefined ? [] : [[`-${option.short}`, name]])]))
+  const isOption = (arg: string) => arg === '--' || longOf.has(arg.split('=')[0] ?? '')
+  const joined: string[] = []
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? ''
+
+    if (arg === '--')
+      return [...joined, ...args.slice(i)]
+
+    const name = longOf.get(arg)
+    const next = args[i + 1]
+
+    if (name !== undefined && options[name]?.type === 'string' && next !== undefined && next.startsWith('-') && next !== '-' && !isOption(next)) {
+      joined.push(`--${name}=${next}`)
+      i++
+    }
+    else {
+      joined.push(arg)
+    }
+  }
+
+  return joined
 }
 
 // parseArgs' message, its first sentence alone and lowercased as the kit's own: `unknown option '--nope'`.
