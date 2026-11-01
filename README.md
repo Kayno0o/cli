@@ -1,6 +1,6 @@
 # agent-tools
 
-CLIs built for Claude Code sessions, each published on its own from `packages/`.
+CLIs built for Claude Code sessions, each published on its own from `packages/` to npmjs under the `@kaynooo` scope: `bun install -g @kaynooo/<package>`.
 
 | Package | Bin | What it does |
 | --- | --- | --- |
@@ -44,13 +44,11 @@ Two ways wire the bins into Claude Code, never both on one host:
 ### A host without the dotfiles
 
 ```sh
-# the @kaynooo scope resolves from this registry, which answers without a token
-printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml
 bun install -g @kaynooo/forgejo-tools @kaynooo/env-tools @kaynooo/db-tools @kaynooo/check-tools @kaynooo/pkg-tools @kaynooo/stack-tools @kaynooo/out-tools @kaynooo/edit-tools @kaynooo/base-tools @kaynooo/git-tools @kaynooo/wait-tools @kaynooo/gitlab-tools @kaynooo/guard-tools @kaynooo/code-tools @kaynooo/doctor-tools
 claude plugin install agent-tools-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git
 ```
 
-Every package is also on npmjs, so a host that cannot reach git.kaynooo.fr installs the bins without the scope mapping: `bun install -g @kaynooo/guard-tools` and the others. The plugin still comes from the Forgejo marketplace.
+The packages come from npmjs with no registry setup. Each is also published to the Forgejo registry, which answers without a token; to install from it instead, map the scope first: `printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml`. The plugin comes from the Forgejo marketplace either way.
 
 The hooks need `guard-tools` 0.2.0 or later, the first with `guard hook`. Claude Code caches a plugin by its version, so a change under `plugin/` bumps `plugin/.claude-plugin/plugin.json` to reach the hosts.
 

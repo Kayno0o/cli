@@ -6,7 +6,7 @@ What every @kaynooo CLI shares, so each one parses, helps and fails the same way
 bun add @kaynooo/cli-kit
 ```
 
-It ships its TypeScript source and runs on Bun only (>= 1.4.3). The agent-tools CLIs take it as a `workspace:*` dev dependency and bundle it at build; a CLI elsewhere takes it from the registry as a dependency.
+It ships its TypeScript source and runs on Bun only (>= 1.4.3). The agent-tools CLIs take it as a `workspace:*` dev dependency and bundle it at build; a CLI elsewhere takes it from npmjs as a dependency (`bun add --exact @kaynooo/cli-kit`).
 
 ```ts
 import { parse, runCli } from '@kaynooo/cli-kit'
