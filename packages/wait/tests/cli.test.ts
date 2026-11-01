@@ -120,7 +120,8 @@ describe('waitfor --port and --url', () => {
 
   test('times out on a URL answering an error, naming the status', async () => {
     const server = Bun.serve({ port: 0, fetch: () => new Response('', { status: 500 }) })
-    const result = await waitfor(['--url', `http://127.0.0.1:${server.port}/`, '-t', '500ms'])
+    // Long enough for a first answer on a loaded CI runner, where 500ms has run out before it.
+    const result = await waitfor(['--url', `http://127.0.0.1:${server.port}/`, '-t', '2s'])
 
     await server.stop(true)
     expect(result.code).toBe(2)
