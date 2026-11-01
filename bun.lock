@@ -5,7 +5,7 @@
     "": {
       "name": "@kaynooo/changelogitea",
       "devDependencies": {
-        "@kaynooo/cli-kit": "0.4.0",
+        "@kaynooo/cli-kit": "0.5.0",
         "@kaynooo/eslint": "^7.1.1",
         "@kaynooo/utils": "^2.23.0",
         "@types/bun": "^1.3.14",
@@ -59,7 +59,7 @@
 
     "@joplin/turndown-plugin-gfm": ["@joplin/turndown-plugin-gfm@1.0.68", "", {}, "sha512-m8DfAQNC/V7g0j5H6Jv60WhekBBjodD+zTPGrU+g2m+ux/z8ZX07KQIl6kaAmbKwfvsQhC04op52g63I78sVgg=="],
 
-    "@kaynooo/cli-kit": ["@kaynooo/cli-kit@0.4.0", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Fcli-kit/-/0.4.0/cli-kit-0.4.0.tgz", { "dependencies": { "@kaynooo/utils": "^2.31.0" } }, "sha512-eIymZI8zT4+EHbwOopSvsv+b6CzeX1Gyr2zGjqqmbyta9e8wbz5N7MnsprxfYtjWuCVWx76eTVMcugaN36PH9w=="],
+    "@kaynooo/cli-kit": ["@kaynooo/cli-kit@0.5.0", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Fcli-kit/-/0.5.0/cli-kit-0.5.0.tgz", { "dependencies": { "@kaynooo/utils": "^2.31.0" } }, "sha512-ke9OR8XuUJNhIof2he01mryAit1ewpr8BO/jo+Y3tGGbMniTIhQ02LmB9D/m6p5Z1Ek9dkhUhhhu/y2LdkB9AA=="],
 
     "@kaynooo/eslint": ["@kaynooo/eslint@7.1.1", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/7.1.1/eslint-7.1.1.tgz", { "dependencies": { "@e18e/eslint-plugin": "^0.8.0", "@eslint-community/eslint-plugin-eslint-comments": "^4.7.2", "@eslint/markdown": "^8.0.3", "@stylistic/eslint-plugin": "^5.10.0", "@typescript-eslint/eslint-plugin": "^8.67.0", "@typescript-eslint/parser": "^8.67.0", "eslint-config-flat-gitignore": "^2.3.0", "eslint-flat-config-utils": "^3.2.0", "eslint-merge-processors": "^2.0.0", "eslint-plugin-antfu": "^3.2.3", "eslint-plugin-better-tailwindcss": "^4.7.0", "eslint-plugin-format": "^2.0.1", "eslint-plugin-import-lite": "^0.6.0", "eslint-plugin-jsonc": "^3.4.1", "eslint-plugin-no-only-tests": "^3.4.0", "eslint-plugin-perfectionist": "^5.10.1", "eslint-plugin-regexp": "^3.2.0", "eslint-plugin-toml": "^1.5.0", "eslint-plugin-unicorn": "^73.0.0", "eslint-plugin-unused-imports": "^4.4.1", "eslint-plugin-yml": "^3.8.1", "globals": "^17.11.0", "toml-eslint-parser": "^1.0.3", "yaml-eslint-parser": "^2.1.0" }, "peerDependencies": { "eslint": "^10.7.0" }, "bin": { "keslint": "dist/bin.js" } }, "sha512-5DCS/CFcqT5ES6Bb5LcJGvPBYn66impXHfcnAN8MG1Ybz0be7+YQ3ziQGHRQyUBXebaX05ID53IobVHKmy/a0w=="],
 

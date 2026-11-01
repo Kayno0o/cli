@@ -6,6 +6,7 @@ import { $ } from 'bun'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
+import { confirm } from '@kaynooo/cli-kit/prompt'
 import { sendDiscordWebhook } from '@kaynooo/utils'
 import { colors } from '@kaynooo/utils/tools/colors'
 import { version } from '../package.json'
@@ -63,9 +64,8 @@ function toOptions(args: Flags): ChangelogOptions {
   }
 }
 
-function ask(message: string) {
-  // eslint-disable-next-line no-alert
-  return confirm(colors.yellow(message))
+async function ask(question: string) {
+  return await confirm(question, { default: false, hint: 'pass --yes to skip the questions' }) === true
 }
 
 async function readTokenFromGiteaCli() {
@@ -257,7 +257,7 @@ async function undo(argv: string[]) {
       if (args.note)
         deleteNote = true
       else if (!args.yes)
-        deleteNote = ask(`Also delete the Gitea release note "${release.name || tag}"?`)
+        deleteNote = await ask(`Also delete the Gitea release note "${release.name || tag}"?`)
     }
 
     const actions: string[] = []
@@ -294,7 +294,7 @@ async function undo(argv: string[]) {
       return 0
     }
 
-    if (!args.yes && !ask('Proceed?')) {
+    if (!args.yes && !await ask('Proceed?')) {
       console.log(colors.yellow('Aborted.'))
 
       return 0
