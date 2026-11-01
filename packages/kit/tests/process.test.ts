@@ -16,7 +16,7 @@ async function script(body: string) {
 }
 
 async function written(path: string): Promise<string> {
-  for (let tries = 0; tries < 100 && !existsSync(path); tries++)
+  for (let tries = 0; tries < 100 && !(existsSync(path) && readFileSync(path, 'utf8') !== ''); tries++)
     await Bun.sleep(20)
 
   return readFileSync(path, 'utf8')
