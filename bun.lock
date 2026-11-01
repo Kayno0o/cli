@@ -136,7 +136,7 @@
     },
     "packages/stack": {
       "name": "@kaynooo/stack-tools",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "bin": {
         "stack": "./dist/cli.js",
       },
