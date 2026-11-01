@@ -56,8 +56,40 @@ export function usageLine(usage: string, colors = paint(process.stdout)): string
   return `${colors.bold('Usage:')} ${usage.replace(USAGE_PREFIX, '').replaceAll(OPTIONAL, part => colors.dim(part))}`
 }
 
-export function helpText(usage: string, options: Options, colors = paint(process.stdout), examples: Example[] = []): string {
-  return [usageLine(usage, colors), '', colors.bold('Options:'), ...optionRows(options, colors), ...exampleRows(examples, colors)].join('\n')
+export function helpText(usage: string, options: Options, colors = paint(process.stdout), { examples = [], replaces }: Described = {}): string {
+  return [usageLine(usage, colors), ...replacesRows(replaces, colors), '', colors.bold('Options:'), ...optionRows(options, colors), ...exampleRows(examples, colors)].join('\n')
+}
+
+// An `Instead of:` line, after a blank line; nothing without one.
+export function replacesRows(replaces: string | undefined, colors = paint(process.stdout)): string[] {
+  return replaces === undefined ? [] : ['', `${colors.bold('Instead of:')} ${replaces}`]
+}
+
+// What a bin's --help prints under KIT_HELP=json, for `agent-tools list` to read without parsing the text.
+export interface Description {
+  synopsis: string
+  summary: string
+  replaces?: string
+  examples: { line: string, note?: string }[]
+}
+
+export function wantsHelpJson(env: Record<string, string | undefined> = process.env): boolean {
+  return env.KIT_HELP === 'json'
+}
+
+// The synopsis and the summary a usage's first line splits into at its first `: `, with the examples spelled out.
+export function description(usage: string, { examples = [], replaces }: Described = {}): Description {
+  const text = usage.replace(USAGE_PREFIX, '')
+  const end = text.indexOf('\n')
+  const first = end === -1 ? text : text.slice(0, end)
+  const colon = first.indexOf(': ')
+
+  return {
+    synopsis: colon === -1 ? first : first.slice(0, colon),
+    summary: colon === -1 ? '' : first.slice(colon + 2),
+    ...replaces === undefined ? {} : { replaces },
+    examples: examples.map(example => typeof example === 'string' ? { line: example } : { line: example[0], note: example[1] }),
+  }
 }
 
 // An `Examples:` section, after a blank line, with a line per example; nothing without one.
@@ -95,9 +127,14 @@ export interface ParseSettings<Names extends readonly string[] = string[]> {
   positionals?: Names
   // Command lines shown under `Examples:` in the help, each with an optional dimmed note: `['ft ci HEAD~1', 'wait for the commit before the last']`.
   examples?: Example[]
+  // What the command is reached for instead of, shown as `Instead of:` in the help and listed by `agent-tools list`: 'sed -n N,Mp, grep -n chains and whole-file reads'.
+  replaces?: string
 }
 
 export type Example = string | [line: string, note: string]
+
+// The parts of the settings the help and the description show.
+interface Described { examples?: Example[] | undefined, replaces?: string | undefined }
 
 // The output flags every command takes, before its own help.
 export const OUTPUT_OPTIONS = {
@@ -153,7 +190,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   applyOutput('color' in output ? values.color as string | undefined : undefined, 'plain' in output ? values.plain as boolean | undefined : undefined)
 
   if (values.help === true) {
-    console.log(helpText(usage, all, undefined, settings.examples))
+    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings)) : helpText(usage, all, undefined, settings))
 
     throw new HelpShown()
   }

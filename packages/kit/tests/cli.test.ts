@@ -254,6 +254,35 @@ describe('the help screen', () => {
 
     expect((await capture(async () => runMain({ name: 'demo', version: '1', run: example }, ['--help']))).out).toEndWith('show this help\n\nExamples:\n  demo a\n')
   })
+
+  test('names what a command and a CLI replace under their usage', async () => {
+    const replacing = async (args: string[]) => {
+      parse(args, 'demo [file]: prints a file', {}, { replaces: 'cat' })
+
+      return 0
+    }
+
+    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: replacing }, ['--help']))).out).toStartWith('Usage: demo [file]: prints a file\n\nInstead of: cat\n\nOptions:')
+    expect((await capture(async () => runCli({ ...cli, replaces: 'echo' }, ['--help']))).out).toContain('Usage: demo <command> [options]\n\nInstead of: echo\n\nCommands:')
+  })
+
+  test('prints the description as JSON under KIT_HELP=json', async () => {
+    const described = async (args: string[]) => {
+      parse(args, 'demo [file]: prints a file\n\nExits 0 always.', {}, { replaces: 'cat', examples: ['demo a', ['demo', 'stdin']] })
+
+      return 0
+    }
+
+    process.env.KIT_HELP = 'json'
+
+    try {
+      expect(JSON.parse((await capture(async () => runMain({ name: 'demo', version: '1', run: described }, ['--help']))).out)).toEqual({ synopsis: 'demo [file]', summary: 'prints a file', replaces: 'cat', examples: [{ line: 'demo a' }, { line: 'demo', note: 'stdin' }] })
+      expect(JSON.parse((await capture(async () => runCli({ ...cli, examples: ['demo echo hi'] }, ['--help']))).out)).toEqual({ synopsis: 'demo <command> [options]', summary: 'a demo', examples: [{ line: 'demo echo hi' }] })
+    }
+    finally {
+      delete process.env.KIT_HELP
+    }
+  })
 })
 
 describe('runHint', () => {

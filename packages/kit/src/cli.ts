@@ -1,7 +1,7 @@
 import type { Example, Options } from './args'
 import type { Colors } from './style'
 import process from 'node:process'
-import { applyOutput, Completing, completion, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, UsageError, usageLine } from './args'
+import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, replacesRows, UsageError, usageLine, wantsHelpJson } from './args'
 import { paint, takesControlCodes } from './style'
 import { distance } from './text'
 
@@ -29,6 +29,8 @@ export interface Cli {
   redact?: (text: string) => string
   // Command lines shown under `Examples:` in `<cli> --help`; a command's own go to `parse`.
   examples?: Example[]
+  // What the CLI is reached for instead of, shown as `Instead of:` in `<cli> --help`.
+  replaces?: string
 }
 
 const LEVEL_OPTIONS = {
@@ -89,16 +91,22 @@ interface Level {
   // The words typed to reach this level, `ft plan`.
   path: string[]
   header: (colors: Colors) => string
+  summary: string
   commands: Record<string, Command>
   aliases: Record<string, string> | undefined
   defaultCommand: string | undefined
   examples: Example[] | undefined
+  replaces: string | undefined
 }
 
 // The level's help; a default command's options follow the commands, as they apply with no command named.
-async function help({ path, header, commands, defaultCommand, examples }: Level, stream: { isTTY?: boolean }): Promise<string> {
+async function help({ path, header, summary, commands, defaultCommand, examples, replaces }: Level, stream: { isTTY?: boolean }): Promise<string> {
   const colors = paint(stream)
   const prefix = path.join(' ')
+
+  if (wantsHelpJson())
+    return JSON.stringify(description(`${prefix} <command> [options]: ${summary}`, { examples, replaces }))
+
   const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]
   const options = fallback !== undefined && 'run' in fallback ? await optionsOf(fallback.run) : undefined
   // The default command's own run lists the output flags again, so they show once, under the level's.
@@ -108,6 +116,7 @@ async function help({ path, header, commands, defaultCommand, examples }: Level,
     header(colors),
     '',
     usageLine(`${prefix} ${defaultCommand === undefined ? colors.cyan('<command>') : `[${colors.cyan('<command>')}]`} [options]`, colors),
+    ...replacesRows(replaces, colors),
     '',
     ...commandRows(commands, colors),
     ...own.length === 0 ? [] : ['', `${colors.bold(`Options of ${defaultCommand}:`)} ${colors.dim('the command run when none is named')}`, ...optionRows(Object.fromEntries(own), colors)],
@@ -221,7 +230,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   if ('commands' in command) {
     const { summary } = command
 
-    return dispatch({ path: [...level.path, name], header: colors => `${colors.bold(`${prefix} ${name}`)}  ${summary}`, commands: command.commands, aliases: command.aliases, defaultCommand: undefined, examples: command.examples }, rest, { version, redact })
+    return dispatch({ path: [...level.path, name], header: colors => `${colors.bold(`${prefix} ${name}`)}  ${summary}`, summary, commands: command.commands, aliases: command.aliases, defaultCommand: undefined, examples: command.examples, replaces: undefined }, rest, { version, redact })
   }
 
   try {
@@ -292,7 +301,7 @@ export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<nu
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(cli.commands, cli.aliases, cli.defaultCommand, argv.slice(1)))
 
-  return dispatch({ path: [cli.name], header: colors => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${cli.about}`, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand, examples: cli.examples }, argv, { version: cli.version, redact: cli.redact })
+  return dispatch({ path: [cli.name], header: colors => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${cli.about}`, summary: cli.about, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
 }
 
 export interface Main {
