@@ -63,6 +63,7 @@ async function bashCall(command: string, input: HookInput, machine: Machine): Pr
     isPushAsked: file !== null && machine.exists(file),
     canRewrite: false,
     canWrap: false,
+    canSub: machine.has('sub'),
     read: machine.read,
     exists: machine.exists,
   })

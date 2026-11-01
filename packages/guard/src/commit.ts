@@ -8,14 +8,15 @@ const REUSES = new Set(['c', 'C', '--reuse-message', '--reedit-message', '--fixu
 const TRAILER_FLAGS = new Set(['--signoff', '--trailer'])
 const LONG_VALUE = /=(.*)/s
 const CAT_OPENER = /^\$\(cat <<-?[ \t]*(['"]?)([\w-]+)\1/
-const HEREDOC_OPENER = /<<-?[ \t]*(['"]?)([\w-]+)\1/
+
+export const HEREDOC_OPENER = /<<-?[ \t]*(['"]?)([\w-]+)\1/
 // parseCommand trims the closing parenthesis off the last word, so it may be gone.
 const CAT_CLOSER = /^\s*(?:\)\s*)?$/
 // Text the shell would still expand, which leaves the message unknown.
 const EXPANDS = /\$[({\w]|`/
 
 // The body of the first heredoc the opener finds, up to its delimiter line (which may carry the `)` closing a `$(cat ...)`), and the text after that line; the rest of the opener's line is the command's.
-function heredocBody(text: string, opener: RegExp): { body: string, rest: string } | undefined {
+export function heredocBody(text: string, opener: RegExp): { body: string, rest: string } | undefined {
   const found = opener.exec(text)
 
   const newline = found === null ? -1 : text.indexOf('\n', found.index + found[0].length)

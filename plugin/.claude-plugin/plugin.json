@@ -1,6 +1,6 @@
 {
   "name": "agent-tools-hooks",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Wires the agent-tools bins into Claude Code: guard's rules on every Bash, Read, Edit and Write call, pkg before installs, and the installed bins listed at session start.",
   "author": { "name": "Kaynooo" },
   "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools",

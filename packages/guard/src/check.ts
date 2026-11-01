@@ -9,6 +9,7 @@ import { installRequests, LOCKFILES, mismatchFor } from '@kaynooo/pkg-tools/src/
 import { commitSources, inlineMessage } from './commit'
 import { gitViolation } from './git'
 import { remoteViolation } from './remote'
+import { replaceViolation } from './replace'
 
 // What the rules may learn of the machine the command runs on.
 export interface Context {
@@ -20,6 +21,8 @@ export interface Context {
   canRewrite: boolean
   // Whether `out` is installed, so a noisy command runs through it.
   canWrap: boolean
+  // Whether `sub` is installed, so an in-place edit is pointed at it.
+  canSub: boolean
   // A file's text, null when it cannot be read.
   read: (path: string) => string | null
   exists: (path: string) => boolean
@@ -113,6 +116,7 @@ export async function checkCommand(command: string, context: Context): Promise<V
   add('commit', commit === null ? null : `${commit} ${USE_GC}`)
   add('sql', first(await Promise.all(run.map(async each => sqlViolation(each, async path => Promise.resolve(context.read(absolute(path, context.cwd))))))))
   add('env', touchesEnv(command) ? USE_EV : null)
+  add('edit', context.canSub ? first(run.map(replaceViolation)) : null)
 
   const found = mismatches(command, context)
   const refused = found.find(mismatch => mismatch.rewrite === null || !context.canRewrite)

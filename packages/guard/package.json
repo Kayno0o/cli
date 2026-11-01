@@ -38,6 +38,7 @@
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*",
     "@kaynooo/db-tools": "workspace:*",
+    "@kaynooo/edit-tools": "workspace:*",
     "@kaynooo/env-tools": "workspace:*",
     "@kaynooo/git-tools": "workspace:*",
     "@kaynooo/out-tools": "workspace:*",

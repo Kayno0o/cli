@@ -11,6 +11,7 @@ function context(files: Record<string, string> = {}, settings: Partial<Context> 
     isPushAsked: false,
     canRewrite: true,
     canWrap: false,
+    canSub: true,
     read: path => files[path] ?? null,
     exists: path => path in files,
     ...settings,
@@ -68,6 +69,14 @@ describe('commit messages', () => {
     expect(violations[0]?.message).toContain('The rule: a `type(scope): title` line')
     expect(violations[0]?.message).toContain('`gc \'fix(api): retry a timed-out fetch\'')
     expect((await checkCommand('git commit -am "fix: wip"', context())).violations[0]?.message).toContain('Commit with `gc`')
+  })
+})
+
+describe('in-place edits', () => {
+  cases('edit', ['sed -i \'s/a/b/\' x', 'echo "$(sed -i \'s/a/b/\' x)"', 'python3 - <<\'EOF\'\nfrom pathlib import Path\np = Path(\'x\')\np.write_text(p.read_text().replace(\'a\', \'b\'))\nEOF'], ['sed -n 1p x', 'sub --from a --to b x'])
+
+  test('lets them through where sub is not installed', async () => {
+    expect(await rules('sed -i \'s/a/b/\' x', {}, { canSub: false })).toEqual([])
   })
 })
 

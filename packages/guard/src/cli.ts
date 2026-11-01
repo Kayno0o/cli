@@ -13,7 +13,7 @@ import { EVENTS, hook } from './hook'
 
 const checkUsage = `guard check [options] [<command> | -]
 
-Checks a shell command against the rules: remote machines, git (stash, whole-tree add and commit, push, tags), commit messages, SQL writes, env files and package managers.
+Checks a shell command against the rules: remote machines, git (stash, whole-tree add and commit, push, tags), commit messages, SQL writes, env files, package managers and in-place edits (sed -i and replace scripts, pointed at sub).
 Prints each broken rule with the route to take instead and exits 1, prints nothing and exits 0 when the command is clean.
 The command is read from stdin with - or when none is given; a rule may rewrite it instead (the pinned package manager, a noisy run through out), printed as \`runs as: <command>\`.`
 
@@ -68,6 +68,7 @@ async function check(args: string[]): Promise<number> {
     isPushAsked: values['push-asked'] === true,
     canRewrite: true,
     canWrap: values['no-wrap'] !== true && Bun.which('out') !== null,
+    canSub: Bun.which('sub') !== null,
     read: readText,
     exists: existsSync,
   }
