@@ -15,6 +15,14 @@ describe('parse', () => {
     expect(parse(['-n', '5', 'x', '--', 'ls', '-n', '--help'], 'u', options, { rest: true })).toMatchObject({ values: { lines: '5' }, positionals: ['x'], rest: ['ls', '-n', '--help'] })
     expect(parse(['-n', '5'], 'u', options, { rest: true })?.rest).toBeUndefined()
   })
+
+  test('takes `--no-<flag>` as false only when asked to', () => {
+    const flags = { emoji: { type: 'boolean', default: true, description: 'emoji' } } as const
+
+    expect(parse(['--no-emoji'], 'u', flags, { allowNegative: true })?.values.emoji).toBe(false)
+    expect(parse([], 'u', flags, { allowNegative: true })?.values.emoji).toBe(true)
+    expect(() => parse(['--no-emoji'], 'u', flags)).toThrow(Exit)
+  })
 })
 
 describe('readInput', () => {

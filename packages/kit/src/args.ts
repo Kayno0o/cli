@@ -32,6 +32,8 @@ export function helpText(usage: string, options: Options): string {
 export interface ParseSettings {
   // Stops at the first `--` and hands what follows back untouched as `rest`, for a command that runs another (`out -n 200 -- <cmd>`).
   rest?: boolean
+  // Takes `--no-<flag>` as `false` for a boolean flag, as parseArgs' own `allowNegative` does.
+  allowNegative?: boolean
 }
 
 // Parses a command's arguments, printing its help and returning undefined on --help.
@@ -48,7 +50,7 @@ export function parse<const T extends Options>(args: string[], usage: string, op
   let parsed
 
   try {
-    parsed = parseArgs({ args: own, options: all, allowPositionals: true, strict: true })
+    parsed = parseArgs({ args: own, options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
   }
   catch (error) {
     fail(`${error instanceof Error ? error.message : String(error)}\n\n${helpText(usage, all)}`)
