@@ -217,6 +217,16 @@ describe('confirm', () => {
     expect(await confirm('go?', { default: true, terminal: terminal(['\x03']).fake })).toBeUndefined()
   })
 
+  it('answers undefined once stdin ends unanswered, listening no more', async () => {
+    const { fake, listeners } = terminal([])
+    const asked = confirm('go?', { default: true, terminal: fake })
+
+    queueMicrotask(() => (fake.stdin as unknown as EventEmitter).emit('end'))
+
+    expect(await asked).toBeUndefined()
+    expect(listeners()).toBe(0)
+  })
+
   it('fails off a terminal', async () => {
     expect(await thrown(confirm('go?', { hint: 'pass --yes', terminal: terminal([], { tty: false }).fake }))).toMatchObject({ code: 2, hint: 'pass --yes' })
   })

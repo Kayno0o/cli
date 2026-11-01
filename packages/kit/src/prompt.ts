@@ -292,13 +292,12 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
     draw('asking')
 
     return await new Promise<boolean>((resolve) => {
-      const onData = (data: Buffer) => {
+      function onData(data: Buffer) {
         for (const key of readKeys(data.toString())) {
-          outcome = press(key)
+          const pressed = press(key)
 
-          if (outcome !== undefined) {
-            stdin.off('data', onData)
-            resolve(outcome === 'enter')
+          if (pressed !== undefined) {
+            settle(pressed)
 
             return
           }
@@ -307,7 +306,20 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
         draw('asking')
       }
 
+      // A stdin closing before an answer, as a terminal hung up does, cancels instead of leaving the prompt waiting forever.
+      function onEnd() {
+        settle('cancel')
+      }
+
+      function settle(settled: Outcome) {
+        outcome = settled
+        stdin.off('data', onData)
+        stdin.off('end', onEnd)
+        resolve(settled === 'enter')
+      }
+
       stdin.on('data', onData)
+      stdin.on('end', onEnd)
     })
   }
   finally {
