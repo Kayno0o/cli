@@ -17,6 +17,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/wait-tools`](packages/wait) | `waitfor` | a wait on a log line, a listening port, a URL answering, a process exiting or a background task ending, ending early on an error line, instead of sleep and polling loops |
 | [`@kaynooo/gitlab-tools`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
 | [`@kaynooo/guard-tools`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers, in-place edits), each refusal naming the route |
+| [`@kaynooo/code-tools`](packages/code) | `peek`, `todo-scan` | source read by spans, declarations, usages and outlines in one call; the TODO and issue-reference comments of a repository, those naming a closed issue flagged |
 | [`@kaynooo/cli-kit`](packages/kit) | - | the CLI kit every @kaynooo CLI is built on: argument parsing with `--help`, the command dispatcher, prompts, the progress line, config loading, the shell command parser every guard reads with, and output helpers |
 
 ## Development
@@ -44,7 +45,7 @@ Two ways wire the bins into Claude Code, never both on one host:
 ```sh
 # the @kaynooo scope resolves from this registry, which answers without a token
 printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml
-bun install -g @kaynooo/forgejo-tools @kaynooo/env-tools @kaynooo/db-tools @kaynooo/check-tools @kaynooo/pkg-tools @kaynooo/stack-tools @kaynooo/out-tools @kaynooo/edit-tools @kaynooo/base-tools @kaynooo/git-tools @kaynooo/wait-tools @kaynooo/gitlab-tools @kaynooo/guard-tools
+bun install -g @kaynooo/forgejo-tools @kaynooo/env-tools @kaynooo/db-tools @kaynooo/check-tools @kaynooo/pkg-tools @kaynooo/stack-tools @kaynooo/out-tools @kaynooo/edit-tools @kaynooo/base-tools @kaynooo/git-tools @kaynooo/wait-tools @kaynooo/gitlab-tools @kaynooo/guard-tools @kaynooo/code-tools
 claude plugin install agent-tools-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git
 ```
 

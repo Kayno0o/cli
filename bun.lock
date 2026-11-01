@@ -30,6 +30,17 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/code": {
+      "name": "@kaynooo/code-tools",
+      "version": "0.1.0",
+      "bin": {
+        "peek": "./dist/peek.js",
+        "todo-scan": "./dist/todo-scan.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/db": {
       "name": "@kaynooo/db-tools",
       "version": "0.4.1",
@@ -210,6 +221,8 @@
     "@kaynooo/check-tools": ["@kaynooo/check-tools@workspace:packages/check"],
 
     "@kaynooo/cli-kit": ["@kaynooo/cli-kit@workspace:packages/kit"],
+
+    "@kaynooo/code-tools": ["@kaynooo/code-tools@workspace:packages/code"],
 
     "@kaynooo/db-tools": ["@kaynooo/db-tools@workspace:packages/db"],
 
