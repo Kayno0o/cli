@@ -1,4 +1,4 @@
-import { parseCommand, splitCommand, tokenize } from '@kaynooo/cli-kit'
+import { parseCommand, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
 import { writes } from './guard'
 
 const SQL_CLIENTS = new Set(['psql', 'mysql', 'mariadb', 'pgcli', 'mycli', 'sqlite3'])

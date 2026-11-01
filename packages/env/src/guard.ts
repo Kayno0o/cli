@@ -1,5 +1,5 @@
-import type { Piece } from '@kaynooo/cli-kit'
-import { parseCommand, splitCommand, substitutions, tokenize, words } from '@kaynooo/cli-kit'
+import type { Piece } from '@kaynooo/cli-kit/shell'
+import { parseCommand, splitCommand, substitutions, tokenize, words } from '@kaynooo/cli-kit/shell'
 import { ENV_FILE, TEMPLATE } from './files'
 
 const REDIRECT = /^\d*[<>]+&?/

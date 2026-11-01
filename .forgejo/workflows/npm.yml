@@ -21,14 +21,14 @@ jobs:
       - name: Check, lint and test
         run: bun run check && bun run lint && bun run test
 
-      # A tag ft-v0.3.0 builds and publishes packages/ft.
+      # A tag ft-v0.3.0 builds and publishes packages/ft; cli-kit ships its source, so it has no build.
       - name: Publish to the Forgejo npm registry
         run: |
           trap 'rm -f ~/.npmrc' EXIT
           echo "@kaynooo:registry=https://git.kaynooo.fr/api/packages/kaynooo/npm/" > ~/.npmrc
           echo "//git.kaynooo.fr/api/packages/kaynooo/npm/:_authToken=${PACKAGE_TOKEN}" >> ~/.npmrc
           cd "packages/${TAG%-v*}"
-          bun run build
+          bun run --if-present build
           bun publish --access public
         env:
           TAG: ${{ github.ref_name }}

@@ -1,4 +1,4 @@
-import { parseCommand, splitCommand } from '@kaynooo/cli-kit'
+import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
 
 // git's own options that take the next word as their value, before the subcommand.
 const GLOBAL_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'])

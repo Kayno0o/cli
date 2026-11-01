@@ -1,4 +1,4 @@
-import { parseCommand, splitCommand } from '@kaynooo/cli-kit'
+import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
 import { COMMIT_VALUE_LONGS, COMMIT_VALUE_SHORTS, SHORT_CLUSTER, subcommandOf } from './git'
 
 // What a commit's message is made of: the `-m` texts, a `-F` file (`-` reading the heredoc fed to it), or nothing to check when git reuses a message or opens an editor.

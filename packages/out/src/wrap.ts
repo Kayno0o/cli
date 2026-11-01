@@ -1,4 +1,4 @@
-import { isPlain, splitCommand, tokenize } from '@kaynooo/cli-kit'
+import { isPlain, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
 
 const ASSIGNMENT = /^\w+=/
 const EXCLUDED = /(?:^|\s)(?:--json|--help|--version|-h)(?:\s|$)/

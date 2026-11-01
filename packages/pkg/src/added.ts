@@ -1,4 +1,4 @@
-import { parseCommand, splitCommand } from '@kaynooo/cli-kit'
+import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
 
 // A redirect, `2>` once `2>&1` is split at its `&`, `>log`, or a bare `>` whose target is the next word.
 const REDIRECT = /^\d*[<>]/

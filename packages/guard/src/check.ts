@@ -1,5 +1,5 @@
 import type { Manager, Mismatch, Pinned } from '@kaynooo/pkg-tools/src/pin.ts'
-import { parentDir, replacePieces, substitutions } from '@kaynooo/cli-kit'
+import { parentDir, replacePieces, substitutions } from '@kaynooo/cli-kit/shell'
 import { sqlViolation } from '@kaynooo/db-tools/src/clients.ts'
 import { isEnvFile, touchesEnv, USE_EV } from '@kaynooo/env-tools/guard'
 import { commitMessageViolation, TRAILERS } from '@kaynooo/git-tools/message'

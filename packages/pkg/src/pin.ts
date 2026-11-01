@@ -1,5 +1,5 @@
-import type { Piece } from '@kaynooo/cli-kit'
-import { parseCommand, resolvePath, splitCommand } from '@kaynooo/cli-kit'
+import type { Piece } from '@kaynooo/cli-kit/shell'
+import { parseCommand, resolvePath, splitCommand } from '@kaynooo/cli-kit/shell'
 
 export type Manager = 'bun' | 'pnpm' | 'yarn' | 'npm'
 type Action = 'install' | 'frozen' | 'add' | 'remove' | 'update'

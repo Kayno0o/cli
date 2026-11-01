@@ -1,4 +1,4 @@
-import { parseCommand, splitCommand, tokenize } from '@kaynooo/cli-kit'
+import { parseCommand, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
 
 const SHELL_PROGRAMS = new Set(['ssh', 'scp', 'sftp', 'mosh', 'autossh'])
 // `host:path` as rsync spells a remote end, a Windows drive letter and a local path with a colon aside.
