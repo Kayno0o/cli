@@ -34,16 +34,15 @@ jobs:
           TAG: ${{ github.ref_name }}
           PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
 
-      # The same tarball goes to npmjs: publishConfig.registry is pointed there for this run, so bun reads the token the way the Forgejo step above does.
+      # The same package goes to npmjs: publishConfig.registry is pointed there for this run. npm publishes it because bun publish finds no auth for registry.npmjs.org even with a valid token in ~/.npmrc.
       - name: Publish to npmjs
         run: |
           trap 'rm -f ~/.npmrc' EXIT
           test -n "${NPM_TOKEN}" || { echo "the NPM_TOKEN secret is empty"; exit 1; }
-          echo "@kaynooo:registry=https://registry.npmjs.org/" > ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
           cd "packages/${TAG%-v*}"
           bun -e 'const f = Bun.file("package.json"); const p = await f.json(); p.publishConfig.registry = "https://registry.npmjs.org/"; await Bun.write(f, JSON.stringify(p, null, 2) + "\n")'
-          bun publish --access public
+          bunx npm publish --access public
         env:
           TAG: ${{ github.ref_name }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
