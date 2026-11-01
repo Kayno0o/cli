@@ -51,6 +51,16 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/doctor": {
+      "name": "@kaynooo/doctor-tools",
+      "version": "0.0.0",
+      "bin": {
+        "doctor": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/edit": {
       "name": "@kaynooo/edit-tools",
       "version": "0.1.2",
@@ -225,6 +235,8 @@
     "@kaynooo/code-tools": ["@kaynooo/code-tools@workspace:packages/code"],
 
     "@kaynooo/db-tools": ["@kaynooo/db-tools@workspace:packages/db"],
+
+    "@kaynooo/doctor-tools": ["@kaynooo/doctor-tools@workspace:packages/doctor"],
 
     "@kaynooo/edit-tools": ["@kaynooo/edit-tools@workspace:packages/edit"],
 

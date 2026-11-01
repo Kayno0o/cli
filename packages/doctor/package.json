@@ -1,0 +1,40 @@
+{
+  "name": "@kaynooo/doctor-tools",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "doctor: checks the agent-tools install of a host: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks and the Bun floor.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/doctor#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "directory": "packages/doctor"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "keywords": [
+    "claude-code",
+    "cli",
+    "doctor",
+    "install"
+  ],
+  "bin": {
+    "doctor": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "doctor": "$npm_execpath src/cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
