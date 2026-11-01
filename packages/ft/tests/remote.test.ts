@@ -1,4 +1,10 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
+import { remote } from '../src/commands/remote'
+import { loadSettings, settingsPath } from '../src/config'
 import { canonicalRemote, parseSshRemote, reachesHost } from '../src/remote'
 
 const HOST = 'git.kaynooo.fr'
@@ -36,5 +42,33 @@ describe('reachesHost', () => {
   test('does not reach it from another host, nor from an alias ssh does not know', async () => {
     expect(await reachesHost('github.com', HOST, hostAddresses, addressesOf)).toBe(false)
     expect(await reachesHost(undefined, HOST, hostAddresses, addressesOf)).toBe(false)
+  })
+})
+
+describe('the remote host setting', () => {
+  function homeWith(text?: string): string {
+    const home = mkdtempSync(join(tmpdir(), 'ft-home-'))
+
+    if (text !== undefined) {
+      mkdirSync(join(home, '.config', 'ft'), { recursive: true })
+      writeFileSync(settingsPath(home), text)
+    }
+
+    return home
+  }
+
+  test('comes from ~/.config/ft/config.json, and from nowhere else', async () => {
+    expect(await loadSettings(homeWith('{"remoteHost":"git.example.com"}'))).toEqual({ remoteHost: 'git.example.com' })
+    expect(await loadSettings(homeWith())).toEqual({})
+    expect(await loadSettings(homeWith('not json'))).toEqual({})
+    expect(await loadSettings(homeWith('{"remoteHost":""}'))).toEqual({})
+  })
+
+  test('left unset, ft remote checks nothing and says where to set it', async () => {
+    const home = homeWith()
+    const { result, out } = await capture(async () => remote([], home))
+
+    expect(result).toBe(0)
+    expect(out).toBe(`note: no Forgejo host to check origin against: pass --host, or set "remoteHost" in ${settingsPath(home)}\n`)
   })
 })

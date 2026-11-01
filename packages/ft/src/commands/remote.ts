@@ -1,6 +1,8 @@
 import { lookup } from 'node:dns/promises'
-import { parse } from '@kaynooo/cli-kit'
+import { homedir } from 'node:os'
+import { note, parse } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
+import { loadSettings, settingsPath } from '../config'
 import { git } from '../git'
 import { canonicalRemote, parseSshRemote, reachesHost } from '../remote'
 
@@ -8,11 +10,12 @@ const usage = `ft remote [--fix]
 
 Checks that origin's URLs name the Forgejo host itself: tea only finds the repository when origin's host is the login's ssh_host, never through an ssh alias such as \`forgejo\` or \`gitea\`.
 --fix switches every alias URL to \`git@<host>:<owner>/<repo>.git\` and proves it with \`git ls-remote\`.
+The host comes from --host, else \`remoteHost\` in ~/.config/ft/config.json; with neither, it checks nothing.
 
-Exits 0 when origin names the Forgejo host (or was switched), 1 when it does not or a switch is still to run, 2 on a usage error.`
+Exits 0 when origin names the Forgejo host (or was switched) or no host is set, 1 when it does not or a switch is still to run, 2 on a usage error.`
 
 const options = {
-  host: { type: 'string', description: 'the Forgejo ssh host (git.kaynooo.fr)' },
+  host: { type: 'string', description: 'the Forgejo ssh host, instead of remoteHost in ~/.config/ft/config.json' },
   fix: { type: 'boolean', description: 'rewrite the alias URLs' },
 } as const
 
@@ -35,11 +38,16 @@ function originHost(url: string): string | undefined {
   return parseSshRemote(url)?.host ?? (URL.canParse(url) ? new URL(url).hostname : undefined)
 }
 
-export async function remote(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+export async function remote(args: string[], home = homedir()): Promise<number> {
+  const { values } = parse(args, usage, options)
+  const host = values.host ?? (await loadSettings(home)).remoteHost
 
-  const { values } = parsed
-  const host = values.host ?? 'git.kaynooo.fr'
+  if (host === undefined) {
+    note(`no Forgejo host to check origin against: pass --host, or set "remoteHost" in ${settingsPath(home)}`)
+
+    return 0
+  }
+
   const fetchUrl = await git(['remote', 'get-url', 'origin'])
   const pushUrls = (await $`git config --get-all remote.origin.pushurl`.quiet().nothrow().text()).split('\n').filter(Boolean)
   const hostAddresses = new Set(await addresses(host))

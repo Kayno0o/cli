@@ -29,7 +29,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft close <n>... [-m reason]` | closes issues no commit fixed (a duplicate, one dropped), posting the reason first; `ft reopen` reopens them the same way |
 | `ft label <n> [+]a -b` | adds the labels named bare or with `+`, removes those named with `-`, refusing one the repository lacks, and prints the issue's labels |
 | `ft plan add <plan> <n>...` / `ft plan carry <from> <to>` | adds `- [ ] #<n> <title>` lines to a release plan's checklist, or copies one plan's unticked `#<n>` lines into the next, both under `--section "Bugs:"` (created when missing) and skipping issues already listed |
-| `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches |
+| `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches; the host comes from `--host` or `remoteHost` in `~/.config/ft/config.json` (`{"remoteHost": "git.example.com"}`), and with neither it checks nothing |
 
 `ft <command> --help` lists each command's options. Waiting commands exit 0 when the runs pass, 1 when one fails, 2 on a timeout, a stalled queue or bad usage; the other commands exit 0 when done, 1 when Forgejo refuses or a check fails, 2 on a usage error.
 
