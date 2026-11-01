@@ -12,7 +12,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/stack-tools`](packages/stack) | `stack` | a stable port per service name, and a compose release setup audited against its `release.config.ts` |
 | [`@kaynooo/out-tools`](packages/out) | `out` | noisy command output folded, errors kept, the full log saved to a file |
 | [`@kaynooo/edit-tools`](packages/edit) | `sub` | text replaced in files, written only when every replacement matches as often as expected |
-| [`@kaynooo/base-tools`](packages/base) | `base` | a command run at HEAD or another ref in a temporary worktree, instead of a `git stash` round trip |
+| [`@kaynooo/base-tools`](packages/base) | `base`, `proof` | a command run at HEAD or another ref in a temporary worktree, instead of a `git stash` round trip; a test shown to fail before a change and pass after it |
 | [`@kaynooo/git-tools`](packages/git) | `gst`, `gc` | a repository's state in one call; a commit of exactly the paths given, its message checked before anything is staged |
 | [`@kaynooo/wait-tools`](packages/wait) | `waitfor` | a wait on a log line, a listening port, a URL answering, a process exiting or a background task ending, ending early on an error line, instead of sleep and polling loops |
 | [`@kaynooo/gitlab-tools`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
