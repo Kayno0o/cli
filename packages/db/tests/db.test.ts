@@ -77,12 +77,13 @@ const reason = SERVER === undefined ? await inDocker() : onServer(SERVER)
 if (reason !== '')
   console.warn(`db integration tests skipped: ${reason}`)
 
+// Removing the container can outlast the 5 s default when the whole suite loads the machine.
 afterAll(() => {
   if (SERVER !== undefined)
     psql(SERVER, `drop database if exists ${DATABASE} with (force)`)
   else if (Bun.which('docker') !== null)
     docker('rm', '-f', CONTAINER)
-})
+}, 30_000)
 
 const cwd = mkdtempSync(join(tmpdir(), 'db-tools-'))
 
