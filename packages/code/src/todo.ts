@@ -72,7 +72,21 @@ export function refKey(ref: Ref): string {
   return `${ref.repo}#${ref.number}`
 }
 
-// Each issue's state, one `ft issue --json` call per repository.
+// Each issue's state on GitHub through gh, for a repository Forgejo does not have, one call per issue.
+async function lookUpOnGitHub(repo: string, numbers: readonly string[], cwd: string): Promise<Map<string, string> | string> {
+  const states = new Map<string, string>()
+
+  for (const ran of await Promise.all(numbers.map(async number => ({ number, ran: await runCommand(['gh', 'api', `repos/${repo}/issues/${number}`, '--jq', '.state'], { cwd }) })))) {
+    if (ran.ran.code !== 0)
+      return ran.ran.text.trim().replace(AFTER_FIRST_LINE, '')
+
+    states.set(refKey({ repo, number: Number(ran.number) }), stdoutOf(ran.ran.chunks).trim())
+  }
+
+  return states
+}
+
+// Each issue's state, one `ft issue --json` call per repository, gh asked for a repository ft cannot reach.
 export async function lookUp(refs: readonly Ref[], cwd: string): Promise<Lookup> {
   const lookup: Lookup = { states: new Map(), failed: new Map() }
   const byRepo = Map.groupBy(refs, ref => ref.repo)
@@ -82,7 +96,14 @@ export async function lookUp(refs: readonly Ref[], cwd: string): Promise<Lookup>
     const ran = await runCommand(['ft', 'issue', ...numbers, '-r', repo, '--json'], { cwd })
 
     if (ran.code !== 0) {
-      lookup.failed.set(repo, ran.text.trim().replace(AFTER_FIRST_LINE, ''))
+      const onGitHub = Bun.which('gh') === null ? 'gh is not installed' : await lookUpOnGitHub(repo, numbers, cwd)
+
+      if (typeof onGitHub === 'string') {
+        lookup.failed.set(repo, `ft: ${ran.text.trim().replace(AFTER_FIRST_LINE, '')}; gh: ${onGitHub}`)
+      }
+      else {
+        for (const [key, state] of onGitHub) lookup.states.set(key, state)
+      }
 
       continue
     }

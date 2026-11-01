@@ -10,10 +10,10 @@ import { lookUp, marksIn, refKey } from './todo'
 
 const USAGE = `todo-scan [options] [path...]: lists the TODO, FIXME and owner/repo#N comments under the paths (here by default), each as <file>:<line>: <comment>, honouring .gitignore
 
---stale keeps only the comments naming a closed issue, each issue's state looked up with ft, and exits 1 when it finds one.`
+--stale keeps only the comments naming a closed issue, each issue's state looked up with ft, or gh for a GitHub repository, and exits 1 when it finds one.`
 
 const OPTIONS = {
-  stale: { type: 'boolean', description: 'only the comments naming a closed issue, looked up with ft' },
+  stale: { type: 'boolean', description: 'only the comments naming a closed issue, looked up with ft or gh' },
   json: jsonOption('[{path, line, kind, text, refs: [{repo, number, state?}]}]'),
 } as const
 

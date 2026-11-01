@@ -27,5 +27,5 @@ todo-scan --stale
 ## todo-scan
 
 - `todo-scan [path...]` prints `<file>:<line>: <comment>` for each comment holding `TODO`, `FIXME` or an `owner/repo#N` reference, over the same files as `peek`. A comment opens with `//` (not a URL's), `/*`, `<!--`, a `#` or `--` standing alone, or the `*` of a block comment's line; in Markdown and HTML only `<!--` does.
-- `--stale` looks each referenced issue up with `ft issue <n>... -r <owner/repo> --json`, one call per repository, keeps the comments naming a closed issue (`src/a.ts:3: kaynooo/kayjs#823 closed: ...`) and exits 1 when it finds one; a repository `ft` cannot reach is named on stderr and skipped.
+- `--stale` looks each referenced issue up with `ft issue <n>... -r <owner/repo> --json`, one call per repository, or with `gh api` for a repository Forgejo does not have (a GitHub one), keeps the comments naming a closed issue (`src/a.ts:3: kaynooo/kayjs#823 closed: ...`) and exits 1 when it finds one; a repository neither can reach is named on stderr and skipped.
 - `--json` prints `[{path, line, kind, text, refs}]`, each ref with its `state` under `--stale`.

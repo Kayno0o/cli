@@ -47,18 +47,31 @@ describe('todo-scan', () => {
     expect((JSON.parse(scan(['--json', 'src']).out) as { kind: string }[]).map(mark => mark.kind)).toEqual(['TODO', 'ref', 'FIXME'])
   })
 
-  test('keeps the comments naming a closed issue with --stale, exiting 1', () => {
+  // Stand-in ft and gh: kayjs#823 closed and #9 open on Forgejo, owner/repo unknown to ft, and to gh unless `gh` is given.
+  function standIns(gh = 'echo "gh: Not Found (HTTP 404)" >&2; exit 1') {
     const bin = join(dir, 'ignored', 'bin')
 
     mkdirSync(bin, { recursive: true })
-    // A stand-in ft: kayjs#823 closed, #9 open, owner/repo unknown.
     writeFileSync(join(bin, 'ft'), '#!/bin/sh\ncase "$*" in\n  *kaynooo/kayjs*) echo \'[{"number":823,"state":"closed"},{"number":9,"state":"open"}]\' ;;\n  *) echo "error: no repository owner/repo" >&2; exit 1 ;;\nesac\n')
+    writeFileSync(join(bin, 'gh'), `#!/bin/sh\n${gh}\n`)
     chmodSync(join(bin, 'ft'), 0o755)
+    chmodSync(join(bin, 'gh'), 0o755)
 
-    const result = scan(['--stale'], { ...process.env, PATH: `${bin}:${process.env.PATH}` })
+    return { ...process.env, PATH: `${bin}:${process.env.PATH}` }
+  }
+
+  test('keeps the comments naming a closed issue with --stale, exiting 1', () => {
+    const result = scan(['--stale'], standIns())
 
     expect(result.code).toBe(1)
     expect(result.out).toBe('src/a.ts:3: kaynooo/kayjs#823 closed: kaynooo/kayjs#823\n')
     expect(result.err).toContain('could not look owner/repo up')
+  })
+
+  test('asks gh for a repository ft cannot reach', () => {
+    const result = scan(['--stale'], standIns('[ "$2" = repos/owner/repo/issues/4 ] && echo closed'))
+
+    expect(result.out).toBe('script.sh:2: owner/repo#4 closed: owner/repo#4 waits on this\nsrc/a.ts:3: kaynooo/kayjs#823 closed: kaynooo/kayjs#823\n')
+    expect(result.err).toBe('')
   })
 })
