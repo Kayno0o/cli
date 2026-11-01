@@ -1,5 +1,6 @@
 export * from './args'
 export * from './cli'
+export * from './config'
 export * from './format'
 export * from './process'
 export * from './style'
