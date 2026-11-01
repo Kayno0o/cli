@@ -43,6 +43,12 @@ describe('todo-scan', () => {
     expect(scan(['src']).out.split('\n')).toHaveLength(4)
   })
 
+  test('caps the list with --limit, counting the rest, and leaves JSON whole', () => {
+    expect(scan(['--limit', '2']).out).toBe('notes.md:2: TODO: say more\nscript.sh:2: owner/repo#4 waits on this\n3 more, rerun with --full\n')
+    expect(scan(['--full']).out.split('\n')).toHaveLength(6)
+    expect((JSON.parse(scan(['--json']).out) as unknown[]).length).toBe(5)
+  })
+
   test('prints JSON', () => {
     expect((JSON.parse(scan(['--json', 'src']).out) as { kind: string }[]).map(mark => mark.kind)).toEqual(['TODO', 'ref', 'FIXME'])
   })

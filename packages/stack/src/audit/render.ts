@@ -1,7 +1,7 @@
 import type { AuditResult, Finding } from './types'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { marked } from '@kaynooo/cli-kit'
+import { capped, marked } from '@kaynooo/cli-kit'
 
 const line = (finding: Finding) => `  ${marked(finding.level === 'error' ? 'problem' : 'warn', `[${finding.check}] ${finding.message}`, process.stdout)}`
 
@@ -9,7 +9,14 @@ export function errorsOf(result: AuditResult): Finding[] {
   return result.findings.filter(finding => finding.level === 'error')
 }
 
-export function render(result: AuditResult): string {
+// Each of the errors and warnings lists at most `limit` findings and ends on the count of the rest, the totals line counting them all.
+function section(heading: string, findings: Finding[], limit: number): string[] {
+  const { shown, footer } = capped(findings, limit)
+
+  return findings.length === 0 ? [] : [heading, ...shown.map(line), ...footer === undefined ? [] : [`  ${footer}`], '']
+}
+
+export function render(result: AuditResult, limit = Number.POSITIVE_INFINITY): string {
   const errors = errorsOf(result)
   const warnings = result.findings.filter(finding => finding.level === 'warn')
 
@@ -17,8 +24,8 @@ export function render(result: AuditResult): string {
     return marked('ok', `${basename(result.root)}: compose ${result.composeFiles.join(', ')} and release.config.ts agree.`, process.stdout)
 
   return [
-    ...(errors.length > 0 ? ['Errors', ...errors.map(line), ''] : []),
-    ...(warnings.length > 0 ? ['Warnings', ...warnings.map(line), ''] : []),
+    ...section('Errors', errors, limit),
+    ...section('Warnings', warnings, limit),
     `${errors.length} error(s), ${warnings.length} warning(s)`,
   ].join('\n')
 }

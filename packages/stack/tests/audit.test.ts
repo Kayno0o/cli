@@ -82,6 +82,13 @@ describe('audit', () => {
     expect(render(result)).toMatch(/^ok: stack-audit-\w+: compose compose\.yaml and release\.config\.ts agree\.$/)
   })
 
+  test('lists at most the limit of errors and of warnings, the totals counting them all', () => {
+    const finding = (level: 'error' | 'warn', message: string) => ({ level, check: 'x', message })
+    const result = { root: '/p', composeFiles: [], findings: [finding('error', 'a'), finding('error', 'b'), finding('error', 'c'), finding('warn', 'd')] } as unknown as Parameters<typeof render>[0]
+
+    expect(render(result, 2)).toBe('Errors\n  error: [x] a\n  error: [x] b\n  1 more, rerun with --full\n\nWarnings\n  warning: [x] d\n\n3 error(s), 1 warning(s)')
+  })
+
   test('reports a missing sync file, build inputs and secrets', async () => {
     const config = `export default {
       registry: 'r',

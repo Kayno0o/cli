@@ -3,7 +3,7 @@
 import type { Mark } from './todo'
 import { join } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson, runMain, warn } from '@kaynooo/cli-kit'
+import { capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, warn } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { listFiles, readText } from './files'
 import { lookUp, marksIn, refKey } from './todo'
@@ -12,16 +12,26 @@ const USAGE = `todo-scan [options] [path...]: lists the TODO, FIXME and owner/re
 
 --stale keeps only the comments naming a closed issue, each issue's state looked up with ft, or gh for a GitHub repository, and exits 1 when it finds one.
 
+Lists at most 100 comments, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.
+
 Exits 0 when it listed the comments or found no stale one, 1 when --stale finds one or ft is not installed, 2 on a usage error.`
+
+const LIST_LIMIT = 100
 
 const OPTIONS = {
   stale: { type: 'boolean', description: 'only the comments naming a closed issue, looked up with ft or gh' },
+  ...limitOptions(LIST_LIMIT),
   json: jsonOption('[{path, line, kind, text, refs: [{repo, number, state?}]}]'),
 } as const
+
+function printLines(lines: string[], footer: string | undefined): void {
+  console.log([...lines, ...footer === undefined ? [] : [footer]].join('\n'))
+}
 
 async function main(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[path...]'] })
   const cwd = process.cwd()
+  const limit = limitOf(values, LIST_LIMIT)
   const marks: Mark[] = []
 
   for (const path of await listFiles(positionals, cwd)) {
@@ -32,10 +42,12 @@ async function main(args: string[]): Promise<number> {
   }
 
   if (values.stale !== true) {
+    const { shown, footer } = capped(marks, limit)
+
     if (values.json === true)
-      printJson(marks)
+      printJson(shown)
     else
-      console.log(marks.map(mark => `${mark.path}:${mark.line}: ${mark.text}`).join('\n'))
+      printLines(shown.map(mark => `${mark.path}:${mark.line}: ${mark.text}`), footer)
 
     return 0
   }
@@ -50,10 +62,12 @@ async function main(args: string[]): Promise<number> {
 
   const stale = marks.filter(mark => mark.refs.some(ref => states.get(refKey(ref)) === 'closed'))
 
+  const { shown, footer } = capped(stale, limit)
+
   if (values.json === true)
-    printJson(stale.map(mark => ({ ...mark, refs: mark.refs.map(ref => ({ ...ref, state: states.get(refKey(ref)) })) })))
+    printJson(shown.map(mark => ({ ...mark, refs: mark.refs.map(ref => ({ ...ref, state: states.get(refKey(ref)) })) })))
   else
-    console.log(stale.map(mark => `${mark.path}:${mark.line}: ${mark.refs.filter(ref => states.get(refKey(ref)) === 'closed').map(refKey).join(', ')} closed: ${mark.text}`).join('\n'))
+    printLines(shown.map(mark => `${mark.path}:${mark.line}: ${mark.refs.filter(ref => states.get(refKey(ref)) === 'closed').map(refKey).join(', ')} closed: ${mark.text}`), footer)
 
   return stale.length > 0 ? 1 : 0
 }

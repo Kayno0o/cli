@@ -1,7 +1,7 @@
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
 import type { Session } from '../sessions'
-import { Exit, fail, formatAge, jsonOption, parse, printHint, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
+import { capped, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, parse, printHint, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -51,15 +51,23 @@ function noteLine(comments: IssueComment[], now: number): string[] {
   return note === undefined || first === undefined ? [] : [`    ${note.user.login} ${formatAge(note.created_at, now)}: ${truncate(first, NOTE_WIDTH)}`]
 }
 
-export function renderBoard(rows: BoardRow[], now = Date.now()): string {
+// A section's table of at most `limit` rows, the count of the rest on a last line, each line mapped through `decorate`.
+function within<T>(rows: T[], limit: number, cells: (row: T) => string[], decorate: (line: string, index: number) => string[] = line => [line]): { lines: string[] } {
+  const { shown, footer } = capped(rows, limit)
+
+  return { lines: [...table(shown.map(cells)).split('\n').flatMap(decorate), ...footer === undefined ? [] : [footer]] }
+}
+
+// Each section lists at most `limit` issues and ends on the count of the rest.
+export function renderBoard(rows: BoardRow[], now = Date.now(), limit = Number.POSITIVE_INFINITY): string {
   const available = rows.filter(row => row.standing.state === 'available')
   const claimed = (state: Claimed['state']) => rows.flatMap(({ issue, standing: row, comments }) => row.state === state ? [{ issue, row, comments }] : [])
   const taken = claimed('taken')
   const away = claimed('away')
   const sections = [
-    { heading: 'available', count: available.length, lines: table(available.map(({ issue }) => [`#${issue.number}`, truncate(issue.title, TITLE_WIDTH), issue.labels.map(label => label.name).join(', ')])).split('\n') },
-    { heading: 'taken', count: taken.length, lines: table(taken.map(({ issue, row }) => claimRow(issue, row, now))).split('\n') },
-    { heading: 'claimed, no live session here', count: away.length, lines: table(away.map(({ issue, row }) => claimRow(issue, row, now))).split('\n').flatMap((line, index) => [line, ...noteLine(away[index]?.comments ?? [], now)]) },
+    { heading: 'available', count: available.length, ...within(available, limit, ({ issue }) => [`#${issue.number}`, truncate(issue.title, TITLE_WIDTH), issue.labels.map(label => label.name).join(', ')]) },
+    { heading: 'taken', count: taken.length, ...within(taken, limit, ({ issue, row }) => claimRow(issue, row, now)) },
+    { heading: 'claimed, no live session here', count: away.length, ...within(away, limit, ({ issue, row }) => claimRow(issue, row, now), (line, index) => [line, ...noteLine(away[index]?.comments ?? [], now)]) },
   ].filter(section => section.count > 0)
 
   return sections.length === 0 ? 'no open issue' : sections.map(({ heading, count, lines }) => `${heading} (${count})\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
@@ -67,16 +75,19 @@ export function renderBoard(rows: BoardRow[], now = Date.now()): string {
 
 const boardUsage = `ft board
 
-Lists open issues as available, taken by a session running here, or claimed by a session no session here answers to, from their latest "Taken by session <name>." comment.
+Lists open issues, at most 30 of each kind (--full for all), as available, taken by a session running here, or claimed by a session no session here answers to, from their latest "Taken by session <name>." comment.
 A claim shows its boxes left, and one no live session holds also the latest comment that is not a claim.
 A lane's claim (lane-<n>-<issue>) is held while the session whose name ends in -<n> runs.
 
 Exits 0 when it listed them, 1 when the issues cannot be read, 2 on a usage error.`
 
+const BOARD_LIMIT = 30
+
 const boardOptions = {
   labels: { type: 'string', short: 'L', description: 'only issues with these labels, comma separated' },
   query: { type: 'string', short: 'q', description: 'only issues whose title matches this, a case-insensitive regex such as dom|eager' },
   state: { type: 'string', description: 'only issues in this state: available, taken or away (claimed, no live session here)' },
+  ...limitOptions(BOARD_LIMIT),
   json: jsonOption('number, title, labels, state, holder, since, session, boxesTotal, boxesLeft and note (author, at, body of the latest comment that is not a claim)'),
   ...repoOption,
 } as const
@@ -86,6 +97,7 @@ export async function board(args: string[]): Promise<number> {
 
   const { values } = parsed
   const state = values.state
+  const limit = limitOf(values, BOARD_LIMIT)
 
   if (state !== undefined && !STATES.has(state))
     fail(`--state takes available, taken or away, not ${state}`)
@@ -130,7 +142,7 @@ export async function board(args: string[]): Promise<number> {
     return 0
   }
 
-  console.log(rows.length === 0 && (query !== undefined || state !== undefined) ? 'no open issue matches' : renderBoard(rows))
+  console.log(rows.length === 0 && (query !== undefined || state !== undefined) ? 'no open issue matches' : renderBoard(rows, Date.now(), limit))
 
   return 0
 }

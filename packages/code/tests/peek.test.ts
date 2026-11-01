@@ -106,6 +106,9 @@ describe('peek', () => {
   test('prints JSON in every mode, and its failures as JSON', () => {
     expect(JSON.parse(peek('src/b.ts:3', '--json').out)).toEqual([{ path: 'src/b.ts', from: 3, to: 3, lines: ['console.log(addOne(2))'] }])
     expect(JSON.parse(peek('--def', 'LIMIT', '--json').out)).toEqual([{ path: 'src/a.ts', from: 10, to: 10, lines: ['export const LIMIT = 5'] }])
+    expect(peek('--refs', 'addOne', '--limit', '2').out).toBe('src/a.ts\n 4  export function addOne(value: number): number {\n22  this.count += addOne(by) - 1\n2 more, rerun with --full\n')
+    expect(peek('--refs', 'addOne', '--limit', '2', '--full').code).toBe(2)
+    expect(peek('--refs', 'addOne', '--full').out).not.toContain('more')
     expect(JSON.parse(peek('--refs', 'addOne', 'src/b.ts', '--json').out)).toEqual([{ path: 'src/b.ts', line: 1, text: 'import { addOne } from \'./a\'' }, { path: 'src/b.ts', line: 3, text: 'console.log(addOne(2))' }])
     expect(JSON.parse(peek('--outline', 'README.md', '--json').out)).toEqual([{ path: 'README.md', line: 1, depth: 0, text: '# Title' }, { path: 'README.md', line: 5, depth: 1, text: '## Usage' }])
     expect((JSON.parse(peek('--around', 'private', '-C', '0', '--json').out) as unknown[]).length).toBe(1)

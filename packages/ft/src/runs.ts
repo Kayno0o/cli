@@ -36,10 +36,30 @@ export function startedAge(run: Run, now = Date.now()): string {
   return Date.parse(run.started) < EPOCH ? '-' : formatAge(run.started, now)
 }
 
-export async function recentRuns(limit: number, repo?: string, workflow?: string): Promise<Run[]> {
-  const filter = workflow === undefined ? '' : `&workflow_id=${encodeURIComponent(workflow)}`
+const RUNS_PAGE = 50
 
-  return (await repoApi<{ workflow_runs: Run[] | null }>(`actions/runs?page=1&limit=${limit}${filter}`, repo)).workflow_runs ?? []
+// The newest runs, `limit` of them, paged since Forgejo caps a page (an infinite limit reads them all), with how many the repository holds.
+export async function runsListing(limit: number, repo?: string, workflow?: string): Promise<{ runs: Run[], total: number }> {
+  const filter = workflow === undefined ? '' : `&workflow_id=${encodeURIComponent(workflow)}`
+  const runs: Run[] = []
+  let total = 0
+
+  for (let page = 1; runs.length < limit; page++) {
+    const found = await repoApi<{ workflow_runs: Run[] | null, total_count?: number }>(`actions/runs?page=${page}&limit=${RUNS_PAGE}${filter}`, repo)
+    const list = found.workflow_runs ?? []
+
+    runs.push(...list)
+    total = found.total_count ?? 0
+
+    if (list.length < RUNS_PAGE)
+      break
+  }
+
+  return { runs: runs.slice(0, limit), total: Math.max(total, runs.length) }
+}
+
+export async function recentRuns(limit: number, repo?: string, workflow?: string): Promise<Run[]> {
+  return (await runsListing(limit, repo, workflow)).runs
 }
 
 export async function runsOn(sha: string, repo?: string): Promise<Run[]> {

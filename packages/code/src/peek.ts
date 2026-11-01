@@ -3,7 +3,7 @@
 import type { Span } from './source'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badUsage, fail, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { listFiles, readText } from './files'
 import { around, definitions, outline, usages } from './source'
@@ -16,9 +16,12 @@ peek --refs <symbol> [path...]         the lines naming the symbol, grouped by f
 peek --outline <file>...               the declarations and class members, a Markdown file's headings
 peek --around <regex> [-C 3] [path...] the lines around each match, overlapping ones merged
 The paths default to the files git keeps here (.gitignore holds).
---json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}], --outline as [{path, line, depth, text}], the lines never cut.
+--refs lists at most 100 lines, the count of the rest after them (--limit <n>, --full for all).
+--json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}], --outline as [{path, line, depth, text}], the lines never cut and the rows never counted off unless --limit is given.
 
 Exits 0 when it printed something, 1 when nothing is found or a file cannot be read, 2 on a usage error.`
+
+const REFS_LIMIT = 100
 
 const OPTIONS = {
   def: { type: 'string', short: 'd', description: 'print the declaration of this symbol' },
@@ -26,6 +29,7 @@ const OPTIONS = {
   outline: { type: 'boolean', short: 'o', description: 'list the declarations of the files given' },
   around: { type: 'string', short: 'a', description: 'print the lines around the matches of this regular expression' },
   context: { type: 'string', short: 'C', description: 'lines on each side of an --around match (3)' },
+  ...limitOptions(REFS_LIMIT),
   json: jsonOption(),
 } as const
 
@@ -147,10 +151,17 @@ async function main(args: string[]): Promise<number> {
     if (rows.length === 0)
       fail(`nothing names ${values.refs}`, 1)
 
-    if (json)
-      printJson(rows)
-    else
-      printByFile(rows.map(row => ({ ...row, text: cut(row.text) })))
+    const { shown, footer } = capped(rows, limitOf({ ...values, json }, REFS_LIMIT))
+
+    if (json) {
+      printJson(shown)
+    }
+    else {
+      printByFile(shown.map(row => ({ ...row, text: cut(row.text) })))
+
+      if (footer !== undefined)
+        console.log(footer)
+    }
 
     return 0
   }

@@ -180,5 +180,7 @@ describe('pkg consumers', () => {
 
     expect(run()).toMatch(/^FOLDER\s+KIND\s+VERSION\s+MANAGER\napp\s+dependencies\s+\^0\.8\.0\s+pnpm\n/)
     expect((JSON.parse(run('--json')) as { dir: string }[]).map(each => each.dir)).toEqual(['app', 'done', 'kay', 'tools/packages/a'])
+    expect(run('--limit', '3')).toEndWith('\n1 more, rerun with --full\n')
+    expect(run('--full')).not.toContain('more')
   })
 })

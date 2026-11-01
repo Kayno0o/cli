@@ -81,6 +81,13 @@ describe('latestNote', () => {
 
 describe('renderBoard', () => {
   const issue = (number: number, body: string): Issue => ({ number, title: `issue ${number}`, body, state: 'open', html_url: '', comments: 0, labels: [{ name: 'kind/chore' }] })
+
+  test('lists at most the limit of each section, counting the rest', () => {
+    const rows = [1, 2, 3].map(number => ({ issue: issue(number, ''), standing: { state: 'available' } as const, comments: [] }))
+
+    expect(renderBoard(rows, Date.now(), 2)).toBe('available (3)\n  #1  issue 1  kind/chore\n  #2  issue 2  kind/chore\n  1 more, rerun with --full')
+    expect(renderBoard(rows, Date.now(), 3)).not.toContain('more')
+  })
   const comment = (body: string, minute: number) => ({ body, created_at: at(minute), user: { login: 'kaynooo' } })
 
   test('shows boxes left on claims, and the latest note under one no live session holds', () => {
