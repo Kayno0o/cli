@@ -5,7 +5,7 @@ import type { ChangelogOptions, ResolvedChangelogOptions } from './types'
 import { $ } from 'bun'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fail, parse, runCli } from '@kaynooo/cli-kit'
+import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
 import { sendDiscordWebhook } from '@kaynooo/utils'
 import { colors } from '@kaynooo/utils/tools/colors'
 import { version } from '../package.json'
@@ -102,7 +102,7 @@ async function release(argv: string[]) {
     return 0
 
   if (parsed.positionals.length)
-    fail(`unexpected argument ${parsed.positionals[0]}`)
+    badUsage(`unexpected argument ${parsed.positionals[0]}`)
 
   const options = await withToken(toOptions(parsed.values))
   let generated: { config: ResolvedChangelogOptions, md: string } | undefined
@@ -201,7 +201,7 @@ async function undo(argv: string[]) {
   const { values: args, positionals } = parsed
 
   if (positionals.length > 1)
-    fail(`unexpected argument ${positionals[1]}`)
+    badUsage(`unexpected argument ${positionals[1]}`)
 
   let tag = positionals[0]
   const options = await withToken(toOptions(args))
