@@ -127,7 +127,7 @@
     },
     "packages/pkg": {
       "name": "@kaynooo/pkg-tools",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "bin": {
         "pkg": "./dist/cli.js",
       },
