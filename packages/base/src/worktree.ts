@@ -1,9 +1,11 @@
-import type { Ran } from '@kaynooo/cli-kit'
+import type { HeldSignals, Ran } from '@kaynooo/cli-kit'
+import type { Subprocess } from 'bun'
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { fail, runCommand } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, runCommand } from '@kaynooo/cli-kit'
 
+const WHITESPACE = /\s/
 const ENV_FILE = /^\.env(?:\..+)?$/
 const DEPENDENCIES = new Set(['node_modules', 'vendor', '.venv'])
 const TRAILING_SLASH = /\/$/
@@ -128,4 +130,75 @@ export async function removeWorktree(root: string, dir: string, links: string[])
   await git(['worktree', 'remove', '--force', dir], root)
   rmSync(dirname(dir), { recursive: true, force: true })
   await git(['worktree', 'prune'], root)
+}
+
+export interface Run {
+  code: number
+  // Both streams joined, only when the run was captured.
+  output: string
+  // False when the command could not be started.
+  started: boolean
+}
+
+// One argument holding spaces is a shell line, `base -- 'bun test a | tail'`.
+export function shellCommand(given: string[]): string[] {
+  const [only] = given
+
+  return given.length === 1 && only !== undefined && WHITESPACE.test(only) ? ['sh', '-c', only] : given
+}
+
+// Runs the command in a folder, inheriting the terminal or capturing both streams, the held signals passed on to it.
+export async function runIn(dir: string, command: string[], signals: HeldSignals, capture = false): Promise<Run> {
+  if (signals.signal !== undefined)
+    return { code: exitCodeOf(null, signals.signal), output: '', started: true }
+
+  let child: Subprocess
+
+  try {
+    child = Bun.spawn(command, { cwd: dir, stdin: 'inherit', stdout: capture ? 'pipe' : 'inherit', stderr: capture ? 'pipe' : 'inherit' })
+  }
+  catch (error) {
+    return { code: 127, output: `cannot run ${command[0]}: ${error instanceof Error ? error.message : String(error)}`, started: false }
+  }
+
+  signals.forward(child)
+
+  const streams = capture ? await Promise.all([new Response(child.stdout as ReadableStream).text(), new Response(child.stderr as ReadableStream).text()]) : []
+
+  await child.exited
+
+  return { code: exitCodeOf(child.exitCode, child.signalCode ?? null), output: streams.join(''), started: true }
+}
+
+export interface WorktreeOptions {
+  root: string
+  prefix: string
+  sha: string
+  ref: string
+  kept: string[]
+  link: boolean
+}
+
+// Runs the callback in the caller's folder of a temporary worktree at the commit, signals held from its creation to its removal.
+export async function inWorktree<T>(options: WorktreeOptions, body: (runDir: string, signals: HeldSignals) => Promise<T>): Promise<T> {
+  const { root, prefix, sha, ref, kept, link } = options
+  let links: string[] = []
+  const signals = holdSignals()
+  const dir = await addWorktree(root, sha)
+
+  try {
+    copyKept(root, dir, kept)
+    links = link ? linkEntries(root, dir, await linkedEntries(root)) : []
+
+    const runDir = join(dir, prefix)
+
+    if (!existsSync(runDir))
+      fail(`${prefix} does not exist at ${ref}`)
+
+    return await body(runDir, signals)
+  }
+  finally {
+    await removeWorktree(root, dir, links)
+    signals.release()
+  }
 }
