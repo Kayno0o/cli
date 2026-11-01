@@ -16,7 +16,7 @@ const OPTIONS = {
 async function main(argv: string[]): Promise<number> {
   // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
-  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true })
+  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, replaces: 'git stash, a test run, then git stash pop', examples: [['base -- bun test tests/api.test.ts', 'the test at HEAD, the working tree changes left out'], ['base --ref main~3 --keep tests/new.test.ts -- bun test tests/new.test.ts', 'a new test against an older commit']] })
 
   const given = bare ? argv : parsed.rest ?? []
 

@@ -23,7 +23,7 @@ function staged({ index, from, path }: Change): string {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS)
+  const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'git status --short and git log --oneline', examples: ['gst', ['gst --log 5', 'with the last five commits']] })
 
   if (parsed.positionals.length > 0)
     fail(`gst takes no paths\n\n${USAGE}`)

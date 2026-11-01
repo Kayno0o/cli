@@ -19,7 +19,7 @@ const OPTIONS = {
   json: jsonOption('[{check, ok, detail, fix?}]'),
 } as const
 
-function hostHere(): Host {
+export function hostHere(): Host {
   const home = homedir()
 
   return {
@@ -27,8 +27,8 @@ function hostHere(): Host {
     globalModules: join(process.env.BUN_INSTALL ?? join(home, '.bun'), 'install', 'global', 'node_modules'),
     bunVersion: Bun.version,
     which: bin => Bun.which(bin),
-    run: async (argv) => {
-      const ran = await runCommand(argv)
+    run: async (argv, env) => {
+      const ran = await runCommand(argv, env === undefined ? {} : { env: { ...process.env, ...env } })
       const of = (stream: 'stdout' | 'stderr') => Buffer.concat(ran.chunks.filter(chunk => chunk.stream === stream).map(chunk => chunk.data)).toString()
 
       return { code: ran.code, stdout: of('stdout'), stderr: of('stderr') }
@@ -50,7 +50,7 @@ function print(results: readonly Result[]): void {
 }
 
 export async function main(args: string[], host: Host = hostHere()): Promise<number> {
-  const { values } = parse(args, USAGE, OPTIONS, { positionals: [] })
+  const { values } = parse(args, USAGE, OPTIONS, { positionals: [], replaces: 'checking each bin\'s version, tea\'s login and the hooks by hand', examples: ['doctor', ['doctor --json', 'the checks for a script']] })
   const results = await runChecks(host)
 
   if (values.json === true)

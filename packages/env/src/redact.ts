@@ -17,7 +17,7 @@ const options = {
 } as const
 
 async function run(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { replaces: 'printing a command\'s secrets into a log or a transcript', examples: [['docker compose config | redact', 'the resolved compose file, secrets masked'], ['git diff --cached | redact --check', 'refuse a commit carrying a secret']] })
 
   const known = parsed.values['no-env'] === true ? undefined : await loadKnown()
 

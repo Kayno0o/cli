@@ -18,7 +18,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/`.
 | [`@kaynooo/gitlab-tools`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
 | [`@kaynooo/guard-tools`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers, in-place edits), each refusal naming the route |
 | [`@kaynooo/code-tools`](packages/code) | `peek`, `todo-scan`, `hotspots` | source read by spans, declarations, usages and outlines in one call; the TODO and issue-reference comments of a repository, those naming a closed issue flagged; the files ranked by complexity times git churn |
-| [`@kaynooo/doctor-tools`](packages/doctor) | `doctor` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix |
+| [`@kaynooo/doctor-tools`](packages/doctor) | `doctor`, `agent-tools` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix; every bin in one line, what it does and what it replaces, read from its own help |
 | [`@kaynooo/cli-kit`](packages/kit) | - | the CLI kit every @kaynooo CLI is built on: argument parsing with `--help`, the command dispatcher, prompts, the progress line, config loading, the shell command parser every guard reads with, and output helpers |
 
 ## Development

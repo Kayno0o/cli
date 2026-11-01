@@ -146,6 +146,8 @@ process.exitCode = await runCli({
   name: 'guard',
   version,
   about: 'the safety rules a Claude Code Bash call is held to, each refusal naming the route',
+  replaces: 'a hook script per rule, each wording its own refusal',
+  examples: [['guard check "git push --force"', 'the rules a command breaks, with their routes'], ['guard path .env', 'whether a file tool may open a path']],
   commands: {
     check: { run: check, summary: 'check a shell command, printing each broken rule with its route' },
     path: { run: async args => Promise.resolve(path(args)), summary: 'check a path a file tool would open' },

@@ -1,7 +1,7 @@
 import type { Example } from '../src'
 import process from 'node:process'
 import { describe, expect, test } from 'bun:test'
-import { applyOutput, badUsage, fail, parse, printHint, runCli, runHint, runMain } from '../src'
+import { applyOutput, badUsage, description, fail, parse, printHint, runCli, runHint, runMain } from '../src'
 import { capture } from '../src/test'
 
 const cli = {
@@ -282,6 +282,10 @@ describe('the help screen', () => {
     finally {
       delete process.env.KIT_HELP
     }
+  })
+
+  test('takes the summary from the line after the synopses when the first names none', () => {
+    expect(description('errs [log]\nerrs -- <command>\n\nPrints one line per error.\nMore.')).toEqual({ synopsis: 'errs [log]', summary: 'prints one line per error', examples: [] })
   })
 })
 

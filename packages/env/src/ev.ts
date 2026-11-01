@@ -12,6 +12,8 @@ process.exitCode = await runCli({
   name: 'ev',
   version,
   about: '.env files listed and edited with secrets masked',
+  replaces: 'cat .env, grep on env files and editing them by hand',
+  examples: ['ev list', ['ev get DATABASE_URL', 'one key, its value masked']],
   commands: {
     list: { run: list, summary: 'every key of the .env* files, secrets masked' },
     get: { run: get, summary: 'one key\'s masked value' },

@@ -115,7 +115,7 @@ async function main(args: string[]): Promise<number> {
   if (args[0] === 'task')
     return waitTask(args.slice(1))
 
-  const parsed = parse(args, USAGE, OPTIONS)
+  const parsed = parse(args, USAGE, OPTIONS, { replaces: 'sleep loops, tail -f and until ! pgrep -f', examples: [['waitfor --file dev.log --until "ready in" --fail error', 'a dev server up, or its first error'], ['waitfor --port 5432 -t 2m', 'Postgres accepting connections']] })
 
   const { values, positionals } = parsed
 

@@ -37,7 +37,7 @@ function limit(text: string | undefined): number {
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[dir]'], examples: ['hotspots', 'hotspots src --since "3 months ago" -n 10'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'hotspots src --since "3 months ago" -n 10'] })
 
   if (positionals.length > 1)
     badUsage('give one folder')

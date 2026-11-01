@@ -8,6 +8,8 @@ process.exitCode = await runCli({
   name: 'pkg',
   version,
   about: 'checks npm packages before they are added, and moves a lib\'s consumers onto a new release',
+  replaces: 'bun add on trust, and a bun info and sleep loop then a bun add per consumer',
+  examples: [['pkg zod', 'the name, the newest version two weeks old, its licence and scripts'], ['pkg bump @kaynooo/cli-kit --dry-run', 'the consumers a release would move']],
   defaultCommand: 'check',
   commands: {
     check: { summary: 'check packages before they are added (`pkg <name>` alone runs it)', run: async args => (await import('./commands/check')).check(args) },

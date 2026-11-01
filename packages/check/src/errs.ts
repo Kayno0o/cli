@@ -63,7 +63,7 @@ export async function errs(args: string[], cwd = process.cwd()): Promise<number>
   // Bun drops a leading `--` before the script sees it, so a first word that is neither an option nor an existing file starts the command.
   const first = args[0]
   const bare = first !== undefined && !first.startsWith('-') && !await Bun.file(first).exists()
-  const parsed = parse(bare ? [] : args, usage, options, { rest: true })
+  const parsed = parse(bare ? [] : args, usage, options, { rest: true, replaces: 'reading raw tsc, eslint or bun test logs', examples: [['errs -- bun run check', 'the type errors of a run'], ['bun test 2>&1 | errs', 'the failed tests from stdin']] })
 
   if (parsed.positionals.length > 1)
     fail(`give one log, or a command after --\n\n${usage}`)

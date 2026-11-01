@@ -16,3 +16,12 @@ doctor --json    # [{check, ok, detail, fix?}]
 | `bun` | Bun satisfies the `engines.bun` range of every installed package | `bun upgrade` |
 
 A registry that does not answer leaves a package passing, with a note. Exit codes: 0 every check passed, 1 one failed, 2 a usage error.
+
+## agent-tools list
+
+```sh
+agent-tools list         # every bin in one line: what it does; instead of what
+agent-tools list --json  # [{bin, package, installed, synopsis?, summary?, replaces?, examples?}]
+```
+
+Each line is read from the bin's own `--help`, run with `KIT_HELP=json` (see the kit README), so it cannot drift from the usage and follows the installed version. A bin installed from before that prints its text help, whose first line is kept; one not installed is listed with the command installing it. The repo's `tests/describe.test.ts` holds every bin to a summary, a `replaces` and two examples naming it.

@@ -19,6 +19,8 @@ process.exitCode = await runCli({
   name: 'ft',
   version,
   about: 'Forgejo tools over tea, run from a repository whose origin is on Forgejo',
+  replaces: 'tea api calls piped through jq, and sleep loops waiting on CI',
+  examples: [['ft ci', 'wait for the runs of origin\'s tip, failures printed'], ['ft issue 12 -c', 'an issue with its boxes numbered and its comments']],
   commands: {
     runs: { run: runs, summary: 'recent runs with workflow, ref, duration and age' },
     ci: { run: ci, summary: 'wait for the runs covering a commit, printing what failed' },

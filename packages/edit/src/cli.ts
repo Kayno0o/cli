@@ -101,7 +101,7 @@ function writable(path: string): boolean {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS)
+  const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
 
   const { values, positionals } = parsed
   const files = [...new Set(positionals)]

@@ -115,7 +115,7 @@ function regex(source: string): RegExp {
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[target...]'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[target...]'], replaces: 'sed -n N,Mp, grep -n chains and whole-file reads', examples: [['peek src/a.ts:120-140 src/b.ts:1-40', 'two spans in one call'], ['peek --def parseArgs src', 'a whole declaration']] })
   const modes = [values.def, values.refs, values.outline, values.around].filter(mode => mode !== undefined && mode !== false)
   const json = values.json === true
 

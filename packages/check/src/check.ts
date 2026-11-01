@@ -37,7 +37,7 @@ export function pick<T extends { name: string }>(steps: T[], only: string | unde
 
 // Runs the repo's steps in order and prints one line each, with what failed under a failing one; returns 0 only when every step passed.
 export async function check(args: string[], cwd = process.cwd()): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { replaces: 'bun run check && bun run lint && bun run test, read through tail', examples: ['check', ['check --only lint,test', 'two of the steps']] })
 
   const found = await discover(cwd)
 

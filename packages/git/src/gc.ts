@@ -51,7 +51,7 @@ function fileLine(line: string): string {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS, { rest: true })
+  const parsed = parse(argv, USAGE, OPTIONS, { rest: true, replaces: 'git add, git status and git commit chained', examples: ['gc "fix(api): retry a timed-out fetch" -- src/api.ts', ['gc "feat(ui): a dark theme" -m "The toggle sits in the header." --ticket "#12 - Dark theme" -- src/theme.ts src/header.ts', 'a body line and a ticket']] })
 
   const { values, positionals, rest = [] } = parsed
   const paths = [...new Set(rest)]

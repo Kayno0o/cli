@@ -60,6 +60,7 @@
       "version": "0.0.0",
       "bin": {
         "doctor": "./dist/cli.js",
+        "agent-tools": "./dist/agent-tools.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",

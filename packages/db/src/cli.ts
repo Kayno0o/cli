@@ -10,6 +10,8 @@ process.exitCode = await runCli({
   name: 'db',
   version,
   about: 'read-only SQL against Postgres, credentials never shown',
+  replaces: 'psql with the connection string on the command line',
+  examples: ['db "select count(*) from users"', ['db describe users', 'the columns of a table']],
   commands: {
     query: { run: query, summary: 'run one read-only statement (the default: db "<sql>"), a write is printed instead' },
     tables: { run: tables, summary: 'list tables and views with an estimated row count' },

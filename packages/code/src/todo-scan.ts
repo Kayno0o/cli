@@ -29,7 +29,7 @@ function printLines(lines: string[], footer: string | undefined): void {
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[path...]'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[path...]'], replaces: 'grep -rn TODO, then opening each issue it names', examples: ['todo-scan src', ['todo-scan --stale', 'only the comments naming a closed issue']] })
   const cwd = process.cwd()
   const limit = limitOf(values, LIST_LIMIT)
   const marks: Mark[] = []

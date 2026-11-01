@@ -15,7 +15,8 @@ export interface Host {
   globalModules: string
   bunVersion: string
   which: (bin: string) => string | null
-  run: (argv: string[]) => Promise<{ code: number, stdout: string, stderr: string }>
+  // `env` adds to the environment the command inherits.
+  run: (argv: string[], env?: Record<string, string>) => Promise<{ code: number, stdout: string, stderr: string }>
 }
 
 // Every agent-tools package and the bins it installs; the repo's tests check it against packages/*.
@@ -24,7 +25,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/check-tools': ['check', 'fix', 'errs'],
   '@kaynooo/code-tools': ['peek', 'todo-scan', 'hotspots'],
   '@kaynooo/db-tools': ['db'],
-  '@kaynooo/doctor-tools': ['doctor'],
+  '@kaynooo/doctor-tools': ['doctor', 'agent-tools'],
   '@kaynooo/edit-tools': ['sub'],
   '@kaynooo/env-tools': ['ev', 'redact'],
   '@kaynooo/forgejo-tools': ['ft'],
@@ -44,7 +45,7 @@ const LEADING_TILDE = /^~(?=\/|$)/
 
 interface Manifest { version?: string, engines?: { bun?: string } }
 
-function readJsonText<T>(text: string): T | undefined {
+export function readJsonText<T>(text: string): T | undefined {
   try {
     return JSON.parse(text) as T
   }
@@ -57,7 +58,7 @@ function readJson<T>(path: string): T | undefined {
   return existsSync(path) ? readJsonText<T>(readFileSync(path, 'utf8')) : undefined
 }
 
-function firstLine(text: string): string {
+export function firstLine(text: string): string {
   const trimmed = text.trim()
   const end = trimmed.indexOf('\n')
 

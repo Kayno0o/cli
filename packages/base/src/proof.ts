@@ -39,7 +39,7 @@ function describe(outcome: Outcome, at: string): { message: string, side: 'befor
 async function main(argv: string[]): Promise<number> {
   // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
-  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true })
+  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, replaces: 'running a test, stashing the change and running it again', examples: [['proof --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the new test fails at HEAD and passes now'], ['proof --ref v1.2.0 --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the same against a release']] })
 
   const given = bare ? argv : parsed.rest ?? []
 

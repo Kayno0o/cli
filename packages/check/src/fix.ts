@@ -134,7 +134,7 @@ function printChanged(changed: string[]): void {
 
 // Runs the folder's fixers in order, one line each with what failed under a failing one, then lists the files they changed; returns 0 only when every fixer ran.
 export async function fix(args: string[], cwd = process.cwd()): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { replaces: 'running each fixer and formatter by hand', examples: ['fix', ['fix --list', 'the fixers it would run']] })
 
   if (process.env[RUNNING] !== undefined)
     fail('a fixer called fix again, which would recurse: give its script another command')
