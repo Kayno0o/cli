@@ -1,14 +1,18 @@
-import type { Options } from './args'
+import type { Example, Options } from './args'
 import type { Colors } from './style'
 import process from 'node:process'
-import { Completing, completion, Exit, HelpShown, optionRows, UsageError, usageLine } from './args'
+import { applyOutput, Completing, completion, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, UsageError, usageLine } from './args'
 import { paint, takesControlCodes } from './style'
 import { distance } from './text'
 
-export type Command = { summary: string } & (
+export type Command = {
+  summary: string
+  // The heading the command is listed under in the help, after those with none.
+  group?: string
+} & (
   | { run: (args: string[]) => Promise<number> }
   // A group of subcommands dispatched the same way, with its own help.
-  | { commands: Record<string, Command>, aliases?: Record<string, string> }
+  | { commands: Record<string, Command>, aliases?: Record<string, string>, examples?: Example[] }
 )
 
 export interface Cli {
@@ -23,6 +27,50 @@ export interface Cli {
   defaultCommand?: string
   // Rewrites an error's message and cause before they print, for a CLI whose errors may quote what a log must not keep.
   redact?: (text: string) => string
+  // Command lines shown under `Examples:` in `<cli> --help`; a command's own go to `parse`.
+  examples?: Example[]
+}
+
+const LEVEL_OPTIONS = {
+  ...OUTPUT_OPTIONS,
+  help: { type: 'boolean', short: 'h', description: 'show this help' },
+} as const satisfies Options
+const TOP_OPTIONS = { ...LEVEL_OPTIONS, version: { type: 'boolean', short: 'v', description: 'print the version' } } as const satisfies Options
+
+// The rows under `Commands:`, then a heading per group in the order first met, names aligned across them all.
+function commandRows(commands: Record<string, Command>, colors: Colors): string[] {
+  const width = Math.max(...Object.keys(commands).map(name => name.length))
+  const groups = new Map<string, string[]>([['Commands:', []]])
+
+  for (const [name, { summary, group }] of Object.entries(commands)) {
+    const heading = group === undefined ? 'Commands:' : `${group}:`
+    const rows = groups.get(heading) ?? []
+
+    rows.push(`  ${colors.cyan(name.padEnd(width))}  ${colors.dim(summary)}`)
+    groups.set(heading, rows)
+  }
+
+  return [...groups].filter(([, rows]) => rows.length > 0).flatMap(([heading, rows], index) => [...index === 0 ? [] : [''], colors.bold(heading), ...rows])
+}
+
+// The output flags typed before the command name, applied and dropped: `ft --plain runs`.
+function takeOutputFlags(argv: string[]): string[] {
+  let index = 0
+
+  for (; index < argv.length; index++) {
+    const word = argv[index]!
+
+    if (word === '--plain')
+      applyOutput(undefined, true)
+    else if (word.startsWith('--color='))
+      applyOutput(word.slice('--color='.length), undefined)
+    else if (word === '--color' && argv[index + 1] !== undefined)
+      applyOutput(argv[++index], undefined)
+    else
+      break
+  }
+
+  return argv.slice(index)
 }
 
 // A command the name starts, else one within two edits (one for a name under four letters).
@@ -44,24 +92,29 @@ interface Level {
   commands: Record<string, Command>
   aliases: Record<string, string> | undefined
   defaultCommand: string | undefined
+  examples: Example[] | undefined
 }
 
 // The level's help; a default command's options follow the commands, as they apply with no command named.
-async function help({ path, header, commands, defaultCommand }: Level, stream: { isTTY?: boolean }): Promise<string> {
+async function help({ path, header, commands, defaultCommand, examples }: Level, stream: { isTTY?: boolean }): Promise<string> {
   const colors = paint(stream)
-  const width = Math.max(...Object.keys(commands).map(name => name.length))
   const prefix = path.join(' ')
   const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]
   const options = fallback !== undefined && 'run' in fallback ? await optionsOf(fallback.run) : undefined
+  // The default command's own run lists the output flags again, so they show once, under the level's.
+  const own = Object.entries(options ?? {}).filter(([name]) => !(name in TOP_OPTIONS))
 
   return [
     header(colors),
     '',
     usageLine(`${prefix} ${defaultCommand === undefined ? colors.cyan('<command>') : `[${colors.cyan('<command>')}]`} [options]`, colors),
     '',
-    colors.bold('Commands:'),
-    ...Object.entries(commands).map(([name, { summary }]) => `  ${colors.cyan(name.padEnd(width))}  ${colors.dim(summary)}`),
-    ...options === undefined || Object.keys(options).length === 0 ? [] : ['', `${colors.bold(`Options of ${defaultCommand}:`)} ${colors.dim('the command run when none is named')}`, ...optionRows(options, colors)],
+    ...commandRows(commands, colors),
+    ...own.length === 0 ? [] : ['', `${colors.bold(`Options of ${defaultCommand}:`)} ${colors.dim('the command run when none is named')}`, ...optionRows(Object.fromEntries(own), colors)],
+    '',
+    colors.bold('Options:'),
+    ...optionRows(path.length === 1 ? TOP_OPTIONS : LEVEL_OPTIONS, colors),
+    ...exampleRows(examples ?? [], colors),
     '',
     `${colors.dim('Run')} ${prefix} ${colors.cyan('<command>')} --help ${colors.dim('for its options.')}`,
   ].join('\n')
@@ -92,9 +145,18 @@ function reportThrown(prefix: string, error: unknown, redact: (text: string) => 
   return error instanceof Exit ? error.code : 1
 }
 
-async function dispatch(level: Level, argv: string[], { version, redact }: { version: string, redact: Cli['redact'] | undefined }): Promise<number> {
-  const [name, ...args] = argv
+async function dispatch(level: Level, typed: string[], { version, redact }: { version: string, redact: Cli['redact'] | undefined }): Promise<number> {
   const prefix = level.path.join(' ')
+  let argv: string[]
+
+  try {
+    argv = takeOutputFlags(typed)
+  }
+  catch (error) {
+    return reportThrown(prefix, error)
+  }
+
+  const [name, ...args] = argv
 
   if (name === undefined && level.path.length > 1) {
     console.error(await help(level, process.stderr))
@@ -133,7 +195,7 @@ async function dispatch(level: Level, argv: string[], { version, redact }: { ver
   if ('commands' in command) {
     const { summary } = command
 
-    return dispatch({ path: [...level.path, name], header: colors => `${colors.bold(`${prefix} ${name}`)}  ${summary}`, commands: command.commands, aliases: command.aliases, defaultCommand: undefined }, rest, { version, redact })
+    return dispatch({ path: [...level.path, name], header: colors => `${colors.bold(`${prefix} ${name}`)}  ${summary}`, commands: command.commands, aliases: command.aliases, defaultCommand: undefined, examples: command.examples }, rest, { version, redact })
   }
 
   try {
@@ -204,7 +266,7 @@ export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<nu
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(cli.commands, cli.aliases, cli.defaultCommand, argv.slice(1)))
 
-  return dispatch({ path: [cli.name], header: colors => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${cli.about}`, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand }, argv, { version: cli.version, redact: cli.redact })
+  return dispatch({ path: [cli.name], header: colors => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${cli.about}`, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand, examples: cli.examples }, argv, { version: cli.version, redact: cli.redact })
 }
 
 export interface Main {

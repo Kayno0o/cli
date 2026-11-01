@@ -1,5 +1,7 @@
+import type { Example } from '../src'
+import process from 'node:process'
 import { describe, expect, test } from 'bun:test'
-import { badUsage, fail, parse, runCli, runMain } from '../src'
+import { applyOutput, badUsage, fail, parse, runCli, runMain } from '../src'
 import { capture } from '../src/test'
 
 const cli = {
@@ -37,7 +39,7 @@ describe('runCli', () => {
 
   test('prints the version and the help', async () => {
     expect((await capture(async () => runCli(cli, ['-v']))).out).toBe('1.2.3\n')
-    expect((await capture(async () => runCli(cli, []))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo <command> [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n\nRun demo <command> --help for its options.\n')
+    expect((await capture(async () => runCli(cli, []))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo <command> [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n\nOptions:\n      --color <value>  auto (on a terminal alone), always or never\n      --plain          plain text, no colour or spinner: --color never\n  -h, --help           show this help\n  -v, --version        print the version\n\nRun demo <command> --help for its options.\n')
   })
 
   test('names the command an Exit came from and uses its code', async () => {
@@ -71,7 +73,7 @@ describe('runCli', () => {
       return 0
     } } }, defaultCommand: 'port' }
 
-    expect((await capture(async () => runCli(withDefault, ['--help']))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo [<command>] [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n  port  parses first\n\nOptions of port: the command run when none is named\n      --max <value>  highest port\n  -h, --help         show this help\n\nRun demo <command> --help for its options.\n')
+    expect((await capture(async () => runCli(withDefault, ['--help']))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo [<command>] [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n  port  parses first\n\nOptions of port: the command run when none is named\n      --max <value>  highest port\n\nOptions:\n      --color <value>  auto (on a terminal alone), always or never\n      --plain          plain text, no colour or spinner: --color never\n  -h, --help           show this help\n  -v, --version        print the version\n\nRun demo <command> --help for its options.\n')
     expect(ran).toEqual([])
   })
 
@@ -83,7 +85,7 @@ describe('runCli', () => {
       return 3
     } } } }
 
-    expect(await capture(async () => runCli(helped, ['port', '--help']))).toEqual({ result: 0, out: 'Usage: demo port\n\nOptions:\n  -h, --help  show this help\n', err: '' })
+    expect(await capture(async () => runCli(helped, ['port', '--help']))).toEqual({ result: 0, out: 'Usage: demo port\n\nOptions:\n      --color <value>  auto (on a terminal alone), always or never\n      --plain          plain text, no colour or spinner: --color never\n  -h, --help           show this help\n', err: '' })
   })
 
   test('names an error other than an Exit by its class, prints its cause\'s message under it, and redacts both', async () => {
@@ -158,7 +160,7 @@ describe('__complete', () => {
   })
 
   test('lists a command\'s options without running it, and asks for paths otherwise', async () => {
-    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '--']))).out).toBe('--max\thighest port\n--help\tshow this help\n')
+    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '--']))).out).toBe('--max\thighest port\n--color\tauto (on a terminal alone), always or never\n--plain\tplain text, no colour or spinner: --color never\n--help\tshow this help\n')
     expect((await capture(async () => runCli(parsing, ['__complete', 'port', '']))).out).toBe('__files__\n')
     expect(ran).toEqual([])
     expect((await capture(async () => runCli(parsing, ['port']))).result).toBe(0)
@@ -172,6 +174,77 @@ describe('__complete', () => {
       return 0
     }
 
-    expect((await capture(async () => runMain({ name: 'x', version: '1', run }, ['__complete', '-']))).out).toBe('--only\tsome\n--help\tshow this help\n')
+    expect((await capture(async () => runMain({ name: 'x', version: '1', run }, ['__complete', '-']))).out).toBe('--only\tsome\n--color\tauto (on a terminal alone), always or never\n--plain\tplain text, no colour or spinner: --color never\n--help\tshow this help\n')
+  })
+})
+
+// Runs `body` with NO_COLOR and FORCE_COLOR put back after, as the output flags set them on process.env.
+async function keepingColorEnv<T>(body: () => Promise<T>): Promise<T> {
+  const saved = { NO_COLOR: process.env.NO_COLOR, FORCE_COLOR: process.env.FORCE_COLOR }
+
+  try {
+    return await body()
+  }
+  finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined)
+        Reflect.deleteProperty(process.env, key)
+      else
+        process.env[key] = value
+    }
+  }
+}
+
+describe('output flags', () => {
+  test('--plain and --color set what the colours read, each choice dropping the other', () => {
+    const env: Record<string, string | undefined> = { FORCE_COLOR: '1' }
+
+    applyOutput(undefined, true, env)
+    expect(env).toEqual({ NO_COLOR: '1' })
+    applyOutput('always', undefined, env)
+    expect(env).toEqual({ FORCE_COLOR: '1' })
+    applyOutput('auto', undefined, env)
+    expect(env).toEqual({ FORCE_COLOR: '1' })
+    expect(() => applyOutput('sometimes', undefined, {})).toThrow('--color takes auto, always or never, not sometimes')
+  })
+
+  test('are taken before the command name and by every command\'s parse, a command\'s own --plain left to it', async () => {
+    await keepingColorEnv(async () => {
+      expect(await capture(async () => runCli(cli, ['--plain', 'echo', 'hi']))).toEqual({ result: 0, out: 'hi\n', err: '' })
+      expect(process.env.NO_COLOR).toBe('1')
+
+      parse(['--color=always'], 'u', {})
+      expect([process.env.FORCE_COLOR, process.env.NO_COLOR]).toEqual(['1', undefined])
+      expect(parse(['--plain'], 'u', { plain: { type: 'boolean', description: 'its own' } }).values.plain).toBe(true)
+      expect(process.env.NO_COLOR).toBeUndefined()
+
+      const refused = await capture(async () => runCli(cli, ['--color', 'sometimes', 'echo']))
+
+      expect(refused.result).toBe(2)
+      expect(refused.err).toContain('--color takes auto, always or never, not sometimes')
+    })
+  })
+})
+
+describe('the help screen', () => {
+  const run = async () => 0
+
+  test('lists grouped commands under their heading after the others, and the CLI\'s examples', async () => {
+    const examples: Example[] = ['demo echo hi', ['demo prune', 'as a cron job']]
+    const grouped = { ...cli, commands: { echo: cli.commands.echo, prune: { summary: 'drops old runs', group: 'Admin', run }, boom: cli.commands.boom }, examples }
+    const { out } = await capture(async () => runCli(grouped, ['--help']))
+
+    expect(out).toContain('Commands:\n  echo   prints its arguments\n  boom   fails\n\nAdmin:\n  prune  drops old runs\n')
+    expect(out).toContain('\n\nExamples:\n  demo echo hi\n  demo prune  # as a cron job\n\nRun demo')
+  })
+
+  test('shows a command\'s examples under its options', async () => {
+    const example = async (args: string[]) => {
+      parse(args, 'demo', {}, { examples: ['demo a'] })
+
+      return 0
+    }
+
+    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: example }, ['--help']))).out).toEndWith('show this help\n\nExamples:\n  demo a\n')
   })
 })

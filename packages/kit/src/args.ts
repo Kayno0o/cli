@@ -56,8 +56,16 @@ export function usageLine(usage: string, colors = paint(process.stdout)): string
   return `${colors.bold('Usage:')} ${usage.replace(USAGE_PREFIX, '').replaceAll(OPTIONAL, part => colors.dim(part))}`
 }
 
-export function helpText(usage: string, options: Options, colors = paint(process.stdout)): string {
-  return [usageLine(usage, colors), '', colors.bold('Options:'), ...optionRows(options, colors)].join('\n')
+export function helpText(usage: string, options: Options, colors = paint(process.stdout), examples: Example[] = []): string {
+  return [usageLine(usage, colors), '', colors.bold('Options:'), ...optionRows(options, colors), ...exampleRows(examples, colors)].join('\n')
+}
+
+// An `Examples:` section, after a blank line, with a line per example; nothing without one.
+export function exampleRows(examples: Example[], colors = paint(process.stdout)): string[] {
+  if (examples.length === 0)
+    return []
+
+  return ['', colors.bold('Examples:'), ...examples.map(example => typeof example === 'string' ? `  ${example}` : `  ${example[0]}  ${colors.dim(`# ${example[1]}`)}`)]
 }
 
 // A line per option, `-n, --times <value>  how many`, aligned on the visible text.
@@ -85,11 +93,44 @@ export interface ParseSettings<Names extends readonly string[] = string[]> {
   allowNegative?: boolean
   // The positionals the command takes, by name as its usage writes them: `<key>` or `KEY` required, `[file]` optional, a last one ending in `...` taking any more. One missing or one too many is a usage error, and the positionals come back typed by these names.
   positionals?: Names
+  // Command lines shown under `Examples:` in the help, each with an optional dimmed note: `['ft ci HEAD~1', 'wait for the commit before the last']`.
+  examples?: Example[]
+}
+
+export type Example = string | [line: string, note: string]
+
+// The output flags every command takes, before its own help.
+export const OUTPUT_OPTIONS = {
+  color: { type: 'string', description: 'auto (on a terminal alone), always or never' },
+  plain: { type: 'boolean', description: 'plain text, no colour or spinner: --color never' },
+} as const satisfies Options
+
+// Applies --color or --plain to the environment, where the kit's colours and redrawn lines read it and so do the processes a command starts; `auto` leaves it as it is.
+export function applyOutput(color: string | undefined, plain: boolean | undefined, env: Record<string, string | undefined> = process.env): void {
+  const when = plain === true ? 'never' : color ?? 'auto'
+
+  if (when === 'auto')
+    return
+
+  if (when !== 'always' && when !== 'never')
+    badUsage(`--color takes auto, always or never, not ${when}`)
+
+  // FORCE_COLOR wins over NO_COLOR for the colours, so each choice drops the other.
+  if (when === 'always') {
+    env.FORCE_COLOR = '1'
+    delete env.NO_COLOR
+  }
+  else {
+    env.NO_COLOR = '1'
+    delete env.FORCE_COLOR
+  }
 }
 
 // Parses a command's arguments; on --help, prints its help and throws HelpShown, which ends the command with exit 0.
 export function parse<const T extends Options, const Names extends readonly string[] = string[]>(args: string[], usage: string, options: T, settings: ParseSettings<Names> = {}) {
-  const all = { ...options, help: { type: 'boolean', short: 'h', description: 'show this help' } } as const
+  // A command's own --color or --plain is its own to read.
+  const output = Object.fromEntries(Object.entries(OUTPUT_OPTIONS).filter(([name]) => !(name in options))) as Omit<typeof OUTPUT_OPTIONS, keyof T>
+  const all = { ...options, ...output, help: { type: 'boolean', short: 'h', description: 'show this help' } } as const
 
   if (completion.active)
     throw new Completing(all)
@@ -107,8 +148,12 @@ export function parse<const T extends Options, const Names extends readonly stri
     badUsage(parseError(error))
   }
 
-  if ((parsed.values as { help?: boolean }).help === true) {
-    console.log(helpText(usage, all))
+  const values = parsed.values as { help?: boolean, color?: unknown, plain?: unknown }
+
+  applyOutput('color' in output ? values.color as string | undefined : undefined, 'plain' in output ? values.plain as boolean | undefined : undefined)
+
+  if (values.help === true) {
+    console.log(helpText(usage, all, undefined, settings.examples))
 
     throw new HelpShown()
   }
