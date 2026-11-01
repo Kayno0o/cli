@@ -1,5 +1,7 @@
 import type { Run } from '../runs'
-import { duration, Exit, fail, formatDuration, parse } from '@kaynooo/cli-kit'
+import process from 'node:process'
+import { badge, duration, Exit, fail, formatDuration, paint, parse } from '@kaynooo/cli-kit'
+import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { cwdGone, defaultBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
 
@@ -99,65 +101,76 @@ export async function ci(args: string[]): Promise<number> {
   let moving = started
   let followed = ''
   let runs: Run[] | undefined
+  const { dim } = paint(process.stderr)
+  // The runs followed and their state, on a terminal, under a line for the wait itself.
+  const region = liveRegion(spinner => [
+    `${spinner} CI on ${short} ${dim(formatDuration(Date.now() - started))}`,
+    ...(runs ?? []).map(run => `  ${badge(run.status, process.stderr)} ${run.workflow_id} ${dim(`run ${run.id}`)}`),
+  ])
 
-  for (;;) {
-    if (Date.now() - started > giveUp)
-      fail(`CI has not finished on ${short} in ${formatDuration(giveUp)}${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
+  try {
+    for (;;) {
+      if (Date.now() - started > giveUp)
+        fail(`CI has not finished on ${short} in ${formatDuration(giveUp)}${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
 
-    // Forgejo or origin missing one poll leaves the wait to the next, unless the runs followed are over by then.
-    try {
-      runs = await covering()
-    }
-    catch (error) {
+      // Forgejo or origin missing one poll leaves the wait to the next, unless the runs followed are over by then.
+      try {
+        runs = await covering()
+      }
+      catch (error) {
       // a refusal, such as a commit not on the branch, ends the wait at once
-      if (error instanceof Exit)
-        throw error
+        if (error instanceof Exit)
+          throw error
 
-      if (cwdGone())
-        fail(`the working directory was removed while waiting for CI on ${short}${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
+        if (cwdGone())
+          fail(`the working directory was removed while waiting for CI on ${short}${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
 
-      console.warn(`ft ci: ${error instanceof Error ? error.message : String(error)}, polling again`)
+        console.warn(`ft ci: ${error instanceof Error ? error.message : String(error)}, polling again`)
 
-      const latest = runs === undefined ? undefined : await refreshed(runs)
+        const latest = runs === undefined ? undefined : await refreshed(runs)
 
-      if (latest?.every(run => FINISHED.has(run.status)) === true) {
-        runs = latest
+        if (latest?.every(run => FINISHED.has(run.status)) === true) {
+          runs = latest
 
-        break
+          break
+        }
+
+        await Bun.sleep(POLL)
+
+        continue
+      }
+
+      if (runs !== undefined) {
+        seen = Date.now()
+
+        const ids = runs.map(run => run.id).join(',')
+
+        if (ids !== followed) {
+          followed = ids
+
+          for (const run of runs)
+            console.log(`following ${run.workflow_id} run ${run.id} on ${run.commit_sha.slice(0, 7)}${run.commit_sha === sha ? '' : `, which covers ${short}`}: ${run.html_url}`)
+        }
+
+        if (runs.every(run => FINISHED.has(run.status)))
+          break
+
+        const stall = await stallReason(runs)
+
+        if (stall === undefined)
+          moving = Date.now()
+        else if (stall.certain || Date.now() - moving > STALLED)
+          fail(`runs queued on ${short} are not moving: ${stall.reason}`)
+      }
+      else if (Date.now() - seen > NO_RUN) {
+        fail(`no run covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`)
       }
 
       await Bun.sleep(POLL)
-
-      continue
     }
-
-    if (runs !== undefined) {
-      seen = Date.now()
-
-      const ids = runs.map(run => run.id).join(',')
-
-      if (ids !== followed) {
-        followed = ids
-
-        for (const run of runs)
-          console.log(`following ${run.workflow_id} run ${run.id} on ${run.commit_sha.slice(0, 7)}${run.commit_sha === sha ? '' : `, which covers ${short}`}: ${run.html_url}`)
-      }
-
-      if (runs.every(run => FINISHED.has(run.status)))
-        break
-
-      const stall = await stallReason(runs)
-
-      if (stall === undefined)
-        moving = Date.now()
-      else if (stall.certain || Date.now() - moving > STALLED)
-        fail(`runs queued on ${short} are not moving: ${stall.reason}`)
-    }
-    else if (Date.now() - seen > NO_RUN) {
-      fail(`no run covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`)
-    }
-
-    await Bun.sleep(POLL)
+  }
+  finally {
+    region.stop()
   }
 
   const status = overall(runs)

@@ -2,7 +2,8 @@
 
 import type { Line } from './conditions'
 import process from 'node:process'
-import { duration, fail, formatDuration, parse, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, paint, parse, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { version } from '../package.json'
 import { FileWatch, portProblem, urlCheck } from './conditions'
 
@@ -74,45 +75,62 @@ async function main(args: string[]): Promise<number> {
   const started = Date.now()
   let portLeft = port === undefined ? undefined : 'not checked yet'
   let urlLeft = values.url === undefined ? undefined : 'not checked yet'
+  const { dim } = paint(process.stderr)
+  // What is still awaited, on a terminal: a line per condition with what it last saw.
+  const region = liveRegion((spinner) => {
+    const waited = dim(formatDuration(Date.now() - started))
+    const left = [
+      watch === undefined || watch.done ? undefined : `${watch.path}: ${watch.exists ? 'no --until line yet' : 'does not exist yet'}`,
+      portLeft === undefined ? undefined : `${host}:${port}: ${portLeft}`,
+      urlLeft === undefined ? undefined : `${values.url}: ${urlLeft}`,
+    ]
 
-  for (;;) {
-    if (watch !== undefined) {
-      for (const event of await watch.poll()) {
-        if (event.kind === 'until') {
-          console.log(`${watch.path}:${event.line.number}: ${truncate(event.line.text, WIDTH)}`)
+    return left.filter(line => line !== undefined).map(line => `${spinner} ${line} ${waited}`)
+  })
 
-          continue
+  try {
+    for (;;) {
+      if (watch !== undefined) {
+        for (const event of await watch.poll()) {
+          if (event.kind === 'until') {
+            console.log(`${watch.path}:${event.line.number}: ${truncate(event.line.text, WIDTH)}`)
+
+            continue
+          }
+
+          console.error(`waitfor: ${watch.path}:${event.line.number} matched --fail after ${formatDuration(Date.now() - started)}\n${numbered(event.excerpt, event.line)}`)
+
+          return 1
         }
-
-        console.error(`waitfor: ${watch.path}:${event.line.number} matched --fail after ${formatDuration(Date.now() - started)}\n${numbered(event.excerpt, event.line)}`)
-
-        return 1
       }
+
+      if (port !== undefined && portLeft !== undefined) {
+        portLeft = await portProblem(host, port)
+
+        if (portLeft === undefined)
+          console.log(`${host}:${port} listening after ${formatDuration(Date.now() - started)}`)
+      }
+
+      if (values.url !== undefined && urlLeft !== undefined) {
+        const check = await urlCheck(values.url, Math.max(1, Math.min(URL_TIMEOUT, started + timeout - Date.now())))
+
+        urlLeft = 'problem' in check ? check.problem : undefined
+
+        if ('status' in check)
+          console.log(`${values.url} answered ${check.status} after ${formatDuration(Date.now() - started)}`)
+      }
+
+      if ((watch?.done ?? true) && portLeft === undefined && urlLeft === undefined)
+        return 0
+
+      if (Date.now() - started >= timeout && !(watch?.failing ?? false))
+        break
+
+      await Bun.sleep(POLL)
     }
-
-    if (port !== undefined && portLeft !== undefined) {
-      portLeft = await portProblem(host, port)
-
-      if (portLeft === undefined)
-        console.log(`${host}:${port} listening after ${formatDuration(Date.now() - started)}`)
-    }
-
-    if (values.url !== undefined && urlLeft !== undefined) {
-      const check = await urlCheck(values.url, Math.max(1, Math.min(URL_TIMEOUT, started + timeout - Date.now())))
-
-      urlLeft = 'problem' in check ? check.problem : undefined
-
-      if ('status' in check)
-        console.log(`${values.url} answered ${check.status} after ${formatDuration(Date.now() - started)}`)
-    }
-
-    if ((watch?.done ?? true) && portLeft === undefined && urlLeft === undefined)
-      return 0
-
-    if (Date.now() - started >= timeout && !(watch?.failing ?? false))
-      break
-
-    await Bun.sleep(POLL)
+  }
+  finally {
+    region.stop()
   }
 
   const missing: string[] = []

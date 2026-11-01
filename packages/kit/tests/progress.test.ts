@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'bun:test'
-import { progressLine, progressText, task } from '../src/progress'
+import { liveRegion, progressLine, progressText, task, taskList } from '../src/progress'
 import { takesControlCodes } from '../src/style'
 import { stripAnsi } from '../src/text'
 
@@ -230,5 +230,75 @@ describe('task', () => {
 
     expect(written).toHaveLength(1)
     expect(written[0]).toMatch(/^ok: bundling \d+\.\ds\n$/)
+  })
+})
+
+const LINE_UP = '\x1B[1A\x1B[2K'
+
+describe('the live region', () => {
+  it('redraws its lines in place, clearing as many as it drew, each cut to the width with its styles ended', () => {
+    const { written, stream } = terminal(11)
+    let lines = ['one', `\x1B[36m${'long '.repeat(4)}\x1B[39m`, 'three']
+    const region = liveRegion(() => lines, stream, {})
+
+    region.redraw()
+    lines = ['four']
+    region.redraw()
+    region.stop()
+
+    expect(written).toEqual([`${CLEAR_LINE}one\n\x1B[36mlong long \x1B[0m\nthree`, `${CLEAR_LINE}${LINE_UP}${LINE_UP}four`, CLEAR_LINE])
+  })
+
+  it('keeps to the terminal\'s height, and prints above itself', () => {
+    const { written, stream } = terminal()
+    const region = liveRegion(() => ['a', 'b', 'c', 'd'], { ...stream, rows: 3 }, {})
+
+    region.redraw()
+    region.print('kept')
+    region.stop()
+
+    expect(written).toEqual([`${CLEAR_LINE}a\nb`, `${CLEAR_LINE}${LINE_UP}`, 'kept\n', `${CLEAR_LINE}a\nb`, `${CLEAR_LINE}${LINE_UP}`])
+  })
+
+  it('draws nothing off a terminal, where print still prints', () => {
+    const { written, stream } = terminal()
+    const region = liveRegion(() => ['never'], { ...stream, isTTY: false }, {})
+
+    region.redraw()
+    region.print('kept')
+    region.stop()
+
+    expect(written).toEqual(['kept\n'])
+  })
+})
+
+describe('the task list', () => {
+  it('stacks a line per running task, and leaves each one\'s end above those still running', () => {
+    const { written, stream } = terminal()
+    const list = taskList(stream, {})
+    const lint = list.add('lint')
+    const test = list.add('test')
+
+    test.update({ done: 3, total: 6, unit: 'files' })
+    lint.done()
+    test.failed('test: 2 failed')
+
+    const shown = written.map(stripAnsi)
+
+    expect(shown[1]).toMatch(/^\r⠙ lint 0\.0s\n⠙ test 0\.0s$/)
+    expect(shown.find(text => text.startsWith('✓ lint'))).toMatch(/^✓ lint \d\.\ds\n$/)
+    expect(shown.at(-1)).toBe('✗ test: 2 failed\n')
+  })
+
+  it('prints the ends alone off a terminal', () => {
+    const { written, stream } = terminal()
+    const list = taskList({ ...stream, isTTY: false }, {})
+
+    list.add('lint').done()
+    list.add('test').failed()
+
+    expect(written).toHaveLength(2)
+    expect(written[0]).toMatch(/^ok: lint \d\.\ds\n$/)
+    expect(written[1]).toBe('error: test\n')
   })
 })
