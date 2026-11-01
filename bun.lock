@@ -63,7 +63,7 @@
     },
     "packages/ft": {
       "name": "@kaynooo/forgejo-tools",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "bin": {
         "ft": "./dist/cli.js",
       },
