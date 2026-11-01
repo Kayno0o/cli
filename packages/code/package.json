@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/code-tools",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "peek and todo-scan: source read by spans, symbols and outlines in one call, and the TODO and issue-reference comments of a repository, stale ones flagged.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
