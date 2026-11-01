@@ -2,6 +2,7 @@
 export const BINS: Record<string, string> = {
   'check': '`check`: runs the repo\'s check, typecheck, lint and test steps and prints only what failed, each full log saved to a file; validate a change with it rather than chaining the scripts (`--only lint,test`, `--list`).',
   'fix': '`fix`: runs the repo\'s fixers and formatters (its fix, lint:fix and format scripts, just fmt, go fmt, cargo fmt, ruff) and lists the files they changed.',
+  'errs': '`errs [log]`, `errs -- <cmd>`: turns tsc, tsgo, eslint, bun check and bun test output into one `file:line:col: message (rule)` line per error, counting the lines it did not recognise (`--json`); use it instead of reading raw type, lint or test logs.',
   'db': '`db "<sql>"`: one read-only statement against the Postgres in DATABASE_URL (`-e KEY` for another) or, without one, the compose project\'s running Postgres service (`-s <service>`, `-d <database>`), credentials never shown, a write printed for the user to run; `db tables`, `db describe <table>`, `db dbs`.',
   'ev': '`ev`: .env files read and edited with values masked (`ev list`, `ev get KEY`, `ev grep <regex>`, `ev show <rev>:<file>`, `ev set`, `ev diff`, `ev missing`); `ev audit [dir]` finds env files others can read or git tracks, and compose files writing secrets out.',
   'redact': '`redact`: masks secrets in piped output, `<cmd> | redact`.',
