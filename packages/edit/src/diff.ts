@@ -23,7 +23,7 @@ export async function diffTexts(path: string, before: string, after: string): Pr
       child = Bun.spawn(['diff', '-u', '--label', `a/${path}`, '--label', `b/${path}`, join(dir, 'before'), join(dir, 'after')], { stdout: 'pipe', stderr: 'pipe' })
     }
     catch {
-      fail('diff is not installed, which sub needs to show its changes')
+      fail('diff is not installed, which sub needs to show its changes', 1)
     }
 
     const unified = await new Response(child.stdout).text()

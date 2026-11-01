@@ -15,7 +15,9 @@ const checkUsage = `guard check [options] [<command> | -]
 
 Checks a shell command against the rules: remote machines, git (stash, whole-tree add and commit, push, tags), commit messages, SQL writes, env files, package managers and in-place edits (sed -i and replace scripts, pointed at sub).
 Prints each broken rule with the route to take instead and exits 1, prints nothing and exits 0 when the command is clean.
-The command is read from stdin with - or when none is given; a rule may rewrite it instead (the pinned package manager, a noisy run through out), printed as \`runs as: <command>\`.`
+The command is read from stdin with - or when none is given; a rule may rewrite it instead (the pinned package manager, a noisy run through out), printed as \`runs as: <command>\`.
+
+Exits 0 when the command is clean, 1 when a rule is broken, 2 on a usage error.`
 
 const checkOptions = {
   'json': jsonOption('{violations, command, notes, packages} for a hook'),
@@ -26,7 +28,9 @@ const checkOptions = {
 
 const pathUsage = `guard path [--json] <path>...
 
-Checks the paths a file tool would read, edit or write: env files are refused.`
+Checks the paths a file tool would read, edit or write: env files are refused.
+
+Exits 0 when every path is clean, 1 when one is refused, 2 on a usage error.`
 
 const pathOptions = {
   json: jsonOption('{violations} for a hook'),
@@ -36,7 +40,9 @@ const hookUsage = `guard hook <${EVENTS.join('|')}>
 
 Answers a Claude Code hook: reads the event JSON on stdin and prints the reply JSON, nothing when the call goes ahead untouched.
 pre-tool-use refuses a Bash call breaking a rule, an install pkg refuses, and a Read, Edit or Write of an env file; user-prompt-submit remembers whether the prompt asked for a push; session-start lists the installed agent-tools bins.
-A failure exits 1, which Claude Code reports without blocking the call.`
+A failure exits 1, which Claude Code reports without blocking the call.
+
+Exits 0 when it answered, 1 on a failure or an unknown event (never 2, which would block the call).`
 
 function readText(path: string): string | null {
   try {

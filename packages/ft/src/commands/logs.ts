@@ -7,7 +7,9 @@ import { jobLog, jobsOf, runById } from '../runs'
 const usage = `ft logs <run id>
 
 Prints what the failed jobs of a run say went wrong: each failed bun test's output and the end of each failed step.
-With no failed job it prints every job's last lines; --full prints whole logs.`
+With no failed job it prints every job's last lines; --full prints whole logs.
+
+Exits 0 when it printed the logs, 1 when Forgejo cannot be read, 2 on a usage error or a job the run lacks.`
 
 const options = {
   job: { type: 'string', short: 'j', description: 'only this job, by name' },

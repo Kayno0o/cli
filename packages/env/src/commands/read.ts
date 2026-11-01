@@ -6,11 +6,15 @@ import { maskValue } from '../mask'
 
 const listUsage = `ev list [file]
 
-Prints every key of the folder's .env* files, or of one file, with secret values masked: a few leading characters and the length under a key named like TOKEN, SECRET, PASSWORD, KEY, PRIVATE or DSN, and the password of any URL.`
+Prints every key of the folder's .env* files, or of one file, with secret values masked: a few leading characters and the length under a key named like TOKEN, SECRET, PASSWORD, KEY, PRIVATE or DSN, and the password of any URL.
+
+Exits 0 when it printed them, 1 when there is no .env* file, 2 on a usage error.`
 
 const getUsage = `ev get KEY [file]
 
-Prints the masked value of one key, from every .env* file that sets it or from one file.`
+Prints the masked value of one key, from every .env* file that sets it or from one file.
+
+Exits 0 when the key is set, 1 when it is not set anywhere, 2 on a usage error.`
 
 function display(key: string, value: string): string {
   return maskValue(key, value).replaceAll('\n', '\\n').replaceAll('\r', '\\r')
@@ -66,11 +70,15 @@ export async function get(args: string[]): Promise<number> {
 
 const grepUsage = `ev grep [-i] <regex> [file...]
 
-Prints the keys matching the regular expression, from the folder's .env* files or the files given, with their values masked as ev list does. The regex is matched against the key only, never the value: \`ev grep '^DATABASE_'\` instead of \`grep ^DATABASE_ .env\`.`
+Prints the keys matching the regular expression, from the folder's .env* files or the files given, with their values masked as ev list does. The regex is matched against the key only, never the value: \`ev grep '^DATABASE_'\` instead of \`grep ^DATABASE_ .env\`.
+
+Exits 0 when a key matches, 1 when none does, 2 on a usage error.`
 
 const showUsage = `ev show <rev>:<file>
 
-Prints every key of an env file as a git revision holds it, values masked as ev list does: \`ev show HEAD~1:api/.env\` instead of \`git show HEAD~1:api/.env\`.`
+Prints every key of an env file as a git revision holds it, values masked as ev list does: \`ev show HEAD~1:api/.env\` instead of \`git show HEAD~1:api/.env\`.
+
+Exits 0 when it printed them, 1 when git cannot show the file, 2 on a usage error.`
 
 const REVISION = /^([^:]+):(.+)$/
 

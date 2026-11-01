@@ -3,6 +3,7 @@ import type { BumpSettings } from '../src/commands/bump'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Exit } from '@kaynooo/cli-kit'
 import { capture } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { bumpConsumers, servedVersion } from '../src/commands/bump'
@@ -83,10 +84,11 @@ describe('servedVersion', () => {
         return await servedVersion(NAME, '0.9.0', settings({ fetcher: registry(['0.8.0']).fetcher, timeout: 50 }))
       }
       catch (error) {
-        return error instanceof Error ? error.message : String(error)
+        return error instanceof Exit ? `${error.code}: ${error.message}` : String(error)
       }
     })
 
+    expect(result).toContain(`2: `)
     expect(result).toContain(`does not serve ${NAME}@0.9.0 after`)
   })
 })

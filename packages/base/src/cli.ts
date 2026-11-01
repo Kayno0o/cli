@@ -9,7 +9,7 @@ import { exitCodeOf, fail, holdSignals, parse, runMain } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { addWorktree, checkout, copyKept, keptPaths, linkedEntries, linkEntries, removeWorktree, resolveRef, runsInContainer } from './worktree'
 
-const USAGE = 'base [--ref <rev>] [--keep <path>...] [--no-link] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, the working tree untouched, exiting with its code'
+const USAGE = 'base [--ref <rev>] [--keep <path>...] [--no-link] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, the working tree untouched, exiting with its code\n\nExits with the code of the command, 127 when it cannot be started, 2 on a usage error, an unknown ref or a refused command.'
 
 const OPTIONS = {
   'ref': { type: 'string', short: 'r', description: 'the commit to run at (default HEAD)' },

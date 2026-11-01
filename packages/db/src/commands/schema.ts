@@ -44,15 +44,15 @@ async function show(args: string[], usage: string, work: (positionals: string[])
 }
 
 export async function tables(args: string[]): Promise<number> {
-  return show(args, 'db tables\n\nLists the tables, views and materialized views outside the system schemas, with an estimated row count.', () => ({ sql: TABLES, params: [] }))
+  return show(args, 'db tables\n\nLists the tables, views and materialized views outside the system schemas, with an estimated row count.\n\nExits 0 when it listed them, 1 when the database refused or was unreachable, 2 on a usage error.', () => ({ sql: TABLES, params: [] }))
 }
 
 export async function databases(args: string[]): Promise<number> {
-  return show(args, 'db dbs\n\nLists the databases the connection may open, with their size, marking the one it reads, so --database can pick another.', () => ({ sql: DATABASES, params: [] }))
+  return show(args, 'db dbs\n\nLists the databases the connection may open, with their size, marking the one it reads, so --database can pick another.\n\nExits 0 when it listed them, 1 when the database refused or was unreachable, 2 on a usage error.', () => ({ sql: DATABASES, params: [] }))
 }
 
 export async function describe(args: string[]): Promise<number> {
-  return show(args, 'db describe <table>\n\nLists a table\'s columns with type, nullability, default and primary key. Takes `schema.table` to tell apart tables of the same name.', ([target, ...extra]) => {
+  return show(args, 'db describe <table>\n\nLists a table\'s columns with type, nullability, default and primary key. Takes `schema.table` to tell apart tables of the same name.\n\nExits 0 when it listed them, 1 when the database refused or was unreachable, 2 on a usage error.', ([target, ...extra]) => {
     if (target === undefined || extra.length > 0)
       fail('db describe takes one table name')
 

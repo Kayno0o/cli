@@ -5,7 +5,7 @@ import { fail, parse, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { run } from './run'
 
-const USAGE = 'out [-n <lines>] -- <command> [args...]: runs the command and shortens its output when it is long, exiting with its code'
+const USAGE = 'out [-n <lines>] -- <command> [args...]: runs the command and shortens its output when it is long, exiting with its code\n\nExits 0 when the command does, with its own code otherwise, 127 when it cannot be started, 2 on a usage error.'
 
 async function main(argv: string[]): Promise<number> {
   // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.

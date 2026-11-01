@@ -8,13 +8,17 @@ const addUsage = `ft plan add <plan> <n>... [--section "Bugs:"]
 
 Lists each issue <n> as \`- [ ] #<n> <title>\` in the checklist of issue <plan>, skipping those already listed.
 Lines go under --section, created at the end of the body when missing, or else after the checklist's last box.
-The body is read again just before it is written, so an edit made meanwhile is kept.`
+The body is read again just before it is written, so an edit made meanwhile is kept.
+
+Exits 0 when it listed the issues, 1 when Forgejo refuses, 2 on a usage error.`
 
 const carryUsage = `ft plan carry <from> <to> [--section "Carried from 1.71.0:"]
 
 Copies the unticked \`#<n>\` lines of issue <from> into issue <to>, skipping those <to> already lists.
 Lines go under --section, created at the end of the body when missing, or else after the checklist's last box.
-The body is read again just before it is written, so an edit made meanwhile is kept.`
+The body is read again just before it is written, so an edit made meanwhile is kept.
+
+Exits 0 when it copied the lines, 1 when Forgejo refuses, 2 on a usage error.`
 
 const options = {
   section: { type: 'string', short: 's', description: 'the heading the lines go under, e.g. "Bugs:"' },

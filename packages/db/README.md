@@ -28,11 +28,11 @@ Options: `-n <rows>` caps the rows shown (100) and says how many were left out, 
 
 - The statement runs after `SET LOCAL statement_timeout = '30s'` in `BEGIN READ ONLY`, and the transaction is rolled back, so Postgres itself refuses a write the checks below miss.
 - Before running, the SQL is tokenized (comments, strings, quoted identifiers and dollar-quoted bodies are ignored). It must start with `SELECT`, `WITH`, `VALUES`, `TABLE`, `SHOW` or `EXPLAIN`, and must not use `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `INTO`, `SET`, `FOR UPDATE` and the like anywhere (so a write hidden in a CTE is caught), nor functions with side effects (`nextval`, `setval`, `set_config`, `pg_terminate_backend`, `lo_*`, `dblink`, ...).
-- Such a statement is printed as a `sql` block with the reasons and `db` exits 3 without connecting. Several statements in one string are refused unless each reads, and then run one at a time.
+- Such a statement is printed as a `sql` block with the reasons and `db` exits 1 without connecting. Several statements in one string are refused unless each reads, and then run one at a time.
 - Columns named like emails, phones, tokens, secrets, passwords or hashes show `***` unless `--raw`. `NULL` stays `NULL`.
 - Every message, errors included, is scrubbed of the URL, the password (raw and decoded) and any `scheme://user:password@`.
 
-Exit codes: 0 done, 1 the database refused or was unreachable, 2 bad usage, 3 the statement was not run because it would write.
+Exit codes: 0 done, 1 the database refused or was unreachable or the statement was not run because it would write, 2 bad usage.
 
 ## Other databases
 

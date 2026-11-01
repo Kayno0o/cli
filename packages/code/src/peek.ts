@@ -15,8 +15,10 @@ peek --def <symbol> [path...]          the whole declaration of the symbol, its 
 peek --refs <symbol> [path...]         the lines naming the symbol, grouped by file
 peek --outline <file>...               the declarations and class members, a Markdown file's headings
 peek --around <regex> [-C 3] [path...] the lines around each match, overlapping ones merged
-The paths default to the files git keeps here (.gitignore holds). Exits 1 when nothing is found.
---json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}], --outline as [{path, line, depth, text}], the lines never cut.`
+The paths default to the files git keeps here (.gitignore holds).
+--json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}], --outline as [{path, line, depth, text}], the lines never cut.
+
+Exits 0 when it printed something, 1 when nothing is found or a file cannot be read, 2 on a usage error.`
 
 const OPTIONS = {
   def: { type: 'string', short: 'd', description: 'print the declaration of this symbol' },

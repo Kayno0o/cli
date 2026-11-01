@@ -4,7 +4,7 @@ import { isListening, MAX_PORT, MIN_PORT, stringToPort } from '../port'
 const usage = `stack port <name>
 
 Prints the port a name always hashes to (FNV-1a, ${MIN_PORT}-${MAX_PORT} by default), so a service keeps the same port on every machine.
-Says on stderr when something already listens on it; the exit code stays 0.`
+Says on stderr when something already listens on it; the exit code stays 0.\n\nExits 0 when it printed the port, 2 on a usage error.`
 
 const options = {
   min: { type: 'string', description: `lowest port (${MIN_PORT})` },

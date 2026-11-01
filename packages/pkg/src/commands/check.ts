@@ -9,7 +9,8 @@ import { fetchDownloads, fetchPackument, isPublic } from '../registry'
 const usage = `pkg [check] <name>[@version]...
 
 Checks npm packages before they are added: whether the name exists, the latest and the newest version at least two weeks old, weekly downloads, licence, repository, install scripts and a near miss of a popular name.
-Exits 1 when a package is missing or the version asked for is under the minimum age.`
+
+Exits 0 when every package passes, 1 when one is missing or the version asked for is under the minimum age, 2 on a usage error.`
 
 const options = {
   'json': jsonOption(),

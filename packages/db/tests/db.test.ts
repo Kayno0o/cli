@@ -124,7 +124,7 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
   ])('prints %p instead of running it', async (sql) => {
     const result = await db([sql])
 
-    expect(result.code).toBe(3)
+    expect(result.code).toBe(1)
     expect(result.out).toContain('```sql')
     expect(result.out).toContain(sql)
     expect((await db(['select count(*) as n from audit'])).out).toContain('0')

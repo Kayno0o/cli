@@ -7,7 +7,9 @@ import { canonicalRemote, parseSshRemote, reachesHost } from '../remote'
 const usage = `ft remote [--fix]
 
 Checks that origin's URLs name the Forgejo host itself: tea only finds the repository when origin's host is the login's ssh_host, never through an ssh alias such as \`forgejo\` or \`gitea\`.
---fix switches every alias URL to \`git@<host>:<owner>/<repo>.git\` and proves it with \`git ls-remote\`.`
+--fix switches every alias URL to \`git@<host>:<owner>/<repo>.git\` and proves it with \`git ls-remote\`.
+
+Exits 0 when origin names the Forgejo host (or was switched), 1 when it does not or a switch is still to run, 2 on a usage error.`
 
 const options = {
   host: { type: 'string', description: 'the Forgejo ssh host (git.kaynooo.fr)' },

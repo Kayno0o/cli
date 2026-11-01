@@ -5,7 +5,9 @@ import { FINISHED, pipelinesOn, recentPipelines } from '../pipelines'
 
 const usage = `gl runs [--sha <ref>]
 
-Lists recent pipelines with their ref, source, commit, duration and age, the commit's subject when the clone has it.`
+Lists recent pipelines with their ref, source, commit, duration and age, the commit's subject when the clone has it.
+
+Exits 0 when it listed them, 1 when GitLab or git cannot be read, 2 on a usage error.`
 
 const options = {
   limit: { type: 'string', short: 'n', description: 'how many pipelines (10, at most 100)' },

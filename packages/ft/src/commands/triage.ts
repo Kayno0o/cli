@@ -47,7 +47,9 @@ async function setState(args: string[], usage: string, wanted: 'open' | 'closed'
 
 const closeUsage = `ft close <n>... [-m <reason>]
 
-Closes issues without a fix, a duplicate or one dropped, posting the -m reason first. \`ft fixed\` closes one a commit fixed.`
+Closes issues without a fix, a duplicate or one dropped, posting the -m reason first. \`ft fixed\` closes one a commit fixed.
+
+Exits 0 when every issue is closed, 1 when Forgejo refuses, 2 on a usage error.`
 
 export async function closeIssues(args: string[]): Promise<number> {
   return setState(args, closeUsage, 'closed')
@@ -55,7 +57,9 @@ export async function closeIssues(args: string[]): Promise<number> {
 
 const reopenUsage = `ft reopen <n>... [-m <reason>]
 
-Reopens closed issues, posting the -m reason first.`
+Reopens closed issues, posting the -m reason first.
+
+Exits 0 when every issue is open, 1 when Forgejo refuses, 2 on a usage error.`
 
 export async function reopenIssues(args: string[]): Promise<number> {
   return setState(args, reopenUsage, 'open')
@@ -88,7 +92,9 @@ function labelChanges(args: string[]): { rest: string[], add: string[], remove: 
 
 const labelUsage = `ft label <n> [+]<label>... -<label>...
 
-Adds the labels named bare or with +, removes those named with -, then prints the issue's labels. A label the repository lacks is refused.`
+Adds the labels named bare or with +, removes those named with -, then prints the issue's labels. A label the repository lacks is refused.
+
+Exits 0 when it changed the labels, 1 when Forgejo refuses, 2 on a usage error or a label the repository lacks.`
 
 export async function label(args: string[]): Promise<number> {
   const changes = labelChanges(args)

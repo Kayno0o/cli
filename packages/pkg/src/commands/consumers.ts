@@ -6,7 +6,9 @@ import { ROOT_OPTION } from './bump'
 
 const usage = `pkg consumers <name>
 
-Lists the folders under --root whose package.json depends on the package: the folder, the kind of dependency, the version it asks for and the manager its lockfile pins.`
+Lists the folders under --root whose package.json depends on the package: the folder, the kind of dependency, the version it asks for and the manager its lockfile pins.
+
+Exits 0 when it listed them, 2 on a usage error.`
 
 const options = {
   root: ROOT_OPTION,

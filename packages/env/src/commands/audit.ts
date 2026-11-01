@@ -12,7 +12,7 @@ const usage = `ev audit [dir...] [--fix]
 Lists the .env files any account on the machine can read or git tracks, and the compose files any account can read that write a secret out (a secret-named value or a URL password) instead of reading it from a .env, never printing a value.
 Looks under each folder (the current one by default) down to 5 levels, skipping node_modules, vendor and .git, and leaves .example, .sample, .template and .dist files out. A folder it cannot read is named on stderr.
 With --fix, moves each secret a listed compose file writes out into the .env beside it as \${KEY}, puts it back when \`docker compose config\` resolves differently after, and shuts other accounts out of both files and of every listed .env; a key the .env already sets to another value stays put.
-Exits 1 when it finds one (with --fix, when one is left), 0 otherwise.`
+Exits 0 when it finds none (with --fix, when none is left), 1 when it finds one, 2 on a usage error.`
 
 const options = {
   json: jsonOption('the findings and the folders it could not read'),

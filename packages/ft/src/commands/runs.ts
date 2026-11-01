@@ -5,7 +5,9 @@ import { recentRuns, runSeconds, runsOn, startedAge } from '../runs'
 
 const usage = `ft runs [--sha <ref>]
 
-Lists recent runs with what tea's own listing leaves empty: workflow, ref, duration and age.`
+Lists recent runs with what tea's own listing leaves empty: workflow, ref, duration and age.
+
+Exits 0 when it listed them, 1 when Forgejo or git cannot be read, 2 on a usage error.`
 
 const options = {
   limit: { type: 'string', short: 'n', description: 'how many runs (10)' },

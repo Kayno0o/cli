@@ -13,7 +13,8 @@ const usage = `pkg bump <name> [version]
 
 Waits until the registry serves the version (the latest when none is given), then runs \`bun add --exact --no-cache\` in each folder under --root whose package.json depends on the package, the kind of dependency kept, a line per folder.
 A workspace:, link: or file: dependency, a folder already on the version and one whose lockfile pins another manager are left as they are, each said so.
-Exits 1 when an install fails or the version never shows, 2 on a usage error.`
+
+Exits 0 when every install ran or was left as it is, 1 when an install fails or the registry has no such package, 2 when the version never shows within the timeout or on a usage error.`
 
 export const ROOT_OPTION = { type: 'string', description: 'the folder holding the repositories (~/Workspace)' } as const
 
@@ -57,7 +58,7 @@ export async function servedVersion(name: string, version: string | undefined, s
         return version
 
       if (Date.now() - started >= settings.timeout)
-        fail(`${host} does not serve ${name}@${version} after ${formatDuration(settings.timeout)}`, 1)
+        fail(`${host} does not serve ${name}@${version} after ${formatDuration(settings.timeout)}`)
 
       region.redraw()
       await Bun.sleep(settings.poll ?? POLL)

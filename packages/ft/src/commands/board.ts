@@ -69,7 +69,9 @@ const boardUsage = `ft board
 
 Lists open issues as available, taken by a session running here, or claimed by a session no session here answers to, from their latest "Taken by session <name>." comment.
 A claim shows its boxes left, and one no live session holds also the latest comment that is not a claim.
-A lane's claim (lane-<n>-<issue>) is held while the session whose name ends in -<n> runs.`
+A lane's claim (lane-<n>-<issue>) is held while the session whose name ends in -<n> runs.
+
+Exits 0 when it listed them, 1 when the issues cannot be read, 2 on a usage error.`
 
 const boardOptions = {
   labels: { type: 'string', short: 'L', description: 'only issues with these labels, comma separated' },
@@ -148,7 +150,9 @@ async function me(as: string | undefined, sessions: Session[]): Promise<string> 
 const takeUsage = `ft take <n>...
 
 Claims each issue for this Claude Code session with a "Taken by session <name>." comment.
-An issue another live session holds is refused, one this session or its lanes hold passes to the new name, and one claimed by a session no session here answers to needs --take-stale; a refusal leaves the other issues taken and exits 1.`
+An issue another live session holds is refused, one this session or its lanes hold passes to the new name, and one claimed by a session no session here answers to needs --take-stale; a refusal leaves the other issues taken.
+
+Exits 0 when every issue is taken, 1 when one is refused, 2 on a usage error.`
 
 const laneOption = {
   lane: { type: 'boolean', description: 'claim each as lane-<s>-<n>, <s> ending this session\'s name, so the claim stays live while it runs' },
@@ -234,7 +238,9 @@ export async function take(args: string[]): Promise<number> {
 
 const dropUsage = `ft drop <n>...
 
-Gives each issue back with a "Released by session <name>." comment, when this session holds it.`
+Gives each issue back with a "Released by session <name>." comment, when this session holds it.
+
+Exits 0 when every issue is given back, 1 when one is not held by this session, 2 on a usage error.`
 
 const dropOptions = {
   as: { type: 'string', description: 'the name it was taken as, instead of this session\'s' },

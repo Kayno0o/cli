@@ -8,15 +8,21 @@ const TRAILING_NEWLINE = /\r?\n$/
 
 const setUsage = `ev set KEY [file]
 
-Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; --empty sets it to an empty value.`
+Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; --empty sets it to an empty value.
+
+Exits 0 when it wrote the key, 1 when it could not, 2 on a usage error.`
 
 const unsetUsage = `ev unset KEY [file]
 
-Removes every line setting KEY from the file (.env by default), leaving comments and other lines as they are.`
+Removes every line setting KEY from the file (.env by default), leaving comments and other lines as they are.
+
+Exits 0 when it removed the key, 1 when the file does not set it, 2 on a usage error.`
 
 const mvUsage = `ev mv KEY --from <file> --to <file>
 
-Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force.`
+Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force.
+
+Exits 0 when it moved the key, 1 when the source lacks it or the target already sets it, 2 on a usage error.`
 
 async function readValue(from: string | undefined): Promise<string> {
   const input = await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })

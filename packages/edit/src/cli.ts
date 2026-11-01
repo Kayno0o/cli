@@ -8,7 +8,7 @@ import { version } from '../package.json'
 import { diffTexts } from './diff'
 import { applyPairs, compile, listLines } from './replace'
 
-const USAGE = 'sub [options] <file>...: replaces text in files, writing nothing unless every replacement matches as often as expected'
+const USAGE = 'sub [options] <file>...: replaces text in files, writing nothing unless every replacement matches as often as expected\n\nExits 0 when it wrote every replacement, 1 when one did not match or a file cannot be written (nothing is written), 2 on a usage error.'
 
 const OPTIONS = {
   'from': { type: 'string', short: 'f', description: 'text to find, taken literally' },

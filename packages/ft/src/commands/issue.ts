@@ -11,7 +11,9 @@ import { checkLabels } from './triage'
 const issueUsage = `ft issue <n>...
 
 Prints each issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it.
-With --body, prints only the raw description, to edit and give back to \`ft edit -F\`.`
+With --body, prints only the raw description, to edit and give back to \`ft edit -F\`.
+
+Exits 0 when it printed them, 1 when an issue cannot be read, 2 on a usage error.`
 
 const issueOptions = {
   todo: { type: 'boolean', short: 't', description: 'only the header and the boxes left to tick' },
@@ -134,7 +136,9 @@ async function closedReferences(body: string, repo: string | undefined): Promise
 
 const newUsage = `ft new -t <title> [-F <file>]
 
-Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it. A label the repository lacks is refused before anything is created.`
+Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it. A label the repository lacks is refused before anything is created.
+
+Exits 0 when it created the issue, 1 when Forgejo refuses, 2 on a usage error or a label the repository lacks.`
 
 const newOptions = {
   title: { type: 'string', short: 't', description: 'the issue title' },
@@ -166,7 +170,9 @@ const editUsage = `ft edit <n> [-t <title>] [-F <file> [--append]] [--add-box <t
 
 Replaces the title and/or the description of issue <n>, the description from -F <file> or from stdin with -F -.
 --append adds the -F text after the description instead, and each --add-box an unticked box after the last one, the rest of the description untouched.
-\`ft issue <n> --body\` prints the description to edit.`
+\`ft issue <n> --body\` prints the description to edit.
+
+Exits 0 when it edited the issue, 1 when Forgejo refuses, 2 on a usage error.`
 
 const editOptions = {
   'title': { type: 'string', short: 't', description: 'the new title' },
@@ -215,7 +221,9 @@ export async function edit(args: string[]): Promise<number> {
 const tickUsage = `ft tick <n> <box>...
 
 Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box, then posts the -m or -F comment.
-With --closed, ticks instead every box opening with \`#<issue>\` whose issue is closed, as a release plan lists them.`
+With --closed, ticks instead every box opening with \`#<issue>\` whose issue is closed, as a release plan lists them.
+
+Exits 0 when it ticked the boxes, 1 when Forgejo refuses, 2 on a usage error or a box matching none or several.`
 
 const tickOptions = {
   undo: { type: 'boolean', short: 'u', description: 'untick them instead' },
@@ -274,7 +282,9 @@ export async function tick(args: string[]): Promise<number> {
 
 const commentUsage = `ft comment <n> [text]
 
-Posts a comment on issue <n>: the text given, -F <file>, or stdin when neither is, so a heredoc needs no escaping.`
+Posts a comment on issue <n>: the text given, -F <file>, or stdin when neither is, so a heredoc needs no escaping.
+
+Exits 0 when it posted the comment, 1 when Forgejo refuses, 2 on a usage error.`
 
 const commentOptions = {
   file: noteOptions.file,
@@ -302,7 +312,9 @@ const fixedUsage = `ft fixed <n> [commit]...
 
 Comments "Fixed in <sha>: <message>" on issue <n> and closes it, naming each commit given as "Fixed in <a>, <b> and <c>".
 Without a commit it takes those on origin's default branch whose message names #<n>, and says which, or HEAD when none does.
-The message defaults to the subject of the first commit. Every open issue listing \`- [ ] #<n>\` in its checklist gets that line ticked. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.`
+The message defaults to the subject of the first commit. Every open issue listing \`- [ ] #<n>\` in its checklist gets that line ticked. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.
+
+Exits 0 when it closed the issue, 1 when the issue is already closed, has boxes left or Forgejo refuses, 2 on a usage error.`
 
 const fixedOptions = {
   message: { type: 'string', short: 'm', description: 'the line after "Fixed in <sha>:"' },
@@ -368,7 +380,7 @@ export async function fixed(args: string[]): Promise<number> {
   const found = await getIssue(number, values.repo)
 
   if (found.state === 'closed')
-    fail(`#${number} is already closed`)
+    fail(`#${number} is already closed`, 1)
 
   const left = boxes(found.body).filter(box => !box.done)
 
@@ -377,7 +389,7 @@ export async function fixed(args: string[]): Promise<number> {
     console.log(`ticked ${left.length} box${left.length === 1 ? '' : 'es'} of #${number}`)
   }
   else if (left.length > 0 && values.force !== true) {
-    fail(`#${number} has ${left.length} boxes left, tick them, pass --tick or pass --force:\n${left.map(box => `${String(box.number).padStart(3)} [ ] ${box.text}`).join('\n')}`)
+    fail(`#${number} has ${left.length} boxes left, tick them, pass --tick or pass --force:\n${left.map(box => `${String(box.number).padStart(3)} [ ] ${box.text}`).join('\n')}`, 1)
   }
 
   const shas = joinShas(commits.map(each => each.sha.slice(0, 7)))

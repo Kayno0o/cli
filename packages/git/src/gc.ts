@@ -6,7 +6,7 @@ import { version } from '../package.json'
 import { git } from './git'
 import { commitMessageViolation, RULE, TICKET } from './message'
 
-const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged'
+const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged\n\nExits 0 when it committed, 1 when the message is refused or git fails (nothing is committed), 2 on a usage error.'
 
 const OPTIONS = {
   message: { type: 'string', short: 'm', multiple: true, description: 'a line on what changed, at most two' },

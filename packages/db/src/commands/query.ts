@@ -6,11 +6,13 @@ import { connectionUrl, readRows } from '../run'
 
 const usage = `db query "<sql>"
 
-Runs one read-only statement (the SQL as an argument, or on stdin) in a READ ONLY transaction that is rolled back. A statement that would write is printed for you to run instead, and exits 3 without running.`
+Runs one read-only statement (the SQL as an argument, or on stdin) in a READ ONLY transaction that is rolled back. A statement that would write is printed for you to run instead, and exits 1 without running.
+
+Exits 0 when the statement ran, 1 when the database refused it, was unreachable or the statement would write, 2 on a usage error.`
 
 const options = { ...connectionOptions, ...outputOptions } as const
 
-export const WRITE_EXIT = 3
+export const WRITE_EXIT = 1
 
 const NO_SQL = 'no SQL given: pass it as an argument or on stdin'
 

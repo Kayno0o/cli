@@ -10,7 +10,7 @@ import { CONFIG_FILE, hasConfig, loadConfig, audit as runAudit } from '../audit/
 const usage = `stack audit [dir]
 
 Cross-checks ${CONFIG_FILE} in dir (the current directory) against the compose files it syncs: sync files and build inputs exist, env variables are required or defaulted, versionEnv matches the compose interpolation, restart and post-deploy services exist, healthchecks, routing in overlays, bind mounts documented in the header, Nuxt runtimeConfig keys and .gitignore.
-Needs docker for \`docker compose config\`. Exits 1 on errors, 0 otherwise, 2 when there is no ${CONFIG_FILE}.`
+Needs docker for \`docker compose config\`.\n\nExits 0 when it finds no error, 1 when it finds one, 2 when there is no ${CONFIG_FILE}.`
 
 const options = {
   json: jsonOption('{ root, composeFiles, findings }'),

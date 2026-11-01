@@ -7,7 +7,9 @@ import { excerpt, traceLines } from '../trace'
 const usage = `gl logs <pipeline id>
 
 Prints what the failed jobs of a pipeline say went wrong: each failed PHPUnit test, else the last lines of the script that failed.
-With no failed job it prints every job's last lines; -j picks a job by name or id, --full prints whole traces.`
+With no failed job it prints every job's last lines; -j picks a job by name or id, --full prints whole traces.
+
+Exits 0 when it printed the logs, 1 when GitLab cannot be read, 2 on a usage error or a job the pipeline lacks.`
 
 const options = {
   job: { type: 'string', short: 'j', description: 'only this job, by name or id' },
