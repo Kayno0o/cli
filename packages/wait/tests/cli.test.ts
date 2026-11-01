@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -8,8 +8,8 @@ const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 
 let dir = ''
 
-async function waitfor(args: string[], meanwhile?: () => Promise<void>) {
-  const child = Bun.spawn([process.execPath, CLI, ...args], { cwd: dir, stdout: 'pipe', stderr: 'pipe' })
+async function waitfor(args: string[], meanwhile?: () => Promise<void>, env: Record<string, string | undefined> = process.env) {
+  const child = Bun.spawn([process.execPath, CLI, ...args], { cwd: dir, env, stdout: 'pipe', stderr: 'pipe' })
 
   await meanwhile?.()
 
@@ -129,9 +129,86 @@ describe('waitfor --port and --url', () => {
   })
 })
 
+describe('waitfor task', () => {
+  // A background Bash task's output where Claude Code keeps it, under CLAUDE_CODE_TMPDIR.
+  function taskOutput(id: string, text: string): Record<string, string | undefined> {
+    const tasks = join(dir, `claude-${process.getuid?.() ?? 0}`, '-home-me-repo', 'session', 'tasks')
+
+    mkdirSync(tasks, { recursive: true })
+    writeFileSync(join(tasks, `${id}.output`), text)
+
+    return { ...process.env, CLAUDE_CODE_TMPDIR: dir }
+  }
+
+  test('waits for the exit line, then prints the code and the last lines', async () => {
+    const path = log('building\n')
+    const result = await waitfor(['task', path, '-n', '2', '-t', '5s'], async () => {
+      await Bun.sleep(400)
+      appendFileSync(path, 'step 2\n\u001B[32mdone\u001B[0m\n\n[exited with code 0]\n')
+    })
+
+    expect(result.code).toBe(0)
+    expect(result.out).toMatch(/^task .+app\.log exited with code 0, waited \d+\.\ds\nlast lines of .+app\.log:\n {2}2 {2}step 2\n {2}3 {2}done\n$/)
+  })
+
+  test('finds a task by its id, exits 1 on another code and lists the failure lines above the tail', async () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`)
+
+    lines[4] = '(fail) cli > parses [2ms]'
+    lines[9] = 'error: expect(received).toBe(expected)'
+
+    const env = taskOutput('b1x2', `${lines.join('\n')}\n\n[exited with code 1]\n`)
+    const result = await waitfor(['task', 'b1x2', '-n', '3'], undefined, env)
+
+    expect(result.code).toBe(1)
+    expect(result.out).toContain('task b1x2 exited with code 1')
+    expect(result.out).toContain('(fail) and error: lines above them:\n   5  (fail) cli > parses [2ms]\n  10  error: expect(received).toBe(expected)\n')
+    expect(result.out).toEndWith('  28  line 28\n  29  line 29\n  30  line 30\n')
+  })
+
+  test('times out with 2 and the last lines', async () => {
+    const result = await waitfor(['task', log('still going\n'), '-t', '500ms'])
+
+    expect(result.code).toBe(2)
+    expect(result.err).toContain('is still running')
+    expect(result.err).toContain('1  still going')
+  })
+
+  test('refuses an unknown id and a subagent', async () => {
+    const env = taskOutput('b1x2', '')
+
+    expect((await waitfor(['task', 'nope'], undefined, env)).err).toContain('no background task nope')
+
+    const tasks = join(dir, `claude-${process.getuid?.() ?? 0}`, '-home-me-repo', 'session', 'tasks')
+
+    writeFileSync(join(dir, 'agent.jsonl'), '{}\n')
+    symlinkSync(join(dir, 'agent.jsonl'), join(tasks, 'a9f.output'))
+    expect((await waitfor(['task', 'a9f'], undefined, env)).err).toContain('a9f is a subagent')
+  })
+})
+
+describe('waitfor --pid', () => {
+  test('waits for the process to exit', async () => {
+    const child = Bun.spawn(['sleep', '0.5'])
+    const result = await waitfor(['--pid', String(child.pid), '-t', '5s'])
+
+    expect(result.code).toBe(0)
+    expect(result.out).toMatch(new RegExp(`^pid ${child.pid} exited after \\d+\\.\\ds\\n$`))
+  })
+
+  test('times out on a process still running', async () => {
+    const child = Bun.spawn(['sleep', '5'])
+    const result = await waitfor(['--pid', String(child.pid), '-t', '300ms'])
+
+    child.kill()
+    expect(result.code).toBe(2)
+    expect(result.err).toContain(`pid ${child.pid} is still running`)
+  })
+})
+
 describe('waitfor usage', () => {
   test('refuses what cannot be waited for', async () => {
-    expect((await waitfor([])).err).toContain('give --until with --file, --port or --url')
+    expect((await waitfor([])).err).toContain('give --until with --file, --port, --url or --pid')
     expect((await waitfor(['-u', 'x'])).err).toContain('--file needs one of them')
     expect((await waitfor(['-f', 'a.log', '-p', '80'])).err).toContain('--file needs one of them')
     expect((await waitfor(['-f', 'a.log', '-u', '('])).err).toContain('--until is no valid regular expression')
