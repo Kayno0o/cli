@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/git-tools",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "gst and gc: a repository's state in one call, and a commit of exactly the paths given, its message checked before anything is staged.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
