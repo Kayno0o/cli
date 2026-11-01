@@ -14,6 +14,7 @@
       "version": "0.1.1",
       "bin": {
         "base": "./dist/cli.js",
+        "proof": "./dist/proof.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -36,6 +37,7 @@
       "bin": {
         "peek": "./dist/peek.js",
         "todo-scan": "./dist/todo-scan.js",
+        "hotspots": "./dist/hotspots.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
