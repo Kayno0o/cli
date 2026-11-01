@@ -2,7 +2,7 @@ import type { Manager, Mismatch, Pinned } from '@kaynooo/pkg-tools/src/pin.ts'
 import { parentDir, replacePieces, substitutions } from '@kaynooo/cli-kit/shell'
 import { sqlViolation } from '@kaynooo/db-tools/src/clients.ts'
 import { isEnvFile, touchesEnv, USE_EV } from '@kaynooo/env-tools/guard'
-import { commitMessageViolation, TRAILERS } from '@kaynooo/git-tools/message'
+import { commitMessageViolation, TRAILERS, USE_GC } from '@kaynooo/git-tools/message'
 import { shouldWrap, wrap } from '@kaynooo/out-tools/src/wrap.ts'
 import { addedPackages } from '@kaynooo/pkg-tools/src/added.ts'
 import { installRequests, LOCKFILES, mismatchFor } from '@kaynooo/pkg-tools/src/pin.ts'
@@ -108,7 +108,9 @@ export async function checkCommand(command: string, context: Context): Promise<V
 
   add('remote', first(run.map(remoteViolation)))
   add('git', first(run.map(each => gitViolation(each, context.isPushAsked))))
-  add('commit', commitViolation(command, context))
+  const commit = commitViolation(command, context)
+
+  add('commit', commit === null ? null : `${commit} ${USE_GC}`)
   add('sql', first(await Promise.all(run.map(async each => sqlViolation(each, async path => Promise.resolve(context.read(absolute(path, context.cwd))))))))
   add('env', touchesEnv(command) ? USE_EV : null)
 

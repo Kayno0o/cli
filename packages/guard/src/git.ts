@@ -1,4 +1,5 @@
 import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
+import { USE_GC } from '@kaynooo/git-tools/message'
 
 // git's own options that take the next word as their value, before the subcommand.
 const GLOBAL_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'])
@@ -12,7 +13,7 @@ export const SHORT_CLUSTER = /^-[A-Z]+$/i
 const STAGES_ALL = /[Au]/
 const ALL_TAGS = new Set(['--tags', '--follow-tags'])
 
-const STAGE_BY_PATH = 'Stage by path (`git add <path>...`, then `git status`): the tree carries unrelated work and peer sessions edit it live.'
+const STAGE_BY_PATH = `Stage by path: the tree carries unrelated work and peer sessions edit it live. ${USE_GC}`
 
 export const STASH = 'Never `git stash`: a pop with nothing saved applies someone else\'s old stash. To see how a test behaves without your change, run it at HEAD with `base -- <cmd>` (a temporary worktree, the working tree untouched), `--keep <path>` to carry the new test over, `--ref <rev>` for another commit.'
 export const ADD_ALL = `\`git add\` over the whole tree is refused. ${STAGE_BY_PATH}`

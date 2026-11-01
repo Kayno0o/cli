@@ -110,7 +110,7 @@ describe('gc', () => {
     const result = gc('Added a', '--', 'a.ts')
 
     expect(result.code).toBe(1)
-    expect(result.err).toContain('nothing staged: The title is no Conventional Commit')
+    expect(result.err).toContain('nothing staged: The title is no Conventional Commit. The rule: a `type(scope): title` line')
     expect(gc('fix: a', '-m', 'One.', '-m', 'Two.', '-m', 'Three.', '--', 'a.ts').err).toContain('at most two lines')
     expect(gc('fix: a', '--ticket', 'UC3 Ajouter a', '--', 'a.ts').err).toContain('a ticket line reads')
     expect(git('status', '--porcelain')).toBe('?? a.ts')

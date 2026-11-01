@@ -61,6 +61,14 @@ describe('remote machines', () => {
 
 describe('commit messages', () => {
   cases('commit', ['git commit -m "Fixed the band"', heredoc('fix: x\n\nCo-Authored-By: Claude <noreply@anthropic.com>'), 'git commit -s -m "fix: x"', 'git commit -sm "fix: x"', 'git commit -m "fix: x" -m "Generated with Claude Code"', heredoc('fix: x\nand y'), heredoc('fix: x\n\n- one\n- two'), heredoc('fix: x\n\nOne.\nTwo.\nThree.'), heredoc('fix: x\n\nKeep the band visible when the\nprompt grows.'), 'git commit --file=bad.txt', 'git commit -F - <<\'EOF\'\nwip\nEOF'], ['git commit -m "feat(mods): x"', 'git commit -m "feat(api)!: x"', heredoc('fix(band): x\n\nKeeps the band visible.\n\n#5 - deliver every pointer\n#6 - [UC12] Afficher la liste'), heredoc('fix: x\n\nKeeps the band visible.\nDrops the old cache.'), 'git commit -m "Merge branch \'x\'"', 'git commit -C HEAD', 'git commit -m "$TITLE"', 'git commit', heredoc('feat(api)!: drop v1\n\n- one\n- two\n- three'), 'git commit -m "fix: types generated with openapi"', 'git commit -F /dev/stdin', 'git commit -F good.txt', 'git commit -F - <<\'EOF\'\nfix: y\nEOF'], { [`${REPO}/good.txt`]: 'fix: x\n', [`${REPO}/bad.txt`]: 'Fix x\n' })
+
+  test('spells the whole rule out and points at gc', async () => {
+    const { violations } = await checkCommand('git commit -m "Fixed the band"', context())
+
+    expect(violations[0]?.message).toContain('The rule: a `type(scope): title` line')
+    expect(violations[0]?.message).toContain('`gc \'fix(api): retry a timed-out fetch\'')
+    expect((await checkCommand('git commit -am "fix: wip"', context())).violations[0]?.message).toContain('Commit with `gc`')
+  })
 })
 
 describe('SQL', () => {

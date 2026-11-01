@@ -4,7 +4,7 @@ import process from 'node:process'
 import { fail, parse, runMain } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { git } from './git'
-import { commitMessageViolation, TICKET } from './message'
+import { commitMessageViolation, RULE, TICKET } from './message'
 
 const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged'
 
@@ -67,7 +67,7 @@ async function main(argv: string[]): Promise<number> {
   const wrong = tickets.find(line => !TICKET.test(line))
 
   if (wrong !== undefined)
-    fail(`a ticket line reads \`#<n> - <title>\` or \`owner/repo#<n> - <title>\`, copied verbatim from the ticket, not: ${wrong}`, 1)
+    fail(`nothing staged: a ticket line reads \`#<n> - <title>\` or \`owner/repo#<n> - <title>\`, copied verbatim from the ticket, not: ${wrong}. ${RULE}`, 1)
 
   if (title === '')
     fail(`the title is empty\n\n${USAGE}`)

@@ -12,14 +12,18 @@ const BULLET = /^\s*(?:[-*+]|\d+[.)])\s/
 const SENTENCE_END = /[.!?:;)\]`'"]$/
 const LOWER_START = /^\p{Ll}/u
 
-const FORMAT = 'A commit message is a `type(scope): title` line, then optionally a blank line, one or two lines on what changed and one `#<n> - <title>` line per ticket.'
+// The whole rule, so a refusal needs no other read.
+export const RULE = 'The rule: a `type(scope): title` line, `!` after the scope for a breaking change, type and scope taken from the repository\'s history; then optionally a blank line and one or two lines on what changed, never a bullet list or a hard-wrapped sentence; then a blank line and one line per ticket, its title copied verbatim, `#<n> - <title>` (`owner/repo#<n> - <title>` for another repository). The message ends there: no Co-Authored-By, Signed-off-by or "Generated with" trailer. Only a breaking change gives full details.'
 
-export const TITLE = `The title is no Conventional Commit, its type and scope taken from the repository's history. ${FORMAT}`
-export const TITLE_LINE = `The title takes one line and a blank line follows it. ${FORMAT}`
-export const TRAILERS = `No trailers, ever: no Co-Authored-By, Signed-off-by or "Generated with" line, no --signoff or --trailer. ${FORMAT}`
-export const BULLETS = `The body names what changed in a line or two, never a bullet list narrating the diff. ${FORMAT}`
-export const TOO_LONG = `The body holds at most two lines besides the ticket lines; what goes beyond belongs in the reply. ${FORMAT}`
-export const WRAPPED = `A body sentence stays on one line however long it runs: never hard-wrap it. ${FORMAT}`
+export const TITLE = `The title is no Conventional Commit. ${RULE}`
+export const TITLE_LINE = `The title takes one line and a blank line follows it. ${RULE}`
+export const TRAILERS = `No trailers, ever: no Co-Authored-By, Signed-off-by or "Generated with" line, no --signoff or --trailer. ${RULE}`
+export const BULLETS = `The body names what changed in a line or two, never a bullet list narrating the diff. ${RULE}`
+export const TOO_LONG = `The body holds at most two lines besides the ticket lines; what goes beyond belongs in the reply. ${RULE}`
+export const WRAPPED = `A body sentence stays on one line however long it runs: never hard-wrap it. ${RULE}`
+
+// Where a refused `git commit` is pointed, gc building the message from its parts.
+export const USE_GC = 'Commit with `gc`, which stages exactly the paths given once the message keeps the rule: `gc \'fix(api): retry a timed-out fetch\' -m \'A 502 is retried once before failing.\' --ticket \'#12 - [UC3] Retry failed fetches\' -- src/api.ts`.'
 
 function isDescription(line: string | undefined): boolean {
   return line !== undefined && line !== '' && !TICKET.test(line)
