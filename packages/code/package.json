@@ -2,7 +2,7 @@
   "name": "@kaynooo/code-tools",
   "type": "module",
   "version": "0.1.1",
-  "description": "peek and todo-scan: source read by spans, symbols and outlines in one call, and the TODO and issue-reference comments of a repository, stale ones flagged.",
+  "description": "peek, todo-scan and hotspots: source read by spans, symbols and outlines in one call, the TODO and issue-reference comments of a repository with stale ones flagged, and the files ranked by complexity times git churn.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/code#readme",
@@ -17,11 +17,13 @@
     "cli",
     "code",
     "todo",
-    "outline"
+    "outline",
+    "hotspots"
   ],
   "bin": {
     "peek": "./dist/peek.js",
-    "todo-scan": "./dist/todo-scan.js"
+    "todo-scan": "./dist/todo-scan.js",
+    "hotspots": "./dist/hotspots.js"
   },
   "files": [
     "dist"
@@ -33,9 +35,10 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/peek.ts src/todo-scan.ts --target bun --outdir dist",
+    "build": "$npm_execpath build src/peek.ts src/todo-scan.ts src/hotspots.ts --target bun --outdir dist",
     "peek": "$npm_execpath src/peek.ts",
-    "todo-scan": "$npm_execpath src/todo-scan.ts"
+    "todo-scan": "$npm_execpath src/todo-scan.ts",
+    "hotspots": "$npm_execpath src/hotspots.ts"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"
