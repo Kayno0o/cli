@@ -22,7 +22,7 @@
     },
     "packages/check": {
       "name": "@kaynooo/check-tools",
-      "version": "0.3.2",
+      "version": "0.4.0",
       "bin": {
         "check": "./dist/cli.js",
         "fix": "./dist/fix-cli.js",

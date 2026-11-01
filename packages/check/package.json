@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/check-tools",
   "type": "module",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "check, fix and errs: run a repo's check, typecheck, lint and test steps or its fixers, showing only what failed with each full output saved to a file, and turn tsc, eslint and bun test logs into file:line:col errors.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
