@@ -13,7 +13,7 @@ guard check --json --cwd "$PWD" - < command.txt
 | Rule | Refuses | Lives in |
 | --- | --- | --- |
 | `remote` | `ssh`, `scp`, `sftp`, `mosh`, `rsync` to a host, `DOCKER_HOST=ssh://`, `docker -H ssh://` | `src/remote.ts` |
-| `git` | `git stash` (pointing at `base`), `git add -A`/`.`/`-u`, `git commit -a` in any flag cluster, `git push` the user did not ask for, `git push --tags` without `--atomic` | `src/git.ts` |
+| `git` | `git stash` (pointing at `proof`, `base`, a commit first or `git worktree add`), `git add -A`/`.`/`-u`, `git commit -a` in any flag cluster, `git push` the user did not ask for, `git push --tags` without `--atomic` | `src/git.ts` |
 | `commit` | a commit message breaking the format: no Conventional Commit title, a trailer, a body over two lines, a bullet list, a hard wrap; `-m`, `-F <file>` and `-F -` with a heredoc are read; the refusal spells the rule out and points at `gc` | `src/commit.ts`, the validator in `@kaynooo/git-tools` |
 | `sql` | a SQL client, console or dump tool fed a write (INSERT, UPDATE, DELETE, DDL, migrations, fixtures) outside a test database | `@kaynooo/db-tools` (`src/clients.ts`, `src/guard.ts`) |
 | `env` | a command reading, writing or printing an env file or the whole environment; `guard path` refuses a file tool opening one | `@kaynooo/env-tools` (`src/guard.ts`) |

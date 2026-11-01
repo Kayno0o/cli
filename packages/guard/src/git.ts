@@ -15,7 +15,7 @@ const ALL_TAGS = new Set(['--tags', '--follow-tags'])
 
 const STAGE_BY_PATH = `Stage by path: the tree carries unrelated work and peer sessions edit it live. ${USE_GC}`
 
-export const STASH = 'Never `git stash`: a pop with nothing saved applies someone else\'s old stash. To see how a test behaves without your change, run it at HEAD with `base -- <cmd>` (a temporary worktree, the working tree untouched), `--keep <path>` to carry the new test over, `--ref <rev>` for another commit.'
+export const STASH = 'Never `git stash`: a pop with nothing saved applies someone else\'s old stash. To prove a test fails without your change, `proof --keep <test> -- <cmd>` runs it at HEAD in a temporary worktree and again here; `base -- <cmd>` runs any command at HEAD (`--ref <rev>` another commit), the working tree untouched. To set edits aside before a cherry-pick, a rebase or a checkout, commit them with `gc` first, or do the other work in `git worktree add`.'
 export const ADD_ALL = `\`git add\` over the whole tree is refused. ${STAGE_BY_PATH}`
 export const COMMIT_ALL = `\`git commit -a\` stages the whole tree and is refused. ${STAGE_BY_PATH}`
 export const PUSH = '`git push` runs only when the user asked for a push in their latest prompt: say the commit is ready and let them ask.'
