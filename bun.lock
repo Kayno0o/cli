@@ -32,7 +32,7 @@
     },
     "packages/code": {
       "name": "@kaynooo/code-tools",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "bin": {
         "peek": "./dist/peek.js",
         "todo-scan": "./dist/todo-scan.js",
