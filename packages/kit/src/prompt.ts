@@ -45,14 +45,17 @@ function readKeys(input: string): Key[] {
   return (input.match(KEY_SEQUENCES) ?? []).flatMap(sequence => KEYS[sequence] ?? (CONTROL.test(sequence) ? [] : [{ text: sequence }]))
 }
 
-export interface SelectSettings extends PromptSettings {
+export interface SelectSettings<T> extends PromptSettings {
   // The index of the choice the cursor starts on.
   initial?: number
+  // The value of the choice the cursor starts on, winning over `initial` when a choice holds it.
+  default?: T
 }
 
 // One choice among several, typing filtering them, the arrows moving and Enter picking; undefined once Escape or Ctrl+C cancels.
-export async function select<T>(question: string, choices: Choice<T>[], { initial = 0, ...settings }: SelectSettings = {}): Promise<T | undefined> {
-  const list = new List(choices, initial)
+export async function select<T>(question: string, choices: Choice<T>[], { initial = 0, default: fallback, ...settings }: SelectSettings<T> = {}): Promise<T | undefined> {
+  const named = choices.findIndex(choice => choice.value === fallback)
+  const list = new List(choices, fallback === undefined || named === -1 ? initial : named)
   const picked = await ask(question, settings, (colors, state, rows) => state === 'asking'
     ? [asking(colors, question, list.query, 'type to filter, enter picks'), ...list.rows(colors, rows, () => '')]
     : [answer(colors, question, state, list.current()?.label ?? '')], (key) => {
@@ -72,6 +75,8 @@ export async function select<T>(question: string, choices: Choice<T>[], { initia
 
 export interface ChecklistSettings<T> extends PromptSettings {
   initial?: ReadonlySet<T>
+  // How many choices Enter needs checked: on fewer, `pick at least N` shows under the list until the next key instead of answering.
+  min?: number
   // What checking or unchecking `value` leaves checked, which may change other choices along; flips `value` alone by default.
   toggle?: (checked: ReadonlySet<T>, value: T) => ReadonlySet<T>
 }
@@ -86,14 +91,23 @@ function flip<T>(checked: ReadonlySet<T>, value: T): ReadonlySet<T> {
 }
 
 // Several choices, typing filtering them, Space checking or unchecking the one under the cursor and Enter accepting what is checked; undefined once cancelled.
-export async function checklist<T>(question: string, choices: Choice<T>[], { initial = new Set(), toggle = flip, ...settings }: ChecklistSettings<T> = {}): Promise<ReadonlySet<T> | undefined> {
+export async function checklist<T>(question: string, choices: Choice<T>[], { initial = new Set(), min = 0, toggle = flip, ...settings }: ChecklistSettings<T> = {}): Promise<ReadonlySet<T> | undefined> {
   const list = new List(choices, 0)
   let checked = initial
+  let invalid: string | undefined
   const accepted = await ask(question, settings, (colors, state, rows) => state === 'asking'
-    ? [asking(colors, question, list.query, 'type to filter, space toggles, enter accepts'), ...list.rows(colors, rows, choice => checked.has(choice.value) ? `${colors.cyan('◉')} ` : `${colors.dim('◯')} `)]
+    ? [asking(colors, question, list.query, 'type to filter, space toggles, enter accepts'), ...list.rows(colors, rows, choice => checked.has(choice.value) ? `${colors.cyan('◉')} ` : `${colors.dim('◯')} `), ...invalid === undefined ? [] : [`  ${colors.red(invalid)}`]]
     : [answer(colors, question, state, choices.filter(choice => checked.has(choice.value)).map(choice => choice.label).join(', ') || 'none')], (key) => {
-    if (key === 'enter' || key === 'cancel')
+    if (key === 'cancel')
       return key
+
+    invalid = undefined
+
+    if (key === 'enter') {
+      invalid = checked.size < min ? `pick at least ${min}` : undefined
+
+      return invalid === undefined ? 'enter' : undefined
+    }
 
     const current = list.current()
 

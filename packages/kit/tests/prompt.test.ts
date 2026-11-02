@@ -154,6 +154,14 @@ describe('select', () => {
   })
 })
 
+describe('select default', () => {
+  it('starts the cursor on the choice holding the value, else on initial', async () => {
+    expect(await select('pick', CHOICES, { default: 'c', terminal: terminal(['\r']).fake })).toBe('c')
+    expect(await select('pick', CHOICES, { default: 'c', initial: 1, terminal: terminal(['\r']).fake })).toBe('c')
+    expect(await select('pick', CHOICES, { default: 'x', initial: 1, terminal: terminal(['\r']).fake })).toBe('b')
+  })
+})
+
 describe('checklist', () => {
   it('checks and unchecks with Space, and accepts with Enter', async () => {
     const checked = await checklist('pick', CHOICES, { initial: new Set(['a']), terminal: terminal([' ', DOWN, ' ', DOWN, ' ', ' ', '\r']).fake })
@@ -183,6 +191,15 @@ describe('checklist', () => {
     expect(lastFrame(some.written).slice(1)).toEqual(['  ◯ alpha  the first', '❯ ◉ beta   the second', '  ◉ gamma  the third'])
     expect(some.written.at(-2)).toEndWith('✓ pick beta, gamma')
     expect(none.written.at(-2)).toEndWith('✓ pick none')
+  })
+
+  it('keeps asking on fewer ticks than min, with a message under the list until the next key', async () => {
+    const { fake, written } = terminal(['\r', ' ', '\r'])
+    const checked = await checklist('pick', CHOICES, { min: 1, terminal: fake })
+
+    expect([...checked!]).toEqual(['a'])
+    expect(written[2]!.split('\n').at(-1)).toBe('  pick at least 1')
+    expect(written[3]!.split('\n')).not.toContain('  pick at least 1')
   })
 
   it('answers undefined once cancelled, whatever was checked', async () => {
