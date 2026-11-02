@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
 
 import type { Host, Result } from './checks'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import process from 'node:process'
-import { jsonOption, paint, parse, printJson, runCommand, runMain } from '@kaynooo/cli-kit'
+import { jsonOption, paint, parse, printJson, runMain } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { runChecks } from './checks'
+import { hostHere } from './host'
 
 const USAGE = `doctor [--json]: checks this host's agent-tools install, one line per check, the command that fixes a failing one beside it
 
@@ -18,23 +17,6 @@ const INSTALL = 'bun install -g '
 const OPTIONS = {
   json: jsonOption('[{check, ok, detail, fix?}]'),
 } as const
-
-export function hostHere(): Host {
-  const home = homedir()
-
-  return {
-    home,
-    globalModules: join(process.env.BUN_INSTALL ?? join(home, '.bun'), 'install', 'global', 'node_modules'),
-    bunVersion: Bun.version,
-    which: bin => Bun.which(bin),
-    run: async (argv, env) => {
-      const ran = await runCommand(argv, env === undefined ? {} : { env: { ...process.env, ...env } })
-      const of = (stream: 'stdout' | 'stderr') => Buffer.concat(ran.chunks.filter(chunk => chunk.stream === stream).map(chunk => chunk.data)).toString()
-
-      return { code: ran.code, stdout: of('stdout'), stderr: of('stderr') }
-    },
-  }
-}
 
 function print(results: readonly Result[]): void {
   const { green, red, dim } = paint(process.stdout)

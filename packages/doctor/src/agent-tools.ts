@@ -5,7 +5,7 @@ import type { Listed } from './list'
 import process from 'node:process'
 import { jsonOption, paint, parse, printJson, runCli } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
-import { hostHere } from './cli'
+import { hostHere } from './host'
 import { listBins } from './list'
 
 const LIST_USAGE = `agent-tools list [--json]: every agent-tools bin in one line each, what it does and what it is reached for instead of

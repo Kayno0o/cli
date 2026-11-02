@@ -8,7 +8,7 @@ import { version } from '../package.json'
 import { FileWatch, portProblem, urlCheck } from './conditions'
 import { exitCode, isTranscript, pidAlive, taskEnd, taskFile } from './task'
 
-const USAGE = `waitfor [options]: waits until a file shows a line, a port listens, a URL answers 2xx or a process exits, instead of a sleep or a polling loop
+const USAGE = `waitfor [options]: waits until a file shows a line, a port listens, a URL answers 2xx or a process exits
 waitfor task <task id | file>: waits for a Claude Code background task to end (waitfor task --help)
 
 Every condition given must be met. A --fail line in --file ends the wait at once.
