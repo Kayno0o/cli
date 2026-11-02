@@ -144,6 +144,22 @@ describe('slot', () => {
     expect(await finished(nested)).toEqual({ code: 0, out: 'inner\n', err: '' })
   })
 
+  test('a lock wanted inside a slotted script does not deadlock against a session that holds it and waits for a slot', async () => {
+    const go = join(dir, 'go')
+    const script = `while [ ! -e ${go} ]; do sleep 0.05; done; ${process.execPath} ${CLI} --lock db -t 4s -- echo inner`
+    const outer = slot(['-n', '1', '-t', '4s', '--', 'sh', '-c', script])
+
+    await until(async () => (await listed()).busy === 1)
+
+    const other = slot(['-n', '1', '--lock', 'db', '-t', '4s', '--', 'echo', 'other'])
+
+    await until(async () => (await listed()).entries.some(entry => entry.state === 'waiting'))
+    await Bun.write(go, '')
+
+    expect(await finished(outer)).toMatchObject({ code: 0, out: 'inner\n' })
+    expect(await finished(other)).toMatchObject({ code: 0, out: 'other\n' })
+  }, 10_000)
+
   test('--no-slot takes the lock alone, and the lock name is checked', async () => {
     slot(['-n', '1', ...sleeper('a.pid')])
     await until(async () => (await listed()).busy === 1)

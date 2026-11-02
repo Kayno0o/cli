@@ -117,34 +117,57 @@ async function holderOf(command: string[]): Promise<Holder> {
 
 let waiterCount = 0
 
-// Waits for the resource, listed in `slot ls` as a waiter meanwhile; the waiter's own lock tells `ls` whether it still lives.
-async function acquire(dir: string, wanted: Resource, holder: Holder, deadline: number, timeoutMs: number): Promise<Taken> {
-  let waiter: { held: Held, path: string } | undefined
+// Takes every wanted resource or none: a busy one gives back those already taken, so a waiter never holds a lock while it waits for a slot, nor a slot while it waits for a lock. Holding one while waiting for the other lets two sessions wait on each other: an outer `slot -- script` holds the last slot and its script wants a lock that a session waiting for a slot already holds. A waiter that holds nothing wastes no slot either. It is listed in `slot ls` as a waiter meanwhile; the waiter's own lock tells `ls` whether it still lives.
+async function acquire(dir: string, resources: Resource[], holder: Holder, deadline: number, timeoutMs: number): Promise<Taken[]> {
+  let waiter: { held: Held, path: string, resource: string } | undefined
 
   try {
     for (;;) {
-      const taken = attempt(dir, wanted)
+      const taken: Taken[] = []
+      let busy: Resource | undefined
 
-      if (taken !== undefined) {
-        writeHeld(taken.held, JSON.stringify(holder))
+      for (const wanted of resources) {
+        const got = attempt(dir, wanted)
+
+        if (got === undefined) {
+          busy = wanted
+
+          break
+        }
+
+        taken.push(got)
+      }
+
+      if (busy === undefined) {
+        for (const { held } of taken)
+          writeHeld(held, JSON.stringify(holder))
 
         return taken
       }
+
+      for (const { held } of taken)
+        held.release()
+
+      const resource = busy.kind === 'lock' ? `lock ${busy.name}` : 'slot'
 
       if (waiter === undefined) {
         const path = join(dir, 'waiters', `${process.pid}-${waiterCount++}`)
         const held = tryLock(path)
 
         if (held !== undefined) {
-          writeHeld(held, JSON.stringify({ ...holder, resource: wanted.kind === 'lock' ? `lock ${wanted.name}` : 'slot' }))
-          waiter = { held, path }
+          writeHeld(held, JSON.stringify({ ...holder, resource }))
+          waiter = { held, path, resource }
         }
 
-        console.error(waitingLine(dir, wanted))
+        console.error(waitingLine(dir, busy))
+      }
+      else if (waiter.resource !== resource) {
+        writeHeld(waiter.held, JSON.stringify({ ...holder, resource }))
+        waiter.resource = resource
       }
 
       if (Date.now() >= deadline)
-        fail(`gave up after ${formatDuration(timeoutMs)} waiting for ${wanted.kind === 'lock' ? `lock ${wanted.name}` : 'a slot'}`)
+        fail(`gave up after ${formatDuration(timeoutMs)} waiting for ${busy.kind === 'lock' ? `lock ${busy.name}` : 'a slot'}`)
 
       await Bun.sleep(POLL)
     }
@@ -181,7 +204,6 @@ export async function runSlotted(args: string[]): Promise<number> {
   const timeoutMs = duration(values.timeout, 'timeout', Number.POSITIVE_INFINITY)
   const deadline = Date.now() + timeoutMs
   const holding = new Set((process.env[HOLDING] ?? '').split(',').filter(token => token !== ''))
-  // Locks come first and the slot last, so a command never takes a slot while it still waits for a lock.
   const wanted: Resource[] = [...locks.filter(name => !holding.has(`lock:${name}`)).map((name): Resource => ({ kind: 'lock', name, count })), ...values['no-slot'] === true || holding.has('slot') ? [] : [{ kind: 'slot', name: '', count } satisfies Resource]]
   const signals = holdSignals(() => undefined)
   const taken: Taken[] = []
@@ -191,8 +213,7 @@ export async function runSlotted(args: string[]): Promise<number> {
       const dir = await stateDir()
       const holder = await holderOf(rest)
 
-      for (const resource of wanted)
-        taken.push(await acquire(dir, resource, holder, deadline, timeoutMs))
+      taken.push(...await acquire(dir, wanted, holder, deadline, timeoutMs))
     }
 
     const tokens = new Set([...holding, ...locks.map(name => `lock:${name}`), ...wanted.some(resource => resource.kind === 'slot') ? ['slot'] : []])
