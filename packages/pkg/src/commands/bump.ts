@@ -6,7 +6,6 @@ import { homedir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { duration, Exit, fail, formatDuration, note, ok, parse, problem, runCommand, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
-import { DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { loadConfigs, loadSettings, registryFor } from '../config'
 import { addCommand, findConsumers, isLocal } from '../consumers'
 import { fetchPackument, isValidName } from '../registry'
@@ -15,7 +14,7 @@ import { checkPackage } from './check'
 
 const usage = `pkg bump <name> [version]
 
-Waits until the registry serves the version (the latest when none is given, an exact version otherwise), vets it as \`pkg check\` does (minimum age, advisories, licence allowlist), then runs \`bun add --exact --no-cache\` in each folder under --root whose package.json depends on the package, the kind of dependency kept, a line per folder.
+Waits until the registry serves the version (the latest when none is given, an exact version otherwise), vets it as \`pkg check\` does (advisories, licence allowlist, and a minimum age only when --min-age asks for one), then runs \`bun add --exact --no-cache\` in each folder under --root whose package.json depends on the package, the kind of dependency kept, a line per folder.
 A version the vetting blocks is refused before any folder is touched, unless --force is given.
 A dependency that is not a registry version (workspace:, link:, file:, git, a URL, an npm: alias, catalog:), a peer range, a folder already on the version and one whose lockfile pins another manager are left as they are, each said so.
 With --all-consumers a folder whose package.json or lockfile already has uncommitted changes is left alone, and each folder whose install went through then runs its own \`check\` (the check bin) and is committed with \`gc 'chore(deps): bump <name> to <version>' -- package.json <lockfile>\` only when that passes; a failing one is left uncommitted and listed in the summary with the skipped ones, and nothing is ever pushed.
@@ -30,7 +29,7 @@ const options = {
   'all-consumers': { type: 'boolean', description: 'after each install run the folder\'s check and commit it through gc when it passes' },
   'dry-run': { type: 'boolean', description: 'print what would run, changing nothing' },
   'force': { type: 'boolean', description: 'bump even when the version is blocked by the vetting' },
-  'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS}), 0 to skip the age check` },
+  'min-age': { type: 'string', description: 'days a version must be old (0: a bump adopts a release on purpose, often one just made)' },
 } as const
 
 const POLL = 5000
@@ -119,7 +118,7 @@ export async function vet(name: string, version: string, settings: BumpSettings)
   if (settings.isForced === true)
     return true
 
-  const report = await checkPackage(`${name}@${version}`, { configs: settings.configs, fetcher: settings.fetcher, minAgeDays: settings.minAgeDays ?? DEFAULT_MIN_AGE_DAYS, settings: settings.pkgSettings })
+  const report = await checkPackage(`${name}@${version}`, { configs: settings.configs, fetcher: settings.fetcher, minAgeDays: settings.minAgeDays ?? 0, settings: settings.pkgSettings })
 
   if (!report.blocked) {
     for (const warning of report.warnings)
@@ -255,7 +254,7 @@ export async function bump(args: string[]): Promise<number> {
     isAll: values['all-consumers'] === true,
     isForced: values.force === true,
     pkgSettings: await loadSettings(),
-    minAgeDays: wholeNumber(values['min-age'], 'min-age', DEFAULT_MIN_AGE_DAYS, 0),
+    minAgeDays: wholeNumber(values['min-age'], 'min-age', 0, 0),
   }
   const version = await servedVersion(name, asked, settings)
 

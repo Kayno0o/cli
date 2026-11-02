@@ -260,7 +260,7 @@ describe('vet', () => {
   })
 
   test('refuses a version under the minimum age, a licence outside the allowlist or an advisory', async () => {
-    const fresh = await capture(async () => vet(NAME, '0.8.0', settings({ fetcher: served('0.8.0', {}, new Date().toISOString()) })))
+    const fresh = await capture(async () => vet(NAME, '0.8.0', settings({ fetcher: served('0.8.0', {}, new Date().toISOString()), minAgeDays: 14 })))
     const licence = await capture(async () => vet(NAME, '0.8.0', settings({ fetcher: served('0.8.0'), pkgSettings: { licenses: ['Apache-2.0'] } })))
     const advisory = await capture(async () => vet(NAME, '0.8.0', settings({
       fetcher: async (url, init) => {
@@ -279,11 +279,11 @@ describe('vet', () => {
     expect(advisory.err).toContain('GHSA-aaaa-bbbb-cccc')
   })
 
-  test('--force and --min-age 0 let a fresh version through', async () => {
+  test('--force or no --min-age lets a fresh version through', async () => {
     const fetcher = served('0.8.0', {}, new Date().toISOString())
 
     expect((await capture(async () => vet(NAME, '0.8.0', settings({ fetcher, isForced: true })))).result).toBe(true)
-    expect((await capture(async () => vet(NAME, '0.8.0', settings({ fetcher, minAgeDays: 0 })))).result).toBe(true)
+    expect((await capture(async () => vet(NAME, '0.8.0', settings({ fetcher })))).result).toBe(true)
   })
 })
 
