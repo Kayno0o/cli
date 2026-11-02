@@ -2,7 +2,7 @@
   "name": "@kaynooo/check-tools",
   "type": "module",
   "version": "0.5.0",
-  "description": "check, fix and errs: run a repo's check, typecheck, lint and test steps or its fixers, showing only what failed with each full output saved to a file, and turn tsc, eslint, bun test, vitest, playwright, phpunit, phpstan and php-cs-fixer logs into file:line:col errors.",
+  "description": "check, fix and errs: run a repo's check, typecheck, lint and test steps or its fixers, inside its docker compose service when one mounts the folder, showing only what failed with each full output saved to a file, and turn tsc, eslint, bun test, vitest, playwright, phpunit, phpstan and php-cs-fixer logs into file:line:col errors.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/check#readme",

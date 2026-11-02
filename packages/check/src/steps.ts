@@ -1,3 +1,4 @@
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runCommand } from '@kaynooo/cli-kit'
 
@@ -17,7 +18,11 @@ const JUSTFILES = ['justfile', 'Justfile', '.justfile']
 
 // The order make itself reads them in.
 export const MAKEFILES = ['GNUmakefile', 'makefile', 'Makefile']
+export const CS_FIXER_CONFIGS = ['.php-cs-fixer.php', '.php-cs-fixer.dist.php']
 const JUST_TIMEOUT_MS = 10_000
+const PHPSTAN_CONFIGS = ['phpstan.neon', 'phpstan.neon.dist', 'phpstan.dist.neon']
+const PHPUNIT_CONFIGS = ['phpunit.xml', 'phpunit.xml.dist', 'phpunit.dist.xml']
+const SKIPPED = new Set(['node_modules', 'vendor', 'dist', 'build', 'var', 'tmp', 'coverage'])
 
 interface JustDump {
   recipes?: Record<string, { private?: boolean, parameters?: { default: unknown, kind: string }[] }>
@@ -116,7 +121,68 @@ export async function candidates(dir: string, bin: string): Promise<Step[]> {
   for (const name of targets(makefile ?? ''))
     steps.push({ name, command: `make ${name}`, source: 'Makefile' })
 
+  steps.push(...await phpSteps(dir))
+
   return steps
+}
+
+// The first of the files that exists in the folder.
+export async function firstFile(dir: string, names: string[]): Promise<string | undefined> {
+  for (const name of names) {
+    if (await Bun.file(join(dir, name)).exists())
+      return name
+  }
+
+  return undefined
+}
+
+// The PHP tools a folder configures, last in line so that a composer script of the same name wins.
+async function phpSteps(dir: string): Promise<Step[]> {
+  const steps: Step[] = []
+  const phpstan = await firstFile(dir, PHPSTAN_CONFIGS)
+  const csFixer = await firstFile(dir, CS_FIXER_CONFIGS)
+  const phpunit = await firstFile(dir, PHPUNIT_CONFIGS)
+
+  if (phpstan !== undefined)
+    steps.push({ name: 'typecheck', command: 'vendor/bin/phpstan analyse --no-progress --memory-limit=1G', source: phpstan })
+
+  if (csFixer !== undefined)
+    steps.push({ name: 'lint', command: 'vendor/bin/php-cs-fixer fix --dry-run -v', source: csFixer })
+
+  if (phpunit !== undefined)
+    steps.push({ name: 'test', command: 'vendor/bin/phpunit', source: phpunit })
+
+  return steps
+}
+
+export interface Project {
+  // The subfolder's name, undefined for the folder itself.
+  name?: string
+  dir: string
+  steps: Step[]
+}
+
+// The folder's own steps, else those of each subfolder that has some (api/ and client/ of a root without a manifest).
+export async function discoverProjects(dir: string): Promise<Project[]> {
+  const own = await discover(dir)
+
+  if (own.length > 0)
+    return [{ dir, steps: own }]
+
+  const projects: Project[] = []
+  const entries = await readdir(dir, { withFileTypes: true })
+
+  for (const entry of entries.toSorted((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isDirectory() || entry.name.startsWith('.') || SKIPPED.has(entry.name))
+      continue
+
+    const steps = await discover(join(dir, entry.name))
+
+    if (steps.length > 0)
+      projects.push({ name: entry.name, dir: join(dir, entry.name), steps })
+  }
+
+  return projects
 }
 
 // The repo's steps: each of STEP_NAMES once, from package.json, else composer.json, else a Justfile, else a Makefile.

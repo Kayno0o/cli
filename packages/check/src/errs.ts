@@ -1,19 +1,24 @@
+import type { PlaceSettings } from './compose'
 import type { ToolError } from './output'
 import { relative } from 'node:path'
 import process from 'node:process'
 import { fail, holdSignals, jsonOption, parse, printJson, readInput as readText, runCommand, stripAnsi, warn } from '@kaynooo/cli-kit'
+import { argvIn, place, placeOptions, placeSettings, Stack } from './compose'
 import { parseErrors } from './output'
 import { saveLog } from './run'
 
 const usage = `errs [options] [log]
 errs [options] -- <command> [args...]
+errs --in <service> | --host -- <command> [args...]
 
 Prints one \`file:line:col: message (rule)\` line per error found in a tsc, tsgo, vue-tsc, bun check, eslint, keslint, bun test, vitest, playwright (list and line reporters), phpunit, paratest, phpstan (table, raw and json) or php-cs-fixer log, read from the file given, from stdin (no argument or -), or from the output of the command run after --.
 The lines no format recognised are counted on stderr, never dropped silently, and a command's full output is saved to a log file whose path is printed with that count.
+A command runs inside the docker compose service that bind-mounts the current folder (found in compose.yml, compose.yaml or docker-compose.yml, up to the repository root), at the matching path, with its output read here; a service that is down is never started, the call fails naming it. --in picks the service, --host forces the host.
 Exits 0 when no error was found and the command, if any, passed, 1 when errors were found or the command failed, 2 on a usage error.
 --json prints {errors: [{tool, file, line, column, rule, severity, message, test?}], unrecognised, log?, code?}, tool one of tsc, eslint, bun check, bun test, vitest, playwright, phpunit, phpstan, php-cs-fixer.`
 
 const options = {
+  ...placeOptions,
   json: jsonOption(),
 } as const
 
@@ -34,8 +39,11 @@ export function formatError(error: ToolError, cwd: string): string {
 }
 
 // The log named by a lone argument (- for stdin, none for stdin too), or the output of the command to run.
-async function readInput(command: string[], run: boolean): Promise<{ text: string, log?: string, code?: number }> {
+async function readInput(command: string[], run: boolean, settings: PlaceSettings, cwd: string): Promise<{ text: string, log?: string, code?: number }> {
   const [path] = command
+
+  if (!run && (settings.service !== undefined || settings.host === true))
+    fail('--in and --host apply to a command run after --')
 
   if (!run && (path === undefined || path === '-'))
     return { text: await readText('-', { noStdin: 'give a log, a command after --, or pipe the output on stdin' }) }
@@ -46,11 +54,17 @@ async function readInput(command: string[], run: boolean): Promise<{ text: strin
   if (path === undefined)
     fail('give the command after --')
 
+  const placement = await place(cwd, path, settings)
+  const down = placement === undefined ? undefined : await new Stack().problem(placement)
+
+  if (down !== undefined)
+    fail(down, 1)
+
   const held = holdSignals()
   let ran
 
   try {
-    ran = await runCommand(command, { env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }, onStart: child => held.forward(child) })
+    ran = await runCommand(placement === undefined ? command : argvIn(placement, command), { ...(placement === undefined ? {} : { cwd: placement.composeDir }), env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }, onStart: child => held.forward(child) })
   }
   catch (error) {
     fail(`cannot run ${command[0]}: ${error instanceof Error ? error.message : String(error)}`)
@@ -72,7 +86,7 @@ export async function errs(args: string[], cwd = process.cwd()): Promise<number>
   if (parsed.positionals.length > 1)
     fail(`give one log, or a command after --\n\n${usage}`)
 
-  const input = await readInput(bare ? args : parsed.rest ?? parsed.positionals, bare || parsed.rest !== undefined)
+  const input = await readInput(bare ? args : parsed.rest ?? parsed.positionals, bare || parsed.rest !== undefined, placeSettings(parsed.values), cwd)
   const { errors, unrecognised } = parseErrors(input.text)
 
   if (parsed.values.json === true) {

@@ -1,3 +1,4 @@
+import type { Placement } from './compose'
 import type { Outcome, StepSettings } from './run'
 import type { Step } from './steps'
 import { existsSync, statSync } from 'node:fs'
@@ -7,23 +8,26 @@ import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
 import { changedFiles, dirtyFiles } from './changes'
 import { pick } from './check'
+import { place, placeOptions, placeSettings, programOf, shellIn, Stack } from './compose'
 import { declarePhony } from './makefile'
-import { logDirectory, outcomeJson, printOutcome, runStep } from './run'
-import { candidates, MAKEFILES, read } from './steps'
+import { logDirectory, outcomeJson, printOutcome, refusedStep, runStep } from './run'
+import { candidates, CS_FIXER_CONFIGS, firstFile, MAKEFILES, read } from './steps'
 
-const usage = `fix [--only <fixers>] [--timeout <duration>] [--list]
+const usage = `fix [--only <fixers>] [--timeout <duration>] [--in <service> | --host] [--list]
 
-Runs the folder's fixers: the project's own \`fix\` script, else its \`lint:fix\` and \`format\` ones (package.json through bun run, composer.json, a Justfile or a Makefile), then the formatters its files call for: just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY.
+Runs the folder's fixers: the project's own \`fix\` script, else its \`lint:fix\` and \`format\` ones (package.json through bun run, composer.json, a Justfile or a Makefile), then the formatters its files call for: php-cs-fixer where configured and composer.json has no fixer, just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY.
 It looks at the folder itself only, so each package of a monorepo gets its own run.
+A script or php-cs-fixer runs inside the docker compose service that bind-mounts the folder (found in compose.yml, compose.yaml or docker-compose.yml, up to the repository root), at the matching path; a service that is down is never started, the fixer fails naming it. The formatters run on the host. --in picks the service, --host forces the host.
 Prints one line per fixer, what a failing one said, then the files the run changed. Each fixer's full output is saved to the file whose path ends its line.
-A fixer still running after --timeout is ended with everything it started.
+A fixer still running after --timeout is ended with everything it started, but not what it started inside a container.
 Exits 0 when every fixer ran or was skipped for a missing binary, 1 when one failed, 2 on bad usage, when nothing applies or when a fixer timed out.
---json prints {fixers: [{name, command, ok, ms, log, failed?} or {name, command, skipped}], changed} once every fixer ran, changed null outside a git repository.`
+--json prints {fixers: [{name, command, in?, ok, ms, log, failed?} or {name, command, skipped}], changed} once every fixer ran, changed null outside a git repository.`
 
 const options = {
-  list: { type: 'boolean', short: 'l', description: 'print the fixers that apply and the commands that run them, without running them' },
+  list: { type: 'boolean', short: 'l', description: 'print the fixers that apply, the commands that run them and where (host or service), without running them' },
   only: { type: 'string', short: 'o', description: 'comma separated fixers to run, by the names --list prints' },
   timeout: { type: 'string', short: 't', description: 'longest a fixer may run before it is ended (30s, 5m, 1h), none by default' },
+  ...placeOptions,
   json: jsonOption(),
 } as const
 
@@ -47,15 +51,6 @@ async function replaceFile(path: string, content: string): Promise<void> {
 
   await writeFile(temporary, content, { mode: statSync(path).mode & 0o777 })
   await rename(temporary, path)
-}
-
-async function firstFile(dir: string, names: string[]): Promise<string | undefined> {
-  for (const name of names) {
-    if (await Bun.file(join(dir, name)).exists())
-      return name
-  }
-
-  return undefined
 }
 
 // The project's own fix script, recipe or target when it has one, else its lint:fix and format ones.
@@ -106,10 +101,22 @@ async function toolFixers(dir: string): Promise<Fixer[]> {
 }
 
 export async function fixers(dir: string): Promise<Fixer[]> {
-  return [...await projectFixers(dir), ...await toolFixers(dir)]
+  const project = await projectFixers(dir)
+  const csFixer = await firstFile(dir, CS_FIXER_CONFIGS)
+  const php: Fixer[] = csFixer === undefined || project.some(fixer => fixer.source === 'composer.json') ? [] : [{ name: 'php-cs-fixer', command: 'vendor/bin/php-cs-fixer fix', source: csFixer }]
+
+  return [...project, ...php, ...await toolFixers(dir)]
 }
 
-async function runFixer(fixer: Fixer, cwd: string, logFile: string, settings: Omit<StepSettings, 'env'>): Promise<Outcome> {
+// Only the project's scripts and php-cs-fixer go into a compose service: the formatters and the file writer are the host's.
+function runsInService(fixer: Fixer): boolean {
+  return fixer.write === undefined && fixer.requires === undefined
+}
+
+async function runFixer(fixer: Fixer, placement: Placement | undefined, cwd: string, logFile: string, settings: Omit<StepSettings, 'env'>): Promise<Outcome> {
+  if (fixer.write === undefined && placement !== undefined)
+    return runStep(shellIn(placement, fixer.command, { [RUNNING]: '1' }), cwd, logFile, { ...settings, env: { [RUNNING]: '1' } })
+
   if (fixer.write === undefined)
     return runStep(fixer.command, cwd, logFile, { ...settings, env: { [RUNNING]: '1' } })
 
@@ -146,7 +153,8 @@ function printChanged(changed: string[]): void {
 
 // Runs the folder's fixers in order, one line each with what failed under a failing one, then lists the files they changed; returns 0 only when every fixer ran or was skipped for a missing binary.
 export async function fix(args: string[], cwd = process.cwd()): Promise<number> {
-  const parsed = parse(args, usage, options, { replaces: 'running each fixer and formatter by hand', examples: ['fix', ['fix --list', 'the fixers it would run']] })
+  const parsed = parse(args, usage, options, { replaces: 'running each fixer and formatter by hand, or docker compose exec <service> bun run lint:fix', examples: ['fix', ['fix --list', 'the fixers it would run']] })
+  const settings = placeSettings(parsed.values)
 
   if (process.env[RUNNING] !== undefined)
     fail('a fixer called fix again, which would recurse: give its script another command')
@@ -154,18 +162,22 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
   const found = await fixers(cwd)
 
   if (found.length === 0)
-    fail('nothing to fix here: no fix, lint:fix or format script, Makefile, Justfile, go.mod, Cargo.toml nor ruff config')
+    fail('nothing to fix here: no fix, lint:fix or format script, php-cs-fixer config, Makefile, Justfile, go.mod, Cargo.toml nor ruff config')
 
   const picked = pick(found, parsed.values.only)
+  const placements = new Map<Fixer, Placement | undefined>()
+
+  for (const fixer of picked)
+    placements.set(fixer, runsInService(fixer) ? await place(cwd, programOf(fixer.command), settings) : undefined)
 
   const json = parsed.values.json === true
   const missing = (fixer: Fixer) => fixer.requires !== undefined && Bun.which(fixer.requires) === null
 
   if (parsed.values.list === true) {
     if (json)
-      printJson(picked.map(fixer => ({ name: fixer.name, command: fixer.command, source: fixer.source, ...(missing(fixer) ? { needs: fixer.requires } : {}) })))
+      printJson(picked.map(fixer => ({ name: fixer.name, command: fixer.command, source: fixer.source, ...(placements.get(fixer) === undefined ? {} : { in: placements.get(fixer)?.service }), ...(missing(fixer) ? { needs: fixer.requires } : {}) })))
     else
-      console.log(table(picked.map(fixer => [fixer.name, fixer.command, missing(fixer) ? `${fixer.source}, needs ${fixer.requires}` : fixer.source])))
+      console.log(table(picked.map(fixer => [fixer.name, fixer.command, missing(fixer) ? `${fixer.source}, needs ${fixer.requires}` : fixer.source, placements.get(fixer)?.service ?? 'host'])))
 
     return 0
   }
@@ -173,7 +185,8 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
   const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
   const directory = await logDirectory(cwd)
   const held = holdSignals()
-  const settings: Omit<StepSettings, 'env'> = { ...(timeoutMs === undefined ? {} : { timeoutMs }), held }
+  const runSettings: Omit<StepSettings, 'env'> = { ...(timeoutMs === undefined ? {} : { timeoutMs }), held }
+  const stack = new Stack()
 
   const width = Math.max(...picked.map(fixer => fixer.name.length))
   const before = await dirtyFiles(cwd)
@@ -196,12 +209,14 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
       }
 
       const logFile = join(directory, `fix-${fixer.name.replaceAll(':', '-')}.log`)
-      const outcome = await runFixer(fixer, cwd, logFile, settings)
+      const placement = placements.get(fixer)
+      const down = placement === undefined ? undefined : await stack.problem(placement)
+      const outcome = down === undefined ? await runFixer(fixer, placement, cwd, logFile, runSettings) : await refusedStep(down, logFile)
 
       if (!json)
-        printOutcome(fixer.name, width, fixer.command, logFile, outcome)
+        printOutcome(fixer.name, width, placement === undefined ? fixer.command : `${fixer.command} (in ${placement.service})`, logFile, outcome)
 
-      ran.push(outcomeJson(fixer.name, fixer.command, logFile, outcome))
+      ran.push(outcomeJson(fixer.name, fixer.command, logFile, outcome, placement?.service))
 
       if (outcome.timedOut === true)
         timedOut = true

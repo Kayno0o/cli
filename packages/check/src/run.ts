@@ -59,9 +59,16 @@ export async function runStep(command: string, cwd: string, logFile: string, { e
   return { ok: code === 0, ms: Date.now() - started, output, ...(timedOut ? { timedOut } : {}) }
 }
 
-// A step's outcome as --json prints it, what failed under `failed` for a failing one.
-export function outcomeJson(name: string, command: string, logFile: string, outcome: Outcome): { name: string, command: string, ok: boolean, ms: number, log: string, timedOut?: true, failed?: string } {
-  return { name, command, ok: outcome.ok, ms: outcome.ms, log: logFile, ...(outcome.timedOut === true ? { timedOut: true as const } : {}), ...(outcome.ok ? {} : { failed: failureExcerpt(outcome.output) }) }
+// A step that could not start: its failure is the reason, saved to its log like any output.
+export async function refusedStep(reason: string, logFile: string): Promise<Outcome> {
+  await writeFile(logFile, reason, { mode: 0o600, flag: 'wx' })
+
+  return { ok: false, ms: 0, output: reason }
+}
+
+// A step's outcome as --json prints it, what failed under `failed` for a failing one and the compose service it ran in under `in`.
+export function outcomeJson(name: string, command: string, logFile: string, outcome: Outcome, service?: string): { name: string, command: string, in?: string, ok: boolean, ms: number, log: string, timedOut?: true, failed?: string } {
+  return { name, command, ...(service === undefined ? {} : { in: service }), ok: outcome.ok, ms: outcome.ms, log: logFile, ...(outcome.timedOut === true ? { timedOut: true as const } : {}), ...(outcome.ok ? {} : { failed: failureExcerpt(outcome.output) }) }
 }
 
 // One line for a passing step; for a failing one its command, then what failed, indented.
