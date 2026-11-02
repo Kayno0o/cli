@@ -93,4 +93,11 @@ describe('todo-scan', () => {
     expect(result.out).toBe('script.sh:2: owner/repo#4 closed: owner/repo#4 waits on this\nsrc/a.ts:3: kaynooo/kayjs#823 closed: kaynooo/kayjs#823\n')
     expect(result.err).toBe('')
   })
+
+  test('names what gh answered when it cannot look an issue up', () => {
+    const result = scan(['--stale'], standIns('echo "HTTP 404: Not Found" >&2; exit 1'))
+
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('HTTP 404: Not Found')
+  })
 })

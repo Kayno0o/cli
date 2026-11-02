@@ -32,7 +32,7 @@ function walk(dir: string, found: string[]): string[] {
   return found
 }
 
-// The files under the paths (the folder itself when none is given), relative to it: git's own list in a repository, so .gitignore holds, else a walk leaving node_modules and dot folders out.
+// The files under the paths (the folder itself when none is given), relative to it: git's own list in a repository, so .gitignore holds, else a walk leaving dependency, build and dot folders out.
 export async function listFiles(paths: readonly string[], cwd: string): Promise<string[]> {
   const listed = await runCommand(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...paths], { cwd })
 

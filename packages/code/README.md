@@ -22,7 +22,7 @@ hotspots --since '3 months ago' --limit 10
 - `--outline <file>...` lists the declarations at the top of each file and the members one level inside its classes, with their line numbers; a Markdown file lists its headings.
 - `--around <regex> -C <n>` prints the `n` (3) lines on each side of each matching line, spans that touch merged.
 - `--json` prints the spans as `[{path, from, to, lines}]`, `--refs` as `[{path, line, text}]` and `--outline` as `[{path, line, depth, text}]`, the lines never cut; a failure prints as `{"error"}` on stderr.
-- `--def`, `--refs` and `--around` look through the paths given, the files git keeps here by default (`git ls-files` with the untracked files `.gitignore` lets through), and outside a repository a walk leaving `node_modules`, `dist` and dot folders out; binary files and files over 2 MB are skipped.
+- `--def`, `--refs` and `--around` look through the paths given, the files git keeps here by default (`git ls-files` with the untracked files `.gitignore` lets through), and outside a repository a walk leaving dot folders and `node_modules`, `dist`, `build`, `vendor`, `target`, `coverage` out; binary files and files over 2 MB are skipped.
 - The symbols are found by pattern, not by a type checker: a name declared twice in a file shows twice, and a symbol re-exported under another name is not followed.
 - A path must lie inside the repository (a symlink out of it counts as outside), absolute or relative. Exits 1 when nothing is found, a file cannot be read or a span starts past the end, 2 on a usage error or a path outside the repository.
 

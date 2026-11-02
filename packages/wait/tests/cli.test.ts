@@ -94,6 +94,16 @@ describe('waitfor --port and --url', () => {
     expect(result.out).toMatch(new RegExp(`^127\\.0\\.0\\.1:${port} listening after \\d+\\.\\ds\\n$`))
   })
 
+  test('waits on the --host given, not 127.0.0.1', async () => {
+    const server = Bun.listen({ hostname: '127.0.0.2', port: 0, socket: { data: socket => void socket.end() } })
+    const port = server.port
+    const result = await waitfor(['-p', String(port), '-H', '127.0.0.2', '-t', '5s'])
+
+    server.stop(true)
+    expect(result.code).toBe(0)
+    expect(result.out).toStartWith(`127.0.0.2:${port} listening after`)
+  })
+
   test('times out on a closed port, naming the error', async () => {
     const server = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: socket => void socket.end() } })
     const port = server.port
@@ -266,5 +276,13 @@ describe('waitfor usage', () => {
     expect((await waitfor(['-p', '70000'])).err).toContain('up to 65535')
     expect((await waitfor(['-p', '80', '-t', 'soon'])).err).toContain('--timeout takes a duration')
     expect((await waitfor(['--url', 'nope'])).code).toBe(2)
+  })
+
+  test('exits 2 on a usage error', async () => {
+    const results = await Promise.all([[], ['-H', 'db', '--url', 'http://x'], ['-p', '80', 'extra'], ['-p', 'eighty'], ['--pid', '-1']].map(async args => waitfor(args)))
+
+    expect(results.map(({ code }) => code)).toEqual([2, 2, 2, 2, 2])
+    expect(results[1]?.err).toContain('--host goes with --port')
+    expect(results[2]?.err).toContain('unexpected argument extra')
   })
 })
