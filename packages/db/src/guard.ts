@@ -1,5 +1,6 @@
 export interface Token {
-  kind: 'word' | 'punct'
+  // A quoted identifier is its unescaped content, kept apart from keywords: `"set"` is a name while `set` is a command.
+  kind: 'word' | 'punct' | 'quoted'
   text: string
 }
 
@@ -19,6 +20,11 @@ const DIGITS = /\d/
 const COMMAND_ENDS = ';'
 // Stands for a quote or dollar-quoted body that never closes, which hides the rest of the text.
 const UNCLOSED = 'unclosed'
+// Stand for a NUL byte, and for a `U&"..."` identifier whose escapes can spell any name.
+const NUL = '\0'
+const UNICODE_IDENTIFIER = 'U&"'
+const UNICODE_PREFIX = /u&$/i
+const LINE_END = /[\r\n]/
 
 // A SET starting a statement changes a session setting, harmless unless it switches the role or the transaction's access mode.
 const PRIVILEGED_SET = new Set(['role', 'session', 'transaction'])
@@ -29,8 +35,8 @@ const READ_STARTS = new Set(['select', 'with', 'values', 'table', 'show', 'expla
 // Words that write or lock wherever they appear in a statement that started like a read, such as a DELETE inside a CTE.
 const WRITE_WORDS = new Set(['insert', 'update', 'delete', 'merge', 'truncate', 'drop', 'alter', 'create', 'grant', 'revoke', 'into', 'call', 'vacuum', 'lock', 'refresh', 'reindex', 'cluster', 'do'])
 
-// Functions with side effects: sequences, settings, backends, advisory locks, large objects, remote access and server files.
-const SIDE_EFFECT_FUNCTIONS = /^(?:nextval|setval|set_config|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_switch_wal|pg_create_restore_point|pg_advisory_lock\w*|pg_advisory_xact_lock\w*|pg_try_advisory\w*|pg_notify|lo_\w+|dblink\w*|pg_read_file|pg_read_binary_file|pg_ls_dir|query_to_xml\w*|pg_logical_\w+|pg_replication_\w+|pg_drop_replication_slot|pg_stat_reset\w*|pg_promote|pg_file_\w+)$/
+// Functions with side effects: sequences, settings, backends, advisory locks, large objects, remote access, server files, sleeping and transaction ids.
+const SIDE_EFFECT_FUNCTIONS = /^(?:nextval|setval|set_config|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_switch_wal|pg_create_restore_point|pg_advisory_lock\w*|pg_advisory_xact_lock\w*|pg_try_advisory\w*|pg_notify|lo_\w+|dblink\w*|pg_read_file|pg_read_binary_file|pg_ls_\w+|pg_stat_file|pg_sleep\w*|pg_export_snapshot|pg_backup_start|pg_backup_stop|pg_start_backup|pg_stop_backup|txid_current|pg_current_xact_id|pg_current_logfile|pg_wal_replay_\w+|\w+_to_xml\w*|pg_logical_\w+|pg_replication_\w+|pg_drop_replication_slot|pg_stat_reset\w*|pg_promote|pg_file_\w+)$/
 
 // Splits SQL into words and punctuation, dropping comments and the content of strings, quoted identifiers and dollar-quoted bodies, but keeping what a MySQL `/*! ... */` comment runs.
 export function tokenize(sql: string): Token[] {
@@ -44,10 +50,14 @@ export function tokenize(sql: string): Token[] {
     if (SPACE.test(char)) {
       at++
     }
+    else if (char === NUL) {
+      tokens.push({ kind: 'punct', text: NUL })
+      at++
+    }
     else if (char === '-' && next === '-') {
-      const end = sql.indexOf('\n', at)
+      const end = sql.slice(at).search(LINE_END)
 
-      at = end === -1 ? sql.length : end + 1
+      at = end === -1 ? sql.length : at + end + 1
     }
     else if (char === '/' && next === '*' && sql.charAt(at + 2) === '!') {
       at += 3
@@ -58,12 +68,22 @@ export function tokenize(sql: string): Token[] {
     else if (char === '/' && next === '*') {
       at = skipComment(sql, at)
     }
-    else if (char === '\'' || char === '"' || char === '`') {
-      const backslashes = char === '\'' && ESCAPE_PREFIX.test(sql.charAt(at - 1)) && !WORD_PART.test(sql.charAt(at - 2))
+    else if (char === '\'') {
+      const backslashes = ESCAPE_PREFIX.test(sql.charAt(at - 1)) && !WORD_PART.test(sql.charAt(at - 2))
       const end = skipQuoted(sql, at, char, backslashes)
 
       at = end ?? sql.length
       tokens.push({ kind: 'punct', text: end === undefined ? UNCLOSED : char })
+    }
+    // A backtick quotes an identifier in MySQL, which clients.ts also checks with this tokenizer.
+    else if (char === '"' || char === '`') {
+      const end = skipQuoted(sql, at, char, false)
+
+      if (char === '"' && UNICODE_PREFIX.test(sql.slice(Math.max(0, at - 2), at)) && !WORD_PART.test(sql.charAt(at - 3)))
+        tokens.push({ kind: 'punct', text: UNICODE_IDENTIFIER })
+
+      tokens.push(end === undefined ? { kind: 'punct', text: UNCLOSED } : { kind: 'quoted', text: sql.slice(at + 1, end - 1).replaceAll(char + char, char) })
+      at = end ?? sql.length
     }
     else if (char === '$' && DOLLAR_TAG.test(sql.slice(at))) {
       const tag = DOLLAR_TAG.exec(sql.slice(at))?.[0] ?? '$$'
@@ -182,6 +202,13 @@ function statementWrites(statement: Token[]): string[] {
   for (const [index, token] of statement.entries()) {
     if (isPunct(token, UNCLOSED))
       reasons.push('has a quote that never closes')
+    else if (isPunct(token, NUL))
+      reasons.push('contains a NUL byte')
+    else if (isPunct(token, UNICODE_IDENTIFIER))
+      reasons.push('uses a U& escaped identifier')
+
+    if (token.kind === 'quoted' && SIDE_EFFECT_FUNCTIONS.test(token.text))
+      reasons.push(`calls ${token.text}`)
 
     if (token.kind !== 'word')
       continue

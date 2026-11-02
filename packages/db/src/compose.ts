@@ -100,14 +100,20 @@ export async function composeServices(): Promise<Service[]> {
     return []
   }
 
-  const rows = ps.code === 0 ? parsePs(stdoutOf(ps.chunks)).filter(row => row.State === 'running' && row.ID !== undefined) : []
+  try {
+    const rows = ps.code === 0 ? parsePs(stdoutOf(ps.chunks)).filter(row => row.State === 'running' && row.ID !== undefined) : []
 
-  if (rows.length === 0)
+    if (rows.length === 0)
+      return []
+
+    const inspect = await runCommand(['docker', 'inspect', ...rows.map(row => row.ID ?? '')])
+
+    return inspect.code === 0 ? describeServices(rows, JSON.parse(stdoutOf(inspect.chunks)) as Inspected[]) : []
+  }
+  catch {
+    // Output that is not the JSON Compose prints is read as no project.
     return []
-
-  const inspect = await runCommand(['docker', 'inspect', ...rows.map(row => row.ID ?? '')])
-
-  return inspect.code === 0 ? describeServices(rows, JSON.parse(stdoutOf(inspect.chunks)) as Inspected[]) : []
+  }
 }
 
 // The Postgres service to read: the one named, else the only one running.

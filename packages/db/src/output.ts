@@ -7,6 +7,9 @@ export interface Shown {
   rows: Row[]
   total: number
   omitted: number
+  // False when the rows came through a cursor that stopped at the cap, so total and omitted only count what was fetched.
+  exact: boolean
+  truncated: boolean
   masked: string[]
 }
 
@@ -34,15 +37,15 @@ export function jsonValue(_key: string, value: unknown): unknown {
 }
 
 // Caps the rows and masks sensitive columns, keeping how many were left out.
-export function shape(rows: Row[], limit: number, raw: boolean): Shown {
+export function shape(rows: Row[], limit: number, raw: boolean, exact = true): Shown {
   const { rows: masked, masked: columns } = maskRows(rows.slice(0, limit), raw)
 
-  return { columns: Object.keys(rows[0] ?? {}), rows: masked, total: rows.length, omitted: Math.max(0, rows.length - limit), masked: columns }
+  return { columns: Object.keys(rows[0] ?? {}), rows: masked, total: rows.length, omitted: Math.max(0, rows.length - limit), exact, truncated: rows.length > limit, masked: columns }
 }
 
 export function render(shown: Shown, json: boolean): string {
   if (json)
-    return JSON.stringify({ columns: shown.columns, rows: shown.rows, total: shown.total, omitted: shown.omitted, masked: shown.masked }, jsonValue, 2)
+    return JSON.stringify({ columns: shown.columns, rows: shown.rows, ...(shown.exact ? { total: shown.total, omitted: shown.omitted } : {}), truncated: shown.truncated, masked: shown.masked }, jsonValue, 2)
 
   if (shown.total === 0)
     return 'no rows'
@@ -52,7 +55,9 @@ export function render(shown: Shown, json: boolean): string {
     ...shown.rows.map(row => shown.columns.map(column => cell(row[column]))),
   ], { cellWidth: CELL_WIDTH })]
 
-  if (shown.omitted > 0)
+  if (shown.truncated && !shown.exact)
+    lines.push('... more rows not shown (-n raises the cap)')
+  else if (shown.truncated)
     lines.push(`... ${shown.omitted} more ${shown.omitted === 1 ? 'row' : 'rows'} not shown (${shown.total} in all, -n raises the cap)`)
 
   if (shown.masked.length > 0)

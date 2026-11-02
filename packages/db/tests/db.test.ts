@@ -86,9 +86,11 @@ afterAll(() => {
 }, 30_000)
 
 const cwd = mkdtempSync(join(tmpdir(), 'db-tools-'))
+// A home without a ~/.config/db/config.json, so the allowlist is empty unless a test writes one.
+const home = mkdtempSync(join(tmpdir(), 'db-tools-home-'))
 
 async function db(args: string[], env: Record<string, string> = { DATABASE_URL: url }, stdin?: string) {
-  const child = Bun.spawn([process.execPath, CLI, ...args], { cwd, env: { PATH: process.env.PATH ?? '', ...env }, stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe' })
+  const child = Bun.spawn([process.execPath, CLI, ...args], { cwd, env: { PATH: process.env.PATH ?? '', HOME: home, ...env }, stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe' })
   const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
 
   return { out, err, code }
@@ -100,17 +102,18 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
 
     expect(result.code).toBe(0)
     expect(result.out).toContain('user1 ')
-    expect(result.out).toContain('50 more rows not shown (150 in all')
+    expect(result.out).toContain('... more rows not shown (-n raises the cap)')
+    expect(result.out).not.toContain('user101')
     expect(result.out).toContain('masked: email, password_hash')
     expect(result.out).not.toContain('u1@x.io')
   })
 
   test('shows masked columns with --raw, and honors -n and --json', async () => {
     const result = await db(['query', '-n', '2', '--raw', '--json', 'select id, email from users order by id'])
-    const json = JSON.parse(result.out) as { rows: unknown, omitted: number }
+    const json = JSON.parse(result.out) as { rows: unknown, truncated: boolean }
 
     expect(json.rows).toEqual([{ id: 1, email: 'u1@x.io' }, { id: 2, email: 'u2@x.io' }])
-    expect(json.omitted).toBe(148)
+    expect(json.truncated).toBe(true)
   })
 
   test('reads SQL from stdin', async () => {
@@ -121,6 +124,8 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
     'insert into audit (note) values (\'x\')',
     'with d as (delete from audit returning *) select * from d',
     'select nextval(\'audit_id_seq\')',
+    'select "nextval"(\'audit_id_seq\')',
+    'select 1 --\r; delete from audit',
     'select 1; delete from audit',
   ])('prints %p instead of running it', async (sql) => {
     const result = await db([sql])
@@ -137,7 +142,7 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
     let message = ''
 
     try {
-      await readRows(url, 'insert into audit (note) values (\'x\')')
+      await readRows(url, 'select nextval(\'audit_id_seq\')')
     }
     catch (error) {
       message = error instanceof Error ? error.message : String(error)
@@ -145,6 +150,22 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
 
     expect(message).toContain('read-only')
     expect(await readRows(url, 'select count(*)::int as n from audit')).toEqual([{ n: 0 }])
+  })
+
+  test('reads a select through a cursor that stops one row past the cap', async () => {
+    const { readRows } = await import('../src/run')
+
+    expect(await readRows(url, 'select * from generate_series(1, 1000000) n', [], 3)).toHaveLength(4)
+    expect(await readRows(url, 'select $1::int as n', [7], 3)).toEqual([{ n: 7 }])
+    expect(await readRows(url, 'show server_version', [], 3)).toHaveLength(1)
+    expect((await db(['-n', '0', 'select 1 as one'])).out).toContain('more rows not shown')
+  })
+
+  test('opens the session read-only with a lock and idle timeout', async () => {
+    const { readRows } = await import('../src/run')
+    const [settings] = await readRows(url, 'select current_setting(\'default_transaction_read_only\') as ro, current_setting(\'lock_timeout\') as lock, current_setting(\'idle_in_transaction_session_timeout\') as idle')
+
+    expect(settings).toEqual({ ro: 'on', lock: '5s', idle: '1min' })
   })
 
   test('lists tables and describes one', async () => {
@@ -191,7 +212,7 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
       const target = new URL(url)
       const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
       const ps = { ID: 'abc123', Service: 'database', State: 'running', Image: 'postgres:18-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: Number(target.port) }] }
-      const inspect = [{ Id: 'abc123def', Name: '/app-database-1', Config: { Env: [`POSTGRES_USER=${decodeURIComponent(target.username)}`, `POSTGRES_PASSWORD=${decodeURIComponent(target.password)}`, `POSTGRES_DB=${target.pathname.slice(1)}`, 'PG_MAJOR=18'] }, NetworkSettings: { Networks: { app: { IPAddress: '10.0.0.2', Aliases: ['database'] } } } }]
+      const inspect = [{ Id: 'abc123def', Name: '/app-database-1', Config: { Env: [`POSTGRES_USER=${decodeURIComponent(target.username)}`, `POSTGRES_PASSWORD=${decodeURIComponent(target.password)}`, `POSTGRES_DB=${target.pathname.slice(1)}`, 'PG_MAJOR=18'] }, NetworkSettings: { Networks: { app: { IPAddress: '10.0.0.2', Aliases: ['database', 'db'] } } } }]
 
       writeFileSync(join(bin, 'ps.json'), `${JSON.stringify(ps)}\n`)
       writeFileSync(join(bin, 'inspect.json'), JSON.stringify(inspect))
@@ -220,6 +241,27 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
 
     expect(result.code).toBe(0)
     expect(result.out).toContain('150')
+  })
+
+  test.skipIf(!compose.loopback)('reaches a URL naming the service by a network alias', async () => {
+    const aliased = new URL(url)
+
+    aliased.hostname = 'db'
+
+    expect((await db(['select count(*) as n from users'], { PATH: compose.path, DATABASE_URL: aliased.href })).out).toContain('150')
+  })
+
+  test('refuses a host that is neither local nor a compose service, before connecting', async () => {
+    const remote = new URL(url)
+
+    remote.hostname = 'db.example.com'
+
+    const result = await db(['select 1'], { DATABASE_URL: remote.href })
+
+    expect(result.code).toBe(2)
+    expect(result.err).toContain('db.example.com')
+    expect(result.err).toContain(join(home, '.config', 'db', 'config.json'))
+    expect(result.out + result.err).not.toContain(PASSWORD)
   })
 
   test.skipIf(!compose.loopback)('lists the databases and reads another with --database', async () => {

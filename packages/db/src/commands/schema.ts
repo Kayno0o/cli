@@ -1,9 +1,11 @@
 import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
-import { connectionOptions, DEFAULT_LIMIT, outputOptions } from '../args'
+import { connectionOptions, DEFAULT_LIMIT, HOSTS_NOTE, outputOptions } from '../args'
 import { render, shape } from '../output'
 import { connectionUrl, readRows } from '../run'
 
 const options = { ...connectionOptions, ...outputOptions } as const
+
+const EXITS = 'Exits 0 when it listed them, 1 when the database refused or was unreachable, 2 on a usage error or a host that is not allowed.'
 
 const TABLES = `
 select n.nspname as schema, c.relname as name,
@@ -36,23 +38,24 @@ async function show(args: string[], usage: string, work: (positionals: string[])
 
   const { values, positionals } = parsed
   const { sql, params } = work(positionals)
-  const rows = await readRows(await connectionUrl(values), sql, params)
+  const limit = wholeNumber(values.limit, 'limit', DEFAULT_LIMIT, 0)
+  const rows = await readRows(await connectionUrl(values), sql, params, limit)
 
-  console.log(render(shape(rows, wholeNumber(values.limit, 'limit', DEFAULT_LIMIT, 0), true), values.json === true))
+  console.log(render(shape(rows, limit, true, false), values.json === true))
 
   return 0
 }
 
 export async function tables(args: string[]): Promise<number> {
-  return show(args, 'db tables\n\nLists the tables, views and materialized views outside the system schemas, with an estimated row count.\n\nExits 0 when it listed them, 1 when the database refused or was unreachable, 2 on a usage error.', () => ({ sql: TABLES, params: [] }))
+  return show(args, `db tables\n\nLists the tables, views and materialized views outside the system schemas, with an estimated row count.\n\n${HOSTS_NOTE}\n\n${EXITS}`, () => ({ sql: TABLES, params: [] }))
 }
 
 export async function databases(args: string[]): Promise<number> {
-  return show(args, 'db dbs\n\nLists the databases the connection may open, with their size, marking the one it reads, so --database can pick another.\n\nExits 0 when it listed them, 1 when the database refused or was unreachable, 2 on a usage error.', () => ({ sql: DATABASES, params: [] }))
+  return show(args, `db dbs\n\nLists the databases the connection may open, with their size, marking the one it reads, so --database can pick another.\n\n${HOSTS_NOTE}\n\n${EXITS}`, () => ({ sql: DATABASES, params: [] }))
 }
 
 export async function describe(args: string[]): Promise<number> {
-  return show(args, 'db describe <table>\n\nLists a table\'s columns with type, nullability, default and primary key. Takes `schema.table` to tell apart tables of the same name.\n\nExits 0 when it listed them, 1 when the database refused or was unreachable, 2 on a usage error.', ([target, ...extra]) => {
+  return show(args, `db describe <table>\n\nLists a table's columns with type, nullability, default and primary key. Takes \`schema.table\` to tell apart tables of the same name.\n\n${HOSTS_NOTE}\n\n${EXITS}`, ([target, ...extra]) => {
     if (target === undefined || extra.length > 0)
       fail('db describe takes one table name')
 

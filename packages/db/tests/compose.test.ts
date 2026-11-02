@@ -1,3 +1,7 @@
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
 import { Exit } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { describeServices, parsePs, pickPostgres, serviceUrl } from '../src/compose'
@@ -85,5 +89,25 @@ describe('serviceUrl', () => {
 
   test('refuses a password kept in a file', () => {
     expect(failure(() => serviceUrl({ ...services[1]!, env: { POSTGRES_PASSWORD_FILE: '/run/secrets/pw' } }))).toContain('reads its password from a file')
+  })
+})
+
+describe('composeServices', () => {
+  // Runs in a child, as Bun looks docker up on the PATH the process started with.
+  async function listed(dockerScript: string): Promise<unknown> {
+    const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
+
+    writeFileSync(join(bin, 'docker'), dockerScript)
+    chmodSync(join(bin, 'docker'), 0o755)
+
+    const child = Bun.spawn([process.execPath, '-e', 'import { composeServices } from "./src/compose"; console.log(JSON.stringify(await composeServices()))'], { cwd: new URL('..', import.meta.url).pathname, env: { PATH: `${bin}:${process.env.PATH ?? ''}` }, stdout: 'pipe', stderr: 'pipe' })
+
+    return JSON.parse(await new Response(child.stdout).text())
+  }
+
+  test('reads output that is not JSON as no project', async () => {
+    expect(await listed('#!/bin/sh\necho "not json"\n')).toEqual([])
+    expect(await listed('#!/bin/sh\ncase "$1" in compose) echo \'{"ID":"abc","Service":"database","State":"running"}\' ;; *) echo "oops" ;; esac\n')).toEqual([])
+    expect(await listed('#!/bin/sh\necho null\n')).toEqual([])
   })
 })
