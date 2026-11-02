@@ -14,7 +14,12 @@
     "ft": "$npm_execpath packages/ft/src/cli.ts"
   },
   "devDependencies": {
-    "@kaynooo/eslint": "^7.0.4",
+    "@kaynooo/eslint": "^7.1.4",
     "@types/bun": "^1.4.3"
+  },
+  "overrides": {
+    "katex": "^0.18.2",
+    "minimatch": "^11.0.3",
+    "tinypool": "^2.2.0"
   }
 }
