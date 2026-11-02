@@ -10,7 +10,7 @@
     "check": "$npm_execpath check",
     "lint": "keslint --cache",
     "lint:fix": "keslint --fix --cache",
-    "test": "$npm_execpath test",
+    "test": "$npm_execpath test --parallel",
     "ft": "$npm_execpath packages/ft/src/cli.ts"
   },
   "devDependencies": {
