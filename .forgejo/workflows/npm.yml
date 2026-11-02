@@ -8,40 +8,25 @@ on:
     tags:
       - '*-v*'
 
+# The tests are not rerun here: `ft release` waits for the Tests run on main before the version bump, and the bump commit only changes versions.
 jobs:
   publish:
     runs-on: alpine
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - uses: https://git.kaynooo.fr/kaynooo/actions/setup-bun@v1
 
-      - name: Check, lint and test
-        run: bun run check && bun run lint && bun run test
-
-      # A tag ft-v0.3.0 builds and publishes packages/ft; cli-kit ships its source, so it has no build.
-      - name: Publish to the Forgejo npm registry
-        run: |
-          trap 'rm -f ~/.npmrc' EXIT
-          echo "@kaynooo:registry=https://git.kaynooo.fr/api/packages/kaynooo/npm/" > ~/.npmrc
-          echo "//git.kaynooo.fr/api/packages/kaynooo/npm/:_authToken=${PACKAGE_TOKEN}" >> ~/.npmrc
-          cd "packages/${TAG%-v*}"
-          bun run --if-present build
-          bun publish --access public
+      # A tag ft-v0.3.0 publishes packages/ft; cli-kit ships its source, so it has no build.
+      - name: Find the package
+        id: package
+        run: echo "directory=packages/${TAG%-v*}" >> "$GITHUB_OUTPUT"
         env:
           TAG: ${{ github.ref_name }}
-          PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
 
-      # The same package goes to npmjs. The repo .npmrc maps @kaynooo to Forgejo and beats publishConfig and --registry, so the scope flag overrides it; bun publish finds no auth for registry.npmjs.org even with a valid token.
-      - name: Publish to npmjs
-        run: |
-          trap 'rm -f ~/.npmrc' EXIT
-          test -n "${NPM_TOKEN}" || { echo "the NPM_TOKEN secret is empty"; exit 1; }
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          cd "packages/${TAG%-v*}"
-          bunx npm@12.2.1 publish --access public --@kaynooo:registry=https://registry.npmjs.org/
-        env:
-          TAG: ${{ github.ref_name }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - uses: https://git.kaynooo.fr/kaynooo/actions/npm-publish@v1
+        with:
+          working-directory: ${{ steps.package.outputs.directory }}
+          token: ${{ secrets.PACKAGE_TOKEN }}
+          npm-token: ${{ secrets.NPM_TOKEN }}
