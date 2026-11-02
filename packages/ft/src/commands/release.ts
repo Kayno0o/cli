@@ -33,8 +33,9 @@ const PARTS = /^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/
 const LAST_NUMBER = /\d+$/
 const REGISTRY_TRIES = 12
 const REGISTRY_POLL = 5000
-// How long a push may take before it is given up.
-const PUSH_MS = 5 * 60_000
+
+// How long a push may take before it is given up; tests shorten it.
+export const limits = { pushMs: 5 * 60_000 }
 // How long one `bun info` may take before the registry counts as not serving the version yet.
 const REGISTRY_INFO_MS = 30_000
 // How long a pushed commit may go without a run before the release goes on: a push touching only ignored paths starts none.
@@ -128,7 +129,7 @@ async function testsPass(sha: string, branch: string, timeout: number): Promise<
     let push
 
     try {
-      push = await runTool('git push', ['git', 'push', 'origin', `${sha}:refs/heads/${branch}`], { timeoutMs: PUSH_MS, onStart: child => held.forward(child) })
+      push = await runTool('git push', ['git', 'push', 'origin', `${sha}:refs/heads/${branch}`], { timeoutMs: limits.pushMs, onStart: child => held.forward(child) })
     }
     finally {
       held.release()
@@ -265,6 +266,8 @@ export async function release(args: string[]): Promise<number> {
   let tag = ''
   let head = ''
   let pushed = false
+  // a push that timed out may have landed, so its bump is kept rather than dropped
+  let isPushUnknown = false
 
   // Everything between the bump and the push is undone on a failure or a signal, but only what this run created: with --tagged the commit and tag are the user's own.
   try {
@@ -292,7 +295,15 @@ export async function release(args: string[]): Promise<number> {
     if (held.signal !== undefined)
       fail(`interrupted by ${held.signal} before the push`, exitCodeOf(null, held.signal))
 
-    const push = await runTool('git push', ['git', 'push', '--atomic', 'origin', `HEAD:refs/heads/${branch}`, tag], { timeoutMs: PUSH_MS, onStart: child => held.forward(child) })
+    let push
+
+    try {
+      push = await runTool('git push', ['git', 'push', '--atomic', 'origin', `HEAD:refs/heads/${branch}`, tag], { timeoutMs: limits.pushMs, onStart: child => held.forward(child) })
+    }
+    catch (error) {
+      isPushUnknown = true
+      fail(`${error instanceof Error ? error.message : String(error)}, so ${tag} and its commit are kept: the push may have landed`, 2, `git ls-remote origin refs/tags/${tag} tells; if it is there, ft release --tagged waits for its runs`)
+    }
 
     if (push.code !== 0) {
       const signal = signalOf()
@@ -305,7 +316,7 @@ export async function release(args: string[]): Promise<number> {
   finally {
     held.release()
 
-    if (!pushed && level !== undefined)
+    if (!pushed && !isPushUnknown && level !== undefined)
       await rollBack(preBump, tagsBefore)
   }
 

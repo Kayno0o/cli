@@ -5,12 +5,12 @@ import process from 'node:process'
 import { capture } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
-import { release } from '../src/commands/release'
+import { limits, release } from '../src/commands/release'
 import { timing } from '../src/commands/watch'
 import { withFakeTea } from './fake-tea'
 
-// A clone whose origin refuses every tag, with an unpushed `feat` commit.
-async function refusingTags(run: (sha: string) => Promise<void>): Promise<void> {
+// A clone whose origin refuses every tag (or runs `hookScript` on each pushed ref), with an unpushed `feat` commit.
+async function refusingTags(run: (sha: string) => Promise<void>, hookScript = 'while read old new ref; do case "$ref" in refs/tags/*) echo "no tags here" >&2; exit 1;; esac; done'): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
   const origin = join(root, 'origin.git')
   const work = join(root, 'work')
@@ -23,7 +23,7 @@ async function refusingTags(run: (sha: string) => Promise<void>): Promise<void> 
     process.chdir(work)
     await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
     await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.quiet()
-    await Bun.write(hook, '#!/bin/sh\nwhile read old new ref; do case "$ref" in refs/tags/*) echo "no tags here" >&2; exit 1;; esac; done\n')
+    await Bun.write(hook, `#!/bin/sh\n${hookScript}\n`)
     await chmod(hook, 0o755)
     await Bun.write(join(work, 'a.ts'), 'export {}\n')
     await $`git add a.ts && git commit -q -m feat`.quiet()
@@ -68,4 +68,25 @@ describe('release rollback', () => {
       expect((await $`git tag`.text()).trim()).toBe('v1.0.1')
     })
   })
+
+  test('a push that times out keeps the bump, as it may have landed', async () => {
+    const pushMs = limits.pushMs
+
+    limits.pushMs = 1000
+
+    try {
+      await refusingTags(async (sha) => {
+        await withFakeTea({ issues: [], runs: passing(sha) }, async () => {
+          // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+          await expect(capture(async () => release(['patch']))).rejects.toThrow('the push may have landed')
+        })
+
+        expect((await $`git tag`.text()).trim()).toBe('v1.0.1')
+        expect(((await Bun.file('package.json').json()) as { version: string }).version).toBe('1.0.1')
+      }, 'while read old new ref; do case "$ref" in refs/tags/*) sleep 5;; esac; done')
+    }
+    finally {
+      limits.pushMs = pushMs
+    }
+  }, 20_000)
 })
