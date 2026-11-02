@@ -30,6 +30,14 @@ function redact(args: string[], stdin: string) {
 }
 
 describe('Redactor', () => {
+  test('masks a webhook URL and a token query parameter, and leaves a plain URL', () => {
+    const redactor = new Redactor()
+    const input = 'a http://127.0.0.1:55601/api/push/Zx9Cv8Bn7Mq6We5Rt4Yu3Io2Pa1S b https://example.com/x?sig=abcdefghij c https://example.com/health\n'
+    const out = redactor.push(input) + redactor.end()
+
+    expect(out).toBe('a http://127.0.0.1:55601/api/push/Zx9***(28) b https://example.com/x?sig=ab***(10) c https://example.com/health\n')
+  })
+
   test.each([['GitHub', GITHUB], ['GitLab', GITLAB], ['sk-', OPENAI], ['Slack', SLACK], ['JWT', JWT]])('masks a %s token', (_name, token) => {
     const redactor = new Redactor()
     const out = redactor.push(`before ${token} after\n`) + redactor.end()

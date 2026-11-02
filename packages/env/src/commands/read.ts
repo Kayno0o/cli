@@ -6,7 +6,7 @@ import { maskValue } from '../mask'
 
 const listUsage = `ev list [file]
 
-Prints every key of the folder's .env* files, or of one file, with secret values masked: a few leading characters and the length under a key named like TOKEN, SECRET, PASSWORD, KEY, PRIVATE or DSN, and the password of any URL.
+Prints every key of the folder's .env* files, or of one file, with secret values masked: a few leading characters and the length under a key named like TOKEN, SECRET, PASSWORD, KEY, PRIVATE or DSN, and the password and tokens of any URL.
 
 Exits 0 when it printed them, 1 when there is no .env* file, 2 on a usage error.`
 

@@ -61,6 +61,28 @@ describe('ev', () => {
       expect(out).not.toContain(secret)
   })
 
+  test('list, get and grep mask webhook and push URLs under any key, and keep a plain URL', async () => {
+    const hook = 'https://discord.com/api/webhooks/123456789012345678/Ab3dEf6hIj9kLm2NoPq5RsT8uVw1Ab3dEf6hIj9kLm2NoPq5RsT8uVw1'
+    const push = 'http://127.0.0.1:55601/api/push/Zx9Cv8Bn7Mq6We5Rt4Yu3Io2Pa1S'
+
+    await write('.env', `DISCORD_WEBHOOK_URL=${hook}\nexport HEALTHCHECK_URL_BACKUP=${push}\nSTATUS_ENDPOINT=https://example.com/api/v1/users?page=1&apikey=abcdefghij\nSITE_URL=https://example.com/health\n`)
+
+    for (const args of [['list'], ['get', 'DISCORD_WEBHOOK_URL'], ['get', 'HEALTHCHECK_URL_BACKUP'], ['grep', '_URL|_ENDPOINT']]) {
+      const { out } = ev(args)
+
+      expect(out).not.toContain('Ab3dEf6hIj9kLm2NoPq5')
+      expect(out).not.toContain('Zx9Cv8Bn7Mq6')
+      expect(out).not.toContain('apikey=abcdefghij')
+    }
+
+    const { out } = ev(['list'])
+
+    expect(out).toContain('https://discord.com/api/webhooks/123456789012345678/Ab3***(')
+    expect(out).toContain('http://127.0.0.1:55601/api/push/Zx9***(28)')
+    expect(out).toContain('apikey=ab***(10)')
+    expect(out).toContain('https://example.com/health')
+  })
+
   test('list of one file, and a missing file', async () => {
     await write('.env', ENV)
     await write('.env.local', 'ONLY_HERE=1\n')
