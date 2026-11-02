@@ -189,9 +189,13 @@ async function main(args: string[]): Promise<number> {
       }
 
       if (values.url !== undefined && urlLeft !== undefined) {
-        const check = await urlCheck(values.url, Math.max(1, Math.min(URL_TIMEOUT, started + timeout - Date.now())))
+        const budget = Math.max(1, Math.min(URL_TIMEOUT, started + timeout - Date.now()))
+        const check = await urlCheck(values.url, budget)
+        // a probe the deadline cut short says less than the answer before it
+        const isCutShort = 'problem' in check && check.isTimeout === true && budget < URL_TIMEOUT && urlLeft !== 'not checked yet'
 
-        urlLeft = 'problem' in check ? check.problem : undefined
+        if (!isCutShort)
+          urlLeft = 'problem' in check ? check.problem : undefined
 
         if ('status' in check)
           console.log(`${values.url} answered ${check.status} after ${formatDuration(Date.now() - started)}`)

@@ -168,7 +168,7 @@ async function closeWhenConnected(attempt: ReturnType<typeof Bun.connect>): Prom
 }
 
 // The status once the URL answers 2xx, else what it answered or why it could not.
-export async function urlCheck(url: string, timeout: number): Promise<{ status: number } | { problem: string }> {
+export async function urlCheck(url: string, timeout: number): Promise<{ status: number } | { problem: string, isTimeout?: boolean }> {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(timeout) })
 
@@ -177,6 +177,6 @@ export async function urlCheck(url: string, timeout: number): Promise<{ status: 
     return response.ok ? { status: response.status } : { problem: `answered ${response.status}` }
   }
   catch (error) {
-    return { problem: error instanceof Error ? error.message : String(error) }
+    return { problem: error instanceof Error ? error.message : String(error), isTimeout: error instanceof Error && error.name === 'TimeoutError' }
   }
 }
