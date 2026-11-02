@@ -6,6 +6,7 @@ import { version } from '../package.json'
 import { audit } from './commands/audit'
 import { diff, missing } from './commands/compare'
 import { cp, mv, set, unset } from './commands/edit'
+import { pins } from './commands/pins'
 import { get, grep, list, show } from './commands/read'
 
 process.exitCode = await runCli({
@@ -25,6 +26,7 @@ process.exitCode = await runCli({
     mv: { run: mv, summary: 'move a key from one file to another' },
     diff: { run: diff, summary: 'keys set in one file and not the other' },
     missing: { run: missing, summary: 'keys of .env.example that .env lacks' },
+    pins: { run: pins, summary: 'the env vars reaching outside that an app\'s tests leave to a developer\'s env' },
     audit: { run: audit, summary: '.env files others can read or git tracks, compose files writing secrets out' },
   },
   aliases: { ls: 'list' },

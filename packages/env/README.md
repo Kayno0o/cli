@@ -20,6 +20,7 @@ bun install -g @kaynooo/env-tools
 | `ev mv KEY --from <file> --to <file>` | moves a key's line as written, `--force` to replace one the target has |
 | `ev diff <a> <b>` | names the keys set in one file and not the other, exit 1 when they differ |
 | `ev missing [file]` | names the keys of `.env.example` (`--against`) that the file lacks, exit 1 when some are |
+| `ev pins [dir]` | checks an app's tests pin the env that reaches outside: lists the optional URL, key, token, secret, password and host variables of its `defineEnv` schema that no `.env.test` entry, test `overrideEnv` or local bunfig preload dropping what `.env` sets pins, and each test file calling `testSite` or `proxyKeyTests` without pinning them (`// ev pins: none reached, <why>` exempts one), names only, exit 1 when something is unpinned |
 | `ev audit [dir...]` | lists the `.env` files any account can read or git tracks, and the compose files any account can read that write a secret or URL password out, with the fix for each, exit 1 when it finds one |
 | `ev audit --fix [dir...]` | moves each secret a listed compose file writes out into the `.env` beside it as `${KEY}` (a key the `.env` sets to another value stays put), puts it back when `docker compose config` resolves differently, and shuts other accounts out of both files and of every listed `.env`; exit 1 when something is left |
 
