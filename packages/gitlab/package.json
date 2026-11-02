@@ -5,13 +5,13 @@
   "description": "gl: GitLab pipelines waited on and their failed jobs' traces read from the terminal, through glab.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/gitlab#readme",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/gitlab#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
     "directory": "packages/gitlab"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
   "keywords": [
     "gitlab",
     "glab",

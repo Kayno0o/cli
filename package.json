@@ -1,5 +1,5 @@
 {
-  "name": "agent-tools",
+  "name": "cli",
   "type": "module",
   "private": true,
   "description": "CLIs built for Claude Code agents: Forgejo and GitLab CI, .env files without secrets, repo checks, guards and more.",

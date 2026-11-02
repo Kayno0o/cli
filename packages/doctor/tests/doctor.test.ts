@@ -118,7 +118,7 @@ describe('checkHooks', () => {
   })
 
   test('fails with neither, settings missing included', () => {
-    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git' })
+    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/cli.git' })
   })
 })
 

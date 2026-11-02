@@ -2,16 +2,16 @@
   "name": "@kaynooo/cli-doctor",
   "type": "module",
   "version": "0.1.3",
-  "description": "doctor: checks the agent-tools install of a host: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks and the Bun floor; agent-tools list: every bin in one line, read from its own help.",
+  "description": "doctor: checks the @kaynooo/cli-* install of a host: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks and the Bun floor; cli list: every bin in one line, read from its own help.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/doctor#readme",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/doctor#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/agent-tools.git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
     "directory": "packages/doctor"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
   "keywords": [
     "claude-code",
     "cli",

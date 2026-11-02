@@ -43,7 +43,7 @@ export const FORGE = 'git.kaynooo.fr'
 // The same Forgejo under the private name its owner's network reaches it by, which a login may use instead.
 const FORGE_HOSTS = new Set([FORGE, 'git.kaynooo.fr'])
 const PLUGIN = 'cli-hooks@kaynooo-cli'
-const MARKETPLACE = `https://${FORGE}/kaynooo/agent-tools.git`
+const MARKETPLACE = `https://${FORGE}/kaynooo/cli.git`
 const LEADING_TILDE = /^~(?=\/|$)/
 
 interface Manifest { version?: string, engines?: { bun?: string }, bin?: Record<string, string> | string }
