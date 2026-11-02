@@ -185,6 +185,38 @@ describe('__complete', () => {
     expect((await capture(async () => runCli(toggling, ['__complete', 'sync', '--']))).out).toStartWith('--no-refresh\tkeep the cached copy\n--md\tmarkdown\n--no-md\tno markdown\n')
   })
 
+  test('offers the candidates of the positional being typed, and of an option\'s value from a function', async () => {
+    const naming = { ...cli, commands: { ...cli.commands, open: { summary: 'opens', run: async (args: string[]) => {
+      parse(args, 'open <project> [more...]', { out: { type: 'string', short: 'o', candidates: () => ['a', ['b', 'the b']] }, all: { type: 'boolean' } }, {
+        positionals: ['<project>', '[more...]'],
+        candidates: { '<project>': async () => [['alpha', 'the first'], 'beta'], '[more...]': () => ['x', 'y'] },
+      })
+
+      return 0
+    } } } }
+    const complete = async (...words: string[]) => (await capture(async () => runCli(naming, ['__complete', 'open', ...words]))).out
+
+    expect(await complete('')).toBe('alpha\tthe first\nbeta\n')
+    expect(await complete('--all', 'al')).toBe('alpha\tthe first\nbeta\n')
+    expect(await complete('-o', 'a', '')).toBe('alpha\tthe first\nbeta\n')
+    expect(await complete('alpha', 'b', '')).toBe('x\ny\n')
+    expect(await complete('alpha', '')).toBe('x\ny\n')
+    expect(await complete('--out', '')).toBe('a\nb\tthe b\n')
+    expect(await complete('--', 'p', '')).toBe('x\ny\n')
+  })
+
+  test('still offers paths for a positional with no candidates', async () => {
+    const plain = { ...cli, commands: { ...cli.commands, put: { summary: 'puts', run: async (args: string[]) => {
+      parse(args, 'put <file> <name>', { to: { type: 'string' } }, { positionals: ['<file>', '<name>'], candidates: { '<name>': () => ['n'] } })
+
+      return 0
+    } } } }
+
+    expect((await capture(async () => runCli(plain, ['__complete', 'put', '']))).out).toBe('__files__\n')
+    expect((await capture(async () => runCli(plain, ['__complete', 'put', 'f', '']))).out).toBe('n\n')
+    expect((await capture(async () => runCli(plain, ['__complete', 'put', '--to', '']))).out).toBe('__files__\n')
+  })
+
   test('offers the choices of the string option just typed', async () => {
     const choosing = { ...cli, commands: { ...cli.commands, pick: { summary: 'picks', run: async (args: string[]) => {
       parse(args, 'pick', { bump: { type: 'string', short: 'b', choices: ['patch', 'minor'] }, name: { type: 'string' } })
@@ -402,7 +434,6 @@ describe('lazy commands', () => {
     calls.length = 0
 
     expect((await capture(async () => runCli(lazy, ['__complete', '']))).out).toBe('echo\tprints its arguments\nboom\tfails\nplan\ta group\nhello\tsays hello\n')
-    expect((await capture(async () => runCli(lazy, ['__complete', 'echo', '']))).out).toBe('__files__\n')
     expect(calls).toEqual([['']])
 
     const parsing = { ...cli, commands: async () => ({ port: { summary: 'parses first', run: async (args: string[]) => {

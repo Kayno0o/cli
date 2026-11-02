@@ -1,4 +1,4 @@
-import type { Example, Options } from './args'
+import type { Candidate, Example, Options } from './args'
 import type { Colors } from './style'
 import process from 'node:process'
 import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, replacesRows, UsageError, usageLine, wantsHelpJson } from './args'
@@ -288,8 +288,8 @@ export const COMPLETE = '__complete'
 // Printed instead of candidates where a path fits, for the shell to complete files itself.
 export const FILES = '__files__'
 
-// A command's options, read by running it until its parse call throws them: every command parses its arguments before anything else.
-async function optionsOf(run: (args: string[]) => Promise<number>): Promise<Options> {
+// What a command declares to its completion, read by running it until its parse call throws it: every command parses its arguments before anything else.
+async function completingOf(run: (args: string[]) => Promise<number>): Promise<Completing> {
   completion.active = true
 
   try {
@@ -297,25 +297,74 @@ async function optionsOf(run: (args: string[]) => Promise<number>): Promise<Opti
   }
   catch (error) {
     if (error instanceof Completing)
-      return error.options
+      return error
   }
   finally {
     completion.active = false
   }
 
-  return {}
+  return new Completing({})
 }
 
-// A leaf command's candidates: the choices of the string option just typed, its long options for a word starting with a dash, else paths.
-async function leafCandidates(run: (args: string[]) => Promise<number>, words: string[]): Promise<string[]> {
-  if (!(words.at(-1) ?? '').startsWith('-')) {
-    const flag = words.at(-2)
-    const option = flag?.startsWith('-') === true ? Object.entries(await optionsOf(run)).find(([name, { short }]) => flag === `--${name}` || flag === `-${short}`)?.[1] : undefined
+async function optionsOf(run: (args: string[]) => Promise<number>): Promise<Options> {
+  return (await completingOf(run)).options
+}
 
-    return option?.type === 'string' && option.choices !== undefined ? [...option.choices] : [FILES]
+function candidateLine(candidate: Candidate): string {
+  return typeof candidate === 'string' ? candidate : candidate.join('\t')
+}
+
+// The name of the positional the last word is, counting the words before it that are neither options, nor the values of string ones; the last name repeats when it ends in `...`.
+function positionalBeingTyped(before: string[], { options, positionals }: Completing): string | undefined {
+  const takesValue = (word: string) => !word.includes('=') && Object.entries(options).some(([name, { short, type }]) => type === 'string' && (word === `--${name}` || word === `-${short}`))
+  let index = 0
+  let at = 0
+
+  while (at < before.length) {
+    const word = before[at]!
+
+    if (word === '--') {
+      index += before.length - at - 1
+
+      break
+    }
+
+    if (!word.startsWith('-'))
+      index++
+    else if (takesValue(word))
+      at++
+
+    at++
   }
 
-  return Object.entries(await optionsOf(run)).map(([name, option]) => option.description === undefined ? `--${name}` : `--${name}\t${option.description}`)
+  const last = positionals.at(-1)
+
+  if (index < positionals.length)
+    return positionals[index]
+
+  return last?.replace(']', '').endsWith('...') === true ? last : undefined
+}
+
+// A leaf command's candidates: the values of the string option just typed or of the positional being typed, else paths for a word not starting with a dash; its long options for one that does.
+async function leafCandidates(run: (args: string[]) => Promise<number>, words: string[]): Promise<string[]> {
+  const completing = await completingOf(run)
+
+  if ((words.at(-1) ?? '').startsWith('-'))
+    return Object.entries(completing.options).map(([name, option]) => option.description === undefined ? `--${name}` : `--${name}\t${option.description}`)
+
+  const flag = words.at(-2)
+  const option = flag?.startsWith('-') === true ? Object.entries(completing.options).find(([name, { short }]) => flag === `--${name}` || flag === `-${short}`)?.[1] : undefined
+
+  if (option?.type === 'string') {
+    const values = option.choices === undefined ? await option.candidates?.() : option.choices
+
+    return values === undefined ? [FILES] : values.map(candidateLine)
+  }
+
+  const name = positionalBeingTyped(words.slice(0, -1), completing)
+  const values = name === undefined ? undefined : await completing.candidates[name]?.()
+
+  return values === undefined ? [FILES] : values.map(candidateLine)
 }
 
 // The candidates for the last word, `value\tdescription` per line, after walking the subcommands the earlier words name.

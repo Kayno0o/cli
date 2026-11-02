@@ -10,6 +10,8 @@ interface OptionExtras {
   description?: string
   // A string option taking `choices` accepts only those values: another is a usage error naming them, the help shows them as the value and `__complete` offers them.
   choices?: readonly string[]
+  // The values a string option can take, from a function, offered by `__complete` when `choices` does not give them.
+  candidates?: Candidates
   // A string option whose value may be left out (`--out [n]`): bare, it reads `bare`. A next word is its value unless it starts with a dash or, given `accepts`, does not match it, and then stays a positional.
   optional?: { bare: string, accepts?: RegExp }
   // Options it cannot be given with, a usage error naming both when they are.
@@ -56,8 +58,14 @@ export class HelpShown extends Exit {
 
 // Thrown by parse while a bin answers `__complete`, so the command reached hands over its options before doing anything else.
 export class Completing {
-  constructor(readonly options: Options) {}
+  constructor(readonly options: Options, readonly positionals: readonly string[] = [], readonly candidates: Record<string, Candidates | undefined> = {}) {}
 }
+
+// A value `__complete` offers, with an optional description shown beside it.
+export type Candidate = string | [value: string, description: string]
+
+// The values a positional or an option can take, read only while a shell completes it.
+export type Candidates = () => Candidate[] | Promise<Candidate[]>
 
 export const completion = { active: false }
 
@@ -153,6 +161,8 @@ export interface ParseSettings<Names extends readonly string[] = string[]> {
   allowNegative?: boolean
   // The positionals the command takes, by name as its usage writes them: `<key>` or `KEY` required, `[file]` optional, a last one ending in `...` taking any more. One missing or one too many is a usage error, and the positionals come back typed by these names.
   positionals?: Names
+  // The values `__complete` offers for a positional, by its name as `positionals` writes it: `{ '<project>': async () => names }`. A positional without one completes as a path.
+  candidates?: Partial<Record<Names[number], Candidates>>
   // Command lines shown under `Examples:` in the help, each with an optional dimmed note: `['ft ci HEAD~1', 'wait for the commit before the last']`.
   examples?: Example[]
   // What the command is reached for instead of, shown as `Instead of:` in the help and listed by `cli list`: 'sed -n N,Mp, grep -n chains and whole-file reads'.
@@ -200,7 +210,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   const listing = listed(all, settings.allowNegative === true)
 
   if (completion.active)
-    throw new Completing(listing)
+    throw new Completing(listing, settings.positionals, settings.candidates)
 
   const separator = settings.rest === true ? args.indexOf('--') : -1
   const own = separator === -1 ? args : args.slice(0, separator)
