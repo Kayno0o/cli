@@ -2,7 +2,7 @@ import type { Terminal } from '../src/prompt'
 import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'bun:test'
 import { Exit } from '../src/args'
-import { checklist, confirm, input, select } from '../src/prompt'
+import { checklist, confirm, editor, input, select } from '../src/prompt'
 import { stripAnsi } from '../src/text'
 
 const CHOICES = [
@@ -271,5 +271,31 @@ describe('input', () => {
 
   it('answers undefined once cancelled', async () => {
     expect(await input('name', { terminal: terminal(['ada', '\x1B']).fake })).toBeUndefined()
+  })
+})
+
+describe('editor', () => {
+  it('answers the file as the editor left it, started on the default', async () => {
+    const { fake, written } = terminal([])
+
+    expect(await editor('notes', { default: 'draft\n', env: { EDITOR: 'sed -i s/draft/final/' }, terminal: fake })).toBe('final\n')
+    expect(written).toEqual(['? notes (sed -i s/draft/final/)\n', '✓ notes edited\n'])
+  })
+
+  it('names the file with the extension and prefers VISUAL to EDITOR', async () => {
+    const edited = await editor('notes', { extension: '.md', env: { VISUAL: 'sh -c \'basename "$0" > "$0"\'', EDITOR: 'false' }, terminal: terminal([]).fake })
+
+    expect(edited).toBe('edit.md\n')
+  })
+
+  it('answers undefined when the editor exits nonzero', async () => {
+    const { fake, written } = terminal([])
+
+    expect(await editor('notes', { env: { EDITOR: 'false' }, terminal: fake })).toBeUndefined()
+    expect(written.at(-1)).toBe('✗ notes cancelled\n')
+  })
+
+  it('fails off a terminal', async () => {
+    expect(await thrown(editor('notes', { terminal: terminal([], { tty: false }).fake }))).toBeInstanceOf(Exit)
   })
 })

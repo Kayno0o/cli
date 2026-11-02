@@ -1,4 +1,7 @@
 import type { Colors } from './style'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
 import { fail } from './args'
 import { truncate } from './format'
@@ -327,5 +330,43 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
     stderr.write('\n\x1B[?25h')
     stdin.setRawMode(false)
     stdin.pause()
+  }
+}
+
+export interface EditorSettings extends PromptSettings {
+  // The text the file starts with.
+  default?: string
+  // The file's extension, such as `.md`, so the editor picks its highlighting.
+  extension?: string
+  // Where VISUAL and EDITOR are read, the process's environment by default.
+  env?: Record<string, string | undefined>
+}
+
+// A text edited in VISUAL or EDITOR (vi without either) on a temp file, the editor taking the terminal until it exits; undefined when it exits nonzero, as `:cq` does.
+export async function editor(question: string, { default: text = '', extension = '.txt', env = process.env, hint, terminal = process }: EditorSettings = {}): Promise<string | undefined> {
+  const { stdin, stderr } = terminal
+
+  if (stdin.isTTY !== true || stderr.isTTY !== true)
+    fail(`cannot ask "${question}" off a terminal`, 2, hint)
+
+  const colors = paint(stderr)
+  const command = [env.VISUAL, env.EDITOR].find(value => value !== undefined && value !== '') ?? 'vi'
+  const dir = await mkdtemp(join(tmpdir(), 'kit-editor-'))
+  const file = join(dir, `edit${extension}`)
+
+  try {
+    await writeFile(file, text)
+    stderr.write(`${colors.cyan('?')} ${question} ${colors.dim(`(${command})`)}\n`)
+
+    // Through the shell, so an EDITOR with arguments (`code --wait`) runs as typed.
+    const edited = Bun.spawn(['sh', '-c', `${command} "$1"`, 'sh', file], { stdio: ['inherit', 'inherit', 'inherit'], env })
+    const done = await edited.exited === 0
+
+    stderr.write(`${answer(colors, question, done ? 'enter' : 'cancel', 'edited')}\n`)
+
+    return done ? await readFile(file, 'utf8') : undefined
+  }
+  finally {
+    await rm(dir, { recursive: true, force: true })
   }
 }
