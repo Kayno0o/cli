@@ -174,7 +174,7 @@ describe('gc', () => {
   })
 
   test('outside a repository it exits 2', () => {
-    rmSync(join(dir, '.git'), { recursive: true })
+    rmSync(join(dir, '.git'), { recursive: true, force: true })
     file('a.ts')
 
     expect(gc('fix: a', '--', 'a.ts').code).toBe(2)
