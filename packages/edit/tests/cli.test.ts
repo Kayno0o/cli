@@ -131,6 +131,16 @@ describe('sub', () => {
     expect(sub(['-r', '-f', '(', '-t', 'x', 'a.ts']).err).toContain('--from is no valid regular expression')
   })
 
+  /* eslint-disable no-template-curly-in-string -- ${1} is sub's syntax here, not a template */
+  test('--regex reads ${1} and ${name} in --to, so digits can follow a group', () => {
+    file('a.ts', 'sha: "old"\nkey: "old"\n')
+
+    expect(sub(['-r', '-f', '^(sha: ")old', '-t', '${1}0123', 'a.ts']).code).toBe(0)
+    expect(sub(['-r', '-f', '^(?<key>key: ")old', '-t', '${key}9$${1}', 'a.ts']).code).toBe(0)
+    expect(read('a.ts')).toBe('sha: "0123"\nkey: "9${1}"\n')
+  })
+  /* eslint-enable no-template-curly-in-string */
+
   test('matches a --from typed with plain newlines in a CRLF file, keeping CRLF', () => {
     file('a.ts', 'a\r\nb\r\nc\r\n')
 

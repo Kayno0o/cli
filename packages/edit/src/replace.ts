@@ -15,6 +15,9 @@ export interface Applied {
 }
 
 const CRLF = /\r?\n/g
+// A ${1} or ${name} reference in a regex --to, an escaped $$ matched first so it stays literal.
+const BRACED_GROUP = /\$\$|\$\{(\w+)\}/g
+const DIGITS = /^\d+$/
 const LONGEST_LIST = 8
 
 function linesOf(text: string, indexes: number[]): number[] {
@@ -65,6 +68,16 @@ export function compile(source: string): RegExp {
   return new RegExp(source, 'gm')
 }
 
+// String.replace leaves ${1} and ${name} as they are, so they become $01 and $<name>: the two-digit form keeps digits typed after the group out of its number.
+function bracedGroups(to: string): string {
+  return to.replace(BRACED_GROUP, (whole, group: string | undefined) => {
+    if (group === undefined)
+      return whole
+
+    return DIGITS.test(group) ? `$${group.padStart(2, '0')}` : `$<${group}>`
+  })
+}
+
 // Applies the pairs in order, each to the previous one's result, and lists every pair that matched another number of times than expected.
 export function applyPairs(original: string, pairs: Pair[]): Applied {
   const crlf = original.includes('\r\n')
@@ -95,7 +108,7 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
     }
 
     lines.push(...found)
-    text = pattern === undefined ? text.split(from).join(to) : text.replace(pattern, to)
+    text = pattern === undefined ? text.split(from).join(to) : text.replace(pattern, bracedGroups(to))
   }
 
   return { text, lines, problems }

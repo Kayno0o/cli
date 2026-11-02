@@ -32,7 +32,7 @@ const OPTIONS = {
   'to': { type: 'string', short: 't', description: 'text to put in its place, empty to delete it' },
   'count': { type: 'string', short: 'n', description: 'matches expected in each file (default 1)' },
   'all': { type: 'boolean', short: 'a', description: 'replace every match, expecting at least one in each file' },
-  'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1 and $<name>' },
+  'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1, ${1}, $<name> and ${name}' }, // eslint-disable-line no-template-curly-in-string
   'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?} applied in order: inline when it starts with [, else a file or - for stdin' },
   'diff': { type: 'boolean', short: 'd', description: 'print each file\'s unified diff' },
   'dry-run': { type: 'boolean', description: 'show what would change without writing' },
