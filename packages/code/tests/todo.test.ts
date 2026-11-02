@@ -1,8 +1,10 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { marksIn } from '../src/todo'
+
+const temp = tempDirs()
 
 const CLI = new URL('../src/todo-scan.ts', import.meta.url).pathname
 
@@ -20,7 +22,7 @@ function scan(args: string[], env: Record<string, string | undefined> = process.
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'todo-scan-'))
+  dir = temp('todo-scan-')
   Bun.spawnSync(['git', 'init', '-q'], { cwd: dir })
   write('.gitignore', 'ignored/\n')
   write('src/a.ts', 'const url = \'https://x.dev/TODO\'\n// TODO: drop once released\nfoo() // kaynooo/kayjs#823\n/* FIXME kaynooo/kayjs#9 too */\nconst s = \'TODO in a string\'\n')

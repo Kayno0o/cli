@@ -1,10 +1,13 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { createLog, privateLogDirectory, sweepLogs } from '../src'
+import { tempDirs } from '../src/test'
 
-const runtime = () => mkdtempSync(join(tmpdir(), 'kit-logs-'))
+const temp = tempDirs()
+
+const runtime = () => temp('kit-logs-')
 
 describe('privateLogDirectory', () => {
   test('creates a folder only the user can use under XDG_RUNTIME_DIR', async () => {
@@ -22,14 +25,19 @@ describe('privateLogDirectory', () => {
 
     mkdirSync(open, { recursive: true, mode: 0o755 })
     chmodSync(open, 0o755)
-    expect(await privateLogDirectory('open', { XDG_RUNTIME_DIR: base })).not.toBe(open)
-
     symlinkSync(tmpdir(), join(base, 'agent-tools', 'linked'))
 
+    const instead = await privateLogDirectory('open', { XDG_RUNTIME_DIR: base })
     const used = await privateLogDirectory('linked', { XDG_RUNTIME_DIR: base })
 
+    const mode = statSync(used).mode & 0o777
+
+    // Both fell back to a folder of the system's temp folder.
+    rmSync(instead, { recursive: true })
+    rmSync(used, { recursive: true })
+    expect(instead).not.toBe(open)
     expect(used).not.toBe(join(base, 'agent-tools', 'linked'))
-    expect(statSync(used).mode & 0o777).toBe(0o700)
+    expect(mode).toBe(0o700)
   })
 })
 

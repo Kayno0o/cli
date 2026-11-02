@@ -1,11 +1,12 @@
 import type { Host } from '../src/checks'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { capture } from '@kaynooo/cli-kit/test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { list } from '../src/agent-tools'
 import { describeBin } from '../src/list'
+
+const temp = tempDirs()
 
 const GST = { synopsis: 'gst [--log N]', summary: 'the repository in one line', replaces: 'git status --short', examples: [{ line: 'gst' }] }
 
@@ -42,7 +43,7 @@ describe('describeBin', () => {
 
 describe('describeBin with a declared bin', () => {
   test('runs the installed package\'s own file, not the first of that name on the PATH', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'doctor-list-'))
+    const dir = temp('doctor-list-')
 
     mkdirSync(join(dir, '@kaynooo', 'git-tools'), { recursive: true })
     writeFileSync(join(dir, '@kaynooo', 'git-tools', 'package.json'), JSON.stringify({ bin: { gst: './dist/gst.js' } }))

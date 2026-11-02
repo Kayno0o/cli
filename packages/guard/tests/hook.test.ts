@@ -1,9 +1,10 @@
 import type { HookInput, Machine } from '../src/hook'
-import { existsSync, mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { hook } from '../src/hook'
+
+const temp = tempDirs()
 
 const REPO = '/work/repo'
 
@@ -155,7 +156,7 @@ describe('session-start', () => {
 })
 
 describe('the bin', () => {
-  const state = mkdtempSync(join(tmpdir(), 'guard-hook-'))
+  const state = temp('guard-hook-')
 
   async function run(args: string[], stdin: string) {
     const proc = Bun.spawn(['bun', `${import.meta.dir}/../src/cli.ts`, 'hook', ...args], { stdin: new TextEncoder().encode(stdin), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, XDG_STATE_HOME: state } })

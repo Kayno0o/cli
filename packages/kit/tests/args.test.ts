@@ -1,8 +1,10 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { duration, Exit, HelpShown, jsonOption, optionRows, paint, parse, readInput, UsageError, wholeNumber } from '../src'
+import { tempDirs } from '../src/test'
+
+const temp = tempDirs()
 
 const options = { lines: { type: 'string', short: 'n', description: 'lines' } } as const
 
@@ -100,7 +102,7 @@ describe('parse', () => {
 
 describe('readInput', () => {
   test('reads a file', async () => {
-    const path = join(mkdtempSync(join(tmpdir(), 'kit-')), 'in.txt')
+    const path = join(temp('kit-'), 'in.txt')
 
     writeFileSync(path, 'hello\n')
     expect(await readInput(path)).toBe('hello\n')

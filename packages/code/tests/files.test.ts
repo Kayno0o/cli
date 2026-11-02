@@ -1,11 +1,13 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { listFiles } from '../src/files'
 
+const temp = tempDirs()
+
 describe('listFiles outside a repository', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'code-files-'))
+  const dir = temp('code-files-')
 
   for (const path of ['src/a.ts', 'src/deep/b.ts', 'README.md', 'node_modules/x/index.js', '.cache/c.ts', 'dist/d.js', 'build/e.js', 'vendor/f.php', 'target/g.rs', 'coverage/h.json']) {
     mkdirSync(join(dir, path, '..'), { recursive: true })

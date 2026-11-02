@@ -1,11 +1,12 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { capture } from '@kaynooo/cli-kit/test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { remote } from '../src/commands/remote'
 import { loadSettings, settingsPath } from '../src/config'
 import { canonicalRemote, parseSshRemote, reachesHost, redactUrl } from '../src/remote'
+
+const temp = tempDirs()
 
 const HOST = 'git.kaynooo.fr'
 const reaches = (alias: string) => alias === 'forgejo' || alias === 'gitea'
@@ -67,7 +68,7 @@ describe('reachesHost', () => {
 
 describe('the remote host setting', () => {
   function homeWith(text?: string): string {
-    const home = mkdtempSync(join(tmpdir(), 'ft-home-'))
+    const home = temp('ft-home-')
 
     if (text !== undefined) {
       mkdirSync(join(home, '.config', 'ft'), { recursive: true })

@@ -1,13 +1,14 @@
 import type { Ran } from '@kaynooo/cli-kit'
 import type { BumpSettings } from '../src/commands/bump'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Exit } from '@kaynooo/cli-kit'
-import { capture } from '@kaynooo/cli-kit/test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { bumpConsumers, checkAndCommit, lockfileOf, servedVersion, vet } from '../src/commands/bump'
 import { addCommand, findConsumers, isLocal } from '../src/consumers'
+
+const temp = tempDirs()
 
 const NAME = '@kaynooo/cli-kit'
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
@@ -39,7 +40,7 @@ function registry(...answers: string[][]): { fetcher: BumpSettings['fetcher'], c
 }
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'pkg-bump-'))
+  root = temp('pkg-bump-')
   manifest('kay', { name: 'kay', devDependencies: { [NAME]: '0.7.3' } })
   manifest('tools', { name: 'tools', workspaces: ['packages/*'] })
   manifest('tools/packages/a', { name: 'a', devDependencies: { [NAME]: 'workspace:*' } }, '')

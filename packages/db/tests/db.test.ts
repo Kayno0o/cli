@@ -1,8 +1,10 @@
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { afterAll, describe, expect, test } from 'bun:test'
+
+const temp = tempDirs()
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const IMAGE = 'postgres:18-alpine'
@@ -85,9 +87,9 @@ afterAll(() => {
     docker('rm', '-f', CONTAINER)
 }, 30_000)
 
-const cwd = mkdtempSync(join(tmpdir(), 'db-tools-'))
+const cwd = temp('db-tools-')
 // A home without a ~/.config/db/config.json, so the allowlist is empty unless a test writes one.
-const home = mkdtempSync(join(tmpdir(), 'db-tools-home-'))
+const home = temp('db-tools-home-')
 
 async function db(args: string[], env: Record<string, string> = { DATABASE_URL: url }, stdin?: string) {
   const child = Bun.spawn([process.execPath, CLI, ...args], { cwd, env: { PATH: process.env.PATH ?? '', HOME: home, ...env }, stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe' })
@@ -210,7 +212,7 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
     ? { path: '', loopback: false, password: '' }
     : (() => {
       const target = new URL(url)
-      const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
+      const bin = temp('db-tools-docker-')
       const ps = { ID: 'abc123', Service: 'database', State: 'running', Image: 'postgres:18-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: Number(target.port) }] }
       const inspect = [{ Id: 'abc123def', Name: '/app-database-1', Config: { Env: [`POSTGRES_USER=${decodeURIComponent(target.username)}`, `POSTGRES_PASSWORD=${decodeURIComponent(target.password)}`, `POSTGRES_DB=${target.pathname.slice(1)}`, 'PG_MAJOR=18'] }, NetworkSettings: { Networks: { app: { IPAddress: '10.0.0.2', Aliases: ['database', 'db'] } } } }]
 

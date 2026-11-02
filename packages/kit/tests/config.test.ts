@@ -1,8 +1,10 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'bun:test'
 import { findUp, loadConfig } from '../src/config'
+import { tempDirs } from '../src/test'
+
+const temp = tempDirs()
 
 // What a promise rejects with, undefined when it resolves.
 async function thrown(promise: Promise<unknown>): Promise<unknown> {
@@ -18,7 +20,7 @@ async function thrown(promise: Promise<unknown>): Promise<unknown> {
 
 // A fresh folder holding `files`, nested folders created along.
 function folder(files: Record<string, string> = {}): string {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'kit-config-')))
+  const root = realpathSync(temp('kit-config-'))
 
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(join(root, path, '..'), { recursive: true })

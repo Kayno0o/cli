@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
 import { format } from 'node:util'
+import { afterAll } from 'bun:test'
 
 export interface Captured<T> {
   result: T
@@ -7,6 +11,24 @@ export interface Captured<T> {
   out: string
   // Everything printed to stderr (console.error, console.warn and process.stderr.write).
   err: string
+}
+
+// Called at the top of a test file, answers a maker of fresh folders under the system temp folder, each removed with its content once the file's tests are done.
+export function tempDirs(): (prefix?: string) => string {
+  const made: string[] = []
+
+  afterAll(() => {
+    for (const dir of made.splice(0))
+      rmSync(dir, { recursive: true, force: true })
+  })
+
+  return (prefix = 'test-') => {
+    const dir = mkdtempSync(join(tmpdir(), prefix))
+
+    made.push(dir)
+
+    return dir
+  }
 }
 
 // Runs a command in-process and returns what it printed, so a test needs no spy on console. Output is restored even when the command throws.

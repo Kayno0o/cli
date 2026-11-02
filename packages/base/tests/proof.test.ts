@@ -1,7 +1,9 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
+
+const temp = tempDirs()
 
 const CLI = new URL('../src/proof.ts', import.meta.url).pathname
 
@@ -30,7 +32,7 @@ function check(word: string): string[] {
 }
 
 beforeEach(() => {
-  repo = realpathSync(mkdtempSync(join(tmpdir(), 'proof-test-')))
+  repo = realpathSync(temp('proof-test-'))
   git('init', '-q', '-b', 'main')
   git('config', 'user.email', 'test@example.com')
   git('config', 'user.name', 'test')

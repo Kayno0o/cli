@@ -1,30 +1,15 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { capture } from '@kaynooo/cli-kit/test'
-import { afterAll, describe, expect, test } from 'bun:test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
+import { describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
 import { place } from '../src/compose'
 import { errs } from '../src/errs'
 import { fix } from '../src/fix'
 import { discover, discoverProjects } from '../src/steps'
 
-// Every temp folder of the file, removed once it ends.
-const made: string[] = []
-
-function temp(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix))
-
-  made.push(dir)
-
-  return dir
-}
-
-afterAll(() => {
-  for (const dir of made)
-    rmSync(dir, { recursive: true, force: true })
-})
+const temp = tempDirs()
 
 process.env.XDG_RUNTIME_DIR = temp('compose-runtime-')
 

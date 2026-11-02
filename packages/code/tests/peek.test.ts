@@ -1,8 +1,10 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { definitions, locations, outline, spansAround } from '../src/source'
+
+const temp = tempDirs()
 
 const CLI = new URL('../src/peek.ts', import.meta.url).pathname
 
@@ -51,7 +53,7 @@ function piped(input: string | undefined, ...args: string[]) {
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'peek-'))
+  dir = temp('peek-')
   Bun.spawnSync(['git', 'init', '-q'], { cwd: dir })
   mkdirSync(join(dir, 'src'))
   writeFileSync(join(dir, 'src/a.ts'), SOURCE)
@@ -142,7 +144,7 @@ describe('peek', () => {
 
   test('reads an absolute path inside the repository and refuses one outside', () => {
     expect(peek(`${realpathSync(dir)}/src/b.ts:3`).out).toContain('3  console.log(addOne(2))')
-    expect(peek('../../etc/hostname')).toMatchObject({ code: 2 })
+    expect(peek(relative(dir, '/etc/hostname'))).toMatchObject({ code: 2 })
     expect(peek('/etc/hostname').err).toContain('outside the repository')
     expect(peek('--refs', 'x', '/etc').code).toBe(2)
   })

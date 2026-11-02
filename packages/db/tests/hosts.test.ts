@@ -1,12 +1,14 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Exit } from '@kaynooo/cli-kit'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, spyOn, test } from 'bun:test'
 import { reachable } from '../src/run'
 import { loadSettings, settingsPath } from '../src/settings'
 
-const root = mkdtempSync(join(tmpdir(), 'db-tools-hosts-'))
+const temp = tempDirs()
+
+const root = temp('db-tools-hosts-')
 
 function homeWith(config: string | undefined): string {
   const home = mkdtempSync(join(root, 'home-'))

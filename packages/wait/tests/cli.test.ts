@@ -1,8 +1,10 @@
-import { appendFileSync, mkdirSync, mkdtempSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { appendFileSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
+
+const temp = tempDirs()
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 
@@ -27,7 +29,7 @@ function log(text: string): string {
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'waitfor-test-'))
+  dir = temp('waitfor-test-')
 })
 
 describe('waitfor --file', () => {

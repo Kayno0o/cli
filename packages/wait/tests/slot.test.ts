@@ -1,9 +1,11 @@
 import type { Subprocess } from 'bun'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
+
+const temp = tempDirs()
 
 const CLI = new URL('../src/slot-cli.ts', import.meta.url).pathname
 
@@ -47,7 +49,7 @@ function sleeper(name: string): string[] {
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'slot-test-'))
+  dir = temp('slot-test-')
   started = []
 })
 

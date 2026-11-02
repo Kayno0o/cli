@@ -1,9 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 import { runsInContainer } from '../src/worktree'
+
+const temp = tempDirs()
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 
@@ -36,7 +38,7 @@ function worktrees(): number {
 }
 
 beforeEach(() => {
-  repo = realpathSync(mkdtempSync(join(tmpdir(), 'base-test-')))
+  repo = realpathSync(temp('base-test-'))
   git('init', '-q', '-b', 'main')
   git('config', 'user.email', 'test@example.com')
   git('config', 'user.name', 'test')
@@ -125,7 +127,7 @@ describe('base', () => {
   })
 
   test('refuses a --keep going through a committed symlink, writing nothing outside', () => {
-    const outside = realpathSync(mkdtempSync(join(tmpdir(), 'base-outside-')))
+    const outside = realpathSync(temp('base-outside-'))
 
     symlinkSync(outside, join(repo, 'evil'))
     commit('add a symlink')

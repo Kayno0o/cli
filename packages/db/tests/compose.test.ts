@@ -1,11 +1,13 @@
 import type { Service } from '../src/compose'
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { Exit } from '@kaynooo/cli-kit'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { describeNamedContainer, describeServices, parsePs, pickService, serviceUrl } from '../src/compose'
+
+const temp = tempDirs()
 
 const PS = [
   { ID: 'aaa111', Service: 'tilid-db', State: 'running', Image: 'postgres:17-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: 45000 }] },
@@ -162,7 +164,7 @@ describe('serviceUrl', () => {
 describe('composeServices', () => {
   // Runs in a child, as Bun looks docker up on the PATH the process started with.
   async function listed(dockerScript: string, expression = 'composeServices()'): Promise<unknown> {
-    const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
+    const bin = temp('db-tools-docker-')
 
     writeFileSync(join(bin, 'docker'), dockerScript)
     chmodSync(join(bin, 'docker'), 0o755)

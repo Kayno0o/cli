@@ -1,28 +1,15 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, test } from 'bun:test'
+import { tempDirs } from '@kaynooo/cli-kit/test'
+import { describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 import { cleanLogs } from '../src/logs'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const LOG_PATH = /full log: ([^\s\]]+)/
 
-// Every temp folder of the file, removed once it ends.
-const made: string[] = []
-
-function temp(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix))
-
-  made.push(dir)
-
-  return dir
-}
-
-afterAll(() => {
-  for (const dir of made)
-    rmSync(dir, { recursive: true, force: true })
-})
+const temp = tempDirs()
 
 const RUNTIME = temp('out-runtime-')
 const STATE = temp('out-state-')

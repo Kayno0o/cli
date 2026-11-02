@@ -1,8 +1,8 @@
 import type { Fetcher } from '../src/registry'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Exit } from '@kaynooo/cli-kit'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { fetchAdvisories } from '../src/advisories'
 import { parseSpec } from '../src/analyze'
@@ -10,6 +10,8 @@ import { checkPackage, render } from '../src/commands/check'
 import { loadConfigs, loadSettings, parseBunfig, parseNpmrc, registryFor } from '../src/config'
 import { nearMisses } from '../src/nearmiss'
 import { fetchDownloads, fetchPackument } from '../src/registry'
+
+const temp = tempDirs()
 
 const FIXTURES = new URL('fixtures/', import.meta.url)
 
@@ -204,7 +206,7 @@ describe('registry configuration', () => {
   })
 
   test('ends on exit 2, could not check, for a broken config file', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pkg-config-'))
+    const dir = temp('pkg-config-')
 
     writeFileSync(join(dir, 'bunfig.toml'), '[install\nbroken')
     writeFileSync(join(dir, '.pkgrc.json'), '{ nope')
@@ -227,7 +229,7 @@ describe('registry configuration', () => {
   })
 
   test('loads every config from the directory up, then the home', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'pkg-home-'))
+    const home = temp('pkg-home-')
     const dir = join(home, 'a', 'b')
 
     mkdirSync(dir, { recursive: true })

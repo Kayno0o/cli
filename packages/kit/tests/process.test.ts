@@ -1,8 +1,10 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { distance, exitCodeOf, holdSignals, openUrl, runCommand, stripAnsi } from '../src'
+import { tempDirs } from '../src/test'
+
+const temp = tempDirs()
 
 const SRC = JSON.stringify(join(import.meta.dir, '../src'))
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP']
@@ -81,7 +83,7 @@ describe('holdSignals', () => {
 
 describe('openUrl', () => {
   test('hands a URL as given and a path made absolute to the command BROWSER names', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'kit-open-'))
+    const dir = temp('kit-open-')
     const opener = join(dir, 'opener')
 
     writeFileSync(opener, `#!/bin/sh\necho "$1" > "$OUT"\n`)
@@ -116,7 +118,7 @@ describe('runCommand', () => {
   })
 
   test('ends the whole process group on a timeout, grandchildren included', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'kit-timeout-'))
+    const dir = temp('kit-timeout-')
     const pidFile = join(dir, 'pid')
     const started = Date.now()
     const ran = await runCommand(['sh', '-c', `sleep 30 & echo $! > ${pidFile}; wait`], { timeoutMs: 300 })

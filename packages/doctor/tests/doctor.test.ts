@@ -1,11 +1,12 @@
 import type { Host } from '../src/checks'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { capture } from '@kaynooo/cli-kit/test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { checkBun, checkHooks, checkTea, checkTool, runChecks, TOOLS } from '../src/checks'
 import { main } from '../src/cli'
+
+const temp = tempDirs()
 
 let home = ''
 
@@ -36,7 +37,7 @@ function fakeHost(answers: Record<string, { code?: number, stdout?: string, stde
 const LATEST = { 'bun info @kaynooo/forgejo-tools version --no-cache': { stdout: '0.5.1\n' } }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'doctor-'))
+  home = temp('doctor-')
 })
 
 describe('checkTool', () => {

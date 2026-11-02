@@ -1,8 +1,8 @@
 import type { AuditContext } from '../src/commands/audit'
 import type { Fetcher } from '../src/registry'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { advisoriesFor, filterAdvisories, fixedVersion } from '../src/advisories'
 import { auditPackages, renderAudit } from '../src/commands/audit'
@@ -10,6 +10,8 @@ import { checkPackage } from '../src/commands/check'
 import { loadSettings, parseSettings } from '../src/config'
 import { isLicenseAllowed } from '../src/licenses'
 import { parseBunLock } from '../src/lockfile'
+
+const temp = tempDirs()
 
 const NOW = Date.parse('2026-09-01T00:00:00Z')
 const OLD = '2026-01-01T00:00:00.000Z'
@@ -78,8 +80,8 @@ describe('settings', () => {
   })
 
   test('each key comes from the nearest file that sets it', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'pkg-home-'))
-    const project = mkdtempSync(join(tmpdir(), 'pkg-project-'))
+    const home = temp('pkg-home-')
+    const project = temp('pkg-project-')
 
     mkdirSync(join(home, '.config', 'pkg'), { recursive: true })
     writeFileSync(join(home, '.config', 'pkg', 'config.json'), '{ "licenses": ["ISC"], "blockSeverity": "critical" }')

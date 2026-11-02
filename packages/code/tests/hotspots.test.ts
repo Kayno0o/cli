@@ -1,8 +1,10 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { complexityOf, isCandidate } from '../src/churn'
+
+const temp = tempDirs()
 
 const CLI = new URL('../src/hotspots.ts', import.meta.url).pathname
 const BRANCHY = 'export function f(a: number) {\n  if (a > 1 && a < 5) {\n    for (const x of [a]) {\n      if (x) return 1\n    }\n  }\n  return a ? 2 : 3\n}\n'
@@ -33,7 +35,7 @@ function hotspots(args: string[]) {
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'hotspots-'))
+  dir = temp('hotspots-')
   Bun.spawnSync(['git', 'init', '-q'], { cwd: dir })
   write('.gitignore', 'ignored/\n')
   write('ignored/hidden.ts', BRANCHY)
