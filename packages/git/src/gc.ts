@@ -81,8 +81,10 @@ async function main(argv: string[]): Promise<number> {
   if (violation !== null)
     fail(`nothing staged: ${violation}`, 1)
 
-  const changed = await Promise.all(paths.map(async path => (await checked(['status', '--porcelain', '--untracked-files=all', '--', path])) !== ''))
-  const unchanged = paths.filter((_, i) => changed[i] !== true)
+  const statuses = await Promise.all(paths.map(async path => checked(['status', '--porcelain', '--untracked-files=all', '--', path])))
+  const unchanged = paths.filter((_, i) => statuses[i] === '')
+  // A path whose only change is a staged deletion (a git rm, the old side of a git mv) is in neither the tree nor the index, so git add refuses it, while commit --only still takes it.
+  const addable = paths.filter((_, i) => !(statuses[i] ?? '').trimEnd().split('\n').every(line => line.startsWith('D ')))
 
   if (unchanged.length > 0)
     fail(`nothing staged: no change to commit in ${unchanged.join(', ')} (unchanged, ignored or missing)`, 1, runHint('gst', 'see what changed'))
@@ -95,7 +97,8 @@ async function main(argv: string[]): Promise<number> {
   const signals = holdSignals()
 
   try {
-    await checked(['add', '--', ...paths])
+    if (addable.length > 0)
+      await checked(['add', '--', ...addable])
 
     if (signals.signal !== undefined) {
       await unstage(paths)

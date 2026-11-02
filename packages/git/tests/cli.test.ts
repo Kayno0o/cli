@@ -149,6 +149,15 @@ describe('gc', () => {
     expect(git('status', '--porcelain')).toBe('A  b.ts\n?? a.ts')
   })
 
+  test('commits both sides of a git mv, the old path already staged as deleted', () => {
+    git('mv', 'base.ts', 'moved.ts')
+    const result = gc('refactor: move base', '--', 'base.ts', 'moved.ts')
+
+    expect(result).toMatchObject({ code: 0, err: '' })
+    expect(result.out).toEndWith('  R base.ts -> moved.ts\n')
+    expect(git('status', '--porcelain')).toBe('')
+  })
+
   test('commits a path that was already staged on its own', () => {
     file('a.ts')
     git('add', 'a.ts')
