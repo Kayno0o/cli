@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/forgejo-tools",
   "type": "module",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "ft: Forgejo CI runs, logs, releases and issue checklists from the terminal, through tea.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
