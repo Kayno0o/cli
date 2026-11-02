@@ -106,19 +106,19 @@ describe('checkTea', () => {
 
 describe('checkHooks', () => {
   test('passes the plugin or the mod, one of them only', () => {
-    write(join(home, '.claude', 'settings.json'), { enabledPlugins: { 'agent-tools-hooks@agent-tools': true } })
-    expect(checkHooks(fakeHost())).toMatchObject({ ok: true, detail: 'the agent-tools-hooks@agent-tools plugin' })
+    write(join(home, '.claude', 'settings.json'), { enabledPlugins: { 'cli-hooks@kaynooo-cli': true } })
+    expect(checkHooks(fakeHost())).toMatchObject({ ok: true, detail: 'the cli-hooks@kaynooo-cli plugin' })
 
-    write(join(home, '.claude', 'mods', 'agent-tools', 'hooks', 'hooks.json'), '{}')
-    write(join(home, '.claude', 'settings.json'), { env: { CLAUDE_CODE_PLUGIN_DIRS: '~/.claude/mods/guards:~/.claude/mods/agent-tools' } })
-    expect(checkHooks(fakeHost())).toMatchObject({ ok: true, detail: `the agent-tools mod in ${home}/.claude/mods/agent-tools` })
+    write(join(home, '.claude', 'mods', 'cli', 'hooks', 'hooks.json'), '{}')
+    write(join(home, '.claude', 'settings.json'), { env: { CLAUDE_CODE_PLUGIN_DIRS: '~/.claude/mods/guards:~/.claude/mods/cli' } })
+    expect(checkHooks(fakeHost())).toMatchObject({ ok: true, detail: `the cli mod in ${home}/.claude/mods/cli` })
 
-    write(join(home, '.claude', 'settings.json'), { enabledPlugins: { 'agent-tools-hooks@agent-tools': true }, env: { CLAUDE_CODE_PLUGIN_DIRS: '~/.claude/mods/agent-tools' } })
-    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin disable agent-tools-hooks@agent-tools' })
+    write(join(home, '.claude', 'settings.json'), { enabledPlugins: { 'cli-hooks@kaynooo-cli': true }, env: { CLAUDE_CODE_PLUGIN_DIRS: '~/.claude/mods/cli' } })
+    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin disable cli-hooks@kaynooo-cli' })
   })
 
   test('fails with neither, settings missing included', () => {
-    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin install agent-tools-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git' })
+    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git' })
   })
 })
 

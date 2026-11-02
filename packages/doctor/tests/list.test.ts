@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { list } from '../src/agent-tools'
+import { list } from '../src/cli-bin'
 import { describeBin } from '../src/list'
 
 const temp = tempDirs()
@@ -60,7 +60,7 @@ describe('describeBin with a declared bin', () => {
   })
 })
 
-describe('agent-tools list', () => {
+describe('cli list', () => {
   test('prints one line per bin, what it replaces after the summary', async () => {
     const { result, out } = await capture(async () => list([], fakeHost({ gst: JSON.stringify(GST) })))
     // The names are padded to the longest bin's, which changes as bins come and go.

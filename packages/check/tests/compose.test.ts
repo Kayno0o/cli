@@ -437,7 +437,7 @@ describe('fix in a compose service', () => {
 
       expect(result).toBe(0)
       expect(out).toContain('ok    lint:fix')
-      expect(await docker.calls()).toEqual(['compose ps --services --status running', 'compose exec -T -w /app -e NO_COLOR=1 -e FORCE_COLOR=0 -e AGENT_TOOLS_FIX=1 app sh -c bun run lint:fix'])
+      expect(await docker.calls()).toEqual(['compose ps --services --status running', 'compose exec -T -w /app -e NO_COLOR=1 -e FORCE_COLOR=0 -e KAYNOOO_CLI_FIX=1 app sh -c bun run lint:fix'])
     })
   })
 

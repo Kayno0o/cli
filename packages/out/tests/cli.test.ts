@@ -35,7 +35,7 @@ describe('out', () => {
     spawn('--', 'sh', '-c', 'seq 1 1000')
     spawn('--was', 'tail -n 5', '--', 'seq', '1', '1000')
 
-    const entries = readFileSync(join(state, 'agent-tools/out/stats.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as { command: string, bytes: number, baseline: number, shown: number, folded: boolean })
+    const entries = readFileSync(join(state, 'kaynooo-cli/out/stats.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as { command: string, bytes: number, baseline: number, shown: number, folded: boolean })
     const stats = JSON.parse(spawn('--stats', '--since', '1d', '--json').stdout.toString()) as { runs: number, commands: { command: string, tokensSaved: number }[] }
 
     expect(entries.map(each => [each.command, each.bytes, each.folded])).toEqual([['seq', 3893, true], ['seq', 3893, true]])

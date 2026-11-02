@@ -1,4 +1,4 @@
-// What each agent-tools bin is for, as the prompt lists the installed ones; the zshrc agent-tools mod carries a copy.
+// What each @kaynooo/cli-* bin is for, as the prompt lists the installed ones; the zshrc cli mod carries a copy.
 export const BINS: Record<string, string> = {
   'check': '`check`: runs the repo\'s check, typecheck, lint and test steps (package.json, composer.json and PHP tool configs, a Justfile, a Makefile) and prints only what failed, each full log saved to a file; a step runs inside the running compose service that mounts its folder (`--in <service>`, `--host`), never starting one; validate a change with it rather than chaining the scripts or `docker compose exec` by hand (`--only lint,test`, `--list`, `--slot`).',
   'fix': '`fix`: runs the repo\'s fixers and formatters (its fix, lint:fix and format scripts, php-cs-fixer, just fmt, go fmt, cargo fmt, ruff), in the compose service like `check`, and lists the files they changed.',
@@ -19,14 +19,15 @@ export const BINS: Record<string, string> = {
   'gl': '`gl ci [ref]` waits for the GitLab pipeline covering a commit and prints each failed job\'s tests (exit 0/1/2), `gl runs`, `gl logs <pipeline> [-j job] [--full]`; use it instead of `glab ci` or `glab api .../pipelines/<id>/jobs` polled in a sleep loop.',
   'peek': '`peek <file:from-to>...` prints several spans with line numbers in one call, `peek --def <symbol>` a whole declaration, `--refs <symbol>` its usages by file, `--outline <file>` the declarations and members, `--around <regex> -C 3` the lines around matches; use it instead of `sed -n N,Mp`, `grep -n` chains and whole-file reads.',
   'todo-scan': '`todo-scan [path...]` lists the TODO, FIXME and owner/repo#N comments as `<file>:<line>: <comment>`, `--stale` only those whose issue is closed (exit 1), through ft; use it to find the workarounds a shipped fix lets you drop.',
-  'doctor': '`doctor`: checks this host\'s agent-tools install, one line per check with its fix: each bin\'s version against the registry, tea\'s login, the Claude Code hooks, the Bun floor (`--json`); run it when a bin lacks a command or a flag its docs name.',
-  'agent-tools': '`agent-tools list`: every agent-tools bin in one line, what it does and what it is reached for instead of, read from each bin\'s own --help (`--json` adds the synopsis and examples); run it to find the bin that fits a task.',
+  'doctor': '`doctor`: checks this host\'s @kaynooo/cli-* install, one line per check with its fix: each bin\'s version against the registry, tea\'s login, the Claude Code hooks, the Bun floor (`--json`); run it when a bin lacks a command or a flag its docs name.',
+  'cli': '`cli list`: every @kaynooo/cli-* bin in one line, what it does and what it is reached for instead of, read from each bin\'s own --help (`--json` adds the synopsis and examples); run it to find the bin that fits a task.',
   'hotspots': '`hotspots [dir] [--since <date>] [-n 20]`: ranks the source files by complexity times git churn (commits touching each in the window, 6 months by default), tests and generated files left out, `--json`; use it to pick which complex files are worth splitting first.',
   'out': '`out -- <cmd>`: folds long output, keeping the errors and saving the full log; run noisy builds, installs, tests and linters through it.',
+  'changelog': '`changelog --dry`: the release notes since the last tag, grouped from the conventional commits, without publishing them; `changelog` publishes them as the Forgejo release of the tag at HEAD, `changelog undo [tag]` takes a release back.',
 }
 
 export function binsSection(installed: Set<string>): string | undefined {
   const lines = Object.entries(BINS).filter(([bin]) => installed.has(bin)).map(([, line]) => `- ${line}`)
 
-  return lines.length === 0 ? undefined : `# Agent tools\n\nCLIs installed on this machine for you to use over hand-rolled equivalents, \`<bin> --help\` for the options:\n${lines.join('\n')}`
+  return lines.length === 0 ? undefined : `# CLIs\n\nCLIs installed on this machine for you to use over hand-rolled equivalents, \`<bin> --help\` for the options:\n${lines.join('\n')}`
 }

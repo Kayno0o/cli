@@ -19,14 +19,14 @@ export interface Host {
   run: (argv: string[], env?: Record<string, string>) => Promise<{ code: number, stdout: string, stderr: string }>
 }
 
-// Every agent-tools package and the bins it installs; the repo's tests check it against packages/*.
+// Every @kaynooo/cli-* package and the bins it installs; the repo's tests check it against packages/*.
 export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-base': ['base', 'proof'],
   '@kaynooo/cli-changelog': ['changelog'],
   '@kaynooo/cli-check': ['check', 'fix', 'errs'],
   '@kaynooo/cli-code': ['peek', 'todo-scan', 'hotspots'],
   '@kaynooo/cli-db': ['db'],
-  '@kaynooo/cli-doctor': ['doctor', 'agent-tools'],
+  '@kaynooo/cli-doctor': ['doctor', 'cli'],
   '@kaynooo/cli-edit': ['sub'],
   '@kaynooo/cli-env': ['ev', 'redact'],
   '@kaynooo/cli-forgejo': ['ft'],
@@ -42,7 +42,7 @@ export const TOOLS: Record<string, string[]> = {
 export const FORGE = 'git.kaynooo.fr'
 // The same Forgejo under the private name its owner's network reaches it by, which a login may use instead.
 const FORGE_HOSTS = new Set([FORGE, 'git.kaynooo.fr'])
-const PLUGIN = 'agent-tools-hooks@agent-tools'
+const PLUGIN = 'cli-hooks@kaynooo-cli'
 const MARKETPLACE = `https://${FORGE}/kaynooo/agent-tools.git`
 const LEADING_TILDE = /^~(?=\/|$)/
 
@@ -133,11 +133,11 @@ export async function checkTea(host: Host): Promise<Result> {
   return { check: 'tea', ok: true, detail: `logged in to ${forge} as ${login.name}, Forgejo ${served}` }
 }
 
-// The hooks wired one way exactly: the agent-tools-hooks plugin or the dotfiles' agent-tools mod, never both.
+// The hooks wired one way exactly: the cli-hooks plugin or the dotfiles' cli mod, never both.
 export function checkHooks(host: Host): Result {
   const settings = readJson<{ enabledPlugins?: Record<string, boolean>, env?: Record<string, string> }>(join(host.home, '.claude', 'settings.json')) ?? {}
   const plugin = settings.enabledPlugins?.[PLUGIN] === true
-  const mod = (settings.env?.CLAUDE_CODE_PLUGIN_DIRS ?? '').split(':').map(dir => dir.replace(LEADING_TILDE, host.home)).find(dir => basename(dir) === 'agent-tools' && existsSync(join(dir, 'hooks', 'hooks.json')))
+  const mod = (settings.env?.CLAUDE_CODE_PLUGIN_DIRS ?? '').split(':').map(dir => dir.replace(LEADING_TILDE, host.home)).find(dir => basename(dir) === 'cli' && existsSync(join(dir, 'hooks', 'hooks.json')))
 
   if (plugin && mod !== undefined)
     return { check: 'hooks', ok: false, detail: `both the ${PLUGIN} plugin and the mod in ${mod} run guard, so every call is checked twice`, fix: `claude plugin disable ${PLUGIN}` }
@@ -146,9 +146,9 @@ export function checkHooks(host: Host): Result {
     return { check: 'hooks', ok: true, detail: `the ${PLUGIN} plugin` }
 
   if (mod !== undefined)
-    return { check: 'hooks', ok: true, detail: `the agent-tools mod in ${mod}` }
+    return { check: 'hooks', ok: true, detail: `the cli mod in ${mod}` }
 
-  return { check: 'hooks', ok: false, detail: 'neither the plugin nor the agent-tools mod is wired into ~/.claude/settings.json', fix: `claude plugin install agent-tools-hooks --marketplace ${MARKETPLACE}` }
+  return { check: 'hooks', ok: false, detail: 'neither the plugin nor the cli mod is wired into ~/.claude/settings.json', fix: `claude plugin install cli-hooks --marketplace ${MARKETPLACE}` }
 }
 
 // Bun at least as new as every installed package asks for.

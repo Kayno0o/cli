@@ -14,18 +14,18 @@ describe('privateLogDirectory', () => {
     const base = runtime()
     const dir = await privateLogDirectory('check/repo', { XDG_RUNTIME_DIR: base })
 
-    expect(dir).toBe(join(base, 'agent-tools', 'check/repo'))
+    expect(dir).toBe(join(base, 'kaynooo-cli', 'check/repo'))
     expect(statSync(dir).mode & 0o777).toBe(0o700)
     expect(await privateLogDirectory('check/repo', { XDG_RUNTIME_DIR: base })).toBe(dir)
   })
 
   test('does not trust an existing folder others can read, nor a link', async () => {
     const base = runtime()
-    const open = join(base, 'agent-tools', 'open')
+    const open = join(base, 'kaynooo-cli', 'open')
 
     mkdirSync(open, { recursive: true, mode: 0o755 })
     chmodSync(open, 0o755)
-    symlinkSync(tmpdir(), join(base, 'agent-tools', 'linked'))
+    symlinkSync(tmpdir(), join(base, 'kaynooo-cli', 'linked'))
 
     const instead = await privateLogDirectory('open', { XDG_RUNTIME_DIR: base })
     const used = await privateLogDirectory('linked', { XDG_RUNTIME_DIR: base })
@@ -36,7 +36,7 @@ describe('privateLogDirectory', () => {
     rmSync(instead, { recursive: true })
     rmSync(used, { recursive: true })
     expect(instead).not.toBe(open)
-    expect(used).not.toBe(join(base, 'agent-tools', 'linked'))
+    expect(used).not.toBe(join(base, 'kaynooo-cli', 'linked'))
     expect(mode).toBe(0o700)
   })
 })

@@ -6,6 +6,9 @@ import process from 'node:process'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+// The folder the @kaynooo/cli-* bins keep their logs and state in, under the runtime, cache or state directory.
+export const CLI_FOLDER = 'kaynooo-cli'
+
 // Whether the folder is a real directory (not a link) that only this user can use.
 function isPrivateDirectory(path: string): boolean {
   try {
@@ -18,10 +21,10 @@ function isPrivateDirectory(path: string): boolean {
   }
 }
 
-// A folder for log files that only this user can read: `<name>` under $XDG_RUNTIME_DIR, else ~/.cache/agent-tools. When one already exists it must be a private directory of this user, otherwise a fresh private folder in the temp directory is used instead of trusting it.
+// A folder for log files that only this user can read: `<name>` under $XDG_RUNTIME_DIR, else ~/.cache/kaynooo-cli. When one already exists it must be a private directory of this user, otherwise a fresh private folder in the temp directory is used instead of trusting it.
 export async function privateLogDirectory(name: string, env: Record<string, string | undefined> = process.env): Promise<string> {
   const runtime = env.XDG_RUNTIME_DIR
-  const base = runtime === undefined || runtime === '' ? join(homedir(), '.cache', 'agent-tools') : join(runtime, 'agent-tools')
+  const base = runtime === undefined || runtime === '' ? join(homedir(), '.cache', CLI_FOLDER) : join(runtime, CLI_FOLDER)
   const path = join(base, name)
 
   try {

@@ -39,7 +39,7 @@ export interface Fixer extends Step {
 }
 
 // Set for the fixers' commands, so a fix script calling this bin again fails instead of recursing.
-const RUNNING = 'AGENT_TOOLS_FIX'
+const RUNNING = 'KAYNOOO_CLI_FIX'
 const JUSTFILES = ['justfile', 'Justfile', '.justfile']
 const RUFF_CONFIGS = ['ruff.toml', '.ruff.toml']
 const RUFF_SECTION = /^\[tool\.ruff/m

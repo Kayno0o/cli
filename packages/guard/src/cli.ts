@@ -39,7 +39,7 @@ const pathOptions = {
 const hookUsage = `guard hook <${EVENTS.join('|')}>
 
 Answers a Claude Code hook: reads the event JSON on stdin and prints the reply JSON, nothing when the call goes ahead untouched.
-pre-tool-use refuses a Bash call breaking a rule, an install pkg refuses (or fails to check), and a file tool (Read, Edit, MultiEdit, Write, NotebookEdit, Grep, Glob) reaching an env file; user-prompt-submit remembers whether the prompt asked for a push; session-start lists the installed agent-tools bins.
+pre-tool-use refuses a Bash call breaking a rule, an install pkg refuses (or fails to check), and a file tool (Read, Edit, MultiEdit, Write, NotebookEdit, Grep, Glob) reaching an env file; user-prompt-submit remembers whether the prompt asked for a push; session-start lists the installed @kaynooo/cli-* bins.
 A failure exits 1, which Claude Code reports without blocking the call.
 
 Exits 0 when it answered, 1 on a failure or an unknown event (never 2, which would block the call).`

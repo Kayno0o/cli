@@ -1,6 +1,6 @@
-# agent-tools
+# cli
 
-CLIs built for Claude Code sessions, each published on its own from `packages/` to npmjs under the `@kaynooo` scope: `bun install -g @kaynooo/<package>`.
+CLIs built for Claude Code sessions, each published on its own from `packages/` to npmjs under the `@kaynooo` scope: `bun install -g @kaynooo/<package>`. Only `@kaynooo/cli-changelog` stays on the Forgejo registry.
 
 | Package | Bin | What it does |
 | --- | --- | --- |
@@ -18,7 +18,8 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 | [`@kaynooo/cli-gitlab`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
 | [`@kaynooo/cli-guard`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers, in-place edits), each refusal naming the route |
 | [`@kaynooo/cli-code`](packages/code) | `peek`, `todo-scan`, `hotspots` | source read by spans, declarations, usages and outlines in one call; the TODO and issue-reference comments of a repository, those naming a closed issue flagged; the files ranked by complexity times git churn |
-| [`@kaynooo/cli-doctor`](packages/doctor) | `doctor`, `agent-tools` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix; every bin in one line, what it does and what it replaces, read from its own help |
+| [`@kaynooo/cli-changelog`](packages/changelog) | `changelog` | a release's notes generated from its conventional commits and published as a Forgejo release, posted to Discord too; a release undone |
+| [`@kaynooo/cli-doctor`](packages/doctor) | `doctor`, `cli` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix; every bin in one line, what it does and what it replaces, read from its own help |
 | [`@kaynooo/cli-kit`](packages/kit) | - | the CLI kit every @kaynooo CLI is built on: argument parsing with `--help`, the command dispatcher, prompts, the progress line, config loading, the shell command parser every guard reads with, and output helpers |
 
 ## Development
@@ -38,14 +39,14 @@ The same workflow then publishes the package to npmjs (`@kaynooo` org) with the 
 
 Two ways wire the bins into Claude Code, never both on one host:
 
-- **The `agent-tools-hooks` plugin** in this repo, for any host: `guard hook` answers each event, refusing a Bash call that breaks a rule (with the command to run instead, the pinned package manager included), an install `pkg` refuses and a Read, Edit or Write of an env file, letting `git push` through only when the latest prompt asked for one, and listing the installed bins at session start. A hook cannot swap the command Claude runs without approving it too, so nothing runs through `out` here.
-- **The `agent-tools` mod** in the user's dotfiles (`zshrc/dotfiles/claude/mods/agent-tools`): the same rules through `guard check`, plus the install rewritten to the pinned manager and noisy runs through `out`.
+- **The `cli-hooks` plugin** in this repo, for any host: `guard hook` answers each event, refusing a Bash call that breaks a rule (with the command to run instead, the pinned package manager included), an install `pkg` refuses and a Read, Edit or Write of an env file, letting `git push` through only when the latest prompt asked for one, and listing the installed bins at session start. A hook cannot swap the command Claude runs without approving it too, so nothing runs through `out` here.
+- **The `cli` mod** in the user's dotfiles (`zshrc/dotfiles/claude/mods/cli`): the same rules through `guard check`, plus the install rewritten to the pinned manager and noisy runs through `out`.
 
 ### A host without the dotfiles
 
 ```sh
 bun install -g @kaynooo/cli-forgejo @kaynooo/cli-env @kaynooo/cli-db @kaynooo/cli-check @kaynooo/cli-pkg @kaynooo/cli-stack @kaynooo/cli-out @kaynooo/cli-edit @kaynooo/cli-base @kaynooo/cli-git @kaynooo/cli-wait @kaynooo/cli-gitlab @kaynooo/cli-guard @kaynooo/cli-code @kaynooo/cli-doctor
-claude plugin install agent-tools-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git
+claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git
 ```
 
 The packages come from npmjs with no registry setup. Each is also published to the Forgejo registry, which answers without a token; to install from it instead, map the scope first: `printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml`. The plugin comes from the Forgejo marketplace either way.

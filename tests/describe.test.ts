@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { bins, run } from './bins'
 
-// What `agent-tools list` reads off each bin, so a bin that stops describing itself fails here rather than drops off the list.
+// What `cli list` reads off each bin, so a bin that stops describing itself fails here rather than drops off the list.
 describe('every bin describes itself', () => {
   for (const { bin, source } of bins) {
     test(bin, () => {

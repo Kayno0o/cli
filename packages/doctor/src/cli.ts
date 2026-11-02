@@ -7,9 +7,9 @@ import { version } from '../package.json'
 import { runChecks } from './checks'
 import { hostHere } from './host'
 
-const USAGE = `doctor [--json]: checks this host's agent-tools install, one line per check, the command that fixes a failing one beside it
+const USAGE = `doctor [--json]: checks this host's @kaynooo/cli-* install, one line per check, the command that fixes a failing one beside it
 
-Each @kaynooo tools package installed globally with its bins on the PATH and no older than the registry's latest; tea logged in to git.kaynooo.fr and reaching it; the Claude Code hooks wired through the agent-tools-hooks plugin or the agent-tools mod, not both; Bun at least the version the tools ask for.
+Each @kaynooo/cli-* package installed globally with its bins on the PATH and no older than the registry's latest; tea logged in to git.kaynooo.fr and reaching it; the Claude Code hooks wired through the cli-hooks plugin or the cli mod, not both; Bun at least the version the tools ask for.
 Exits 0 when every check passes, 1 when one fails, 2 on a usage error.`
 
 const INSTALL = 'bun install -g '

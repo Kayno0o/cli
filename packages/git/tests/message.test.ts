@@ -25,7 +25,7 @@ describe('commitMessageViolation', () => {
     ['a scoped title', 'feat(mods): x'],
     ['a breaking change', 'feat(api)!: x'],
     ['a body and ticket lines', 'fix(band): x\n\nKeeps the band visible.\n\n#5 - deliver every pointer\n#6 - [UC12] Afficher la liste'],
-    ['two body lines and a ticket of another repository', 'fix(band): x\n\nKeeps the band visible.\nDrops the old cache.\n\nkaynooo/agent-tools#39 - guard rules live in the dotfiles mods'],
+    ['two body lines and a ticket of another repository', 'fix(band): x\n\nKeeps the band visible.\nDrops the old cache.\n\nkaynooo/cli#39 - guard rules live in the dotfiles mods'],
     ['two body sentences', 'fix: x\n\nKeeps the band visible.\nDrops the old cache.'],
     ['a title git writes', 'Merge branch \'x\''],
     ['a breaking change giving full details', 'feat(api)!: drop v1\n\n- one\n- two\n- three'],

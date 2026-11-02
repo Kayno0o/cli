@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import process from 'node:process'
-import { table } from '@kaynooo/cli-kit'
+import { CLI_FOLDER, table } from '@kaynooo/cli-kit'
 
 // A rough count, close enough for a running total: no tokenizer is shipped or called.
 const BYTES_PER_TOKEN = 4
@@ -27,7 +27,7 @@ export interface Entry {
 }
 
 export function statsPath(env: Record<string, string | undefined> = process.env): string {
-  return join(env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'agent-tools', 'out', 'stats.jsonl')
+  return join(env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), CLI_FOLDER, 'out', 'stats.jsonl')
 }
 
 // The words naming what ran (`bun run build`, `docker compose exec`), stopping at an option or any word that could carry a value, so no argument a secret may sit in is kept; `sh -c '...'` is named by the last command of its chain that is not a `cd`.

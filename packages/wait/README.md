@@ -47,5 +47,5 @@ check --slot
 - When it has to wait, stderr gets one line naming who holds what it needs: the session, the command and for how long. `--timeout` (`-t`, `30s`, `5m`, a bare number of seconds) gives up with exit 2; it waits forever by default.
 - `slot ls` lists the holders (`slot 2`, `lock booki-test-db`) and the waiters with their session (found as `ft take` finds it, through `~/.claude/sessions`), command and age, `--json` as `{slots, busy, entries}`. A waiter that died is dropped from the list.
 - `slot ls` is the listing even as a first word, `slot -- ls` being read as `slot ls` because Bun drops a leading `--`: write `slot -n 4 -- ls` for the command.
-- State lives in `$XDG_RUNTIME_DIR/agent-tools/slot` (`~/.cache/agent-tools/slot` without it), only the user can enter it; `$SLOT_DIR` points elsewhere.
+- State lives in `$XDG_RUNTIME_DIR/kaynooo-cli/slot` (`~/.cache/kaynooo-cli/slot` without it), only the user can enter it; `$SLOT_DIR` points elsewhere.
 - Exit codes: the command's, 2 on a timeout or a usage error.

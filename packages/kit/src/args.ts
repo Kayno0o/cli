@@ -69,7 +69,7 @@ export function replacesRows(replaces: string | undefined, colors = paint(proces
   return replaces === undefined ? [] : ['', `${colors.bold('Instead of:')} ${replaces}`]
 }
 
-// What a bin's --help prints under KIT_HELP=json, for `agent-tools list` to read without parsing the text.
+// What a bin's --help prints under KIT_HELP=json, for `cli list` to read without parsing the text.
 export interface Description {
   synopsis: string
   summary: string
@@ -132,7 +132,7 @@ export interface ParseSettings<Names extends readonly string[] = string[]> {
   positionals?: Names
   // Command lines shown under `Examples:` in the help, each with an optional dimmed note: `['ft ci HEAD~1', 'wait for the commit before the last']`.
   examples?: Example[]
-  // What the command is reached for instead of, shown as `Instead of:` in the help and listed by `agent-tools list`: 'sed -n N,Mp, grep -n chains and whole-file reads'.
+  // What the command is reached for instead of, shown as `Instead of:` in the help and listed by `cli list`: 'sed -n N,Mp, grep -n chains and whole-file reads'.
   replaces?: string
 }
 
