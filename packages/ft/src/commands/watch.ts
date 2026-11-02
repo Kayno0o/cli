@@ -1,5 +1,6 @@
 import type { Run } from '../runs'
-import { badge, duration, Exit, fail, formatDuration, isPermanentFailure, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, duration, Exit, fail, formatDuration, isPermanentFailure, parse, takesControlCodes, wholeNumber } from '@kaynooo/cli-kit'
+import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { repoOption } from '../args'
 import { failureReport, FINISHED, overall, recentRuns, runById, stallReason } from '../runs'
 
@@ -19,11 +20,16 @@ export const timing = { poll: 10_000 }
 const LIMIT = 20
 const STALLED = 3 * 60_000
 
-// Polls until the picked runs are all finished, printing each status change; a failure prints its jobs' log excerpts.
+type Output = NonNullable<Parameters<typeof liveRegion>[1]>
+
+// Polls until the picked runs are all finished, a failure printing its jobs' log excerpts. A terminal shows one line per run redrawn in place, then each run's last status; anything else gets a line per status change.
 // With `idle`, picking no run for that many milliseconds counts as a pass: a push touching only ignored paths starts none.
-export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, repo?: string, idle?: number): Promise<number> {
+export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, repo?: string, idle?: number, out: Output = process.stdout): Promise<number> {
   const started = Date.now()
-  const reported = new Map<number, string>()
+  // The last state of every run seen, in the order they appeared.
+  const latest = new Map<number, Run>()
+  const line = (run: Run) => `${run.workflow_id} run ${run.id} on ${run.prettyref}: ${badge(run.status, out)}`
+  const region = takesControlCodes(out) ? liveRegion(() => [...latest.values()].map(line), out) : undefined
   // Every run ever picked, read again by id once newer runs push it out of the page of the newest ones.
   const followed = new Set<number>()
   const failed = new Set<number>()
@@ -39,11 +45,13 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
       followed.add(run.id)
 
     for (const run of runs) {
-      if (reported.get(run.id) !== run.status)
-        console.log(`${run.workflow_id} run ${run.id} on ${run.prettyref}: ${badge(run.status, process.stdout)}`)
+      if (region === undefined && latest.get(run.id)?.status !== run.status)
+        out.write(`${line(run)}\n`)
 
-      reported.set(run.id, run.status)
+      latest.set(run.id, run)
     }
+
+    region?.redraw()
 
     if (runs.length === 0) {
       if (idle !== undefined && Date.now() - started > idle) {
@@ -79,30 +87,44 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
     return undefined
   }
 
-  for (;;) {
-    // Sleeping first gives a push's runs time to all appear, so one finishing early is not taken for the lot.
-    await Bun.sleep(timing.poll)
+  async function settle(): Promise<number> {
+    for (;;) {
+      // Sleeping first gives a push's runs time to all appear, so one finishing early is not taken for the lot.
+      await Bun.sleep(timing.poll)
 
-    if (Date.now() - started > timeout)
-      fail(`the runs did not finish in ${formatDuration(timeout)}`)
+      if (Date.now() - started > timeout)
+        fail(`the runs did not finish in ${formatDuration(timeout)}`)
 
-    // Every call to the forge sits in the retry: one failing leaves the wait to the next poll, unless it can only fail again.
-    try {
-      const code = await poll()
+      // Every call to the forge sits in the retry: one failing leaves the wait to the next poll, unless it can only fail again.
+      try {
+        const code = await poll()
 
-      if (code !== undefined)
-        return code
+        if (code !== undefined)
+          return code
+      }
+      catch (error) {
+        if (error instanceof Exit)
+          throw error
+
+        const message = error instanceof Error ? error.message : String(error)
+
+        if (isPermanentFailure(error))
+          fail(message)
+
+        console.warn(`ft watch: ${message}, polling again`)
+      }
     }
-    catch (error) {
-      if (error instanceof Exit)
-        throw error
+  }
 
-      const message = error instanceof Error ? error.message : String(error)
+  try {
+    return await settle()
+  }
+  finally {
+    if (region !== undefined) {
+      region.stop()
 
-      if (isPermanentFailure(error))
-        fail(message)
-
-      console.warn(`ft watch: ${message}, polling again`)
+      for (const run of latest.values())
+        out.write(`${line(run)}\n`)
     }
   }
 }

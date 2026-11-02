@@ -39,6 +39,38 @@ describe('watchRuns', () => {
   })
 })
 
+describe('watchRuns output', () => {
+  const stream = (isTTY: boolean) => {
+    const written: string[] = []
+
+    return { written, out: { isTTY, columns: 120, rows: 40, write: (text: string) => written.push(text) } }
+  }
+
+  test('on a terminal, redraws one line per run and leaves each run\'s last status once', async () => {
+    const { written, out } = stream(true)
+
+    await withFastPoll([run(2, 'success'), run(1, 'success')], async () => {
+      expect(await watchRuns(runs => runs, 1000, undefined, undefined, out)).toBe(0)
+    })
+
+    const text = written.join('')
+    const left = Bun.stripANSI(text.slice(text.lastIndexOf('\x1B[2K') + 4))
+
+    expect(text).toContain('\x1B[1A')
+    expect(left).toBe('test.yml run 2 on main: ✓ success\ntest.yml run 1 on main: ✓ success\n')
+  })
+
+  test('elsewhere, prints a line per run as it is first seen', async () => {
+    const { written, out } = stream(false)
+
+    await withFastPoll([run(2, 'success'), run(1, 'success')], async () => {
+      expect(await watchRuns(runs => runs, 1000, undefined, undefined, out)).toBe(0)
+    })
+
+    expect(written.join('')).toBe('test.yml run 2 on main: success\ntest.yml run 1 on main: success\n')
+  })
+})
+
 describe('watchRuns failures', () => {
   test('polls again after tea answers an API error, including from the stall and failure lookups', async () => {
     const failures = [{ match: 'actions/runs?', message: 'internal error', times: 2 }, { match: '/jobs', message: 'internal error', times: 1 }]
