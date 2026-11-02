@@ -3,7 +3,7 @@ import type { Colors } from './style'
 import process from 'node:process'
 import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, replacesRows, UsageError, usageLine, wantsHelpJson } from './args'
 import { paint, takesControlCodes } from './style'
-import { distance } from './text'
+import { closest } from './text'
 
 export type Command = {
   summary: string
@@ -73,18 +73,6 @@ function takeOutputFlags(argv: string[]): string[] {
   }
 
   return argv.slice(index)
-}
-
-// A command the name starts, else one within two edits (one for a name under four letters).
-export function closest(name: string, names: string[]): string | undefined {
-  const started = names.find(known => known.startsWith(name))
-
-  if (started !== undefined)
-    return started
-
-  const [best] = names.map(known => ({ known, far: distance(name, known) })).sort((a, b) => a.far - b.far)
-
-  return best !== undefined && best.far <= (name.length < 4 ? 1 : 2) ? best.known : undefined
 }
 
 interface Level {
@@ -269,7 +257,7 @@ async function leafCandidates(run: (args: string[]) => Promise<number>, words: s
   if (!(words.at(-1) ?? '').startsWith('-'))
     return [FILES]
 
-  return Object.entries(await optionsOf(run)).map(([name, option]) => `--${name}\t${option.description}`)
+  return Object.entries(await optionsOf(run)).map(([name, option]) => option.description === undefined ? `--${name}` : `--${name}\t${option.description}`)
 }
 
 // The candidates for the last word, `value\tdescription` per line, after walking the subcommands the earlier words name.

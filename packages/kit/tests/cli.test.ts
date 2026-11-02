@@ -153,7 +153,7 @@ describe('__complete', () => {
     commands: {
       ...cli.commands,
       port: { summary: 'parses first', run: async (args: string[]) => {
-        parse(args, 'port <name>', { max: { type: 'string', description: 'highest port' } })
+        parse(args, 'port <name>', { max: { type: 'string', description: 'highest port' }, bare: { type: 'boolean' } })
         ran.push('port')
 
         return 0
@@ -167,7 +167,7 @@ describe('__complete', () => {
   })
 
   test('lists a command\'s options without running it, and asks for paths otherwise', async () => {
-    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '--']))).out).toBe('--max\thighest port\n--color\tauto (on a terminal alone), always or never\n--plain\tplain text, no colour or spinner: --color never\n--help\tshow this help\n')
+    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '--']))).out).toBe('--max\thighest port\n--bare\n--color\tauto (on a terminal alone), always or never\n--plain\tplain text, no colour or spinner: --color never\n--help\tshow this help\n')
     expect((await capture(async () => runCli(parsing, ['__complete', 'port', '']))).out).toBe('__files__\n')
     expect(ran).toEqual([])
     expect((await capture(async () => runCli(parsing, ['port']))).result).toBe(0)

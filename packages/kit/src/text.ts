@@ -19,3 +19,15 @@ export function distance(a: string, b: string): number {
 
   return previous[b.length] ?? 0
 }
+
+// A name the typed one starts, else one within two edits (one for a name under four letters).
+export function closest(name: string, names: string[]): string | undefined {
+  const started = names.find(known => known.startsWith(name))
+
+  if (started !== undefined)
+    return started
+
+  const [best] = names.map(known => ({ known, far: distance(name, known) })).sort((a, b) => a.far - b.far)
+
+  return best !== undefined && best.far <= (name.length < 4 ? 1 : 2) ? best.known : undefined
+}

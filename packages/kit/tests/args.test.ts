@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { duration, Exit, HelpShown, jsonOption, parse, readInput, UsageError } from '../src'
+import { duration, Exit, HelpShown, jsonOption, optionRows, paint, parse, readInput, UsageError } from '../src'
 
 const options = { lines: { type: 'string', short: 'n', description: 'lines' } } as const
 
@@ -31,6 +31,37 @@ describe('parse', () => {
     expect(parse(['--no-emoji'], 'u', flags, { allowNegative: true }).values.emoji).toBe(false)
     expect(parse([], 'u', flags, { allowNegative: true }).values.emoji).toBe(true)
     expect(() => parse(['--no-emoji'], 'u', flags)).toThrow(Exit)
+  })
+
+  test('hints the nearest option on an unknown one, none when nothing is close', () => {
+    const flags = { check: { type: 'boolean', short: 'c' }, times: { type: 'string', short: 't', description: 'times' } } as const
+    const hint = (args: string[], negative = false) => {
+      try {
+        parse(args, 'u', flags, { allowNegative: negative })
+      }
+      catch (error) {
+        return error instanceof UsageError ? error.hint : 'not a usage error'
+      }
+
+      return 'no error'
+    }
+
+    expect(hint(['--chek'])).toBe('did you mean --check?')
+    expect(hint(['--chek=1'])).toBe('did you mean --check?')
+    expect(hint(['--no-chek'], true)).toBe('did you mean --no-check?')
+    expect(hint(['--no-chek'])).toBeUndefined()
+    expect(hint(['--no-times'], true)).toBeUndefined()
+    expect(hint(['--tim'])).toBe('did you mean --times?')
+    expect(hint(['--c'])).toBe('did you mean -c?')
+    expect(hint(['-x'])).toBeUndefined()
+    expect(hint(['--zzzzzz'])).toBeUndefined()
+  })
+
+  test('prints an option without a description as its flag alone', () => {
+    const rows = optionRows({ bare: { type: 'boolean' }, said: { type: 'string', description: 'said' } }, paint({ isTTY: false }))
+
+    expect(rows[0]).toBe('      --bare')
+    expect(rows[1]).toBe('      --said <value>  said')
   })
 
   test('throws HelpShown after printing the help, so the command goes no further', () => {

@@ -3,8 +3,9 @@ import process from 'node:process'
 import { parseArgs } from 'node:util'
 import { upTo } from './format'
 import { paint } from './style'
+import { closest } from './text'
 
-export type Options = Record<string, ParseArgsOptionDescriptor & { description: string }>
+export type Options = Record<string, ParseArgsOptionDescriptor & { description?: string }>
 
 // The `--json` flag every CLI words alike: `print JSON`, then what it holds when given.
 export function jsonOption(holds?: string) {
@@ -24,8 +25,8 @@ export function fail(message: string, code = 2, hint?: string): never {
 
 // An Exit for arguments the command cannot take, which runCli points at the command's --help.
 export class UsageError extends Exit {
-  constructor(message: string) {
-    super(message, 2)
+  constructor(message: string, hint?: string) {
+    super(message, 2, hint)
   }
 }
 
@@ -51,6 +52,7 @@ export const completion = { active: false }
 const OPTIONAL = /\[[^\]]+\]/g
 const USAGE_PREFIX = /^usage:\s*/i
 const FULL_STOP = /\.$/
+const DASHES = /^-+/
 
 // `Usage: <usage>`, the usage given with or without its own `usage:`, optional parts dimmed.
 export function usageLine(usage: string, colors = paint(process.stdout)): string {
@@ -108,11 +110,11 @@ export function optionRows(options: Options, colors = paint(process.stdout)): st
     const short = option.short === undefined ? '    ' : `${colors.cyan(`-${option.short}`)}, `
     const value = option.type === 'string' ? ` ${colors.dim('<value>')}` : ''
 
-    return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? ' <value>'.length : 0), description: option.description }
+    return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? ' <value>'.length : 0), description: option.description ?? '' }
   })
   const width = Math.max(0, ...rows.map(row => row.width))
 
-  return rows.map(row => `  ${row.flag}${' '.repeat(width - row.width)}  ${colors.dim(row.description)}`)
+  return rows.map(row => row.description === '' ? `  ${row.flag}` : `  ${row.flag}${' '.repeat(width - row.width)}  ${colors.dim(row.description)}`)
 }
 
 // The positionals typed by their names: `<key>` or `KEY` a string, `[file]` an optional one, a name ending in `...` the rest.
@@ -184,7 +186,9 @@ export function parse<const T extends Options, const Names extends readonly stri
     parsed = parseArgs({ args: joinDashValues(own, all), options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
   }
   catch (error) {
-    badUsage(parseError(error))
+    const message = parseError(error)
+
+    throw new UsageError(message, nearestOption(message, all, settings.allowNegative === true))
   }
 
   const values = parsed.values as { help?: boolean, color?: unknown, plain?: unknown }
@@ -246,6 +250,30 @@ function parseError(error: unknown): string {
   const message = upTo(error instanceof Error ? error.message : String(error), '. ')
 
   return `${message.charAt(0).toLowerCase()}${message.slice(1)}`
+}
+
+const UNKNOWN_OPTION = /^unknown option '(-[^']+)'/
+
+// `did you mean --no-check?` for an unknown option within reach of a known one (shorts and `--no-<flag>` included), nothing when none is, so runCli keeps its `--help` hint.
+function nearestOption(message: string, options: Options, allowNegative: boolean): string | undefined {
+  const typed = UNKNOWN_OPTION.exec(message)?.[1]
+
+  if (typed === undefined)
+    return undefined
+
+  const word = typed.replace(DASHES, '')
+
+  if (word.length < 2 && !typed.startsWith('--'))
+    return undefined
+
+  const known = Object.entries(options).flatMap(([name, option]) => [
+    ...option.short === undefined ? [] : [`-${option.short}`],
+    `--${name}`,
+    ...allowNegative && option.type === 'boolean' ? [`--no-${name}`] : [],
+  ])
+  const meant = closest(word, known.map(flag => flag.replace(DASHES, '')))
+
+  return meant === undefined ? undefined : `did you mean ${known.find(flag => flag.replace(DASHES, '') === meant)}?`
 }
 
 export function wholeNumber(value: string | undefined, name: string, fallback: number, min = 1): number {
