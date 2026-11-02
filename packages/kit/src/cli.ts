@@ -395,8 +395,16 @@ async function candidates(scope: Scope, defaultCommand: string | undefined, word
     command = commands[aliases?.[word] ?? word]
   }
 
-  if (listing)
-    return Promise.all(Object.entries(shown(commands)).map(async ([name, { summary }]) => `${name}\t${await resolveSummary(summary)}`))
+  if (listing) {
+    const own = await Promise.all(Object.entries(shown(commands)).map(async ([name, { summary }]) => `${name}\t${await resolveSummary(summary)}`))
+    const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]
+    // What the default command takes as its first positional is typed here too, `acme <project>`; a name a command already has is left out.
+    const values = fallback !== undefined && 'run' in fallback ? await leafCandidates(fallback.run, [word]) : []
+
+    const valueOf = (line: string) => line.slice(0, line.includes('\t') ? line.indexOf('\t') : undefined)
+
+    return [...own, ...values.filter(line => line !== FILES && !(valueOf(line) in commands))]
+  }
 
   if (command === undefined) {
     const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]

@@ -217,6 +217,17 @@ describe('defaultCommand', () => {
     expect((await capture(async () => runCli(withDefault, ['a', 'b']))).err).toBe('error: demo ls: unexpected argument b\n  hint: run demo ls --help for its options\n')
   })
 
+  test('__complete adds the default command\'s first positional values after the subcommands, minus a name a command has', async () => {
+    const picking = { ...cli, commands: { ...cli.commands, up: { summary: 'starts', run: async (args: string[]) => {
+      parse(args, 'up <project>', {}, { positionals: ['<project>'], candidates: { '<project>': () => [['alpha', 'the first'], 'echo'] } })
+
+      return 0
+    } } }, defaultCommand: 'up' }
+
+    expect((await capture(async () => runCli(picking, ['__complete', '']))).out).toBe('echo\tprints its arguments\nboom\tfails\nplan\ta group\nup\tstarts\nalpha\tthe first\n')
+    expect((await capture(async () => runCli(withDefault, ['__complete', '']))).out).toBe('echo\tprints its arguments\nboom\tfails\nplan\ta group\nls\tlists\n')
+  })
+
   test('prints the help for a bare run unless told to run the default command', async () => {
     expect((await capture(async () => runCli(withDefault, []))).out).toStartWith('demo 1.2.3')
     expect(await capture(async () => runCli({ ...withDefault, runBare: true }, []))).toEqual({ result: 0, out: 'listing\n', err: '' })
