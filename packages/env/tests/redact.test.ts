@@ -78,12 +78,12 @@ describe('Redactor', () => {
     expect(redactor.end()).toBe('two')
   })
 
-  test('masks .env values of 6 characters or more as whole words only', () => {
-    const known = knownSecrets([['DB_PASSWORD', 'hunter22'], ['PIN_TOKEN', 'ab12'], ['API_KEY', 'swordfish']])
+  test('masks .env values of 4 characters or more as whole words only', () => {
+    const known = knownSecrets([['DB_PASSWORD', 'hunter22'], ['PIN_TOKEN', 'ab1'], ['API_KEY', 'swordfish']])
     const redactor = new Redactor(known)
-    const out = redactor.push('pw hunter22 pin ab12 word swordfishing a_swordfish\n')
+    const out = redactor.push('pw hunter22 pin ab1 word swordfishing a_swordfish\n')
 
-    expect(out).toBe('pw hu***(8) pin ab12 word swordfishing a_swordfish\n')
+    expect(out).toBe('pw hu***(8) pin ab1 word swordfishing a_swordfish\n')
   })
 })
 

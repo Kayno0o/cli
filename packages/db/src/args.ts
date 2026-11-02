@@ -13,6 +13,6 @@ export const connectionOptions = {
 
 export const outputOptions = {
   limit: { type: 'string', short: 'n', description: `rows shown (${DEFAULT_LIMIT})` },
-  raw: { type: 'boolean', description: 'show columns masked by default (emails, phones, tokens, password hashes)' },
+  raw: { type: 'boolean', description: 'show columns masked by default (emails, phones, tokens, password hashes, secret-named keys inside JSON values)' },
   json: jsonOption(),
 } as const

@@ -1,3 +1,5 @@
+import { isSecretName } from '@kaynooo/cli-kit'
+
 export interface Match {
   start: number
   end: number
@@ -13,24 +15,55 @@ export interface KnownSecrets {
 }
 
 // A value shorter than this is not masked when found loose in output, too many false hits.
-export const MIN_KNOWN_LENGTH = 6
+export const MIN_KNOWN_LENGTH = 4
 
-const SECRET_KEY = /TOKEN|SECRET|PASSWORD|KEY|PRIVATE|DSN/i
-const URL_PASSWORD = /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]*:([^\s@/]+)@/dgi
+export const KEY_MASK = '*** private key redacted ***'
+// A value that is a setting rather than a secret, even under a secret-looking key.
+const PLAIN_VALUE = /^(?:true|false|null|none|nil|yes|no|on|off|undefined)$/i
+const PLACEHOLDER = /^[$%{<(*/]/
+const URL_PASSWORD = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]{0,31}:\/\/[^\s:/@]*:([^\s'"]{1,1024})@/dgi
+const PORT = /^\d{1,5}$/
 const ESCAPE = /[.*+?^${}()|[\]\\]/g
 
-const TOKEN_FORMATS: [kind: string, pattern: RegExp][] = [
-  ['GitHub token', /\b(?:gh[pousr]_|github_pat_)\w{20,}/g],
-  ['GitLab token', /\bglpat-[\w-]{20,}/g],
-  ['API key', /\bsk-[\w-]{20,}/g],
-  ['Slack token', /\bxox[abprs]-[\w-]{10,}/g],
-  ['JWT', /\beyJ[\w-]+\.[\w-]+\.[\w-]+/g],
+interface TokenFormat {
+  kind: string
+  pattern: RegExp
+  // Skips a candidate that is a placeholder or a plain word.
+  skip?: (value: string) => boolean
+}
+
+// A secret value starting like this is a reference or a placeholder, not the secret.
+function isPlaceholder(value: string): boolean {
+  return PLACEHOLDER.test(value) || PLAIN_VALUE.test(value)
+}
+
+// A pattern with a group masks that group only, else the whole match.
+const TOKEN_FORMATS: TokenFormat[] = [
+  { kind: 'GitHub token', pattern: /\b(?:gh[pousr]_|github_pat_)\w{20,}/dg },
+  { kind: 'GitLab token', pattern: /\bglpat-[\w-]{20,}/dg },
+  { kind: 'API key', pattern: /\bsk-[\w-]{20,}/dg },
+  { kind: 'Slack token', pattern: /\bx(?:ox[abprs]|app)-[\w-]{10,}/dg },
+  { kind: 'JWT', pattern: /\beyJ[\w-]+\.[\w-]+\.[\w-]+/dg },
+  { kind: 'AWS access key', pattern: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/dg },
+  { kind: 'npm token', pattern: /\bnpm_[A-Za-z0-9]{30,}/dg },
+  { kind: 'Stripe key', pattern: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{10,}/dg },
+  { kind: 'Google API key', pattern: /\bAIza[\w-]{35}/dg },
+  { kind: 'SendGrid key', pattern: /\bSG\.[\w-]{16,}\.[\w-]{16,}/dg },
+  { kind: 'Authorization header', pattern: /\bAuthorization["']?\s*[:=]\s*["']?(?:Bearer|Basic|Token|Digest)\s+([^\s"',;]{8,})/dgi, skip: isPlaceholder },
+  { kind: 'Bearer token', pattern: /\bBearer\s+((?=[\w.~+/=-]*\d)[\w.~+/=-]{20,})/dg },
+  { kind: 'password', pattern: /(?<![\w-])(?:[\w-]{0,30}[_-])?(?:password|passwd|secret|api[_-]?key)(?:[_-][\w-]{0,30})?=([^\s"'&;,]{4,})/dgi, skip: isPlaceholder },
+  { kind: 'password', pattern: /(?<![\w-])["']?(?:[\w-]{0,30}[_-])?(?:password|passwd|secret|api[_-]?key)(?:[_-][\w-]{0,30})?["']?\s*[:=]\s*(["'])((?:\\.|(?!\1)[^\\\n]){4,})\1/dgi, skip: isPlaceholder },
 ]
 
+// A private key block (PEM, PGP). Its body is masked from just after the BEGIN marker to the END marker or the end of the line, so one line may hold the whole key escaped as JSON.
+export const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/
+export const PEM_END = /-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/
+const PEM_BODY = /(?<=-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----)(?:(?!-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----)[\s\S])+/dg
+const PEM_BEGIN_ALL = /-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/g
+
 // A URL split into authority, path and query, each with its offsets (flag d).
-const URL_PARTS = /\b[a-z][a-z0-9+.-]*:\/\/([^\s/?#'"<>`]*)([^\s?#'"<>`]*)(?:\?([^\s#'"<>`]*))?/dgi
+const URL_PARTS = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]{0,31}:\/\/([^\s/?#'"<>`]*)([^\s?#'"<>`]*)(?:\?([^\s#'"<>`]*))?/dgi
 const PATH_SEGMENT = /[^/]+/g
-const QUERY_PARAM = /([^&=]+)=([^&]*)/g
 const SECRET_PARAM = /^(?:token|[a-z]+_token|key|api[_-]?key|access[_-]?key|secret|[a-z]+_secret|password|passwd|pwd|sig|signature|auth|authorization)$/i
 
 // Webhook and ping URLs whose last path segment is the secret, whatever the key holding the URL is named.
@@ -44,11 +77,8 @@ const WEBHOOK_FORMATS: [kind: string, pattern: RegExp][] = [
 // A path segment that looks like a token: at least 20 characters of [A-Za-z0-9_-] mixing lowercase, uppercase and digits, or at least 32 alphanumerics mixing letters and digits (hex, base32, dashless UUIDs). Plain slugs, dates and words never do.
 const OPAQUE_SEGMENT = /^(?:(?=[\w-]{20,}$)(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[\w-]+|(?=[A-Za-z\d]{32,}$)(?=.*[A-Za-z])(?=.*\d).+)$/
 
-export const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/
-export const PEM_END = /-----END [A-Z ]*PRIVATE KEY-----/
-
 export function isSecretKey(key: string): boolean {
-  return SECRET_KEY.test(key)
+  return isSecretName(key)
 }
 
 // A few leading characters and the length, so two values can be told apart without leaking either.
@@ -58,12 +88,22 @@ export function hint(value: string): string {
   return `${value.slice(0, shown)}***(${value.length})`
 }
 
+// The forms a value takes in output: as is, percent-encoded and escaped inside a JSON string.
+function forms(value: string): string[] {
+  return [...new Set([value, encodeURIComponent(value), JSON.stringify(value).slice(1, -1)])]
+}
+
 export function knownSecrets(pairs: Iterable<readonly [key: string, value: string]>): KnownSecrets {
   const keys = new Map<string, string>()
 
   for (const [key, value] of pairs) {
-    if (value.length >= MIN_KNOWN_LENGTH && !keys.has(value))
-      keys.set(value, key)
+    if (value.length < MIN_KNOWN_LENGTH || PLAIN_VALUE.test(value))
+      continue
+
+    for (const form of forms(value)) {
+      if (!keys.has(form))
+        keys.set(form, key)
+    }
   }
 
   if (keys.size === 0)
@@ -74,8 +114,24 @@ export function knownSecrets(pairs: Iterable<readonly [key: string, value: strin
   return { pattern: new RegExp(`(?<!\\w)(?:${alternatives.join('|')})(?!\\w)`, 'g'), keys }
 }
 
+// The password span of each URL in the text. A password may hold `@`, the last one before the host closing it, and `/`, unless only a port precedes the `/` (`host:3000/@scope/pkg`).
+function passwordSpans(text: string): [start: number, end: number][] {
+  const spans: [number, number][] = []
+
+  for (const url of text.matchAll(URL_PASSWORD)) {
+    const [start, end] = url.indices?.[1] ?? []
+    const password = url[1] ?? ''
+    const slash = password.indexOf('/')
+
+    if (start !== undefined && end !== undefined && !(slash !== -1 && PORT.test(password.slice(0, slash))))
+      spans.push([start, end])
+  }
+
+  return spans
+}
+
 export function urlPasswords(text: string): string[] {
-  return [...text.matchAll(URL_PASSWORD)].flatMap(url => url[1] ?? [])
+  return passwordSpans(text).map(([start, end]) => text.slice(start, end))
 }
 
 // The tokens a URL carries outside its password: the secret of a known webhook format, an opaque path segment and the value of a token-like query parameter.
@@ -112,11 +168,16 @@ function urlTokens(line: string): Match[] {
     if (query === undefined || queryStart === undefined)
       continue
 
-    for (const param of query.matchAll(QUERY_PARAM)) {
-      const [name, value] = [param[1] ?? '', param[2] ?? '']
+    let offset = 0
 
-      if (value !== '' && SECRET_PARAM.test(name))
-        add('URL token', queryStart + param.index + name.length + 1, value)
+    // Split rather than matched with a regex, which rescans the rest of a long parameter from every character.
+    for (const param of query.split('&')) {
+      const equals = param.indexOf('=')
+
+      if (equals > 0 && equals < param.length - 1 && SECRET_PARAM.test(param.slice(0, equals)))
+        add('URL token', queryStart + offset + equals + 1, param.slice(equals + 1))
+
+      offset += param.length + 1
     }
   }
 
@@ -127,16 +188,28 @@ function urlTokens(line: string): Match[] {
 export function findSecrets(line: string, known?: KnownSecrets): Match[] {
   const found: Match[] = []
 
-  for (const url of line.matchAll(URL_PASSWORD)) {
-    const [start, end] = url.indices?.[1] ?? []
+  for (const [start, end] of passwordSpans(line))
+    found.push({ start, end, kind: 'URL password', mask: '***' })
+
+  for (const body of line.matchAll(PEM_BODY)) {
+    const [start, end] = body.indices?.[0] ?? []
 
     if (start !== undefined && end !== undefined)
-      found.push({ start, end, kind: 'URL password', mask: '***' })
+      found.push({ start, end, kind: 'private key', mask: KEY_MASK })
   }
 
-  for (const [kind, pattern] of TOKEN_FORMATS) {
-    for (const token of line.matchAll(pattern))
-      found.push({ start: token.index, end: token.index + token[0].length, kind, mask: hint(token[0]) })
+  for (const { kind, pattern, skip } of TOKEN_FORMATS) {
+    for (const token of line.matchAll(pattern)) {
+      const [start, end] = token.indices?.at(-1) ?? []
+
+      if (start === undefined || end === undefined)
+        continue
+
+      const value = line.slice(start, end)
+
+      if (!skip?.(value))
+        found.push({ start, end, kind, mask: hint(value) })
+    }
   }
 
   found.push(...urlTokens(line))
@@ -158,6 +231,18 @@ export function findSecrets(line: string, known?: KnownSecrets): Match[] {
   return kept
 }
 
+// When the line opens a private key block it does not close (the last BEGIN marker has no END marker after it), the key text that follows the marker on the line, else undefined.
+export function openKeyBody(line: string): string | undefined {
+  const last = [...line.matchAll(PEM_BEGIN_ALL)].at(-1)
+
+  if (last === undefined)
+    return undefined
+
+  const after = line.slice(last.index + last[0].length)
+
+  return PEM_END.test(after) ? undefined : after.trim()
+}
+
 export function maskLine(line: string, known?: KnownSecrets): string {
   let out = ''
   let at = 0
@@ -170,10 +255,10 @@ export function maskLine(line: string, known?: KnownSecrets): string {
   return out + line.slice(at)
 }
 
-// A value shown by ev: wholly masked under a secret-looking key or when it is a private key, else only the secrets inside it.
-export function maskValue(key: string, value: string): string {
+// A value shown by ev: wholly masked under a secret-looking key or when it holds a private key, else only the secrets inside it.
+export function maskValue(key: string, value: string, known?: KnownSecrets): string {
   if (value === '')
     return value
 
-  return isSecretKey(key) || PEM_BEGIN.test(value) ? hint(value) : maskLine(value)
+  return isSecretName(key) || PEM_BEGIN.test(value) ? hint(value) : maskLine(value, known)
 }

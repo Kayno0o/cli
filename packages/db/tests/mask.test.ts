@@ -6,11 +6,20 @@ const URL = 'postgres://app:s3cr%40t-pw@db.example.com:5432/shop'
 
 describe('masking', () => {
   test('recognizes sensitive column names only', () => {
-    for (const name of ['email', 'user_email', 'mobile_phone', 'api_token', 'password_hash', 'secret', 'passwd'])
+    for (const name of ['email', 'user_email', 'mobile_phone', 'api_token', 'password_hash', 'secret', 'passwd', 'db_pass', 'ssn', 'iban', 'card_number', 'cvv', 'auth', 'cookie', 'session_id', 'jwt', 'otp', 'salt'])
       expect(sensitiveKind(name)).toBeDefined()
 
-    for (const name of ['id', 'name', 'status', 'compass', 'created_at'])
+    for (const name of ['id', 'name', 'status', 'compass', 'created_at', 'key', 'author', 'footprint', 'keyword'])
       expect(sensitiveKind(name)).toBeUndefined()
+  })
+
+  test('masks sensitive keys inside JSON values, as objects or as text', () => {
+    const rows = [{ id: 1, doc: { name: 'a', token: 'abc', nested: [{ password: 'x', ok: 1 }], empty: { api_key: null } }, text: '{"jwt":"eyJ","n":1}', plain: '{"n":1}' }]
+    const { rows: masked, masked: names } = maskRows(rows, false)
+
+    expect(masked).toEqual([{ id: 1, doc: { name: 'a', token: '***', nested: [{ password: '***', ok: 1 }], empty: { api_key: null } }, text: '{"jwt":"***","n":1}', plain: '{"n":1}' }])
+    expect(names).toEqual(['doc.token', 'doc.nested.password', 'text.jwt'])
+    expect(maskRows(rows, true).rows).toBe(rows)
   })
 
   test('masks values but keeps nulls, unless raw', () => {

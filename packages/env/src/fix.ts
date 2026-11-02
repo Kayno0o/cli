@@ -1,7 +1,8 @@
-import { chmod, chown, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, chown, lstat, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isInlineSecret } from './audit'
 import { entries, parseDotenv, serializeDotenv, setLine } from './dotenv'
+import { writeAtomic } from './files'
 
 export interface Left {
   key: string
@@ -106,6 +107,19 @@ function envLine(key: string, value: string): string | undefined {
   return value.includes('\'') || value.includes('\n') ? undefined : `${key}='${value}'`
 }
 
+// A link, dangling or not: writing through it would change a file elsewhere.
+async function isLink(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isSymbolicLink()
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return false
+
+    throw error
+  }
+}
+
 // What `docker compose config` resolves the file to, never printed; undefined when it fails.
 async function resolved(path: string): Promise<string | undefined> {
   const run = Bun.spawn(['docker', 'compose', '-f', path, 'config', '--format', 'json'], { cwd: dirname(path), stdout: 'pipe', stderr: 'ignore', stdin: 'ignore' })
@@ -126,10 +140,10 @@ function gainedBy(before: string, after: string, key: string): string[] {
   return services(after).filter(([name, service]) => service.environment?.[key] !== undefined && !had.has(name)).map(([name]) => name)
 }
 
-// False when another account owns the file, so only it or root can change its mode.
-export async function shutOthersOut(path: string): Promise<boolean> {
+// Takes others, and the group too when `group`, out of the file's mode. False when another account owns the file, so only it or root can change its mode.
+export async function shutOthersOut(path: string, group = false): Promise<boolean> {
   try {
-    await chmod(path, (await stat(path)).mode & 0o770)
+    await chmod(path, (await stat(path)).mode & (group ? 0o700 : 0o770))
 
     return true
   }
@@ -142,13 +156,14 @@ export async function shutOthersOut(path: string): Promise<boolean> {
 }
 
 // Moves each inline secret of a compose file into the .env beside it, swapping the value for `${KEY}`, then shuts others out of both. A key the .env sets to another value stays put, and a move `docker compose config` resolves differently is put back.
-export async function fixCompose(path: string): Promise<ComposeFix> {
+export async function fixCompose(path: string, group = false): Promise<ComposeFix> {
   const env = join(dirname(path), '.env')
   const compose = await Bun.file(path).text()
   const envBefore = await Bun.file(env).exists() ? await Bun.file(env).text() : undefined
   const dotenv = parseDotenv(envBefore ?? '')
   const known = entries(dotenv)
   const fix: ComposeFix = { path, env, moved: [], left: [], open: [] }
+  const linked = await isLink(env)
 
   const lines = compose.split('\n').map((line) => {
     const entry = composeEntry(line)
@@ -160,6 +175,12 @@ export async function fixCompose(path: string): Promise<ComposeFix> {
 
     if ('unmovable' in entry) {
       fix.left.push({ key, why: entry.unmovable })
+
+      return line
+    }
+
+    if (linked) {
+      fix.left.push({ key, why: 'its .env is a symbolic link' })
 
       return line
     }
@@ -201,7 +222,7 @@ export async function fixCompose(path: string): Promise<ComposeFix> {
     await move(fix, compose, lines.join('\n'), envBefore, serializeDotenv(dotenv))
 
   for (const file of [path, env]) {
-    if (await Bun.file(file).exists() && !await shutOthersOut(file))
+    if (!(file === env && linked) && await Bun.file(file).exists() && !await shutOthersOut(file, group))
       fix.open.push(file)
   }
 
@@ -214,7 +235,7 @@ async function move(fix: ComposeFix, compose: string, composeAfter: string, envB
   const before = docker ? await resolved(path) : undefined
 
   if (envBefore === undefined) {
-    await writeFile(env, envAfter, { mode: 0o600 })
+    await writeAtomic(env, envAfter)
 
     // A root run gives the .env to whoever owns the compose file; anyone else already owns what they write.
     const { uid, gid } = await stat(path)
@@ -225,10 +246,10 @@ async function move(fix: ComposeFix, compose: string, composeAfter: string, envB
     catch {}
   }
   else {
-    await writeFile(env, envAfter)
+    await writeAtomic(env, envAfter)
   }
 
-  await writeFile(path, composeAfter)
+  await writeAtomic(path, composeAfter)
 
   if (!docker) {
     fix.check = 'no docker'
@@ -250,12 +271,12 @@ async function move(fix: ComposeFix, compose: string, composeAfter: string, envB
     return
   }
 
-  await writeFile(path, compose)
+  await writeAtomic(path, compose)
 
   if (envBefore === undefined)
     await rm(env)
   else
-    await writeFile(env, envBefore)
+    await writeAtomic(env, envBefore)
 
   fix.check = 'rolled back'
   fix.left.push(...fix.moved.map((key) => {

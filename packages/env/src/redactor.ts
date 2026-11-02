@@ -1,5 +1,5 @@
 import type { KnownSecrets } from './mask'
-import { findSecrets, maskLine, PEM_BEGIN, PEM_END } from './mask'
+import { findSecrets, KEY_MASK, maskLine, openKeyBody, PEM_END } from './mask'
 
 export interface Finding {
   file: string
@@ -11,6 +11,10 @@ const DIFF_START = /^(?:diff --git |@@ )/
 const NEW_FILE = /^\+\+\+ (?:b\/)?(.+)$/
 const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)/
 
+// A line longer than this with no line break is cut, keeping its last OVERLAP characters to be read with what follows.
+const MAX_PENDING = 1 << 18
+const OVERLAP = 1 << 13
+
 // Masks text pushed in chunks of any size: only whole lines are emitted, so a secret split across two chunks is seen whole, and the lines of a private key block are replaced by one marker.
 export class Redactor {
   private pending = ''
@@ -20,18 +24,31 @@ export class Redactor {
   constructor(private readonly known?: KnownSecrets) {}
 
   push(chunk: string): string {
+    const end = chunk.lastIndexOf('\n')
+
     this.pending += chunk
 
-    const end = this.pending.lastIndexOf('\n')
-
     if (end === -1)
-      return ''
+      return this.pending.length > MAX_PENDING ? this.cut() : ''
 
-    const complete = this.pending.slice(0, end + 1)
+    const split = this.pending.length - chunk.length + end + 1
+    const complete = this.pending.slice(0, split)
 
-    this.pending = this.pending.slice(end + 1)
+    this.pending = this.pending.slice(split)
 
     return complete.split('\n').slice(0, -1).map(line => this.line(line)).filter(line => line !== undefined).map(line => `${line}\n`).join('')
+  }
+
+  // Emits a line that never ends, up to the last space before the overlap when there is one so a secret is not cut in two.
+  private cut(): string {
+    const limit = this.pending.length - OVERLAP
+    const space = this.pending.lastIndexOf(' ', limit)
+    const at = space > 0 ? space + 1 : limit
+    const head = this.pending.slice(0, at)
+
+    this.pending = this.pending.slice(at)
+
+    return this.line(head) ?? ''
   }
 
   end(): string {
@@ -44,25 +61,28 @@ export class Redactor {
 
   private line(line: string): string | undefined {
     if (this.inKey) {
-      if (PEM_END.test(line)) {
-        this.inKey = false
+      const end = PEM_END.exec(line)
 
-        return line
+      if (end === null) {
+        if (this.hidden)
+          return undefined
+
+        this.hidden = true
+
+        return KEY_MASK
       }
 
-      if (this.hidden)
-        return undefined
+      this.inKey = false
 
-      this.hidden = true
-
-      return '*** private key redacted ***'
+      // The text before the END marker is the last of the key, the text after it is read as any line.
+      return (end.index > 0 && !this.hidden ? KEY_MASK : '') + this.line(line.slice(end.index))
     }
 
-    if (PEM_BEGIN.test(line)) {
-      this.inKey = !PEM_END.test(line)
-      this.hidden = false
+    const body = openKeyBody(line)
 
-      return line
+    if (body !== undefined) {
+      this.inKey = true
+      this.hidden = body !== ''
     }
 
     return maskLine(line, this.known)
@@ -118,18 +138,28 @@ export function check(text: string, known?: KnownSecrets): Finding[] {
     }
 
     if (inKey) {
-      inKey = !PEM_END.test(line)
+      const end = PEM_END.exec(line)
 
-      continue
+      inKey = end === null
+
+      if (end === null)
+        continue
+
+      line = line.slice(end.index)
     }
 
-    if (PEM_BEGIN.test(line)) {
-      inKey = !PEM_END.test(line)
-      findings.push({ file, line: number, kind: 'private key' })
+    const found = findSecrets(line, known).map(match => match.kind)
+    const body = openKeyBody(line)
+
+    if (body !== undefined) {
+      inKey = true
+
+      if (body === '')
+        found.push('private key')
     }
 
-    for (const match of findSecrets(line, known))
-      findings.push({ file, line: number, kind: match.kind })
+    for (const kind of found)
+      findings.push({ file, line: number, kind })
   }
 
   return findings

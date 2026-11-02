@@ -55,12 +55,12 @@ describe('findSecrets', () => {
     expect(maskLine('sk-short and task-force-one-two-three')).toBe('sk-short and task-force-one-two-three')
   })
 
-  test('masks a value found in .env files, only as a whole word and from 6 characters', () => {
-    const known = knownSecrets([['DB_PASSWORD', 'hunter22'], ['SHORT_TOKEN', 'abc12']])
+  test('masks a value found in .env files, only as a whole word and from 4 characters', () => {
+    const known = knownSecrets([['DB_PASSWORD', 'hunter22'], ['SHORT_TOKEN', 'abc'], ['PIN_KEY', 'abc12']])
 
     expect(maskLine('login with hunter22 now', known)).toBe('login with hu***(8) now')
     expect(maskLine('xhunter22x and hunter222', known)).toBe('xhunter22x and hunter222')
-    expect(maskLine('abc12', known)).toBe('abc12')
+    expect(maskLine('abc12 abc', known)).toBe('a***(5) abc')
     expect(findSecrets('hunter22', known)[0]?.kind).toBe('value of DB_PASSWORD')
   })
 

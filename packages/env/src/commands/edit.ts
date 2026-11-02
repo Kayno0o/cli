@@ -1,10 +1,11 @@
-import { fail, parse, readInput } from '@kaynooo/cli-kit'
+import { badUsage, fail, parse, readInput } from '@kaynooo/cli-kit'
 import { entries, lastLine, removeKey, setLine } from '../dotenv'
-import { readEnv, writeEnv } from '../files'
+import { loadKnown, readEnv, withLocks, writeEnv } from '../files'
 import { maskValue } from '../mask'
 
 const DEFAULT_FILE = '.env'
 const TRAILING_NEWLINE = /\r?\n$/
+const KEY_NAME = /^[A-Z_][\w.-]*$/i
 
 const setUsage = `ev set KEY [file]
 
@@ -39,6 +40,12 @@ async function readValue(from: string | undefined): Promise<string> {
   return input.replace(TRAILING_NEWLINE, '')
 }
 
+// A key that is not a plain name could carry a line break or an `=` and write more than one line.
+function checkKey(key: string): void {
+  if (!KEY_NAME.test(key))
+    badUsage(`${JSON.stringify(key)} is not a valid key: letters, digits, _, . and - only, not starting with a digit`)
+}
+
 async function readOrEmpty(path: string) {
   return await Bun.file(path).exists() ? readEnv(path) : { lines: [] }
 }
@@ -57,12 +64,20 @@ export async function set(args: string[]): Promise<number> {
   if (parsed.values.empty === true && parsed.values.file !== undefined)
     fail('--empty and -F exclude each other')
 
-  const value = parsed.values.empty === true ? '' : await readValue(parsed.values.file)
-  const file = await readOrEmpty(target)
+  checkKey(key)
 
-  setLine(file, key, value)
-  await writeEnv(target, file)
-  console.log(`${target}: ${key}=${maskValue(key, value).replaceAll('\n', '\\n')}`)
+  const value = parsed.values.empty === true ? '' : await readValue(parsed.values.file)
+
+  const file = await withLocks([target], async () => {
+    const current = await readOrEmpty(target)
+
+    setLine(current, key, value)
+    await writeEnv(target, current)
+
+    return current
+  })
+
+  console.log(`${target}: ${key}=${maskValue(key, value, await loadKnown(process.cwd(), [file])).replaceAll('\n', '\\n')}`)
 
   return 0
 }
@@ -75,12 +90,15 @@ export async function unset(args: string[]): Promise<number> {
   if (key === undefined)
     fail(`missing KEY\n\n${unsetUsage}`)
 
-  const file = await readEnv(target)
+  await withLocks([target], async () => {
+    const file = await readEnv(target)
 
-  if (removeKey(file, key) === 0)
-    fail(`${key} is not set in ${target}`, 1)
+    if (removeKey(file, key) === 0)
+      fail(`${key} is not set in ${target}`, 1)
 
-  await writeEnv(target, file)
+    await writeEnv(target, file)
+  })
+
   console.log(`${target}: removed ${key}`)
 
   return 0
@@ -88,6 +106,11 @@ export async function unset(args: string[]): Promise<number> {
 
 // The write path of mv and cp: puts KEY's line from `from` into `to`, as `newKey` when given, and returns both files for the caller to finish.
 async function transfer(key: string, from: string, to: string, newKey: string | undefined, replace: boolean) {
+  checkKey(key)
+
+  if (newKey !== undefined)
+    checkKey(newKey)
+
   if (from === to && newKey === undefined)
     fail('--from and --to are the same file')
 
@@ -108,7 +131,7 @@ async function transfer(key: string, from: string, to: string, newKey: string | 
   setLine(target, name, value, newKey === undefined && !entries(target).has(name) ? line.raw : undefined)
   await writeEnv(to, target)
 
-  return { source, value, name }
+  return { source, target, value, name }
 }
 
 export async function mv(args: string[]): Promise<number> {
@@ -124,10 +147,13 @@ export async function mv(args: string[]): Promise<number> {
   if (key === undefined || from === undefined || to === undefined)
     fail(`needs KEY, --from and --to\n\n${mvUsage}`)
 
-  const { source } = await transfer(key, from, to, undefined, force === true)
+  await withLocks([from, to], async () => {
+    const { source } = await transfer(key, from, to, undefined, force === true)
 
-  removeKey(source, key)
-  await writeEnv(from, source)
+    removeKey(source, key)
+    await writeEnv(from, source)
+  })
+
   console.log(`${key}: ${from} -> ${to}`)
 
   return 0
@@ -146,9 +172,10 @@ export async function cp(args: string[]): Promise<number> {
   if (key === undefined || from === undefined || to === undefined)
     fail(`needs KEY, --from and --to\n\n${cpUsage}`)
 
-  const { value, name } = await transfer(key, from, to, as, true)
+  const { source, target, value, name } = await withLocks([from, to], async () => transfer(key, from, to, as, true))
+  const known = await loadKnown(process.cwd(), [source, target])
 
-  console.log(`${to}: ${name}=${maskValue(name, value).replaceAll('\n', '\\n')}`)
+  console.log(`${to}: ${name}=${maskValue(name, value, known).replaceAll('\n', '\\n')}`)
 
   return 0
 }

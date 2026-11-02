@@ -13,7 +13,10 @@ const ASSIGNMENT = /^\s*(?:export\s+)?([A-Z_][\w.-]*)\s*=(.*)$/i
 const EXPORTED = /^\s*export\s/
 const INLINE_COMMENT = /\s+#.*$/
 const CARRIAGE_RETURN = /\r$/
-const ESCAPES: Record<string, string> = { 'n': '\n', 'r': '\r', 't': '\t', '"': '"', '\\': '\\' }
+const ESCAPES: Record<string, string> = { 'n': '\n', 'r': '\r', 't': '\t', '"': '"', '\\': '\\', '$': '$' }
+const LINE_BREAK = /[\r\n]/
+// Bun does not unescape these inside double quotes, so a value holding one is written in single quotes.
+const RAW_ONLY = /["\\]/
 const NEEDS_QUOTES = /[\s#"'\\$`]/
 
 // Finds the closing quote, skipping backslash escapes inside double quotes. Returns -1 when the value continues on the next line.
@@ -26,6 +29,11 @@ function closingQuote(text: string, quote: string): number {
   }
 
   return -1
+}
+
+// Bun reads `\$` as a literal dollar sign in every quoting, and expands a bare `$` even inside single quotes.
+function unescapeDollar(text: string): string {
+  return text.replaceAll('\\$', '$')
 }
 
 function unescapeDouble(text: string): string {
@@ -65,7 +73,7 @@ export function parseDotenv(text: string): Dotenv {
     const quote = start[0]
 
     if (quote !== '"' && quote !== '\'' && quote !== '`') {
-      lines.push({ raw: line, key, value: start.replace(INLINE_COMMENT, '').trim() })
+      lines.push({ raw: line, key, value: unescapeDollar(start.replace(INLINE_COMMENT, '').trim()) })
 
       continue
     }
@@ -83,7 +91,7 @@ export function parseDotenv(text: string): Dotenv {
 
     const inner = end === -1 ? body : body.slice(0, end)
 
-    lines.push({ raw, key, value: quote === '"' ? unescapeDouble(inner) : inner })
+    lines.push({ raw, key, value: quote === '"' ? unescapeDouble(inner) : unescapeDollar(inner) })
   }
 
   return { lines }
@@ -109,7 +117,11 @@ export function formatAssignment(key: string, value: string): string {
   if (value === '' || !NEEDS_QUOTES.test(value))
     return `${key}=${value}`
 
-  const escaped = value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\r', '\\r').replaceAll('\n', '\\n')
+  // Bun expands a bare `$` in every quoting, so each one is written as `\$`.
+  if (RAW_ONLY.test(value) && !value.includes('\'') && !LINE_BREAK.test(value))
+    return `${key}='${value.replaceAll('$', '\\$')}'`
+
+  const escaped = value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\r', '\\r').replaceAll('\n', '\\n').replaceAll('$', '\\$')
 
   return `${key}="${escaped}"`
 }

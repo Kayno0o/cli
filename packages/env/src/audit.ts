@@ -1,13 +1,17 @@
 import type { Dirent } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { isSecretName } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
-import { ENV_FILE, TEMPLATE } from './files'
+import { ENV_FILE, isFileEntry, TEMPLATE } from './files'
 import { urlPasswords } from './mask'
 
 export interface Exposure {
   path: string
+  // Readable by an account other than its owner: any account, its group or an ACL entry.
   readable: boolean
+  // Set when it is readable only through its group or an ACL, not by any account.
+  group?: boolean
   tracked: boolean
   // The keys a compose file writes out, for a compose file only.
   secrets?: string[]
@@ -18,7 +22,9 @@ const SKIPPED = new Set(['node_modules', '.git', 'vendor'])
 const COMPOSE_FILE = /^(?:docker-)?compose[\w.-]*\.ya?ml$/
 // An environment entry, `KEY: value` or `- KEY=value`, with its value written out.
 const ENTRY = /^\s*(?:-\s*)?["']?([A-Z0-9_]+)["']?\s*[:=]\s*["']?([^"'\s#]+)/
-const SECRET_NAME = /(?:PASSWORD|PASSWD|SECRET|TOKEN|KEY)$/
+// A setting about a secret (its lifetime, the file or header holding it), not the secret.
+const SETTING_SUFFIX = /_(?:TTL|FILE|PATH|DIR|NAME|TIMEOUT|EXPIRY|EXPIRES|LIFETIME|LENGTH|ENABLED|ALGORITHM|HEADER|PREFIX|COUNT|MAX|MIN)$/i
+const ACL_READER = /^(?:user|group):[^:]+:r/
 // A switch like MYSQL_RANDOM_ROOT_PASSWORD: 1, not a secret.
 const FLAG = /^(?:[01]|yes|no|true|false)$/i
 
@@ -27,7 +33,7 @@ export function isInlineSecret(name: string, value: string): boolean {
   if (value === '' || value.startsWith('$') || value.startsWith('/run/secrets/') || FLAG.test(value))
     return false
 
-  return SECRET_NAME.test(name) || urlPasswords(value).some(password => !password.startsWith('$'))
+  return (isSecretName(name) && !SETTING_SUFFIX.test(name)) || urlPasswords(value).some(password => !password.startsWith('$'))
 }
 
 // The names of the secrets a compose file writes out.
@@ -54,8 +60,40 @@ export async function openToOthers(path: string): Promise<boolean> {
   return true
 }
 
+// Accounts other than the owner can read it through a group that is not the owner's own, or through a named user or group of its ACL, and every folder above lets them through.
+export async function sharedWith(path: string): Promise<boolean> {
+  const info = await stat(path)
+  const shared = (info.mode & 0o040) !== 0 && info.gid !== info.uid && info.gid !== process.getgid?.()
+
+  if (!shared && (Bun.which('getfacl') === null || !await hasAclReader(path)))
+    return false
+
+  for (let dir = dirname(path); dir !== '/'; dir = dirname(dir)) {
+    if (((await stat(dir)).mode & 0o011) === 0)
+      return false
+  }
+
+  return true
+}
+
+async function hasAclReader(path: string): Promise<boolean> {
+  const acl = await $`getfacl --absolute-names --omit-header -- ${path}`.quiet().nothrow()
+
+  return acl.exitCode === 0 && acl.stdout.toString().split('\n').some(line => ACL_READER.test(line))
+}
+
+// Exit 1 is git saying the file is not tracked, and a folder outside any repository tracks nothing; anything else is git failing, which must not read as untracked.
 async function tracked(path: string): Promise<boolean> {
-  return (await $`git ls-files --error-unmatch -- ${path}`.cwd(dirname(path)).quiet().nothrow()).exitCode === 0
+  const run = await $`git ls-files --error-unmatch -- ${path}`.cwd(dirname(path)).quiet().nothrow()
+  const error = run.stderr.toString()
+
+  if (run.exitCode === 0)
+    return true
+
+  if (run.exitCode === 1 || error.includes('not a git repository'))
+    return false
+
+  throw new Error(`git could not tell whether ${path} is tracked: ${error.trim() || `exit ${run.exitCode}`}`)
 }
 
 // The .env* and compose files under root, down to MAX_DEPTH folders, skipping dependency and git folders and following no link; a folder it cannot read goes to `unread`.
@@ -76,7 +114,7 @@ async function* candidates(root: string, unread: string[], depth = 0): AsyncGene
 
     if (entry.isDirectory() && depth < MAX_DEPTH && !SKIPPED.has(entry.name))
       yield* candidates(path, unread, depth + 1)
-    else if (entry.isFile() && !TEMPLATE.test(entry.name) && (ENV_FILE.test(entry.name) || COMPOSE_FILE.test(entry.name)))
+    else if (!TEMPLATE.test(entry.name) && (ENV_FILE.test(entry.name) || COMPOSE_FILE.test(entry.name)) && await isFileEntry(entry, path))
       yield path
   }
 }
@@ -88,14 +126,16 @@ export async function audit(roots: string[]): Promise<{ exposed: Exposure[], unr
 
   for (const root of roots) {
     for await (const path of candidates(root, unread)) {
-      const readable = await openToOthers(path)
+      const others = await openToOthers(path)
+      const readable = others || await sharedWith(path)
+      const group = readable && !others ? true : undefined
       const name = path.slice(path.lastIndexOf('/') + 1)
 
       if (ENV_FILE.test(name)) {
         const isTracked = await tracked(path)
 
         if (readable || isTracked)
-          exposed.push({ path, readable, tracked: isTracked })
+          exposed.push({ path, readable, ...group && { group }, tracked: isTracked })
 
         continue
       }
@@ -103,7 +143,7 @@ export async function audit(roots: string[]): Promise<{ exposed: Exposure[], unr
       const secrets = readable ? inlineSecrets(await Bun.file(path).text()) : []
 
       if (secrets.length > 0)
-        exposed.push({ path, readable, tracked: false, secrets })
+        exposed.push({ path, readable, ...group && { group }, tracked: false, secrets })
     }
   }
 

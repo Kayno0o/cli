@@ -51,9 +51,9 @@ async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: Comp
   const fixed: ComposeFix[] = []
   let left = false
 
-  for (const { path, readable, tracked, secrets } of exposed) {
-    const fix = secrets === undefined ? undefined : await fixCompose(path)
-    const open = fix?.open ?? (readable && !await shutOthersOut(path) ? [path] : [])
+  for (const { path, readable, group, tracked, secrets } of exposed) {
+    const fix = secrets === undefined ? undefined : await fixCompose(path, group === true)
+    const open = fix?.open ?? (readable && !await shutOthersOut(path, group === true) ? [path] : [])
 
     if (fix !== undefined)
       fixed.push(fix)
@@ -67,7 +67,7 @@ async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: Comp
       ...fix === undefined || fix.moved.length === 0 ? [] : [`moved ${fix.moved.join(', ')} into ${shown(fix.env)}`],
       ...fix?.left.map(({ key, why }) => `left ${key} in place: ${why}`) ?? [],
       ...fix?.check === undefined ? [] : [CHECKS[fix.check]],
-      ...open.map(file => `another account owns ${file === path ? 'it' : shown(file)}, so it stays readable: sudo chmod o-rwx ${quoted(shown(file))}`),
+      ...open.map(file => `another account owns ${file === path ? 'it' : shown(file)}, so it stays readable: sudo chmod go-rwx ${quoted(shown(file))}`),
       ...readable && !open.includes(path) ? ['now unreadable by other accounts'] : [],
       ...tracked ? [`tracked by git: git rm --cached ${quoted(shown(path))}, then ignore it`] : [],
     ]
@@ -123,12 +123,12 @@ export async function audit(args: string[]): Promise<number> {
 
   const uid = process.getuid?.()
 
-  for (const { path, readable, tracked, secrets } of exposed) {
+  for (const { path, readable, group, tracked, secrets } of exposed) {
     // Only the owner or root can change a file's mode.
     const sudo = uid !== undefined && uid !== 0 && (await stat(path)).uid !== uid ? 'sudo ' : ''
     const problems = [
       ...secrets === undefined ? [] : [`writes out ${secrets.join(', ')}: ev audit --fix moves the values into a .env beside it`],
-      ...readable ? [`readable by any account: ${sudo}chmod o-rwx ${quoted(shown(path))}`] : [],
+      ...readable ? [group === true ? `readable by its group or an ACL: ${sudo}chmod go-rwx ${quoted(shown(path))}` : `readable by any account: ${sudo}chmod o-rwx ${quoted(shown(path))}`] : [],
       ...tracked ? [`tracked by git: git rm --cached ${quoted(shown(path))}, then ignore it`] : [],
     ]
 

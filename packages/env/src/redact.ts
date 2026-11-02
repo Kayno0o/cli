@@ -8,7 +8,7 @@ import { check, Redactor } from './redactor'
 
 const usage = `redact [--check]
 
-Copies stdin to stdout line by line with secrets masked: known token formats (ghp_, github_pat_, glpat-, sk-, xox?-, JWTs), private key blocks, the password and the tokens of any URL and the values of secret-looking keys in this folder's .env* files.
+Copies stdin to stdout line by line with secrets masked: known token formats (GitHub, GitLab, Slack, AWS, npm, Stripe, Google and SendGrid keys, sk-, JWTs, Authorization headers, password= and secret= pairs), private key blocks, the password and the tokens of any URL and the values of secret-looking keys in this folder's .env* files.
 --check prints nothing of the input and lists the file and line of each secret found, exiting 1 when there is any: \`git diff --cached | redact --check\`.\n\nExits 0 when it copied the input or found no secret, 1 when --check finds one, 2 on a usage error.`
 
 const options = {

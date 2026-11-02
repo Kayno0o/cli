@@ -1,12 +1,14 @@
+import type { Dotenv } from '../dotenv'
+import type { KnownSecrets } from '../mask'
 import { fail, parse, table } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { entries, parseDotenv } from '../dotenv'
-import { envFiles, readEnv } from '../files'
+import { envFiles, loadKnown, readEnv } from '../files'
 import { maskValue } from '../mask'
 
 const listUsage = `ev list [file]
 
-Prints every key of the folder's .env* files, or of one file, with secret values masked: a few leading characters and the length under a key named like TOKEN, SECRET, PASSWORD, KEY, PRIVATE or DSN, and the password and tokens of any URL.
+Prints every key of the folder's .env* files, or of one file, with secret values masked: a few leading characters and the length under a key named like TOKEN, SECRET, PASSWORD, PASS, PWD, KEY, PRIVATE, DSN, AUTH, SALT or COOKIE, any value equal to a secret of the folder's .env* files, and the password and tokens of any URL.
 
 Exits 0 when it printed them, 1 when there is no .env* file, 2 on a usage error.`
 
@@ -16,8 +18,18 @@ Prints the masked value of one key, from every .env* file that sets it or from o
 
 Exits 0 when the key is set, 1 when it is not set anywhere, 2 on a usage error.`
 
-function display(key: string, value: string): string {
-  return maskValue(key, value).replaceAll('\n', '\\n').replaceAll('\r', '\\r')
+function display(key: string, value: string, known: KnownSecrets): string {
+  return maskValue(key, value, known).replaceAll('\n', '\\n').replaceAll('\r', '\\r')
+}
+
+// Reads each file once and learns the secrets of the folder and of these files, so a value is masked whatever key holds it.
+async function readAll(names: string[]): Promise<{ files: [name: string, file: Dotenv][], known: KnownSecrets }> {
+  const files: [string, Dotenv][] = []
+
+  for (const name of names)
+    files.push([name, await readEnv(name)])
+
+  return { files, known: await loadKnown(process.cwd(), files.map(([, file]) => file)) }
 }
 
 export async function list(args: string[]): Promise<number> {
@@ -31,9 +43,11 @@ export async function list(args: string[]): Promise<number> {
 
   const rows: string[][] = []
 
-  for (const name of names) {
-    for (const [key, value] of entries(await readEnv(name)))
-      rows.push([name, key, display(key, value)])
+  const { files, known } = await readAll(names)
+
+  for (const [name, file] of files) {
+    for (const [key, value] of entries(file))
+      rows.push([name, key, display(key, value, known)])
   }
 
   if (rows.length > 0)
@@ -53,11 +67,13 @@ export async function get(args: string[]): Promise<number> {
   const names = file === undefined ? await envFiles() : [file]
   const rows: string[][] = []
 
-  for (const name of names) {
-    const value = entries(await readEnv(name)).get(key)
+  const { files, known } = await readAll(names)
+
+  for (const [name, file] of files) {
+    const value = entries(file).get(key)
 
     if (value !== undefined)
-      rows.push([name, display(key, value)])
+      rows.push([name, display(key, value, known)])
   }
 
   if (rows.length === 0)
@@ -85,7 +101,7 @@ const REVISION = /^([^:]+):(.+)$/
 export async function grep(args: string[]): Promise<number> {
   const parsed = parse(args, grepUsage, { 'ignore-case': { type: 'boolean', short: 'i', description: 'match the key whatever its case' } })
 
-  const [source, ...files] = parsed.positionals
+  const [source, ...given] = parsed.positionals
 
   if (source === undefined)
     fail(`missing the regex\n\n${grepUsage}`)
@@ -99,13 +115,15 @@ export async function grep(args: string[]): Promise<number> {
     fail(`${source} is no valid regular expression: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  const names = files.length === 0 ? await envFiles() : files
+  const names = given.length === 0 ? await envFiles() : given
   const rows: string[][] = []
 
-  for (const name of names) {
-    for (const [key, value] of entries(await readEnv(name))) {
+  const { files, known } = await readAll(names)
+
+  for (const [name, file] of files) {
+    for (const [key, value] of entries(file)) {
       if (pattern.test(key))
-        rows.push([name, key, display(key, value)])
+        rows.push([name, key, display(key, value, known)])
     }
   }
 
@@ -126,12 +144,17 @@ export async function show(args: string[]): Promise<number> {
   if (revision === undefined || path === undefined)
     fail(`give <rev>:<file>\n\n${showUsage}`)
 
-  const shown = await $`git show ${`${revision}:${path}`}`.quiet().nothrow()
+  if (revision.startsWith('-'))
+    fail(`${revision} is not a revision: it reads as a git option`)
+
+  const shown = await $`git show --end-of-options ${`${revision}:${path}`}`.quiet().nothrow()
 
   if (shown.exitCode !== 0)
     fail(`git show ${revision}:${path} failed: ${shown.stderr.toString().trim()}`, 1)
 
-  const rows = [...entries(parseDotenv(shown.stdout.toString()))].map(([key, value]) => [key, display(key, value)])
+  const file = parseDotenv(shown.stdout.toString())
+  const known = await loadKnown(process.cwd(), [file])
+  const rows = [...entries(file)].map(([key, value]) => [key, display(key, value, known)])
 
   if (rows.length > 0)
     console.log(table(rows))
