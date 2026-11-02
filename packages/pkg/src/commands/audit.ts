@@ -1,4 +1,5 @@
 import type { Advisory, VersionAdvisory } from '../advisories'
+import type { AnalyzeInput } from '../analyze'
 import type { PkgSettings, RegistryConfig, Severity } from '../config'
 import type { Locked } from '../lockfile'
 import type { Fetcher, Packument, Registry } from '../registry'
@@ -7,7 +8,7 @@ import process from 'node:process'
 import { fail, jsonOption, parse, printJson, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
-import { isSeverity, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
+import { DEFAULT_BLOCK_SEVERITY, isSeverity, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
 import { parseBunLock } from '../lockfile'
 import { fetchPackument } from '../registry'
 
@@ -67,13 +68,24 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
 
     return packuments.get(key)
   }
+  const looked: { name: string, version: string, registry: Registry, input: AnalyzeInput, safe?: string | undefined }[] = []
+
+  for (let start = 0; start < packages.length; start += BATCH) {
+    looked.push(...await Promise.all(packages.slice(start, start + BATCH).map(async ({ name, version }) => {
+      const registry = registryFor(name, context.configs)
+      const input = { spec: { name, request: version }, packument: await lookup(name, registry), registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings.licenses }
+
+      return { name, version, registry, input, safe: analyze(input).safe?.version }
+    })))
+  }
+
   const registries = new Map<string, { registry: Registry, versions: Record<string, string[]> }>()
 
-  for (const { name, version } of packages) {
-    const registry = registryFor(name, context.configs)
+  for (const { name, version, registry, safe } of looked) {
     const group = registries.get(registry.url) ?? { registry, versions: {} }
 
-    group.versions[name] = [...group.versions[name] ?? [], version]
+    // The safe version is asked about too, so a fresh pin fixing its advisories is not held back for its age.
+    group.versions[name] = [...group.versions[name] ?? [], version, ...safe === undefined || safe === version ? [] : [safe]]
     registries.set(registry.url, group)
   }
 
@@ -89,17 +101,14 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
       unavailable.push(fetched.unavailable)
   }
 
-  const audited: Audited[] = []
+  const blockSeverity = context.settings.blockSeverity ?? DEFAULT_BLOCK_SEVERITY
+  const audited = looked.map(({ name, version, input, safe }) => {
+    const found = filterAdvisories(advisoriesFor(advisories[name], version), context.level, context.ignore)
+    const safeAdvisories = safe === undefined ? [] : filterAdvisories(advisoriesFor(advisories[name], safe), blockSeverity, context.ignore)
+    const report = analyze({ ...input, advisories: advisoriesFor(advisories[name], version), safeAdvisories })
 
-  for (let start = 0; start < packages.length; start += BATCH) {
-    audited.push(...await Promise.all(packages.slice(start, start + BATCH).map(async ({ name, version }) => {
-      const registry = registryFor(name, context.configs)
-      const found = filterAdvisories(advisoriesFor(advisories[name], version), context.level, context.ignore)
-      const report = analyze({ spec: { name, request: version }, packument: await lookup(name, registry), registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings.licenses })
-
-      return { name, version, license: report.license, blocked: report.blocked || found.length > 0, warnings: report.warnings, advisories: found }
-    })))
-  }
+    return { name, version, license: report.license, blocked: report.blocked || found.length > 0, warnings: report.warnings, advisories: found }
+  })
 
   return { audited, unavailable }
 }

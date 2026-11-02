@@ -2,7 +2,7 @@ import type { AnalyzeInput, Report } from '../analyze'
 import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher } from '../registry'
 import { fail, formatAge, jsonOption, parse, printJson, table, wholeNumber } from '@kaynooo/cli-kit'
-import { advisoriesFor, fetchAdvisories } from '../advisories'
+import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor } from '../config'
 import { fetchDownloads, fetchPackument, isPublic, unreachable } from '../registry'
@@ -42,12 +42,14 @@ export async function checkPackage(text: string, context: Context): Promise<Repo
   if (report.version === undefined)
     return report
 
-  const { found, unavailable, isUnsupported } = await fetchAdvisories({ [spec.name]: [report.version] }, registry, context.fetcher)
+  // The safe version is asked about too, so a fresh version fixing its advisories is not sent back to it.
+  const safe = report.safe?.version
+  const { found, unavailable, isUnsupported } = await fetchAdvisories({ [spec.name]: safe === undefined || safe === report.version ? [report.version] : [report.version, safe] }, registry, context.fetcher)
 
   if (unavailable !== undefined && isUnsupported !== true)
     return unreachable(unavailable)
 
-  const checked = analyze({ ...input, blockSeverity, advisories: advisoriesFor(found[spec.name], report.version) })
+  const checked = analyze({ ...input, blockSeverity, advisories: advisoriesFor(found[spec.name], report.version), safeAdvisories: safe === undefined ? [] : filterAdvisories(advisoriesFor(found[spec.name], safe), blockSeverity) })
 
   if (unavailable !== undefined)
     checked.warnings.push(`${unavailable}, so its known advisories are not checked`)

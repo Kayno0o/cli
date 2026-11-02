@@ -26,12 +26,16 @@ const PACKUMENTS: Record<string, unknown> = {
   'https://registry.npmjs.org/none-lib': packument('none-lib', { '1.0.0': {} }),
   'https://registry.npmjs.org/dual-lib': packument('dual-lib', { '1.0.0': { license: '(GPL-3.0-only OR Apache-2.0)' } }),
   'https://registry.npmjs.org/vuln-lib': packument('vuln-lib', { '1.0.0': { license: 'MIT' }, '1.2.0': { license: 'MIT' }, '2.0.0': { license: 'MIT' } }),
+  'https://registry.npmjs.org/fresh-lib': { ...packument('fresh-lib', { '1.0.0': { license: 'MIT' }, '1.1.0': { license: 'MIT' } }), time: { '1.0.0': OLD, '1.1.0': '2026-08-29T00:00:00.000Z' } },
 }
 
 const ADVISORIES = {
   'vuln-lib': [
     { id: 11, url: 'https://github.com/advisories/GHSA-aaaa-bbbb-cccc', title: 'Prototype pollution', severity: 'high', vulnerable_versions: '<1.2.0', cwe: [], cvss: { score: 0, vectorString: null } },
     { id: 12, url: 'https://github.com/advisories/GHSA-dddd-eeee-ffff', title: 'Minor leak', severity: 'low', vulnerable_versions: '<=1.2.0', cwe: [], cvss: { score: 0, vectorString: null } },
+  ],
+  'fresh-lib': [
+    { id: 21, url: 'https://github.com/advisories/GHSA-1111-2222-3333', title: 'Remote code execution', severity: 'critical', vulnerable_versions: '<1.1.0', cwe: [], cvss: { score: 0, vectorString: null } },
   ],
 }
 
@@ -130,7 +134,7 @@ describe('advisories', () => {
     expect(filterAdvisories(raw, 'low', ['12']).map(each => each.id)).toEqual([11])
   })
 
-  test('check refuses a version at or above the configured severity, posting name to versions', async () => {
+  test('check refuses a version at or above the configured severity, posting name to versions, the safe one included', async () => {
     const { fetcher, seen } = registry()
     const context = { configs: [], settings: { blockSeverity: 'high' as const }, minAgeDays: 14, now: NOW, fetcher }
     const bad = await checkPackage('vuln-lib@1.0.0', context)
@@ -139,7 +143,7 @@ describe('advisories', () => {
     expect(bad.blocked).toBe(true)
     expect(bad.warnings.join()).toContain('GHSA-aaaa-bbbb-cccc')
     expect(fixed.blocked).toBe(false)
-    expect(seen.find(each => each.method === 'POST')).toEqual({ url: 'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk', method: 'POST', body: '{"vuln-lib":["1.0.0"]}' })
+    expect(seen.find(each => each.method === 'POST')).toEqual({ url: 'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk', method: 'POST', body: '{"vuln-lib":["1.0.0","2.0.0"]}' })
   })
 
   test('check blocks at high with no threshold configured', async () => {
@@ -213,6 +217,19 @@ describe('auditPackages', () => {
     const { audited } = await auditPackages(parseBunLock(LOCK), { ...base(fetcher), settings: {}, level: 'high', ignore: ['GHSA-aaaa-bbbb-cccc'] })
 
     expect(audited.every(each => !each.blocked && each.advisories.length === 0)).toBe(true)
+  })
+
+  test('a fresh pin fixing a critical advisory of the safe version is not held back for its age, unless that advisory is ignored', async () => {
+    const { fetcher, seen } = registry()
+    const pins = [{ name: 'fresh-lib', version: '1.1.0' }]
+    const { audited: [fixed] } = await auditPackages(pins, base(fetcher))
+    const { audited: [ignored] } = await auditPackages(pins, { ...base(fetcher), ignore: ['GHSA-1111-2222-3333'] })
+
+    expect(seen.find(each => each.method === 'POST')?.body).toBe('{"fresh-lib":["1.1.0","1.0.0"]}')
+    expect(fixed?.blocked).toBe(false)
+    expect(fixed?.warnings.join()).toContain('but it fixes GHSA-1111-2222-3333 (critical) that 1.0.0 has')
+    expect(ignored?.blocked).toBe(true)
+    expect(ignored?.warnings.join()).toContain('use fresh-lib@1.0.0')
   })
 
   test('an advisory lookup that fails is reported as unavailable, not as no advisory', async () => {

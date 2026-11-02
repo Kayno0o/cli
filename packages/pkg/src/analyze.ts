@@ -43,6 +43,8 @@ export interface Report {
   installScripts: Record<string, string>
   nearMisses: string[]
   advisories: VersionAdvisory[]
+  // The advisories of the safe version that the resolved one is clear of: a fresh version fixing them is not held back for its age.
+  fixes: VersionAdvisory[]
   warnings: string[]
   // True when the package is missing, the version does not resolve, it is too fresh, its licence is outside the allowlist or an advisory reaches the severity threshold.
   blocked: boolean
@@ -93,6 +95,10 @@ function ageDays(published: string | undefined, now: number): number | undefined
   return Number.isNaN(at) ? undefined : (now - at) / DAY
 }
 
+function daysAgo(age: number): string {
+  return age < 1 ? 'less than a day' : `${Math.floor(age)} day${Math.floor(age) === 1 ? '' : 's'}`
+}
+
 function installScriptsOf(version: Version | undefined): Record<string, string> {
   return Object.fromEntries(INSTALL_SCRIPTS.flatMap(name => version?.scripts?.[name] === undefined ? [] : [[name, version.scripts[name]]]))
 }
@@ -115,12 +121,14 @@ export interface AnalyzeInput {
   licenses?: string[] | undefined
   // The advisories hitting the resolved version, and the severity at which one blocks.
   advisories?: VersionAdvisory[] | undefined
+  // The advisories of the safe version severe enough that a fresh version fixing them is let through, already filtered by the caller.
+  safeAdvisories?: VersionAdvisory[] | undefined
   blockSeverity?: Severity | undefined
 }
 
 export function analyze(input: AnalyzeInput): Report {
   const { spec, packument, registry, now = Date.now(), minAgeDays = DEFAULT_MIN_AGE_DAYS } = input
-  const report: Report = { name: spec.name, registry, exists: packument !== undefined, requested: spec.request, installScripts: {}, nearMisses: nearMisses(spec.name), advisories: input.advisories ?? [], warnings: [], blocked: false, downloads: input.downloads }
+  const report: Report = { name: spec.name, registry, exists: packument !== undefined, requested: spec.request, installScripts: {}, nearMisses: nearMisses(spec.name), advisories: input.advisories ?? [], fixes: [], warnings: [], blocked: false, downloads: input.downloads }
 
   if (report.nearMisses.length > 0)
     report.warnings.push(`name looks like ${report.nearMisses.join('; ')}, check it is the package meant`)
@@ -154,6 +162,9 @@ export function analyze(input: AnalyzeInput): Report {
   }
 
   const age = ageDays(report.published, now)
+  const kept = new Set(report.advisories.map(each => each.id))
+
+  report.fixes = report.safe?.version === version ? [] : (input.safeAdvisories ?? []).filter(each => !kept.has(each.id))
 
   if (age === undefined) {
     // npmjs.org always dates a version, so a missing date there is a way round the age check
@@ -162,9 +173,12 @@ export function analyze(input: AnalyzeInput): Report {
     report.blocked ||= isBlocking
     report.warnings.push(`${registry} gives no publish date for ${version}, its age cannot be checked${isBlocking ? ' and it is refused' : ''}`)
   }
+  else if (age < minAgeDays && report.fixes.length > 0) {
+    report.warnings.push(`${version} was published ${daysAgo(age)} ago, under ${minAgeDays} days, but it fixes ${report.fixes.map(each => `${each.ghsa ?? each.id} (${each.severity})`).join(', ')} that ${report.safe?.version} has, so its age does not hold it back`)
+  }
   else if (age < minAgeDays) {
     report.blocked = true
-    report.warnings.push(`${version} was published ${age < 1 ? 'less than a day' : `${Math.floor(age)} day${Math.floor(age) === 1 ? '' : 's'}`} ago, under ${minAgeDays} days${report.safe === undefined ? ', and no older stable version exists' : `, use ${spec.name}@${report.safe.version}`}`)
+    report.warnings.push(`${version} was published ${daysAgo(age)} ago, under ${minAgeDays} days${report.safe === undefined ? ', and no older stable version exists' : `, use ${spec.name}@${report.safe.version}`}`)
   }
 
   const scripts = Object.keys(report.installScripts)

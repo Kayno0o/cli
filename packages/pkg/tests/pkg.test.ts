@@ -314,6 +314,26 @@ describe('analyze edge cases', () => {
     expect(private_.blocked).toBe(false)
   })
 
+  test('a fresh version fixing a high advisory of the safe one is not held back for its age', async () => {
+    const now = Date.parse('2026-11-01')
+    const fetcher = (severity: string, vulnerable: string): Fetcher => async (url) => {
+      if (url.endsWith('/bulk'))
+        return Response.json({ 'some-lib': [{ id: 7, url: 'https://github.com/advisories/GHSA-aaaa-bbbb-cccc', title: 'RCE', severity, vulnerable_versions: vulnerable }] })
+
+      return Response.json({ 'name': 'some-lib', 'dist-tags': { latest: '1.1.0' }, 'time': { '1.0.0': '2020-01-01T00:00:00.000Z', '1.1.0': '2026-10-29T00:00:00.000Z' }, 'versions': { '1.0.0': { version: '1.0.0' }, '1.1.0': { version: '1.1.0' } } })
+    }
+    const fixed = await checkPackage('some-lib', { configs: [], minAgeDays: 14, now, fetcher: fetcher('high', '<1.1.0') })
+    const moderate = await checkPackage('some-lib', { configs: [], minAgeDays: 14, now, fetcher: fetcher('moderate', '<1.1.0') })
+    const unfixed = await checkPackage('some-lib', { configs: [], minAgeDays: 14, now, fetcher: fetcher('high', '<=1.1.0') })
+
+    expect(fixed.blocked).toBe(false)
+    expect(fixed.warnings.join()).toContain('1.1.0 was published 3 days ago, under 14 days, but it fixes GHSA-aaaa-bbbb-cccc (high) that 1.0.0 has')
+    expect(moderate.blocked).toBe(true)
+    expect(moderate.warnings.join()).toContain('use some-lib@1.0.0')
+    expect(unfixed.blocked).toBe(true)
+    expect(unfixed.fixes).toEqual([])
+  })
+
   test('a long name far from every popular name skips the edit distance', () => {
     const started = performance.now()
     const names = Array.from({ length: 1500 }, (_, index) => `@scope${index}/package-with-a-long-name-${index}`)

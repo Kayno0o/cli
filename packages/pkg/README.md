@@ -12,9 +12,9 @@ pkg left-pad@1.3.0 @types/node --json
 
 - Whether the name exists, the version the request resolves to (an exact version, a dist-tag or a range), the latest version, and the highest stable version at least two weeks old (`safe`), each with its publish date.
 - Weekly downloads (public registry only), licence and repository.
-- Warnings for a version under the minimum age (with the `safe` version to use instead), `preinstall`, `install` and `postinstall` scripts, a deprecated version, and a name that is a near miss of a popular package (one or two edits, other separators or case, or the same name under another scope).
+- Warnings for a version under the minimum age (with the `safe` version to use instead; a fresh version clear of an advisory at `blockSeverity` or above that `safe` has is let through, with a warning naming the GHSAs it fixes), `preinstall`, `install` and `postinstall` scripts, a deprecated version, and a name that is a near miss of a popular package (one or two edits, other separators or case, or the same name under another scope).
 
-`pkg` exits 1 when a package is blocked (missing, the request matches no version or is not a valid range, the resolved version is too fresh or has no publish date on npmjs.org, its licence is outside the allowlist, or an advisory reaches the threshold), 2 when it could not check (the registry unreachable, slower than 10 s or answering badly, a broken `.pkgrc.json`, `bunfig.toml` or `.npmrc`) or on a usage error; other warnings exit 0. `--json` prints one report, or an array for several names, `--min-age <days>` changes the 14 days.
+`pkg` exits 1 when a package is blocked (missing, the request matches no version or is not a valid range, the resolved version is too fresh (unless it fixes an advisory of the safe version at the threshold) or has no publish date on npmjs.org, its licence is outside the allowlist, or an advisory reaches the threshold), 2 when it could not check (the registry unreachable, slower than 10 s or answering badly, a broken `.pkgrc.json`, `bunfig.toml` or `.npmrc`) or on a usage error; other warnings exit 0. `--json` prints one report, or an array for several names, `--min-age <days>` changes the 14 days.
 
 ## Config: licence allowlist and advisory threshold
 
@@ -38,6 +38,7 @@ pkg audit ~/Workspace/app --audit-level high --ignore GHSA-238p-pmpm-9mq7 --json
 
 - `--audit-level <low|moderate|high|critical>` (`low`) keeps only the advisories at that severity or above, and `--ignore <GHSA or id>` (repeatable) skips an advisory; `blockSeverity` is for `pkg check` and does not apply here.
 - `--json` prints the packages with a finding as `[{name, version, license, blocked, warnings, advisories}]`; `--min-age <days>` changes the 14 days.
+- A pin under the minimum age fixing an advisory of the `safe` version at `blockSeverity` or above (not one `--ignore` skips) is let through as `pkg check` lets it, a warning naming the GHSAs.
 - It exits 1 when a package is missing, too fresh or outside the allowlist, or an advisory remains after the level and the ignores; install scripts and near misses alone exit 0. When the advisories of a registry could not be read it warns which, never prints a clean result for them, and exits 2 unless something already blocks.
 - An `npm:` alias (`"lodash": "npm:other@1.0.0"`) is audited as the package it names.
 
