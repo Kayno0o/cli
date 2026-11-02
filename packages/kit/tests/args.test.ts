@@ -133,7 +133,15 @@ describe('choices', () => {
   const bump = { bump: { type: 'string', description: 'the bump', choices: ['patch', 'minor', 'major'] } } as const
 
   test('accepts a value in the set, or none', () => {
-    expect(parse(['--bump', 'minor'], 'u', bump).values.bump).toBe('minor')
+    const chosen: 'patch' | 'minor' | 'major' | undefined = parse(['--bump', 'minor'], 'u', bump).values.bump
+    const several: ('patch' | 'minor' | 'major')[] | undefined = parse([], 'u', { bump: { ...bump.bump, multiple: true } }).values.bump
+
+    // @ts-expect-error the union holds more than 'patch'
+    const only: 'patch' | undefined = parse([], 'u', bump).values.bump
+
+    expect(only).toBeUndefined()
+    expect(chosen).toBe('minor')
+    expect(several).toBeUndefined()
     expect(parse([], 'u', bump).values.bump).toBeUndefined()
   })
 

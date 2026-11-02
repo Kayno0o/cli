@@ -125,6 +125,15 @@ type Slots<Names extends readonly string[]> = Names extends readonly [infer Firs
   ? First extends `${string}...` | `${string}...]` ? string[] : First extends `[${string}` ? [string?, ...Slots<Others>] : [string, ...Slots<Others>]
   : Names extends readonly [] ? [] : string[]
 
+// The parsed values with an option that has `choices` typed as their union, `undefined` kept when the option may be absent.
+type Chosen<T extends Options, Values> = {
+  [Name in keyof Values]: Name extends keyof T
+    ? T[Name] extends { choices: infer Choices extends readonly string[] }
+      ? Extract<Values[Name], undefined> | (NonNullable<Values[Name]> extends unknown[] ? Choices[number][] : Choices[number])
+      : Values[Name]
+    : Values[Name]
+}
+
 export interface ParseSettings<Names extends readonly string[] = string[]> {
   // Stops at the first `--` and hands what follows back untouched as `rest`, for a command that runs another (`out -n 200 -- <cmd>`).
   rest?: boolean
@@ -209,7 +218,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   if (settings.positionals !== undefined)
     checkPositionals(parsed.positionals, settings.positionals)
 
-  return { ...parsed, positionals: parsed.positionals as Slots<Names>, rest }
+  return { ...parsed, values: parsed.values as Chosen<T, typeof parsed.values>, positionals: parsed.positionals as Slots<Names>, rest }
 }
 
 // A usage error for an option given a value outside its `choices`, in parseArgs' own order.
