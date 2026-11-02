@@ -104,8 +104,9 @@ export function commitSources(command: string): CommitSource[] {
     const { program, args } = parseCommand(piece.command)
     const { name, rest } = program === 'git' ? subcommandOf(args) : { name: '', rest: [] }
 
+    // the splitter hands a heredoc body to the piece after a `&&`, `;` or `|` that follows its opener, so a piece with an opener reads on from its start
     if (name === 'commit')
-      sources.push(sourceOf(rest, piece.text))
+      sources.push(sourceOf(rest, HEREDOC_OPENER.test(piece.text) ? command.slice(piece.start) : piece.text))
   }
 
   return sources

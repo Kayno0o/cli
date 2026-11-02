@@ -25,7 +25,7 @@ const PATTERN_OPTIONS = new Set(['-e', '-f', '--regexp', '--file'])
 const GREP_NAMES_ONLY = new Set('lLcq')
 const RG_NAMES_ONLY = new Set('lcq')
 const NAMES_ONLY_LONG = new Set(['--files-with-matches', '--files-without-match', '--count', '--count-matches', '--quiet', '--silent'])
-const FIND_ACTIONS = new Set(['-exec', '-execdir', '-ok', '-okdir', '-delete', '-fprint', '-fprint0', '-fprintf', '-fls'])
+const FIND_ACTIONS = new Set(['-exec', '-execdir', '-ok', '-okdir', '-delete', '-fprint', '-fprint0', '-fprintf', '-fls', '-files0-from'])
 // What a script needs to open a file or run a command: file, process and shell APIs, imports, command substitution and backticks.
 const CAN_REACH_FILES = /read|write|open|exec|spawn|system|popen|import|require|eval|load|fetch|glob|stream|source|getline|constructor|file(?!s\b)|\bcat\b|\b(?:Bun|Deno|fs|os|io|sh|bash|process|globalThis|window|Function|qx)\b|\$\s*[`({]|`/i
 const HIDDEN_FLAGS = /^(?:-u{2,}|--hidden|-\.)$/i
@@ -51,6 +51,8 @@ const ENV_DUMP = /(?:console\.\w+|JSON\.stringify|Object\.(?:entries|keys|values
 // Programs that name an env file without reading it: listing, testing, or loading it into a process that prints nothing.
 const HARMLESS = new Set(['ev', 'redact', 'ls', 'stat', 'test', '[', '[[', 'touch'])
 const GIT_HARMLESS = new Set(['check-ignore', 'ls-files', 'status'])
+// Programs an `xargs` can run on a listing of names without printing a line of the files.
+const XARGS_SAFE = new Set(['ls', 'stat', 'wc', 'test', '[', 'touch', 'echo', 'printf', 'basename', 'dirname', 'ev', 'redact', ''])
 // Programs printing a process's whole environment.
 const ENV_PRINTERS = new Set(['env', 'printenv'])
 const DOCKER = new Set(['docker', 'docker-compose'])
@@ -68,13 +70,11 @@ export const USE_EV = '.env files hold secrets that must never reach the transcr
 
 export const USE_EV_SEARCH = 'To search them, `ev grep <regex>` prints the matching keys, masked. `grep -l`, `-L` and `-c` (file names and counts) are allowed, and a tree-wide search can run as `rg <regex>`, which skips gitignored files, or `grep -r --exclude=\'.env*\' <regex> .`.'
 
-// Whether a piece of the command is a grep-family search, which the refusal then advises on.
-export function isSearchCommand(command: string): boolean {
-  return splitCommand(command).some((piece) => {
-    const { program } = parseCommand(piece.command)
+// Whether a piece is a grep-family search, which the refusal then advises on.
+export function isSearchCommand(piece: Piece): boolean {
+  const { program } = parseCommand(piece.command)
 
-    return GREPS.has(program) || program === 'rg' || program === 'ag'
-  })
+  return GREPS.has(program) || program === 'rg' || program === 'ag'
 }
 
 // The name past the last `/`, or past the `:` of `HEAD~1:api/.env` as git spells a file at a revision; the `.env*` glob reaches one too.
@@ -354,16 +354,23 @@ function dumpsContainerEnv(program: string, args: string[]): boolean {
 
 function readsEnv(piece: Piece, variables: ReadonlyMap<string, string[]>): boolean {
   const { program, args } = parseCommand(piece.command)
-  const found = words(piece.command)
 
   if (program === '' || HARMLESS.has(program) || (program === 'git' && GIT_HARMLESS.has(args[0] ?? '')))
     return false
 
-  if (INTERPRETERS.has(program) && codeReadsEnv(found, piece.heredocs))
+  if (INTERPRETERS.has(program) && codeReadsEnv(words(piece.command), piece.heredocs))
     return true
 
   if (printsNamesOnly(program, args) || listsFiles(program, args))
     return false
+
+  return namesEnv(piece, variables)
+}
+
+// Whether a piece has a word naming an env file, whatever it does with it.
+function namesEnv(piece: Piece, variables: ReadonlyMap<string, string[]>): boolean {
+  const { program, args } = parseCommand(piece.command)
+  const found = words(piece.command)
 
   // a git pathspec like `:!.env` leaves the file out
   const isExclusion = (word: Word) => program === 'git' && GIT_EXCLUDE.test(word.text)
@@ -451,21 +458,36 @@ function printsTrackedEnv(program: string, args: readonly string[]): boolean {
   return !rest.some(arg => GIT_NO_PATCH.has(arg))
 }
 
-// True when the command would read, write or print an env file or the whole environment; an env file named only inside a quoted message or a heredoc body is text, and a container's environment piped through `redact` is masked.
-export function touchesEnv(command: string, options: { hasTrackedEnv?: boolean } = {}): boolean {
-  if (ENV_DUMP.test(command))
-    return true
+// Whether the piece is an `xargs` running a command that may print the files it is given the names of, on a listing naming an env file further up its pipeline (harmless alone, but `xargs` opens each name).
+function xargsReadsListedEnv(pieces: readonly Piece[], index: number, variables: ReadonlyMap<string, string[]>): boolean {
+  const command = pieces[index]?.command ?? ''
+  const { program, isWrapped } = parseCommand(command)
 
-  if (substitutions(command).some(each => touchesEnv(each, options)))
-    return true
+  // parseCommand sees through `xargs` to the command it runs
+  if (!isWrapped || !tokenize(command).includes('xargs') || XARGS_SAFE.has(program))
+    return false
 
+  for (let at = index - 1; at >= 0 && pieces[at]?.separator.startsWith('|'); at--) {
+    if (namesEnv(pieces[at] as Piece, variables))
+      return true
+  }
+
+  return false
+}
+
+// The pieces of a command that would read, write or print an env file or the whole environment.
+export function touchingPieces(command: string, options: { hasTrackedEnv?: boolean } = {}): Piece[] {
   const pieces = splitCommand(command)
+
+  if (ENV_DUMP.test(command) || substitutions(command).some(each => touchesEnv(each, options)))
+    return pieces
+
   const variables = variablesOf(command)
 
-  return pieces.some((piece, index) => {
+  return pieces.filter((piece, index) => {
     const { program, args } = parseCommand(piece.command)
 
-    if (readsEnv(piece, variables) || searchesEnv(program, args))
+    if (readsEnv(piece, variables) || searchesEnv(program, args) || xargsReadsListedEnv(pieces, index, variables))
       return true
 
     const isDump = dumpsContainerEnv(program, args) || dumpsEnvironment(program, args, tokenize(piece.command)) || (options.hasTrackedEnv === true && printsTrackedEnv(program, args))
@@ -481,4 +503,9 @@ export function touchesEnv(command: string, options: { hasTrackedEnv?: boolean }
 
     return true
   })
+}
+
+// True when the command would read, write or print an env file or the whole environment; an env file named only inside a quoted message or a heredoc body is text, and a container's environment piped through `redact` is masked.
+export function touchesEnv(command: string, options: { hasTrackedEnv?: boolean } = {}): boolean {
+  return touchingPieces(command, options).length > 0
 }

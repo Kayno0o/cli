@@ -1,7 +1,7 @@
 import type { Manager, Mismatch, Pinned } from '@kaynooo/pkg-tools/src/pin.ts'
 import { commandsRun, parentDir, replacePieces } from '@kaynooo/cli-kit/shell'
 import { sqlViolation } from '@kaynooo/db-tools/src/clients.ts'
-import { isSearchCommand, reachesEnvFile, touchesEnv, USE_EV, USE_EV_SEARCH } from '@kaynooo/env-tools/guard'
+import { isSearchCommand, reachesEnvFile, touchingPieces, USE_EV, USE_EV_SEARCH } from '@kaynooo/env-tools/guard'
 import { commitMessageViolation, TRAILERS, USE_GC } from '@kaynooo/git-tools/message'
 import { shouldWrap, wrap } from '@kaynooo/out-tools/src/wrap.ts'
 import { addedPackages } from '@kaynooo/pkg-tools/src/added.ts'
@@ -132,7 +132,7 @@ export async function checkCommand(command: string, context: Context): Promise<V
   add('commit', commit === null ? null : `${commit} ${USE_GC}`)
   add('sql', await guarded('sql', async () => first(await Promise.all(run.map(async each => sqlViolation(each, readSql))))))
   add('env', await guarded('env', () => {
-    const touching = run.filter(each => touchesEnv(each, { hasTrackedEnv: context.hasTrackedEnv === true }))
+    const touching = run.flatMap(each => touchingPieces(each, { hasTrackedEnv: context.hasTrackedEnv === true }))
 
     if (touching.length === 0)
       return null

@@ -28,7 +28,7 @@ describe('touchesEnv', () => {
 })
 
 describe('touchesEnv, commands that print no value', () => {
-  const allowed = ['ls -a | grep -E \'^\\.env\'', 'grep -l GCU_API_TOKEN .env*', 'grep -L KEY .env', 'grep -c KEY .env', 'grep -rl KEY .env.local', 'grep -ql KEY .env', 'grep --files-with-matches KEY .env', 'rg -l KEY .env', 'rg --count KEY .env', 'find . -name \'.env*\'', 'find . -maxdepth 2 -name .env -print', 'git ls-files .env', 'bun -e \'console.log(/\\.env files/.test("x"))\'', 'bun -e \'console.log("the .env files")\'', 'python3 - <<\'EOF\'\nprint(\'the .env files\')\nEOF', 'python3 -c \'print("mentions .env")\'', 'grep -rl KEY .']
+  const allowed = ['ls -a | grep -E \'^\\.env\'', 'grep -l GCU_API_TOKEN .env*', 'grep -L KEY .env', 'grep -c KEY .env', 'grep -rl KEY .env.local', 'grep -ql KEY .env', 'grep --files-with-matches KEY .env', 'rg -l KEY .env', 'rg --count KEY .env', 'find . -name \'.env*\'', 'find . -maxdepth 2 -name .env -print', 'git ls-files .env', 'bun -e \'console.log(/\\.env files/.test("x"))\'', 'bun -e \'console.log("the .env files")\'', 'python3 - <<\'EOF\'\nprint(\'the .env files\')\nEOF', 'python3 -c \'print("mentions .env")\'', 'grep -rl KEY .', 'find . -name \'.env*\' | xargs ls -la', 'ls .env | xargs wc -c', 'grep -l KEY .env* | xargs echo', 'ls | xargs cat']
 
   for (const command of allowed) {
     test(`lets ${command} through`, () => {
@@ -56,6 +56,12 @@ describe('touchesEnv, commands that print no value', () => {
     'find . -name .env -exec cat {} \\;',
     'find . -name \'.env*\' -execdir cat {} +',
     'find . -name .env -fprint /dev/stdout',
+    'find . -name \'.env*\' | xargs cat',
+    'grep -l K .env* | xargs cat',
+    'ls .env | xargs cat',
+    'find . -name \'.env*\' | sort | xargs -n1 head',
+    'find . -name .env -files0-from .env',
+    'find -files0-from .env',
     'cat .env',
     'bun -e \'console.log(await Bun.file(".env").text())\'',
     'bun -e \'import { $ } from "bun"; await $`cat .env`\'',
