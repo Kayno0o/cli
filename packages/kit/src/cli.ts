@@ -38,6 +38,8 @@ export interface Cli {
   aliases?: Record<string, string>
   // The command that takes the arguments when the first one names no command, so `db "select 1"` runs `db query "select 1"`; `--help` lists its options under the commands.
   defaultCommand?: string
+  // With `defaultCommand`, a bare `<cli>` runs it instead of printing the help (`account` lists, `mux` attaches).
+  runBare?: boolean
   // Rewrites an error's message and cause before they print, for a CLI whose errors may quote what a log must not keep.
   redact?: (text: string) => string
   // Command lines shown under `Examples:` in `<cli> --help`; a command's own go to `parse`.
@@ -108,6 +110,8 @@ interface Level extends Scope {
   header: (colors: Colors, summary: string) => string
   summary: Summary
   defaultCommand: string | undefined
+  // Whether a bare run of the level runs its default command instead of printing the help.
+  runBare: boolean
   examples: Example[] | undefined
   replaces: string | undefined
 }
@@ -229,6 +233,16 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   }
 
   const [name, ...args] = argv
+  const fallback = level.defaultCommand === undefined ? undefined : level.commands[level.defaultCommand]
+
+  if (name === undefined && level.runBare && fallback !== undefined && 'run' in fallback) {
+    try {
+      return await fallback.run([])
+    }
+    catch (error) {
+      return reportThrown(`${prefix} ${level.defaultCommand}`, error, redact, false)
+    }
+  }
 
   if (name === undefined && level.path.length > 1) {
     console.error(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stderr))
@@ -250,6 +264,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
 
   let command = level.commands[level.aliases?.[name] ?? name]
   let rest = args
+  let ran = name
 
   if (command === undefined && level.lazy.length > 0) {
     level = await expand(level, [...level.path.slice(1), ...argv])
@@ -259,6 +274,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   if (command === undefined && level.defaultCommand !== undefined) {
     command = level.commands[level.defaultCommand]
     rest = argv
+    ran = level.defaultCommand
   }
 
   if (command === undefined) {
@@ -272,14 +288,14 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   if ('commands' in command) {
     const { summary } = command
 
-    return dispatch({ path: [...level.path, name], header: (colors, text) => `${colors.bold(`${prefix} ${name}`)}  ${text}`, summary, ...scopeOf(command.commands, command.extraCommands, command.aliases), defaultCommand: undefined, examples: command.examples, replaces: undefined }, rest, { version, redact })
+    return dispatch({ path: [...level.path, name], header: (colors, text) => `${colors.bold(`${prefix} ${name}`)}  ${text}`, summary, ...scopeOf(command.commands, command.extraCommands, command.aliases), defaultCommand: undefined, runBare: false, examples: command.examples, replaces: undefined }, rest, { version, redact })
   }
 
   try {
     return await command.run(rest)
   }
   catch (error) {
-    return reportThrown(`${prefix} ${name}`, error, redact, wantsJson(rest))
+    return reportThrown(`${prefix} ${ran}`, error, redact, wantsJson(rest))
   }
 }
 
@@ -403,7 +419,7 @@ export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<nu
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(scopeOf(cli.commands, cli.extraCommands, cli.aliases), cli.defaultCommand, argv.slice(1)))
 
-  return dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
+  return dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
 }
 
 export interface Main {
@@ -411,6 +427,22 @@ export interface Main {
   version: string
   run: (args: string[]) => Promise<number>
   redact?: (text: string) => string
+}
+
+// Parses a module's own arguments through runMain's handling, for a script running at its top level: the parsed values come back, and the process ends itself on --help, --version, `__complete` or an error, with the exit code runMain gives.
+export async function mainArgs<T>(main: Omit<Main, 'run'>, parseArgv: (args: string[]) => T, argv = process.argv.slice(2)): Promise<T> {
+  let parsed: { value: T } | undefined
+  // eslint-disable-next-line ts/require-await -- commands are async by contract
+  const code = await runMain({ ...main, run: async (args) => {
+    parsed = { value: parseArgv(args) }
+
+    return 0
+  } }, argv)
+
+  if (parsed === undefined)
+    process.exit(code)
+
+  return parsed.value
 }
 
 // Runs a CLI that is a single command: `--version` or `-v` alone prints the version, an `Exit` or any error prints as `error: <name>: <message>`. Returns the exit code.

@@ -220,6 +220,26 @@ describe('negative', () => {
   })
 })
 
+describe('trailing', () => {
+  const compose = { project: { type: 'string', short: 'p' }, all: { type: 'boolean' } } as const
+  const settings = { positionals: ['<project>'], trailing: true } as const
+
+  test('hands everything after the last positional back as rest, dashes included', () => {
+    expect(parse(['x', 'exec', '-T', 'php', '--help'], 'u', compose, settings)).toMatchObject({ positionals: ['x'], rest: ['exec', '-T', 'php', '--help'] })
+    expect(parse(['x', 'logs', '--tail=200'], 'u', compose, settings)).toMatchObject({ rest: ['logs', '--tail=200'] })
+  })
+
+  test('parses the options typed before it, a string one taking its value', () => {
+    expect(parse(['--all', '-p', 'p1', 'x', 'up', '--all'], 'u', compose, settings)).toMatchObject({ values: { all: true, project: 'p1' }, positionals: ['x'], rest: ['up', '--all'] })
+  })
+
+  test('has no rest until a positional is given, and an empty one when nothing follows', () => {
+    expect(() => parse([], 'u', compose, settings)).toThrow('missing <project>')
+    expect(parse(['x'], 'u', compose, settings).rest).toEqual([])
+    expect(() => parse(['--help'], 'u', compose, settings)).toThrow(HelpShown)
+  })
+})
+
 describe('wholeNumber', () => {
   test('reads digits only', () => {
     expect(wholeNumber('12', 'limit', 1)).toBe(12)

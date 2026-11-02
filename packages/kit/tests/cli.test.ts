@@ -1,7 +1,7 @@
 import type { Example } from '../src'
 import process from 'node:process'
-import { describe, expect, test } from 'bun:test'
-import { applyOutput, badUsage, description, fail, parse, printHint, runCli, runHint, runMain } from '../src'
+import { describe, expect, spyOn, test } from 'bun:test'
+import { applyOutput, badUsage, description, fail, mainArgs, parse, printHint, runCli, runHint, runMain } from '../src'
 import { capture } from '../src/test'
 
 const cli = {
@@ -157,6 +157,69 @@ describe('runMain', () => {
     expect((await capture(async () => runMain(main(async () => fail('timed out', 2)), ['--json', 'x']))).err).toBe('{"error":"timed out"}\n')
     expect((await capture(async () => runMain(main(async () => fail('timed out', 2)), ['--', '--json']))).err).toBe('error: solo: timed out\n')
     expect((await capture(async () => runCli({ name: 'demo', version: '1.0.0', about: 'a demo', commands: { boom: { summary: 'fails', run: async () => fail('it broke', 4) } } }, ['boom', '--json']))).err).toBe('{"error":"it broke"}\n')
+  })
+})
+
+describe('mainArgs', () => {
+  const OPTS = { port: { type: 'string' } } as const
+  const parsing = async (argv: string[]) => {
+    const exits: number[] = []
+    const exit = spyOn(process, 'exit').mockImplementation((code) => {
+      exits.push(Number(code ?? 0))
+
+      throw new Error('exited')
+    })
+
+    let values: { port?: string | undefined } | undefined
+
+    try {
+      const captured = await capture(async () => {
+        try {
+          values = await mainArgs({ name: 'solo', version: '0.4.0' }, args => parse(args, 'solo', OPTS).values, argv)
+        }
+        catch (error) {
+          if (!(error instanceof Error) || error.message !== 'exited')
+            throw error
+        }
+
+        return 0
+      })
+
+      return { ...captured, exits, values }
+    }
+    finally {
+      exit.mockRestore()
+    }
+  }
+
+  test('hands the parsed values back', async () => {
+    expect((await parsing(['--port', '80'])).values).toEqual({ port: '80' })
+  })
+
+  test('ends the process itself on help, version, completion or a usage error', async () => {
+    expect(await parsing(['--help'])).toMatchObject({ exits: [0], out: expect.stringContaining('Usage: solo') })
+    expect(await parsing(['--version'])).toMatchObject({ exits: [0], out: '0.4.0\n' })
+    expect(await parsing(['__complete', '--'])).toMatchObject({ exits: [0], out: expect.stringContaining('--port') })
+    expect(await parsing(['--nope'])).toMatchObject({ exits: [2], err: expect.stringContaining('solo: unknown option') })
+  })
+})
+
+describe('defaultCommand', () => {
+  const list = async (args: string[]) => {
+    parse(args, 'list', {}, { positionals: ['[name]'] })
+    console.log('listing')
+
+    return 0
+  }
+  const withDefault = { ...cli, commands: { ...cli.commands, ls: { summary: 'lists', run: list } }, defaultCommand: 'ls' }
+
+  test('names the default command, not the typed argument, in an error', async () => {
+    expect((await capture(async () => runCli(withDefault, ['a', 'b']))).err).toBe('error: demo ls: unexpected argument b\n  hint: run demo ls --help for its options\n')
+  })
+
+  test('prints the help for a bare run unless told to run the default command', async () => {
+    expect((await capture(async () => runCli(withDefault, []))).out).toStartWith('demo 1.2.3')
+    expect(await capture(async () => runCli({ ...withDefault, runBare: true }, []))).toEqual({ result: 0, out: 'listing\n', err: '' })
   })
 })
 

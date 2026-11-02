@@ -157,6 +157,8 @@ type Chosen<T extends Options, Values> = {
 export interface ParseSettings<Names extends readonly string[] = string[]> {
   // Stops at the first `--` and hands what follows back untouched as `rest`, for a command that runs another (`out -n 200 -- <cmd>`).
   rest?: boolean
+  // With `positionals`, passes everything after the last declared one back untouched as `rest`, dashes included and without a `--`: `acme compose <project> exec -T php bash`. Options typed before it parse as usual, and it replaces `rest`.
+  trailing?: boolean
   // Takes `--no-<flag>` as `false` for a boolean flag, as parseArgs' own `allowNegative` does.
   allowNegative?: boolean
   // The positionals the command takes, by name as its usage writes them: `<key>` or `KEY` required, `[file]` optional, a last one ending in `...` taking any more. One missing or one too many is a usage error, and the positionals come back typed by these names.
@@ -212,9 +214,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   if (completion.active)
     throw new Completing(listing, settings.positionals, settings.candidates)
 
-  const separator = settings.rest === true ? args.indexOf('--') : -1
-  const own = separator === -1 ? args : args.slice(0, separator)
-  const rest = separator === -1 ? undefined : args.slice(separator + 1)
+  const { own, rest } = settings.trailing === true ? splitTrailing(args, all, settings.positionals?.length ?? 0) : splitRest(args, settings.rest === true)
 
   let parsed
 
@@ -244,6 +244,43 @@ export function parse<const T extends Options, const Names extends readonly stri
     checkPositionals(parsed.positionals, settings.positionals)
 
   return { ...parsed, values: parsed.values as Chosen<T, typeof parsed.values>, positionals: parsed.positionals as Slots<Names>, rest }
+}
+
+// The arguments before a `--` and what follows it, when the command passes that through.
+function splitRest(args: string[], passes: boolean): { own: string[], rest: string[] | undefined } {
+  const separator = passes ? args.indexOf('--') : -1
+
+  return { own: separator === -1 ? args : args.slice(0, separator), rest: separator === -1 ? undefined : args.slice(separator + 1) }
+}
+
+// The arguments up to the last of `count` positionals, options and their values apart, and everything after it.
+function splitTrailing(args: string[], options: Options, count: number): { own: string[], rest: string[] | undefined } {
+  const takesValue = (word: string) => !word.includes('=') && Object.entries(options).some(([name, { short, type }]) => type === 'string' && (word === `--${name}` || word === `-${short}`))
+  let seen = 0
+
+  if (count === 0)
+    return { own: args, rest: undefined }
+
+  for (let at = 0; at < args.length; at++) {
+    const word = args[at]!
+
+    if (word === '--')
+      break
+
+    if (word.startsWith('-')) {
+      if (takesValue(word))
+        at++
+
+      continue
+    }
+
+    seen++
+
+    if (seen === count)
+      return { own: args.slice(0, at + 1), rest: args.slice(at + 1) }
+  }
+
+  return { own: args, rest: undefined }
 }
 
 // The options as the help and `__complete` list them: with `allowNegative`, `--no-<name>` for an option with a `negative` description, in place of the positive flag when that has none of its own.
