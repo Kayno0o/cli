@@ -10,6 +10,7 @@ const LONG_VALUE = /=(.*)/s
 const CAT_OPENER = /^\$\(cat <<-?[ \t]*(['"]?)([\w-]+)\1/
 
 export const HEREDOC_OPENER = /<<-?[ \t]*(['"]?)([\w-]+)\1/
+const TICKET_LINE = /^(?:[\w.-]+\/[\w.-]+)?#\d+ - /
 // parseCommand trims the closing parenthesis off the last word, so it may be gone.
 const CAT_CLOSER = /^\s*(?:\)\s*)?$/
 // Text the shell would still expand, which leaves the message unknown.
@@ -122,4 +123,49 @@ export function inlineMessage(parts: readonly string[]): string | null {
   }
 
   return texts.join('\n\n')
+}
+
+function quoted(text: string): string {
+  return `'${text.replaceAll('\'', '\'\\\'\'')}'`
+}
+
+// The paths of the `git add` commands in the command, null when one stages without naming paths or there is none.
+function addedPaths(command: string): string[] | null {
+  const paths: string[] = []
+
+  for (const piece of splitCommand(command)) {
+    const { program, args } = parseCommand(piece.command)
+    const { name, rest } = program === 'git' ? subcommandOf(args) : { name: '', rest: [] }
+
+    if (name !== 'add')
+      continue
+
+    const operands = rest.filter(arg => arg !== '--')
+
+    if (operands.length === 0 || operands.some(arg => arg.startsWith('-')))
+      return null
+
+    paths.push(...operands)
+  }
+
+  return paths.length === 0 ? null : paths
+}
+
+// The `gc` line doing what a `git add <paths>` then `git commit -m ...` chain does, null when the chain is no such pair or its message is not known.
+export function gcLine(command: string): string | null {
+  const paths = addedPaths(command)
+  const [source, ...others] = commitSources(command)
+
+  if (paths === null || source === undefined || others.length > 0 || source.file !== null || source.isReused || source.hasTrailerFlag)
+    return null
+
+  const lines = (inlineMessage(source.parts) ?? '').split('\n').map(line => line.trim()).filter(line => line !== '')
+  const [title, ...rest] = lines
+
+  if (title === undefined)
+    return null
+
+  const options = rest.map(line => TICKET_LINE.test(line) ? `--ticket ${quoted(line)}` : `-m ${quoted(line)}`)
+
+  return ['gc', quoted(title), ...options, '--', ...paths.map(quoted)].join(' ')
 }

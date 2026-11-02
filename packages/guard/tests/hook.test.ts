@@ -93,6 +93,30 @@ describe('pre-tool-use on file tools', () => {
   })
 })
 
+describe('the gc nudge', () => {
+  const chain = 'git add src/a.ts "my file.ts" && git commit -m "$(cat <<\'EOF\'\nfix(api): retry a timed-out fetch\n\nA 502 is retried once.\n\n#12 - [UC3] Retry failed fetches\nEOF\n)"'
+
+  test('names the gc line of a passing add and commit chain, without refusing it', async () => {
+    const reply = await hook('pre-tool-use', bash(chain), machine())
+
+    expect(reply?.hookSpecificOutput.permissionDecision).toBeUndefined()
+    expect(reply?.hookSpecificOutput.hookEventName).toBe('PreToolUse')
+    expect(reply?.hookSpecificOutput.additionalContext).toContain('`gc \'fix(api): retry a timed-out fetch\' -m \'A 502 is retried once.\' --ticket \'#12 - [UC3] Retry failed fetches\' -- \'src/a.ts\' \'my file.ts\'`')
+  })
+
+  test('says nothing of a commit gc cannot replace', async () => {
+    for (const command of ['git commit -m "fix: x"', 'git add src/a.ts', 'git add -p src/a.ts && git commit -m "fix: x"', 'git add src/a.ts && git commit -F msg.txt', 'git add src/a.ts && git commit --amend --no-edit'])
+      expect(await hook('pre-tool-use', bash(command), machine({ [`${REPO}/msg.txt`]: 'fix: x' }))).toBeNull()
+  })
+
+  test('keeps refusing a chain that breaks a rule, with the refusal alone', async () => {
+    const reply = await hook('pre-tool-use', bash('git add src/a.ts && git commit -m "wip"'), machine())
+
+    expect(reply?.hookSpecificOutput.permissionDecision).toBe('deny')
+    expect(reply?.hookSpecificOutput.additionalContext).toBeUndefined()
+  })
+})
+
 describe('user-prompt-submit', () => {
   test('git push passes only while the latest prompt asked for one', async () => {
     const files: Record<string, string> = {}

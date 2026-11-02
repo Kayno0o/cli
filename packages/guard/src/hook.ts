@@ -2,6 +2,7 @@ import type { Context, Violation } from './check'
 import { isEnvFile } from '@kaynooo/env-tools/guard'
 import { BINS, binsSection } from './bins'
 import { checkCommand, checkPath } from './check'
+import { gcLine } from './commit'
 
 export const EVENTS = ['pre-tool-use', 'user-prompt-submit', 'session-start'] as const
 export type Event = typeof EVENTS[number]
@@ -75,8 +76,20 @@ function deny(violations: Violation[]): HookOutput | null {
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: violations.map(each => each.message).join('\n\n') } }
 }
 
-// A Claude Code hook cannot swap the command without also approving or asking for it, so a rule that would rewrite refuses with the command to run instead, and nothing goes through out.
+// A command that passed gets a nudge, as context only: the call still runs.
 async function bashCall(command: string, input: HookInput, machine: Machine): Promise<HookOutput | null> {
+  const answer = await checkedBashCall(command, input, machine)
+
+  if (answer !== null)
+    return answer
+
+  const line = gcLine(command)
+
+  return line === null ? null : { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: `This commit went through, but \`gc\` does the same in one call, checks the message first and is never held by the read-first gate: \`${line}\`` } }
+}
+
+// A Claude Code hook cannot swap the command without also approving or asking for it, so a rule that would rewrite refuses with the command to run instead, and nothing goes through out.
+async function checkedBashCall(command: string, input: HookInput, machine: Machine): Promise<HookOutput | null> {
   const file = pushFile(input.session_id, machine)
   const cwd = input.cwd ?? machine.home
   const verdict = await checkCommand(command, {
