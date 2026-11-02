@@ -57,7 +57,7 @@
     },
     "packages/doctor": {
       "name": "@kaynooo/doctor-tools",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "bin": {
         "doctor": "./dist/cli.js",
         "agent-tools": "./dist/agent-tools.js",
