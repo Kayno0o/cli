@@ -1,35 +1,71 @@
 import type { Service } from './compose'
+import type { Dialect } from './guard'
 import { isIP } from 'node:net'
 import { homedir } from 'node:os'
 import process from 'node:process'
 import { fail } from '@kaynooo/cli-kit'
 import { SQL } from 'bun'
 import { DEFAULT_ENV } from './args'
-import { composeServices, pickPostgres, serviceUrl } from './compose'
+import { composeServices, containerService, pickService, serviceUrl } from './compose'
+import { testWriteBlockers } from './guard'
 import { scrub } from './mask'
 import { loadSettings, settingsPath } from './settings'
 
 export type Row = Record<string, unknown>
 
 const STATEMENT_TIMEOUT = '30s'
-// Sent at connect, so the session is read-only and bounded before the transaction starts.
-const SESSION_SETTINGS = { default_transaction_read_only: 'on', lock_timeout: '5s', idle_in_transaction_session_timeout: '60s' }
+// Sent at connect, so the session is bounded (and read-only for a read) before the transaction starts.
+const SESSION_SETTINGS = { lock_timeout: '5s', idle_in_transaction_session_timeout: '60s' }
 const CURSOR = 'db_rows'
 // A cursor can only be declared on these, SHOW and EXPLAIN are read whole.
 const CURSOR_STARTS = /^\s*(?:select|with|values|table)\b/i
+const TRAILING_SEMICOLONS = /[;\s]+$/
 // Doctrine's DATABASE_URL carries these for the ORM, not for the server.
 const DOCTRINE_PARAMS = ['serverVersion', 'charset']
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 const BRACKETS = /^\[|\]$/g
+const POSTGRES_SCHEMES = new Set(['postgres:', 'postgresql:'])
+const MYSQL_SCHEMES = new Set(['mysql:', 'mysql2:', 'mariadb:'])
+const MYSQL_TIMEOUTS = ['SET SESSION max_execution_time = 30000', 'SET SESSION max_statement_time = 30']
+
+// A write only runs on a database whose name ends so.
+export const TEST_SUFFIX = '_test'
 
 export interface Target {
   env?: string | undefined
   service?: string | undefined
+  container?: string | undefined
   database?: string | undefined
 }
 
+// A statement's rows, and how many rows it changed.
+export type Result = Row[] & { affected?: number }
+
+export interface Tx {
+  unsafe: (statement: string, params?: unknown[]) => Promise<Result>
+}
+
+export interface Session {
+  // Runs the work in one transaction, rolled back when it throws and committed when it returns.
+  transaction: (work: (tx: Tx) => Promise<void>, readOnly: boolean) => Promise<void>
+  close: () => Promise<void>
+}
+
+// Opens a session on a server; stubbed in tests.
+export type Connect = (url: string, dialect: Dialect, readOnly: boolean) => Session
+
 // Thrown inside the transaction so that Bun rolls it back instead of committing.
 class Rollback extends Error {}
+
+export function dialectOf(url: URL): Dialect {
+  if (POSTGRES_SCHEMES.has(url.protocol))
+    return 'postgres'
+
+  if (MYSQL_SCHEMES.has(url.protocol))
+    return 'mysql'
+
+  return fail(`the connection URL is ${url.protocol.replace(':', '')}://, but db reads Postgres (postgres://), MySQL and MariaDB (mysql://, mariadb://) only`)
+}
 
 // The host a URL connects to: its authority, else the `host` parameter some drivers take in its place. Empty or a path stands for a local socket.
 function hostOf(url: URL): string {
@@ -40,14 +76,15 @@ function hostOf(url: URL): string {
 
 const isLocal = (host: string) => host === '' || host.startsWith('/') || LOCAL_HOSTS.has(host)
 
-// The compose service a hostname names: the service called so, else the only Postgres service answering to it on a network.
-function serviceNamed(services: Service[], host: string): Service | undefined {
+// The compose service a hostname names: the service called so, else the only service of the URL's engine answering to it on a network.
+function serviceNamed(services: Service[], host: string, dialect: Dialect): Service | undefined {
   const exact = services.find(candidate => candidate.name.toLowerCase() === host)
 
   if (exact !== undefined)
     return exact
 
-  const aliased = services.filter(candidate => candidate.engine === 'postgres' && candidate.names.some(name => name.toLowerCase() === host))
+  const engine = dialect === 'mysql' ? 'mysql' : 'postgres'
+  const aliased = services.filter(candidate => candidate.engine === engine && candidate.names.some(name => name.toLowerCase() === host))
 
   if (aliased.length > 1)
     fail(`${host} names several services (${aliased.map(candidate => candidate.name).join(', ')}): pick one with --service`)
@@ -66,12 +103,13 @@ export async function reachable(value: string, home = homedir()): Promise<URL> {
     fail('the connection URL does not parse')
   }
 
+  const dialect = dialectOf(url)
   const host = hostOf(url)
 
   if (isLocal(host))
     return url
 
-  const service = isIP(host) === 0 ? serviceNamed(await composeServices(), host) : undefined
+  const service = isIP(host) === 0 ? serviceNamed(await composeServices(), host, dialect) : undefined
 
   if (service !== undefined) {
     url.hostname = service.host.includes(':') ? `[${service.host}]` : service.host
@@ -86,17 +124,21 @@ export async function reachable(value: string, home = homedir()): Promise<URL> {
   return url
 }
 
-// The URL to read: a compose service when one is named, else the environment key (which Bun fills from .env files), else the project's only running Postgres service.
-export async function connectionUrl({ env, service, database }: Target, home = homedir()): Promise<string> {
-  const value = service === undefined ? process.env[env ?? DEFAULT_ENV] : undefined
+// The URL to read: a container or compose service when one is named, else the environment key (which Bun fills from .env files), else the project's only running database service.
+export async function connectionUrl({ env, service, container, database }: Target, home = homedir()): Promise<string> {
+  if (service !== undefined && container !== undefined)
+    fail('--service and --container name two databases: pick one')
+
+  const isNamed = service !== undefined || container !== undefined
+  const value = isNamed ? undefined : process.env[env ?? DEFAULT_ENV]
   let url: URL
 
   if (value !== undefined && value !== '')
     url = await reachable(value, home)
-  else if (env !== undefined && service === undefined)
+  else if (env !== undefined && !isNamed)
     fail(`${env} is not set: put the connection URL in a .env file or the environment`)
   else
-    url = new URL(serviceUrl(pickPostgres(await composeServices(), service)))
+    url = new URL(serviceUrl(container === undefined ? pickService(await composeServices(), service) : await containerService(container)))
 
   for (const param of DOCTRINE_PARAMS)
     url.searchParams.delete(param)
@@ -107,42 +149,162 @@ export async function connectionUrl({ env, service, database }: Target, home = h
   return url.href
 }
 
+// The database a URL opens, empty when it names none.
+export function databaseOfUrl(url: string): string {
+  const { pathname } = new URL(url)
+
+  try {
+    return decodeURIComponent(pathname.slice(1))
+  }
+  catch {
+    return pathname.slice(1)
+  }
+}
+
+function toResult(rows: Row[] & { count?: number, affectedRows?: number }): Result {
+  return Object.assign([...rows], { affected: rows.count ?? rows.affectedRows ?? rows.length })
+}
+
+// The Bun SQL client, which speaks Postgres and MySQL alike. A read session is read-only from the start: Postgres by `default_transaction_read_only` at connect and a READ ONLY transaction, MySQL by `SET SESSION TRANSACTION READ ONLY` before the transaction begins.
+export const bunConnect: Connect = (url, dialect, readOnly) => {
+  const sql = new SQL({ url, max: 1, connectionTimeout: 10, ...dialect === 'postgres' ? { connection: { ...SESSION_SETTINGS, ...readOnly ? { default_transaction_read_only: 'on' } : {} } } : {} })
+
+  return {
+    async transaction(work, isReadOnly) {
+      const run = async (tx: SQL) => work({ unsafe: async (statement, params) => toResult(await tx.unsafe<Row[]>(statement, params)) })
+
+      if (dialect === 'postgres') {
+        const body = async (tx: SQL) => {
+          await tx.unsafe(`SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT}'`)
+          await run(tx)
+        }
+
+        await (isReadOnly ? sql.begin('read only', body) : sql.begin(body))
+
+        return
+      }
+
+      if (isReadOnly)
+        await sql.unsafe('SET SESSION TRANSACTION READ ONLY')
+
+      for (const timeout of MYSQL_TIMEOUTS) {
+        try {
+          await sql.unsafe(timeout)
+        }
+        catch {
+          // MySQL and MariaDB name this setting differently, so the other server refuses one of the two.
+        }
+      }
+
+      await sql.begin(run)
+    },
+    async close() {
+      await sql.close()
+    },
+  }
+}
+
+// MySQL has no cursor to declare, so a select is wrapped to stop at limit + 1 rows, and read whole when the wrapping does not parse.
+async function fetchRows(tx: Tx, dialect: Dialect, statement: string, params: unknown[], limit: number | undefined): Promise<Row[]> {
+  if (limit === undefined || !CURSOR_STARTS.test(statement))
+    return tx.unsafe(statement, params)
+
+  if (dialect === 'postgres') {
+    await tx.unsafe(`DECLARE ${CURSOR} NO SCROLL CURSOR FOR ${statement}`, params)
+
+    return tx.unsafe(`FETCH FORWARD ${limit + 1} FROM ${CURSOR}`)
+  }
+
+  try {
+    return await tx.unsafe(`select * from (\n${statement.replace(TRAILING_SEMICOLONS, '')}\n) as ${CURSOR} limit ${limit + 1}`, params)
+  }
+  catch {
+    return tx.unsafe(statement, params)
+  }
+}
+
+function messageOf(error: unknown, url: string): string {
+  return scrub(error instanceof Error ? error.message : String(error), url)
+}
+
 // Runs one statement in a READ ONLY transaction that is always rolled back, with every error scrubbed of the URL. With a limit, a select is read through a cursor that stops at limit + 1 rows, enough to tell that more were left.
-export async function readRows(url: string, statement: string, params: unknown[] = [], limit?: number): Promise<Row[]> {
-  const sql = new SQL({ url, max: 1, connectionTimeout: 10, connection: SESSION_SETTINGS })
+export async function readRows(url: string, statement: string, params: unknown[] = [], limit?: number, connect: Connect = bunConnect): Promise<Row[]> {
+  const dialect = dialectOf(new URL(url))
+  const session = connect(url, dialect, true)
   let rows: Row[] = []
 
   try {
-    await sql.begin('read only', async (transaction) => {
-      await transaction.unsafe(`SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT}'`)
-
-      if (limit !== undefined && CURSOR_STARTS.test(statement)) {
-        await transaction.unsafe(`DECLARE ${CURSOR} NO SCROLL CURSOR FOR ${statement}`, params)
-        rows = [...await transaction.unsafe<Row[]>(`FETCH FORWARD ${limit + 1} FROM ${CURSOR}`)]
-      }
-      else {
-        rows = [...await transaction.unsafe<Row[]>(statement, params)]
-      }
+    await session.transaction(async (tx) => {
+      rows = [...await fetchRows(tx, dialect, statement, params, limit)]
 
       throw new Rollback()
-    })
+    }, true)
   }
   catch (error) {
     if (!(error instanceof Rollback))
-      fail(scrub(error instanceof Error ? error.message : String(error), url), 1)
+      fail(messageOf(error, url), 1)
   }
   finally {
-    await closeQuietly(sql, url)
+    await closeQuietly(session, url)
   }
 
   return rows
 }
 
-async function closeQuietly(sql: SQL, url: string): Promise<void> {
+export type WriteResult = { isRun: true, database: string, rows: Row[], affected: number } | { isRun: false, reasons: string[] }
+
+// What stops a write on this database, empty when it may run: its name must end in `_test` and the statement must not reach past it.
+function testWriteReasons(database: string, statement: string, dialect: Dialect): string[] {
+  if (!database.endsWith(TEST_SUFFIX))
+    return [`the database ${database === '' ? 'is not named' : database} does not end in ${TEST_SUFFIX}`]
+
+  return testWriteBlockers(statement, dialect, database)
+}
+
+// Runs a write in a transaction that commits, only when the database actually connected to ends in `_test`: the URL's name is checked before connecting, then the server is asked which database the session is on, so the statement's own text never decides it.
+export async function writeRows(url: string, statement: string, connect: Connect = bunConnect): Promise<WriteResult> {
+  const dialect = dialectOf(new URL(url))
+  const declared = testWriteReasons(databaseOfUrl(url), statement, dialect)
+
+  if (declared.length > 0)
+    return { isRun: false, reasons: declared }
+
+  const session = connect(url, dialect, false)
+  let outcome: WriteResult = { isRun: false, reasons: ['not run'] }
+
   try {
-    await sql.close()
+    await session.transaction(async (tx) => {
+      const [current] = await tx.unsafe(dialect === 'postgres' ? 'select current_database() as name' : 'select database() as name')
+      const database = String(current?.name ?? '')
+      const reasons = testWriteReasons(database, statement, dialect)
+
+      if (reasons.length > 0) {
+        outcome = { isRun: false, reasons }
+
+        throw new Rollback()
+      }
+
+      const result = await tx.unsafe(statement)
+
+      outcome = { isRun: true, database, rows: [...result], affected: result.affected ?? 0 }
+    }, false)
   }
   catch (error) {
-    console.error(scrub(error instanceof Error ? error.message : String(error), url))
+    if (!(error instanceof Rollback))
+      fail(messageOf(error, url), 1)
+  }
+  finally {
+    await closeQuietly(session, url)
+  }
+
+  return outcome
+}
+
+async function closeQuietly(session: Session, url: string): Promise<void> {
+  try {
+    await session.close()
+  }
+  catch (error) {
+    console.error(messageOf(error, url))
   }
 }

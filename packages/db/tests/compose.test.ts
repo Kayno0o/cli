@@ -1,10 +1,11 @@
+import type { Service } from '../src/compose'
 import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { Exit } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
-import { describeServices, parsePs, pickPostgres, serviceUrl } from '../src/compose'
+import { describeNamedContainer, describeServices, parsePs, pickService, serviceUrl } from '../src/compose'
 
 const PS = [
   { ID: 'aaa111', Service: 'tilid-db', State: 'running', Image: 'postgres:17-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: 45000 }] },
@@ -58,21 +59,83 @@ describe('describeServices', () => {
   })
 })
 
-describe('pickPostgres', () => {
+describe('pickService', () => {
   test('asks for --service when several run, and takes the one named', () => {
-    expect(failure(() => pickPostgres(services, undefined))).toContain('several Postgres services run here (tilid-db, supervisor-db): pick one with --service')
-    expect(pickPostgres(services, 'supervisor-db').name).toBe('supervisor-db')
+    expect(failure(() => pickService(services, undefined))).toContain('several database services run here (tilid-db, supervisor-db, mysql): pick one with --service')
+    expect(pickService(services, 'supervisor-db').name).toBe('supervisor-db')
+    expect(pickService(services, 'mysql').engine).toBe('mysql')
   })
 
-  test('takes the only one without asking', () => {
-    expect(pickPostgres(services.slice(1), undefined).name).toBe('supervisor-db')
+  test('takes the only one without asking, MySQL included', () => {
+    expect(pickService(services.slice(1, 2), undefined).name).toBe('supervisor-db')
+    expect(pickService(services.slice(2), undefined).name).toBe('mysql')
   })
 
-  test('refuses a MySQL server, an unknown name and an empty project, saying why', () => {
-    expect(failure(() => pickPostgres(services.slice(2), undefined))).toContain('only mysql runs here, a MySQL or MariaDB server')
-    expect(failure(() => pickPostgres(services, 'php'))).toContain('php is no Postgres service')
-    expect(failure(() => pickPostgres(services, 'nope'))).toContain('no running service nope in this compose project, running: tilid-db')
-    expect(failure(() => pickPostgres([], undefined))).toContain('no DATABASE_URL and no running Postgres service')
+  test('refuses a service that is no database, an unknown name and an empty project, saying why', () => {
+    expect(failure(() => pickService(services, 'php'))).toContain('php is no Postgres, MySQL or MariaDB service')
+    expect(failure(() => pickService(services, 'nope'))).toContain('no running service nope in this compose project, running: tilid-db')
+    expect(failure(() => pickService([], undefined))).toContain('no DATABASE_URL and no running Postgres, MySQL or MariaDB service')
+  })
+})
+
+describe('describeNamedContainer', () => {
+  const container = {
+    Id: 'eee555ffff',
+    Name: '/booki-docker--shot-igesa-db-1',
+    State: { Running: true },
+    Config: { Image: 'postgres:17', Env: ['POSTGRES_USER=booki', 'POSTGRES_PASSWORD=s3cret-pw', 'POSTGRES_DB=booki_test'] },
+    NetworkSettings: { Networks: { shot: { IPAddress: '172.40.0.3' } }, Ports: { '5432/tcp': [{ HostIp: '0.0.0.0', HostPort: '45432' }, { HostIp: '::', HostPort: '45432' }], '8080/tcp': null } },
+  }
+
+  test('reads a container outside any compose project, reached on its published port', () => {
+    const service = describeNamedContainer('booki-docker--shot-igesa-db-1', [container])
+
+    expect(service).toMatchObject({ name: 'booki-docker--shot-igesa-db-1', engine: 'postgres', host: '127.0.0.1', port: 45432 })
+    expect(serviceUrl(service)).toBe('postgres://booki:s3cret-pw@127.0.0.1:45432/booki_test')
+  })
+
+  test('falls back on the network address when nothing is published', () => {
+    expect(describeNamedContainer('c', [{ ...container, NetworkSettings: { Networks: container.NetworkSettings.Networks, Ports: {} } }])).toMatchObject({ host: '172.40.0.3', port: 5432 })
+  })
+
+  test('refuses a stopped container, an unknown one and one with no address', () => {
+    expect(failure(() => describeNamedContainer('c', [{ ...container, State: { Running: false } }]))).toBe('c is not running')
+    expect(failure(() => describeNamedContainer('c', []))).toBe('no container c')
+    expect(failure(() => describeNamedContainer('c', [{ ...container, NetworkSettings: { Networks: {}, Ports: {} } }]))).toContain('publishes no port')
+  })
+
+  test('never puts the password in a message', () => {
+    expect(failure(() => serviceUrl({ ...describeNamedContainer('c', [container]), env: { POSTGRES_PASSWORD_FILE: '/run/secrets/pw' } }))).not.toContain('s3cret-pw')
+  })
+})
+
+describe('serviceUrl for MySQL and MariaDB', () => {
+  const base: Service = { name: 'db', engine: 'mysql', env: {}, names: ['db'], host: '127.0.0.1', port: 33060 }
+
+  test('reads MYSQL_USER, MYSQL_PASSWORD and MYSQL_DATABASE', () => {
+    const url = new URL(serviceUrl({ ...base, env: { MYSQL_USER: 'battena', MYSQL_PASSWORD: 'p@ss', MYSQL_DATABASE: 'battena_test', MYSQL_ROOT_PASSWORD: 'rootpw' } }))
+
+    expect([url.protocol, url.username, decodeURIComponent(url.password), url.host, url.pathname]).toEqual(['mysql:', 'battena', 'p@ss', '127.0.0.1:33060', '/battena_test'])
+  })
+
+  test('reads the MARIADB_ equivalents', () => {
+    const url = new URL(serviceUrl({ ...base, env: { MARIADB_USER: 'app', MARIADB_PASSWORD: 'pw1', MARIADB_DATABASE: 'app' } }))
+
+    expect([url.username, url.password, url.pathname]).toEqual(['app', 'pw1', '/app'])
+  })
+
+  test('falls back on root and its password, without a database', () => {
+    const url = new URL(serviceUrl({ ...base, env: { MYSQL_ROOT_PASSWORD: 'rootpw' } }))
+
+    expect([url.username, url.password, url.pathname]).toEqual(['root', 'rootpw', ''])
+    expect(new URL(serviceUrl({ ...base, env: { MARIADB_ROOT_PASSWORD: 'maria' } })).password).toBe('maria')
+    expect(new URL(serviceUrl({ ...base, env: { MYSQL_ALLOW_EMPTY_PASSWORD: 'yes' } })).username).toBe('root')
+  })
+
+  test('refuses without credentials or with a password file, never printing a password', () => {
+    expect(failure(() => serviceUrl(base))).toContain('has no MYSQL_USER or MYSQL_ROOT_PASSWORD')
+    expect(failure(() => serviceUrl({ ...base, env: { MYSQL_USER: 'u', MYSQL_PASSWORD_FILE: '/run/secrets/pw' } }))).toContain('reads its password from a file')
+    expect(failure(() => serviceUrl({ ...base, env: { MARIADB_ROOT_PASSWORD_FILE: '/run/secrets/pw' } }))).toContain('reads its password from a file')
   })
 })
 
@@ -94,16 +157,23 @@ describe('serviceUrl', () => {
 
 describe('composeServices', () => {
   // Runs in a child, as Bun looks docker up on the PATH the process started with.
-  async function listed(dockerScript: string): Promise<unknown> {
+  async function listed(dockerScript: string, expression = 'composeServices()'): Promise<unknown> {
     const bin = mkdtempSync(join(tmpdir(), 'db-tools-docker-'))
 
     writeFileSync(join(bin, 'docker'), dockerScript)
     chmodSync(join(bin, 'docker'), 0o755)
 
-    const child = Bun.spawn([process.execPath, '-e', 'import { composeServices } from "./src/compose"; console.log(JSON.stringify(await composeServices()))'], { cwd: new URL('..', import.meta.url).pathname, env: { PATH: `${bin}:${process.env.PATH ?? ''}` }, stdout: 'pipe', stderr: 'pipe' })
+    const child = Bun.spawn([process.execPath, '-e', `import { composeServices, containerService } from "./src/compose"; console.log(JSON.stringify(await ${expression}))`], { cwd: new URL('..', import.meta.url).pathname, env: { PATH: `${bin}:${process.env.PATH ?? ''}` }, stdout: 'pipe', stderr: 'pipe' })
 
     return JSON.parse(await new Response(child.stdout).text())
   }
+
+  test('looks a container up by name with docker inspect, a stub standing for docker', async () => {
+    const inspected = JSON.stringify([{ Id: 'abc', Name: '/booki-db-1', State: { Running: true }, Config: { Image: 'mariadb:11', Env: ['MARIADB_ROOT_PASSWORD=rootpw'] }, NetworkSettings: { Networks: {}, Ports: { '3306/tcp': [{ HostIp: '127.0.0.1', HostPort: '33061' }] } } }])
+    const script = `#!/bin/sh\ncase "$1 $2 $3 $4" in "inspect --type container --") [ "$5" = booki-db-1 ] && echo '${inspected}' ;; *) exit 1 ;; esac\n`
+
+    expect(await listed(script, 'containerService("booki-db-1")')).toMatchObject({ name: 'booki-db-1', engine: 'mysql', host: '127.0.0.1', port: 33061 })
+  })
 
   test('reads output that is not JSON as no project', async () => {
     expect(await listed('#!/bin/sh\necho "not json"\n')).toEqual([])

@@ -6,7 +6,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 | --- | --- | --- |
 | [`@kaynooo/forgejo-tools`](packages/ft) | `ft` | Forgejo CI runs and failures, releases, issue checklists and issue claims between sessions, through tea |
 | [`@kaynooo/env-tools`](packages/env) | `ev`, `redact` | .env files listed and edited with secrets masked; secrets masked in any piped output |
-| [`@kaynooo/db-tools`](packages/db) | `db` | read-only SQL against Postgres that never shows the connection credentials, writes handed back as SQL |
+| [`@kaynooo/db-tools`](packages/db) | `db` | read-only SQL against Postgres, MySQL and MariaDB (compose service or any container) that never shows the connection credentials, writes handed back as SQL unless the database ends in `_test` |
 | [`@kaynooo/check-tools`](packages/check) | `check`, `fix`, `errs` | a repo's check, typecheck, lint and test steps, or its fixers and formatters, showing only what failed; tsc, eslint and bun test logs turned into `file:line:col` errors |
 | [`@kaynooo/pkg-tools`](packages/pkg) | `pkg` | an npm package checked before it is added: guessed names, versions under two weeks old, install scripts; `pkg bump` moves every consumer repo onto a release once the registry serves it |
 | [`@kaynooo/stack-tools`](packages/stack) | `stack` | a stable port per service name, and a compose release setup audited against its `release.config.ts` |

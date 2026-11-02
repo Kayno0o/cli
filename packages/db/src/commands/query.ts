@@ -1,16 +1,18 @@
-import { fail, parse, readInput, wholeNumber } from '@kaynooo/cli-kit'
-import { connectionOptions, DEFAULT_LIMIT, HOSTS_NOTE, outputOptions } from '../args'
+import { Exit, fail, parse, readInput, wholeNumber } from '@kaynooo/cli-kit'
+import { connectionOptions, DEFAULT_LIMIT, HOSTS_NOTE, outputOptions, WRITE_NOTE } from '../args'
 import { inspect } from '../guard'
-import { render, shape } from '../output'
-import { connectionUrl, readRows } from '../run'
+import { jsonValue, render, shape } from '../output'
+import { connectionUrl, databaseOfUrl, dialectOf, readRows, TEST_SUFFIX, writeRows } from '../run'
 
 const usage = `db query "<sql>"
 
-Runs one read-only statement (the SQL as an argument, or on stdin) in a READ ONLY transaction that is rolled back. A statement that would write is printed for you to run instead, and exits 1 without running.
+Runs one read-only statement (the SQL as an argument, or on stdin) in a READ ONLY transaction that is rolled back, on Postgres, MySQL or MariaDB. A statement that would write is printed for you to run instead, and exits 1 without running.
+
+${WRITE_NOTE}
 
 ${HOSTS_NOTE}
 
-Exits 0 when the statement ran, 1 when the database refused it, was unreachable or the statement would write, 2 on a usage error or a host that is not allowed.`
+Exits 0 when the statement ran, 1 when the database refused it, was unreachable or the statement would write and was not run, 2 on a usage error or a host that is not allowed.`
 
 const options = { ...connectionOptions, ...outputOptions } as const
 
@@ -27,24 +29,58 @@ export async function readSql(positionals: string[]): Promise<string> {
   return sql
 }
 
+function handBack(sql: string, reasons: string[], note = ''): number {
+  console.log(`db: not run, this statement would write or cannot be shown to only read (${reasons.join('; ')})${note}. Run it yourself:\n\n\`\`\`sql\n${sql.trim()}\n\`\`\``)
+
+  return WRITE_EXIT
+}
+
+// A write is judged as both engines when the target cannot be resolved, so it is still printed.
+function isWrite(sql: string): boolean {
+  return inspect(sql, 'postgres').reasons.length > 0 || inspect(sql, 'mysql').reasons.length > 0
+}
+
 export async function query(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
   const { values, positionals } = parsed
   const limit = wholeNumber(values.limit, 'limit', DEFAULT_LIMIT, 0)
   const sql = await readSql(positionals)
-  const verdict = inspect(sql)
+  let url: string
+
+  try {
+    url = await connectionUrl(values)
+  }
+  catch (error) {
+    if (error instanceof Exit && isWrite(sql))
+      return handBack(sql, inspect(sql, 'postgres').reasons.concat(inspect(sql, 'mysql').reasons))
+
+    throw error
+  }
+
+  const dialect = dialectOf(new URL(url))
+  const verdict = inspect(sql, dialect)
 
   if (verdict.reasons.length > 0) {
-    console.log(`db: not run, this statement would write or cannot be shown to only read (${verdict.reasons.join('; ')}). Run it yourself:\n\n\`\`\`sql\n${sql.trim()}\n\`\`\``)
+    const written = await writeRows(url, sql)
 
-    return WRITE_EXIT
+    if (!written.isRun)
+      return handBack(sql, verdict.reasons, databaseOfUrl(url).endsWith(TEST_SUFFIX) ? `; not run on this ${TEST_SUFFIX} database either: ${written.reasons.join('; ')}` : '')
+
+    const shown = shape(written.rows, limit, values.raw === true, false)
+
+    if (values.json === true)
+      console.log(JSON.stringify({ database: written.database, affected: written.affected, columns: shown.columns, rows: shown.rows, truncated: shown.truncated, masked: shown.masked }, jsonValue, 2))
+    else
+      console.log(`ran on ${written.database}, ${written.affected} ${written.affected === 1 ? 'row' : 'rows'} affected${written.rows.length === 0 ? '' : `\n${render(shown, false)}`}`)
+
+    return 0
   }
 
   if (verdict.statements > 1)
     fail('one statement at a time')
 
-  const rows = await readRows(await connectionUrl(values), sql, [], limit)
+  const rows = await readRows(url, sql, [], limit)
 
   console.log(render(shape(rows, limit, values.raw === true, false), values.json === true))
 

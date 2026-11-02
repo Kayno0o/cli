@@ -16,7 +16,14 @@ export interface Service {
 interface Publisher { URL?: string, TargetPort?: number, PublishedPort?: number }
 interface PsRow { ID?: string, Service?: string, State?: string, Image?: string, Publishers?: Publisher[] | null }
 interface Network { IPAddress?: string, Aliases?: string[] | null, DNSNames?: string[] | null }
-interface Inspected { Id?: string, Name?: string, Config?: { Env?: string[] | null, Image?: string }, NetworkSettings?: { Networks?: Record<string, Network> | null } }
+interface PortBinding { HostIp?: string, HostPort?: string }
+export interface Inspected {
+  Id?: string
+  Name?: string
+  State?: { Running?: boolean }
+  Config?: { Env?: string[] | null, Image?: string }
+  NetworkSettings?: { Networks?: Record<string, Network> | null, Ports?: Record<string, PortBinding[] | null> | null }
+}
 
 const POSTGRES_PORT = 5432
 const MYSQL_PORT = 3306
@@ -54,6 +61,28 @@ function engineOf(image: string, env: Record<string, string>): Engine {
   return 'other'
 }
 
+function describeContainer(name: string, image: string | undefined, publishers: Publisher[], container: Inspected): Service[] {
+  const env = envOf(container.Config?.Env ?? [])
+  const engine = engineOf(image ?? container.Config?.Image ?? '', env)
+  const target = engine === 'mysql' ? MYSQL_PORT : POSTGRES_PORT
+  const networks = Object.values(container.NetworkSettings?.Networks ?? {})
+  const published = publishers.find(publisher => publisher.TargetPort === target && (publisher.PublishedPort ?? 0) > 0 && LOOPBACK.has(publisher.URL ?? ''))
+  const address = networks.map(network => network.IPAddress ?? '').find(ip => ip !== '')
+  const names = [name, (container.Name ?? '').replace(LEADING_SLASH, ''), ...networks.flatMap(network => [...network.Aliases ?? [], ...network.DNSNames ?? []])].filter(each => each !== '')
+
+  if (published === undefined && address === undefined)
+    return []
+
+  return [{
+    name,
+    engine,
+    env,
+    names: [...new Set(names)],
+    host: published === undefined ? address ?? '' : '127.0.0.1',
+    port: published?.PublishedPort ?? target,
+  }]
+}
+
 export function describeServices(rows: PsRow[], inspected: Inspected[]): Service[] {
   const byId = new Map(inspected.map(container => [container.Id ?? '', container]))
 
@@ -63,26 +92,57 @@ export function describeServices(rows: PsRow[], inspected: Inspected[]): Service
     if (container === undefined || row.Service === undefined)
       return []
 
-    const env = envOf(container.Config?.Env ?? [])
-    const engine = engineOf(row.Image ?? container.Config?.Image ?? '', env)
-    const target = engine === 'mysql' ? MYSQL_PORT : POSTGRES_PORT
-    const networks = Object.values(container.NetworkSettings?.Networks ?? {})
-    const published = (row.Publishers ?? []).find(publisher => publisher.TargetPort === target && (publisher.PublishedPort ?? 0) > 0 && LOOPBACK.has(publisher.URL ?? ''))
-    const address = networks.map(network => network.IPAddress ?? '').find(ip => ip !== '')
-    const names = [row.Service, (container.Name ?? '').replace(LEADING_SLASH, ''), ...networks.flatMap(network => [...network.Aliases ?? [], ...network.DNSNames ?? []])].filter(name => name !== '')
-
-    if (published === undefined && address === undefined)
-      return []
-
-    return [{
-      name: row.Service,
-      engine,
-      env,
-      names: [...new Set(names)],
-      host: published === undefined ? address ?? '' : '127.0.0.1',
-      port: published?.PublishedPort ?? target,
-    }]
+    return describeContainer(row.Service, row.Image, row.Publishers ?? [], container)
   })
+}
+
+// What `docker inspect` gives as published ports: `{ "5432/tcp": [{ "HostIp": "0.0.0.0", "HostPort": "45000" }] }`.
+function publishersOf(container: Inspected): Publisher[] {
+  return Object.entries(container.NetworkSettings?.Ports ?? {}).flatMap(([port, bindings]) => (bindings ?? []).map(binding => ({ URL: binding.HostIp ?? '', TargetPort: Number.parseInt(port, 10), PublishedPort: Number.parseInt(binding.HostPort ?? '', 10) || 0 })))
+}
+
+// The container a docker inspect output describes, as a service named after the container.
+export function describeNamedContainer(wanted: string, inspected: Inspected[]): Service {
+  const [container] = inspected
+
+  if (container === undefined)
+    fail(`no container ${wanted}`)
+
+  if (container.State?.Running === false)
+    fail(`${wanted} is not running`)
+
+  const name = (container.Name ?? '').replace(LEADING_SLASH, '') || wanted
+  const [service] = describeContainer(name, undefined, publishersOf(container), container)
+
+  if (service === undefined)
+    fail(`${wanted} publishes no port and has no address on a network, so db cannot reach it`)
+
+  return service
+}
+
+// A running container by name or id, wherever its compose project is.
+export async function containerService(wanted: string): Promise<Service> {
+  let inspect
+
+  try {
+    inspect = await runCommand(['docker', 'inspect', '--type', 'container', '--', wanted])
+  }
+  catch {
+    fail('docker is not installed, so db cannot look a container up')
+  }
+
+  if (inspect.code !== 0)
+    fail(`no container ${wanted}`)
+
+  try {
+    return describeNamedContainer(wanted, JSON.parse(stdoutOf(inspect.chunks)) as Inspected[])
+  }
+  catch (error) {
+    if (error instanceof SyntaxError)
+      fail(`docker inspect ${wanted} did not print JSON`)
+
+    throw error
+  }
 }
 
 function stdoutOf(chunks: { stream: string, data: Uint8Array }[]): string {
@@ -116,9 +176,9 @@ export async function composeServices(): Promise<Service[]> {
   }
 }
 
-// The Postgres service to read: the one named, else the only one running.
-export function pickPostgres(services: Service[], wanted: string | undefined): Service {
-  const postgres = services.filter(service => service.engine === 'postgres')
+// The database service to read: the one named, else the only Postgres, MySQL or MariaDB one running.
+export function pickService(services: Service[], wanted: string | undefined): Service {
+  const databases = services.filter(service => service.engine !== 'other')
 
   if (wanted !== undefined) {
     const named = services.find(service => service.name === wanted)
@@ -126,35 +186,71 @@ export function pickPostgres(services: Service[], wanted: string | undefined): S
     if (named === undefined)
       fail(`no running service ${wanted} in this compose project${services.length === 0 ? '' : `, running: ${services.map(service => service.name).join(', ')}`}`)
 
-    if (named.engine !== 'postgres')
-      fail(`${wanted} is no Postgres service: db reads Postgres only`)
+    if (named.engine === 'other')
+      fail(`${wanted} is no Postgres, MySQL or MariaDB service: db reads those only`)
 
     return named
   }
 
-  if (postgres.length > 1)
-    fail(`several Postgres services run here (${postgres.map(service => service.name).join(', ')}): pick one with --service`)
+  if (databases.length > 1)
+    fail(`several database services run here (${databases.map(service => service.name).join(', ')}): pick one with --service`)
 
-  const [only] = postgres
+  const [only] = databases
 
   if (only !== undefined)
     return only
 
-  const mysql = services.filter(service => service.engine === 'mysql')
+  fail('no DATABASE_URL and no running Postgres, MySQL or MariaDB service in this compose project (docker compose ps, from this directory or a parent): put the URL in a .env file, name another key with --env, or ask for the stack to be started')
+}
 
-  if (mysql.length > 0)
-    fail(`only ${mysql.map(service => service.name).join(', ')} run${mysql.length === 1 ? 's' : ''} here, a MySQL or MariaDB server: db reads Postgres only`)
+const PASSWORD_FILE_HINT = 'reads its password from a file inside the container: give the URL with --env instead'
 
-  fail('no DATABASE_URL and no running Postgres service in this compose project (docker compose ps, from this directory or a parent): put the URL in a .env file, name another key with --env, or ask for the stack to be started')
+function mysqlUrl(service: Service, authority: string): URL {
+  const { env } = service
+  const user = env.MYSQL_USER ?? env.MARIADB_USER
+  const url = new URL(`mysql://${authority}`)
+
+  if (user !== undefined) {
+    if ((env.MYSQL_PASSWORD_FILE ?? env.MARIADB_PASSWORD_FILE) !== undefined && (env.MYSQL_PASSWORD ?? env.MARIADB_PASSWORD) === undefined)
+      fail(`${service.name} ${PASSWORD_FILE_HINT}`)
+
+    url.username = user
+    url.password = env.MYSQL_PASSWORD ?? env.MARIADB_PASSWORD ?? ''
+  }
+  else {
+    const root = env.MYSQL_ROOT_PASSWORD ?? env.MARIADB_ROOT_PASSWORD
+    const isEmptyAllowed = ['MYSQL_ALLOW_EMPTY_PASSWORD', 'MARIADB_ALLOW_EMPTY_ROOT_PASSWORD'].some(key => ['1', 'yes', 'true'].includes((env[key] ?? '').toLowerCase()))
+
+    if (root === undefined && (env.MYSQL_ROOT_PASSWORD_FILE ?? env.MARIADB_ROOT_PASSWORD_FILE) !== undefined)
+      fail(`${service.name} ${PASSWORD_FILE_HINT}`)
+
+    if (root === undefined && !isEmptyAllowed)
+      fail(`${service.name} has no MYSQL_USER or MYSQL_ROOT_PASSWORD (nor the MARIADB_ ones) in its environment, so db has no credentials for it: give the URL with --env instead`)
+
+    url.username = 'root'
+    url.password = root ?? ''
+  }
+
+  const database = env.MYSQL_DATABASE ?? env.MARIADB_DATABASE
+
+  if (database !== undefined && database !== '')
+    url.pathname = `/${database}`
+
+  return url
 }
 
 // The URL the official image's environment describes, a password file aside.
 export function serviceUrl(service: Service): string {
+  const authority = `${service.host.includes(':') ? `[${service.host}]` : service.host}:${service.port}`
+
+  if (service.engine === 'mysql')
+    return mysqlUrl(service, authority).href
+
   if (service.env.POSTGRES_PASSWORD_FILE !== undefined && service.env.POSTGRES_PASSWORD === undefined)
-    fail(`${service.name} reads its password from a file inside the container: give the URL with --env instead`)
+    fail(`${service.name} ${PASSWORD_FILE_HINT}`)
 
   const user = service.env.POSTGRES_USER ?? 'postgres'
-  const url = new URL(`postgres://${service.host.includes(':') ? `[${service.host}]` : service.host}:${service.port}`)
+  const url = new URL(`postgres://${authority}`)
 
   url.username = user
   url.password = service.env.POSTGRES_PASSWORD ?? ''

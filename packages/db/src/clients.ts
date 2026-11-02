@@ -38,7 +38,8 @@ export const SQL_UNREADABLE = 'A file this SQL client is fed cannot be read here
 interface ClientInput { statements: string[], files: string[], databases: string[], operands: string[] }
 
 function hasWrite(statement: string): boolean {
-  return writes(statement).length > 0
+  // The server behind a client is unknown, so a statement is read as Postgres and as MySQL, and writes if either reading does.
+  return writes(statement, 'postgres').length > 0 || writes(statement, 'mysql').length > 0
 }
 
 function programOf(word: string): string {

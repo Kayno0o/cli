@@ -2,7 +2,7 @@
   "name": "@kaynooo/db-tools",
   "type": "module",
   "version": "0.6.0",
-  "description": "db: run read-only SQL against Postgres from the terminal without ever showing the connection credentials.",
+  "description": "db: run read-only SQL against Postgres, MySQL and MariaDB from the terminal without ever showing the connection credentials.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/db#readme",
@@ -12,7 +12,7 @@
     "directory": "packages/db"
   },
   "bugs": "https://git.kaynooo.fr/kaynooo/agent-tools/issues",
-  "keywords": ["postgres", "sql", "read-only", "cli", "bun"],
+  "keywords": ["postgres", "mysql", "mariadb", "sql", "read-only", "cli", "bun"],
   "bin": {
     "db": "./dist/cli.js"
   },

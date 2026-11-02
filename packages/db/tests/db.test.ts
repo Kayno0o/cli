@@ -201,7 +201,7 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
   test('reads another key with --env, and says when it is unset', async () => {
     expect((await db(['-e', 'OTHER_URL', 'select 1 as one'], { OTHER_URL: url })).out).toContain('one')
     expect((await db(['-e', 'OTHER_URL', 'select 1'], {})).err).toContain('OTHER_URL is not set')
-    expect((await db(['select 1'], {})).err).toContain('no DATABASE_URL and no running Postgres service')
+    expect((await db(['select 1'], {})).err).toContain('no DATABASE_URL and no running Postgres, MySQL or MariaDB service')
   })
 
   // A docker that answers `compose ps` and `inspect` as a project running this Postgres as its `database` service would.

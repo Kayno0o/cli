@@ -82,6 +82,76 @@ describe('inspect', () => {
   })
 })
 
+const mysqlReads = [
+  'select * from users',
+  'select replace(name, \'a\', \'b\') from t',
+  'select `drop`, `delete` from t',
+  'select "delete" from t',
+  'select \'it\\\'s; delete from t\'',
+  'select 1 # delete from t',
+  'select 1 -- delete from t',
+  'select 1 /* delete from t */',
+  'select /*+ MAX_EXECUTION_TIME(100) */ 1',
+  'select $x$ from t',
+  'describe users',
+  'desc users',
+  'show tables',
+  'explain select 1',
+  'select * from db.t',
+]
+
+const mysqlWriting: [string, string][] = [
+  ['insert into t values (1) on duplicate key update a = 1', 'INSERT'],
+  ['replace into t values (1)', 'REPLACE'],
+  ['replace t set a = 1', 'REPLACE'],
+  ['load data infile \'/x\' into table t', 'LOAD'],
+  ['load data local infile \'/x\' into table t', 'LOAD'],
+  ['set global max_connections = 1', 'SET'],
+  ['set persist max_connections = 1', 'SET'],
+  ['set password = \'x\'', 'SET'],
+  ['set @@global.read_only = 0', 'SET'],
+  ['select 1; delete from t', 'delete'],
+  ['/*! delete from t */', 'DELETE'],
+  ['select 1 /*!50000 ; drop table t */', 'DROP'],
+  ['/*M!100100 delete from t */', 'DELETE'],
+  ['select 1 /* a /* b */ ; delete from t /* c */', 'delete'],
+  ['select 1--1; delete from t', 'delete'],
+  ['select 1 --delete from t', 'DELETE'],
+  ['select 1 into outfile \'/tmp/x\'', 'INTO'],
+  ['select * from t lock in share mode', 'LOCK'],
+  ['select * from t for update', 'row locks'],
+  ['select sleep(10)', 'sleep'],
+  ['select benchmark(1000000, md5(1))', 'benchmark'],
+  ['select get_lock(\'a\', 1)', 'get_lock'],
+  ['select load_file(\'/etc/passwd\')', 'load_file'],
+  ['prepare s from \'delete from t\'', 'PREPARE'],
+  ['execute s', 'EXECUTE'],
+  ['call p()', 'CALL'],
+  ['rename table a to b', 'RENAME'],
+  ['flush privileges', 'FLUSH'],
+  ['optimize table t', 'OPTIMIZE'],
+  ['truncate t', 'TRUNCATE'],
+  ['alter table t add c int', 'ALTER'],
+  ['use other', 'starts with use'],
+]
+
+describe('inspect for MySQL', () => {
+  test.each(mysqlReads)('lets %p through', (sql) => {
+    expect(inspect(sql, 'mysql').reasons).toEqual([])
+  })
+
+  test.each(mysqlWriting)('stops %p', (sql, reason) => {
+    expect(inspect(sql, 'mysql').reasons.join(' ')).toContain(reason)
+  })
+
+  test('reads quotes and comments as MySQL does, not as Postgres', () => {
+    expect(inspect('select \'a\\\' ; delete from t; -- \'', 'mysql').reasons).toEqual([])
+    expect(inspect('select \'a\\\' ; delete from t; -- \'', 'postgres').reasons.join(' ')).toContain('DELETE')
+    expect(inspect('select 1 # \'', 'mysql').reasons).toEqual([])
+    expect(inspect('select $$ delete from t $$', 'mysql').reasons.join(' ')).toContain('DELETE')
+  })
+})
+
 describe('writes', () => {
   test('passes what only reads, however it starts', () => {
     for (const sql of ['\\dt', 'describe users', 'show tables', 'select * from t where note = \'drop it\'', 'select * from "grant"', '-- delete from t\nselect 1'])
