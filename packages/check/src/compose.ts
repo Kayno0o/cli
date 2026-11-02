@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, runCommand, warn } from '@kaynooo/cli-kit'
+import { shellQuote } from '@kaynooo/cli-kit/shell'
 
 // The files `docker compose` reads on its own, a project's own first and its override merged over it.
 const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml']
@@ -10,7 +11,6 @@ const OVERRIDE_FILES = ['compose.override.yaml', 'compose.override.yml', 'docker
 const PS_TIMEOUT_MS = 20_000
 const VARIABLE = /\$\{(\w+)(?::?-([^${}]*))?\}|\$(\w+)/g
 const ENV_LINE = /^\s*(?:export\s+)?(\w+)=(.*)$/
-const SAFE_WORD = /^[\w@%+=:,./-]+$/
 const QUOTED = /^(['"])(.*)\1$/
 
 // What a step needs to run: the service that mounts its folder, where its compose project lives and the folder's path inside the container.
@@ -345,10 +345,6 @@ function choose(mounting: Service[], services: Service[], dir: string, program: 
   return fit
 }
 
-function quote(text: string): string {
-  return SAFE_WORD.test(text) ? text : `'${text.replaceAll('\'', '\'\\\'\'')}'`
-}
-
 // `docker compose exec` for a command, as the words after the service name.
 function execArgv(placement: Placement, argv: string[], env: Record<string, string>): string[] {
   const variables = Object.entries({ NO_COLOR: '1', FORCE_COLOR: '0', ...env }).flatMap(([name, value]) => ['-e', `${name}=${value}`])
@@ -358,7 +354,7 @@ function execArgv(placement: Placement, argv: string[], env: Record<string, stri
 
 // A shell command string running `command` in the service, with `env` set for it.
 export function shellIn(placement: Placement, command: string, env: Record<string, string> = {}): string {
-  return `cd ${quote(placement.composeDir)} && ${execArgv(placement, ['sh', '-c', command], env).map(word => quote(word)).join(' ')}`
+  return `cd ${shellQuote(placement.composeDir)} && ${execArgv(placement, ['sh', '-c', command], env).map(word => shellQuote(word)).join(' ')}`
 }
 
 // The argv running `argv` in the service, to be spawned from the compose project's folder.

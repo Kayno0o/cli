@@ -101,7 +101,7 @@ describe('the gc nudge', () => {
 
     expect(reply?.hookSpecificOutput.permissionDecision).toBeUndefined()
     expect(reply?.hookSpecificOutput.hookEventName).toBe('PreToolUse')
-    expect(reply?.hookSpecificOutput.additionalContext).toContain('`gc \'fix(api): retry a timed-out fetch\' -m \'A 502 is retried once.\' --ticket \'#12 - [UC3] Retry failed fetches\' -- \'src/a.ts\' \'my file.ts\'`')
+    expect(reply?.hookSpecificOutput.additionalContext).toContain('`gc \'fix(api): retry a timed-out fetch\' -m \'A 502 is retried once.\' --ticket \'#12 - [UC3] Retry failed fetches\' -- src/a.ts \'my file.ts\'`')
   })
 
   test('says nothing of a commit gc cannot replace', async () => {

@@ -1,5 +1,5 @@
 import type { Pair } from '@kaynooo/edit-tools/src/replace.ts'
-import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
+import { parseCommand, shellQuote, splitCommand } from '@kaynooo/cli-kit/shell'
 import { HEREDOC_OPENER, heredocBody } from './commit'
 
 const PYTHON = /^python[\d.]*$/
@@ -393,13 +393,9 @@ function sedPairs(script: string, isExtended: boolean): Pair[] | undefined {
   return pairs.length === 0 ? undefined : pairs
 }
 
-function quote(text: string): string {
-  return `'${text.replaceAll('\'', String.raw`'\''`)}'`
-}
-
 // A file as given, a glob left for the shell to expand.
 function fileWord(path: string): string {
-  return PLAIN_WORD.test(path) ? path : quote(path)
+  return PLAIN_WORD.test(path) ? path : shellQuote(path)
 }
 
 function flagsOf(pair: Pair): string {
@@ -432,7 +428,7 @@ export function subCommand(pairs: readonly Pair[], files: readonly string[]): st
   const [pair] = pairs
 
   if (pairs.length === 1 && pair !== undefined && !pair.from.includes('\n') && !pair.to.includes('\n'))
-    return `sub --from ${quote(pair.from)} --to ${quote(pair.to)}${flagsOf(pair)} ${targets}`
+    return `sub --from ${shellQuote(pair.from)} --to ${shellQuote(pair.to)}${flagsOf(pair)} ${targets}`
 
   const blocks = pair === undefined || pairs.some(({ from }) => from === '') ? undefined : blocksOf(pairs)
 

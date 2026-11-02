@@ -1,4 +1,4 @@
-import { isPlain, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
+import { isPlain, shellQuote, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
 
 const ASSIGNMENT = /^\w+=/
 const EXCLUDED = /(?:^|\s)(?:--json|--help|--version|-h|--watch(?:-?all|=\S*)?|--watchAll)(?:\s|$)/
@@ -169,10 +169,6 @@ export function shouldWrap(command: string): boolean {
   return segments.every(segment => isCd(segment) || listedSegment(segment))
 }
 
-function quoted(value: string): string {
-  return `'${value.replaceAll('\'', '\'\\\'\'')}'`
-}
-
 // The command line to run instead: `out -- <cmd>` without the final tail, head or grep pipe, through `sh -c` when it chains commands or starts with an assignment.
 export function wrap(command: string): string {
   const trimmed = withoutFilters(command.trim())
@@ -180,5 +176,5 @@ export function wrap(command: string): string {
   if (scan(trimmed).segments.length <= 1 && !ASSIGNMENT.test(trimmed))
     return `out -- ${trimmed}`
 
-  return `out -- sh -c ${quoted(trimmed)}`
+  return `out -- sh -c ${shellQuote(trimmed)}`
 }

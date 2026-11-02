@@ -592,8 +592,13 @@ export function parseCommand(text: string): Invocation {
   return { program: program.split('/').pop() ?? '', args, assignments, isWrapped }
 }
 
+// A word as a POSIX shell reads it back unchanged: left bare when it holds nothing the shell would act on, else single-quoted.
+export function shellQuote(word: string): string {
+  return SAFE_WORD.test(word) ? word : `'${word.replaceAll('\'', '\'\\\'\'')}'`
+}
+
 function quoted(word: string): string {
-  return SAFE_WORD.test(word) || word === '{}' ? word : `'${word.replaceAll('\'', '\'\\\'\'')}'`
+  return word === '{}' ? word : shellQuote(word)
 }
 
 // The command strings a piece hands to a shell with `-c`, wherever the shell sits in it (`docker exec db sh -c '...'`, `su -c '...'`).

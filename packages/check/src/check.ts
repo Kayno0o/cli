@@ -3,6 +3,7 @@ import type { Project, Step } from './steps'
 import { join } from 'node:path'
 import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
+import { shellQuote } from '@kaynooo/cli-kit/shell'
 import { place, placeOptions, placeSettings, programOf, shellIn, Stack } from './compose'
 import { logDirectory, outcomeJson, printOutcome, refusedStep, runStep } from './run'
 import { discoverProjects, STEP_NAMES } from './steps'
@@ -36,7 +37,7 @@ interface Planned extends Step {
 
 // The command as `sh -c` takes it inside a slot.
 function slotted(command: string): string {
-  return `slot -- sh -c '${command.replaceAll('\'', '\'\\\'\'')}'`
+  return `slot -- sh -c ${shellQuote(command)}`
 }
 
 const COMMA = /\s*,\s*/

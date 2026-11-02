@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
+import { shellQuote } from '@kaynooo/cli-kit/shell'
 import { audit as findExposed } from '../audit'
 import { fixCompose, shutOthersOut } from '../fix'
 
@@ -19,7 +20,6 @@ const options = {
   fix: { type: 'boolean', description: 'move inline compose secrets into a .env and shut other accounts out' },
 } as const
 
-const SHELL_SAFE = /^[\w./-]+$/
 const MAX_UNREAD_LISTED = 3
 
 const CHECKS: Record<NonNullable<ComposeFix['check']>, string> = {
@@ -36,10 +36,6 @@ async function isFolder(path: string): Promise<boolean> {
   catch {
     return false
   }
-}
-
-function quoted(path: string): string {
-  return SHELL_SAFE.test(path) ? path : `'${path.replaceAll('\'', '\'\\\'\'')}'`
 }
 
 function shown(path: string): string {
@@ -67,9 +63,9 @@ async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: Comp
       ...fix === undefined || fix.moved.length === 0 ? [] : [`moved ${fix.moved.join(', ')} into ${shown(fix.env)}`],
       ...fix?.left.map(({ key, why }) => `left ${key} in place: ${why}`) ?? [],
       ...fix?.check === undefined ? [] : [CHECKS[fix.check]],
-      ...open.map(file => `another account owns ${file === path ? 'it' : shown(file)}, so it stays readable: sudo chmod go-rwx ${quoted(shown(file))}`),
+      ...open.map(file => `another account owns ${file === path ? 'it' : shown(file)}, so it stays readable: sudo chmod go-rwx ${shellQuote(shown(file))}`),
       ...readable && !open.includes(path) ? ['now unreadable by other accounts'] : [],
-      ...tracked ? [`tracked by git: git rm --cached ${quoted(shown(path))}, then ignore it`] : [],
+      ...tracked ? [`tracked by git: git rm --cached ${shellQuote(shown(path))}, then ignore it`] : [],
     ]
 
     console.log(`${shown(path)}\n  ${lines.join('\n  ')}`)
@@ -128,8 +124,8 @@ export async function audit(args: string[]): Promise<number> {
     const sudo = uid !== undefined && uid !== 0 && (await stat(path)).uid !== uid ? 'sudo ' : ''
     const problems = [
       ...secrets === undefined ? [] : [`writes out ${secrets.join(', ')}: ev audit --fix moves the values into a .env beside it`],
-      ...readable ? [group === true ? `readable by its group or an ACL: ${sudo}chmod go-rwx ${quoted(shown(path))}` : `readable by any account: ${sudo}chmod o-rwx ${quoted(shown(path))}`] : [],
-      ...tracked ? [`tracked by git: git rm --cached ${quoted(shown(path))}, then ignore it`] : [],
+      ...readable ? [group === true ? `readable by its group or an ACL: ${sudo}chmod go-rwx ${shellQuote(shown(path))}` : `readable by any account: ${sudo}chmod o-rwx ${shellQuote(shown(path))}`] : [],
+      ...tracked ? [`tracked by git: git rm --cached ${shellQuote(shown(path))}, then ignore it`] : [],
     ]
 
     console.log(`${shown(path)}\n  ${problems.join('\n  ')}`)

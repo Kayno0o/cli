@@ -15,15 +15,15 @@ function suggested(command: string): string | null {
 
 describe('sed -i', () => {
   const translated: [string, string][] = [
-    ['sed -i \'s/foo/bar/\' a.ts', 'sub --from \'foo\' --to \'bar\' a.ts'],
-    ['sed -i \'s/foo/bar/g\' a.ts b.ts', 'sub --from \'foo\' --to \'bar\' --all a.ts b.ts'],
-    ['sed -i.bak -e \'s|a/b|c|\' src/*.ts', 'sub --from \'a/b\' --to \'c\' src/*.ts'],
+    ['sed -i \'s/foo/bar/\' a.ts', 'sub --from foo --to bar a.ts'],
+    ['sed -i \'s/foo/bar/g\' a.ts b.ts', 'sub --from foo --to bar --all a.ts b.ts'],
+    ['sed -i.bak -e \'s|a/b|c|\' src/*.ts', 'sub --from a/b --to c src/*.ts'],
     ['sed -Ei \'s/v(\\d+)/w\\1/g\' x', 'sub --from \'v(\\d+)\' --to \'w$1\' --regex --all x'],
     ['sed -i \'s/a\\(b\\)\\+/[&]/\' x', 'sub --from \'a(b)+\' --to \'[$&]\' --regex x'],
-    ['sed -i \'s/1\\.2/1.3/\' x', 'sub --from \'1.2\' --to \'1.3\' x'],
-    ['sed -i \'s/it\'\\\'\'s/its/\' x', 'sub --from \'it\'\\\'\'s\' --to \'its\' x'],
+    ['sed -i \'s/1\\.2/1.3/\' x', 'sub --from 1.2 --to 1.3 x'],
+    ['sed -i \'s/it\'\\\'\'s/its/\' x', 'sub --from \'it\'\\\'\'s\' --to its x'],
     ['sed -i -e \'s/a/b/\' -e \'s/c/d/g\' x', 'sub --pairs - x <<\'PAIRS\'\n[{"from":"a","to":"b"},{"from":"c","to":"d","all":true}]\nPAIRS'],
-    ['cd x && sed -i \'s/a/&&/\' y', 'sub --from \'a\' --to \'aa\' y'],
+    ['cd x && sed -i \'s/a/&&/\' y', 'sub --from a --to aa y'],
   ]
 
   for (const [command, sub] of translated) {
@@ -66,8 +66,8 @@ describe('replace scripts', () => {
   })
 
   test('reads a bun -e script, a regex literal included', () => {
-    expect(suggested('bun -e "const f=\'a.ts\'; await Bun.write(f, (await Bun.file(f).text()).replace(\'x\', \'y\'))"')).toBe('sub --from \'x\' --to \'y\' a.ts')
-    expect(suggested('bun -e "const t = await Bun.file(\'a.ts\').text(); await Bun.write(\'a.ts\', t.replace(/v\\d+/g, \'v2\'))"')).toBe('sub --from \'v\\d+\' --to \'v2\' --regex --all a.ts')
+    expect(suggested('bun -e "const f=\'a.ts\'; await Bun.write(f, (await Bun.file(f).text()).replace(\'x\', \'y\'))"')).toBe('sub --from x --to y a.ts')
+    expect(suggested('bun -e "const t = await Bun.file(\'a.ts\').text(); await Bun.write(\'a.ts\', t.replace(/v\\d+/g, \'v2\'))"')).toBe('sub --from \'v\\d+\' --to v2 --regex --all a.ts')
   })
 
   test('points a script it cannot read at sub without a command', () => {

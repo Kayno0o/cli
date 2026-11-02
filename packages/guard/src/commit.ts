@@ -1,4 +1,4 @@
-import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
+import { parseCommand, shellQuote, splitCommand } from '@kaynooo/cli-kit/shell'
 import { COMMIT_VALUE_LONGS, COMMIT_VALUE_SHORTS, SHORT_CLUSTER, subcommandOf } from './git'
 
 // What a commit's message is made of: the `-m` texts, a `-F` file (`-` reading the heredoc fed to it), or nothing to check when git reuses a message or opens an editor.
@@ -129,10 +129,6 @@ export function inlineMessage(parts: readonly string[]): string | null {
   return texts.join('\n\n')
 }
 
-function quoted(text: string): string {
-  return `'${text.replaceAll('\'', '\'\\\'\'')}'`
-}
-
 // The paths of the `git add` commands in the command, null when one stages without naming paths or there is none.
 function addedPaths(command: string): string[] | null {
   const paths: string[] = []
@@ -202,7 +198,7 @@ export function gcLine(command: string): string | null {
   if (title === undefined)
     return null
 
-  const options = rest.map(line => TICKET_LINE.test(line) ? `--ticket ${quoted(line)}` : `-m ${quoted(line)}`)
+  const options = rest.map(line => TICKET_LINE.test(line) ? `--ticket ${shellQuote(line)}` : `-m ${shellQuote(line)}`)
 
-  return ['gc', quoted(title), ...options, '--', ...paths.map(quoted)].join(' ')
+  return ['gc', shellQuote(title), ...options, '--', ...paths.map(path => shellQuote(path))].join(' ')
 }
