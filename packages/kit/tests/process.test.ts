@@ -18,7 +18,17 @@ async function isGone(pid: number): Promise<boolean> {
       return true
     }
 
-    if (ZOMBIE_STATE.test(readFileSync(`/proc/${pid}/stat`, 'utf8')))
+    let stat
+
+    // It may be reaped between the signal and the read, its /proc entry gone with it.
+    try {
+      stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    }
+    catch {
+      return true
+    }
+
+    if (ZOMBIE_STATE.test(stat))
       return true
 
     await Bun.sleep(100)
