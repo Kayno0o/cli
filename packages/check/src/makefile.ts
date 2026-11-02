@@ -32,8 +32,8 @@ export function declarePhony(content: string, exists: (name: string) => boolean 
     .replace(EXTRA_BLANK_LINES, '\n\n')
     .replace(LEADING_BLANK_LINES, '')
 
-  const line = `.PHONY: ${targets.join(' ')}`
-  const fixed = targets.length === 0 ? body.replace(PLACEHOLDER, '') : body.includes(PLACEHOLDER) ? body.replace(PLACEHOLDER, line) : `${line}\n\n${body}`
+  const line = targets.length === 0 ? '' : `.PHONY: ${targets.join(' ')}`
+  const fixed = body.includes(PLACEHOLDER) || line === '' ? body.replace(PLACEHOLDER, line) : `${line}\n\n${body}`
 
   return { content: fixed.replace(LEADING_BLANK_LINES, '').replace(TRAILING_WHITESPACE, '\n'), targets }
 }
