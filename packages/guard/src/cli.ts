@@ -2,7 +2,7 @@
 
 import type { Context, Verdict, Violation } from './check'
 import type { Event, HookInput, Machine } from './hook'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import process from 'node:process'
@@ -39,14 +39,19 @@ const pathOptions = {
 const hookUsage = `guard hook <${EVENTS.join('|')}>
 
 Answers a Claude Code hook: reads the event JSON on stdin and prints the reply JSON, nothing when the call goes ahead untouched.
-pre-tool-use refuses a Bash call breaking a rule, an install pkg refuses, and a Read, Edit or Write of an env file; user-prompt-submit remembers whether the prompt asked for a push; session-start lists the installed agent-tools bins.
+pre-tool-use refuses a Bash call breaking a rule, an install pkg refuses (or fails to check), and a file tool (Read, Edit, MultiEdit, Write, NotebookEdit, Grep, Glob) reaching an env file; user-prompt-submit remembers whether the prompt asked for a push; session-start lists the installed agent-tools bins.
 A failure exits 1, which Claude Code reports without blocking the call.
 
 Exits 0 when it answered, 1 on a failure or an unknown event (never 2, which would block the call).`
 
+const MAX_READ = 1_000_000
+
+// A regular file of a sane size only: a device such as /dev/zero would hang the hook.
 function readText(path: string): string | null {
   try {
-    return readFileSync(path, 'utf8')
+    const stats = statSync(path, { throwIfNoEntry: false })
+
+    return stats?.isFile() === true && stats.size <= MAX_READ ? readFileSync(path, 'utf8') : null
   }
   catch {
     return null
@@ -109,10 +114,11 @@ function path(args: string[]): number {
 
 function machine(): Machine {
   const home = homedir()
+  const stateDir = `${process.env.XDG_STATE_HOME ?? `${home}/.local/state`}/guard`
 
   return {
     home,
-    stateDir: `${process.env.XDG_STATE_HOME ?? `${home}/.local/state`}/guard`,
+    stateDir,
     has: bin => Bun.which(bin) !== null,
     run: async (argv, cwd) => runCommand(argv, { cwd }),
     read: readText,
@@ -122,6 +128,15 @@ function machine(): Machine {
       writeFileSync(path, text)
     },
     remove: path => rmSync(path, { force: true }),
+    log: (text) => {
+      try {
+        mkdirSync(stateDir, { recursive: true })
+        appendFileSync(`${stateDir}/errors.log`, text)
+      }
+      catch {
+        // the log is a courtesy: the refusal stands without it
+      }
+    },
   }
 }
 

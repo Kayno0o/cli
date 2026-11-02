@@ -1,7 +1,7 @@
 import type { Manager, Mismatch, Pinned } from '@kaynooo/pkg-tools/src/pin.ts'
-import { parentDir, replacePieces, substitutions } from '@kaynooo/cli-kit/shell'
+import { commandsRun, parentDir, replacePieces } from '@kaynooo/cli-kit/shell'
 import { sqlViolation } from '@kaynooo/db-tools/src/clients.ts'
-import { isEnvFile, touchesEnv, USE_EV } from '@kaynooo/env-tools/guard'
+import { reachesEnvFile, touchesEnv, USE_EV } from '@kaynooo/env-tools/guard'
 import { commitMessageViolation, TRAILERS, USE_GC } from '@kaynooo/git-tools/message'
 import { shouldWrap, wrap } from '@kaynooo/out-tools/src/wrap.ts'
 import { addedPackages } from '@kaynooo/pkg-tools/src/added.ts'
@@ -26,7 +26,13 @@ export interface Context {
   // A file's text, null when it cannot be read.
   read: (path: string) => string | null
   exists: (path: string) => boolean
+  // Whether the repository tracks an env file, which a diff or a log would print.
+  hasTrackedEnv?: boolean
+  // Told of a rule that threw, whose command is then refused.
+  onError?: (rule: string, error: unknown, command: string) => void
 }
+
+const UNREADABLE_MESSAGE = 'The commit message cannot be read here (a variable, a substitution, a missing file or no heredoc on stdin), so it cannot be checked. Write it literally with `-m` or a `$(cat <<\'EOF\' ... EOF)` heredoc.'
 
 export interface Violation { rule: string, message: string }
 
@@ -62,6 +68,9 @@ function commitViolation(command: string, { cwd, read }: Context): string | null
     else if (file !== '-')
       message = read(absolute(file, cwd))
 
+    if (message === null && (source.parts.length > 0 || file !== null))
+      return UNREADABLE_MESSAGE
+
     const violation = message === null ? null : commitMessageViolation(message)
 
     if (violation !== null)
@@ -84,11 +93,6 @@ function pinnedManagers(start: string, exists: Context['exists']): Pinned | null
   }
 }
 
-// The command and each one it runs through a substitution, nested ones included.
-function commandsRun(command: string): string[] {
-  return [command, ...substitutions(command).flatMap(commandsRun)]
-}
-
 function mismatches(command: string, { cwd, home, exists }: Context): Mismatch[] {
   return installRequests(command, cwd, home).flatMap((request) => {
     const mismatch = mismatchFor(request, pinnedManagers(request.dir, exists))
@@ -108,15 +112,27 @@ export async function checkCommand(command: string, context: Context): Promise<V
 
   const run = commandsRun(command)
   const first = (messages: (string | null)[]) => messages.find(message => message !== null) ?? null
+  // a rule that throws refuses the command: a crash must not let it through
+  const guarded = async (rule: string, check: () => Promise<string | null> | string | null): Promise<string | null> => {
+    try {
+      return await check()
+    }
+    catch (error) {
+      context.onError?.(rule, error, command)
 
-  add('remote', first(run.map(remoteViolation)))
-  add('git', first(run.map(each => gitViolation(each, context.isPushAsked))))
-  const commit = commitViolation(command, context)
+      return `The ${rule} rule crashed on this command (${error instanceof Error ? error.message : String(error)}), so it is refused. Simplify the command or run it yourself.`
+    }
+  }
+  const readSql = async (path: string) => Promise.resolve(context.read(absolute(path, context.cwd)))
+
+  add('remote', await guarded('remote', () => first(run.map(remoteViolation))))
+  add('git', await guarded('git', () => first(run.map(each => gitViolation(each, context.isPushAsked)))))
+  const commit = await guarded('commit', () => first(run.map(each => commitViolation(each, context))))
 
   add('commit', commit === null ? null : `${commit} ${USE_GC}`)
-  add('sql', first(await Promise.all(run.map(async each => sqlViolation(each, async path => Promise.resolve(context.read(absolute(path, context.cwd))))))))
-  add('env', touchesEnv(command) ? USE_EV : null)
-  add('edit', context.canSub ? first(run.map(replaceViolation)) : null)
+  add('sql', await guarded('sql', async () => first(await Promise.all(run.map(async each => sqlViolation(each, readSql))))))
+  add('env', await guarded('env', () => run.some(each => touchesEnv(each, { hasTrackedEnv: context.hasTrackedEnv === true })) ? USE_EV : null))
+  add('edit', context.canSub ? await guarded('edit', () => first(run.map(replaceViolation))) : null)
 
   const found = mismatches(command, context)
   const refused = found.find(mismatch => mismatch.rewrite === null || !context.canRewrite)
@@ -135,10 +151,10 @@ export async function checkCommand(command: string, context: Context): Promise<V
   if (context.canRewrite && context.canWrap && shouldWrap(rewritten))
     rewritten = wrap(rewritten)
 
-  return { violations, command: violations.length > 0 ? command : rewritten, notes: violations.length > 0 ? [] : notes, packages: addedPackages(command) }
+  return { violations, command: violations.length > 0 ? command : rewritten, notes: violations.length > 0 ? [] : notes, packages: [...new Set(run.flatMap(addedPackages))] }
 }
 
 // Why a file tool may not open the path, null when it may.
 export function checkPath(path: string): Violation | null {
-  return isEnvFile(path) ? { rule: 'env', message: USE_EV } : null
+  return reachesEnvFile(path) ? { rule: 'env', message: USE_EV } : null
 }

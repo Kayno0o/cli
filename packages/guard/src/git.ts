@@ -12,6 +12,12 @@ export const COMMIT_VALUE_LONGS = new Set(['--message', '--file', '--reuse-messa
 export const SHORT_CLUSTER = /^-[A-Z]+$/i
 const STAGES_ALL = /[Au]/
 const ALL_TAGS = new Set(['--tags', '--follow-tags'])
+// A pathspec's leading magic naming the repository root.
+const TOP_MAGIC = /^:(?:\/|\([^)]*\))/
+// Config keys that run a program or define a command (an alias runs anything, `!git push` included), which `-c` or `git config` must not set.
+const RISKY_CONFIG = /^(?:alias\.|core\.(?:sshcommand|hookspath|pager|editor|fsmonitor|askpass|gitproxy)|credential\.|diff\.external|sequence\.editor|pager\.|filter\.|gpg\..*program)/i
+const RISKY_ENV = /^GIT_(?:CONFIG_(?:COUNT|PARAMETERS)|EXTERNAL_DIFF|ASKPASS|PROXY_COMMAND|PAGER)=/
+const READS_CONFIG = new Set(['--get', '--get-all', '--get-regexp', '--list', '-l', '--unset', '--unset-all', '--show-origin', '--show-scope'])
 
 const STAGE_BY_PATH = `Stage by path: the tree carries unrelated work and peer sessions edit it live. ${USE_GC}`
 
@@ -19,6 +25,7 @@ export const STASH = 'Never `git stash`: a pop with nothing saved applies someon
 export const ADD_ALL = `\`git add\` over the whole tree is refused. ${STAGE_BY_PATH}`
 export const COMMIT_ALL = `\`git commit -a\` stages the whole tree and is refused. ${STAGE_BY_PATH}`
 export const PUSH = '`git push` runs only when the user asked for a push in their latest prompt: say the commit is ready and let them ask.'
+export const CONFIG_OVERRIDE = 'Never set git config that runs a program or defines a command (`-c alias.*`, `--config-env`, `core.sshCommand`, `core.hooksPath`, `core.pager`, credential helpers, `git config alias.*`): it sidesteps every rule here. Run the git command itself.'
 export const TAGS_APART = 'A tag goes out with its branch in one `git push --atomic origin <branch> <tag>`, never a separate `git push --tags`.'
 
 export function subcommandOf(args: readonly string[]): { name: string, rest: string[] } {
@@ -32,6 +39,48 @@ export function subcommandOf(args: readonly string[]): { name: string, rest: str
   }
 
   return { name: '', rest: [] }
+}
+
+// Whether the options before the subcommand override config in a way that runs a program or defines a command.
+function overridesConfig(args: readonly string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? ''
+
+    if (arg === '--config-env' || arg.startsWith('--config-env='))
+      return true
+
+    if (arg === '-c' && RISKY_CONFIG.test(args[i + 1] ?? ''))
+      return true
+
+    if (GLOBAL_VALUE_OPTIONS.has(arg))
+      i++
+    else if (!arg.startsWith('-'))
+      return false
+  }
+
+  return false
+}
+
+// A pathspec naming the whole tree, however it is spelled: `.`, `src/..`, `:/`, `:/.`, `*`.
+function isWholeTree(arg: string): boolean {
+  if (WHOLE_TREE.has(arg))
+    return true
+
+  if (arg.startsWith('-'))
+    return SHORT_CLUSTER.test(arg) && STAGES_ALL.test(arg)
+
+  const parts: string[] = []
+
+  for (const part of arg.replace(TOP_MAGIC, '').split('/')) {
+    if (part === '..' && parts.length > 0 && parts.at(-1) !== '..')
+      parts.pop()
+    else if (part !== '' && part !== '.')
+      parts.push(part)
+  }
+
+  const path = parts.join('/')
+
+  return path === '' || path === '..' || WHOLE_TREE.has(path)
 }
 
 function commitsAll(args: readonly string[]): boolean {
@@ -74,17 +123,26 @@ function commitsAll(args: readonly string[]): boolean {
 // Why the command is refused, or null when no piece breaks a git rule; a push needs the user to have asked for one.
 export function gitViolation(command: string, isPushAsked = false): string | null {
   for (const piece of splitCommand(command)) {
-    const { program, args } = parseCommand(piece.command)
+    const { program, args, assignments } = parseCommand(piece.command)
+
+    if (assignments.some(assignment => RISKY_ENV.test(assignment)))
+      return CONFIG_OVERRIDE
 
     if (program !== 'git')
       continue
 
+    if (overridesConfig(args))
+      return CONFIG_OVERRIDE
+
     const { name, rest } = subcommandOf(args)
+
+    if (name === 'config' && rest.length > 1 && rest.some(arg => RISKY_CONFIG.test(arg)) && !rest.some(arg => READS_CONFIG.has(arg)))
+      return CONFIG_OVERRIDE
 
     if (name === 'stash' && !READ_ONLY_STASH.has(rest[0] ?? ''))
       return STASH
 
-    if (name === 'add' && rest.some(arg => WHOLE_TREE.has(arg) || (SHORT_CLUSTER.test(arg) && STAGES_ALL.test(arg))))
+    if (name === 'add' && rest.some(isWholeTree))
       return ADD_ALL
 
     if (name === 'commit' && commitsAll(rest))

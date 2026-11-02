@@ -2,13 +2,13 @@
   "description": "guard answers each event; a missing guard fails without blocking the call.",
   "hooks": {
     "PreToolUse": [
-      { "matcher": "Bash|Read|Edit|Write", "hooks": [{ "type": "command", "command": "guard hook pre-tool-use", "timeout": 60 }] }
+      { "matcher": "Bash|Read|Edit|MultiEdit|Write|NotebookEdit|Grep|Glob", "hooks": [{ "type": "command", "command": "\"${BUN_INSTALL:-$HOME/.bun}/bin/guard\" hook pre-tool-use", "timeout": 60 }] }
     ],
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "guard hook user-prompt-submit", "timeout": 10 }] }
+      { "hooks": [{ "type": "command", "command": "\"${BUN_INSTALL:-$HOME/.bun}/bin/guard\" hook user-prompt-submit", "timeout": 10 }] }
     ],
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "guard hook session-start", "timeout": 10 }] }
+      { "hooks": [{ "type": "command", "command": "\"${BUN_INSTALL:-$HOME/.bun}/bin/guard\" hook session-start", "timeout": 10 }] }
     ]
   }
 }
