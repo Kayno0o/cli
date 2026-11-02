@@ -155,6 +155,44 @@ describe('ev', () => {
     expect(await read('.env')).toBe('')
   })
 
+  test('cp copies a value without printing it: replaced in place, appended, or renamed with --as', async () => {
+    const secret = 'fake_Zx9Cv8Bn7Mq6We5Rt4Yu3'
+
+    await write('.env.a', `FORGEJO_TOKEN=${secret}\nOTHER=1\n`)
+    await write('.env.b', 'export FORGEJO_TOKEN=old_value_1234\nKEEP=1\n')
+
+    const replaced = ev(['cp', 'FORGEJO_TOKEN', '--from', '.env.a', '--to', '.env.b'])
+
+    expect(replaced.code).toBe(0)
+    expect(await read('.env.b')).toBe(`export FORGEJO_TOKEN=${secret}\nKEEP=1\n`)
+    expect(await read('.env.a')).toBe(`FORGEJO_TOKEN=${secret}\nOTHER=1\n`)
+    expect(replaced.out).toBe('.env.b: FORGEJO_TOKEN=fak***(26)\n')
+
+    const appended = ev(['cp', 'FORGEJO_TOKEN', '--from', '.env.a', '--to', '.env.c', '--as', 'SHARED_TOKEN'])
+
+    expect(appended.code).toBe(0)
+    expect(await read('.env.c')).toBe(`SHARED_TOKEN=${secret}\n`)
+
+    const list = ev(['list'])
+
+    expect(list.out).toContain('fak***(26)')
+    for (const result of [replaced, appended, list, ev(['cp', 'NOPE', '--from', '.env.a', '--to', '.env.c'])]) {
+      expect(result.out + result.err).not.toContain(secret)
+      expect(result.out + result.err).not.toMatch(/Zx9Cv8/)
+    }
+  })
+
+  test('cp refuses a key the source lacks and changes nothing', async () => {
+    await write('.env.a', 'A=1\n')
+    await write('.env.b', 'B=2\n')
+
+    const { code, err } = ev(['cp', 'MISSING', '--from', '.env.a', '--to', '.env.b'])
+
+    expect(code).toBe(1)
+    expect(err).toContain('MISSING is not set in .env.a')
+    expect(await read('.env.b')).toBe('B=2\n')
+  })
+
   test('diff and missing name keys without values', async () => {
     await write('.env', 'A=1\nB=secretb\n')
     await write('.env.example', 'A=\nC=\n')

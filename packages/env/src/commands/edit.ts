@@ -24,6 +24,12 @@ Moves KEY's line from one file to another, as written. Refuses to replace a key 
 
 Exits 0 when it moved the key, 1 when the source lacks it or the target already sets it, 2 on a usage error.`
 
+const cpUsage = `ev cp KEY --from <file> --to <file> [--as NEWKEY]
+
+Copies KEY's value from one file to another without printing it, replacing the key's line in the target in place or appending one, and prints the masked result as ev set does. --as stores the copy under another key.
+
+Exits 0 when it copied the key, 1 when the source lacks it, 2 on a usage error.`
+
 async function readValue(from: string | undefined): Promise<string> {
   const input = await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
 
@@ -80,6 +86,31 @@ export async function unset(args: string[]): Promise<number> {
   return 0
 }
 
+// The write path of mv and cp: puts KEY's line from `from` into `to`, as `newKey` when given, and returns both files for the caller to finish.
+async function transfer(key: string, from: string, to: string, newKey: string | undefined, replace: boolean) {
+  if (from === to && newKey === undefined)
+    fail('--from and --to are the same file')
+
+  const source = await readEnv(from)
+  const line = lastLine(source, key)
+
+  if (line === undefined)
+    fail(`${key} is not set in ${from}`, 1)
+
+  const target = from === to ? source : await readOrEmpty(to)
+  const name = newKey ?? key
+
+  if (!replace && entries(target).has(name))
+    fail(`${to} already sets ${name}, --force replaces it`, 1)
+
+  const value = line.value ?? ''
+
+  setLine(target, name, value, newKey === undefined && !entries(target).has(name) ? line.raw : undefined)
+  await writeEnv(to, target)
+
+  return { source, value, name }
+}
+
 export async function mv(args: string[]): Promise<number> {
   const parsed = parse(args, mvUsage, {
     from: { type: 'string', description: 'the file to take KEY from' },
@@ -93,25 +124,31 @@ export async function mv(args: string[]): Promise<number> {
   if (key === undefined || from === undefined || to === undefined)
     fail(`needs KEY, --from and --to\n\n${mvUsage}`)
 
-  if (from === to)
-    fail('--from and --to are the same file')
+  const { source } = await transfer(key, from, to, undefined, force === true)
 
-  const source = await readEnv(from)
-  const line = lastLine(source, key)
-
-  if (line === undefined)
-    fail(`${key} is not set in ${from}`, 1)
-
-  const target = await readOrEmpty(to)
-
-  if (entries(target).has(key) && force !== true)
-    fail(`${to} already sets ${key}, --force replaces it`, 1)
-
-  setLine(target, key, line.value ?? '', line.raw)
-  await writeEnv(to, target)
   removeKey(source, key)
   await writeEnv(from, source)
   console.log(`${key}: ${from} -> ${to}`)
+
+  return 0
+}
+
+export async function cp(args: string[]): Promise<number> {
+  const parsed = parse(args, cpUsage, {
+    from: { type: 'string', description: 'the file to take KEY from' },
+    to: { type: 'string', description: 'the file to put the copy in, created when missing' },
+    as: { type: 'string', description: 'store the copy under this key instead' },
+  })
+
+  const [key] = parsed.positionals
+  const { from, to, as } = parsed.values
+
+  if (key === undefined || from === undefined || to === undefined)
+    fail(`needs KEY, --from and --to\n\n${cpUsage}`)
+
+  const { value, name } = await transfer(key, from, to, as, true)
+
+  console.log(`${to}: ${name}=${maskValue(name, value).replaceAll('\n', '\\n')}`)
 
   return 0
 }
