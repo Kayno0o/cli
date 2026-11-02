@@ -45,7 +45,11 @@ const PLUGIN = 'agent-tools-hooks@agent-tools'
 const MARKETPLACE = `https://${FORGE}/kaynooo/agent-tools.git`
 const LEADING_TILDE = /^~(?=\/|$)/
 
-interface Manifest { version?: string, engines?: { bun?: string } }
+interface Manifest { version?: string, engines?: { bun?: string }, bin?: Record<string, string> | string }
+
+const VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/
+// `bun info` calls in flight at once, so the registry is not asked for every package together.
+const INFO_AT_ONCE = 4
 
 export function readJsonText<T>(text: string): T | undefined {
   try {
@@ -71,6 +75,14 @@ function installed(host: Host, name: string): Manifest | undefined {
   return readJson<Manifest>(join(host.globalModules, name, 'package.json'))
 }
 
+// The file the installed package declares for the bin, undefined when it declares none, so the one under test is run and not the first of that name on the PATH.
+export function ownBin(host: Host, name: string, bin: string): string | undefined {
+  const declared = installed(host, name)?.bin
+  const file = typeof declared === 'string' ? declared : declared?.[bin]
+
+  return file === undefined ? undefined : join(host.globalModules, name, file)
+}
+
 // One package: installed, its bins on the PATH, and no older than the version the registry serves.
 export async function checkTool(host: Host, name: string, bins: readonly string[]): Promise<Result> {
   const check = name.slice(name.indexOf('/') + 1)
@@ -85,10 +97,11 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
     return { check, ok: false, detail: `${version}, ${off.join(', ')} not on the PATH`, fix: `add ${join(host.globalModules, '..', '..', '..', 'bin')} to the PATH` }
 
   const info = await host.run(['bun', 'info', name, 'version', '--no-cache'])
-  const latest = info.code === 0 ? firstLine(info.stdout.trim().split('\n').at(-1) ?? '') : ''
+  const answered = info.code === 0 ? firstLine(info.stdout.trim().split('\n').at(-1) ?? '') : ''
+  const latest = VERSION.test(answered) ? answered : ''
 
   if (latest === '')
-    return { check, ok: true, detail: `${version}, the registry did not answer: ${firstLine(info.stderr) || 'no version'}` }
+    return { check, ok: true, detail: `${version}, the registry did not answer: ${firstLine(info.stderr) || answered || 'no version'}` }
 
   if (Bun.semver.order(version, latest) < 0)
     return { check, ok: false, detail: `${version}, ${latest} released`, fix: `bun install -g ${name}@${latest}` }
@@ -149,7 +162,11 @@ export function checkBun(host: Host): Result {
 }
 
 export async function runChecks(host: Host): Promise<Result[]> {
-  const tools = await Promise.all(Object.entries(TOOLS).map(async ([name, bins]) => checkTool(host, name, bins)))
+  const entries = Object.entries(TOOLS)
+  const tools: Result[] = []
+
+  for (let at = 0; at < entries.length; at += INFO_AT_ONCE)
+    tools.push(...await Promise.all(entries.slice(at, at + INFO_AT_ONCE).map(async ([name, bins]) => checkTool(host, name, bins))))
 
   return [...tools, await checkTea(host), checkHooks(host), checkBun(host)]
 }

@@ -6,6 +6,8 @@ import { describe, expect, test } from 'bun:test'
 import { errs } from '../src/errs'
 import { parseErrors } from '../src/output'
 
+process.env.XDG_RUNTIME_DIR = mkdtempSync(join(tmpdir(), 'errs-runtime-'))
+
 interface ErrsJson { errors: unknown[], unrecognised: number, log: string, code?: number }
 
 const fixturePath = (name: string) => new URL(`fixtures/errs/${name}`, import.meta.url).pathname

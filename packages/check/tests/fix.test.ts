@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -9,6 +9,8 @@ import { changedFiles, dirtyFiles } from '../src/changes'
 import { fix, fixers } from '../src/fix'
 
 let dir: string
+
+process.env.XDG_RUNTIME_DIR = mkdtempSync(join(tmpdir(), 'fix-runtime-'))
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'fix-'))
@@ -85,6 +87,31 @@ describe('fix', () => {
     expect(lines[1]).toStartWith('ok    makefile')
     expect(lines.slice(2).sort()).toEqual(['  Makefile', '  a.ts', 'changed 2 files:'].sort())
     expect(await Bun.file(join(dir, 'Makefile')).text()).toBe('.PHONY: a b\n\nb:\n\ttrue\n\na:\n\ttrue\n')
+  })
+
+  test('leaves a Makefile that is already declared untouched', async () => {
+    await repo()
+    writeFileSync(join(dir, 'Makefile'), '.PHONY: a\n\na:\n\ttrue\n')
+
+    const before = statSync(join(dir, 'Makefile')).mtimeMs
+
+    await Bun.sleep(20)
+
+    const { result, out } = await capture(async () => fix([], dir))
+
+    expect(result).toBe(0)
+    expect(out).toContain('nothing changed')
+    expect(statSync(join(dir, 'Makefile')).mtimeMs).toBe(before)
+  })
+
+  test('--timeout ends a fixer and exits 2', async () => {
+    await repo()
+    scripts({ fix: 'sleep 30 & wait' })
+
+    const { result, out } = await capture(async () => fix(['--timeout', '1s'], dir))
+
+    expect(result).toBe(2)
+    expect(out).toContain('TIME  fix')
   })
 
   test('--json prints each fixer\'s outcome and the files changed', async () => {

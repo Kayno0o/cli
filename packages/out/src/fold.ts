@@ -8,7 +8,6 @@ export interface FoldOptions {
 
 const HEAD = 40
 const TAIL = 60
-const MAX_KEPT = 100
 const MAX_BLOCK = 20
 const MIN_REFERENCED = 20
 const TOP_REPEATED = 3
@@ -186,7 +185,6 @@ export function fold(text: string, { threshold, logPath }: FoldOptions): string 
   }
   else {
     const middleEnd = entries.length - tail
-    let kept = 0
     let gap = 0
 
     const closeGap = () => {
@@ -205,10 +203,9 @@ export function fold(text: string, { threshold, logPath }: FoldOptions): string 
         continue
       }
 
-      if (entry.important && kept < MAX_KEPT) {
+      if (entry.important) {
         closeGap()
         out.push(entry.text)
-        kept++
 
         continue
       }

@@ -14,12 +14,26 @@ export interface Ran {
   // The bytes of every chunk joined.
   output: Buffer
   text: string
+  // The command was ended because `timeoutMs` passed, its code then being the signal's.
+  timedOut: boolean
+  // More than `maxBytes` came, and the rest was left out of chunks, output and text.
+  truncated: boolean
 }
 
 export interface RunSettings {
   cwd?: string
   env?: Record<string, string | undefined>
   stdin?: 'inherit' | 'ignore'
+  // Ends the command and its children after this long.
+  timeoutMs?: number
+  // Ends the command and its children when aborted.
+  signal?: AbortSignal
+  // Bytes kept in the result; the pipes are still read to the end.
+  maxBytes?: number
+  // Called with each chunk as it arrives; throwing ends the command and rethrows once the pipes are drained.
+  onChunk?: (chunk: Chunk) => void
+  // Called once the command runs, with a handle that sends a signal to its whole process group, for `holdSignals().forward`.
+  onStart?: (child: { kill: (signal: NodeJS.Signals) => void }) => void
 }
 
 export interface HeldSignals {
@@ -31,15 +45,11 @@ export interface HeldSignals {
   release: () => void
 }
 
+const KILL_GRACE_MS = 2000
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 // A scheme of two letters or more, so a Windows drive is read as a path.
 const SCHEME = /^[a-z][\w+.-]+:/i
 const OPENERS: Partial<Record<NodeJS.Platform, string[]>> = { darwin: ['open'], win32: ['cmd', '/c', 'start', ''] }
-
-async function collect(stream: ReadableStream<Uint8Array>, name: Chunk['stream'], chunks: Chunk[]): Promise<void> {
-  for await (const data of stream)
-    chunks.push({ stream: name, data })
-}
 
 // The exit code a shell would report: the code, or 128 plus the signal.
 export function exitCodeOf(code: number | null, signal: NodeJS.Signals | number | null): number {
@@ -106,15 +116,106 @@ export function openUrl(target: string, env: Record<string, string | undefined> 
   }
 }
 
-// Runs a command with stdout and stderr captured; throws when it cannot be started.
-export async function runCommand(argv: string[], { cwd, env, stdin = 'ignore' }: RunSettings = {}): Promise<Ran> {
+// Runs a command with stdout and stderr captured; throws when it cannot be started. With `timeoutMs`, `signal`, `onStart` or `onChunk` the child leads its own process group, and the whole group is ended (SIGTERM, then SIGKILL after a short grace) on the timeout, an abort or a throwing `onChunk`; the pipes are drained to their end either way.
+export async function runCommand(argv: string[], { cwd, env, stdin = 'ignore', timeoutMs, signal, maxBytes = Infinity, onChunk, onStart }: RunSettings = {}): Promise<Ran> {
   const chunks: Chunk[] = []
-  const proc = Bun.spawn(argv, { ...(cwd === undefined ? {} : { cwd }), ...(env === undefined ? {} : { env }), stdin, stdout: 'pipe', stderr: 'pipe' })
+  const grouped = timeoutMs !== undefined || signal !== undefined || onStart !== undefined || onChunk !== undefined
+  const proc = Bun.spawn(argv, { ...(cwd === undefined ? {} : { cwd }), ...(env === undefined ? {} : { env }), stdin, stdout: 'pipe', stderr: 'pipe', ...(grouped ? { detached: true } : {}) })
+  const state = { kept: 0, truncated: false, timedOut: false, failure: undefined as unknown, done: false }
+  const timers: ReturnType<typeof setTimeout>[] = []
 
-  await Promise.all([collect(proc.stdout, 'stdout', chunks), collect(proc.stderr, 'stderr', chunks)])
-  await proc.exited
+  const killGroup = (killing: NodeJS.Signals) => {
+    if (state.done)
+      return
 
-  const output = Buffer.concat(chunks.map(({ data }) => data))
+    try {
+      if (grouped)
+        process.kill(-proc.pid, killing)
+      else
+        proc.kill(killing)
+    }
+    catch {
+      // The group is already gone.
+    }
+  }
 
-  return { code: exitCodeOf(proc.exitCode, proc.signalCode), chunks, output, text: output.toString() }
+  const stop = () => {
+    killGroup('SIGTERM')
+    timers.push(setTimeout(killGroup, KILL_GRACE_MS, 'SIGKILL'))
+  }
+
+  const onAbort = () => stop()
+
+  if (timeoutMs !== undefined) {
+    timers.push(setTimeout(() => {
+      state.timedOut = true
+      stop()
+    }, timeoutMs))
+  }
+
+  if (signal?.aborted === true)
+    onAbort()
+  else
+    signal?.addEventListener('abort', onAbort, { once: true })
+
+  onStart?.({ kill: killing => killGroup(killing) })
+
+  const drain = async (stream: ReadableStream<Uint8Array>, name: Chunk['stream']) => {
+    for await (const data of stream) {
+      if (state.failure !== undefined)
+        continue
+
+      try {
+        onChunk?.({ stream: name, data })
+      }
+      catch (error) {
+        state.failure = error
+        stop()
+
+        continue
+      }
+
+      if (state.kept + data.length > maxBytes) {
+        state.truncated = true
+
+        continue
+      }
+
+      state.kept += data.length
+      chunks.push({ stream: name, data })
+    }
+  }
+
+  try {
+    await Promise.all([drain(proc.stdout, 'stdout'), drain(proc.stderr, 'stderr')])
+    await proc.exited
+  }
+  finally {
+    state.done = true
+
+    for (const timer of timers)
+      clearTimeout(timer)
+
+    signal?.removeEventListener('abort', onAbort)
+  }
+
+  if (state.failure !== undefined)
+    throw state.failure
+
+  const joined = () => Buffer.concat(chunks.map(({ data }) => data))
+  let output: Buffer | undefined
+  let text: string | undefined
+
+  return {
+    code: exitCodeOf(proc.exitCode, proc.signalCode),
+    chunks,
+    timedOut: state.timedOut,
+    truncated: state.truncated,
+    get output() {
+      return output ??= joined()
+    },
+    get text() {
+      return text ??= (output ??= joined()).toString()
+    },
+  }
 }

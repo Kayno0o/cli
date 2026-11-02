@@ -1,6 +1,6 @@
 import type { Description } from '@kaynooo/cli-kit'
 import type { Host } from './checks'
-import { firstLine, readJsonText, TOOLS } from './checks'
+import { firstLine, ownBin, readJsonText, TOOLS } from './checks'
 
 export interface Listed extends Partial<Description> {
   bin: string
@@ -15,7 +15,8 @@ export async function describeBin(host: Host, bin: string, name: string): Promis
   if (host.which(bin) === null)
     return { bin, package: name, installed: false }
 
-  const ran = await host.run([bin, '--help'], { KIT_HELP: 'json', NO_COLOR: '1' })
+  const own = ownBin(host, name, bin)
+  const ran = await host.run(own === undefined ? [bin, '--help'] : ['bun', own, '--help'], { KIT_HELP: 'json', NO_COLOR: '1' })
   const described = readJsonText<Description>(ran.stdout)
 
   if (described !== undefined)

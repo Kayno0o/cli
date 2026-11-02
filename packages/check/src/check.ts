@@ -1,21 +1,22 @@
 import type { Step } from './steps'
-import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
 import { logDirectory, outcomeJson, printOutcome, runStep } from './run'
 import { discover, STEP_NAMES } from './steps'
 
-const usage = `check [--only <steps>] [--list]
+const usage = `check [--only <steps>] [--timeout <duration>] [--list]
 
 Runs the repo's check, typecheck, lint and test steps, from package.json scripts (through bun run), composer.json, a Justfile or a Makefile.
 A passing step is one line, a failing one shows only what failed, and each step's full output is saved to the file whose path ends its line.
-Exits 0 when every step passed, 1 when one failed, 2 on bad usage or when no step is found.
+A step still running after --timeout is ended with everything it started.
+Exits 0 when every step passed, 1 when one failed, 2 on bad usage, when no step is found or when a step timed out.
 --json prints [{name, command, ok, ms, log, failed?}] once every step ran, --list --json [{name, command, source}].`
 
 const options = {
   list: { type: 'boolean', short: 'l', description: 'print the steps found and the commands that run them, without running them' },
   only: { type: 'string', short: 'o', description: `comma separated steps to run, among ${STEP_NAMES.join(', ')}` },
+  timeout: { type: 'string', short: 't', description: 'longest a step may run before it is ended (30s, 5m, 1h), none by default' },
   json: jsonOption(),
 } as const
 
@@ -27,6 +28,10 @@ export function pick<T extends { name: string }>(steps: T[], only: string | unde
     return steps
 
   const names = only.split(COMMA).filter(name => name !== '')
+
+  if (names.length === 0)
+    fail(`--only names no step, found ${steps.map(step => step.name).join(', ')}`)
+
   const unknown = names.filter(name => !steps.some(step => step.name === name))
 
   if (unknown.length > 0)
@@ -57,25 +62,38 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
     return 0
   }
 
-  const directory = logDirectory(cwd)
-
-  await mkdir(directory, { recursive: true })
-
+  const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
+  const directory = await logDirectory(cwd)
+  const held = holdSignals()
   const width = Math.max(...steps.map(step => step.name.length))
   const outcomes: ReturnType<typeof outcomeJson>[] = []
 
-  for (const step of steps) {
-    const logFile = join(directory, `${step.name}.log`)
-    const outcome = await runStep(step.command, cwd, logFile)
+  try {
+    for (const step of steps) {
+      const logFile = join(directory, `${step.name}.log`)
+      const outcome = await runStep(step.command, cwd, logFile, { ...(timeoutMs === undefined ? {} : { timeoutMs }), held })
 
-    if (!json)
-      printOutcome(step.name, width, step.command, logFile, outcome)
+      if (!json)
+        printOutcome(step.name, width, step.command, logFile, outcome)
 
-    outcomes.push(outcomeJson(step.name, step.command, logFile, outcome))
+      outcomes.push(outcomeJson(step.name, step.command, logFile, outcome))
+
+      if (held.signal !== undefined)
+        break
+    }
+  }
+  finally {
+    held.release()
   }
 
   if (json)
     printJson(outcomes)
+
+  if (held.signal !== undefined)
+    return exitCodeOf(null, held.signal)
+
+  if (outcomes.some(outcome => outcome.timedOut === true))
+    return 2
 
   return outcomes.every(outcome => outcome.ok) ? 0 : 1
 }

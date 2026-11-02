@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -178,6 +178,15 @@ describe('waitfor task', () => {
     expect(result.err).toContain('1  still going')
   })
 
+  test('fails at once with 2 on an output file that does not exist', async () => {
+    const started = Date.now()
+    const result = await waitfor(['task', join(dir, 'typo.output'), '-t', '1m'])
+
+    expect(result.code).toBe(2)
+    expect(result.err).toContain('no output file')
+    expect(Date.now() - started).toBeLessThan(10_000)
+  })
+
   test('refuses an unknown id and a subagent', async () => {
     const env = taskOutput('b1x2', '')
 
@@ -191,7 +200,45 @@ describe('waitfor task', () => {
   })
 })
 
+describe('waitfor --file rotation', () => {
+  test('starts over when the file is replaced by one at least as large', async () => {
+    const path = join(dir, 'app.log')
+
+    writeFileSync(path, 'old line one\nold line two\n')
+
+    const result = await waitfor(['-f', path, '-u', '^fresh', '-t', '5s'], async () => {
+      await Bun.sleep(600)
+      writeFileSync(join(dir, 'new.log'), 'fresh start of the new file, longer\nmore\n')
+      renameSync(join(dir, 'new.log'), path)
+    })
+
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('fresh start')
+  })
+
+  test('reads a large file in slices, and cuts a very long line before matching it', async () => {
+    const path = join(dir, 'big.log')
+
+    writeFileSync(path, `${'x'.repeat(3_000_000)}\nready\n`)
+
+    const result = await waitfor(['-f', path, '-u', '^ready', '-t', '5s'])
+
+    expect(result.code).toBe(0)
+    expect(result.out).toBe(`${path}:2: ready\n`)
+  })
+})
+
 describe('waitfor --pid', () => {
+  test('does not wait for a zombie to be reaped', async () => {
+    const parent = Bun.spawn(['sh', '-c', 'sleep 0.2 & echo $!; sleep 30'], { stdout: 'pipe' })
+    const reader = parent.stdout.getReader()
+    const pid = Number(new TextDecoder().decode((await reader.read()).value).trim())
+    const result = await waitfor(['--pid', String(pid), '-t', '5s'])
+
+    parent.kill()
+    expect(result.code).toBe(0)
+  })
+
   test('waits for the process to exit', async () => {
     const child = Bun.spawn(['sleep', '0.5'])
     const result = await waitfor(['--pid', String(child.pid), '-t', '5s'])

@@ -1,7 +1,11 @@
 import { isPlain, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
 
 const ASSIGNMENT = /^\w+=/
-const EXCLUDED = /(?:^|\s)(?:--json|--help|--version|-h)(?:\s|$)/
+const EXCLUDED = /(?:^|\s)(?:--json|--help|--version|-h|--watch(?:-?all|=\S*)?|--watchAll)(?:\s|$)/
+// A tool's short watch flag, kept apart as -w means something else for `make` and `docker`.
+const SHORT_WATCH = /(?:^|\s)(?:\S*\/)?(?:tsc|tsgo|vue-tsc|vitest|jest)\s(?:.*\s)?-w(?:\s|$)/
+// Recipes and targets that run until stopped, whose output would sit buffered until a timeout.
+const LONG_RUNNING = /^(?:dev|watch|serve|start|up|run|preview|storybook)(?:[:-]\S*)?$/
 const BUN_SCRIPT = /^(?:build|check|lint|typecheck|types|test|ci|verify|compile)(?::|$)/
 const BUN_TOOLS = new Set(['tsc', 'tsgo', 'eslint', 'keslint', 'vitest', 'jest', 'prettier', 'playwright', 'biome', 'vue-tsc'])
 const BUN_SUBCOMMANDS = new Set(['install', 'i', 'add', 'remove', 'rm', 'update', 'test', 'check', 'lint', 'build'])
@@ -44,9 +48,9 @@ const RULES: Record<string, Rule> = {
   'php-cs-fixer': always,
   'rector': always,
   'php': args => listed(afterOptions(args, PHP_VALUE_OPTIONS)),
-  'make': always,
+  'make': ([first]) => first === undefined || !LONG_RUNNING.test(first),
   'check': always,
-  'just': ([first]) => first !== undefined && !first.startsWith('-'),
+  'just': ([first]) => first !== undefined && !first.startsWith('-') && !LONG_RUNNING.test(first),
   'composer': ([sub]) => sub === 'install' || sub === 'update' || sub === 'require',
   'pip': ([sub]) => sub === 'install',
   'cargo': ([sub]) => ['build', 'test', 'check', 'clippy'].includes(sub ?? ''),
@@ -147,7 +151,7 @@ function listed(words: string[]): boolean {
 }
 
 function listedSegment(segment: string): boolean {
-  return !EXCLUDED.test(segment) && listed(tokenize(segment))
+  return !EXCLUDED.test(segment) && !SHORT_WATCH.test(segment) && listed(tokenize(segment))
 }
 
 // A `cd` ahead of the real command is harmless to wrap.

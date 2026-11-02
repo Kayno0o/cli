@@ -1,9 +1,9 @@
 import type { ToolError } from './output'
 import { relative } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson, runCommand, stripAnsi, warn } from '@kaynooo/cli-kit'
-import { saveLog } from '@kaynooo/out-tools/src/logs.ts'
+import { fail, holdSignals, jsonOption, parse, printJson, readInput as readText, runCommand, stripAnsi, warn } from '@kaynooo/cli-kit'
 import { parseErrors } from './output'
+import { saveLog } from './run'
 
 const usage = `errs [options] [log]
 errs [options] -- <command> [args...]
@@ -38,21 +38,25 @@ async function readInput(command: string[], run: boolean): Promise<{ text: strin
   const [path] = command
 
   if (!run && (path === undefined || path === '-'))
-    return { text: await Bun.stdin.text() }
+    return { text: await readText('-', { noStdin: 'give a log, a command after --, or pipe the output on stdin' }) }
 
   if (!run && path !== undefined)
-    return { text: await Bun.file(path).text(), log: path }
+    return { text: await readText(path), log: path }
 
   if (path === undefined)
     fail('give the command after --')
 
+  const held = holdSignals()
   let ran
 
   try {
-    ran = await runCommand(command, { env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } })
+    ran = await runCommand(command, { env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' }, onStart: child => held.forward(child) })
   }
   catch (error) {
     fail(`cannot run ${command[0]}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  finally {
+    held.release()
   }
 
   return { text: stripAnsi(ran.text), log: await saveLog(ran.output), code: ran.code }

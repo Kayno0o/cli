@@ -30,7 +30,6 @@
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
-        "@kaynooo/out-tools": "workspace:*",
       },
     },
     "packages/code": {

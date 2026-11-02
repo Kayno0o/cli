@@ -1,7 +1,8 @@
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { $ } from 'bun'
 
-// The content hash of every file git sees as changed or new under dir, undefined outside a repository.
+// The size and modification time of every file git sees as changed or new under dir, undefined outside a repository; reading no content keeps it cheap on a dirty tree.
 export async function dirtyFiles(dir: string): Promise<Map<string, string> | undefined> {
   const listed = await $`git ls-files -z --modified --others --exclude-standard`.cwd(dir).quiet().nothrow()
 
@@ -11,9 +12,14 @@ export async function dirtyFiles(dir: string): Promise<Map<string, string> | und
   const files = new Map<string, string>()
 
   for (const path of listed.stdout.toString().split('\0').filter(Boolean)) {
-    const file = Bun.file(join(dir, path))
+    try {
+      const { size, mtimeMs } = await stat(join(dir, path))
 
-    files.set(path, await file.exists() ? String(Bun.hash(await file.arrayBuffer())) : '')
+      files.set(path, `${size}:${mtimeMs}`)
+    }
+    catch {
+      files.set(path, '')
+    }
   }
 
   return files

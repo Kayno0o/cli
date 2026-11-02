@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -8,8 +8,11 @@ import { cleanLogs } from '../src/logs'
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const LOG_PATH = /full log: ([^\s\]]+)/
 
+const RUNTIME = mkdtempSync(join(tmpdir(), 'out-runtime-'))
+const ENV = { ...process.env, XDG_RUNTIME_DIR: RUNTIME }
+
 function out(...args: string[]) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdout: 'pipe', stderr: 'pipe' })
+  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdout: 'pipe', stderr: 'pipe', env: ENV })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -50,6 +53,33 @@ describe('out', () => {
     expect(result.out).toContain('FAILED: boom')
     expect(path).toBeDefined()
     expect(readFileSync(path ?? '', 'utf8')).toContain('row 399 of the table is fine\nFAILED: boom\n')
+  })
+
+  test('keeps the log private to the user', () => {
+    const path = LOG_PATH.exec(out('-n', '5', '--', 'seq', '1', '60').out)?.[1] ?? ''
+
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(statSync(join(path, '..')).mode & 0o777).toBe(0o700)
+    expect(path.startsWith(RUNTIME)).toBe(true)
+  })
+
+  test('streams output past the memory it keeps to the log, and still folds', () => {
+    const result = out('--', 'sh', '-c', 'head -c 6000000 /dev/zero | tr "\\0" a | fold -w 80; echo THE-END')
+    const path = LOG_PATH.exec(result.out)?.[1] ?? ''
+
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('THE-END')
+    expect(result.out).toContain('left out of memory')
+    expect(statSync(path).size).toBeGreaterThan(6_000_000)
+  })
+
+  test('forwards a signal to the command, exiting with its code', async () => {
+    const child = Bun.spawn([process.execPath, CLI, '--', 'sh', '-c', 'sleep 30 & wait'], { stdout: 'pipe', stderr: 'pipe', env: ENV })
+
+    await Bun.sleep(500)
+    child.kill('SIGTERM')
+
+    expect(await child.exited).toBe(143)
   })
 
   test('takes the threshold with -n', () => {

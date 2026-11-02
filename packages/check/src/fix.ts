@@ -1,26 +1,29 @@
-import type { Outcome } from './run'
+import type { Outcome, StepSettings } from './run'
 import type { Step } from './steps'
-import { mkdir } from 'node:fs/promises'
+import { existsSync, statSync } from 'node:fs'
+import { rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
 import { changedFiles, dirtyFiles } from './changes'
 import { pick } from './check'
 import { declarePhony } from './makefile'
 import { logDirectory, outcomeJson, printOutcome, runStep } from './run'
-import { candidates, read } from './steps'
+import { candidates, MAKEFILES, read } from './steps'
 
-const usage = `fix [--only <fixers>] [--list]
+const usage = `fix [--only <fixers>] [--timeout <duration>] [--list]
 
 Runs the folder's fixers: the project's own \`fix\` script, else its \`lint:fix\` and \`format\` ones (package.json through bun run, composer.json, a Justfile or a Makefile), then the formatters its files call for: just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY.
 It looks at the folder itself only, so each package of a monorepo gets its own run.
 Prints one line per fixer, what a failing one said, then the files the run changed. Each fixer's full output is saved to the file whose path ends its line.
-Exits 0 when every fixer ran, 1 when one failed, 2 on bad usage or when nothing applies.
+A fixer still running after --timeout is ended with everything it started.
+Exits 0 when every fixer ran or was skipped for a missing binary, 1 when one failed, 2 on bad usage, when nothing applies or when a fixer timed out.
 --json prints {fixers: [{name, command, ok, ms, log, failed?} or {name, command, skipped}], changed} once every fixer ran, changed null outside a git repository.`
 
 const options = {
   list: { type: 'boolean', short: 'l', description: 'print the fixers that apply and the commands that run them, without running them' },
   only: { type: 'string', short: 'o', description: 'comma separated fixers to run, by the names --list prints' },
+  timeout: { type: 'string', short: 't', description: 'longest a fixer may run before it is ended (30s, 5m, 1h), none by default' },
   json: jsonOption(),
 } as const
 
@@ -33,11 +36,18 @@ export interface Fixer extends Step {
 
 // Set for the fixers' commands, so a fix script calling this bin again fails instead of recursing.
 const RUNNING = 'AGENT_TOOLS_FIX'
-const MAKEFILES = ['GNUmakefile', 'makefile', 'Makefile']
 const JUSTFILES = ['justfile', 'Justfile', '.justfile']
 const RUFF_CONFIGS = ['ruff.toml', '.ruff.toml']
 const RUFF_SECTION = /^\[tool\.ruff/m
 const MAX_CHANGED = 30
+
+// Writes beside the file and renames over it, so an interrupted write never leaves it half done.
+async function replaceFile(path: string, content: string): Promise<void> {
+  const temporary = `${path}.${process.pid}.tmp`
+
+  await writeFile(temporary, content, { mode: statSync(path).mode & 0o777 })
+  await rename(temporary, path)
+}
 
 async function firstFile(dir: string, names: string[]): Promise<string | undefined> {
   for (const name of names) {
@@ -68,10 +78,12 @@ async function toolFixers(dir: string): Promise<Fixer[]> {
 
   if (makefile !== undefined) {
     fixers.push({ name: 'makefile', command: 'declare every target .PHONY', source: makefile, write: async (cwd) => {
-      const file = Bun.file(join(cwd, makefile))
-      const { content, targets } = declarePhony(await file.text())
+      const path = join(cwd, makefile)
+      const current = await Bun.file(path).text()
+      const { content, targets } = declarePhony(current, name => existsSync(join(cwd, name)))
 
-      await Bun.write(file, content)
+      if (content !== current)
+        await replaceFile(path, content)
 
       return `.PHONY: ${targets.join(' ')}`
     } })
@@ -97,9 +109,9 @@ export async function fixers(dir: string): Promise<Fixer[]> {
   return [...await projectFixers(dir), ...await toolFixers(dir)]
 }
 
-async function runFixer(fixer: Fixer, cwd: string, logFile: string): Promise<Outcome> {
+async function runFixer(fixer: Fixer, cwd: string, logFile: string, settings: Omit<StepSettings, 'env'>): Promise<Outcome> {
   if (fixer.write === undefined)
-    return runStep(fixer.command, cwd, logFile, { [RUNNING]: '1' })
+    return runStep(fixer.command, cwd, logFile, { ...settings, env: { [RUNNING]: '1' } })
 
   const started = Date.now()
   let outcome: Outcome
@@ -111,7 +123,7 @@ async function runFixer(fixer: Fixer, cwd: string, logFile: string): Promise<Out
     outcome = { ok: false, ms: 0, output: error instanceof Error ? error.message : String(error) }
   }
 
-  await Bun.write(logFile, outcome.output)
+  await writeFile(logFile, outcome.output, { mode: 0o600, flag: 'wx' })
 
   return { ...outcome, ms: Date.now() - started }
 }
@@ -132,7 +144,7 @@ function printChanged(changed: string[]): void {
     console.log(`  and ${changed.length - MAX_CHANGED} more`)
 }
 
-// Runs the folder's fixers in order, one line each with what failed under a failing one, then lists the files they changed; returns 0 only when every fixer ran.
+// Runs the folder's fixers in order, one line each with what failed under a failing one, then lists the files they changed; returns 0 only when every fixer ran or was skipped for a missing binary.
 export async function fix(args: string[], cwd = process.cwd()): Promise<number> {
   const parsed = parse(args, usage, options, { replaces: 'running each fixer and formatter by hand', examples: ['fix', ['fix --list', 'the fixers it would run']] })
 
@@ -158,35 +170,48 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
     return 0
   }
 
-  const directory = logDirectory(cwd)
-
-  await mkdir(directory, { recursive: true })
+  const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
+  const directory = await logDirectory(cwd)
+  const held = holdSignals()
+  const settings: Omit<StepSettings, 'env'> = { ...(timeoutMs === undefined ? {} : { timeoutMs }), held }
 
   const width = Math.max(...picked.map(fixer => fixer.name.length))
   const before = await dirtyFiles(cwd)
   const ran: (ReturnType<typeof outcomeJson> | { name: string, command: string, skipped: string })[] = []
   let failed = 0
+  let timedOut = false
 
-  for (const fixer of picked) {
-    if (missing(fixer)) {
+  try {
+    for (const fixer of picked) {
+      if (held.signal !== undefined)
+        break
+
+      if (missing(fixer)) {
+        if (!json)
+          console.log(`skip  ${fixer.name.padEnd(width)}  ${fixer.requires} is not installed`)
+
+        ran.push({ name: fixer.name, command: fixer.command, skipped: `${fixer.requires} is not installed` })
+
+        continue
+      }
+
+      const logFile = join(directory, `fix-${fixer.name.replaceAll(':', '-')}.log`)
+      const outcome = await runFixer(fixer, cwd, logFile, settings)
+
       if (!json)
-        console.log(`skip  ${fixer.name.padEnd(width)}  ${fixer.requires} is not installed`)
+        printOutcome(fixer.name, width, fixer.command, logFile, outcome)
 
-      ran.push({ name: fixer.name, command: fixer.command, skipped: `${fixer.requires} is not installed` })
+      ran.push(outcomeJson(fixer.name, fixer.command, logFile, outcome))
 
-      continue
+      if (outcome.timedOut === true)
+        timedOut = true
+
+      if (!outcome.ok)
+        failed++
     }
-
-    const logFile = join(directory, `fix-${fixer.name.replaceAll(':', '-')}.log`)
-    const outcome = await runFixer(fixer, cwd, logFile)
-
-    if (!json)
-      printOutcome(fixer.name, width, fixer.command, logFile, outcome)
-
-    ran.push(outcomeJson(fixer.name, fixer.command, logFile, outcome))
-
-    if (!outcome.ok)
-      failed++
+  }
+  finally {
+    held.release()
   }
 
   const after = before && await dirtyFiles(cwd)
@@ -197,6 +222,12 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
     printJson({ fixers: ran, changed })
   else if (changed !== null)
     printChanged(changed)
+
+  if (held.signal !== undefined)
+    return exitCodeOf(null, held.signal)
+
+  if (timedOut)
+    return 2
 
   return failed === 0 ? 0 : 1
 }

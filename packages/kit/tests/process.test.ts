@@ -84,6 +84,65 @@ describe('runCommand', () => {
   test('throws when the command cannot start', async () => {
     expect(runCommand(['/no/such/command'])).rejects.toThrow()
   })
+
+  test('ends the whole process group on a timeout, grandchildren included', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kit-timeout-'))
+    const pidFile = join(dir, 'pid')
+    const started = Date.now()
+    const ran = await runCommand(['sh', '-c', `sleep 30 & echo $! > ${pidFile}; wait`], { timeoutMs: 300 })
+
+    expect(ran.timedOut).toBe(true)
+    expect(ran.code).toBeGreaterThan(128)
+    expect(Date.now() - started).toBeLessThan(5000)
+
+    const grandchild = Number(readFileSync(pidFile, 'utf8'))
+
+    await Bun.sleep(100)
+    expect(() => process.kill(grandchild, 0)).toThrow()
+  })
+
+  test('reports no timeout when the command ends in time', async () => {
+    const ran = await runCommand(['sh', '-c', 'echo hi'], { timeoutMs: 5000 })
+
+    expect(ran).toMatchObject({ code: 0, timedOut: false, truncated: false, text: 'hi\n' })
+  })
+
+  test('ends the command when the signal aborts', async () => {
+    const controller = new AbortController()
+    const pending = runCommand(['sleep', '30'], { signal: controller.signal })
+
+    await Bun.sleep(100)
+    controller.abort()
+
+    expect((await pending).code).toBe(143)
+  })
+
+  test('keeps at most maxBytes while still reading the rest', async () => {
+    const ran = await runCommand(['sh', '-c', 'head -c 100000 /dev/zero | tr "\\0" a'], { maxBytes: 1000 })
+
+    expect(ran.code).toBe(0)
+    expect(ran.truncated).toBe(true)
+    expect(ran.output.length).toBeLessThanOrEqual(1000)
+  })
+
+  test('ends the command and rethrows when the collector throws', async () => {
+    const seen: number[] = []
+    let thrown: unknown
+
+    try {
+      await runCommand(['sh', '-c', 'echo a; sleep 30'], { onChunk: () => {
+        seen.push(1)
+
+        throw new Error('collector broke')
+      } })
+    }
+    catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toEqual(new Error('collector broke'))
+    expect(seen.length).toBe(1)
+  })
 })
 
 describe('exitCodeOf', () => {

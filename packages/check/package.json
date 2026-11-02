@@ -29,7 +29,6 @@
     "build": "$npm_execpath build src/cli.ts src/fix-cli.ts src/errs-cli.ts --target bun --outdir dist"
   },
   "devDependencies": {
-    "@kaynooo/cli-kit": "workspace:*",
-    "@kaynooo/out-tools": "workspace:*"
+    "@kaynooo/cli-kit": "workspace:*"
   }
 }

@@ -1,4 +1,7 @@
 import type { Host } from '../src/checks'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { list } from '../src/agent-tools'
@@ -34,6 +37,25 @@ describe('describeBin', () => {
 
     expect(await describeBin(host, 'gst', '@kaynooo/git-tools')).toEqual({ bin: 'gst', package: '@kaynooo/git-tools', installed: true, summary: 'gst [--log N]: the repository in one line' })
     expect(await describeBin(host, 'gc', '@kaynooo/git-tools')).toEqual({ bin: 'gc', package: '@kaynooo/git-tools', installed: false })
+  })
+})
+
+describe('describeBin with a declared bin', () => {
+  test('runs the installed package\'s own file, not the first of that name on the PATH', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'doctor-list-'))
+
+    mkdirSync(join(dir, '@kaynooo', 'git-tools'), { recursive: true })
+    writeFileSync(join(dir, '@kaynooo', 'git-tools', 'package.json'), JSON.stringify({ bin: { gst: './dist/gst.js' } }))
+
+    const argvs: string[][] = []
+    const host: Host = { ...fakeHost({ gst: '' }), globalModules: dir, run: async (argv) => {
+      argvs.push(argv)
+
+      return { code: 0, stdout: JSON.stringify(GST), stderr: '' }
+    } }
+
+    await describeBin(host, 'gst', '@kaynooo/git-tools')
+    expect(argvs).toEqual([['bun', join(dir, '@kaynooo', 'git-tools', 'dist/gst.js'), '--help']])
   })
 })
 

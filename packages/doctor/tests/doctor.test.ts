@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { capture } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { checkBun, checkHooks, checkTea, checkTool, TOOLS } from '../src/checks'
+import { checkBun, checkHooks, checkTea, checkTool, runChecks, TOOLS } from '../src/checks'
 import { main } from '../src/cli'
 
 let home = ''
@@ -57,6 +57,31 @@ describe('checkTool', () => {
     install('@kaynooo/forgejo-tools', '0.5.0')
 
     expect(await checkTool(fakeHost(), '@kaynooo/forgejo-tools', ['ft'])).toMatchObject({ ok: true, detail: '0.5.0, the registry did not answer: no stub for bun info @kaynooo/forgejo-tools version --no-cache' })
+  })
+})
+
+describe('runChecks', () => {
+  test('asks the registry for at most four packages at once, and ignores an answer that is no version', async () => {
+    let running = 0
+    let peak = 0
+    const host: Host = {
+      ...fakeHost({}, []),
+      run: async () => {
+        running++
+        peak = Math.max(peak, running)
+        await Bun.sleep(10)
+        running--
+
+        return { code: 0, stdout: '<html>captive portal</html>', stderr: '' }
+      },
+    }
+
+    for (const name of Object.keys(TOOLS))
+      install(name, '0.1.0')
+
+    expect(await checkTool({ ...host, which: () => '/bin/x' }, '@kaynooo/forgejo-tools', ['ft'])).toMatchObject({ ok: true, detail: expect.stringContaining('the registry did not answer') })
+    await runChecks({ ...host, which: () => '/bin/x' })
+    expect(peak).toBeLessThanOrEqual(4)
   })
 })
 

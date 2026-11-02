@@ -4,6 +4,11 @@ import { existsSync, statSync } from 'node:fs'
 const TAIL = 20
 const AROUND = 5
 const CARRIAGE_RETURN = /\r$/
+// Bytes read from the file at a time, so a large one is never held whole.
+const SLICE_BYTES = 1024 * 1024
+// A line is cut to this length before the user's patterns see it, which bounds a pattern that backtracks.
+const MAX_LINE = 10_000
+const PORT_TIMEOUT_MS = 3000
 
 export interface Line {
   number: number
@@ -24,6 +29,7 @@ export class FileWatch {
   private offset = 0
   private decoder = new TextDecoder()
   private partial = ''
+  private identity: { dev: number, ino: number } | undefined
   private number = 0
   private recent: Line[] = []
   private failure: Failure | undefined
@@ -47,28 +53,30 @@ export class FileWatch {
   async poll(): Promise<FileEvent[]> {
     const events: FileEvent[] = []
 
-    for (const line of await this.newLines()) {
-      if (this.failure !== undefined) {
-        if (this.failure.after.length < AROUND)
-          this.failure.after.push(line)
+    for (let lines = await this.nextLines(); lines !== undefined; lines = await this.nextLines()) {
+      for (const line of lines) {
+        if (this.failure !== undefined) {
+          if (this.failure.after.length < AROUND)
+            this.failure.after.push(line)
 
-        continue
-      }
+          continue
+        }
 
-      if (this.failOn?.test(line.text) === true) {
-        this.failure = { before: this.recent.slice(-AROUND), line, after: [], waited: false }
+        if (this.failOn?.test(line.text) === true) {
+          this.failure = { before: this.recent.slice(-AROUND), line, after: [], waited: false }
 
-        continue
-      }
+          continue
+        }
 
-      this.recent.push(line)
+        this.recent.push(line)
 
-      if (this.recent.length > TAIL)
-        this.recent.shift()
+        if (this.recent.length > TAIL)
+          this.recent.shift()
 
-      if (!this.matched && this.until?.test(line.text) === true) {
-        this.matched = true
-        events.push({ kind: 'until', line })
+        if (!this.matched && this.until?.test(line.text) === true) {
+          this.matched = true
+          events.push({ kind: 'until', line })
+        }
       }
     }
 
@@ -85,13 +93,17 @@ export class FileWatch {
     return this.recent
   }
 
-  private async newLines(): Promise<Line[]> {
+  // The lines of the next slice of the file, undefined once it is read to its end. A smaller file, or another one under the same name (rotated), starts it over.
+  private async nextLines(): Promise<Line[] | undefined> {
     if (!existsSync(this.path))
-      return []
+      return undefined
 
-    const size = statSync(this.path).size
+    const { size, dev, ino } = statSync(this.path)
+    const replaced = this.identity !== undefined && (this.identity.dev !== dev || this.identity.ino !== ino)
 
-    if (size < this.offset) {
+    this.identity = { dev, ino }
+
+    if (size < this.offset || replaced) {
       this.offset = 0
       this.decoder = new TextDecoder()
       this.partial = ''
@@ -100,25 +112,39 @@ export class FileWatch {
     }
 
     if (size === this.offset)
-      return []
+      return undefined
+
+    const end = Math.min(size, this.offset + SLICE_BYTES)
 
     // Streamed, so a read ending inside a multibyte character keeps its first bytes for the next one.
-    const chunk = this.decoder.decode(await Bun.file(this.path).slice(this.offset, size).bytes(), { stream: true })
+    const chunk = this.decoder.decode(await Bun.file(this.path).slice(this.offset, end).bytes(), { stream: true })
 
-    this.offset = size
+    this.offset = end
 
     const pieces = (this.partial + chunk).split('\n')
 
-    this.partial = pieces.pop() ?? ''
+    this.partial = (pieces.pop() ?? '').slice(0, MAX_LINE)
 
-    return pieces.map(text => ({ number: ++this.number, text: Bun.stripANSI(text.replace(CARRIAGE_RETURN, '')) }))
+    return pieces.map(text => ({ number: ++this.number, text: Bun.stripANSI(text.slice(0, MAX_LINE).replace(CARRIAGE_RETURN, '')) }))
   }
 }
 
 // Undefined once something accepts connections on the port, else why the connection failed.
-export async function portProblem(host: string, port: number): Promise<string | undefined> {
+export async function portProblem(host: string, port: number, timeoutMs = PORT_TIMEOUT_MS): Promise<string | undefined> {
+  const attempt = Bun.connect({ hostname: host, port, socket: { data: socket => void socket.end() } })
+  let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
-    const socket = await Bun.connect({ hostname: host, port, socket: { data: socket => void socket.end() } })
+    const socket = await Promise.race([attempt, new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs, 'timeout')
+    })])
+
+    if (socket === 'timeout') {
+      // Dropped SYNs can take minutes to fail: a late connection is closed as soon as it comes.
+      void closeWhenConnected(attempt)
+
+      return 'ETIMEDOUT'
+    }
 
     socket.end()
 
@@ -126,6 +152,18 @@ export async function portProblem(host: string, port: number): Promise<string | 
   }
   catch (error) {
     return error instanceof Error ? (error as Error & { code?: string }).code ?? error.message : String(error)
+  }
+  finally {
+    clearTimeout(timer)
+  }
+}
+
+async function closeWhenConnected(attempt: ReturnType<typeof Bun.connect>): Promise<void> {
+  try {
+    (await attempt).end()
+  }
+  catch {
+    // The attempt failed, which is all it had to do.
   }
 }
 

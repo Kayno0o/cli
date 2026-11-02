@@ -102,3 +102,20 @@ describe('fold', () => {
     expect(folded(`${text}\n`)).toContain('building (x200, last: ')
   })
 })
+
+describe('long lines and many errors', () => {
+  test('shapes 40k character lines in well under a second', () => {
+    const started = performance.now()
+
+    folded(`${'a.'.repeat(20_000)}\n${'/a'.repeat(20_000)}\n`.repeat(3), 1)
+    expect(performance.now() - started).toBeLessThan(500)
+  })
+
+  test('never drops an error, however many come', () => {
+    const lines = Array.from({ length: 400 }, (_, i) => `step ${i}\nerror: failure number ${'x'.repeat(i % 7)}${i} in ${i % 2 === 0 ? 'a' : 'b'}.ts`)
+    const output = folded(`${lines.join('\n')}\n`, 50)
+
+    expect(output).toContain('failure number 399')
+    expect(output).toContain('failure number xxxxx')
+  })
+})

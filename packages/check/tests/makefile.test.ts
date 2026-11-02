@@ -17,6 +17,18 @@ describe('declarePhony', () => {
     expect(declarePhony('\n\nrun:\n\tbun x\n\n\n\ntest:\n\tbun test\n\n\n').content).toBe('.PHONY: run test\n\nrun:\n\tbun x\n\ntest:\n\tbun test\n')
   })
 
+  test('replaces a .PHONY line continued over several lines whole', () => {
+    const { content } = declarePhony('.PHONY: a b \\\n  c d\n\na:\n\ttrue\n\nb:\n\ttrue\n')
+
+    expect(content).toBe('.PHONY: a b\n\na:\n\ttrue\n\nb:\n\ttrue\n')
+  })
+
+  test('leaves out a target that is a file that exists or that depends on files', () => {
+    const { targets } = declarePhony('node_modules: package.json\n\tbun install\n\nbuild: src/main.c\n\tcc\n\ndist:\n\tmkdir dist\n\ntest:\n\ttrue\n', name => name === 'dist')
+
+    expect(targets).toEqual(['test'])
+  })
+
   test('adds no declaration to a Makefile without targets', () => {
     expect(declarePhony('include other.mk\n')).toEqual({ content: 'include other.mk\n', targets: [] })
   })

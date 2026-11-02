@@ -1,7 +1,14 @@
+import { mkdtempSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
 import { discover } from '../src/steps'
+
+const RUNTIME = mkdtempSync(join(tmpdir(), 'check-runtime-'))
+
+process.env.XDG_RUNTIME_DIR = RUNTIME
 
 const repo = (name: string) => new URL(`fixtures/repos/${name}`, import.meta.url).pathname
 
@@ -28,8 +35,26 @@ describe('discover', () => {
     expect((await discover(repo('self'))).map(step => step.name)).toEqual(['lint'])
   })
 
-  test('a Justfile\'s recipes without parameters', async () => {
-    expect(await discover(repo('just'))).toEqual([{ name: 'lint', command: 'just lint', source: 'Justfile' }])
+  test.skipIf(Bun.which('just') === null)('a Justfile\'s recipes that need no argument', async () => {
+    expect(await discover(repo('just'))).toEqual([{ name: 'lint', command: 'just lint', source: 'Justfile' }, { name: 'test', command: 'just test', source: 'Justfile' }])
+  })
+
+  test.skipIf(Bun.which('just') === null)('recipes with @ or parameters are found, those needing an argument or private are not', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'check-just-'))
+
+    writeFileSync(join(dir, 'Justfile'), '@test:\n  true\n\nlint *args:\n  true\n\ncheck:\n  true\n\n[private]\ntypecheck:\n  true\n')
+    expect((await discover(dir)).map(step => step.name)).toEqual(['check', 'lint', 'test'])
+
+    writeFileSync(join(dir, 'Justfile'), 'lint target:\n  true\n\ntest +files:\n  true\n')
+    expect(await discover(dir)).toEqual([])
+  })
+
+  test('reads GNUmakefile, then makefile, then Makefile, as make does', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'check-make-'))
+
+    writeFileSync(join(dir, 'Makefile'), 'lint:\n\ttrue\n')
+    writeFileSync(join(dir, 'GNUmakefile'), 'test:\n\ttrue\n')
+    expect((await discover(dir)).map(step => step.name)).toEqual(['test'])
   })
 
   test('composer.json scripts, even as an array', async () => {
@@ -72,7 +97,7 @@ describe('check', () => {
     expect(result).toBe(1)
     expect(outcomes.map(outcome => [outcome.name, outcome.ok, outcome.failed])).toEqual([['check', true, undefined], ['lint', false, 'src/a.ts(1,7): error TS2322: bad'], ['test', true, undefined]])
     expect(outcomes[0]?.log).toEndWith('check.log')
-    expect(JSON.parse((await capture(async () => check(['--list', '--json'], repo('just')))).out)).toEqual([{ name: 'lint', command: 'just lint', source: 'Justfile' }])
+    expect((JSON.parse((await capture(async () => check(['--list', '--json'], repo('just')))).out) as { name: string }[]).map(step => step.name)).toEqual(['lint', 'test'])
   })
 
   test('saves each step\'s full output to the file it prints', async () => {
@@ -91,6 +116,33 @@ describe('check', () => {
 
   test('--only with a step the repo lacks fails with the steps found', async () => {
     expect(await failure(check(['--only', 'test,nope'], repo('make')))).toContain('no nope step here, found test')
+  })
+
+  test('--only with no step name left fails instead of passing silently', async () => {
+    expect(await failure(check(['--only', ''], repo('js')))).toContain('--only names no step')
+    expect(await failure(check(['--only', ','], repo('js')))).toContain('--only names no step')
+  })
+
+  test('--timeout ends a step and what it started, and exits 2', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'check-timeout-'))
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'sleep 30 & wait' } }))
+
+    const started = Date.now()
+    const { result, out } = await capture(async () => check(['--timeout', '1s'], dir))
+
+    expect(result).toBe(2)
+    expect(out).toContain('TIME  test')
+    expect(Date.now() - started).toBeLessThan(10_000)
+  })
+
+  test('keeps the logs in a private folder of the user\'s own, one per run', async () => {
+    const { out } = await capture(async () => check(['--only', 'check'], repo('js')))
+    const path = out.slice(0, out.indexOf('\n')).split('  ').at(-1) ?? ''
+
+    expect(path.startsWith(RUNTIME)).toBe(true)
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(statSync(dirname(path)).mode & 0o777).toBe(0o700)
   })
 
   test('a folder without steps fails', async () => {

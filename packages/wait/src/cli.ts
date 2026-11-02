@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import type { Line } from './conditions'
+import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { duration, fail, formatDuration, jsonOption, paint, parse, printJson, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
@@ -67,6 +68,9 @@ async function waitTask(args: string[]): Promise<number> {
 
   if (path === undefined)
     fail(`no background task ${task}: give the id a background Bash call returned, or the path of its .output file`)
+
+  if (!existsSync(path))
+    fail(`no output file ${path}: ${task} is no background task of this machine`)
 
   if (isTranscript(path))
     fail(`${task} is a subagent, whose end its notification reports: waitfor task waits on a background Bash task`)

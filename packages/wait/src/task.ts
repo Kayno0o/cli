@@ -1,5 +1,5 @@
 import type { Line } from './conditions'
-import { existsSync, lstatSync, statSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 
@@ -56,6 +56,9 @@ export async function exitCode(path: string): Promise<number | undefined> {
 
 // What the task printed last: its last `lines` lines before the exit line, and the failure lines above them.
 export async function taskEnd(path: string, lines: number): Promise<TaskEnd> {
+  if (!existsSync(path))
+    return { failures: [], tail: [] }
+
   const text = (await Bun.file(path).text()).replace(EXITED, '')
   const all = text.split('\n').map((line, i) => ({ number: i + 1, text: Bun.stripANSI(line.replace(CARRIAGE_RETURN, '')) }))
 
@@ -72,11 +75,23 @@ export async function taskEnd(path: string, lines: number): Promise<TaskEnd> {
 export function pidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
-
-    return true
   }
   catch (error) {
     // EPERM: the process exists but belongs to someone else
     return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+
+  return !isZombie(pid)
+}
+
+// A zombie has ended and only waits for its parent to reap it, which a wait for it to exit should not outlast; its state is the letter after the command in parentheses in /proc/<pid>/stat.
+function isZombie(pid: number): boolean {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+
+    return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) === 'Z'
+  }
+  catch {
+    return false
   }
 }
