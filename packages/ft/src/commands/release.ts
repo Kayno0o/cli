@@ -1,8 +1,8 @@
 import { basename, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { duration, fail, formatDuration, parse, runHint, warn } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, formatDuration, holdSignals, parse, runHint, warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
-import { defaultBranch, git, gitOk, tagsAt } from '../git'
+import { defaultBranch, fetchBranch, git, gitOk, tagsAt } from '../git'
 import { closedIssues, openIssues } from '../issues'
 import { closeMilestone, listMilestones } from '../milestones'
 import { newestPerWorkflow, recentRuns } from '../runs'
@@ -14,7 +14,7 @@ ft release --tagged
 Cuts a release from the default branch: first the commit it sits on is pushed and its runs waited for, so failing tests stop it before anything is bumped or tagged. Then \`bun pm version\` commits and tags the bump, one atomic push sends the branch and its tag, and it waits for the runs the push started and for the registry to serve the version.
 --tagged releases a version commit already tagged at HEAD instead, for repos bumping with their own script; the runs waited for first are then those of the commit below it.
 --package releases one workspace package of a monorepo on its own, tagged \`<folder>-v<version>\` (\`ft release patch -p ft\` tags packages/ft as ft-v0.3.0).
-A refused push drops the bump commit and its tag, so a retry starts clean.
+A refused or interrupted push drops the bump commit and its tag, so a retry starts clean; with --tagged the commit and tag are yours and stay.
 Once released, an open milestone titled like the version (\`1.2.0\`, \`v1.2.0\` or the tag) has its closed issues listed and is closed; a failure there only warns.
 --dry-run checks the same and prints the plan: the version bump, the tag, the pushes and the runs and registry it would wait for, changing nothing.
 Exits 0 once released or planned, 1 when a run fails, origin refuses a push or the registry never serves the version, 2 on a timeout, a stalled queue, a refusal before anything ran (another branch, uncommitted changes, origin ahead) or a usage error.`
@@ -177,6 +177,21 @@ async function printPlan({ level, dir, prefix, branch, base, timeout, registry }
   return 0
 }
 
+// Drops the bump commit and the tags it made, back to the commit the release started on; a failure only warns, as the release already failed.
+async function rollBack(preBump: string, tagsBefore: Set<string>): Promise<void> {
+  try {
+    for (const name of await tagsAt('HEAD')) {
+      if (!tagsBefore.has(name))
+        await git(['tag', '-d', name])
+    }
+
+    await git(['reset', '--keep', preBump])
+  }
+  catch (error) {
+    warn(`could not undo the bump, back to ${preBump.slice(0, 7)} by hand`, error instanceof Error ? error.message : String(error))
+  }
+}
+
 export async function release(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
@@ -202,7 +217,7 @@ export async function release(args: string[]): Promise<number> {
   if (await git(['status', '--porcelain']) !== '')
     fail('the tree has uncommitted changes', 2, runHint('gst', 'see them, then commit them with gc'))
 
-  await git(['fetch', '-q', 'origin', branch])
+  await fetchBranch(branch)
 
   // A push origin would refuse is caught before the bump.
   if ((await $`git merge-base --is-ancestor ${`origin/${branch}`} HEAD`.quiet().nothrow()).exitCode !== 0)
@@ -217,35 +232,68 @@ export async function release(args: string[]): Promise<number> {
   if (!await testsPass(base, branch, timeout))
     fail(`the runs on ${base.slice(0, 7)} failed, so nothing was bumped or tagged`, 1, runHint(`ft runs --sha ${base.slice(0, 7)}`, 'list the runs, then ft logs <id> reads the failure'))
 
-  if (level !== undefined) {
-    const bump = dir === undefined
-      ? await $`bun pm version ${level}`.quiet().nothrow()
-      : await $`bun pm version ${level} --no-git-tag-version`.cwd(dir).quiet().nothrow()
-
-    if (bump.exitCode !== 0)
-      fail(`bun pm version ${level}: ${bump.stderr.toString().trim() || bump.stdout.toString().trim()}`)
-
-    if (dir !== undefined)
-      await commitPackageBump(dir, prefix)
-  }
-
-  const tag = (await tagsAt('HEAD')).find(name => taggedVersion(name, prefix) !== undefined)
-
-  if (tag === undefined)
-    fail(tagged ? `HEAD carries no ${prefix}* tag` : `the bump made no ${prefix}* tag`)
-
+  // Read before the bump, so a failure here leaves nothing to undo.
+  const preBump = await git(['rev-parse', 'HEAD'])
+  const tagsBefore = new Set(await tagsAt('HEAD'))
   const before = (await recentRuns(1))[0]?.id ?? 0
-  const push = await $`git push --atomic origin ${`HEAD:refs/heads/${branch}`} ${tag}`.quiet().nothrow()
+  const held = holdSignals()
+  // A getter TypeScript narrows after one check, though a signal can arrive at any await.
+  const signalOf = () => held.signal
+  let tag = ''
+  let head = ''
+  let pushed = false
 
-  if (push.exitCode !== 0) {
-    await git(['tag', '-d', tag])
-    await git(['reset', '--keep', 'HEAD~1'])
-    fail(`origin refused the push, so ${tag} and its commit were dropped for a clean retry:\n${push.stderr.toString().trim()}`, 1)
+  // Everything between the bump and the push is undone on a failure or a signal, but only what this run created: with --tagged the commit and tag are the user's own.
+  try {
+    if (level !== undefined) {
+      const bump = dir === undefined
+        ? await $`bun pm version ${level}`.quiet().nothrow()
+        : await $`bun pm version ${level} --no-git-tag-version`.cwd(dir).quiet().nothrow()
+
+      if (bump.exitCode !== 0)
+        fail(`bun pm version ${level}: ${bump.stderr.toString().trim() || bump.stdout.toString().trim()}`)
+
+      if (dir !== undefined)
+        await commitPackageBump(dir, prefix)
+    }
+
+    const found = (await tagsAt('HEAD')).find(name => taggedVersion(name, prefix) !== undefined)
+
+    if (found === undefined)
+      fail(tagged ? `HEAD carries no ${prefix}* tag` : `the bump made no ${prefix}* tag`)
+
+    tag = found
+
+    head = await git(['rev-parse', 'HEAD'])
+
+    if (held.signal !== undefined)
+      fail(`interrupted by ${held.signal} before the push`, exitCodeOf(null, held.signal))
+
+    const push = await $`git push --atomic origin ${`HEAD:refs/heads/${branch}`} ${tag}`.quiet().nothrow()
+
+    if (push.exitCode !== 0) {
+      const signal = signalOf()
+
+      fail(`origin refused the push${signal === undefined ? '' : `, or ${signal} interrupted it`}, so ${level === undefined ? `${tag} and its commit are kept for a retry` : `${tag} and its commit were dropped for a clean retry`}:\n${push.stderr.toString().trim()}`, signal === undefined ? 1 : exitCodeOf(null, signal))
+    }
+
+    pushed = true
   }
+  finally {
+    held.release()
+
+    if (!pushed && level !== undefined)
+      await rollBack(preBump, tagsBefore)
+  }
+
+  const late = signalOf()
+
+  if (late !== undefined)
+    fail(`interrupted by ${late} after ${tag} was pushed: its runs are not waited for`, exitCodeOf(null, late))
 
   console.log(`pushed ${branch} and ${tag}, waiting for their runs`)
 
-  const code = await watchRuns(runs => runs.filter(run => run.id > before), timeout)
+  const code = await watchRuns(runs => runs.filter(run => run.id > before && run.commit_sha === head), timeout, undefined, NO_RUN)
 
   if (code !== 0)
     return code

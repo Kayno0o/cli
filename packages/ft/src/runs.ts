@@ -62,8 +62,18 @@ export async function recentRuns(limit: number, repo?: string, workflow?: string
   return (await runsListing(limit, repo, workflow)).runs
 }
 
+// Every run of a commit, paged since Forgejo caps a page, so the newest per workflow is picked from the whole list.
 export async function runsOn(sha: string, repo?: string): Promise<Run[]> {
-  return (await repoApi<{ workflow_runs: Run[] | null }>(`actions/runs?head_sha=${sha}`, repo)).workflow_runs ?? []
+  const runs: Run[] = []
+
+  for (let page = 1; ; page++) {
+    const list = (await repoApi<{ workflow_runs: Run[] | null }>(`actions/runs?head_sha=${sha}&page=${page}&limit=${RUNS_PAGE}`, repo)).workflow_runs ?? []
+
+    runs.push(...list)
+
+    if (list.length < RUNS_PAGE)
+      return runs
+  }
 }
 
 export async function runById(id: number, repo?: string): Promise<Run> {

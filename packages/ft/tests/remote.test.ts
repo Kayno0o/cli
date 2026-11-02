@@ -5,15 +5,23 @@ import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { remote } from '../src/commands/remote'
 import { loadSettings, settingsPath } from '../src/config'
-import { canonicalRemote, parseSshRemote, reachesHost } from '../src/remote'
+import { canonicalRemote, parseSshRemote, reachesHost, redactUrl } from '../src/remote'
 
 const HOST = 'git.kaynooo.fr'
 const reaches = (alias: string) => alias === 'forgejo' || alias === 'gitea'
 
 describe('canonicalRemote', () => {
   test('switches an alias remote, in every spelling, to git@<host>:<owner>/<repo>.git', () => {
-    for (const url of ['forgejo:kaynooo/kayjs.git', 'git@forgejo:kaynooo/kayjs.git', 'gitea:kaynooo/kayjs', 'ssh://git@forgejo/kaynooo/kayjs.git', 'ssh://git@forgejo:22022/kaynooo/kayjs/'])
+    for (const url of ['forgejo:kaynooo/kayjs.git', 'git@forgejo:kaynooo/kayjs.git', 'gitea:kaynooo/kayjs', 'ssh://git@forgejo/kaynooo/kayjs.git', 'ssh://git@forgejo:22/kaynooo/kayjs/'])
       expect(canonicalRemote(url, HOST, reaches)).toBe('git@git.kaynooo.fr:kaynooo/kayjs.git')
+  })
+
+  test('keeps a port other than 22, which only the URL form carries', () => {
+    expect(canonicalRemote('ssh://git@forgejo:22022/kaynooo/kayjs/', HOST, reaches)).toBe('ssh://git@git.kaynooo.fr:22022/kaynooo/kayjs.git')
+  })
+
+  test('drops a token written after the user', () => {
+    expect(canonicalRemote('ssh://git:s3cret@forgejo/kaynooo/kayjs.git', HOST, reaches)).toBe('git@git.kaynooo.fr:kaynooo/kayjs.git')
   })
 
   test('leaves the host itself, another host and an https remote alone', () => {
@@ -26,6 +34,18 @@ describe('parseSshRemote', () => {
   test('reads user, host and path, and no https URL', () => {
     expect(parseSshRemote('deploy@forgejo:a/b.git')).toEqual({ user: 'deploy', host: 'forgejo', path: 'a/b' })
     expect(parseSshRemote('https://git.kaynooo.fr/a/b.git')).toBeUndefined()
+  })
+
+  test('refuses a host ssh would read as an option', () => {
+    expect(parseSshRemote('-oProxyCommand=x:a/b.git')).toBeUndefined()
+    expect(parseSshRemote('ssh://-oProxyCommand=x/a/b.git')).toBeUndefined()
+  })
+})
+
+describe('redactUrl', () => {
+  test('strips the user and token of a URL, and leaves one without', () => {
+    expect(redactUrl('https://user:tok3n@git.kaynooo.fr/a/b.git')).toBe('https://git.kaynooo.fr/a/b.git')
+    expect(redactUrl('git@git.kaynooo.fr:a/b.git')).toBe('git@git.kaynooo.fr:a/b.git')
   })
 })
 
@@ -62,6 +82,15 @@ describe('the remote host setting', () => {
     expect(await loadSettings(homeWith())).toEqual({})
     expect(await loadSettings(homeWith('not json'))).toEqual({})
     expect(await loadSettings(homeWith('{"remoteHost":""}'))).toEqual({})
+  })
+
+  test('warns about a settings file it cannot use', async () => {
+    const broken = await capture(async () => loadSettings(homeWith('not json')))
+    const wrongType = await capture(async () => loadSettings(homeWith('{"remoteHost":3}')))
+
+    expect(broken.err).toContain('is not valid JSON')
+    expect(wrongType.err).toContain('remoteHost')
+    expect(wrongType.result).toEqual({})
   })
 
   test('left unset, ft remote checks nothing and says where to set it', async () => {

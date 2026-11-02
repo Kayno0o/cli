@@ -8,7 +8,7 @@ import { repoOption } from '../args'
 import { boxes } from '../checklist'
 import { latestClaim } from '../claims'
 import { defaultBranch, git, gitOk } from '../git'
-import { commentsOfAll, openIssues } from '../issues'
+import { commentsOfAll, openIssues, sessionAuthor } from '../issues'
 import { FINISHED, newestPerWorkflow, recentRuns } from '../runs'
 import { currentSession, liveSessions } from '../sessions'
 import { standing } from './board'
@@ -170,7 +170,8 @@ export async function digest(args: string[]): Promise<number> {
   const [issues, sessions, branch, runs] = await Promise.all([openIssues(undefined, values.repo), liveSessions(), defaultBranch(), recentRuns(RUNS_SCANNED, values.repo)])
   const comments = await commentsOfAll(issues, values.repo)
   const me = await currentSession(sessions)
-  const rows = issues.map(issue => ({ issue, claim: latestClaim(comments.get(issue.number) ?? []) }))
+  const author = await sessionAuthor()
+  const rows = issues.map(issue => ({ issue, claim: latestClaim(comments.get(issue.number) ?? [], author) }))
   const [unpushed, dirty, stale] = await Promise.all([quietly(unpushedCommits), quietly(dirtyTree), staleTodos()])
   const summary: Digest = { ...claims(rows, sessions, me), ci: unsettled(runs, branch), unpushed, dirty, stale }
 

@@ -276,14 +276,17 @@ function nearestOption(message: string, options: Options, allowNegative: boolean
   return meant === undefined ? undefined : `did you mean ${known.find(flag => flag.replace(DASHES, '') === meant)}?`
 }
 
+const WHOLE = /^\d+$/
+
+// A name written `<run id>` is a positional and is printed as is, any other is an option printed `--name`.
 export function wholeNumber(value: string | undefined, name: string, fallback: number, min = 1): number {
   if (value === undefined)
     return fallback
 
   const number = Number(value)
 
-  if (!Number.isInteger(number) || number < min)
-    badUsage(`--${name} takes a whole number from ${min}, not ${value}`)
+  if (!WHOLE.test(value) || !Number.isSafeInteger(number) || number < min)
+    badUsage(`${name.startsWith('<') ? name : `--${name}`} takes a whole number from ${min}, not ${value}`)
 
   return number
 }

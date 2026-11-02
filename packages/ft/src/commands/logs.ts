@@ -34,7 +34,7 @@ export async function logs(args: string[]): Promise<number> {
   if (positionals[0] === undefined)
     fail('a run id is needed', 2, runHint('ft runs', 'list them'))
 
-  const run = await runById(wholeNumber(positionals[0], 'run id', 0), values.repo)
+  const run = await runById(wholeNumber(positionals[0], '<run id>', 0), values.repo)
   const jobs = await jobsOf(run.id, values.repo)
   const picked = pickJobs(jobs, values.job)
 

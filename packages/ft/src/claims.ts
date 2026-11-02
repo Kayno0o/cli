@@ -1,12 +1,12 @@
 import type { Session } from './sessions'
 
 // The comments sessions post to take an issue and to give it back.
-const TAKEN = /^\s*taken by session ([\w.@:-]+?)\.?\s*$/im
-const RELEASED = /^\s*released by session ([\w.@:-]+?)\.?\s*$/im
+const TAKEN = /^\s*taken by session ([\w.@:-]+?)\.?\s*$/i
+const RELEASED = /^\s*released by session ([\w.@:-]+?)\.?\s*$/i
 // A kayjs lane is named lane-<n>-<issue> after the session it runs in, whose name ends in -<n>.
 const LANE = /^lane-([^-]+)-/
 
-export interface Comment { body: string, created_at: string }
+export interface Comment { body: string, created_at: string, user?: { login: string } }
 export interface Claim { holder: string, at: string }
 
 export function takenComment(name: string): string {
@@ -17,11 +17,16 @@ export function releasedComment(name: string): string {
   return `Released by session ${name}.`
 }
 
+// A claim is a comment made of that sentence alone, so a quote or a code block mentioning it claims nothing; given an author, only that user's comments count, as every session posts under the same login.
+function isClaimant(comment: Comment, author: string | undefined): boolean {
+  return author === undefined || comment.user === undefined || comment.user.login === author
+}
+
 // The claim the comments leave standing: the latest one taking the issue, unless its holder released it since.
-export function latestClaim(comments: Comment[]): Claim | undefined {
+export function latestClaim(comments: Comment[], author?: string): Claim | undefined {
   let claim: Claim | undefined
 
-  for (const comment of [...comments].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))) {
+  for (const comment of comments.filter(each => isClaimant(each, author)).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))) {
     const taken = TAKEN.exec(comment.body)?.[1]
 
     if (taken !== undefined) {

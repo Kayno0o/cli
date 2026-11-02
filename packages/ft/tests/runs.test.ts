@@ -1,6 +1,6 @@
 import type { Run } from '../src/runs'
 import { describe, expect, test } from 'bun:test'
-import { judge } from '../src/commands/ci'
+import { commitsToAsk, judge, settled } from '../src/commands/ci'
 import { newestPerWorkflow, overall, startedAge } from '../src/runs'
 
 function run(id: number, status: string, workflow = 'test.yml', event = 'push'): Run {
@@ -29,6 +29,24 @@ describe('judge', () => {
     const release = judge([run(1, 'success')], true, true)
 
     expect(release.kind === 'runs' && release.runs.map(found => found.status)).toEqual(['skipped'])
+  })
+})
+
+describe('settled', () => {
+  test('keeps refreshed runs that are all over, but not one holding a cancelled run', () => {
+    expect(settled([run(1, 'success'), run(2, 'failure')])?.length).toBe(2)
+    expect(settled([run(1, 'success'), run(2, 'cancelled')])).toBeUndefined()
+    expect(settled([run(1, 'running')])).toBeUndefined()
+    expect(settled(undefined)).toBeUndefined()
+  })
+})
+
+describe('commitsToAsk', () => {
+  test('skips commits already passed over and caps a long gap', () => {
+    const commits = Array.from({ length: 50 }, (_, at) => `c${at}`)
+
+    expect(commitsToAsk(commits, new Set(['c0', 'c1']), 3)).toEqual(['c2', 'c3', 'c4'])
+    expect(commitsToAsk(commits, new Set())).toHaveLength(20)
   })
 })
 

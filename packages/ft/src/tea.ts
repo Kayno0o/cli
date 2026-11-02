@@ -33,11 +33,20 @@ function parseJson<T>(path: string, text: string): T {
     throw new Error(`tea api ${path}: ${upTo(text.trim(), '\n') || 'empty answer'}`)
   }
 
-  // tea exits 0 on an API error and prints Forgejo's error object instead.
-  if (value !== null && typeof value === 'object' && !Array.isArray(value) && 'message' in value && typeof value.message === 'string' && 'url' in value)
-    throw new Error(`tea api ${path}: ${value.message}`)
+  const failure = apiError(value)
+
+  if (failure !== undefined)
+    throw new Error(`tea api ${path}: ${failure}`)
 
   return value as T
+}
+
+// tea exits 0 on an API error and prints Forgejo's error object instead.
+function apiError(value: unknown): string | undefined {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value) && 'message' in value && typeof value.message === 'string' && 'url' in value)
+    return value.message
+
+  return undefined
 }
 
 export async function api<T>(path: string, repo?: string): Promise<T> {
@@ -67,22 +76,40 @@ export async function repoWrite<T>(method: 'POST' | 'PATCH', path: string, field
   return parseJson<T>(full, result.stdout.toString())
 }
 
+// A text answer such as a job log; Forgejo's error object, which tea prints with exit 0, is thrown instead of returned as the text.
 export async function repoApiText(path: string, repo?: string): Promise<string> {
-  return request(`repos/{owner}/{repo}/${path}`, repo)
+  const full = `repos/{owner}/{repo}/${path}`
+  const text = await request(full, repo)
+  let value: unknown
+
+  try {
+    value = JSON.parse(text)
+  }
+  catch {
+    return text
+  }
+
+  const failure = apiError(value)
+
+  if (failure !== undefined)
+    throw new Error(`tea api ${full}: ${failure}`)
+
+  return text
 }
 
-export async function tea(args: string[], repo?: string): Promise<string> {
+// Runs a tea subcommand (`['issues', 'edit']`) with `--repo` straight after its name, before any positional or flag value that could be read as one.
+export async function tea(command: string[], args: string[], repo?: string): Promise<string> {
   let result
 
   try {
-    result = await $`tea ${args} ${repoFlag(repo)}`.quiet().nothrow()
+    result = await $`tea ${command} ${repoFlag(repo)} ${args}`.quiet().nothrow()
   }
   catch (error) {
-    throw spawnFailure(`tea ${args[0] ?? ''}`, error)
+    throw spawnFailure(`tea ${command.join(' ')}`, error)
   }
 
   if (result.exitCode !== 0)
-    throw new Error(`tea ${args[0] ?? ''}: ${result.stderr.toString().trim() || result.stdout.toString().trim() || `exit ${result.exitCode}`}`)
+    throw new Error(`tea ${command.join(' ')}: ${result.stderr.toString().trim() || result.stdout.toString().trim() || `exit ${result.exitCode}`}`)
 
   return result.stdout.toString()
 }

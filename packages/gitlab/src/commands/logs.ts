@@ -34,7 +34,7 @@ export async function logs(args: string[]): Promise<number> {
   if (positionals[0] === undefined)
     fail(`a pipeline id is needed, as \`gl runs\` lists them\n\n${usage}`)
 
-  const pipeline = await pipelineById(wholeNumber(positionals[0], 'pipeline id', 0), values.repo)
+  const pipeline = await pipelineById(wholeNumber(positionals[0], '<pipeline id>', 0), values.repo)
   const jobs = await jobsOf(pipeline.id, values.repo)
   const picked = pickJobs(jobs, values.job)
 

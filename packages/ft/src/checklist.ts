@@ -1,24 +1,45 @@
-const BOX = /^(\s*[-*+] \[)([ x])(\]\s)(.*)\r?$/i
-const FENCE = /^\s*(?:```|~~~)/
+// The dotAll flag keeps a U+2028 or U+2029 in a box's text from ending the match.
+const BOX = /^(\s*[-*+] \[)([ x])(\]\s)(.*?)\r?$/is
+const FENCE = /^\s*(`{3,}|~{3,})/
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s/
+const INDENT_CODE = /^(?: {4}|\t)/
 
 export interface Box { number: number, line: number, done: boolean, text: string }
 
-// The task-list boxes of a Markdown body, numbered from 1, those inside fenced code left out.
+// The task-list boxes of a Markdown body, numbered from 1, those inside fenced or indented code left out.
 export function boxes(body: string): Box[] {
   const found: Box[] = []
-  let fenced = false
+  let fence: string | undefined
+  let inList = false
 
   for (const [line, text] of body.split('\n').entries()) {
-    if (FENCE.test(text)) {
-      fenced = !fenced
+    const marker = FENCE.exec(text)?.[1]
+
+    // A fence closes on its own character, at least as long as the one that opened it.
+    if (fence !== undefined) {
+      if (marker?.startsWith(fence[0] ?? '') === true && marker.length >= fence.length && text.trim() === marker)
+        fence = undefined
 
       continue
     }
 
-    const match = fenced ? null : BOX.exec(text)
+    if (marker !== undefined) {
+      fence = marker
+
+      continue
+    }
+
+    const blank = text.trim() === ''
+    const match = INDENT_CODE.test(text) && !inList ? null : BOX.exec(text)
 
     if (match !== null)
       found.push({ number: found.length + 1, line, done: match[2] !== ' ', text: match[4] ?? '' })
+
+    // Four spaces are code unless a list item above they continue.
+    if (LIST_ITEM.test(text))
+      inList = true
+    else if (!blank && !text.startsWith(' ') && !text.startsWith('\t'))
+      inList = false
   }
 
   return found
@@ -54,17 +75,23 @@ export function numberedBody(body: string): string {
 
 export interface Ticked { body: string, changed: Box[] }
 
-// Picks are box numbers or text matching exactly one box, case-insensitive; an unknown or ambiguous pick throws.
+const NUMBERED_PICK = /^(\d+):(.+)$/s
+const WHOLE_PICK = /^\d+$/
+
+// Picks are box numbers, `N:text` for box N only when its text starts with that text, or text matching exactly one box, case-insensitive; an empty, unknown or ambiguous pick throws.
 export function setBoxes(body: string, picks: string[], done: boolean): Ticked {
   const all = boxes(body)
   const chosen = new Map<number, Box>()
 
   for (const pick of picks) {
-    const number = Number(pick)
-    const needle = pick.toLowerCase()
-    const matches = Number.isInteger(number) && String(number) === pick
-      ? all.filter(box => box.number === number)
-      : all.filter(box => box.text.toLowerCase().includes(needle))
+    if (pick.trim() === '')
+      throw new Error('an empty box pick matches every box')
+
+    const guarded = NUMBERED_PICK.exec(pick)
+    const needle = (guarded?.[2] ?? pick).trim().toLowerCase()
+    const matches = guarded === null && !WHOLE_PICK.test(pick)
+      ? all.filter(box => box.text.toLowerCase().includes(needle))
+      : all.filter(box => box.number === Number(guarded?.[1] ?? pick) && (guarded === null || box.text.toLowerCase().startsWith(needle)))
 
     if (matches.length === 0)
       throw new Error(`no box matches ${pick}`)

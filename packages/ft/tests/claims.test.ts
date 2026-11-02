@@ -22,9 +22,18 @@ describe('latestClaim', () => {
     expect(latestClaim([{ body: takenComment('a-1'), created_at: at(1) }, { body: releasedComment('b-2'), created_at: at(2) }])?.holder).toBe('a-1')
   })
 
-  test('reads a claim inside a longer comment, and ignores one quoted mid-line', () => {
-    expect(latestClaim([{ body: 'Picking this up.\nTaken by session lane-80-1978.', created_at: at(1) }])?.holder).toBe('lane-80-1978')
+  test('reads a comment that is the claim alone, and ignores one quoted, fenced or inside a longer comment', () => {
+    expect(latestClaim([{ body: 'Taken by session lane-80-1978.\r\n', created_at: at(1) }])?.holder).toBe('lane-80-1978')
+    expect(latestClaim([{ body: 'Picking this up.\nTaken by session lane-80-1978.', created_at: at(1) }])).toBeUndefined()
+    expect(latestClaim([{ body: '```\nTaken by session x-1.\n```', created_at: at(1) }])).toBeUndefined()
     expect(latestClaim([{ body: 'as the "Taken by session x-1." comment said', created_at: at(1) }])).toBeUndefined()
+  })
+
+  test('counts only the claims of the given author', () => {
+    const comments = [{ body: takenComment('a-1'), created_at: at(1), user: { login: 'kaynooo' } }, { body: takenComment('b-2'), created_at: at(2), user: { login: 'stranger' } }]
+
+    expect(latestClaim(comments, 'kaynooo')?.holder).toBe('a-1')
+    expect(latestClaim(comments)?.holder).toBe('b-2')
   })
 })
 

@@ -6,7 +6,7 @@ import { Exit } from '@kaynooo/cli-kit'
 
 export interface FakeIssue { number: number, title: string, body: string, state: string, labels?: { name: string }[], milestone?: { id: number, title: string } | null | undefined }
 export interface FakeMilestone { id: number, title: string, state: string, description?: string, due_on?: string | null }
-export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[] }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[], clobber?: Record<number, string>, afterComment?: Record<number, string[]> }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -14,7 +14,16 @@ import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 
 const file = process.env.FAKE_TEA_STATE
 const state = JSON.parse(readFileSync(file, 'utf8'))
-const args = process.argv.slice(2).filter((arg, at, all) => arg !== '--repo' && all[at - 1] !== '--repo')
+const raw = process.argv.slice(2)
+const repoAt = raw.indexOf('--repo')
+
+// Like tea, a flag has to come before the positionals: one after a bare number is taken for another positional.
+if (repoAt !== -1 && raw.slice(0, repoAt).some(arg => /^\\d+$/.test(arg))) {
+  console.error('Error: --repo placed after a positional argument')
+  process.exit(1)
+}
+
+const args = raw.filter((arg, at, all) => arg !== '--repo' && all[at - 1] !== '--repo')
 const flag = name => { const at = args.indexOf(name); return at === -1 ? undefined : args[at + 1] }
 const issue = number => state.issues.find(each => each.number === Number(number))
 const milestoneNamed = name => state.milestones?.find(each => each.title === name)
@@ -40,7 +49,13 @@ if (command === 'api') {
   const one = /^issues\\/(\\d+)(\\/comments)?$/.exec(path)
   const found = one === null ? undefined : issue(one[1])
 
-  if (run !== null)
+  if (path === 'user')
+    console.log(JSON.stringify({ login: 'kaynooo' }))
+  else if (one !== null && one[2] !== undefined && method === 'POST') {
+    state.comments = { ...state.comments, [one[1]]: [...(state.comments?.[one[1]] ?? []), fields.body, ...(state.afterComment?.[one[1]] ?? [])] }
+    console.log(JSON.stringify({ id: 1, body: fields.body }))
+  }
+  else if (run !== null)
     console.log(JSON.stringify(state.runs?.find(each => each.id === Number(run[1])) ?? { message: 'not found', url: '' }))
   else if (/^actions\\/runs\\/\\d+\\/jobs$/.test(path))
     console.log('[]')
@@ -75,6 +90,13 @@ else if (command === 'issues' && sub === 'edit') {
   const found = issue(number)
 
   found.body = flag('-d') ?? flag('--description') ?? found.body
+
+  // Another writer's save landing right after this one, once, so the write is lost.
+  if (flag('-d') !== undefined && state.clobber?.[number] !== undefined) {
+    found.body = state.clobber[number]
+    delete state.clobber[number]
+  }
+
   found.title = flag('-t') ?? flag('--title') ?? found.title
   const moved = flag('-m') ?? flag('--milestone')
 
@@ -95,9 +117,6 @@ else if (command === 'issues' && sub === 'close') {
 }
 else if (command === 'issues' && sub === 'reopen') {
   issue(number).state = 'open'
-}
-else if (command === 'comment') {
-  state.comments = { ...state.comments, [sub]: [...(state.comments?.[sub] ?? []), args[2]] }
 }
 else {
   console.error('fake tea: unhandled ' + args.join(' '))

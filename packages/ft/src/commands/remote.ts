@@ -1,10 +1,10 @@
 import { lookup } from 'node:dns/promises'
 import { homedir } from 'node:os'
-import { note, parse } from '@kaynooo/cli-kit'
+import { fail, note, parse } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { loadSettings, settingsPath } from '../config'
 import { git } from '../git'
-import { canonicalRemote, parseSshRemote, reachesHost } from '../remote'
+import { canonicalRemote, parseSshRemote, reachesHost, redactUrl } from '../remote'
 
 const usage = `ft remote [--fix]
 
@@ -22,7 +22,7 @@ const options = {
 const HOSTNAME = /^hostname (.+)$/m
 
 async function sshHostname(alias: string): Promise<string | undefined> {
-  return HOSTNAME.exec(await $`ssh -G ${alias}`.quiet().nothrow().text())?.[1]
+  return HOSTNAME.exec(await $`ssh -G -- ${alias}`.quiet().nothrow().text())?.[1]
 }
 
 async function addresses(name: string): Promise<string[]> {
@@ -31,6 +31,17 @@ async function addresses(name: string): Promise<string[]> {
   }
   catch {
     return []
+  }
+}
+
+// Puts back the URLs `--fix` replaced.
+async function restoreOrigin(fetchUrl: string, pushUrls: string[], changes: (readonly [string, string])[]): Promise<void> {
+  if (changes.some(([from]) => from === fetchUrl))
+    await git(['remote', 'set-url', 'origin', fetchUrl])
+
+  for (const [from, to] of changes) {
+    if (pushUrls.includes(from))
+      await git(['remote', 'set-url', '--push', 'origin', from, to])
   }
 }
 
@@ -74,20 +85,20 @@ export async function remote(args: string[], home = homedir()): Promise<number> 
     const named = originHost(fetchUrl)
 
     if (named === host) {
-      console.log(`origin already names ${host}: ${fetchUrl}`)
+      console.log(`origin already names ${host}: ${redactUrl(fetchUrl)}`)
 
       return 0
     }
 
     const hostname = named === undefined ? undefined : hostnames.get(named)
 
-    console.log(`origin ${fetchUrl} does not reach ${host}${hostname === undefined || hostname === named ? '' : `: ssh connects ${named} to ${hostname}`}, pass --host if Forgejo lives elsewhere`)
+    console.log(`origin ${redactUrl(fetchUrl)} does not reach ${host}${hostname === undefined || hostname === named ? '' : `: ssh connects ${named} to ${hostname}`}, pass --host if Forgejo lives elsewhere`)
 
     return 1
   }
 
   for (const [from, to] of changes)
-    console.log(`${from} -> ${to}`)
+    console.log(`${redactUrl(from)} -> ${redactUrl(to)}`)
 
   if (values.fix !== true) {
     console.log('run `ft remote --fix` to switch them')
@@ -105,7 +116,15 @@ export async function remote(args: string[], home = homedir()): Promise<number> 
       await git(['remote', 'set-url', '--push', 'origin', to, from])
   }
 
-  await git(['ls-remote', 'origin', 'HEAD'])
+  try {
+    await git(['ls-remote', 'origin', 'HEAD'])
+  }
+  catch (error) {
+    await restoreOrigin(fetchUrl, pushUrls, changes)
+
+    return fail(`the switched origin does not answer, so the old URLs were put back: ${redactUrl(error instanceof Error ? error.message : String(error))}`, 1)
+  }
+
   console.log('origin switched, and git ls-remote reaches it')
 
   return 0

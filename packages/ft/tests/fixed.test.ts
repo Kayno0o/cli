@@ -67,6 +67,18 @@ describe('fixed', () => {
     })
   })
 
+  test('does not post its comment twice when a rerun finds it already last', async () => {
+    await withClone(['one'], async (shas) => {
+      const line = `Fixed in ${shas[0]?.slice(0, 7)}: done`
+      const state = await withFakeTea({ issues: [{ number: 7, title: 'seven', body: 'x', state: 'open' }], comments: { 7: [line] } }, async () => {
+        expect(await fixed(['7', 'HEAD', '-m', 'done'])).toBe(0)
+      })
+
+      expect(state.comments?.[7]).toEqual([line])
+      expect(state.issues[0]?.state).toBe('closed')
+    })
+  })
+
   test('names the commits given, and refuses boxes left without --tick', async () => {
     await withClone(['one', 'two'], async (shas) => {
       const state = await withFakeTea({ issues }, async () => {

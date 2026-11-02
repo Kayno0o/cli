@@ -1,3 +1,4 @@
+import type { Ticked } from '../checklist'
 import type { Named } from '../git'
 import type { Issue, IssueComment } from '../issues'
 import { fail, formatAge, jsonOption, parse, printJson, readInput, runHint } from '@kaynooo/cli-kit'
@@ -5,7 +6,7 @@ import { issueNumber, issueNumbers, repoOption } from '../args'
 import { appendBoxes, boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { latestClaim } from '../claims'
 import { commitsNaming, defaultBranch, git, resolveCommit } from '../git'
-import { close, comment, commentsOf, createIssue, editBody, editIssue, getIssue, openIssues, setBody } from '../issues'
+import { close, comment, commentsOf, createIssue, editBody, editIssue, getIssue, openIssues, sessionAuthor } from '../issues'
 import { findMilestone } from '../milestones'
 import { checkLabels } from './triage'
 
@@ -24,11 +25,11 @@ const issueOptions = {
   ...repoOption,
 } as const
 
-export interface IssueView { todo: boolean, comments: boolean }
+export interface IssueView { todo: boolean, comments: boolean, author?: string | undefined }
 
 // Renders an issue as `ft issue` prints it, now being the time ages are counted from.
 export function renderIssue(found: Issue, comments: IssueComment[], view: IssueView, now = Date.now()): string {
-  const claim = latestClaim(comments)
+  const claim = latestClaim(comments, view.author)
   const list = boxes(found.body)
   const left = list.filter(box => !box.done)
   const facts = [found.state]
@@ -58,14 +59,14 @@ export function renderIssue(found: Issue, comments: IssueComment[], view: IssueV
   return parts.join('\n\n')
 }
 
-function issueJson(found: Issue, comments: IssueComment[]) {
+function issueJson(found: Issue, comments: IssueComment[], author: string | undefined) {
   return {
     number: found.number,
     title: found.title,
     state: found.state,
     url: found.html_url,
     labels: found.labels.map(label => label.name),
-    claim: latestClaim(comments) ?? null,
+    claim: latestClaim(comments, author) ?? null,
     boxes: boxes(found.body).map(({ number, done, text }) => ({ number, done, text })),
     body: found.body,
     comments: comments.map(each => ({ author: each.user.login, at: each.created_at, body: each.body })),
@@ -88,15 +89,17 @@ export async function issue(args: string[]): Promise<number> {
 
   const read = await Promise.all(numbers.map(async number => Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])))
 
+  const author = await sessionAuthor()
+
   if (values.json === true) {
-    const json = read.map(([found, comments]) => issueJson(found, comments))
+    const json = read.map(([found, comments]) => issueJson(found, comments, author))
 
     printJson(json.length === 1 ? json[0] : json)
 
     return 0
   }
 
-  const view = { todo: values.todo === true, comments: values.comments === true }
+  const view = { todo: values.todo === true, comments: values.comments === true, author }
 
   console.log(read.map(([found, comments]) => renderIssue(found, comments, view)).join(view.todo ? '\n\n' : '\n\n\n'))
 
@@ -118,12 +121,18 @@ async function noteText(values: { message?: string | undefined, file?: string | 
   return text?.trim() === '' ? undefined : text?.trim()
 }
 
+const NOT_FOUND = /not exist|not found|couldn't be found/i
+
+// An issue Forgejo does not know, such as another repo's number, counts as open; any other failure is thrown, as it says nothing about the state.
 async function isClosed(number: number, repo: string | undefined): Promise<boolean> {
   try {
     return (await getIssue(number, repo)).state === 'closed'
   }
-  catch {
-    return false
+  catch (error) {
+    if (error instanceof Error && NOT_FOUND.test(error.message))
+      return false
+
+    throw error
   }
 }
 
@@ -218,18 +227,26 @@ export async function edit(args: string[]): Promise<number> {
   if (milestone !== undefined)
     change.milestone = milestone
 
-  if (text !== undefined && values.append !== true)
+  const grows = (text !== undefined && values.append === true) || added.length > 0
+
+  if (text !== undefined && !grows)
     change.body = text
-  else if (text !== undefined || added.length > 0)
-    change.body = (await getIssue(number, values.repo)).body
 
-  if (text !== undefined && values.append === true)
-    change.body = `${(change.body ?? '').trimEnd()}\n\n${text}`
+  if (Object.keys(change).length > 0)
+    await editIssue(number, change, values.repo)
 
-  if (added.length > 0)
-    change.body = appendBoxes(change.body ?? '', added)
+  // Adding to the description re-reads it right before writing, so a tick or an edit made meanwhile is kept.
+  if (grows) {
+    // A retry after a lost update runs this on the body again, so what is already in it is not added twice.
+    await editBody(number, (body) => {
+      const appended = text !== undefined && values.append === true && !body.trimEnd().endsWith(text) ? `${body.trimEnd()}\n\n${text}` : body
+      const present = new Set(boxes(appended).map(box => box.text))
+      const missing = added.filter(box => !present.has(box))
 
-  await editIssue(number, change, values.repo)
+      return missing.length > 0 ? appendBoxes(appended, missing) : appended
+    }, values.repo)
+  }
+
   console.log(`edited #${number}`)
 
   return 0
@@ -249,6 +266,15 @@ const tickOptions = {
   ...repoOption,
 } as const
 
+function tickedOrFail(number: number, run: () => Ticked): Ticked {
+  try {
+    return run()
+  }
+  catch (error) {
+    fail(`#${number}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 export async function tick(args: string[]): Promise<number> {
   const parsed = parse(args, tickUsage, tickOptions)
 
@@ -266,20 +292,16 @@ export async function tick(args: string[]): Promise<number> {
   const found = await getIssue(number, values.repo)
   const done = values.undo !== true
   const closed = values.closed === true ? await closedReferences(found.body, values.repo) : undefined
-  let result
+  const apply = (body: string) => closed === undefined ? setBoxes(body, picks, done) : tickReferences(body, issue => closed.has(issue))
+  let result = tickedOrFail(number, () => apply(found.body))
 
-  try {
-    result = closed === undefined ? setBoxes(found.body, picks, done) : tickReferences(found.body, issue => closed.has(issue))
-  }
-  catch (error) {
-    fail(`#${number}: ${error instanceof Error ? error.message : String(error)}`)
-  }
-
+  // The write re-reads the description and ticks again on it, so a box added above since `ft issue` printed is not ticked in its place.
   if (result.changed.length > 0) {
-    if (closed === undefined)
-      await setBody(number, result.body, values.repo)
-    else
-      await editBody(number, body => tickReferences(body, issue => closed.has(issue)).body, values.repo)
+    await editBody(number, (body) => {
+      result = tickedOrFail(number, () => apply(body))
+
+      return result.body
+    }, values.repo)
   }
 
   for (const box of result.changed)
@@ -402,7 +424,7 @@ export async function fixed(args: string[]): Promise<number> {
   const left = boxes(found.body).filter(box => !box.done)
 
   if (left.length > 0 && values.tick === true) {
-    await setBody(number, setBoxes(found.body, left.map(box => String(box.number)), true).body, values.repo)
+    await editBody(number, body => setBoxes(body, boxes(body).filter(box => !box.done).map(box => String(box.number)), true).body, values.repo)
     console.log(`ticked ${left.length} box${left.length === 1 ? '' : 'es'} of #${number}`)
   }
   else if (left.length > 0 && values.force !== true) {
@@ -411,7 +433,12 @@ export async function fixed(args: string[]): Promise<number> {
 
   const shas = joinShas(commits.map(each => each.sha.slice(0, 7)))
 
-  await comment(number, `Fixed in ${shas}: ${values.message ?? commits[0]?.subject ?? ''}`, values.repo)
+  const line = `Fixed in ${shas}: ${values.message ?? commits[0]?.subject ?? ''}`
+
+  // A rerun after a failed close finds its own comment already last and does not post it twice.
+  if ((await commentsOf(number, values.repo)).at(-1)?.body.trim() !== line.trim())
+    await comment(number, line, values.repo)
+
   await close(number, values.repo)
   console.log(`closed #${number}: fixed in ${shas}`)
   await tickListings(number, values.repo)

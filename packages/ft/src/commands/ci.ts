@@ -2,7 +2,7 @@ import type { Run } from '../runs'
 import process from 'node:process'
 import { badge, duration, Exit, fail, formatDuration, paint, parse, runHint } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
-import { cwdGone, defaultBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
+import { cwdGone, defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
 
 const usage = `ft ci [ref]
@@ -23,6 +23,8 @@ const POLL = 15_000
 const NO_RUN = 3 * 60_000
 // How long queued runs may sit while no runner works before the wait is given up.
 const STALLED = 3 * 60_000
+// How many commits of a long gap are asked for their runs on one poll.
+const MAX_LOOKUPS = 20
 
 export type Coverage = { kind: 'none' | 'passed-over' } | { kind: 'runs', runs: Run[] }
 
@@ -42,6 +44,16 @@ export function judge(runs: Run[], jobSkipped: boolean, tagged: boolean): Covera
 
   // A release commit skips its tests for its tag's publish workflow, which runs them on the same tree.
   return tagged ? { kind: 'runs', runs: runs.map(run => ({ ...run, status: 'skipped' })) } : { kind: 'passed-over' }
+}
+
+// The commits whose runs are worth asking for on one poll: those not yet known to be passed over, the oldest first and at most `max`, so a long gap costs a bounded number of calls.
+export function commitsToAsk(commits: string[], passedOver: Set<string>, max = MAX_LOOKUPS): string[] {
+  return commits.filter(commit => !passedOver.has(commit)).slice(0, max)
+}
+
+// The runs as a failed poll leaves them once they are all over and none was cancelled; a cancelled one leaves its commit to a newer push's runs, so the wait goes on.
+export function settled(latest: Run[] | undefined): Run[] | undefined {
+  return latest !== undefined && latest.every(run => FINISHED.has(run.status)) && judge(latest, false, false).kind === 'runs' ? latest : undefined
 }
 
 export async function ci(args: string[]): Promise<number> {
@@ -79,14 +91,14 @@ export async function ci(args: string[]): Promise<number> {
   }
 
   async function covering(): Promise<Run[] | undefined> {
-    await git(['fetch', '-q', 'origin', branch])
+    await fetchBranch(branch)
 
     if (!await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`]))
       fail(`${short} is not on origin/${branch}`, 2, runHint(`git push origin ${branch}`))
 
     const later = (await git(['rev-list', '--reverse', '--first-parent', `${sha}..origin/${branch}`])).split('\n').filter(Boolean)
 
-    for (const commit of [sha, ...later]) {
+    for (const commit of commitsToAsk([sha, ...later], passedOver)) {
       const coverage = await coverageOf(commit)
 
       if (coverage.kind === 'runs')
@@ -127,9 +139,9 @@ export async function ci(args: string[]): Promise<number> {
 
         console.warn(`ft ci: ${error instanceof Error ? error.message : String(error)}, polling again`)
 
-        const latest = runs === undefined ? undefined : await refreshed(runs)
+        const latest = settled(runs === undefined ? undefined : await refreshed(runs))
 
-        if (latest?.every(run => FINISHED.has(run.status)) === true) {
+        if (latest !== undefined) {
           runs = latest
 
           break

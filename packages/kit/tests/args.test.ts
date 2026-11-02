@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { duration, Exit, HelpShown, jsonOption, optionRows, paint, parse, readInput, UsageError } from '../src'
+import { duration, Exit, HelpShown, jsonOption, optionRows, paint, parse, readInput, UsageError, wholeNumber } from '../src'
 
 const options = { lines: { type: 'string', short: 'n', description: 'lines' } } as const
 
@@ -124,6 +124,23 @@ describe('duration', () => {
   test('refuses anything else', () => {
     expect(() => duration('5 min', 'timeout', 0)).toThrow(new Exit('--timeout takes a duration such as 30s, 5m or 1h, not 5 min', 2))
     expect(() => duration('0', 'timeout', 0)).toThrow(Exit)
+  })
+})
+
+describe('wholeNumber', () => {
+  test('reads digits only', () => {
+    expect(wholeNumber('12', 'limit', 1)).toBe(12)
+    expect(wholeNumber('007', 'limit', 1)).toBe(7)
+    expect(wholeNumber(undefined, 'limit', 5)).toBe(5)
+  })
+
+  test.each(['1e3', '0x10', '', ' 3', '1.0', '-1', '9'.repeat(20)])('refuses %p', (value) => {
+    expect(() => wholeNumber(value, 'limit', 0, 0)).toThrow(UsageError)
+  })
+
+  test('names an option with dashes and a positional as written', () => {
+    expect(() => wholeNumber('x', 'limit', 1)).toThrow('--limit takes a whole number from 1, not x')
+    expect(() => wholeNumber('x', '<run id>', 1)).toThrow('<run id> takes a whole number from 1, not x')
   })
 })
 

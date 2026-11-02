@@ -11,7 +11,7 @@ export function issueNumber(value: string | undefined, usage: string): number {
   if (value === undefined)
     fail(`an issue number is needed\n\n${usage}`)
 
-  return wholeNumber(value.replace(ISSUE_HASH, ''), 'issue', 0)
+  return wholeNumber(value.replace(ISSUE_HASH, ''), '<issue>', 0)
 }
 
 export function issueNumbers(values: string[], usage: string): number[] {

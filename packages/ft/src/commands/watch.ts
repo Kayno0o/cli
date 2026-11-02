@@ -1,7 +1,7 @@
 import type { Run } from '../runs'
 import { badge, duration, fail, formatDuration, parse, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
-import { failureReport, FINISHED, overall, recentRuns, stallReason } from '../runs'
+import { failureReport, FINISHED, overall, recentRuns, runById, stallReason } from '../runs'
 
 const usage = `ft watch [--after <id>]
 
@@ -24,6 +24,9 @@ const STALLED = 3 * 60_000
 export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, repo?: string, idle?: number): Promise<number> {
   const started = Date.now()
   const reported = new Map<number, string>()
+  // Every run ever picked, read again by id once newer runs push it out of the page of the newest ones.
+  const followed = new Set<number>()
+  const failed = new Set<number>()
   let moving = started
 
   for (;;) {
@@ -36,7 +39,13 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
     let runs: Run[]
 
     try {
-      runs = pick(await recentRuns(LIMIT, repo))
+      const newest = await recentRuns(LIMIT, repo)
+      const gone = await Promise.all([...followed].filter(id => !newest.some(run => run.id === id)).map(async id => runById(id, repo)))
+
+      runs = [...pick(newest), ...gone]
+
+      for (const run of runs)
+        followed.add(run.id)
     }
     catch (error) {
       console.warn(`ft watch: ${error instanceof Error ? error.message : String(error)}, polling again`)
@@ -61,19 +70,19 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
       continue
     }
 
-    const status = overall(runs)
-
-    if (status === 'failure' || status === 'cancelled') {
-      for (const run of runs) {
-        if (run.status === 'failure')
-          console.error(`\n${await failureReport(run, repo)}\n\n${run.html_url}`)
+    // A failure is reported as soon as it happens, but the wait goes on until every run is over, as `ft ci` does.
+    for (const run of runs) {
+      if (run.status === 'failure' && !failed.has(run.id)) {
+        failed.add(run.id)
+        console.error(`\n${await failureReport(run, repo)}\n\n${run.html_url}`)
       }
-
-      return 1
     }
 
-    if (runs.every(run => FINISHED.has(run.status)))
-      return 0
+    if (runs.every(run => FINISHED.has(run.status))) {
+      const status = overall(runs)
+
+      return status === 'failure' || status === 'cancelled' ? 1 : 0
+    }
 
     const stall = await stallReason(runs, repo)
 

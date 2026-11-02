@@ -5,7 +5,7 @@ import { capped, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, parse
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
-import { comment, commentsOf, commentsOfAll, getIssue, openIssues } from '../issues'
+import { comment, commentsOf, commentsOfAll, getIssue, openIssues, sessionAuthor } from '../issues'
 import { findMilestone } from '../milestones'
 import { currentSession, liveSessions } from '../sessions'
 
@@ -77,11 +77,12 @@ export function renderBoard(rows: BoardRow[], now = Date.now(), limit = Number.P
 // Each issue with the standing its latest claim gives it among the sessions running here.
 export async function boardRows(issues: Issue[], sessions: Session[], repo: string | undefined): Promise<BoardRow[]> {
   const comments = await commentsOfAll(issues, repo)
+  const author = await sessionAuthor()
 
   return issues.map((issue) => {
     const own = comments.get(issue.number) ?? []
 
-    return { issue, standing: standing(latestClaim(own), sessions), comments: own }
+    return { issue, standing: standing(latestClaim(own, author), sessions), comments: own }
   })
 }
 
@@ -236,6 +237,7 @@ export async function take(args: string[]): Promise<number> {
   const numbers = issueNumbers(positionals, takeUsage)
   const sessions = await liveSessions()
   const nameFor = await claimant(values, sessions)
+  const author = await sessionAuthor()
 
   return eachIssue('take', numbers, async (number) => {
     const name = nameFor(number)
@@ -244,7 +246,7 @@ export async function take(args: string[]): Promise<number> {
     if (found.state === 'closed')
       fail(`#${number} is closed`, 1, runHint(`ft reopen ${number}`, 'reopen it'))
 
-    const claim = latestClaim(comments)
+    const claim = latestClaim(comments, author)
     const current = standing(claim, sessions)
 
     if (claim?.holder === name) {
@@ -261,6 +263,13 @@ export async function take(args: string[]): Promise<number> {
       fail(`#${number} was taken by ${current.claim.holder} ${formatAge(current.claim.at)}, which no session here answers to: it may run on another machine`, 1, runHint(`ft take ${number} --take-stale`, 'take it over'))
 
     await comment(number, takenComment(name), values.repo)
+
+    // Two sessions can pass the check above together; the latest claim stands, so the one it is not fails.
+    const standingNow = latestClaim(await commentsOf(number, values.repo), author)
+
+    if (standingNow?.holder !== name)
+      fail(`#${number} was taken by ${standingNow?.holder ?? 'another session'} at the same moment`, 1)
+
     console.log(`took #${number} as ${name}: ${found.title}`)
   })
 }
@@ -283,10 +292,11 @@ export async function drop(args: string[]): Promise<number> {
   const { values, positionals } = parsed
   const numbers = issueNumbers(positionals, dropUsage)
   const nameFor = await claimant(values, await liveSessions())
+  const author = await sessionAuthor()
 
   return eachIssue('drop', numbers, async (number) => {
     const name = nameFor(number)
-    const claim = latestClaim(await commentsOf(number, values.repo))
+    const claim = latestClaim(await commentsOf(number, values.repo), author)
 
     if (claim?.holder !== name)
       fail(`#${number} is ${claim === undefined ? 'not taken' : `taken by ${claim.holder}, not ${name}`}`, 1)
