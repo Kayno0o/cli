@@ -1,6 +1,6 @@
 import type { Pipeline } from '../pipelines'
 import { duration, Exit, fail, parse } from '@kaynooo/cli-kit'
-import { cwdGone, defaultBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
+import { cwdGone, defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
 import { failureReport, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
 const usage = `gl ci [ref]
@@ -45,7 +45,7 @@ export async function ci(args: string[]): Promise<number> {
   const passedOver = new Set<string>()
 
   async function covering(): Promise<Pipeline | undefined> {
-    await git(['fetch', '-q', 'origin', branch])
+    await fetchBranch(branch)
 
     if (!await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`]))
       fail(`${short} is not on origin/${branch}: push it first`)

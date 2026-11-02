@@ -41,6 +41,20 @@ describe('findUp', () => {
   })
 })
 
+describe('config search bounds', () => {
+  it('stops at the git root and never reads a config above it', async () => {
+    const root = folder({ 'demo.config.ts': 'export default 1', 'repo/.git/HEAD': '', 'repo/src/.keep': '' })
+
+    expect(await loadConfig('demo.config.ts', { from: join(root, 'repo/src') })).toBeUndefined()
+  })
+
+  it('finds a config in the git root itself', async () => {
+    const root = folder({ 'repo/demo.config.ts': 'export default 1', 'repo/.git/HEAD': '', 'repo/src/.keep': '' })
+
+    expect((await loadConfig('demo.config.ts', { from: join(root, 'repo/src') }))?.config).toBe(1)
+  })
+})
+
 describe('loadConfig', () => {
   it('imports the default export of the config found, with its folder', async () => {
     const root = folder({ 'demo.config.ts': 'export default { port: 3000 }', 'src/.keep': '' })

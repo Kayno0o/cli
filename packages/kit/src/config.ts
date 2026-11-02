@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fail } from './args'
 
-// The nearest of `names` in `from` or a folder above it, the first name winning within one folder.
-export function findUp(names: string | string[], from = process.cwd()): string | undefined {
+// The nearest of `names` in `from` or a folder above it, the first name winning within one folder; the walk ends after a folder `stop` accepts.
+export function findUp(names: string | string[], from = process.cwd(), stop: (dir: string) => boolean = () => false): string | undefined {
   const wanted = typeof names === 'string' ? [names] : names
 
   for (let dir = resolve(from); ; dir = dirname(dir)) {
@@ -13,9 +14,14 @@ export function findUp(names: string | string[], from = process.cwd()): string |
     if (found !== undefined)
       return found
 
-    if (dirname(dir) === dir)
+    if (stop(dir) || dirname(dir) === dir)
       return undefined
   }
+}
+
+// A config is looked for up to the repository root or the home folder, never in a folder above them where a stranger's file could sit.
+function endsWalk(dir: string): boolean {
+  return dir === resolve(homedir()) || existsSync(join(dir, '.git'))
 }
 
 export interface ConfigSettings {
@@ -33,9 +39,9 @@ export interface LoadedConfig {
   config: unknown
 }
 
-// Imports the nearest config named `names` (`.ts`, `.js` or `.json`), or the one `path` names; undefined when none is found. A named file missing, one failing to import or one without a default export ends the command.
+// Imports the nearest config named `names` (`.ts`, `.js` or `.json`) up to the git root or the home folder, or the one `path` names; undefined when none is found. A named file missing, one failing to import or one without a default export ends the command.
 export async function loadConfig(names: string | string[], { from = process.cwd(), path }: ConfigSettings = {}): Promise<LoadedConfig | undefined> {
-  const file = path === undefined ? findUp(names, from) : resolve(from, path)
+  const file = path === undefined ? findUp(names, from, endsWalk) : resolve(from, path)
 
   if (file === undefined)
     return undefined

@@ -31,12 +31,20 @@ export async function gitOk(args: string[]): Promise<boolean> {
 }
 
 export async function resolveCommit(ref: string): Promise<string> {
-  const sha = (await $`git rev-parse --verify -q ${`${ref}^{commit}`}`.quiet().nothrow().text()).trim()
+  const sha = (await $`git rev-parse --verify -q --end-of-options ${`${ref}^{commit}`}`.quiet().nothrow().text()).trim()
 
   if (sha === '')
     fail(`no commit ${ref}`)
 
   return sha
+}
+
+// Fetches one branch of origin; a name that is no branch, such as `--upload-pack=<command>`, is refused before git reads it, and the refspec is spelled out so it can never be an option.
+export async function fetchBranch(branch: string): Promise<void> {
+  if (branch.startsWith('-') || !await gitOk(['check-ref-format', '--branch', branch]))
+    fail(`${branch} is not a branch name`)
+
+  await git(['fetch', '-q', 'origin', `refs/heads/${branch}`])
 }
 
 // The branch origin's HEAD names, which is the repository's default branch once cloned or `git remote set-head origin -a` ran.
