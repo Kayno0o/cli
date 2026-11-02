@@ -1,14 +1,30 @@
-import { existsSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 import { cleanLogs } from '../src/logs'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const LOG_PATH = /full log: ([^\s\]]+)/
 
-const RUNTIME = mkdtempSync(join(tmpdir(), 'out-runtime-'))
+// Every temp folder of the file, removed once it ends.
+const made: string[] = []
+
+function temp(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+
+  made.push(dir)
+
+  return dir
+}
+
+afterAll(() => {
+  for (const dir of made)
+    rmSync(dir, { recursive: true, force: true })
+})
+
+const RUNTIME = temp('out-runtime-')
 const ENV = { ...process.env, XDG_RUNTIME_DIR: RUNTIME }
 
 function out(...args: string[]) {
@@ -89,9 +105,30 @@ describe('out', () => {
   })
 })
 
+describe('out around a step that runs in a compose service', () => {
+  test('folds the output of the docker compose exec line check builds, keeping the failure lines and the exit code', () => {
+    const bin = temp('out-docker-')
+    const script = ['#!/bin/sh', 'shift 2', 'while true; do case "$1" in -T) shift;; -w|-e) shift 2;; *) break;; esac; done', 'shift', 'exec "$@"', ''].join('\n')
+
+    writeFileSync(join(bin, 'docker'), script)
+    chmodSync(join(bin, 'docker'), 0o755)
+
+    const inner = 'i=0; while [ $i -lt 400 ]; do echo "row $i of the table is fine"; i=$((i+1)); done; echo "src/a.ts(1,7): error TS2322: bad" >&2; exit 1'
+    const line = `cd ${bin} && docker compose exec -T -w /app -e NO_COLOR=1 -e FORCE_COLOR=0 app sh -c '${inner}'`
+    const result = Bun.spawnSync([process.execPath, CLI, '--', 'sh', '-c', line], { stdout: 'pipe', stderr: 'pipe', env: { ...ENV, PATH: `${bin}:${process.env.PATH}` } })
+    const text = result.stdout.toString()
+    const path = LOG_PATH.exec(text)?.[1]
+
+    expect(result.exitCode).toBe(1)
+    expect(text.split('\n').length).toBeLessThan(120)
+    expect(text).toContain('src/a.ts(1,7): error TS2322: bad')
+    expect(readFileSync(path ?? '', 'utf8')).toContain('row 399 of the table is fine')
+  })
+})
+
 describe('cleanLogs', () => {
   test('removes the logs older than a day and keeps the recent ones', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'out-clean-'))
+    const dir = temp('out-clean-')
     const old = join(dir, 'old.log')
     const recent = join(dir, 'recent.log')
     const now = Date.now()
