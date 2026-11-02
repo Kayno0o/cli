@@ -5,8 +5,8 @@
     "": {
       "name": "cli",
       "devDependencies": {
-        "@kaynooo/eslint": "^7.1.4",
-        "@types/bun": "^1.4.3",
+        "@kaynooo/eslint": "^7.1.5",
+        "@types/bun": "^1.4.4",
       },
     },
     "packages/base": {
@@ -27,7 +27,7 @@
         "changelog": "./dist/cli.js",
       },
       "dependencies": {
-        "@kaynooo/utils": "^2.31.0",
+        "@kaynooo/utils": "^2.31.2",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -150,7 +150,7 @@
       "name": "@kaynooo/cli-kit",
       "version": "0.15.1",
       "dependencies": {
-        "@kaynooo/utils": "^2.31.0",
+        "@kaynooo/utils": "^2.31.2",
       },
     },
     "packages/out": {
@@ -285,9 +285,9 @@
 
     "@kaynooo/cli-wait": ["@kaynooo/cli-wait@workspace:packages/wait"],
 
-    "@kaynooo/eslint": ["@kaynooo/eslint@7.1.4", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/7.1.4/eslint-7.1.4.tgz", { "dependencies": { "@e18e/eslint-plugin": "^0.8.0", "@eslint-community/eslint-plugin-eslint-comments": "^4.7.2", "@eslint/markdown": "^8.0.3", "@stylistic/eslint-plugin": "^5.10.0", "@typescript-eslint/eslint-plugin": "^8.67.0", "@typescript-eslint/parser": "^8.67.0", "eslint-config-flat-gitignore": "^2.3.0", "eslint-flat-config-utils": "^3.2.0", "eslint-merge-processors": "^2.0.0", "eslint-plugin-antfu": "^3.2.3", "eslint-plugin-better-tailwindcss": "^4.7.0", "eslint-plugin-format": "^2.0.1", "eslint-plugin-import-lite": "^0.6.0", "eslint-plugin-jsonc": "^3.4.1", "eslint-plugin-no-only-tests": "^3.4.0", "eslint-plugin-perfectionist": "^5.10.1", "eslint-plugin-regexp": "^3.2.0", "eslint-plugin-toml": "^1.5.0", "eslint-plugin-unicorn": "^73.0.0", "eslint-plugin-unused-imports": "^4.4.1", "eslint-plugin-yml": "^3.8.1", "globals": "^17.11.0", "toml-eslint-parser": "^1.0.3", "yaml-eslint-parser": "^2.1.0" }, "peerDependencies": { "eslint": "^10.7.0" }, "bin": { "keslint": "dist/bin.js" } }, "sha512-WzbUlbnDhMDvsqmb5qf1VsK4kOJ581k9UDoqfCSCTUONCo2zCQB1uSe0pRyNyX576ejjHOgUt0vRMyV6FOI76A=="],
+    "@kaynooo/eslint": ["@kaynooo/eslint@7.1.5", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/7.1.5/eslint-7.1.5.tgz", { "dependencies": { "@e18e/eslint-plugin": "^0.8.0", "@eslint-community/eslint-plugin-eslint-comments": "^4.7.2", "@eslint/markdown": "^8.0.3", "@stylistic/eslint-plugin": "^5.10.0", "@typescript-eslint/eslint-plugin": "^8.67.0", "@typescript-eslint/parser": "^8.67.0", "eslint-config-flat-gitignore": "^2.3.0", "eslint-flat-config-utils": "^3.2.0", "eslint-merge-processors": "^2.0.0", "eslint-plugin-antfu": "^3.2.3", "eslint-plugin-better-tailwindcss": "^4.7.0", "eslint-plugin-format": "^2.0.1", "eslint-plugin-import-lite": "^0.6.0", "eslint-plugin-jsonc": "^3.4.1", "eslint-plugin-no-only-tests": "^3.4.0", "eslint-plugin-perfectionist": "^5.10.1", "eslint-plugin-regexp": "^3.2.0", "eslint-plugin-toml": "^1.5.0", "eslint-plugin-unicorn": "^73.0.0", "eslint-plugin-unused-imports": "^4.4.1", "eslint-plugin-yml": "^3.8.1", "globals": "^17.11.0", "toml-eslint-parser": "^1.0.3", "yaml-eslint-parser": "^2.1.0" }, "peerDependencies": { "eslint": "^10.7.0" }, "bin": { "keslint": "dist/bin.js" } }, "sha512-EqaF2c5tuy5K3y1gDHOby9C9PKYMYs39oynCCEFfQwLsy+97jS2mJ5xIGUlAwKHi5VOalTtHYcXn9ETfA4aqWA=="],
 
-    "@kaynooo/utils": ["@kaynooo/utils@2.31.0", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Futils/-/2.31.0/utils-2.31.0.tgz", { "dependencies": { "uqr": "^0.1.3" }, "peerDependencies": { "@joplin/turndown-plugin-gfm": "^1.0.68", "turndown": "^7.2.4", "typescript": "^6.0.3" } }, "sha512-NAoeNHtqONb1epoNNa7nHg5j9HucB/6Gxkef4IhFkwKzve/hS92rXmgpdzrKbhrqyxVGmu/ffY5iMlsMm+Jc2g=="],
+    "@kaynooo/utils": ["@kaynooo/utils@2.31.2", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Futils/-/2.31.2/utils-2.31.2.tgz", { "dependencies": { "uqr": "^0.1.3" }, "peerDependencies": { "@joplin/turndown-plugin-gfm": "^1.0.68", "turndown": "^7.2.4", "typescript": "^6.0.3" } }, "sha512-T/4udiRWlJEiMUDYuFDZxgtpP9jEMe/h5E78BUd/dsmgpvbUt/T5kx/VweIVGcSKBaOMWqIyqQyo0j42woywJA=="],
 
     "@keyv/bigmap": ["@keyv/bigmap@1.3.1", "", { "dependencies": { "hashery": "^1.4.0", "hookified": "^1.15.0" }, "peerDependencies": { "keyv": "^5.6.0" } }, "sha512-WbzE9sdmQtKy8vrNPa9BRnwZh5UF4s1KTmSK0KUVLo3eff5BlQNNWDnFOouNpKfPKDnms9xynJjsMYjMaT/aFQ=="],
 
@@ -339,7 +339,7 @@
 
     "@stylistic/eslint-plugin": ["@stylistic/eslint-plugin@5.10.0", "", { "dependencies": { "@eslint-community/eslint-utils": "^4.9.1", "@typescript-eslint/types": "^8.56.0", "eslint-visitor-keys": "^4.2.1", "espree": "^10.4.0", "estraverse": "^5.3.0", "picomatch": "^4.0.3" }, "peerDependencies": { "eslint": "^9.0.0 || ^10.0.0" } }, "sha512-nPK52ZHvot8Ju/0A4ucSX1dcPV2/1clx0kLcH5wDmrE4naKso7TUC/voUyU1O9OTKTrR6MYip6LP0ogEMQ9jPQ=="],
 
-    "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
+    "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 
     "@types/debug": ["@types/debug@4.1.13", "", { "dependencies": { "@types/ms": "*" } }, "sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw=="],
 
@@ -401,7 +401,7 @@
 
     "builtin-modules": ["builtin-modules@5.4.0", "", {}, "sha512-JCWSCdun+4Ovd9BhM/Vtlmwb7oD6Wl4YiPRXXwhAuwlPhW1un/MKgXn7GZoFm53ginnoNzus69V8JWx0K393jg=="],
 
-    "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+    "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
     "cacheable": ["cacheable@2.5.0", "", { "dependencies": { "@cacheable/memory": "^2.2.0", "@cacheable/utils": "^2.5.0", "hookified": "^1.15.0", "keyv": "^5.6.0", "qified": "^0.10.1" } }, "sha512-60cyAOytib/OzBw1JNSoSV/boK1AtHryDIjvVBk7XbN4ugfkM3+Sry7fEjNgPMGgOjuaZPAp8ruZ0Cxafwyq9g=="],
 

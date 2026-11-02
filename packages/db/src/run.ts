@@ -206,7 +206,7 @@ export const bunConnect: Connect = (url, dialect, readOnly) => {
         await mysqlTransaction({ unsafe: async (statement, params) => connection.unsafe<Row[]>(statement, params) }, work, isReadOnly)
       }
       finally {
-        connection.release()
+        await connection.release()
       }
     },
     async close() {

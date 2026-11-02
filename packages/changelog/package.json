@@ -32,7 +32,7 @@
     "changelog": "$npm_execpath src/cli.ts"
   },
   "dependencies": {
-    "@kaynooo/utils": "^2.31.0"
+    "@kaynooo/utils": "^2.31.2"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"
