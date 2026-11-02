@@ -284,7 +284,9 @@ export function inspect(sql: string, dialect: Dialect = 'postgres'): Verdict {
 
 // What a write may start with on a test database: anything else (USE, SET, CALL, DO, COPY, PREPARE, GRANT, a psql meta-command...) can reach past the database.
 const TEST_WRITE_STARTS = new Set(['insert', 'update', 'delete', 'replace', 'merge', 'truncate', 'create', 'alter', 'drop', 'rename', 'with', 'select', 'values', 'table', 'comment', 'refresh'])
-const DEFINITION_STARTS = new Set(['create', 'alter', 'drop'])
+const DEFINITION_STARTS = new Set(['create', 'alter', 'drop', 'rename'])
+// Code the server runs later or on its own, past this check: an event's body can drop another database, a function's body hides behind $$.
+const STORED_CODE = new Set(['event', 'procedure', 'function', 'trigger', 'rule', 'aggregate'])
 const DEFINITION_MODIFIERS = new Set(['or', 'replace', 'temporary', 'temp', 'unlogged', 'unique', 'fulltext', 'spatial', 'definer'])
 // Objects a definition may name that belong to the server, not to the database: dropping one reaches another database or the server's accounts.
 const SERVER_OBJECTS = new Set(['database', 'user', 'role', 'server', 'tablespace', 'extension', 'system', 'subscription', 'publication', 'logfile', 'instance', 'resource'])
@@ -309,6 +311,13 @@ function definesServerObject(statement: Token[], dialect: Dialect): string | nul
     return null
 
   const kind = statement.slice(1).find(token => !DEFINITION_MODIFIERS.has(token.text))?.text ?? ''
+
+  if (STORED_CODE.has(kind) && statement[0]?.text !== 'drop')
+    return kind
+
+  // a definer clause only heads a view, an event, a procedure, a function or a trigger
+  if (statement[0]?.text !== 'drop' && statement.some(token => token.kind === 'word' && token.text === 'definer'))
+    return 'definer'
 
   return SERVER_OBJECTS.has(kind) || (dialect === 'mysql' && kind === 'schema') ? kind : null
 }

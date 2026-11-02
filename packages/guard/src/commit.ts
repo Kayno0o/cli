@@ -8,6 +8,9 @@ const REUSES = new Set(['c', 'C', '--reuse-message', '--reedit-message', '--fixu
 const TRAILER_FLAGS = new Set(['--signoff', '--trailer'])
 const LONG_VALUE = /=(.*)/s
 const CAT_OPENER = /^\$\(cat <<-?[ \t]*(['"]?)([\w-]+)\1/
+const GLOB = /[*?[]/
+// `-m<text>`, `-qm`, `--message=<text>`, `-q`: the only commit options gc reproduces
+const PLAIN_COMMIT_OPTION = /^(?:-q?m.*|-q|--quiet|--message=.*)$/s
 
 export const HEREDOC_OPENER = /<<-?[ \t]*(['"]?)([\w-]+)\1/
 const TICKET_LINE = /^(?:[\w.-]+\/[\w.-]+)?#\d+ - /
@@ -142,7 +145,8 @@ function addedPaths(command: string): string[] | null {
 
     const operands = rest.filter(arg => arg !== '--')
 
-    if (operands.length === 0 || operands.some(arg => arg.startsWith('-')))
+    // gc takes its paths literally, so a glob git would expand stays git's
+    if (operands.length === 0 || operands.some(arg => arg.startsWith('-') || GLOB.test(arg)))
       return null
 
     paths.push(...operands)
@@ -151,8 +155,40 @@ function addedPaths(command: string): string[] | null {
   return paths.length === 0 ? null : paths
 }
 
-// The `gc` line doing what a `git add <paths>` then `git commit -m ...` chain does, null when the chain is no such pair or its message is not known.
+// Whether every git call in the command is a bare `git add` or a `git commit` given only its message (`-m`, `-q`), which gc reproduces; `--amend`, `-a`, `--no-verify` or `git -C <dir>` it would drop.
+function isPlainChain(command: string): boolean {
+  for (const piece of splitCommand(command)) {
+    const { program, args } = parseCommand(piece.command)
+
+    if (program !== 'git')
+      continue
+
+    const { name, rest } = subcommandOf(args)
+
+    if (args[0] !== name)
+      return false
+
+    if (name !== 'commit')
+      continue
+
+    for (let i = 0; i < rest.length; i++) {
+      const arg = rest[i] ?? ''
+
+      if (arg === '-m' || arg === '-qm' || arg === '--message')
+        i++
+      else if (!PLAIN_COMMIT_OPTION.test(arg))
+        return false
+    }
+  }
+
+  return true
+}
+
+// The `gc` line doing what a `git add <paths>` then `git commit -m ...` chain does, null when the chain is no such pair, carries an option gc lacks or its message is not known.
 export function gcLine(command: string): string | null {
+  if (!isPlainChain(command))
+    return null
+
   const paths = addedPaths(command)
   const [source, ...others] = commitSources(command)
 

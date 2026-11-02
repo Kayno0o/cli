@@ -261,6 +261,14 @@ describe('sub blocks on stdin', () => {
     expect(read('b.ts')).toBe('B z\n')
   })
 
+  test('gathers the blocks of one file named two ways, losing none', () => {
+    file('a.ts', 'a b\n')
+    const result = sub([join(dir, 'a.ts')], block('a', 'A') + block('b', 'B', 'a.ts'))
+
+    expect(result.code).toBe(0)
+    expect(read('a.ts')).toBe('A B\n')
+  })
+
   test('a longer opener lets a marker line sit in the text', () => {
     file('a.md', 'Title\n=======\nbody\n')
     const result = sub(['a.md'], '<<<<<<<<<< SEARCH\nTitle\n=======\n==========\nNew\n=======\n>>>>>>>>>> REPLACE\n')

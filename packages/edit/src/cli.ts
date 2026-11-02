@@ -3,7 +3,7 @@
 import type { Diff } from './diff'
 import type { Pair } from './replace'
 import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { normalize } from 'node:path'
+import { normalize, resolve } from 'node:path'
 import process from 'node:process'
 import { Exit, fail, parse, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
@@ -135,6 +135,29 @@ function readUtf8(path: string): string | undefined {
   }
 }
 
+// One spelling per file, so `a.txt` and its absolute path or a link to it gather their edits instead of the last write dropping the others'.
+function canonical(path: string): string {
+  try {
+    return realpathSync(path)
+  }
+  catch {
+    return resolve(path)
+  }
+}
+
+function dedupe(paths: string[]): string[] {
+  const byFile = new Map<string, string>()
+
+  for (const path of paths) {
+    const key = canonical(path)
+
+    if (!byFile.has(key))
+      byFile.set(key, path)
+  }
+
+  return [...byFile.values()]
+}
+
 // Writes next to the target then renames over it, so a crash never leaves half a file; a symlink is followed and the mode kept.
 function writeAtomic(path: string, text: string) {
   const target = realpathSync(path)
@@ -155,6 +178,8 @@ function writeAtomic(path: string, text: string) {
 // The pairs each file gets: the one set of --from/--to or --pairs for every file argument, or the stdin blocks, each for the file it names or else for the file arguments.
 async function plan(values: { from?: string, to?: string, pairs?: string }, files: string[], defaults: Defaults): Promise<Map<string, Pair[]>> {
   const edits = new Map<string, Pair[]>()
+  // each file under the first spelling given for it
+  const spellings = new Map(files.map(path => [canonical(path), path]))
 
   if (values.pairs !== undefined || values.from !== undefined || values.to !== undefined) {
     if (files.length === 0)
@@ -189,7 +214,11 @@ async function plan(values: { from?: string, to?: string, pairs?: string }, file
 
   for (const [i, block] of blocks.entries()) {
     const pair: Pair = { from: block.from, to: block.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex }
-    const targets = block.file === undefined ? files : [normalize(block.file)]
+    const named = block.file === undefined ? undefined : normalize(block.file)
+    const targets = named === undefined ? files : [spellings.get(canonical(named)) ?? named]
+
+    if (named !== undefined && !spellings.has(canonical(named)))
+      spellings.set(canonical(named), named)
 
     checkPattern(pair, `block ${i + 1}: `)
 
@@ -212,7 +241,7 @@ async function main(argv: string[]): Promise<number> {
   const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub src/a.php <<\'EOF\' (SEARCH/REPLACE blocks, see above)', 'multi-line text, no escaping'], ['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
 
   const { values, positionals } = parsed
-  const files = [...new Set(positionals.map(path => normalize(path)))]
+  const files = dedupe(positionals.map(path => normalize(path)))
 
   if (values.count !== undefined && values.all === true)
     fail('--count and --all exclude each other')

@@ -19,9 +19,11 @@ const INTERPRETERS = new Set(['bun', 'deno', 'node', 'python', 'python3', 'ruby'
 const CODE_OPTIONS = new Set(['-e', '-c', '-p', '-E', '-pe', '-r', '--eval', '--print', '--command'])
 const GREPS = new Set(['grep', 'egrep', 'fgrep'])
 const GREP_VALUE_OPTIONS = new Set(['-e', '-f', '-m', '-A', '-B', '-C', '-d', '-D', '--regexp', '--file', '--max-count', '--include', '--exclude', '--exclude-dir', '--exclude-from', '--context', '--after-context', '--before-context', '--label', '--binary-files', '--directories', '--devices'])
-const RG_VALUE_OPTIONS = new Set(['-e', '-f', '-g', '-t', '-T', '-m', '-A', '-B', '-C', '-j', '-d', '--regexp', '--file', '--glob', '--iglob', '--type', '--type-not', '--max-count', '--context', '--after-context', '--before-context', '--threads', '--max-depth', '--max-filesize'])
+const RG_VALUE_OPTIONS = new Set(['-e', '-f', '-g', '-t', '-T', '-m', '-A', '-B', '-C', '-j', '-d', '-r', '-M', '-E', '--replace', '--max-columns', '--encoding', '--regexp', '--file', '--glob', '--iglob', '--type', '--type-not', '--max-count', '--context', '--after-context', '--before-context', '--threads', '--max-depth', '--max-filesize'])
 const PATTERN_OPTIONS = new Set(['-e', '-f', '--regexp', '--file'])
-const NAMES_ONLY_SHORT = new Set('lLcq')
+// rg's -L follows links, it does not list the files without a match
+const GREP_NAMES_ONLY = new Set('lLcq')
+const RG_NAMES_ONLY = new Set('lcq')
 const NAMES_ONLY_LONG = new Set(['--files-with-matches', '--files-without-match', '--count', '--count-matches', '--quiet', '--silent'])
 const FIND_ACTIONS = new Set(['-exec', '-execdir', '-ok', '-okdir', '-delete', '-fprint', '-fprint0', '-fprintf', '-fls'])
 // What a script needs to open a file or run a command: file, process and shell APIs, imports, command substitution and backticks.
@@ -206,24 +208,43 @@ function printsNamesOnly(program: string, args: readonly string[]): boolean {
   if (!isGrep && program !== 'rg')
     return false
 
-  const valueLetters = valueLettersOf(isGrep ? GREP_VALUE_OPTIONS : RG_VALUE_OPTIONS)
+  const valueOptions = isGrep ? GREP_VALUE_OPTIONS : RG_VALUE_OPTIONS
+  const valueLetters = valueLettersOf(valueOptions)
+  const namesOnly = isGrep ? GREP_NAMES_ONLY : RG_NAMES_ONLY
+  // the word after an option taking a value is that value, never a flag: `grep -e -l .env` prints lines
+  let isValue = false
 
   for (const arg of args) {
+    if (isValue) {
+      isValue = false
+
+      continue
+    }
+
     if (arg === '--')
       return false
 
     if (NAMES_ONLY_LONG.has(arg))
       return true
 
+    if (valueOptions.has(arg)) {
+      isValue = true
+
+      continue
+    }
+
     if (!SHORT_FLAGS.test(arg))
       continue
 
-    // a cluster ends at the first option taking a value, which swallows the rest of it
-    for (const letter of arg.slice(1)) {
-      if (valueLetters.has(letter))
-        break
+    // a cluster ends at the first option taking a value, which swallows the rest of it or else the next word
+    for (const [i, letter] of [...arg.slice(1)].entries()) {
+      if (valueLetters.has(letter)) {
+        isValue = i === arg.length - 2
 
-      if (NAMES_ONLY_SHORT.has(letter))
+        break
+      }
+
+      if (namesOnly.has(letter))
         return true
     }
   }

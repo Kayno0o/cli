@@ -117,6 +117,9 @@ export function describeNamedContainer(wanted: string, inspected: Inspected[]): 
   if (service === undefined)
     fail(`${wanted} publishes no port and has no address on a network, so db cannot reach it`)
 
+  if (service.engine === 'other')
+    fail(`${wanted} is no Postgres, MySQL or MariaDB container: db reads those only`)
+
   return service
 }
 

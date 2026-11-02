@@ -105,7 +105,7 @@ describe('the gc nudge', () => {
   })
 
   test('says nothing of a commit gc cannot replace', async () => {
-    for (const command of ['git commit -m "fix: x"', 'git add src/a.ts', 'git add -p src/a.ts && git commit -m "fix: x"', 'git add src/a.ts && git commit -F msg.txt', 'git add src/a.ts && git commit --amend --no-edit'])
+    for (const command of ['git commit -m "fix: x"', 'git add src/a.ts', 'git add -p src/a.ts && git commit -m "fix: x"', 'git add src/a.ts && git commit -F msg.txt', 'git add src/a.ts && git commit --amend --no-edit', 'git add src/a.ts && git commit --amend -m "fix: x"', 'git add src/a.ts && git commit --no-verify -m "fix: x"', 'git -C api add src/a.ts && git -C api commit -m "fix: x"', 'git add \'src/*.ts\' && git commit -m "fix: x"', 'git add src/a.ts && git commit -m "fix: x" -- src/b.ts'])
       expect(await hook('pre-tool-use', bash(command), machine({ [`${REPO}/msg.txt`]: 'fix: x' }))).toBeNull()
   })
 

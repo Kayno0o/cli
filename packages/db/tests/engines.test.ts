@@ -202,10 +202,16 @@ const MYSQL_ESCAPES: [string, string][] = [
   ['update t set a = 1 -- \n; use prod', 'several statements'],
   ['update t set a = 1 --\tx\n; use prod', 'several statements'],
   ['update t set a = \'x\\\' ; use prod', 'quote that never closes'],
+  ['rename user a to b', 'defines a user'],
+  ['create event e on schedule at current_timestamp do drop database prod', 'defines a event'],
+  ['create procedure p() drop database prod', 'defines a procedure'],
+  ['create definer = root@localhost trigger t before insert on x for each row set new.a = 1', 'defines a definer'],
+  ['alter event e do drop database prod', 'defines a event'],
 ]
 
 const POSTGRES_ESCAPES: [string, string][] = [
   ['\\c prod', 'starts with'],
+  ['create or replace function f() returns void as $$ begin perform pg_terminate_backend(1); end $$ language plpgsql', 'defines a function'],
   ['delete from t; \\c prod', 'several statements'],
   ['do $$ begin perform dblink_exec(\'x\', \'drop table t\'); end $$', 'starts with do'],
   ['select dblink_exec(\'dbname=prod\', \'delete from t\')', 'uses dblink_exec'],
@@ -240,7 +246,7 @@ describe('testWriteBlockers, the escapes from a _test database', () => {
   })
 
   test('lets plain writes on the database itself through', () => {
-    for (const sql of ['insert into users (name) values (\'a\') on duplicate key update name = \'b\'', 'replace into users values (1)', 'update users set role = \'x\' where id = 1', 'update app_test.users set a = 1', 'update `APP_TEST`.users set a = 1', 'delete from users', 'truncate users', 'create table x (id int, role text, `database` int)', 'alter table users add column user int', 'drop table if exists x', 'insert into users select * from users;', 'update t set a = \'x\\\' ; use prod\'', 'with x as (select 1) delete from t'])
+    for (const sql of ['insert into users (name) values (\'a\') on duplicate key update name = \'b\'', 'replace into users values (1)', 'update users set role = \'x\' where id = 1', 'update app_test.users set a = 1', 'update `APP_TEST`.users set a = 1', 'delete from users', 'truncate users', 'create table x (id int, role text, `database` int)', 'alter table users add column user int', 'drop table if exists x', 'rename table a to b', 'drop procedure if exists p', 'insert into users select * from users;', 'update t set a = \'x\\\' ; use prod\'', 'with x as (select 1) delete from t'])
       expect(testWriteBlockers(sql, 'mysql', 'app_test')).toEqual([])
 
     for (const sql of ['insert into t values (1) on conflict do nothing', 'select nextval(\'s\')', 'update public.t set a = 1', 'create table t (role text)', 'drop schema if exists x cascade'])

@@ -104,6 +104,10 @@ describe('describeNamedContainer', () => {
     expect(failure(() => describeNamedContainer('c', [{ ...container, NetworkSettings: { Networks: {}, Ports: {} } }]))).toContain('publishes no port')
   })
 
+  test('refuses a container that runs no database', () => {
+    expect(failure(() => describeNamedContainer('web', [{ ...container, Config: { Image: 'nginx:1.27', Env: [] } }]))).toBe('web is no Postgres, MySQL or MariaDB container: db reads those only')
+  })
+
   test('never puts the password in a message', () => {
     expect(failure(() => serviceUrl({ ...describeNamedContainer('c', [container]), env: { POSTGRES_PASSWORD_FILE: '/run/secrets/pw' } }))).not.toContain('s3cret-pw')
   })
