@@ -1,6 +1,6 @@
 import type { Session } from '@kaynooo/cli-kit'
 import type { Run } from '../src/runs'
-import { chmod, mkdtemp, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -130,13 +130,18 @@ describe('digest', () => {
       await withFakeTea({ issues: [], runs: [] }, async () => {
         const saved = process.env.PATH
 
-        process.env.PATH = (saved ?? '').split(':').filter(dir => !Bun.file(join(dir, 'todo-scan')).size).join(':')
+        // bun shares ~/.bun/bin with todo-scan, so the fake tea's interpreter comes back through a folder of its own
+        const bunOnly = await mkdtemp(join(tmpdir(), 'ft-digest-bun-'))
+
+        await symlink(process.execPath, join(bunOnly, 'bun'))
+        process.env.PATH = [bunOnly, ...(saved ?? '').split(':').filter(dir => !Bun.file(join(dir, 'todo-scan')).size)].join(':')
 
         try {
           expect((await capture(async () => digest([]))).out).toBe('nothing to pick up\n')
         }
         finally {
           process.env.PATH = saved
+          await rm(bunOnly, { recursive: true, force: true })
         }
       })
     }
