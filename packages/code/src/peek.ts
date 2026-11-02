@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 
 import type { Span } from './source'
-import { join } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { badUsage, capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { listFiles, readText } from './files'
 import { around, definitions, outline, usages } from './source'
@@ -19,9 +20,10 @@ The paths default to the files git keeps here (.gitignore holds).
 --refs lists at most 100 lines, the count of the rest after them (--limit <n>, --full for all).
 --json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}], --outline as [{path, line, depth, text}], the lines never cut and the rows never counted off unless --limit is given.
 
-Exits 0 when it printed something, 1 when nothing is found or a file cannot be read, 2 on a usage error.`
+Exits 0 when it printed something, 1 when nothing is found, a file cannot be read or a span starts past the end, 2 on a usage error or a path outside the repository.`
 
 const REFS_LIMIT = 100
+const PARENT = `..${sep}`
 
 const OPTIONS = {
   def: { type: 'string', short: 'd', description: 'print the declaration of this symbol' },
@@ -41,8 +43,34 @@ function cut(text: string): string {
   return text.length > LONGEST_LINE ? `${text.slice(0, LONGEST_LINE - 1)}…` : text
 }
 
+// The repository's top folder, or the current one outside git: nothing past it is read.
+async function readableRoot(): Promise<string> {
+  const ran = await runCommand(['git', 'rev-parse', '--show-toplevel'], { cwd: process.cwd() })
+
+  return realpathSync(ran.code === 0 ? ran.text.trim() : process.cwd())
+}
+
+// Refuses a path whose real location, a symlink followed, lies outside the repository, so peek reads no more than a grep of the repository would.
+async function checkInside(path: string): Promise<void> {
+  let real
+
+  try {
+    real = realpathSync(resolve(process.cwd(), path))
+  }
+  catch {
+    return
+  }
+
+  const inRoot = relative(await readableRoot(), real)
+
+  if (inRoot === '..' || inRoot.startsWith(PARENT) || isAbsolute(inRoot))
+    badUsage(`${path} is outside the repository`)
+}
+
 async function textOf(path: string): Promise<string> {
-  const text = await readText(join(process.cwd(), path))
+  await checkInside(path)
+
+  const text = await readText(resolve(process.cwd(), path))
 
   if (text === undefined)
     fail(`cannot read ${path} (missing, binary or too large)`, 1)
@@ -92,11 +120,17 @@ async function spanOf(target: string): Promise<Span> {
   if (from < 1 || to < from)
     badUsage(`${target}: a span reads <file>:<from>-<to>, from 1 and from <= to`)
 
+  if (from > count)
+    fail(`${path} has ${count} line${count === 1 ? '' : 's'}, ${target} starts past the end`, 1)
+
   return { path, from, to: Math.min(to, count) }
 }
 
 // Each readable file under the paths, with its text.
 async function* sources(paths: readonly string[]): AsyncGenerator<{ path: string, text: string }> {
+  for (const path of paths)
+    await checkInside(path)
+
   for (const path of await listFiles(paths, process.cwd())) {
     const text = await readText(join(process.cwd(), path))
 

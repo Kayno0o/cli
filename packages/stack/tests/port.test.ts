@@ -3,10 +3,26 @@ import { describe, expect, test } from 'bun:test'
 import { port } from '../src/commands/port'
 import { isListening, stringToPort } from '../src/port'
 
+// FNV-1a with BigInt, which never loses precision.
+function fnv(name: string): number {
+  let hash = 2166136261n
+
+  for (const unit of name.split('').map(char => BigInt(char.charCodeAt(0))))
+    hash = ((hash ^ unit) * 16777619n) & 0xFFFFFFFFn
+
+  return Number(hash)
+}
+
 describe('stringToPort', () => {
-  // Printed by ~/zshrc/scripts/port.ts before it moved here.
-  test.each([['a', 54572], ['bc', 24453], ['hello', 9377]])('%s hashes to %d like the old script', (name, expected) => {
+  test.each([['a', 25900], ['bc', 5618], ['hello', 13483]])('%s hashes to %d with 32-bit FNV-1a', (name, expected) => {
     expect(stringToPort(name)).toBe(expected)
+  })
+
+  test('keeps long names exact, below the ephemeral range by default', () => {
+    expect(stringToPort('a'.repeat(200))).toBe(1024 + (fnv('a'.repeat(200)) % 31744))
+
+    for (const name of ['proxy-manager', 'c14', 'a-rather-long-service-name-for-overflow'])
+      expect(stringToPort(name)).toBeWithin(1024, 32768)
   })
 
   test('stays inside min and max', () => {
@@ -35,7 +51,7 @@ describe('stack port', () => {
     const { result, out, err } = await capture(async () => port(['hello']))
 
     expect(result).toBe(0)
-    expect(out).toBe('9377\n')
+    expect(out).toBe('13483\n')
     expect(err).toBe('')
   })
 
@@ -62,6 +78,6 @@ describe('stack port', () => {
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
     await expect(capture(async () => port(['--max', '99999', 'x']))).rejects.toThrow('--max goes up to 65535')
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
-    await expect(capture(async () => port(['--min', '0', 'x']))).rejects.toThrow('--min takes a whole number from 1')
+    await expect(capture(async () => port(['--min', '0', 'x']))).rejects.toThrow('--min takes a whole number from 1024')
   })
 })

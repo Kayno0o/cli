@@ -1,7 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fail } from '@kaynooo/cli-kit'
 
 export interface Diff {
   unified: string
@@ -23,19 +22,19 @@ export async function diffTexts(path: string, before: string, after: string): Pr
       child = Bun.spawn(['diff', '-u', '--label', `a/${path}`, '--label', `b/${path}`, join(dir, 'before'), join(dir, 'after')], { stdout: 'pipe', stderr: 'pipe' })
     }
     catch {
-      fail('diff is not installed, which sub needs to show its changes', 1)
+      throw new Error('diff is not installed, which sub needs to show its changes')
     }
 
     const unified = await new Response(child.stdout).text()
 
     await child.exited
 
-    const lines = unified.split('\n')
+    const body = unified.split('\n').slice(2)
 
     return {
       unified,
-      added: lines.filter(line => line.startsWith('+') && !line.startsWith('+++')).length,
-      removed: lines.filter(line => line.startsWith('-') && !line.startsWith('---')).length,
+      added: body.filter(line => line.startsWith('+')).length,
+      removed: body.filter(line => line.startsWith('-')).length,
     }
   }
   finally {

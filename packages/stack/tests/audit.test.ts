@@ -123,8 +123,22 @@ describe('audit', () => {
 
     expect(messages(result)).toEqual([
       'error env: ${MODE} has no default in compose.yaml and is not in requiredServerEnv',
+      'error env: ${OTHER} has no default in compose.yaml and is not in requiredServerEnv',
       'warn env: requiredServerEnv lists UNUSED, which no compose file references',
     ])
+  })
+
+  test('env references skip the $$ escape and comments, and read a bare $VAR', async () => {
+    const compose = COMPOSE.replace('MODE: ${MODE:-prod}', () => 'MODE: ${MODE:-prod}\n      # OLD: ${COMMENTED}\n      CHECK: $${HEALTH_URL} # was ${TRAILING}\n      BARE: $BARE_VAR\n      HASH: "${QUOTED:-a # b}"')
+    const result = await run({ 'release.config.ts': CONFIG(), 'compose.yaml': compose, '.gitignore': IGNORE }, { 'compose.yaml': HEALTHY })
+
+    expect(messages(result)).toEqual(['error env: ${BARE_VAR} has no default in compose.yaml and is not in requiredServerEnv'])
+  })
+
+  test('without a compose file among deploySyncFiles it says every compose check was skipped', async () => {
+    const result = await run({ 'release.config.ts': CONFIG().replace('./compose.yaml', './notes.txt'), '.gitignore': IGNORE }, {})
+
+    expect(messages(result)).toContain('warn compose: no compose file among deploySyncFiles, so every check that reads the compose model was skipped')
   })
 
   test('a bare variable is a warning while requiredServerEnv is empty', async () => {
@@ -188,6 +202,15 @@ describe('audit', () => {
   test('bind mounts need to appear in the header', async () => {
     const model: ComposeModel = { services: { api: { ...HEALTHY.services?.api, volumes: [{ source: './data/db' }, './secrets:/run/secrets', { source: 'named' }, './data/db:/x'] } } }
     const result = await run({ 'release.config.ts': CONFIG(), 'compose.yaml': COMPOSE, '.gitignore': IGNORE }, { 'compose.yaml': model })
+
+    expect(messages(result)).toEqual(['warn layout: service "api" bind-mounts ./secrets, absent from the header\'s expected server layout'])
+  })
+
+  test('bind mounts resolved to absolute paths are checked against the header too', async () => {
+    const root = project({ 'release.config.ts': CONFIG(), 'compose.yaml': COMPOSE, '.gitignore': IGNORE })
+    const config = (await import(join(root, 'release.config.ts')) as { default: Parameters<typeof runAudit>[0] }).default
+    const model: ComposeModel = { services: { api: { ...HEALTHY.services?.api, volumes: [{ source: join(root, 'data/db') }, { source: join(root, 'secrets') }, { source: '/etc/localtime' }] } } }
+    const result = await runAudit(config, { root, loadCompose: models({ 'compose.yaml': model }), env: {}, home: '/nonexistent-home' })
 
     expect(messages(result)).toEqual(['warn layout: service "api" bind-mounts ./secrets, absent from the header\'s expected server layout'])
   })

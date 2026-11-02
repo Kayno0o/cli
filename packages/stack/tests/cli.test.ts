@@ -15,8 +15,8 @@ describe('stack', () => {
     expect(stack('--help').out).toContain('audit')
   })
 
-  test('port prints the same number as the old script', () => {
-    expect(stack('port', 'hello').out).toBe('9377\n')
-    expect(JSON.parse(stack('port', 'hello', '--json').out)).toEqual({ name: 'hello', port: 9377, listening: false })
+  test('port prints the FNV-1a number of the name', () => {
+    expect(stack('port', 'hello').out).toBe('13483\n')
+    expect(JSON.parse(stack('port', 'hello', '--json').out)).toEqual({ name: 'hello', port: 13483, listening: false })
   })
 })

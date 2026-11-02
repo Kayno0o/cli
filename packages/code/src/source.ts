@@ -19,6 +19,7 @@ const LEADING = /^(?:\/\/|\/\*|\*|#(?!!)|@)/
 // A binding the module keeps to itself, left out of an outline.
 const LOCAL_BINDING = /^(?:const|let|var)\s/
 const HEADING = /^#{1,6}\s/
+const TRAILING_NEWLINE = /\n$/
 const MARKDOWN = /\.(?:md|mdx|markdown)$/i
 const INDENTED = /\.(?:py|yml|yaml)$/i
 const INDENT = /^\s*/
@@ -208,7 +209,7 @@ export function outline(text: string, path: string): OutlineEntry[] {
 
 // The spans around each line matching, `context` lines on each side, overlapping ones merged.
 export function around(text: string, path: string, pattern: RegExp, context: number): Span[] {
-  const lines = text.split('\n')
+  const lines = text.replace(TRAILING_NEWLINE, '').split('\n')
   const spans: Span[] = []
 
   for (const [i, line] of lines.entries()) {

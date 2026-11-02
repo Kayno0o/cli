@@ -72,17 +72,18 @@ describe('hotspots', () => {
     expect((JSON.parse(hotspots(['--json', '--since', '2026-01-01', '--all']).out) as { path: string }[]).map(row => row.path)).toContain('tests/branchy.test.ts')
   })
 
-  test('prints a table, limits with -n and takes a folder', () => {
-    const { code, out } = hotspots(['--since', '2026-01-01', '-n', '1'])
+  test('prints a table, limits with --limit and takes a folder', () => {
+    const { code, out } = hotspots(['--since', '2026-01-01', '--limit', '1'])
 
     expect(code).toBe(0)
-    expect(out.trim().split('\n')).toHaveLength(2)
+    expect(out.trim().split('\n')).toHaveLength(3)
     expect(out).toContain('src/branchy.ts')
+    expect(out).toContain('more, rerun with --full')
     expect(hotspots(['src', '--json', '--since', '2026-01-01']).out).toContain('src/plain.ts')
   })
 
   test('exits 1 with no commit in the window and 2 on a bad count', () => {
     expect(hotspots(['--since', '2030-01-01']).code).toBe(1)
-    expect(hotspots(['-n', 'x']).code).toBe(2)
+    expect(hotspots(['--limit', 'x']).code).toBe(2)
   })
 })

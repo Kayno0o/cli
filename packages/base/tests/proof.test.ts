@@ -96,6 +96,36 @@ describe('proof', () => {
     })
   })
 
+  test('a missing command or a killed run is no test result: exit 2', () => {
+    file('a.txt', 'fixed\n')
+
+    expect(proof(['--', 'sh', '-c', 'exit 127']).code).toBe(2)
+    expect(proof(['--', 'sh', '-c', 'kill -9 $$']).err).toContain('did not run properly')
+  })
+
+  test('folds a long output of the failing side', () => {
+    file('a.txt', 'fixed\n')
+    const result = proof(['--', 'sh', '-c', 'grep -q fixed a.txt || { seq 1 500; exit 1; }'])
+
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('lines omitted')
+    expect(result.out).not.toContain('\n250\n')
+  })
+
+  test('stops after an interrupt in the run before, never printing proved', async () => {
+    const proc = Bun.spawn([process.execPath, CLI, '--', 'sleep', '30'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+
+    for (let i = 0; i < 100 && git('worktree', 'list').split('\n').length === 1; i++)
+      await Bun.sleep(50)
+
+    await Bun.sleep(200)
+    proc.kill('SIGINT')
+
+    expect(await proc.exited).toBe(130)
+    expect(await new Response(proc.stdout).text()).not.toContain('passes now')
+    expect(git('worktree', 'list').split('\n')).toHaveLength(1)
+  })
+
   test('exits 2 on no command, an unknown ref or a command that cannot start', () => {
     expect(proof([]).code).toBe(2)
     expect(proof(['--ref', 'nope', '--', 'true']).code).toBe(2)

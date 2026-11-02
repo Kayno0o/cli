@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -12,12 +13,12 @@ const COPIES = [
   ['packages/guard/src/bins.ts', 'agent-tools/hooks/bins.ts'],
 ] as const
 
-// Only where the mods live, ~/zshrc, so CI skips it.
-const present = await Bun.file(join(MODS, COPIES[0][1])).exists()
-
-describe.skipIf(!present)('the mods\' copies', () => {
+describe('the mods\' copies', () => {
   for (const [source, copy] of COPIES) {
-    test(`${copy} matches ${source}`, async () => {
+    // Only where the mods live, ~/zshrc, so CI skips it.
+    const present = existsSync(join(MODS, copy))
+
+    test.skipIf(!present)(`${copy} matches ${source}`, async () => {
       const copied = await Bun.file(join(MODS, copy)).text()
 
       expect(copied.slice(copied.indexOf('\n') + 1)).toBe(await Bun.file(join(ROOT, source)).text())

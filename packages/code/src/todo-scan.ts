@@ -3,7 +3,7 @@
 import type { Mark } from './todo'
 import { join } from 'node:path'
 import process from 'node:process'
-import { capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, warn } from '@kaynooo/cli-kit'
+import { capped, jsonOption, limitOf, limitOptions, parse, printJson, runMain, warn } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { listFiles, readText } from './files'
 import { lookUp, marksIn, refKey } from './todo'
@@ -14,7 +14,7 @@ const USAGE = `todo-scan [options] [path...]: lists the TODO, FIXME and owner/re
 
 Lists at most 100 comments, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.
 
-Exits 0 when it listed the comments or found no stale one, 1 when --stale finds one or ft is not installed, 2 on a usage error.`
+Exits 0 when it listed the comments or found no stale one, 1 when --stale finds one, 2 on a usage error or when --stale could not look a repository up (ft and gh both failed), so a clean exit never hides an unchecked issue.`
 
 const LIST_LIMIT = 100
 
@@ -25,7 +25,10 @@ const OPTIONS = {
 } as const
 
 function printLines(lines: string[], footer: string | undefined): void {
-  console.log([...lines, ...footer === undefined ? [] : [footer]].join('\n'))
+  const all = [...lines, ...footer === undefined ? [] : [footer]]
+
+  if (all.length > 0)
+    console.log(all.join('\n'))
 }
 
 async function main(args: string[]): Promise<number> {
@@ -52,9 +55,6 @@ async function main(args: string[]): Promise<number> {
     return 0
   }
 
-  if (Bun.which('ft') === null)
-    fail('--stale looks the issues up with ft, which is not installed', 1)
-
   const { states, failed } = await lookUp(marks.flatMap(mark => mark.refs), cwd)
 
   for (const [repo, reason] of failed)
@@ -69,7 +69,10 @@ async function main(args: string[]): Promise<number> {
   else
     printLines(shown.map(mark => `${mark.path}:${mark.line}: ${mark.refs.filter(ref => states.get(refKey(ref)) === 'closed').map(refKey).join(', ')} closed: ${mark.text}`), footer)
 
-  return stale.length > 0 ? 1 : 0
+  if (stale.length > 0)
+    return 1
+
+  return failed.size > 0 ? 2 : 0
 }
 
 process.exitCode = await runMain({ name: 'todo-scan', version, run: main })

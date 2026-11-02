@@ -1,8 +1,12 @@
 import type { ComposeModel, ComposeService, EnvRef, Finding, Release, ReleaseConfig } from './types'
 import { existsSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 
-const ENV_REF = /\$\{([A-Z_]\w*)(\s*:?[-?][^}]*)?\}/gi
+// A `${VAR}`, `${VAR:-x}`, `${VAR:?msg}` or bare `$VAR`, not the `$$` compose reads as a literal dollar.
+const ENV_REF = /(?<!\$)\$(?:\{([A-Z_]\w*)(\s*:?[-?+][^}]*)?\}|([A-Z_]\w*))/gi
+const REQUIRED_OPERATOR = /^\s*:?\?/
+const COMMENT_START = /(?:^|\s)#.*$/
+const QUOTES = /['"]/g
 const YAML_FILE = /\.ya?ml$/
 const LEADING_DOT_SLASH = /^\.\//
 const SERVICES_KEY = /^services:/m
@@ -73,8 +77,23 @@ export function buildFindings(root: string, releases: Release[], env: Record<str
   return findings
 }
 
+// The line without its YAML comment, a `#` inside quotes being text.
+function withoutComment(line: string): string {
+  const comment = COMMENT_START.exec(line)
+
+  if (comment === null || (line.slice(0, comment.index).match(QUOTES)?.length ?? 0) % 2 === 1)
+    return line
+
+  return line.slice(0, comment.index)
+}
+
+// `${VAR:?msg}` demands the variable, so only `-` and `+` count as a default.
 export function envRefs(root: string, composeFiles: string[]): EnvRef[] {
-  return composeFiles.flatMap(file => [...readFileSync(join(root, file), 'utf8').matchAll(ENV_REF)].map(match => ({ name: match[1] as string, defaulted: Boolean(match[2]), file })))
+  return composeFiles.flatMap((file) => {
+    const text = readFileSync(join(root, file), 'utf8').split('\n').map(withoutComment).join('\n')
+
+    return [...text.matchAll(ENV_REF)].map(match => ({ name: (match[1] ?? match[3]) as string, defaulted: match[2] !== undefined && !REQUIRED_OPERATOR.test(match[2]), file }))
+  })
 }
 
 // An empty requiredServerEnv means the project never adopted the preflight check, a partial one means a key drifted out of it. Only the second is a regression.
@@ -218,6 +237,19 @@ export function routingFindings(config: ReleaseConfig, gated: Set<string>, model
   return findings
 }
 
+// A bind source relative to the project: `docker compose config` resolves `./data` to an absolute path, so one inside the project folder is made relative again. Named volumes and paths elsewhere give undefined.
+function relativeSource(root: string, source: string | undefined): string | undefined {
+  if (source === undefined)
+    return undefined
+
+  if (source.startsWith('.'))
+    return source
+
+  const inRoot = relative(resolve(root), source)
+
+  return isAbsolute(source) && inRoot !== '' && !inRoot.startsWith('..') ? `./${inRoot}` : undefined
+}
+
 export function layoutFindings(root: string, base: string | undefined, model: ComposeModel | undefined): Finding[] {
   if (base === undefined)
     return []
@@ -227,9 +259,9 @@ export function layoutFindings(root: string, base: string | undefined, model: Co
 
   for (const [name, service] of services(model)) {
     for (const volume of service.volumes ?? []) {
-      const source = typeof volume === 'string' ? before(volume, ':') : volume.source
+      const source = relativeSource(root, typeof volume === 'string' ? before(volume, ':') : volume.source)
 
-      if (source?.startsWith('.') === true && !header.includes(stripDotSlash(source)))
+      if (source !== undefined && !header.includes(stripDotSlash(source)))
         findings.push({ level: 'warn', check: 'layout', message: `service "${name}" bind-mounts ${source}, absent from the header's expected server layout` })
     }
   }

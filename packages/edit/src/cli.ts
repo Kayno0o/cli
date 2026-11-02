@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
+import type { Diff } from './diff'
 import type { Pair } from './replace'
-import { accessSync, constants, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import process from 'node:process'
 import { Exit, fail, parse, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
@@ -100,6 +101,35 @@ function writable(path: string): boolean {
   }
 }
 
+const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
+
+// The file's text, or undefined when its bytes are not valid UTF-8 and would not survive a round trip.
+function readUtf8(path: string): string | undefined {
+  try {
+    return UTF8.decode(readFileSync(path))
+  }
+  catch {
+    return undefined
+  }
+}
+
+// Writes next to the target then renames over it, so a crash never leaves half a file; a symlink is followed and the mode kept.
+function writeAtomic(path: string, text: string) {
+  const target = realpathSync(path)
+  const temp = `${target}.sub-${process.pid}`
+
+  try {
+    writeFileSync(temp, text)
+    chmodSync(temp, (statSync(target, { throwIfNoEntry: false })?.mode ?? 0o644) & 0o7777)
+    renameSync(temp, target)
+  }
+  catch (error) {
+    rmSync(temp, { force: true })
+
+    throw error
+  }
+}
+
 async function main(argv: string[]): Promise<number> {
   const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
 
@@ -129,7 +159,7 @@ async function main(argv: string[]): Promise<number> {
     checkPattern(pairs[0] as Pair, '')
   }
 
-  const changes: { path: string, before: string, after: string, lines: number[] }[] = []
+  const changes: { path: string, before: string, after: string, lines: number[], diff?: Diff }[] = []
   const problems: string[] = []
 
   for (const path of files) {
@@ -139,7 +169,14 @@ async function main(argv: string[]): Promise<number> {
       continue
     }
 
-    const before = readFileSync(path, 'utf8')
+    const before = readUtf8(path)
+
+    if (before === undefined) {
+      problems.push(`${path}: not valid UTF-8, left alone`)
+
+      continue
+    }
+
     const applied = applyPairs(before, pairs)
 
     problems.push(...applied.problems.map(problem => `${path}: ${problem}`))
@@ -156,11 +193,22 @@ async function main(argv: string[]): Promise<number> {
     return 1
   }
 
-  for (const { path, before, after, lines } of changes) {
-    const diff = await diffTexts(path, before, after)
+  try {
+    for (const change of changes)
+      change.diff = await diffTexts(change.path, change.before, change.after)
+  }
+  catch (error) {
+    console.error(`sub: nothing written\n${error instanceof Error ? error.message : String(error)}`)
+
+    return 1
+  }
+
+  for (const { path, before, after, lines, diff } of changes) {
+    if (diff === undefined)
+      continue
 
     if (values['dry-run'] !== true && after !== before)
-      writeFileSync(path, after)
+      writeAtomic(path, after)
 
     console.log(`${path}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, +${diff.added} -${diff.removed}`)
 

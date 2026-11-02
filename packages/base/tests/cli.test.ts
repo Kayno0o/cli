@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -101,6 +101,46 @@ describe('base', () => {
     expect(existsSync(join(repo, 'node_modules/dep/index.txt'))).toBe(true)
     expect(existsSync(join(repo, '.env.local'))).toBe(true)
     expect(base(['--no-link', '--', 'test', '-e', 'node_modules']).code).toBe(1)
+  })
+
+  test('points a workspace link of node_modules at the worktree, not the main checkout', () => {
+    file('packages/kit/index.txt', 'old kit\n')
+    commit('add kit')
+    file('packages/kit/index.txt', 'new kit\n')
+    mkdirSync(join(repo, 'node_modules/@scope'), { recursive: true })
+    symlinkSync('../../packages/kit', join(repo, 'node_modules/@scope/kit'))
+    file('node_modules/dep/index.txt', 'dep\n')
+
+    const result = base(['--', 'sh', '-c', 'cat node_modules/@scope/kit/index.txt node_modules/dep/index.txt'])
+
+    expect(result.out).toBe('old kit\ndep\n')
+    expect(readFileSync(join(repo, 'packages/kit/index.txt'), 'utf8')).toBe('new kit\n')
+    expect(existsSync(join(repo, 'node_modules/dep/index.txt'))).toBe(true)
+  })
+
+  test('keeps a --keep file whose name starts with two dots', () => {
+    file('..foo', 'dots\n')
+
+    expect(base(['--keep', '..foo', '--', 'cat', '..foo']).out).toBe('dots\n')
+  })
+
+  test('refuses a --keep going through a committed symlink, writing nothing outside', () => {
+    const outside = realpathSync(mkdtempSync(join(tmpdir(), 'base-outside-')))
+
+    symlinkSync(outside, join(repo, 'evil'))
+    commit('add a symlink')
+    rmSync(join(repo, 'evil'))
+    file('evil/file', 'payload\n')
+
+    const result = base(['--keep', 'evil/file', '--', 'true'])
+
+    expect(result.code).toBe(2)
+    expect(result.err).toContain('symlink')
+    expect(existsSync(join(outside, 'file'))).toBe(false)
+  })
+
+  test('takes a ref starting with a dash as a ref, not an option', () => {
+    expect(base(['--ref=--all', '--', 'true']).err).toContain('no commit --all in this repository')
   })
 
   test('removes the worktree when interrupted', async () => {

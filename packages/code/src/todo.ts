@@ -26,7 +26,8 @@ const MARKER = /^(?:@|\[)?(TODO|FIXME)\b/
 const QUOTES = ['\'', '"', '`']
 const ESCAPE = /\\./g
 const AFTER_FIRST_LINE = /\n[\s\S]*/
-const REF = /(?<![\w./-])([\w.-]+\/[\w.-]+)#(\d+)\b/g
+// An owner and a repository as a forge names them, never `.` or `..` and no leading dash, so a match is neither a path nor an option.
+const REF = /(?<![\w./-])(\w[\w.-]*\/(?!\.+#)[\w.][\w.-]*)#(\d+)\b/g
 
 // Whether the index sits inside a string the line opened, a quote of one kind left unclosed before it.
 function isQuoted(line: string, index: number): boolean {
@@ -93,13 +94,13 @@ export async function lookUp(refs: readonly Ref[], cwd: string): Promise<Lookup>
 
   for (const [repo, ofRepo] of byRepo) {
     const numbers = [...new Set(ofRepo.map(ref => String(ref.number)))]
-    const ran = await runCommand(['ft', 'issue', ...numbers, '-r', repo, '--json'], { cwd })
+    const ran = Bun.which('ft') === null ? undefined : await runCommand(['ft', 'issue', ...numbers, '-r', repo, '--json'], { cwd })
 
-    if (ran.code !== 0) {
+    if (ran === undefined || ran.code !== 0) {
       const onGitHub = Bun.which('gh') === null ? 'gh is not installed' : await lookUpOnGitHub(repo, numbers, cwd)
 
       if (typeof onGitHub === 'string') {
-        lookup.failed.set(repo, `ft: ${ran.text.trim().replace(AFTER_FIRST_LINE, '')}; gh: ${onGitHub}`)
+        lookup.failed.set(repo, `ft: ${ran === undefined ? 'not installed' : ran.text.trim().replace(AFTER_FIRST_LINE, '')}; gh: ${onGitHub}`)
       }
       else {
         for (const [key, state] of onGitHub) lookup.states.set(key, state)

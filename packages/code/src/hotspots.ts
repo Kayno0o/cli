@@ -3,7 +3,7 @@
 import type { Hotspot } from './churn'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badUsage, fail, jsonOption, parse, printJson, runMain, table } from '@kaynooo/cli-kit'
+import { badUsage, capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, table } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { churnSince, complexityOf, isCandidate, isGenerated } from './churn'
 import { listFiles, readText } from './files'
@@ -15,39 +15,29 @@ const USAGE = `hotspots [options] [dir]: ranks the source files under dir (here 
 
 Complexity is the count of decision points in the file (branches, loops, cases, catches, boolean operators, ternaries) plus one, churn the commits touching it since --since (${DEFAULT_SINCE}), score their product. Test files and generated or built files are left out unless --all.
 
-Exits 0 when it ranked the files, 1 when no file has commits in the window or the folder is no git repository, 2 on a usage error.`
+Lists at most ${DEFAULT_COUNT} files, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.
+
+Exits 0 when it ranked the files, 1 when no file has commits in the window, 2 on a usage error or outside a git repository.`
 
 const OPTIONS = {
   since: { type: 'string', short: 's', description: `only count the commits since this date, as git reads it (${DEFAULT_SINCE})` },
-  count: { type: 'string', short: 'n', description: `files to list (${DEFAULT_COUNT}), 0 for all` },
+  ...limitOptions(DEFAULT_COUNT),
   all: { type: 'boolean', short: 'a', description: 'keep test files and generated files' },
-  json: jsonOption('[{rank, path, score, churn, complexity, lines}]'),
+  json: jsonOption('[{rank, path, score, churn, complexity, lines}], never cut unless --limit is given'),
 } as const
 
-function limit(text: string | undefined): number {
-  if (text === undefined)
-    return DEFAULT_COUNT
-
-  const count = Number(text)
-
-  if (!Number.isInteger(count) || count < 0)
-    badUsage(`-n takes a whole number, got ${text}`)
-
-  return count
-}
-
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'hotspots src --since "3 months ago" -n 10'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'hotspots src --since "3 months ago" --limit 10'] })
 
   if (positionals.length > 1)
     badUsage('give one folder')
 
-  const count = limit(values.count)
+  const count = limitOf(values, DEFAULT_COUNT)
   const cwd = process.cwd()
   const churn = await churnSince(cwd, values.since ?? DEFAULT_SINCE)
 
   if (churn === undefined)
-    fail('not a git repository, churn comes from its log', 1)
+    fail('not a git repository, churn comes from its log')
 
   const ranked: Hotspot[] = []
 
@@ -72,12 +62,19 @@ async function main(args: string[]): Promise<number> {
 
   ranked.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
 
-  const shown = ranked.slice(0, count === 0 ? undefined : count).map((hotspot, index) => ({ rank: index + 1, ...hotspot }))
+  const { shown: kept, footer } = capped(ranked, count)
+  const shown = kept.map((hotspot, index) => ({ rank: index + 1, ...hotspot }))
 
-  if (values.json === true)
+  if (values.json === true) {
     printJson(shown)
-  else
-    console.log(table([['rank', 'score', 'churn', 'complexity', 'lines', 'file'], ...shown.map(row => [row.rank, row.score, row.churn, row.complexity, row.lines, row.path].map(String))], { header: true, align: ['right', 'right', 'right', 'right', 'right', 'left'] }))
+
+    return 0
+  }
+
+  console.log(table([['rank', 'score', 'churn', 'complexity', 'lines', 'file'], ...shown.map(row => [row.rank, row.score, row.churn, row.complexity, row.lines, row.path].map(String))], { header: true, align: ['right', 'right', 'right', 'right', 'right', 'left'] }))
+
+  if (footer !== undefined)
+    console.log(footer)
 
   return 0
 }

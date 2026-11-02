@@ -1,8 +1,8 @@
 import type { Description } from '../packages/kit/src/args'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { bins, run } from './bins'
 
 // What `agent-tools list` reads off each bin, so a bin that stops describing itself fails here rather than drops off the list.
@@ -22,6 +22,9 @@ describe('every bin describes itself', () => {
 // Built as the build scripts do, every bin of a package in one call: there an entry importing another entry runs that one's `import.meta.main` block too, which no run from source shows.
 describe('every built bin answers as itself', () => {
   const outdir = mkdtempSync(join(tmpdir(), 'built-bins-'))
+
+  afterAll(() => rmSync(outdir, { recursive: true, force: true }))
+
   const byPackage = Map.groupBy(bins, ({ source }) => dirname(source))
 
   for (const [dir, packageBins] of byPackage) {

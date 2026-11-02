@@ -154,6 +154,23 @@ describe('sub', () => {
     expect(statSync(join(dir, 'run.sh')).mode & 0o777).toBe(0o750)
   })
 
+  test('refuses a file that is not valid UTF-8 and leaves its bytes alone', () => {
+    const bytes = Buffer.from([0x61, 0xE9, 0x62])
+
+    writeFileSync(join(dir, 'latin.txt'), bytes)
+    const result = sub(['--from', 'a', '--to', 'c', 'latin.txt'])
+
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('not valid UTF-8')
+    expect(readFileSync(join(dir, 'latin.txt')).equals(bytes)).toBe(true)
+  })
+
+  test('counts a removed line starting with dashes', () => {
+    file('a.sql', 'x\n-- old\ny\n')
+
+    expect(sub(['--from', '-- old\n', '--to', '', 'a.sql']).out).toContain('+0 -1')
+  })
+
   test('deletes with an empty --to', () => {
     file('a.ts', 'keep drop\n')
 

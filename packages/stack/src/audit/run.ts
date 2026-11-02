@@ -55,8 +55,11 @@ async function composeModels(options: AuditOptions, base: string | undefined, ov
     }
   }
 
-  if (base === undefined)
+  if (base === undefined) {
+    findings.push({ level: 'warn', check: 'compose', message: 'no compose file among deploySyncFiles, so every check that reads the compose model was skipped' })
+
     return { model: undefined, findings }
+  }
 
   const model = await load([base])
 

@@ -32,6 +32,7 @@ beforeEach(() => {
 describe('marksIn', () => {
   test('reads the markers and references of comments only', () => {
     expect(marksIn('x = 1 # TODO(me): later\n * FIXME: block line\nlet y = a // b\n', 'a.py').map(mark => [mark.line, mark.kind, mark.text])).toEqual([[1, 'TODO', 'TODO(me): later'], [2, 'FIXME', 'FIXME: block line']])
+    expect(marksIn('// ../..#1 and a/..#2 and -x/y#3 and ok/repo#4 and a/.github#5\n', 'a.ts').flatMap(mark => mark.refs.map(ref => `${ref.repo}#${ref.number}`))).toEqual(['ok/repo#4', 'a/.github#5'])
     expect(marksIn('// the TODO and FIXME comments\nconst s = \'a // TODO: in a string\'\n', 'a.ts')).toEqual([])
     expect(marksIn('// see kaynooo/kayjs#823 and acme/x#2\n', 'a.ts')[0]?.refs).toEqual([{ repo: 'kaynooo/kayjs', number: 823 }, { repo: 'acme/x', number: 2 }])
   })
@@ -71,6 +72,18 @@ describe('todo-scan', () => {
 
     expect(result.code).toBe(1)
     expect(result.out).toBe('src/a.ts:3: kaynooo/kayjs#823 closed: kaynooo/kayjs#823\n')
+    expect(result.err).toContain('could not look owner/repo up')
+  })
+
+  test('exits 2, not 0, when every lookup failed', () => {
+    write('src/a.ts', '// owner/repo#4 waits\n')
+    write('notes.md', '')
+    write('script.sh', '')
+
+    const result = scan(['--stale'], standIns())
+
+    expect(result.code).toBe(2)
+    expect(result.out).toBe('')
     expect(result.err).toContain('could not look owner/repo up')
   })
 

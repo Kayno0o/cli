@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -101,6 +101,19 @@ describe('peek', () => {
     expect(peek('--def', 'a', '--refs', 'b').code).toBe(2)
     expect(peek('src/a.ts:9-3').code).toBe(2)
     expect(peek('missing.ts').code).toBe(1)
+  })
+
+  test('reads an absolute path inside the repository and refuses one outside', () => {
+    expect(peek(`${realpathSync(dir)}/src/b.ts:3`).out).toContain('3  console.log(addOne(2))')
+    expect(peek('../../etc/hostname')).toMatchObject({ code: 2 })
+    expect(peek('/etc/hostname').err).toContain('outside the repository')
+    expect(peek('--refs', 'x', '/etc').code).toBe(2)
+  })
+
+  test('a span starting past the end of the file exits 1, and --around on the last line shows no phantom line', () => {
+    expect(peek('src/b.ts:500-600')).toMatchObject({ code: 1, out: '' })
+    expect(peek('src/b.ts:500-600').err).toContain('has 3 lines')
+    expect(peek('--around', 'console', '-C', '2', 'src/b.ts').out).toStartWith('src/b.ts:1-3\n')
   })
 
   test('prints JSON in every mode, and its failures as JSON', () => {

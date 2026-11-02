@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
 
+import type { Run } from './worktree'
 import process from 'node:process'
-import { fail, holdSignals, jsonOption, parse, printJson, runMain } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runMain } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
-import { checkout, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
+import { checkout, folded, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
-const USAGE = 'proof [--ref <rev>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nExits 0 when the command fails before and passes now, 1 when it passes before too, fails now too, or passes before and fails now, 2 on a usage error, an unknown ref or a command that cannot start.'
+const USAGE = 'proof [--ref <rev>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nExits 0 when the command fails before and passes now, 1 when it passes before too, fails now too, or passes before and fails now, 2 on a usage error, an unknown ref, a command that cannot start or ends with exit 126, 127 or a signal, or 128 plus the signal when interrupted.'
 
 const OPTIONS = {
   'ref': { type: 'string', short: 'r', description: 'the commit to run before at (default HEAD)' },
@@ -13,6 +14,11 @@ const OPTIONS = {
   'no-link': { type: 'boolean', description: 'do not link the ignored env files, node_modules, vendor and .venv of the checkout' },
   'json': jsonOption('{outcome, proved, ref, sha, before: {code, output}, now: {code, output}}'),
 } as const
+
+// A shell's "not executable", "not found" and killed-by-signal codes say the command did not run, which no test result does.
+function abnormal(code: number): boolean {
+  return code === 126 || code === 127 || (code > 128 && code < 160)
+}
 
 type Outcome = 'proved' | 'passes-before' | 'fails-both' | 'regressed'
 
@@ -56,18 +62,30 @@ async function main(argv: string[]): Promise<number> {
   const sha = await resolveRef(root, ref)
   const kept = keptPaths(root, cwd, parsed.values.keep ?? [])
 
-  const before = await inWorktree({ root, prefix, sha, ref, kept, link: parsed.values['no-link'] !== true }, async (runDir, signals) => runIn(runDir, command, signals, true))
-
-  if (!before.started)
-    fail(before.output)
-
   const signals = holdSignals()
-  const now = await runIn(cwd, command, signals, true)
+  let before: Run
+  let now: Run | undefined
 
-  signals.release()
+  try {
+    before = await inWorktree({ root, prefix, sha, ref, kept, link: parsed.values['no-link'] !== true, signals }, async (runDir, held) => runIn(runDir, command, held, true))
 
-  if (!now.started)
-    fail(now.output)
+    if (signals.signal === undefined)
+      now = await runIn(cwd, command, signals, true)
+  }
+  finally {
+    signals.release()
+  }
+
+  if (signals.signal !== undefined || now === undefined)
+    return exitCodeOf(null, signals.signal ?? null)
+
+  for (const [run, where] of [[before, `at ${sha.slice(0, 7)}`], [now, 'now']] as const) {
+    if (!run.started)
+      fail(run.output)
+
+    if (abnormal(run.code))
+      fail(`the command did not run properly ${where}: exit ${run.code}, a missing command or a kill, not a test result${run.output.trim() === '' ? '' : `\n\n${folded(run.output)}`}`)
+  }
 
   const outcome = outcomeOf(before.code, now.code)
   const { message, side } = describe(outcome, sha.slice(0, 7))
@@ -84,7 +102,7 @@ async function main(argv: string[]): Promise<number> {
   const shown = side === 'before' ? before : now
 
   if (shown.code !== 0 && shown.output.trim() !== '')
-    console.log(`\n${shown.output.trimEnd()}`)
+    console.log(`\n${folded(shown.output)}`)
 
   return proved ? 0 : 1
 }

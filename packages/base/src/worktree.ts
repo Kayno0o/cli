@@ -1,14 +1,17 @@
 import type { HeldSignals, Ran } from '@kaynooo/cli-kit'
 import type { Subprocess } from 'bun'
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import process from 'node:process'
 import { exitCodeOf, fail, holdSignals, runCommand } from '@kaynooo/cli-kit'
 
 const WHITESPACE = /\s/
 const ENV_FILE = /^\.env(?:\..+)?$/
 const DEPENDENCIES = new Set(['node_modules', 'vendor', '.venv'])
 const TRAILING_SLASH = /\/$/
+const PARENT = `..${sep}`
+const BASE_DIR = /^base-\w{6}$/
 const CONTAINER = /(?:^|[\s;&|(])(?:docker\s+compose|docker-compose)\s+(?:-\S+(?:\s+[^-\s]\S*)?\s+)*(?:exec|run)\b|(?:^|[\s;&|(])docker\s+exec\b/
 
 export interface Checkout {
@@ -42,7 +45,7 @@ export async function checkout(cwd: string): Promise<Checkout> {
 }
 
 export async function resolveRef(root: string, ref: string): Promise<string> {
-  const ran = await git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], root)
+  const ran = await git(['rev-parse', '--verify', '--quiet', '--end-of-options', `${ref}^{commit}`], root)
 
   if (ran.code !== 0)
     fail(`no commit ${ref} in this repository`)
@@ -52,11 +55,13 @@ export async function resolveRef(root: string, ref: string): Promise<string> {
 
 // Repository paths of the --keep files, refused before anything is created when one is missing or outside the repository.
 export function keptPaths(root: string, cwd: string, paths: string[]): string[] {
+  const realRoot = realpathSync(root)
+
   return paths.map((path) => {
     const absolute = resolve(cwd, path)
-    const inRepo = relative(root, absolute)
+    const inRepo = relative(realRoot, join(realpathSync(dirname(absolute)), basename(absolute)))
 
-    if (inRepo === '' || inRepo.startsWith('..') || isAbsolute(inRepo))
+    if (inRepo === '' || inRepo === '..' || inRepo.startsWith(PARENT) || isAbsolute(inRepo))
       fail(`--keep ${path} is outside the repository`)
 
     if (!existsSync(absolute))
@@ -64,6 +69,18 @@ export function keptPaths(root: string, cwd: string, paths: string[]): string[] 
 
     return inRepo
   })
+}
+
+// Refuses a kept path that a committed symlink of the worktree would send outside it.
+function checkNoSymlink(dir: string, path: string): void {
+  let current = dir
+
+  for (const part of dirname(path).split(sep)) {
+    current = join(current, part)
+
+    if (lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink() === true)
+      fail(`--keep ${path} goes through the symlink ${relative(dir, current)} of the ref, which would write outside the worktree`)
+  }
 }
 
 // Env files and dependency folders the checkout has but git ignores, which a run needs and a fresh worktree lacks.
@@ -95,6 +112,8 @@ export async function addWorktree(root: string, sha: string): Promise<string> {
 
 export function copyKept(root: string, dir: string, paths: string[]): void {
   for (const path of paths) {
+    checkNoSymlink(dir, path)
+
     const target = join(dir, path)
 
     rmSync(target, { recursive: true, force: true })
@@ -114,11 +133,91 @@ export function linkEntries(root: string, dir: string, entries: string[]): strin
       continue
 
     mkdirSync(dirname(link), { recursive: true })
+
+    if (basename(entry) === 'node_modules' && hasWorkspaceLinks(root, entry)) {
+      links.push(...linkModules(root, dir, entry))
+
+      continue
+    }
+
     symlinkSync(join(root, entry), link)
     links.push(link)
   }
 
   return links
+}
+
+// The symlinks of a node_modules folder: its direct entries and those of its @scope folders.
+function moduleLinks(root: string, folder: string): { path: string, name: string }[] {
+  const found: { path: string, name: string }[] = []
+
+  for (const entry of readdirSync(join(root, folder), { withFileTypes: true })) {
+    if (entry.isSymbolicLink())
+      found.push({ path: join(folder, entry.name), name: entry.name })
+    else if (entry.isDirectory() && entry.name.startsWith('@'))
+      found.push(...moduleLinks(root, join(folder, entry.name)))
+  }
+
+  return found
+}
+
+// Where a node_modules symlink points when that is inside the repository but outside any node_modules: a workspace package.
+function workspaceTarget(root: string, path: string): string | undefined {
+  try {
+    const inRepo = relative(realpathSync(root), realpathSync(join(root, path)))
+
+    return inRepo === '' || inRepo.startsWith(PARENT) || inRepo.split(sep).includes('node_modules') ? undefined : inRepo
+  }
+  catch {
+    return undefined
+  }
+}
+
+function hasWorkspaceLinks(root: string, folder: string): boolean {
+  return moduleLinks(root, folder).some(({ path }) => workspaceTarget(root, path) !== undefined)
+}
+
+// Rebuilds a node_modules folder entry by entry so a workspace link lands on the worktree's own copy of the package, not the main checkout's.
+function linkModules(root: string, dir: string, folder: string): string[] {
+  const links: string[] = []
+
+  mkdirSync(join(dir, folder), { recursive: true })
+
+  for (const entry of readdirSync(join(root, folder), { withFileTypes: true })) {
+    const path = join(folder, entry.name)
+    const link = join(dir, path)
+
+    if (entry.isDirectory() && entry.name.startsWith('@')) {
+      links.push(...linkModules(root, dir, path))
+
+      continue
+    }
+
+    const workspace = entry.isSymbolicLink() ? workspaceTarget(root, path) : undefined
+
+    symlinkSync(workspace === undefined ? join(root, path) : join(dir, workspace), link)
+    links.push(link)
+  }
+
+  return links
+}
+
+const STALE_AFTER = 24 * 60 * 60 * 1000
+
+// Removes the temporary worktrees an earlier run left behind when it was killed without a chance to clean up, then forgets their git entries.
+async function sweepStale(root: string): Promise<void> {
+  for (const name of readdirSync(tmpdir())) {
+    if (!BASE_DIR.test(name))
+      continue
+
+    const path = join(tmpdir(), name)
+    const stat = lstatSync(path, { throwIfNoEntry: false })
+
+    if (stat?.isDirectory() === true && stat.uid === process.getuid?.() && Date.now() - stat.mtimeMs > STALE_AFTER)
+      rmSync(path, { recursive: true, force: true })
+  }
+
+  await git(['worktree', 'prune'], root)
 }
 
 export async function removeWorktree(root: string, dir: string, links: string[]): Promise<void> {
@@ -163,11 +262,34 @@ export async function runIn(dir: string, command: string[], signals: HeldSignals
 
   signals.forward(child)
 
-  const streams = capture ? await Promise.all([new Response(child.stdout as ReadableStream).text(), new Response(child.stderr as ReadableStream).text()]) : []
+  const chunks: Uint8Array[] = []
+
+  if (capture)
+    await Promise.all([collect(child.stdout as ReadableStream<Uint8Array>, chunks), collect(child.stderr as ReadableStream<Uint8Array>, chunks)])
 
   await child.exited
 
-  return { code: exitCodeOf(child.exitCode, child.signalCode ?? null), output: streams.join(''), started: true }
+  return { code: exitCodeOf(child.exitCode, child.signalCode ?? null), output: Buffer.concat(chunks).toString(), started: true }
+}
+
+// Keeps the chunks of both streams in the order they arrive.
+async function collect(stream: ReadableStream<Uint8Array>, chunks: Uint8Array[]): Promise<void> {
+  for await (const chunk of stream)
+    chunks.push(chunk)
+}
+
+const FOLD_OVER = 120
+const FOLD_HEAD = 20
+const FOLD_TAIL = 80
+
+// The output as printed: whole up to FOLD_OVER lines, else its first and last lines around a count of those left out.
+export function folded(output: string): string {
+  const lines = output.trimEnd().split('\n')
+
+  if (lines.length <= FOLD_OVER)
+    return lines.join('\n')
+
+  return [...lines.slice(0, FOLD_HEAD), `... ${lines.length - FOLD_HEAD - FOLD_TAIL} lines omitted, --json has them all ...`, ...lines.slice(-FOLD_TAIL)].join('\n')
 }
 
 export interface WorktreeOptions {
@@ -177,13 +299,18 @@ export interface WorktreeOptions {
   ref: string
   kept: string[]
   link: boolean
+  // Held by the caller, who releases them, when it must see a signal that came during the run.
+  signals?: HeldSignals
 }
 
 // Runs the callback in the caller's folder of a temporary worktree at the commit, signals held from its creation to its removal.
 export async function inWorktree<T>(options: WorktreeOptions, body: (runDir: string, signals: HeldSignals) => Promise<T>): Promise<T> {
   const { root, prefix, sha, ref, kept, link } = options
   let links: string[] = []
-  const signals = holdSignals()
+  const signals = options.signals ?? holdSignals()
+
+  await sweepStale(root)
+
   const dir = await addWorktree(root, sha)
 
   try {
@@ -199,6 +326,8 @@ export async function inWorktree<T>(options: WorktreeOptions, body: (runDir: str
   }
   finally {
     await removeWorktree(root, dir, links)
-    signals.release()
+
+    if (options.signals === undefined)
+      signals.release()
   }
 }
