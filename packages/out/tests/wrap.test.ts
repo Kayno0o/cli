@@ -98,8 +98,8 @@ describe('wrap', () => {
     expect(wrap('cd a && bun test -t \'x\'')).toBe('out -- sh -c \'cd a && bun test -t \'\\\'\'x\'\\\'\'\'')
   })
 
-  test('drops a final tail, head or grep and the 2>&1 feeding it', () => {
-    expect(wrap('bun test 2>&1 | tail -40')).toBe('out -- bun test')
-    expect(wrap('cd a && bun run test 2>&1 | grep -v skip | head -20')).toBe('out -- sh -c \'cd a && bun run test\'')
+  test('drops a final tail, head or grep and the 2>&1 feeding it, passing each stage as --was', () => {
+    expect(wrap('bun test 2>&1 | tail -40')).toBe('out --was \'tail -40\' -- bun test')
+    expect(wrap('cd a && bun run test 2>&1 | grep -v skip | head -20')).toBe('out --was \'grep -v skip\' --was \'head -20\' -- sh -c \'cd a && bun run test\'')
   })
 })

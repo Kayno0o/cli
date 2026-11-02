@@ -25,7 +25,8 @@ afterAll(() => {
 })
 
 const RUNTIME = temp('out-runtime-')
-const ENV = { ...process.env, XDG_RUNTIME_DIR: RUNTIME }
+const STATE = temp('out-state-')
+const ENV = { ...process.env, XDG_RUNTIME_DIR: RUNTIME, XDG_STATE_HOME: STATE }
 
 function out(...args: string[]) {
   const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdout: 'pipe', stderr: 'pipe', env: ENV })
@@ -37,6 +38,25 @@ describe('out', () => {
   test('prints its version and its help', () => {
     expect(out('--version').out.trim()).toBe(version)
     expect(out('--help').out).toContain('out [-n <lines>] -- <command>')
+  })
+
+  test('records each run and --stats reads them back, a --was stage counting against what it would have printed', () => {
+    const state = temp('out-stats-cli-')
+    const env = { ...ENV, XDG_STATE_HOME: state }
+    const spawn = (...args: string[]) => Bun.spawnSync([process.execPath, CLI, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env })
+
+    spawn('--', 'sh', '-c', 'seq 1 1000')
+    spawn('--was', 'tail -n 5', '--', 'seq', '1', '1000')
+
+    const entries = readFileSync(join(state, 'agent-tools/out/stats.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as { command: string, bytes: number, baseline: number, shown: number, folded: boolean })
+    const stats = JSON.parse(spawn('--stats', '--since', '1d', '--json').stdout.toString()) as { runs: number, commands: { command: string, tokensSaved: number }[] }
+
+    expect(entries.map(each => [each.command, each.bytes, each.folded])).toEqual([['seq', 3893, true], ['seq', 3893, true]])
+    expect(entries[1]?.baseline).toBe('996\n997\n998\n999\n1000\n'.length)
+    expect(stats.runs).toBe(2)
+    expect(stats.commands[0]?.tokensSaved).toBe(Math.round((3893 - (entries[0]?.shown ?? 0) + 21 - (entries[1]?.shown ?? 0)) / 4))
+    expect(spawn('--stats').stdout.toString()).toContain('2 runs recorded, 2 folded')
+    expect(spawn('--since', '1d', '--', 'true').exitCode).toBe(2)
   })
 
   test('refuses to run without a command', () => {

@@ -4,6 +4,8 @@ import process from 'node:process'
 import { holdSignals, runCommand } from '@kaynooo/cli-kit'
 import { fold, shouldFold } from './fold'
 import { cleanLogs, logDir, newLog } from './logs'
+import { filtered } from './stages'
+import { commandKey, record } from './stats'
 
 // Output kept in memory from the start and from the end; what lies between only reaches the log file.
 const HEAD_BYTES = 2 * 1024 * 1024
@@ -59,6 +61,10 @@ class Recorder {
     return this.dropped > 0
   }
 
+  get bytes(): number {
+    return this.headBytes + this.tailBytes + this.dropped
+  }
+
   get chunks(): Chunk[] {
     return [...this.head, ...this.tail]
   }
@@ -83,8 +89,21 @@ function replay(chunks: Chunk[]): void {
     process[stream].write(data)
 }
 
+// What a run is recorded with: the words naming the command, and the tail, head or grep stages `out` stands in for.
+export interface Recorded {
+  command: string
+  was: readonly string[]
+}
+
+// Counts the run in the stats: the session reads what `out` shows instead of the whole output, or of what the stages it replaced would have printed.
+function count(recorder: Recorder, shown: number, recorded: Recorded): void {
+  const baseline = recorded.was.length === 0 || recorder.overflowing ? undefined : filtered(recorder.text, recorded.was)
+
+  record({ at: new Date().toISOString(), dir: process.cwd(), command: recorded.command, bytes: recorder.bytes, baseline: baseline === undefined ? recorder.bytes : Buffer.byteLength(baseline), shown, folded: shown !== recorder.bytes })
+}
+
 // Runs the command with stdout and stderr captured in arrival order, then replays short output untouched or prints it folded. Returns the command's exit code, which a failure to fold never changes.
-export async function run(command: string[], threshold: number): Promise<number> {
+export async function run(command: string[], threshold: number, was: readonly string[] = []): Promise<number> {
   const dir = await logDir()
 
   await cleanLogs(dir)
@@ -123,11 +142,13 @@ export async function run(command: string[], threshold: number): Promise<number>
     held.release()
   }
 
-  return present(recorder, threshold, code)
+  count(recorder, present(recorder, threshold), { command: commandKey(command), was })
+
+  return code
 }
 
 // Reads output piped in and prints it as `run` does, untouched when short. Its exit code is 0: the writer's is the pipeline's to give, through `set -o pipefail`.
-export async function readPiped(threshold: number): Promise<number> {
+export async function readPiped(threshold: number, was: readonly string[] = []): Promise<number> {
   const dir = await logDir()
 
   await cleanLogs(dir)
@@ -137,25 +158,32 @@ export async function readPiped(threshold: number): Promise<number> {
   for await (const data of Bun.stdin.stream())
     recorder.add({ stream: 'stdout', data })
 
-  return present(recorder, threshold, 0)
+  count(recorder, present(recorder, threshold), { command: '(piped)', was })
+
+  return 0
 }
 
-function present(recorder: Recorder, threshold: number, code: number): number {
+// Prints the output untouched when short, folded otherwise, and answers how many bytes it printed.
+function present(recorder: Recorder, threshold: number): number {
   const text = recorder.text
 
   if (!recorder.overflowing && !shouldFold(text, threshold)) {
     replay(recorder.chunks)
 
-    return code
+    return recorder.bytes
   }
 
+  let printed
+
   try {
-    process.stdout.write(fold(text, { threshold, logPath: recorder.save() }))
+    printed = fold(text, { threshold, logPath: recorder.save() })
   }
   catch (error) {
     console.error(`out: could not fold the output: ${error instanceof Error ? error.message : String(error)}`)
-    process.stdout.write(text.split('\n').slice(-FALLBACK_LINES).join('\n'))
+    printed = text.split('\n').slice(-FALLBACK_LINES).join('\n')
   }
 
-  return code
+  process.stdout.write(printed)
+
+  return Buffer.byteLength(printed)
 }

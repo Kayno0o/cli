@@ -129,14 +129,17 @@ function isFilter(stage: string): boolean {
   return bin !== 'grep' || !args.some(arg => GREP_SUMMARY.test(arg))
 }
 
-// The line without its trailing `| tail`, `| head` and `| grep` stages and the `2>&1` feeding them, as out keeps the failures they would have picked out.
-function withoutFilters(command: string): string {
+// The line without its trailing `| tail`, `| head` and `| grep` stages and the `2>&1` feeding them, as out keeps the failures they would have picked out, and those stages in pipeline order.
+function withoutFilters(command: string): { rest: string, stages: string[] } {
   let rest = command
+  const stages: string[] = []
 
-  for (let at = scan(rest).pipes.at(-1); at !== undefined && isFilter(rest.slice(at + 1).trim()); at = scan(rest).pipes.at(-1))
+  for (let at = scan(rest).pipes.at(-1); at !== undefined && isFilter(rest.slice(at + 1).trim()); at = scan(rest).pipes.at(-1)) {
+    stages.unshift(rest.slice(at + 1).trim())
     rest = rest.slice(0, at).trimEnd().replace(STDERR_MERGE, '')
+  }
 
-  return rest
+  return { rest, stages }
 }
 
 function listed(words: string[]): boolean {
@@ -161,7 +164,7 @@ function isCd(segment: string): boolean {
 
 // True when the line is made only of listed noisy commands (and cd), with no pipe, redirect, background or substitution, and at least one command is listed; a final pipe into tail, head or grep is dropped first.
 export function shouldWrap(command: string): boolean {
-  const { segments, plain } = scan(withoutFilters(command.trim()))
+  const { segments, plain } = scan(withoutFilters(command.trim()).rest)
 
   if (!plain || !segments.some(segment => listedSegment(segment)))
     return false
@@ -169,12 +172,13 @@ export function shouldWrap(command: string): boolean {
   return segments.every(segment => isCd(segment) || listedSegment(segment))
 }
 
-// The command line to run instead: `out -- <cmd>` without the final tail, head or grep pipe, through `sh -c` when it chains commands or starts with an assignment.
+// The command line to run instead: `out -- <cmd>` without the final tail, head or grep pipe, each dropped stage passed as `--was` for out's stats, through `sh -c` when it chains commands or starts with an assignment.
 export function wrap(command: string): string {
-  const trimmed = withoutFilters(command.trim())
+  const { rest, stages } = withoutFilters(command.trim())
+  const out = ['out', ...stages.flatMap(stage => ['--was', shellQuote(stage)]), '--'].join(' ')
 
-  if (scan(trimmed).segments.length <= 1 && !ASSIGNMENT.test(trimmed))
-    return `out -- ${trimmed}`
+  if (scan(rest).segments.length <= 1 && !ASSIGNMENT.test(rest))
+    return `${out} ${rest}`
 
-  return `out -- sh -c ${shellQuote(trimmed)}`
+  return `${out} sh -c ${shellQuote(rest)}`
 }
