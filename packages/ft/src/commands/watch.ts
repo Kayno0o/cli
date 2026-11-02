@@ -1,8 +1,8 @@
 import type { Run } from '../runs'
-import { badge, duration, Exit, fail, formatDuration, isPermanentFailure, parse, takesControlCodes, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, duration, Exit, fail, formatDuration, formatSeconds, isPermanentFailure, parse, takesControlCodes, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { repoOption } from '../args'
-import { failureReport, FINISHED, overall, recentRuns, runById, stallReason } from '../runs'
+import { failureReport, FINISHED, overall, recentRuns, runById, runSeconds, stallReason, startedAt } from '../runs'
 
 const usage = `ft watch [--after <id>]
 
@@ -28,7 +28,9 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
   const started = Date.now()
   // The last state of every run seen, in the order they appeared.
   const latest = new Map<number, Run>()
-  const line = (run: Run) => `${run.workflow_id} run ${run.id} on ${run.prettyref}: ${badge(run.status, out)}`
+  // When each run was first seen, the wait counted from there until Forgejo says it started.
+  const seen = new Map<number, number>()
+  const line = (run: Run) => `${run.workflow_id} run ${run.id} on ${run.prettyref}: ${badge(run.status, out)}${elapsed(run, seen.get(run.id) ?? Date.now())}`
   const region = takesControlCodes(out) ? liveRegion(() => [...latest.values()].map(line), out) : undefined
   // Every run ever picked, read again by id once newer runs push it out of the page of the newest ones.
   const followed = new Set<number>()
@@ -45,6 +47,9 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
       followed.add(run.id)
 
     for (const run of runs) {
+      if (!seen.has(run.id))
+        seen.set(run.id, Date.now())
+
       if (region === undefined && latest.get(run.id)?.status !== run.status)
         out.write(`${line(run)}\n`)
 
@@ -127,6 +132,16 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
         out.write(`${line(run)}\n`)
     }
   }
+}
+
+// ` in 3m 2s` once a run is over, ` for 1m 12s` while it runs or waits, nothing before a second has passed.
+function elapsed(run: Run, seen: number): string {
+  if (FINISHED.has(run.status))
+    return run.duration > 0 ? ` in ${formatDuration(runSeconds(run) * 1000)}` : ''
+
+  const seconds = Math.floor((Date.now() - (startedAt(run) ?? seen)) / 1000)
+
+  return seconds > 0 ? ` for ${formatSeconds(seconds)}` : ''
 }
 
 export async function watch(args: string[]): Promise<number> {

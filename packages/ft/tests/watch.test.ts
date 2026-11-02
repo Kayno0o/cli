@@ -85,6 +85,17 @@ describe('watchRuns output', () => {
 
     expect(written.join('')).toBe('test.yml run 2 on main: success\ntest.yml run 1 on main: success\n')
   })
+
+  test('says how long a run has been running, and how long it took once over', async () => {
+    const { written, out } = stream(false)
+    const started = new Date(Date.now() - 75_000).toISOString()
+
+    await withFastPoll([{ ...run(2, 'running'), started }, { ...run(1, 'success'), duration: 182e9 }], async () => {
+      expect(await refusal(watchRuns(runs => runs, 100, undefined, undefined, out))).toContain('did not finish')
+    })
+
+    expect(written.join('')).toBe('test.yml run 2 on main: running for 1m 15s\ntest.yml run 1 on main: success in 3m 2s\n')
+  })
 })
 
 describe('watchRuns failures', () => {

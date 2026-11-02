@@ -33,7 +33,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft milestone <title\|id>` | shows a milestone's open issues as `ft board` does (available, taken, claimed by one gone); `ft milestone new <title> [-d text] [--due YYYY-MM-DD]` creates one through the API, sending no `due_on` unless `--due` is given, never a zero date; `ft milestone close <m>` refuses while issues are open in it, naming them, unless `--force` |
 | `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches; the host comes from `--host` or `remoteHost` in `~/.config/ft/config.json` (`{"remoteHost": "git.example.com"}`), and with neither it checks nothing |
 
-`ft <command> --help` lists each command's options. Waiting commands show one line per run, redrawn in place on a terminal and left at its last status, and a line per status change in a log or a pipe; they exit 0 when the runs pass, 1 when one fails, 2 on a timeout, a stalled queue or bad usage; the other commands exit 0 when done, 1 when Forgejo refuses or a check fails, 2 on a usage error.
+`ft <command> --help` lists each command's options. Waiting commands show one line per run with how long it has been waiting or running (`● running for 1m 12s`), redrawn in place on a terminal and left at its last status with the time it took (`✓ success in 3m 2s`), and a line per status change in a log or a pipe; they exit 0 when the runs pass, 1 when one fails, 2 on a timeout, a stalled queue or bad usage; the other commands exit 0 when done, 1 when Forgejo refuses or a check fails, 2 on a usage error.
 
 ## CI
 

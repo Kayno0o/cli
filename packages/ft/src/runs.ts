@@ -31,9 +31,15 @@ export function runSeconds(run: Run): number {
   return run.duration / NANOSECONDS
 }
 
-// A run that never started carries Forgejo's zero time, year 1.
+// When the run started, undefined while it has not: Forgejo then gives its zero time, year 1.
+export function startedAt(run: Run): number | undefined {
+  const at = Date.parse(run.started)
+
+  return Number.isNaN(at) || at < EPOCH ? undefined : at
+}
+
 export function startedAge(run: Run, now = Date.now()): string {
-  return Date.parse(run.started) < EPOCH ? '-' : formatAge(run.started, now)
+  return startedAt(run) === undefined ? '-' : formatAge(run.started, now)
 }
 
 const RUNS_PAGE = 50
