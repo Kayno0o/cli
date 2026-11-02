@@ -126,6 +126,20 @@ export async function run(command: string[], threshold: number): Promise<number>
   return present(recorder, threshold, code)
 }
 
+// Reads output piped in and prints it as `run` does, untouched when short. Its exit code is 0: the writer's is the pipeline's to give, through `set -o pipefail`.
+export async function readPiped(threshold: number): Promise<number> {
+  const dir = await logDir()
+
+  await cleanLogs(dir)
+
+  const recorder = new Recorder(dir)
+
+  for await (const data of Bun.stdin.stream())
+    recorder.add({ stream: 'stdout', data })
+
+  return present(recorder, threshold, 0)
+}
+
 function present(recorder: Recorder, threshold: number, code: number): number {
   const text = recorder.text
 

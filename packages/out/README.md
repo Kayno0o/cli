@@ -5,6 +5,7 @@ Shortens noisy command output for Claude Code: installs, builds, test runners an
 ```sh
 bun install -g @kaynooo/out-tools
 out -- bun install
+bun run build 2>&1 | out
 ```
 
 ## Behaviour
@@ -16,7 +17,7 @@ out -- bun install
 - A line or block seen earlier is replaced by `(same as line N)`, N being a line of the full log, and the header lists the most repeated messages with their counts.
 - Carriage-return progress (spinners, bars) keeps only the final state of each line.
 - The head and tail are kept, and lines with `error`, `fail`, `warn`, `panic`, `exception`, `fatal` or a stack frame stay even in the folded middle.
-- The exit code is always the wrapped command's.
+- The exit code is always the wrapped command's. Piped into with no command, `out` folds what it reads and exits 0, the writer's code left to `set -o pipefail`; only stdout is piped, so `2>&1` brings stderr along. A terminal or `/dev/null` on stdin with no command is a usage error.
 - The output is streamed to a full log as it arrives once it outgrows the 4 MiB held in memory (the first and last 2 MiB), otherwise the log is written when folding. Logs go to `$XDG_RUNTIME_DIR/agent-tools/out` (`~/.cache/agent-tools/out` without it), a folder only the user can enter, files at mode 0600, and logs older than a day are removed on the next run.
 - SIGINT, SIGTERM and SIGHUP go to the command's whole process group, and `out` exits with its code. A watch command (`--watch`, `tsc -w`, `just dev`) is never wrapped by the hook, as its output would sit buffered.
 

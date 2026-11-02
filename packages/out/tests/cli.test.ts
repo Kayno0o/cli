@@ -46,6 +46,19 @@ describe('out', () => {
     expect(result.err).toContain('give the command after --')
   })
 
+  test('folds what is piped in, leaving short input untouched, and exits 0', () => {
+    const piped = (input: string, ...args: string[]) => {
+      const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: Buffer.from(input), stdout: 'pipe', stderr: 'pipe', env: ENV })
+
+      return { code: result.exitCode, out: result.stdout.toString() }
+    }
+    const long = Array.from({ length: 400 }, (_, index) => `compiling file ${index}.ts`).join('\n')
+
+    expect(piped('something\n')).toEqual({ code: 0, out: 'something\n' })
+    expect(piped(long, '-n', '50').out).toContain('compiling file 0.ts (x400')
+    expect(piped(long, '-n', '50').out).toMatch(LOG_PATH)
+  })
+
   test('passes short output through byte for byte, stdout and stderr apart', () => {
     const result = out('--', 'sh', '-c', 'printf "a\\n  b \\n"; printf "oops\\n" >&2; printf "no newline"')
 
