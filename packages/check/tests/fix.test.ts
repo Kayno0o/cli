@@ -4,13 +4,19 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { capture } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { changedFiles, dirtyFiles } from '../src/changes'
 import { fix, fixers } from '../src/fix'
 
 let dir: string
 
-process.env.XDG_RUNTIME_DIR = mkdtempSync(join(tmpdir(), 'fix-runtime-'))
+const runtime = mkdtempSync(join(tmpdir(), 'fix-runtime-'))
+
+process.env.XDG_RUNTIME_DIR = runtime
+
+afterAll(() => {
+  rmSync(runtime, { recursive: true, force: true })
+})
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'fix-'))

@@ -1,12 +1,28 @@
-import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { capture } from '@kaynooo/cli-kit/test'
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { errs } from '../src/errs'
 import { parseErrors } from '../src/output'
 
-process.env.XDG_RUNTIME_DIR = mkdtempSync(join(tmpdir(), 'errs-runtime-'))
+// Every temp folder of the file, removed once it ends.
+const made: string[] = []
+
+function temp(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+
+  made.push(dir)
+
+  return dir
+}
+
+afterAll(() => {
+  for (const dir of made)
+    rmSync(dir, { recursive: true, force: true })
+})
+
+process.env.XDG_RUNTIME_DIR = temp('errs-runtime-')
 
 interface ErrsJson { errors: unknown[], unrecognised: number, log: string, code?: number }
 
@@ -204,7 +220,7 @@ describe('parseErrors', () => {
 
 describe('errs', () => {
   test('prints file:line:col: message (rule) lines from a log file and counts the lines it skipped', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'errs-'))
+    const dir = temp('errs-')
     const path = join(dir, 'build.log')
 
     writeFileSync(path, `noise\n${await fixture('tsgo.txt')}`)
@@ -227,7 +243,7 @@ describe('errs', () => {
 
     expect(out.split('\n').at(1)).toBe('a.test.ts:8:25: throws: boom')
 
-    const dir = mkdtempSync(join(tmpdir(), 'errs-'))
+    const dir = temp('errs-')
     const clean = join(dir, 'clean.log')
 
     writeFileSync(clean, ' 3 pass\n 0 fail\n')
@@ -246,7 +262,7 @@ describe('errs', () => {
   })
 
   test('runs a command after --, saves its full output and exits 1 with its errors', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'errs-'))
+    const dir = temp('errs-')
     const script = join(dir, 'tsgo')
 
     writeFileSync(script, `#!/bin/sh\ncat ${fixturePath('tsgo.txt')}\necho 'stray line' >&2\nexit 2\n`)
@@ -264,7 +280,7 @@ describe('errs', () => {
   })
 
   test('a failing command with no recognised error still exits 1 and says so', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'errs-'))
+    const dir = temp('errs-')
     const script = join(dir, 'broken')
 
     writeFileSync(script, '#!/bin/sh\necho boom\nexit 3\n')

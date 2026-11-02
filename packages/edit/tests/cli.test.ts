@@ -1,7 +1,7 @@
-import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
@@ -26,6 +26,10 @@ function read(name: string): string {
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'sub-test-'))
+})
+
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
 })
 
 describe('sub', () => {

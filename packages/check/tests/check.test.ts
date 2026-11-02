@@ -1,12 +1,28 @@
-import { mkdtempSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { capture } from '@kaynooo/cli-kit/test'
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
 import { discover } from '../src/steps'
 
-const RUNTIME = mkdtempSync(join(tmpdir(), 'check-runtime-'))
+// Every temp folder of the file, removed once it ends.
+const made: string[] = []
+
+function temp(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+
+  made.push(dir)
+
+  return dir
+}
+
+afterAll(() => {
+  for (const dir of made)
+    rmSync(dir, { recursive: true, force: true })
+})
+
+const RUNTIME = temp('check-runtime-')
 
 process.env.XDG_RUNTIME_DIR = RUNTIME
 
@@ -40,7 +56,7 @@ describe('discover', () => {
   })
 
   test.skipIf(Bun.which('just') === null)('recipes with @ or parameters are found, those needing an argument or private are not', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'check-just-'))
+    const dir = temp('check-just-')
 
     writeFileSync(join(dir, 'Justfile'), '@test:\n  true\n\nlint *args:\n  true\n\ncheck:\n  true\n\n[private]\ntypecheck:\n  true\n')
     expect((await discover(dir)).map(step => step.name)).toEqual(['check', 'lint', 'test'])
@@ -50,7 +66,7 @@ describe('discover', () => {
   })
 
   test('reads GNUmakefile, then makefile, then Makefile, as make does', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'check-make-'))
+    const dir = temp('check-make-')
 
     writeFileSync(join(dir, 'Makefile'), 'lint:\n\ttrue\n')
     writeFileSync(join(dir, 'GNUmakefile'), 'test:\n\ttrue\n')
@@ -115,7 +131,7 @@ describe('check', () => {
   })
 
   test('--slot runs each step through the slot bin, and fails when there is none', async () => {
-    const bin = mkdtempSync(join(tmpdir(), 'check-slot-'))
+    const bin = temp('check-slot-')
     const calls = join(bin, 'calls')
     const path = process.env.PATH
 
@@ -147,7 +163,7 @@ describe('check', () => {
   })
 
   test('--timeout ends a step and what it started, and exits 2', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'check-timeout-'))
+    const dir = temp('check-timeout-')
 
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'sleep 30 & wait' } }))
 

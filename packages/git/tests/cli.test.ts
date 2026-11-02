@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
 const GST = new URL('../src/gst.ts', import.meta.url).pathname
@@ -30,6 +30,10 @@ beforeEach(() => {
   git('init', '-q', '-b', 'main')
   git('config', 'user.name', 'Test')
   git('config', 'user.email', 'test@example.com')
+})
+
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
 })
 
 describe('gst', () => {
