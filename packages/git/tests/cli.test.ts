@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
@@ -11,8 +11,8 @@ const ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTE
 
 let dir = ''
 
-function run(argv: string[]) {
-  const result = Bun.spawnSync(argv, { cwd: dir, env: ENV, stdout: 'pipe', stderr: 'pipe' })
+function run(argv: string[], env: Record<string, string> = {}) {
+  const result = Bun.spawnSync(argv, { cwd: dir, env: { ...ENV, ...env }, stdout: 'pipe', stderr: 'pipe' })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -177,7 +177,10 @@ describe('gc', () => {
     rmSync(join(dir, '.git'), { recursive: true, force: true })
     file('a.ts')
 
-    expect(gc('fix: a', '--', 'a.ts').code).toBe(2)
+    // no repository above the temp folder may answer for it, wherever the runner keeps one
+    const result = run([process.execPath, GC, 'fix: a', '--', 'a.ts'], { GIT_CEILING_DIRECTORIES: dirname(dir) })
+
+    expect({ code: result.code, err: result.err }).toMatchObject({ code: 2 })
   })
 
   test('asks for one quoted title and the paths after --', () => {
