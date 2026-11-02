@@ -6,6 +6,26 @@ import { distance, exitCodeOf, holdSignals, openUrl, runCommand, stripAnsi } fro
 
 const SRC = JSON.stringify(join(import.meta.dir, '../src'))
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP']
+const ZOMBIE_STATE = /^\d+ \(.*\) Z/
+
+// Whether the process ended within 2 s; in a container with no init reaping orphans, a killed one lingers as a zombie, which counts as ended.
+async function isGone(pid: number): Promise<boolean> {
+  for (let tries = 0; tries < 20; tries++) {
+    try {
+      process.kill(pid, 0)
+    }
+    catch {
+      return true
+    }
+
+    if (ZOMBIE_STATE.test(readFileSync(`/proc/${pid}/stat`, 'utf8')))
+      return true
+
+    await Bun.sleep(100)
+  }
+
+  return false
+}
 
 // Runs a script importing the kit as `kit`, which sends itself a signal.
 async function script(body: string) {
@@ -97,8 +117,7 @@ describe('runCommand', () => {
 
     const grandchild = Number(readFileSync(pidFile, 'utf8'))
 
-    await Bun.sleep(100)
-    expect(() => process.kill(grandchild, 0)).toThrow()
+    expect(await isGone(grandchild)).toBe(true)
   })
 
   test('reports no timeout when the command ends in time', async () => {

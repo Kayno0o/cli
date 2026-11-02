@@ -36,7 +36,7 @@ export async function saveLog(output: Uint8Array): Promise<string> {
 
   await sweepLogs(root)
 
-  const path = join(root, `${new Date().toISOString().replaceAll(/[:.]/g, '-')}-${process.pid}.log`)
+  const path = join(root, `${new Date().toISOString().replaceAll(/[:.]/g, '-')}-${process.pid}-${crypto.randomUUID().slice(0, 8)}.log`)
 
   await writeFile(path, output, { mode: 0o600, flag: 'wx' })
 
