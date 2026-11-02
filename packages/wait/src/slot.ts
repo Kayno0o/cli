@@ -117,7 +117,7 @@ async function holderOf(command: string[]): Promise<Holder> {
 
 let waiterCount = 0
 
-// Takes every wanted resource or none: a busy one gives back those already taken, so a waiter never holds a lock while it waits for a slot, nor a slot while it waits for a lock. Holding one while waiting for the other lets two sessions wait on each other: an outer `slot -- script` holds the last slot and its script wants a lock that a session waiting for a slot already holds. A waiter that holds nothing wastes no slot either. It is listed in `slot ls` as a waiter meanwhile; the waiter's own lock tells `ls` whether it still lives.
+// Takes every wanted resource or none, giving back what it took when one is busy: holding a lock while waiting for a slot, or the reverse, lets two sessions wait on each other. Meanwhile it is listed in `slot ls` as a waiter, its own lock telling whether it still lives.
 async function acquire(dir: string, resources: Resource[], holder: Holder, deadline: number, timeoutMs: number): Promise<Taken[]> {
   let waiter: { held: Held, path: string, resource: string } | undefined
 

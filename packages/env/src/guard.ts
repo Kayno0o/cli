@@ -6,6 +6,7 @@ const REDIRECT = /^\d*[<>]+&?/
 const ENVRC = '.envrc'
 const PROC_ENVIRON = /^\/proc\/[^/]+\/environ$/
 const ENV_NAME_IN_CODE = /(?:^|[^\w.-])(\.env(?:\.[\w.-]*\w)?|\.envrc)(?![\w-])/g
+const ENV_NAME_IN_PATTERN = /(?:^|[^\w-])\.env(?![\w-])/
 const PYTHON_ENVIRON = /\bos\.environ\b(?!\s*(?:\[|\.get\b))/
 const VARIABLE = /\$(?:(\w+)|\{(\w+)\})/
 const ASSIGNMENT = /^\w+=/
@@ -458,6 +459,18 @@ function printsTrackedEnv(program: string, args: readonly string[]): boolean {
   return !rest.some(arg => GIT_NO_PATCH.has(arg))
 }
 
+// Whether the piece is a search whose pattern, its escapes dropped, names an env file (`grep '^\.env'`): fed a listing, what it prints are env file names.
+function searchesEnvNames(piece: Piece): boolean {
+  const { program, args } = parseCommand(piece.command)
+
+  if (!GREPS.has(program) && program !== 'rg')
+    return false
+
+  const at = patternIndex(args, GREPS.has(program) ? GREP_VALUE_OPTIONS : RG_VALUE_OPTIONS)
+
+  return at !== undefined && ENV_NAME_IN_PATTERN.test((args[at] ?? '').replaceAll('\\', ''))
+}
+
 // Whether the piece is an `xargs` running a command that may print the files it is given the names of, on a listing naming an env file further up its pipeline (harmless alone, but `xargs` opens each name).
 function xargsReadsListedEnv(pieces: readonly Piece[], index: number, variables: ReadonlyMap<string, string[]>): boolean {
   const command = pieces[index]?.command ?? ''
@@ -468,7 +481,7 @@ function xargsReadsListedEnv(pieces: readonly Piece[], index: number, variables:
     return false
 
   for (let at = index - 1; at >= 0 && pieces[at]?.separator.startsWith('|'); at--) {
-    if (namesEnv(pieces[at] as Piece, variables))
+    if (namesEnv(pieces[at] as Piece, variables) || searchesEnvNames(pieces[at] as Piece))
       return true
   }
 

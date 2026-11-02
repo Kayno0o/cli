@@ -16,6 +16,14 @@ describe('declarePhony', () => {
     expect(content).toBe('.DEFAULT_GOAL := help\n.PHONY: check fix help major minor patch\n\nhelp:\n\t@echo h\n\npatch minor major:\n\t@echo $@\n')
   })
 
+  test('keeps a declared entry holding a $ as written', () => {
+    expect(declarePhony('.PHONY: a $$b $(EXTRA) $&\n\na:\n\techo a\n').content).toBe('.PHONY: $(EXTRA) $& $$b a\n\na:\n\techo a\n')
+  })
+
+  test('reads no target in the text of a define block', () => {
+    expect(declarePhony('define HELP\nsome text here: and more\nendef\n\nall:\n\techo $(HELP)\n').targets).toEqual(['all'])
+  })
+
   test('leaves variables set with := or ::= out, and keeps double-colon targets', () => {
     expect(declarePhony('CC:=gcc\nLD::=ld\nall:: CC\n\techo $(CC)\n').targets).toEqual(['all'])
   })

@@ -196,7 +196,7 @@ async function composeFiles(composeDir: string, env: Record<string, string>): Pr
       const file = Bun.file(resolve(composeDir, name))
 
       if (!await file.exists())
-        return []
+        fail(`COMPOSE_FILE names ${join(composeDir, name)}, which does not exist`, 1, 'fix COMPOSE_FILE, or run on the host with --host')
 
       files.push({ name, text: await file.text() })
     }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { braceExpand, commandsRun, isPlain, parseCommand, splitCommand, substitutions, tokenize, words } from '../src/shell'
+import { braceExpand, commandsRun, isPlain, parseCommand, shellQuote, splitCommand, substitutions, tokenize, words } from '../src/shell'
 
 describe('splitCommand', () => {
   test('splits on separators outside quotes, keeping each one', () => {
@@ -159,5 +159,11 @@ describe('braceExpand', () => {
     const runaway = '{a,b}'.repeat(10)
 
     expect(braceExpand(runaway)).toEqual([runaway])
+  })
+})
+
+describe('shellQuote', () => {
+  test('leaves a safe word bare and single-quotes the rest', () => {
+    expect(['src/a.ts', 'KEY=1', 'a@b:c,d', 'my file.ts', 'it\'s', '$HOME', '*.ts', '=ls', ''].map(shellQuote)).toEqual(['src/a.ts', 'KEY=1', 'a@b:c,d', '\'my file.ts\'', '\'it\'\\\'\'s\'', '\'$HOME\'', '\'*.ts\'', '\'=ls\'', '\'\''])
   })
 })

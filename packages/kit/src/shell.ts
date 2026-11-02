@@ -592,9 +592,9 @@ export function parseCommand(text: string): Invocation {
   return { program: program.split('/').pop() ?? '', args, assignments, isWrapped }
 }
 
-// A word as a POSIX shell reads it back unchanged: left bare when it holds nothing the shell would act on, else single-quoted.
+// A word as a POSIX shell or zsh reads it back unchanged: left bare when it holds nothing the shell would act on (zsh expands a leading `=`), else single-quoted.
 export function shellQuote(word: string): string {
-  return SAFE_WORD.test(word) ? word : `'${word.replaceAll('\'', '\'\\\'\'')}'`
+  return SAFE_WORD.test(word) && !word.startsWith('=') ? word : `'${word.replaceAll('\'', '\'\\\'\'')}'`
 }
 
 function quoted(word: string): string {

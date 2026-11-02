@@ -40,9 +40,9 @@ Acme repos run their tools in a container, so `check`, `fix` and `errs -- <comma
 - Several services mounting the folder (php and a worker): the one whose name, image or build names the step's tool wins (`bun` and `node` look for `bun` or `node`, `composer`, `php`, `phpunit`, `phpstan` and `vendor/bin/*` for `php`). When none or several stand out the call fails listing them and asks for `--in <service>`.
 - `--in <service>` runs in that service, failing when it does not exist or does not mount the folder. `--host` runs on the host. Both together are a usage error.
 - `check --list` has a column saying where each step runs, `host` or the service; `--json` adds `in` with the service name to a step that runs in one (`--list --json` as well).
-- `COMPOSE_FILE` (in the environment or the project's `.env`) replaces the search for `compose.yaml`: the files it names, separated by `:` (`COMPOSE_PATH_SEPARATOR` if set) and read relative to the project folder, are merged in order.
+- `COMPOSE_FILE` (in the environment or the project's `.env`) replaces the search for `compose.yaml`: the files it names, separated by `:` (`COMPOSE_PATH_SEPARATOR` if set) and read relative to the project folder, are merged in order. A file it names that does not exist fails the call, as `docker compose` would.
 - No `docker` on the PATH (a devcontainer, CI): there is no container to reach, so the step runs on the host and stderr says `host, docker not found` once per project; `--in <service>` fails instead.
-- A compose file that does not parse fails the call naming the file and the parse error, and points at `--host`; it never falls back to the host silently.
+- A compose file that does not parse fails the call naming the file and the parse error, and points at `--host`; it never falls back to the host silently, even without docker.
 - `--slot` queues the whole docker command. `--timeout` ends the `docker compose exec` client, which does not always end what it started inside the container.
 - `fix` runs the project's scripts and `php-cs-fixer` in the service, and keeps its own formatters (`justfile`, `go`, `rust`, `python`, `makefile`) on the host. The recursion guard variable is passed into the container.
 

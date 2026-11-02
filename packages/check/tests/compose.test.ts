@@ -247,6 +247,10 @@ describe('place without docker, with COMPOSE_FILE, with a broken file', () => {
 
       process.env.COMPOSE_FILE = 'stack/base.yml'
       expect(await place(root, 'bun')).toBeUndefined()
+
+      delete process.env.COMPOSE_PATH_SEPARATOR
+      process.env.COMPOSE_FILE = 'stack/base.yml:stack/gone.yml'
+      expect(await failure(place(root, 'bun'))).toContain(`COMPOSE_FILE names ${join(root, 'stack/gone.yml')}, which does not exist`)
     }
     finally {
       for (const [name, value] of [['COMPOSE_FILE', saved.file], ['COMPOSE_PATH_SEPARATOR', saved.separator]] as const) {
