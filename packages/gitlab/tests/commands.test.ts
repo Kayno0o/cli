@@ -136,6 +136,20 @@ describe('gl ci', () => {
     expect(err.join('\n')).toEndWith(`pipeline 9 failed, testing every commit from ${shas[0]?.slice(0, 7)} to ${shas[1]?.slice(0, 7)}: https://gitlab/p/9`)
   })
 
+  test('fails at once when GitLab answers 404 instead of polling to the timeout', async () => {
+    process.chdir(clone)
+
+    const started = Date.now()
+    let refused = { code: 0, message: '' }
+
+    await withFakeGlab({ pipelines: [], failures: [{ match: 'pipelines?sha=', message: '404 Not found (HTTP 404)' }] }, async () => {
+      refused = await refusal(async () => ci(['--timeout', '10']))
+    })
+
+    expect(refused.message).toContain('404 Not found')
+    expect(Date.now() - started).toBeLessThan(5000)
+  })
+
   test('refuses a commit that is not on the branch', async () => {
     process.chdir(clone)
     await $`git -c user.name=t -c user.email=t@t commit -q --allow-empty -m local`.cwd(clone).quiet()

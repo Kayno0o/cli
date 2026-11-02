@@ -1,6 +1,6 @@
 import { basename, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { duration, exitCodeOf, fail, formatDuration, holdSignals, parse, runHint, warn } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, formatDuration, holdSignals, isPermanentFailure, parse, runHint, runTool, warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { defaultBranch, fetchBranch, git, gitOk, tagsAt } from '../git'
 import { closedIssues, openIssues } from '../issues'
@@ -33,6 +33,10 @@ const PARTS = /^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/
 const LAST_NUMBER = /\d+$/
 const REGISTRY_TRIES = 12
 const REGISTRY_POLL = 5000
+// How long a push may take before it is given up.
+const PUSH_MS = 5 * 60_000
+// How long one `bun info` may take before the registry counts as not serving the version yet.
+const REGISTRY_INFO_MS = 30_000
 // How long a pushed commit may go without a run before the release goes on: a push touching only ignored paths starts none.
 const NO_RUN = 3 * 60_000
 
@@ -98,7 +102,15 @@ export async function commitPackageBump(dir: string, prefix: string): Promise<vo
 // The registry serves a version a short while after the publish job ends; --no-cache skips a manifest bun cached before it.
 async function waitForRegistry(name: string, version: string): Promise<boolean> {
   for (let attempt = 0; attempt < REGISTRY_TRIES; attempt++) {
-    const served = (await $`bun info ${name} version --no-cache`.quiet().nothrow().text()).trim().split('\n').at(-1)
+    let served: string | undefined
+
+    try {
+      served = (await runTool('bun info', ['bun', 'info', name, 'version', '--no-cache'], { timeoutMs: REGISTRY_INFO_MS })).stdout.trim().split('\n').at(-1)
+    }
+    catch (error) {
+      if (isPermanentFailure(error))
+        throw error
+    }
 
     if (served === version)
       return true
@@ -112,10 +124,21 @@ async function waitForRegistry(name: string, version: string): Promise<boolean> 
 // Pushes the commit a release sits on when origin lacks it and waits for its own runs, so a red run stops the release before a tag exists that would never publish.
 async function testsPass(sha: string, branch: string, timeout: number): Promise<boolean> {
   if (!await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`])) {
-    const push = await $`git push origin ${`${sha}:refs/heads/${branch}`}`.quiet().nothrow()
+    const held = holdSignals()
+    let push
 
-    if (push.exitCode !== 0)
-      fail(`origin refused the push of ${sha.slice(0, 7)}, so nothing was bumped:\n${push.stderr.toString().trim()}`, 1)
+    try {
+      push = await runTool('git push', ['git', 'push', 'origin', `${sha}:refs/heads/${branch}`], { timeoutMs: PUSH_MS, onStart: child => held.forward(child) })
+    }
+    finally {
+      held.release()
+    }
+
+    if (held.signal !== undefined)
+      fail(`interrupted by ${held.signal} while pushing ${sha.slice(0, 7)}, so nothing was bumped`, exitCodeOf(null, held.signal))
+
+    if (push.code !== 0)
+      fail(`origin refused the push of ${sha.slice(0, 7)}, so nothing was bumped:\n${push.stderr.trim()}`, 1)
 
     console.log(`pushed ${branch} at ${sha.slice(0, 7)}, waiting for its runs before the bump`)
   }
@@ -269,12 +292,12 @@ export async function release(args: string[]): Promise<number> {
     if (held.signal !== undefined)
       fail(`interrupted by ${held.signal} before the push`, exitCodeOf(null, held.signal))
 
-    const push = await $`git push --atomic origin ${`HEAD:refs/heads/${branch}`} ${tag}`.quiet().nothrow()
+    const push = await runTool('git push', ['git', 'push', '--atomic', 'origin', `HEAD:refs/heads/${branch}`, tag], { timeoutMs: PUSH_MS, onStart: child => held.forward(child) })
 
-    if (push.exitCode !== 0) {
+    if (push.code !== 0) {
       const signal = signalOf()
 
-      fail(`origin refused the push${signal === undefined ? '' : `, or ${signal} interrupted it`}, so ${level === undefined ? `${tag} and its commit are kept for a retry` : `${tag} and its commit were dropped for a clean retry`}:\n${push.stderr.toString().trim()}`, signal === undefined ? 1 : exitCodeOf(null, signal))
+      fail(`origin refused the push${signal === undefined ? '' : `, or ${signal} interrupted it`}, so ${level === undefined ? `${tag} and its commit are kept for a retry` : `${tag} and its commit were dropped for a clean retry`}:\n${push.stderr.trim()}`, signal === undefined ? 1 : exitCodeOf(null, signal))
     }
 
     pushed = true

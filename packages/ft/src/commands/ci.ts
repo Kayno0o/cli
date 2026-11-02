@@ -1,8 +1,7 @@
 import type { Run } from '../runs'
 import process from 'node:process'
-import { badge, duration, Exit, fail, formatDuration, paint, parse, runHint } from '@kaynooo/cli-kit'
-import { liveRegion } from '@kaynooo/cli-kit/progress'
-import { cwdGone, defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
+import { badge, duration, fail, formatDuration, paint, parse, runHint, waitForCi } from '@kaynooo/cli-kit'
+import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
 
 const usage = `ft ci [ref]
@@ -18,7 +17,6 @@ const options = {
   timeout: { type: 'string', short: 't', description: 'how long before giving up (30m), a bare number in minutes' },
 } as const
 
-const POLL = 15_000
 // How long the wait goes on with no run covering the commit: a push touching only ignored paths starts none, and a cancelled run's successor may take a poll to appear.
 const NO_RUN = 3 * 60_000
 // How long queued runs may sit while no runner works before the wait is given up.
@@ -108,82 +106,34 @@ export async function ci(args: string[]): Promise<number> {
     return undefined
   }
 
-  const started = Date.now()
-  let seen = started
-  let moving = started
-  let followed = ''
-  let runs: Run[] | undefined
   const { dim } = paint(process.stderr)
-  // The runs followed and their state, on a terminal, under a line for the wait itself.
-  const region = liveRegion(spinner => [
-    `${spinner} CI on ${short} ${dim(formatDuration(Date.now() - started))}`,
-    ...(runs ?? []).map(run => `  ${badge(run.status, process.stderr)} ${run.workflow_id} ${dim(`run ${run.id}`)}`),
-  ])
+  const runs = await waitForCi<Run[]>({
+    tool: 'ft ci',
+    short,
+    giveUpMs: giveUp,
+    noneMs: NO_RUN,
+    stalledMs: STALLED,
+    noneMessage: `no run covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`,
+    covering,
+    finished: found => found.every(run => FINISHED.has(run.status)),
+    key: found => found.map(run => run.id).join(','),
+    announce: (found) => {
+      for (const run of found)
+        console.log(`following ${run.workflow_id} run ${run.id} on ${run.commit_sha.slice(0, 7)}${run.commit_sha === sha ? '' : `, which covers ${short}`}: ${run.html_url}`)
+    },
+    links: found => found.map(run => run.html_url).join(' '),
+    settle: async found => settled(await refreshed(found)),
+    stall: async (found) => {
+      const stall = await stallReason(found)
 
-  try {
-    for (;;) {
-      if (Date.now() - started > giveUp)
-        fail(`CI has not finished on ${short} in ${formatDuration(giveUp)}${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
-
-      // Forgejo or origin missing one poll leaves the wait to the next, unless the runs followed are over by then.
-      try {
-        runs = await covering()
-      }
-      catch (error) {
-      // a refusal, such as a commit not on the branch, ends the wait at once
-        if (error instanceof Exit)
-          throw error
-
-        if (cwdGone())
-          fail(`the working directory was removed while waiting for CI on ${short}${runs === undefined ? '' : `: ${runs.map(run => run.html_url).join(' ')}`}`)
-
-        console.warn(`ft ci: ${error instanceof Error ? error.message : String(error)}, polling again`)
-
-        const latest = settled(runs === undefined ? undefined : await refreshed(runs))
-
-        if (latest !== undefined) {
-          runs = latest
-
-          break
-        }
-
-        await Bun.sleep(POLL)
-
-        continue
-      }
-
-      if (runs !== undefined) {
-        seen = Date.now()
-
-        const ids = runs.map(run => run.id).join(',')
-
-        if (ids !== followed) {
-          followed = ids
-
-          for (const run of runs)
-            console.log(`following ${run.workflow_id} run ${run.id} on ${run.commit_sha.slice(0, 7)}${run.commit_sha === sha ? '' : `, which covers ${short}`}: ${run.html_url}`)
-        }
-
-        if (runs.every(run => FINISHED.has(run.status)))
-          break
-
-        const stall = await stallReason(runs)
-
-        if (stall === undefined)
-          moving = Date.now()
-        else if (stall.certain || Date.now() - moving > STALLED)
-          fail(`runs queued on ${short} are not moving: ${stall.reason}`)
-      }
-      else if (Date.now() - seen > NO_RUN) {
-        fail(`no run covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`)
-      }
-
-      await Bun.sleep(POLL)
-    }
-  }
-  finally {
-    region.stop()
-  }
+      return stall === undefined ? undefined : { message: `runs queued on ${short} are not moving: ${stall.reason}`, certain: stall.certain }
+    },
+    // The runs followed and their state, on a terminal, under a line for the wait itself.
+    lines: (spinner, found, started) => [
+      `${spinner} CI on ${short} ${dim(formatDuration(Date.now() - started))}`,
+      ...(found ?? []).map(run => `  ${badge(run.status, process.stderr)} ${run.workflow_id} ${dim(`run ${run.id}`)}`),
+    ],
+  })
 
   const status = overall(runs)
 

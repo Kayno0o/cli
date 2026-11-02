@@ -1,6 +1,6 @@
 import type { Pipeline } from '../pipelines'
-import { duration, Exit, fail, parse } from '@kaynooo/cli-kit'
-import { cwdGone, defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
+import { duration, fail, parse, waitForCi } from '@kaynooo/cli-kit'
+import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
 import { failureReport, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
 const usage = `gl ci [ref]
@@ -14,7 +14,6 @@ const options = {
   timeout: { type: 'string', short: 't', description: 'how long before giving up (30m), a bare number in minutes' },
 } as const
 
-const POLL = 15_000
 // How long the wait goes on with no pipeline covering the commit: a push its workflow rules leave out starts none, and a cancelled one's successor may take a poll to appear.
 const NO_PIPELINE = 3 * 60_000
 // How long jobs may wait for a runner while none of the pipeline's runs; shared runners can take minutes to pick one up.
@@ -68,67 +67,32 @@ export async function ci(args: string[]): Promise<number> {
     return undefined
   }
 
-  const started = Date.now()
-  let seen = started
-  let moving = started
-  let followed = 0
-  let pipeline: Pipeline | undefined
+  const pipeline = await waitForCi<Pipeline>({
+    tool: 'gl ci',
+    short,
+    giveUpMs: giveUp,
+    noneMs: NO_PIPELINE,
+    stalledMs: STALLED,
+    noneMessage: `no pipeline covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`,
+    covering,
+    finished: found => FINISHED.has(found.status),
+    key: found => String(found.id),
+    announce: found => console.log(`following pipeline ${found.id} on ${found.sha.slice(0, 7)}${found.sha === sha ? '' : `, which covers ${short}`}: ${found.web_url}`),
+    links: found => found.web_url,
+    settle: async (found) => {
+      const latest = await refreshed(found.id)
 
-  for (;;) {
-    if (Date.now() - started > giveUp)
-      fail(`CI has not finished on ${short} in ${giveUp / 60_000} minutes${pipeline === undefined ? '' : `: ${pipeline.web_url}`}`)
-
-    // GitLab or origin missing one poll leaves the wait to the next, unless the pipeline followed is over by then.
-    try {
-      pipeline = await covering()
-    }
-    catch (error) {
-      if (error instanceof Exit)
-        throw error
-
-      if (cwdGone())
-        fail(`the working directory was removed while waiting for CI on ${short}${pipeline === undefined ? '' : `: ${pipeline.web_url}`}`)
-
-      console.warn(`gl ci: ${error instanceof Error ? error.message : String(error)}, polling again`)
-
-      const latest = pipeline === undefined ? undefined : await refreshed(pipeline.id)
-
-      if (latest !== undefined && FINISHED.has(latest.status)) {
-        pipeline = latest
-
-        break
-      }
-
-      await Bun.sleep(POLL)
-
-      continue
-    }
-
-    if (pipeline !== undefined) {
-      seen = Date.now()
-
-      if (pipeline.id !== followed) {
-        followed = pipeline.id
-        moving = Date.now()
-        console.log(`following pipeline ${pipeline.id} on ${pipeline.sha.slice(0, 7)}${pipeline.sha === sha ? '' : `, which covers ${short}`}: ${pipeline.web_url}`)
-      }
-
-      if (FINISHED.has(pipeline.status))
-        break
-
-      const waiting = waitingOnRunner(await jobsOf(pipeline.id))
+      return latest !== undefined && FINISHED.has(latest.status) ? latest : undefined
+    },
+    stall: async (found) => {
+      const waiting = waitingOnRunner(await jobsOf(found.id))
 
       if (waiting.length === 0)
-        moving = Date.now()
-      else if (Date.now() - moving > STALLED)
-        fail(`pipeline ${pipeline.id} on ${short} has waited ${STALLED / 60_000} minutes for a runner: ${waiting.map(job => `${job.name}${job.tag_list.length === 0 ? '' : ` (tags ${job.tag_list.join(', ')})`}`).join('; ')}`)
-    }
-    else if (Date.now() - seen > NO_PIPELINE) {
-      fail(`no pipeline covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`)
-    }
+        return undefined
 
-    await Bun.sleep(POLL)
-  }
+      return { message: `pipeline ${found.id} on ${short} has waited ${STALLED / 60_000} minutes for a runner: ${waiting.map(job => `${job.name}${job.tag_list.length === 0 ? '' : ` (tags ${job.tag_list.join(', ')})`}`).join('; ')}` }
+    },
+  })
 
   if (pipeline.status === 'canceled' || pipeline.status === 'skipped')
     fail(`pipeline ${pipeline.id} on ${short} was ${pipeline.status} while GitLab could not be read: ${pipeline.web_url}`)

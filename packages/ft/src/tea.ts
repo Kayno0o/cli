@@ -1,6 +1,7 @@
-import { upTo } from '@kaynooo/cli-kit'
-import { $ } from 'bun'
-import { spawnFailure } from './git'
+import { runTool, upTo } from '@kaynooo/cli-kit'
+
+// How long one tea call may take before it is given up; the wait loops poll again.
+const TEA_MS = 60_000
 
 // Every Forgejo call goes through tea, which owns the OAuth login and fills {owner}/{repo} from the cwd's origin, or from --repo.
 function repoFlag(repo: string | undefined): string[] {
@@ -8,19 +9,12 @@ function repoFlag(repo: string | undefined): string[] {
 }
 
 async function request(path: string, repo: string | undefined): Promise<string> {
-  let result
+  const result = await runTool(`tea api ${path}`, ['tea', 'api', ...repoFlag(repo), path], { timeoutMs: TEA_MS })
 
-  try {
-    result = await $`tea api ${repoFlag(repo)} ${path}`.quiet().nothrow()
-  }
-  catch (error) {
-    throw spawnFailure(`tea api ${path}`, error)
-  }
+  if (result.code !== 0)
+    throw new Error(`tea api ${path}: ${result.stderr.trim() || `exit ${result.code}`}`)
 
-  if (result.exitCode !== 0)
-    throw new Error(`tea api ${path}: ${result.stderr.toString().trim() || `exit ${result.exitCode}`}`)
-
-  return result.stdout.toString()
+  return result.stdout
 }
 
 function parseJson<T>(path: string, text: string): T {
@@ -61,19 +55,12 @@ export async function repoApi<T>(path: string, repo?: string): Promise<T> {
 export async function repoWrite<T>(method: 'POST' | 'PATCH', path: string, fields: Record<string, string>, repo?: string): Promise<T> {
   const full = `repos/{owner}/{repo}/${path}`
   const flags = Object.entries(fields).flatMap(([name, value]) => ['-f', `${name}=${value}`])
-  let result
+  const result = await runTool(`tea api ${full}`, ['tea', 'api', ...repoFlag(repo), '-X', method, ...flags, full], { timeoutMs: TEA_MS })
 
-  try {
-    result = await $`tea api ${repoFlag(repo)} -X ${method} ${flags} ${full}`.quiet().nothrow()
-  }
-  catch (error) {
-    throw spawnFailure(`tea api ${full}`, error)
-  }
+  if (result.code !== 0)
+    throw new Error(`tea api ${full}: ${result.stderr.trim() || `exit ${result.code}`}`)
 
-  if (result.exitCode !== 0)
-    throw new Error(`tea api ${full}: ${result.stderr.toString().trim() || `exit ${result.exitCode}`}`)
-
-  return parseJson<T>(full, result.stdout.toString())
+  return parseJson<T>(full, result.stdout)
 }
 
 // A text answer such as a job log; Forgejo's error object, which tea prints with exit 0, is thrown instead of returned as the text.
@@ -99,17 +86,10 @@ export async function repoApiText(path: string, repo?: string): Promise<string> 
 
 // Runs a tea subcommand (`['issues', 'edit']`) with `--repo` straight after its name, before any positional or flag value that could be read as one.
 export async function tea(command: string[], args: string[], repo?: string): Promise<string> {
-  let result
+  const result = await runTool(`tea ${command.join(' ')}`, ['tea', ...command, ...repoFlag(repo), ...args], { timeoutMs: TEA_MS })
 
-  try {
-    result = await $`tea ${command} ${repoFlag(repo)} ${args}`.quiet().nothrow()
-  }
-  catch (error) {
-    throw spawnFailure(`tea ${command.join(' ')}`, error)
-  }
+  if (result.code !== 0)
+    throw new Error(`tea ${command.join(' ')}: ${result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`}`)
 
-  if (result.exitCode !== 0)
-    throw new Error(`tea ${command.join(' ')}: ${result.stderr.toString().trim() || result.stdout.toString().trim() || `exit ${result.exitCode}`}`)
-
-  return result.stdout.toString()
+  return result.stdout
 }

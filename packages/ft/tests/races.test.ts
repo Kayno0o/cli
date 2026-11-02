@@ -41,6 +41,18 @@ describe('take', () => {
     expect(state.comments?.[5]).toEqual(['Taken by session a-1.', 'Taken by session other-1.'])
   })
 
+  test('lets exactly one of two sessions take an issue they both check as free', async () => {
+    let refusals: string[] = []
+
+    const state = await withFakeTea({ issues: [open(5, 'x')], barrier: { match: 'issues/5/comments', method: 'POST', parties: 2 } }, async () => {
+      refusals = await Promise.all([refusal(take(['5', '--as', 'a-1'])), refusal(take(['5', '--as', 'b-2']))])
+    })
+
+    expect(refusals.filter(each => each !== '')).toHaveLength(1)
+    expect(refusals.join('')).toContain('at the same moment')
+    expect(state.comments?.[5]).toHaveLength(2)
+  })
+
   test('takes an issue nobody raced for', async () => {
     const state = await withFakeTea({ issues: [open(5, 'x')] }, async () => {
       expect(await take(['5', '--as', 'a-1'])).toBe(0)

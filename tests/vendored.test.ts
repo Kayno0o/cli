@@ -6,22 +6,30 @@ import { describe, expect, test } from 'bun:test'
 const ROOT = new URL('..', import.meta.url).pathname
 const MODS = join(homedir(), 'zshrc/dotfiles/claude/mods')
 
-// The Claude Code mods carry copies of these sources, a first comment line naming the original.
-const COPIES = [
-  ['packages/git/src/status.ts', 'git-facts/hooks/status.ts'],
-  ['packages/kit/src/shell.ts', 'guards/hooks/shell.ts'],
-  ['packages/guard/src/bins.ts', 'agent-tools/hooks/bins.ts'],
-] as const
+// The Claude Code mods carry copies of these sources, a first comment line naming the original; the manifest holds each source's sha256 as of the last sync.
+const manifest = await Bun.file(join(ROOT, 'tests/vendored.json')).json() as Record<string, { copy: string, sha256: string }>
+
+function sha256(text: string): string {
+  return new Bun.CryptoHasher('sha256').update(text).digest('hex')
+}
 
 describe('the mods\' copies', () => {
-  for (const [source, copy] of COPIES) {
-    // Only where the mods live, ~/zshrc, so CI skips it.
-    const present = existsSync(join(MODS, copy))
+  for (const [source, { copy, sha256: synced }] of Object.entries(manifest)) {
+    // The manifest is what CI checks: a source changing without a sync fails anywhere.
+    test(`${source} is as last synced to the mods`, async () => {
+      const actual = sha256(await Bun.file(join(ROOT, source)).text())
 
-    test.skipIf(!present)(`${copy} matches ${source}`, async () => {
+      if (actual !== synced)
+        throw new Error(`${source} changed since it was copied to ${copy}: sync that copy in ~/zshrc/dotfiles/claude/mods, then set its sha256 in tests/vendored.json to ${actual}`)
+    })
+
+    // Only where the mods live, ~/zshrc, are the copies themselves compared.
+    test.skipIf(!existsSync(join(MODS, copy)))(`${copy} matches ${source}`, async () => {
       const copied = await Bun.file(join(MODS, copy)).text()
+      const body = copied.slice(copied.indexOf('\n') + 1)
 
-      expect(copied.slice(copied.indexOf('\n') + 1)).toBe(await Bun.file(join(ROOT, source)).text())
+      expect(body).toBe(await Bun.file(join(ROOT, source)).text())
+      expect(sha256(body)).toBe(synced)
     })
   }
 })

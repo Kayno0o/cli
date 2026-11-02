@@ -4,22 +4,83 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 
-export interface FakeState { pipelines: Pipeline[], jobs?: Record<number, Job[]>, traces?: Record<number, string>, calls?: string[] }
+// A call whose endpoint contains `match` fails `times` times (always when unset) with `message`.
+export interface FakeFailure { match: string, message: string, times?: number }
+// Calls whose arguments contain `match` wait until `parties` of them arrived, so two sessions reach that step together.
+export interface FakeBarrier { match: string, parties: number }
+export interface FakeState { pipelines: Pipeline[], jobs?: Record<number, Job[]>, traces?: Record<number, string>, calls?: string[], failures?: FakeFailure[], barrier?: FakeBarrier }
 
 // A stand-in for the `glab` binary answering `glab api` from a JSON file, failing as glab does on a 404.
 const SCRIPT = `#!/usr/bin/env bun
-import { readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs'
 
 const file = process.env.FAKE_GLAB_STATE
+const raw = process.argv.slice(2)
+const [command, endpoint] = raw
+const sleep = ms => new Promise(done => setTimeout(done, ms))
+const barrier = JSON.parse(readFileSync(file, 'utf8')).barrier
+
+// Matching calls wait here until \`parties\` of them arrived, so two sessions reach the same step together.
+if (barrier !== undefined && raw.join(' ').includes(barrier.match)) {
+  appendFileSync(file + '.barrier', 'x')
+
+  for (let waited = 0; waited < 10000 && readFileSync(file + '.barrier', 'utf8').length < barrier.parties; waited += 5)
+    await sleep(5)
+}
+
+// One call at a time reads and writes the state.
+const lock = file + '.lock'
+
+for (;;) {
+  try {
+    mkdirSync(lock)
+    break
+  }
+  catch {
+    await sleep(5)
+  }
+}
+
+process.on('exit', () => {
+  try {
+    rmdirSync(lock)
+  }
+  catch {}
+})
+
 const state = JSON.parse(readFileSync(file, 'utf8'))
-const [command, endpoint] = process.argv.slice(2)
 
 state.calls = [...(state.calls ?? []), endpoint]
 writeFileSync(file, JSON.stringify(state))
 
 if (command !== 'api') {
-  console.error('fake glab: unhandled ' + process.argv.slice(2).join(' '))
+  console.error('fake glab: unhandled ' + raw.join(' '))
   process.exit(1)
+}
+
+// Like glab, flags are read only before the endpoint: one after it is taken for a second endpoint.
+if (raw.slice(2).some(arg => arg.startsWith('-') && arg !== '-')) {
+  console.error('glab: only one endpoint is accepted, got ' + raw.slice(2).join(' '))
+  process.exit(1)
+}
+
+const failing = (state.failures ?? []).find(each => endpoint.includes(each.match) && each.times !== 0)
+
+// A scripted failure, as glab prints it: GitLab's error object on stdout and its summary on stderr.
+if (failing !== undefined) {
+  failing.times = failing.times === undefined ? undefined : failing.times - 1
+  writeFileSync(file, JSON.stringify(state))
+  console.log(JSON.stringify({ message: failing.message }))
+  console.error('glab: ' + failing.message)
+  process.exit(1)
+}
+
+// A page of a list as GitLab serves it: at most 100 to a page.
+function paged(list, params) {
+  const size = Math.min(Number(params.get('per_page') ?? 20), 100)
+  const from = (Number(params.get('page') ?? 1) - 1) * size
+
+  return list.slice(from, from + size)
 }
 
 const [path, query = ''] = endpoint.replace(/^projects\\/[^/]+\\//, '').split('?')
@@ -29,11 +90,11 @@ const trace = /^jobs\\/(\\d+)\\/trace$/.exec(path)
 const pipeline = one === null ? undefined : state.pipelines.find(each => each.id === Number(one[1]))
 
 if (path === 'pipelines')
-  console.log(JSON.stringify(state.pipelines.filter(each => (!params.has('sha') || each.sha === params.get('sha')) && (!params.has('ref') || each.ref === params.get('ref'))).sort((a, b) => b.id - a.id).slice(0, Number(params.get('per_page') ?? 20))))
+  console.log(JSON.stringify(paged(state.pipelines.filter(each => (!params.has('sha') || each.sha === params.get('sha')) && (!params.has('ref') || each.ref === params.get('ref'))).sort((a, b) => b.id - a.id), params)))
 else if (pipeline !== undefined && one[2] === undefined)
   console.log(JSON.stringify(pipeline))
 else if (pipeline !== undefined)
-  console.log(JSON.stringify(state.jobs?.[pipeline.id] ?? []))
+  console.log(JSON.stringify(paged(state.jobs?.[pipeline.id] ?? [], params)))
 else if (trace !== null && state.traces?.[trace[1]] !== undefined)
   process.stdout.write(state.traces[trace[1]])
 else {

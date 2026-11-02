@@ -1,5 +1,5 @@
 import type { Run } from '../runs'
-import { badge, duration, fail, formatDuration, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, duration, Exit, fail, formatDuration, isPermanentFailure, parse, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { failureReport, FINISHED, overall, recentRuns, runById, stallReason } from '../runs'
 
@@ -29,29 +29,14 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
   const failed = new Set<number>()
   let moving = started
 
-  for (;;) {
-    // Sleeping first gives a push's runs time to all appear, so one finishing early is not taken for the lot.
-    await Bun.sleep(timing.poll)
+  // One look at the runs: the exit code once they are decided, or undefined to poll again.
+  async function poll(): Promise<number | undefined> {
+    const newest = await recentRuns(LIMIT, repo)
+    const gone = await Promise.all([...followed].filter(id => !newest.some(run => run.id === id)).map(async id => runById(id, repo)))
+    const runs = [...pick(newest), ...gone]
 
-    if (Date.now() - started > timeout)
-      fail(`the runs did not finish in ${formatDuration(timeout)}`)
-
-    let runs: Run[]
-
-    try {
-      const newest = await recentRuns(LIMIT, repo)
-      const gone = await Promise.all([...followed].filter(id => !newest.some(run => run.id === id)).map(async id => runById(id, repo)))
-
-      runs = [...pick(newest), ...gone]
-
-      for (const run of runs)
-        followed.add(run.id)
-    }
-    catch (error) {
-      console.warn(`ft watch: ${error instanceof Error ? error.message : String(error)}, polling again`)
-
-      continue
-    }
+    for (const run of runs)
+      followed.add(run.id)
 
     for (const run of runs) {
       if (reported.get(run.id) !== run.status)
@@ -67,14 +52,14 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
         return 0
       }
 
-      continue
+      return undefined
     }
 
     // A failure is reported as soon as it happens, but the wait goes on until every run is over, as `ft ci` does.
     for (const run of runs) {
       if (run.status === 'failure' && !failed.has(run.id)) {
-        failed.add(run.id)
         console.error(`\n${await failureReport(run, repo)}\n\n${run.html_url}`)
+        failed.add(run.id)
       }
     }
 
@@ -90,6 +75,35 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
       moving = Date.now()
     else if (stall.certain || Date.now() - moving > STALLED)
       fail(`queued runs are not moving: ${stall.reason}`)
+
+    return undefined
+  }
+
+  for (;;) {
+    // Sleeping first gives a push's runs time to all appear, so one finishing early is not taken for the lot.
+    await Bun.sleep(timing.poll)
+
+    if (Date.now() - started > timeout)
+      fail(`the runs did not finish in ${formatDuration(timeout)}`)
+
+    // Every call to the forge sits in the retry: one failing leaves the wait to the next poll, unless it can only fail again.
+    try {
+      const code = await poll()
+
+      if (code !== undefined)
+        return code
+    }
+    catch (error) {
+      if (error instanceof Exit)
+        throw error
+
+      const message = error instanceof Error ? error.message : String(error)
+
+      if (isPermanentFailure(error))
+        fail(message)
+
+      console.warn(`ft watch: ${message}, polling again`)
+    }
   }
 }
 

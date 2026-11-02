@@ -6,16 +6,79 @@ import { Exit } from '@kaynooo/cli-kit'
 
 export interface FakeIssue { number: number, title: string, body: string, state: string, labels?: { name: string }[], milestone?: { id: number, title: string } | null | undefined }
 export interface FakeMilestone { id: number, title: string, state: string, description?: string, due_on?: string | null }
-export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[], clobber?: Record<number, string>, afterComment?: Record<number, string[]> }
+// A call whose arguments contain `match` fails `times` times (always when unset): with tea's exit-0 error object, or with a non-zero `exit` and `message` on stderr.
+export interface FakeFailure { match: string, message: string, times?: number, exit?: number }
+// Calls whose arguments contain `match` (and `method`) wait until `parties` of them arrived, so two sessions reach that step together.
+export interface FakeBarrier { match: string, method?: string, parties: number }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[], clobber?: Record<number, string>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
-import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from 'node:fs'
 
 const file = process.env.FAKE_TEA_STATE
-const state = JSON.parse(readFileSync(file, 'utf8'))
 const raw = process.argv.slice(2)
 const repoAt = raw.indexOf('--repo')
+const sleep = ms => new Promise(done => setTimeout(done, ms))
+const barrier = JSON.parse(readFileSync(file, 'utf8')).barrier
+
+// Matching calls wait here until \`parties\` of them arrived, so two sessions reach the same step together.
+if (barrier !== undefined && raw.join(' ').includes(barrier.match) && (barrier.method === undefined || raw.includes(barrier.method))) {
+  appendFileSync(file + '.barrier', 'x')
+
+  for (let waited = 0; waited < 10000 && readFileSync(file + '.barrier', 'utf8').length < barrier.parties; waited += 5)
+    await sleep(5)
+}
+
+// One call at a time reads and writes the state, as the server serialises its writes.
+const lock = file + '.lock'
+
+for (;;) {
+  try {
+    mkdirSync(lock)
+    break
+  }
+  catch {
+    await sleep(5)
+  }
+}
+
+process.on('exit', () => {
+  try {
+    rmdirSync(lock)
+  }
+  catch {}
+})
+
+const state = JSON.parse(readFileSync(file, 'utf8'))
+const VALUE_FLAGS = new Set(['-X', '-f', '-F', '-H', '--repo'])
+
+// Like tea, an api call reads flags only before its path: one after it is taken for another argument.
+function flagAfterPath() {
+  let seenPath = false
+
+  for (let at = 1; at < raw.length; at++) {
+    if (raw[at].startsWith('-') && raw[at] !== '-') {
+      if (seenPath)
+        return raw[at]
+
+      if (VALUE_FLAGS.has(raw[at]))
+        at++
+    }
+    else
+      seenPath = true
+  }
+
+  return undefined
+}
+
+// A page of a list as Forgejo serves it: at most 50 to a page.
+function paged(list, query) {
+  const size = Math.min(Number(query.get('limit') ?? 30), 50)
+  const from = (Number(query.get('page') ?? 1) - 1) * size
+
+  return list.slice(from, from + size)
+}
 
 // Like tea, a flag has to come before the positionals: one after a bare number is taken for another positional.
 if (repoAt !== -1 && raw.slice(0, repoAt).some(arg => /^\\d+$/.test(arg))) {
@@ -38,6 +101,27 @@ if (args.includes('--description-file')) {
 }
 
 const [command, sub, number] = args
+const late = command === 'api' ? flagAfterPath() : undefined
+const failing = (state.failures ?? []).find(each => args.join(' ').includes(each.match) && each.times !== 0)
+
+if (late !== undefined) {
+  console.error('Error: too many arguments, ' + late + ' came after the path')
+  process.exit(1)
+}
+
+// A scripted failure: tea's exit-0 error object, or a real non-zero exit when \`exit\` is set.
+if (failing !== undefined) {
+  failing.times = failing.times === undefined ? undefined : failing.times - 1
+  writeFileSync(file, JSON.stringify(state))
+
+  if (failing.exit === undefined) {
+    console.log(JSON.stringify({ message: failing.message, url: 'https://forge/api/swagger' }))
+    process.exit(0)
+  }
+
+  console.error(failing.message)
+  process.exit(failing.exit)
+}
 
 if (command === 'api') {
   const path = args.at(-1).replace('repos/{owner}/{repo}/', '')
@@ -59,12 +143,15 @@ if (command === 'api') {
     console.log(JSON.stringify(state.runs?.find(each => each.id === Number(run[1])) ?? { message: 'not found', url: '' }))
   else if (/^actions\\/runs\\/\\d+\\/jobs$/.test(path))
     console.log('[]')
-  else if (path.startsWith('actions/runs?'))
-    console.log(JSON.stringify({ workflow_runs: state.runs ?? [] }))
+  else if (path.startsWith('actions/runs?')) {
+    const matching = (state.runs ?? []).filter(each => (!query.has('head_sha') || each.commit_sha === query.get('head_sha')) && (!query.has('workflow_id') || each.workflow_id === query.get('workflow_id')))
+
+    console.log(JSON.stringify({ workflow_runs: paged(matching, query), total_count: matching.length }))
+  }
   else if (path.startsWith('labels?'))
-    console.log(JSON.stringify((state.labels ?? []).map(name => ({ name }))))
+    console.log(JSON.stringify(paged((state.labels ?? []).map(name => ({ name })), query)))
   else if (path.startsWith('milestones?'))
-    console.log(JSON.stringify((state.milestones ?? []).filter(each => query.get('state') === 'all' || each.state === query.get('state')).map(milestoneView)))
+    console.log(JSON.stringify(paged((state.milestones ?? []).filter(each => query.get('state') === 'all' || each.state === query.get('state')).map(milestoneView), query)))
   else if (path === 'milestones' && method === 'POST') {
     const created = { id: Math.max(0, ...(state.milestones ?? []).map(each => each.id)) + 1, state: 'open', description: '', due_on: null, ...fields }
 
@@ -77,8 +164,11 @@ if (command === 'api') {
     Object.assign(target, fields)
     console.log(JSON.stringify(milestoneView(target)))
   }
-  else if (path.startsWith('issues?'))
-    console.log(JSON.stringify(state.issues.filter(each => each.state === query.get('state') && (!query.has('milestones') || each.milestone?.id === Number(query.get('milestones')))).map(view)))
+  else if (path.startsWith('issues?')) {
+    const matching = state.issues.filter(each => each.state === query.get('state') && (!query.has('milestones') || each.milestone?.id === Number(query.get('milestones')))).map(view)
+
+    console.log(JSON.stringify(query.has('page') || query.has('limit') ? paged(matching, query) : matching))
+  }
   else if (found === undefined)
     console.log(JSON.stringify({ message: 'not found', url: '' }))
   else if (one[2] === undefined)
