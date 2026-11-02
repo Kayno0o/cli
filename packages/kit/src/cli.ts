@@ -5,14 +5,22 @@ import { applyOutput, Completing, completion, description, exampleRows, Exit, He
 import { paint, takesControlCodes } from './style'
 import { closest } from './text'
 
+// A command's one-line summary, or a function reading it (a lazily loaded module) that only a listing of the command awaits, never a run.
+export type Summary = string | (() => Promise<string>)
+
+export type Commands = Record<string, Command>
+
+// Commands known only once something is read, called with the words typed so far from the CLI's name on, and only when a word is not a command the level already has, or for a help or `__complete`.
+export type LazyCommands = (words: string[]) => Promise<Commands>
+
 export type Command = {
-  summary: string
+  summary: Summary
   // The heading the command is listed under in the help, after those with none.
   group?: string
 } & (
   | { run: (args: string[]) => Promise<number> }
-  // A group of subcommands dispatched the same way, with its own help.
-  | { commands: Record<string, Command>, aliases?: Record<string, string>, examples?: Example[] }
+  // A group of subcommands dispatched the same way, with its own help; `commands` may be a function for a group made of lazy commands alone.
+  | { commands: Commands | LazyCommands, extraCommands?: LazyCommands, aliases?: Record<string, string>, examples?: Example[] }
 )
 
 export interface Cli {
@@ -20,7 +28,10 @@ export interface Cli {
   version: string
   // One line after `<name> <version>: ` in the help.
   about: string
-  commands: Record<string, Command>
+  // The commands, or a function giving them all lazily.
+  commands: Commands | LazyCommands
+  // Lazy commands added to `commands`, which win a name they share.
+  extraCommands?: LazyCommands
   // Names sessions reach for that mean an existing command.
   aliases?: Record<string, string>
   // The command that takes the arguments when the first one names no command, so `db "select 1"` runs `db query "select 1"`; `--help` lists its options under the commands.
@@ -40,15 +51,16 @@ const LEVEL_OPTIONS = {
 const TOP_OPTIONS = { ...LEVEL_OPTIONS, version: { type: 'boolean', short: 'v', description: 'print the version' } } as const satisfies Options
 
 // The rows under `Commands:`, then a heading per group in the order first met, names aligned across them all.
-function commandRows(commands: Record<string, Command>, colors: Colors): string[] {
+async function commandRows(commands: Commands, colors: Colors): Promise<string[]> {
   const width = Math.max(...Object.keys(commands).map(name => name.length))
   const groups = new Map<string, string[]>([['Commands:', []]])
+  const summaries = await Promise.all(Object.values(commands).map(async ({ summary }) => resolveSummary(summary)))
 
-  for (const [name, { summary, group }] of Object.entries(commands)) {
+  for (const [index, [name, { group }]] of Object.entries(commands).entries()) {
     const heading = group === undefined ? 'Commands:' : `${group}:`
     const rows = groups.get(heading) ?? []
 
-    rows.push(`  ${colors.cyan(name.padEnd(width))}  ${colors.dim(summary)}`)
+    rows.push(`  ${colors.cyan(name.padEnd(width))}  ${colors.dim(summaries[index]!)}`)
     groups.set(heading, rows)
   }
 
@@ -75,22 +87,51 @@ function takeOutputFlags(argv: string[]): string[] {
   return argv.slice(index)
 }
 
-interface Level {
+// What a level lists and dispatches: the commands it has, and the functions giving more once called.
+interface Scope {
+  commands: Commands
+  lazy: LazyCommands[]
+  aliases: Record<string, string> | undefined
+}
+
+interface Level extends Scope {
   // The words typed to reach this level, `ft plan`.
   path: string[]
-  header: (colors: Colors) => string
-  summary: string
-  commands: Record<string, Command>
-  aliases: Record<string, string> | undefined
+  header: (colors: Colors, summary: string) => string
+  summary: Summary
   defaultCommand: string | undefined
   examples: Example[] | undefined
   replaces: string | undefined
 }
 
+async function resolveSummary(summary: Summary): Promise<string> {
+  return typeof summary === 'string' ? summary : summary()
+}
+
+function scopeOf(commands: Commands | LazyCommands, extra: LazyCommands | undefined, aliases: Record<string, string> | undefined): Scope {
+  return { commands: typeof commands === 'function' ? {} : commands, lazy: [...typeof commands === 'function' ? [commands] : [], ...extra === undefined ? [] : [extra]], aliases }
+}
+
+// The scope with its lazy commands called with the words typed so far and merged in, the ones it already has winning a shared name.
+async function expand<T extends Scope>(scope: T, words: string[]): Promise<T> {
+  if (scope.lazy.length === 0)
+    return scope
+
+  const commands = { ...scope.commands }
+
+  for (const added of await Promise.all(scope.lazy.map(async lazy => lazy(words)))) {
+    for (const [name, command] of Object.entries(added))
+      commands[name] ??= command
+  }
+
+  return { ...scope, commands, lazy: [] }
+}
+
 // The level's help; a default command's options follow the commands, as they apply with no command named.
-async function help({ path, header, summary, commands, defaultCommand, examples, replaces }: Level, stream: { isTTY?: boolean }): Promise<string> {
+async function help({ path, header, summary: lazySummary, commands, defaultCommand, examples, replaces }: Level, stream: { isTTY?: boolean }): Promise<string> {
   const colors = paint(stream)
   const prefix = path.join(' ')
+  const summary = await resolveSummary(lazySummary)
 
   if (wantsHelpJson())
     return JSON.stringify(description(`${prefix} <command> [options]: ${summary}`, { examples, replaces }))
@@ -101,12 +142,12 @@ async function help({ path, header, summary, commands, defaultCommand, examples,
   const own = Object.entries(options ?? {}).filter(([name]) => !(name in TOP_OPTIONS))
 
   return [
-    header(colors),
+    header(colors, summary),
     '',
     usageLine(`${prefix} ${defaultCommand === undefined ? colors.cyan('<command>') : `[${colors.cyan('<command>')}]`} [options]`, colors),
     ...replacesRows(replaces, colors),
     '',
-    ...commandRows(commands, colors),
+    ...await commandRows(commands, colors),
     ...own.length === 0 ? [] : ['', `${colors.bold(`Options of ${defaultCommand}:`)} ${colors.dim('the command run when none is named')}`, ...optionRows(Object.fromEntries(own), colors)],
     '',
     colors.bold('Options:'),
@@ -182,13 +223,13 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   const [name, ...args] = argv
 
   if (name === undefined && level.path.length > 1) {
-    console.error(await help(level, process.stderr))
+    console.error(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stderr))
 
     return 2
   }
 
   if (name === undefined || name === 'help' || name === '--help' || name === '-h') {
-    console.log(await help(level, process.stdout))
+    console.log(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stdout))
 
     return 0
   }
@@ -201,6 +242,11 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
 
   let command = level.commands[level.aliases?.[name] ?? name]
   let rest = args
+
+  if (command === undefined && level.lazy.length > 0) {
+    level = await expand(level, [...level.path.slice(1), ...argv])
+    command = level.commands[level.aliases?.[name] ?? name]
+  }
 
   if (command === undefined && level.defaultCommand !== undefined) {
     command = level.commands[level.defaultCommand]
@@ -218,7 +264,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   if ('commands' in command) {
     const { summary } = command
 
-    return dispatch({ path: [...level.path, name], header: colors => `${colors.bold(`${prefix} ${name}`)}  ${summary}`, summary, commands: command.commands, aliases: command.aliases, defaultCommand: undefined, examples: command.examples, replaces: undefined }, rest, { version, redact })
+    return dispatch({ path: [...level.path, name], header: (colors, text) => `${colors.bold(`${prefix} ${name}`)}  ${text}`, summary, ...scopeOf(command.commands, command.extraCommands, command.aliases), defaultCommand: undefined, examples: command.examples, replaces: undefined }, rest, { version, redact })
   }
 
   try {
@@ -261,12 +307,19 @@ async function leafCandidates(run: (args: string[]) => Promise<number>, words: s
 }
 
 // The candidates for the last word, `value\tdescription` per line, after walking the subcommands the earlier words name.
-async function candidates(commands: Record<string, Command>, aliases: Record<string, string> | undefined, defaultCommand: string | undefined, words: string[]): Promise<string[]> {
+async function candidates(scope: Scope, defaultCommand: string | undefined, words: string[], before: string[] = []): Promise<string[]> {
   const [word = '', ...rest] = words
-  const command = commands[aliases?.[word] ?? word]
+  const listing = rest.length === 0 && !word.startsWith('-')
+  let { commands, aliases } = scope
+  let command = commands[aliases?.[word] ?? word]
 
-  if (rest.length === 0 && !word.startsWith('-'))
-    return Object.entries(commands).map(([name, { summary }]) => `${name}\t${summary}`)
+  if (listing || command === undefined) {
+    ({ commands, aliases } = await expand(scope, [...before, ...words]))
+    command = commands[aliases?.[word] ?? word]
+  }
+
+  if (listing)
+    return Promise.all(Object.entries(commands).map(async ([name, { summary }]) => `${name}\t${await resolveSummary(summary)}`))
 
   if (command === undefined) {
     const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]
@@ -274,7 +327,7 @@ async function candidates(commands: Record<string, Command>, aliases: Record<str
     return fallback !== undefined && 'run' in fallback ? leafCandidates(fallback.run, words) : []
   }
 
-  return 'commands' in command ? candidates(command.commands, command.aliases, undefined, rest) : leafCandidates(command.run, rest)
+  return 'commands' in command ? candidates(scopeOf(command.commands, command.extraCommands, command.aliases), undefined, rest, [...before, word]) : leafCandidates(command.run, rest)
 }
 
 async function printCandidates(found: Promise<string[]>): Promise<number> {
@@ -287,9 +340,9 @@ async function printCandidates(found: Promise<string[]>): Promise<number> {
 // Runs the command argv names and returns the exit code: 0 for help and version, 2 for an unknown command.
 export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<number> {
   if (argv[0] === COMPLETE)
-    return printCandidates(candidates(cli.commands, cli.aliases, cli.defaultCommand, argv.slice(1)))
+    return printCandidates(candidates(scopeOf(cli.commands, cli.extraCommands, cli.aliases), cli.defaultCommand, argv.slice(1)))
 
-  return dispatch({ path: [cli.name], header: colors => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${cli.about}`, summary: cli.about, commands: cli.commands, aliases: cli.aliases, defaultCommand: cli.defaultCommand, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
+  return dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
 }
 
 export interface Main {

@@ -303,3 +303,105 @@ describe('runHint', () => {
     expect((await capture(async () => printHint(runHint('demo free')))).err).toBe('  hint: run `demo free`\n')
   })
 })
+
+describe('lazy commands', () => {
+  const calls: string[][] = []
+  const summaries: string[] = []
+  const hello = {
+    summary: async () => {
+      summaries.push('hello')
+
+      return 'says hello'
+    },
+    run: async (args: string[]) => {
+      console.log(`hello ${args.join(' ')}`)
+
+      return 0
+    },
+  }
+  const lazy = {
+    ...cli,
+    extraCommands: async (words: string[]) => {
+      calls.push(words)
+
+      return { hello, echo: { summary: 'shadowed', run: async () => 9 } }
+    },
+  }
+
+  test('is not called to run a command the CLI has, and never awaits a summary for a run', async () => {
+    calls.length = 0
+    summaries.length = 0
+
+    const throwing = { ...lazy, commands: { ...cli.commands, hello: { summary: async () => Promise.reject(new Error('read the module')), run: async () => 0 } } }
+
+    expect(await capture(async () => runCli(throwing, ['echo', 'a']))).toEqual({ result: 0, out: 'a\n', err: '' })
+    expect((await capture(async () => runCli(throwing, ['hello']))).result).toBe(0)
+    expect(calls).toEqual([])
+    expect(summaries).toEqual([])
+  })
+
+  test('is called with the words typed for a word it does not know, and runs what it gives', async () => {
+    calls.length = 0
+    summaries.length = 0
+
+    expect(await capture(async () => runCli(lazy, ['hello', 'world']))).toEqual({ result: 0, out: 'hello world\n', err: '' })
+    expect(calls).toEqual([['hello', 'world']])
+    expect(summaries).toEqual([])
+    expect((await capture(async () => runCli(lazy, ['nope']))).err).toBe('error: demo: no command nope\n  hint: run demo --help for its commands\n')
+  })
+
+  test('is called for a help and awaits the summaries it lists, the CLI\'s own commands winning a shared name', async () => {
+    calls.length = 0
+    summaries.length = 0
+
+    const { out } = await capture(async () => runCli(lazy, ['--help']))
+
+    expect(out).toContain('  hello  says hello\n')
+    expect(out).toContain('  echo   prints its arguments\n')
+    expect(calls).toEqual([['--help']])
+    expect(summaries).toEqual(['hello'])
+  })
+
+  test('is called for __complete, to list and to complete a word it gives', async () => {
+    calls.length = 0
+
+    expect((await capture(async () => runCli(lazy, ['__complete', '']))).out).toBe('echo\tprints its arguments\nboom\tfails\nplan\ta group\nhello\tsays hello\n')
+    expect((await capture(async () => runCli(lazy, ['__complete', 'echo', '']))).out).toBe('__files__\n')
+    expect(calls).toEqual([['']])
+
+    const parsing = { ...cli, commands: async () => ({ port: { summary: 'parses first', run: async (args: string[]) => {
+      parse(args, 'port', { max: { type: 'string', description: 'highest port' } })
+
+      return 0
+    } } }) }
+
+    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '--']))).out).toContain('--max\thighest port\n')
+  })
+
+  test('may be the only source of commands, as a function in place of the record', async () => {
+    const only = { ...cli, commands: async () => ({ hello }) }
+
+    expect((await capture(async () => runCli(only, ['hello', 'x']))).out).toBe('hello x\n')
+    expect((await capture(async () => runCli(only, []))).out).toContain('  hello  says hello\n')
+  })
+
+  test('works the same in a group, called with the words from the CLI\'s name on', async () => {
+    const seen: string[][] = []
+    const grouped = { ...cli, commands: { team: { summary: async () => 'lazy group', commands: { list: cli.commands.echo }, extraCommands: async (words: string[]) => {
+      seen.push(words)
+
+      return { hello }
+    } } } }
+
+    expect((await capture(async () => runCli(grouped, ['team', 'list', 'a']))).out).toBe('a\n')
+    expect(seen).toEqual([])
+    expect((await capture(async () => runCli(grouped, ['team', 'hello', 'b']))).out).toBe('hello b\n')
+    expect(seen).toEqual([['team', 'hello', 'b']])
+
+    const help = (await capture(async () => runCli(grouped, ['team', '--help']))).out
+
+    expect(help).toContain('demo team  lazy group')
+    expect(help).toContain('  hello  says hello\n')
+    expect((await capture(async () => runCli(grouped, ['__complete', 'team', '']))).out).toBe('list\tprints its arguments\nhello\tsays hello\n')
+  })
+})
