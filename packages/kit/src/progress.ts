@@ -62,6 +62,8 @@ const ESC = String.fromCharCode(27)
 // A colour or cursor code, or an OSC 8 link's opening or closing, read where `lastIndex` points.
 const ESCAPE_CODE = new RegExp(`${ESC}(?:\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]|\\][^\\u0007${ESC}]*(?:\\u0007|${ESC}\\\\))`, 'y')
 const RESET_STYLE = `${ESC}[0m`
+// What Ctrl+C sends once raw mode stops the terminal turning it into SIGINT.
+const CTRL_C = 3
 const CLOSE_LINK = `${ESC}]8;;${ESC}\\`
 // What the console prints with, to the terminal the line is drawn on or the other.
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug', 'dir', 'dirxml', 'table', 'trace', 'group', 'groupCollapsed', 'count', 'timeEnd', 'timeLog', 'assert'] as const
@@ -102,7 +104,11 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
   }
   const timer = setInterval(draw, FRAME_MS)
   const restore = interceptOutput(clear)
-  const onExit = () => clear()
+  const release = swallowInput()
+  const onExit = () => {
+    clear()
+    release()
+  }
   // Interrupted, the block goes before the shell's prompt comes back.
   const signals = holdSignals(stop)
 
@@ -110,6 +116,7 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
     clearInterval(timer)
     clear()
     restore()
+    release()
     process.off('exit', onExit)
     signals.release()
   }
@@ -286,6 +293,35 @@ function cutToWidth(line: string, width: number): string {
   }
 
   return `${kept}${RESET_STYLE}${linked ? CLOSE_LINK : ''}`
+}
+
+// Keeps keys typed on the terminal from being echoed while the region is drawn: an Enter would push it down a line and leave its first line behind on every redraw. Ctrl+C still interrupts.
+function swallowInput(): () => void {
+  const input = process.stdin
+
+  if (!input.isTTY)
+    return () => undefined
+
+  const onData = (data: Buffer) => {
+    if (data.includes(CTRL_C))
+      process.kill(process.pid, 'SIGINT')
+  }
+
+  input.setRawMode(true)
+  input.on('data', onData)
+  input.resume()
+
+  let released = false
+
+  return () => {
+    if (released)
+      return
+
+    released = true
+    input.off('data', onData)
+    input.pause()
+    input.setRawMode(false)
+  }
 }
 
 // Clears the region before anything the console or a stream writes, the caller's own code meanwhile included, and answers how to put them back.
