@@ -2,7 +2,7 @@
   "name": "agent-tools",
   "type": "module",
   "private": true,
-  "description": "CLIs built for Claude Code: ft for Forgejo, and more to come.",
+  "description": "CLIs built for Claude Code agents: Forgejo and GitLab CI, .env files without secrets, repo checks, guards and more.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "workspaces": ["packages/*"],

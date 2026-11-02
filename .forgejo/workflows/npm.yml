@@ -41,7 +41,7 @@ jobs:
           test -n "${NPM_TOKEN}" || { echo "the NPM_TOKEN secret is empty"; exit 1; }
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
           cd "packages/${TAG%-v*}"
-          bunx npm publish --access public --@kaynooo:registry=https://registry.npmjs.org/
+          bunx npm@12.2.1 publish --access public --@kaynooo:registry=https://registry.npmjs.org/
         env:
           TAG: ${{ github.ref_name }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

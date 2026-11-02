@@ -1,0 +1,5 @@
+# Fake fixtures of the env tests: a JWT and a private key block the masking tests feed through ev and redact.
+13872112235378253a6db1fa53daec6b173abed9:packages/env/tests/ev.test.ts:private-key:37
+408e4282289226ad28cfd333c01233137004342c:packages/env/tests/redact.test.ts:jwt:13
+408e4282289226ad28cfd333c01233137004342c:packages/env/tests/redact.test.ts:private-key:14
+13872112235378253a6db1fa53daec6b173abed9:packages/env/tests/mask.test.ts:jwt:43
