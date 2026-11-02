@@ -4,21 +4,21 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 
 | Package | Bin | What it does |
 | --- | --- | --- |
-| [`@kaynooo/forgejo-tools`](packages/ft) | `ft` | Forgejo CI runs and failures, releases, issue checklists and issue claims between sessions, through tea |
-| [`@kaynooo/env-tools`](packages/env) | `ev`, `redact` | .env files listed and edited with secrets masked; secrets masked in any piped output |
-| [`@kaynooo/db-tools`](packages/db) | `db` | read-only SQL against Postgres, MySQL and MariaDB (compose service or any container) that never shows the connection credentials, writes handed back as SQL unless the database ends in `_test` |
-| [`@kaynooo/check-tools`](packages/check) | `check`, `fix`, `errs` | a repo's check, typecheck, lint and test steps, or its fixers and formatters, run inside the project's docker compose service when one mounts the folder, showing only what failed; tsc, eslint, bun test, vitest, playwright, phpunit, phpstan and php-cs-fixer logs turned into `file:line:col` errors |
-| [`@kaynooo/pkg-tools`](packages/pkg) | `pkg` | an npm package checked before it is added: guessed names, versions under two weeks old, install scripts; `pkg bump` moves every consumer repo onto a release once the registry serves it |
-| [`@kaynooo/stack-tools`](packages/stack) | `stack` | a stable port per service name, and a compose release setup audited against its `release.config.ts` |
-| [`@kaynooo/out-tools`](packages/out) | `out` | noisy command output folded, errors kept, the full log saved to a file |
-| [`@kaynooo/edit-tools`](packages/edit) | `sub` | text replaced in files, written only when every replacement matches as often as expected |
-| [`@kaynooo/base-tools`](packages/base) | `base`, `proof` | a command run at HEAD or another ref in a temporary worktree, instead of a `git stash` round trip; a test shown to fail before a change and pass after it |
-| [`@kaynooo/git-tools`](packages/git) | `gst`, `gc` | a repository's state in one call; a commit of exactly the paths given, its message checked before anything is staged |
-| [`@kaynooo/wait-tools`](packages/wait) | `waitfor`, `slot` | a wait on a log line, a listening port, a URL answering, a process exiting or a background task ending, ending early on an error line, instead of sleep and polling loops; heavy commands queued behind machine-wide slots and named locks, freed when their holder dies |
-| [`@kaynooo/gitlab-tools`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
-| [`@kaynooo/guard-tools`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers, in-place edits), each refusal naming the route |
-| [`@kaynooo/code-tools`](packages/code) | `peek`, `todo-scan`, `hotspots` | source read by spans, declarations, usages and outlines in one call; the TODO and issue-reference comments of a repository, those naming a closed issue flagged; the files ranked by complexity times git churn |
-| [`@kaynooo/doctor-tools`](packages/doctor) | `doctor`, `agent-tools` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix; every bin in one line, what it does and what it replaces, read from its own help |
+| [`@kaynooo/cli-forgejo`](packages/ft) | `ft` | Forgejo CI runs and failures, releases, issue checklists and issue claims between sessions, through tea |
+| [`@kaynooo/cli-env`](packages/env) | `ev`, `redact` | .env files listed and edited with secrets masked; secrets masked in any piped output |
+| [`@kaynooo/cli-db`](packages/db) | `db` | read-only SQL against Postgres, MySQL and MariaDB (compose service or any container) that never shows the connection credentials, writes handed back as SQL unless the database ends in `_test` |
+| [`@kaynooo/cli-check`](packages/check) | `check`, `fix`, `errs` | a repo's check, typecheck, lint and test steps, or its fixers and formatters, run inside the project's docker compose service when one mounts the folder, showing only what failed; tsc, eslint, bun test, vitest, playwright, phpunit, phpstan and php-cs-fixer logs turned into `file:line:col` errors |
+| [`@kaynooo/cli-pkg`](packages/pkg) | `pkg` | an npm package checked before it is added: guessed names, versions under two weeks old, install scripts; `pkg bump` moves every consumer repo onto a release once the registry serves it |
+| [`@kaynooo/cli-stack`](packages/stack) | `stack` | a stable port per service name, and a compose release setup audited against its `release.config.ts` |
+| [`@kaynooo/cli-out`](packages/out) | `out` | noisy command output folded, errors kept, the full log saved to a file |
+| [`@kaynooo/cli-edit`](packages/edit) | `sub` | text replaced in files, written only when every replacement matches as often as expected |
+| [`@kaynooo/cli-base`](packages/base) | `base`, `proof` | a command run at HEAD or another ref in a temporary worktree, instead of a `git stash` round trip; a test shown to fail before a change and pass after it |
+| [`@kaynooo/cli-git`](packages/git) | `gst`, `gc` | a repository's state in one call; a commit of exactly the paths given, its message checked before anything is staged |
+| [`@kaynooo/cli-wait`](packages/wait) | `waitfor`, `slot` | a wait on a log line, a listening port, a URL answering, a process exiting or a background task ending, ending early on an error line, instead of sleep and polling loops; heavy commands queued behind machine-wide slots and named locks, freed when their holder dies |
+| [`@kaynooo/cli-gitlab`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
+| [`@kaynooo/cli-guard`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers, in-place edits), each refusal naming the route |
+| [`@kaynooo/cli-code`](packages/code) | `peek`, `todo-scan`, `hotspots` | source read by spans, declarations, usages and outlines in one call; the TODO and issue-reference comments of a repository, those naming a closed issue flagged; the files ranked by complexity times git churn |
+| [`@kaynooo/cli-doctor`](packages/doctor) | `doctor`, `agent-tools` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix; every bin in one line, what it does and what it replaces, read from its own help |
 | [`@kaynooo/cli-kit`](packages/kit) | - | the CLI kit every @kaynooo CLI is built on: argument parsing with `--help`, the command dispatcher, prompts, the progress line, config loading, the shell command parser every guard reads with, and output helpers |
 
 ## Development
@@ -44,12 +44,12 @@ Two ways wire the bins into Claude Code, never both on one host:
 ### A host without the dotfiles
 
 ```sh
-bun install -g @kaynooo/forgejo-tools @kaynooo/env-tools @kaynooo/db-tools @kaynooo/check-tools @kaynooo/pkg-tools @kaynooo/stack-tools @kaynooo/out-tools @kaynooo/edit-tools @kaynooo/base-tools @kaynooo/git-tools @kaynooo/wait-tools @kaynooo/gitlab-tools @kaynooo/guard-tools @kaynooo/code-tools @kaynooo/doctor-tools
+bun install -g @kaynooo/cli-forgejo @kaynooo/cli-env @kaynooo/cli-db @kaynooo/cli-check @kaynooo/cli-pkg @kaynooo/cli-stack @kaynooo/cli-out @kaynooo/cli-edit @kaynooo/cli-base @kaynooo/cli-git @kaynooo/cli-wait @kaynooo/cli-gitlab @kaynooo/cli-guard @kaynooo/cli-code @kaynooo/cli-doctor
 claude plugin install agent-tools-hooks --marketplace https://git.kaynooo.fr/kaynooo/agent-tools.git
 ```
 
 The packages come from npmjs with no registry setup. Each is also published to the Forgejo registry, which answers without a token; to install from it instead, map the scope first: `printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml`. The plugin comes from the Forgejo marketplace either way.
 
-The hooks need `guard-tools` 0.2.0 or later, the first with `guard hook`. Claude Code caches a plugin by its version, so a change under `plugin/` bumps `plugin/.claude-plugin/plugin.json` to reach the hosts.
+The hooks need `@kaynooo/cli-guard` or later, the first with `guard hook`. Claude Code caches a plugin by its version, so a change under `plugin/` bumps `plugin/.claude-plugin/plugin.json` to reach the hosts.
 
 `~/.bun/bin` must be on the PATH Claude Code starts with, or the hooks find no `guard`: Claude Code then reports a hook error on each call and lets it through. In a session, `/plugin marketplace add https://git.kaynooo.fr/kaynooo/agent-tools.git` then `/plugin install agent-tools-hooks@agent-tools` does the same as the last line.

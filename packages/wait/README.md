@@ -5,7 +5,7 @@
 Waits for a background build or server for Claude Code, where a session would otherwise `sleep 30; tail -c 2000 build.log` or hand-write an `until` loop: `waitfor` returns as soon as the log line shows, the port listens or the URL answers, and stops early on an error line.
 
 ```sh
-bun install -g @kaynooo/wait-tools
+bun install -g @kaynooo/cli-wait
 waitfor --file server.log --until 'Listening on' --fail 'Error|FATAL' --timeout 2m
 waitfor --port 5432
 waitfor --url http://localhost:8000/health

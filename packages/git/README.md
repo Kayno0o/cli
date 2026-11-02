@@ -3,7 +3,7 @@
 Git for Claude Code, where a session would otherwise chain `git status --short` and `git log --oneline` to read the state, or `git add <paths> && git status && git commit -m ...` to commit and have the commit bounced over its message.
 
 ```sh
-bun install -g @kaynooo/git-tools
+bun install -g @kaynooo/cli-git
 gst --log 3
 gc 'fix(band): keep it visible' -m 'The band stays above a long prompt.' --ticket '#5 - deliver every pointer' -- src/band.ts tests/band.test.ts
 ```
@@ -24,4 +24,4 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 
 ## Library
 
-`@kaynooo/git-tools/message` exports `commitMessageViolation(message)`, the rule a message breaks as the sentence to show or null, and the rule sentences, for the guard that checks a `git commit` typed by hand.
+`@kaynooo/cli-git/message` exports `commitMessageViolation(message)`, the rule a message breaks as the sentence to show or null, and the rule sentences, for the guard that checks a `git commit` typed by hand.

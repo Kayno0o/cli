@@ -3,12 +3,12 @@
 `check` runs a repo's validation and `fix` its fixers, both showing only what failed, so a Claude Code session spends no tokens on passing output.
 
 ```sh
-bun install -g @kaynooo/check-tools
+bun install -g @kaynooo/cli-check
 check            # run every step found
 check --list     # print the steps and the commands that run them
 check --only lint,test
 check --timeout 5m   # end a step still running after 5 minutes, exit 2
-check --slot     # queue each step behind the machine-wide slots of `slot` (@kaynooo/wait-tools)
+check --slot     # queue each step behind the machine-wide slots of `slot` (@kaynooo/cli-wait)
 check --in app   # run every step in this compose service, whatever is detected
 check --host     # run on the host even when a compose service mounts the folder
 check --json     # [{name, command, in?, ok, ms, log, failed?}] once every step ran

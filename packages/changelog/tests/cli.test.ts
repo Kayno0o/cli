@@ -39,7 +39,7 @@ describe('cli', () => {
     const { err, code } = await run(['--nope'])
 
     expect(code).toBe(2)
-    expect(err).toContain('changelogitea --nope')
+    expect(err).toContain('changelog --nope')
   })
 
   it('exits 2 on a stray argument', async () => {

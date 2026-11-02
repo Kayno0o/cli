@@ -29,15 +29,15 @@ describe('describeBin', () => {
   test('reads the description a bin prints under KIT_HELP=json', async () => {
     const envs: Record<string, string>[] = []
 
-    expect(await describeBin(fakeHost({ gst: JSON.stringify(GST) }, envs), 'gst', '@kaynooo/git-tools')).toEqual({ bin: 'gst', package: '@kaynooo/git-tools', installed: true, ...GST })
+    expect(await describeBin(fakeHost({ gst: JSON.stringify(GST) }, envs), 'gst', '@kaynooo/cli-git')).toEqual({ bin: 'gst', package: '@kaynooo/cli-git', installed: true, ...GST })
     expect(envs).toEqual([{ KIT_HELP: 'json', NO_COLOR: '1' }])
   })
 
   test('keeps the first line of an older bin\'s text help, and names one not installed', async () => {
     const host = fakeHost({ gst: 'Usage: gst [--log N]: the repository in one line\n\nOptions:\n' })
 
-    expect(await describeBin(host, 'gst', '@kaynooo/git-tools')).toEqual({ bin: 'gst', package: '@kaynooo/git-tools', installed: true, summary: 'gst [--log N]: the repository in one line' })
-    expect(await describeBin(host, 'gc', '@kaynooo/git-tools')).toEqual({ bin: 'gc', package: '@kaynooo/git-tools', installed: false })
+    expect(await describeBin(host, 'gst', '@kaynooo/cli-git')).toEqual({ bin: 'gst', package: '@kaynooo/cli-git', installed: true, summary: 'gst [--log N]: the repository in one line' })
+    expect(await describeBin(host, 'gc', '@kaynooo/cli-git')).toEqual({ bin: 'gc', package: '@kaynooo/cli-git', installed: false })
   })
 })
 
@@ -45,8 +45,8 @@ describe('describeBin with a declared bin', () => {
   test('runs the installed package\'s own file, not the first of that name on the PATH', async () => {
     const dir = temp('doctor-list-')
 
-    mkdirSync(join(dir, '@kaynooo', 'git-tools'), { recursive: true })
-    writeFileSync(join(dir, '@kaynooo', 'git-tools', 'package.json'), JSON.stringify({ bin: { gst: './dist/gst.js' } }))
+    mkdirSync(join(dir, '@kaynooo', 'cli-git'), { recursive: true })
+    writeFileSync(join(dir, '@kaynooo', 'cli-git', 'package.json'), JSON.stringify({ bin: { gst: './dist/gst.js' } }))
 
     const argvs: string[][] = []
     const host: Host = { ...fakeHost({ gst: '' }), globalModules: dir, run: async (argv) => {
@@ -55,8 +55,8 @@ describe('describeBin with a declared bin', () => {
       return { code: 0, stdout: JSON.stringify(GST), stderr: '' }
     } }
 
-    await describeBin(host, 'gst', '@kaynooo/git-tools')
-    expect(argvs).toEqual([['bun', join(dir, '@kaynooo', 'git-tools', 'dist/gst.js'), '--help']])
+    await describeBin(host, 'gst', '@kaynooo/cli-git')
+    expect(argvs).toEqual([['bun', join(dir, '@kaynooo', 'cli-git', 'dist/gst.js'), '--help']])
   })
 })
 
@@ -68,6 +68,6 @@ describe('agent-tools list', () => {
 
     expect(result).toBe(0)
     expect(lines).toContain('gst the repository in one line; instead of git status --short')
-    expect(lines).toContain('gc not installed: bun install -g @kaynooo/git-tools')
+    expect(lines).toContain('gc not installed: bun install -g @kaynooo/cli-git')
   })
 })

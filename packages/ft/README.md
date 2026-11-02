@@ -3,7 +3,7 @@
 Forgejo tools for the terminal: CI runs and their failures, releases, issue checklists and issue claims between Claude Code sessions.
 
 ```sh
-bun install -g @kaynooo/forgejo-tools
+bun install -g @kaynooo/cli-forgejo
 ```
 
 Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea login add`). Every call goes through `tea api`, so ft has no token of its own: tea owns the login and finds the repository from origin. Run ft from the repository, or pass `--repo owner/name` to the commands that take it.

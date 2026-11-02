@@ -150,7 +150,7 @@ describe('checkPackage', () => {
 describe('registry configuration', () => {
   test('takes a scope registry and its token from an .npmrc, expanding the environment', () => {
     const config = parseNpmrc(`; comment\n@kaynooo:registry=https://git.kaynooo.fr/api/packages/kaynooo/npm/\n//git.kaynooo.fr/api/packages/kaynooo/npm/:_authToken=${BRACED_TOKEN}\n`, { TOKEN: 'abc' })
-    const registry = registryFor('@kaynooo/forgejo-tools', [config])
+    const registry = registryFor('@kaynooo/cli-forgejo', [config])
 
     expect(registry).toEqual({ url: 'https://git.kaynooo.fr/api/packages/kaynooo/npm/', token: 'abc' })
     expect(registryFor('left-pad', [config])).toEqual({ url: 'https://registry.npmjs.org' })

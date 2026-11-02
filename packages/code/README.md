@@ -1,9 +1,9 @@
-# code-tools
+# peek, todo-scan and hotspots
 
 Reads source for Claude Code in fewer calls and fewer tokens: `peek` prints the spans, declarations, usages and outlines a session would otherwise get from `sed -n N,Mp`, `grep -n` chains and whole-file reads, and `todo-scan` lists the TODO and issue-reference comments of a repository, flagging the ones whose issue is closed.
 
 ```sh
-bun install -g @kaynooo/code-tools
+bun install -g @kaynooo/cli-code
 peek src/a.ts:120-140 src/b.ts:1-40
 peek --def parseCommand
 peek --refs parseCommand packages/guard

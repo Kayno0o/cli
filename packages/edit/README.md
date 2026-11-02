@@ -3,7 +3,7 @@
 Replaces text in files for Claude Code, where a session would otherwise retype a `sed -i`, a `bun -e` editor or a python heredoc: `sub` writes nothing unless every replacement matched as often as expected, and says where it did.
 
 ```sh
-bun install -g @kaynooo/edit-tools
+bun install -g @kaynooo/cli-edit
 sub --from 'a.b(1)' --to 'a.c(2)' src/a.ts
 ```
 

@@ -3,7 +3,7 @@
 `doctor` checks a host's agent-tools install in one call: one line per check, the command that fixes a failing one beside it.
 
 ```sh
-bun install -g @kaynooo/doctor-tools
+bun install -g @kaynooo/cli-doctor
 doctor           # one line per check
 doctor --json    # [{check, ok, detail, fix?}]
 ```

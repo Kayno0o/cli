@@ -6,7 +6,7 @@ export function defineConfig(config: ChangelogOptions) {
   return config
 }
 
-const configFiles = ['ts', 'mts', 'js', 'mjs', 'json'].map(ext => `changelogitea.config.${ext}`)
+const configFiles = ['ts', 'mts', 'js', 'mjs', 'json'].map(ext => `changelog.config.${ext}`)
 
 const defaultConfig = {
   scopeMap: {},
@@ -69,10 +69,10 @@ async function loadConfigFile(cwd: string): Promise<ChangelogOptions> {
 async function loadPackageConfig(cwd: string): Promise<ChangelogOptions> {
   const file = Bun.file(join(cwd, 'package.json'))
 
-  return !await file.exists() ? {} : (await file.json() as { changelogitea?: ChangelogOptions }).changelogitea ?? {}
+  return !await file.exists() ? {} : (await file.json() as { changelog?: ChangelogOptions }).changelog ?? {}
 }
 
-// Layers, lowest first: defaults, the package.json `changelogitea` field, `changelogitea.config.*`, then the options passed in.
+// Layers, lowest first: defaults, the package.json `changelog` field, `changelog.config.*`, then the options passed in.
 export async function loadConfig(options: ChangelogOptions, cwd = process.cwd()): Promise<ChangelogOptions> {
   const [packageConfig, fileConfig] = await Promise.all([loadPackageConfig(cwd), loadConfigFile(cwd)])
 

@@ -164,7 +164,7 @@ describe('serviceUrl', () => {
 describe('composeServices', () => {
   // Runs in a child, as Bun looks docker up on the PATH the process started with.
   async function listed(dockerScript: string, expression = 'composeServices()'): Promise<unknown> {
-    const bin = temp('db-tools-docker-')
+    const bin = temp('cli-db-docker-')
 
     writeFileSync(join(bin, 'docker'), dockerScript)
     chmodSync(join(bin, 'docker'), 0o755)

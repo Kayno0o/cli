@@ -1,5 +1,5 @@
 {
-  "name": "@kaynooo/changelogitea",
+  "name": "@kaynooo/cli-changelog",
   "type": "module",
   "version": "1.9.1",
   "description": "Generates a release's changelog from its conventional commits and publishes it as a Forgejo release.",
@@ -18,7 +18,7 @@
     ".": "./src/index.ts"
   },
   "bin": {
-    "changelogitea": "./dist/cli.js"
+    "changelog": "./dist/cli.js"
   },
   "files": ["dist", "src"],
   "engines": {

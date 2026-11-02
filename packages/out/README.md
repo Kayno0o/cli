@@ -3,7 +3,7 @@
 Shortens noisy command output for Claude Code: installs, builds, test runners and linters print hundreds of lines a session mostly does not need, and `out` folds them while keeping what matters.
 
 ```sh
-bun install -g @kaynooo/out-tools
+bun install -g @kaynooo/cli-out
 out -- bun install
 bun run build 2>&1 | out
 out --stats --since 7d

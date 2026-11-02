@@ -34,7 +34,7 @@ function fakeHost(answers: Record<string, { code?: number, stdout?: string, stde
   }
 }
 
-const LATEST = { 'bun info @kaynooo/forgejo-tools version --no-cache': { stdout: '0.5.1\n' } }
+const LATEST = { 'bun info @kaynooo/cli-forgejo version --no-cache': { stdout: '0.5.1\n' } }
 
 beforeEach(() => {
   home = temp('doctor-')
@@ -42,22 +42,22 @@ beforeEach(() => {
 
 describe('checkTool', () => {
   test('passes an installed package as new as the registry\'s', async () => {
-    install('@kaynooo/forgejo-tools', '0.5.1')
+    install('@kaynooo/cli-forgejo', '0.5.1')
 
-    expect(await checkTool(fakeHost(LATEST), '@kaynooo/forgejo-tools', ['ft'])).toEqual({ check: 'forgejo-tools', ok: true, detail: '0.5.1' })
+    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forgejo', ['ft'])).toEqual({ check: 'cli-forgejo', ok: true, detail: '0.5.1' })
   })
 
   test('fails one missing, older than released or with a bin off the PATH, naming the fix', async () => {
-    expect(await checkTool(fakeHost(LATEST), '@kaynooo/forgejo-tools', ['ft'])).toMatchObject({ ok: false, detail: 'not installed', fix: 'bun install -g @kaynooo/forgejo-tools' })
-    install('@kaynooo/forgejo-tools', '0.5.0')
-    expect(await checkTool(fakeHost(LATEST), '@kaynooo/forgejo-tools', ['ft'])).toMatchObject({ ok: false, detail: '0.5.0, 0.5.1 released', fix: 'bun install -g @kaynooo/forgejo-tools@0.5.1' })
-    expect(await checkTool(fakeHost(LATEST, []), '@kaynooo/forgejo-tools', ['ft'])).toMatchObject({ ok: false, detail: '0.5.0, ft not on the PATH' })
+    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: false, detail: 'not installed', fix: 'bun install -g @kaynooo/cli-forgejo' })
+    install('@kaynooo/cli-forgejo', '0.5.0')
+    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: false, detail: '0.5.0, 0.5.1 released', fix: 'bun install -g @kaynooo/cli-forgejo@0.5.1' })
+    expect(await checkTool(fakeHost(LATEST, []), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: false, detail: '0.5.0, ft not on the PATH' })
   })
 
   test('passes with a note when the registry does not answer', async () => {
-    install('@kaynooo/forgejo-tools', '0.5.0')
+    install('@kaynooo/cli-forgejo', '0.5.0')
 
-    expect(await checkTool(fakeHost(), '@kaynooo/forgejo-tools', ['ft'])).toMatchObject({ ok: true, detail: '0.5.0, the registry did not answer: no stub for bun info @kaynooo/forgejo-tools version --no-cache' })
+    expect(await checkTool(fakeHost(), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: true, detail: '0.5.0, the registry did not answer: no stub for bun info @kaynooo/cli-forgejo version --no-cache' })
   })
 })
 
@@ -80,7 +80,7 @@ describe('runChecks', () => {
     for (const name of Object.keys(TOOLS))
       install(name, '0.1.0')
 
-    expect(await checkTool({ ...host, which: () => '/bin/x' }, '@kaynooo/forgejo-tools', ['ft'])).toMatchObject({ ok: true, detail: expect.stringContaining('the registry did not answer') })
+    expect(await checkTool({ ...host, which: () => '/bin/x' }, '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: true, detail: expect.stringContaining('the registry did not answer') })
     await runChecks({ ...host, which: () => '/bin/x' })
     expect(peak).toBeLessThanOrEqual(4)
   })
@@ -124,8 +124,8 @@ describe('checkHooks', () => {
 
 describe('checkBun', () => {
   test('fails a Bun older than an installed package asks for', () => {
-    install('@kaynooo/forgejo-tools', '0.5.1', '>=1.5.0')
-    install('@kaynooo/git-tools', '0.2.0')
+    install('@kaynooo/cli-forgejo', '0.5.1', '>=1.5.0')
+    install('@kaynooo/cli-git', '0.2.0')
 
     expect(checkBun(fakeHost())).toEqual({ check: 'bun', ok: false, detail: '1.4.4, the tools ask for >=1.5.0', fix: 'bun upgrade' })
   })

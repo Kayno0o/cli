@@ -1,5 +1,5 @@
 {
-  "name": "@kaynooo/pkg-tools",
+  "name": "@kaynooo/cli-pkg",
   "type": "module",
   "version": "0.6.0",
   "description": "pkg: check an npm package before it is added, for a guessed name, a version under two weeks old and install scripts.",

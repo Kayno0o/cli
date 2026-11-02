@@ -10,7 +10,7 @@ const found: Issue = {
   title: 'ft issue leaves out the description',
   body: '**Context:** lanes pair it with tea.\r\n\r\n**Checklist:**\r\n- [x] prints the description\r\n  - [ ] nested box\r\n- [ ] adds the comments\r\n',
   state: 'open',
-  html_url: 'https://git.kaynooo.fr/kaynooo/forgejo-tools/issues/12',
+  html_url: 'https://git.kaynooo.fr/kaynooo/cli/issues/12',
   comments: 2,
   labels: [],
 }
@@ -30,7 +30,7 @@ describe('renderIssue', () => {
   test('prints the header, url and numbered description, comments only when asked', () => {
     const plain = renderIssue(found, comments, { todo: false, comments: false }, NOW)
 
-    expect(plain).toStartWith('#12 ft issue leaves out the description (open, 2 of 3 boxes left, taken by lane-60-12 2h ago)\nhttps://git.kaynooo.fr/kaynooo/forgejo-tools/issues/12\n\n**Context:**')
+    expect(plain).toStartWith('#12 ft issue leaves out the description (open, 2 of 3 boxes left, taken by lane-60-12 2h ago)\nhttps://git.kaynooo.fr/kaynooo/cli/issues/12\n\n**Context:**')
     expect(plain).not.toContain('---')
     expect(renderIssue(found, comments, { todo: false, comments: true }, NOW)).toEndWith('--- kaynooo, 2h ago\nTaken by session lane-60-12.\n\n--- kaynooo, 30m ago\nDecisions: boxes stay in place.')
   })

@@ -25,8 +25,9 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
 
+      # cli-changelog only goes to the Forgejo registry: the action skips npmjs without a token.
       - uses: https://git.kaynooo.fr/kaynooo/actions/npm-publish@v1
         with:
           working-directory: ${{ steps.package.outputs.directory }}
           token: ${{ secrets.PACKAGE_TOKEN }}
-          npm-token: ${{ secrets.NPM_TOKEN }}
+          npm-token: ${{ steps.package.outputs.directory != 'packages/changelog' && secrets.NPM_TOKEN || '' }}

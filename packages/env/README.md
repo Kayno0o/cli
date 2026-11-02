@@ -1,9 +1,9 @@
-# env-tools
+# ev and redact
 
 Two CLIs that keep secrets out of a Claude Code transcript: `ev` lists and edits `.env` files with every secret masked, and `redact` masks secrets in any piped output.
 
 ```sh
-bun install -g @kaynooo/env-tools
+bun install -g @kaynooo/cli-env
 ```
 
 ## ev
@@ -45,4 +45,4 @@ git diff --cached | redact --check
 
 ## The parser and the guard
 
-`import { parseDotenv, entries } from '@kaynooo/env-tools/dotenv'` gives the dotenv parser ev reads with: quotes, `export` prefixes, comments and multiline values. `src/guard.ts` holds the env file rules the `guard` bin of `@kaynooo/guard-tools` runs, exported to it as `./guard` within the workspace only.
+`import { parseDotenv, entries } from '@kaynooo/cli-env/dotenv'` gives the dotenv parser ev reads with: quotes, `export` prefixes, comments and multiline values. `src/guard.ts` holds the env file rules the `guard` bin of `@kaynooo/cli-guard` runs, exported to it as `./guard` within the workspace only.

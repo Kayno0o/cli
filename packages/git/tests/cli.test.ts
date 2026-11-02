@@ -26,7 +26,7 @@ function file(name: string, text = `${name}\n`): void {
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'git-tools-test-'))
+  dir = mkdtempSync(join(tmpdir(), 'cli-git-test-'))
   git('init', '-q', '-b', 'main')
   git('config', 'user.name', 'Test')
   git('config', 'user.email', 'test@example.com')

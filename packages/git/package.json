@@ -1,5 +1,5 @@
 {
-  "name": "@kaynooo/git-tools",
+  "name": "@kaynooo/cli-git",
   "type": "module",
   "version": "0.4.0",
   "description": "gst and gc: a repository's state in one call, and a commit of exactly the paths given, its message checked before anything is staged.",

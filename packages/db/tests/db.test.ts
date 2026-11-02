@@ -11,7 +11,7 @@ const IMAGE = 'postgres:18-alpine'
 // A Postgres the suite may create and drop its own database in, as CI starts the runner image's: set only there, so the tests never touch an existing database.
 const SERVER = process.env.DB_TOOLS_TEST_SERVER
 const PASSWORD = SERVER === undefined ? 'pw-never-printed-9731' : decodeURIComponent(new URL(SERVER).password)
-const CONTAINER = `db-tools-test-${process.pid}`
+const CONTAINER = `cli-db-test-${process.pid}`
 const DATABASE = `db_tools_test_${process.pid}`
 const PORT = /:(\d+)$/m
 const SCHEMA = `
@@ -87,9 +87,9 @@ afterAll(() => {
     docker('rm', '-f', CONTAINER)
 }, 30_000)
 
-const cwd = temp('db-tools-')
+const cwd = temp('cli-db-')
 // A home without a ~/.config/db/config.json, so the allowlist is empty unless a test writes one.
-const home = temp('db-tools-home-')
+const home = temp('cli-db-home-')
 
 async function db(args: string[], env: Record<string, string> = { DATABASE_URL: url }, stdin?: string) {
   const child = Bun.spawn([process.execPath, CLI, ...args], { cwd, env: { PATH: process.env.PATH ?? '', HOME: home, ...env }, stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe' })
@@ -212,7 +212,7 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
     ? { path: '', loopback: false, password: '' }
     : (() => {
       const target = new URL(url)
-      const bin = temp('db-tools-docker-')
+      const bin = temp('cli-db-docker-')
       const ps = { ID: 'abc123', Service: 'database', State: 'running', Image: 'postgres:18-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: Number(target.port) }] }
       const inspect = [{ Id: 'abc123def', Name: '/app-database-1', Config: { Env: [`POSTGRES_USER=${decodeURIComponent(target.username)}`, `POSTGRES_PASSWORD=${decodeURIComponent(target.password)}`, `POSTGRES_DB=${target.pathname.slice(1)}`, 'PG_MAJOR=18'] }, NetworkSettings: { Networks: { app: { IPAddress: '10.0.0.2', Aliases: ['database', 'db'] } } } }]
 

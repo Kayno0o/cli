@@ -21,22 +21,22 @@ export interface Host {
 
 // Every agent-tools package and the bins it installs; the repo's tests check it against packages/*.
 export const TOOLS: Record<string, string[]> = {
-  '@kaynooo/base-tools': ['base', 'proof'],
-  '@kaynooo/changelogitea': ['changelogitea'],
-  '@kaynooo/check-tools': ['check', 'fix', 'errs'],
-  '@kaynooo/code-tools': ['peek', 'todo-scan', 'hotspots'],
-  '@kaynooo/db-tools': ['db'],
-  '@kaynooo/doctor-tools': ['doctor', 'agent-tools'],
-  '@kaynooo/edit-tools': ['sub'],
-  '@kaynooo/env-tools': ['ev', 'redact'],
-  '@kaynooo/forgejo-tools': ['ft'],
-  '@kaynooo/git-tools': ['gst', 'gc'],
-  '@kaynooo/gitlab-tools': ['gl'],
-  '@kaynooo/guard-tools': ['guard'],
-  '@kaynooo/out-tools': ['out'],
-  '@kaynooo/pkg-tools': ['pkg'],
-  '@kaynooo/stack-tools': ['stack'],
-  '@kaynooo/wait-tools': ['waitfor', 'slot'],
+  '@kaynooo/cli-base': ['base', 'proof'],
+  '@kaynooo/cli-changelog': ['changelog'],
+  '@kaynooo/cli-check': ['check', 'fix', 'errs'],
+  '@kaynooo/cli-code': ['peek', 'todo-scan', 'hotspots'],
+  '@kaynooo/cli-db': ['db'],
+  '@kaynooo/cli-doctor': ['doctor', 'agent-tools'],
+  '@kaynooo/cli-edit': ['sub'],
+  '@kaynooo/cli-env': ['ev', 'redact'],
+  '@kaynooo/cli-forgejo': ['ft'],
+  '@kaynooo/cli-git': ['gst', 'gc'],
+  '@kaynooo/cli-gitlab': ['gl'],
+  '@kaynooo/cli-guard': ['guard'],
+  '@kaynooo/cli-out': ['out'],
+  '@kaynooo/cli-pkg': ['pkg'],
+  '@kaynooo/cli-stack': ['stack'],
+  '@kaynooo/cli-wait': ['waitfor', 'slot'],
 }
 
 export const FORGE = 'git.kaynooo.fr'

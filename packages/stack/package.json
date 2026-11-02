@@ -1,5 +1,5 @@
 {
-  "name": "@kaynooo/stack-tools",
+  "name": "@kaynooo/cli-stack",
   "type": "module",
   "version": "0.3.0",
   "description": "stack: a stable port per service name, and an audit of a compose release setup against its release.config.ts.",

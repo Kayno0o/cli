@@ -97,7 +97,7 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   }
 
   if (parsed.values.slot === true && Bun.which('slot', { PATH: process.env.PATH ?? '' }) === null)
-    fail('--slot needs the slot bin: bun install -g @kaynooo/wait-tools')
+    fail('--slot needs the slot bin: bun install -g @kaynooo/cli-wait')
 
   const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
   const directory = await logDirectory(cwd)

@@ -1,5 +1,5 @@
 {
-  "name": "@kaynooo/edit-tools",
+  "name": "@kaynooo/cli-edit",
   "type": "module",
   "version": "0.3.0",
   "description": "sub: text replaced in files for Claude Code, written only when every replacement matches as often as expected.",

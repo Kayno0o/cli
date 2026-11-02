@@ -1,5 +1,5 @@
 {
-  "name": "@kaynooo/forgejo-tools",
+  "name": "@kaynooo/cli-forgejo",
   "type": "module",
   "version": "0.9.0",
   "description": "ft: Forgejo CI runs, logs, releases and issue checklists from the terminal, through tea.",

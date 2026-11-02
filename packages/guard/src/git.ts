@@ -1,5 +1,5 @@
+import { USE_GC } from '@kaynooo/cli-git/message'
 import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
-import { USE_GC } from '@kaynooo/git-tools/message'
 
 // git's own options that take the next word as their value, before the subcommand.
 const GLOBAL_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'])

@@ -8,7 +8,7 @@ import { loadSettings, settingsPath } from '../src/settings'
 
 const temp = tempDirs()
 
-const root = temp('db-tools-hosts-')
+const root = temp('cli-db-hosts-')
 
 function homeWith(config: string | undefined): string {
   const home = mkdtempSync(join(root, 'home-'))

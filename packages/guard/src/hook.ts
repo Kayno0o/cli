@@ -1,5 +1,5 @@
 import type { Context, Violation } from './check'
-import { isEnvFile } from '@kaynooo/env-tools/guard'
+import { isEnvFile } from '@kaynooo/cli-env/guard'
 import { BINS, binsSection } from './bins'
 import { checkCommand, checkPath } from './check'
 import { gcLine } from './commit'

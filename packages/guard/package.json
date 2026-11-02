@@ -1,5 +1,5 @@
 {
-  "name": "@kaynooo/guard-tools",
+  "name": "@kaynooo/cli-guard",
   "type": "module",
   "version": "0.6.2",
   "description": "guard: the safety rules a Claude Code Bash call is held to (git, remote machines, SQL writes, env files, package managers, commit messages), each refusal naming the route.",
@@ -36,12 +36,12 @@
     "guard": "$npm_execpath src/cli.ts"
   },
   "devDependencies": {
+    "@kaynooo/cli-db": "workspace:*",
+    "@kaynooo/cli-edit": "workspace:*",
+    "@kaynooo/cli-env": "workspace:*",
+    "@kaynooo/cli-git": "workspace:*",
     "@kaynooo/cli-kit": "workspace:*",
-    "@kaynooo/db-tools": "workspace:*",
-    "@kaynooo/edit-tools": "workspace:*",
-    "@kaynooo/env-tools": "workspace:*",
-    "@kaynooo/git-tools": "workspace:*",
-    "@kaynooo/out-tools": "workspace:*",
-    "@kaynooo/pkg-tools": "workspace:*"
+    "@kaynooo/cli-out": "workspace:*",
+    "@kaynooo/cli-pkg": "workspace:*"
   }
 }

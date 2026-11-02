@@ -3,7 +3,7 @@
 Checks an npm package before it is added: a guessed or typosquatted name, a version published less than two weeks ago, and install scripts.
 
 ```sh
-bun install -g @kaynooo/pkg-tools
+bun install -g @kaynooo/cli-pkg
 pkg esbuild
 pkg left-pad@1.3.0 @types/node --json
 ```

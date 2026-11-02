@@ -1,4 +1,4 @@
-# @kaynooo/changelogitea
+# @kaynooo/cli-changelog
 
 Generate changelog for Gitea / Forgejo releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), and post it to Discord.
 
@@ -32,7 +32,7 @@ With [`highlights`](#open-the-notes-with-highlights), a **🌟 Highlights** sect
 Once the release is out on Forgejo, it is posted to the webhook in `DISCORD_WEBHOOK` (or `discordWebhook` / `--discord-webhook`) as one embed: the same sections with each issue's title beside it, maintenance as a count line, and links to the full note and the diff. A note too long for Discord's 4096 characters ends with `…and N more`. Nothing is posted when no webhook is set.
 
 ```yml
-      - run: bunx @kaynooo/changelogitea
+      - run: bunx @kaynooo/cli-changelog
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
           DISCORD_WEBHOOK: ${{secrets.DISCORD_WEBHOOK}}
@@ -68,7 +68,7 @@ jobs:
         with:
           bun-version: latest
 
-      - run: bunx @kaynooo/changelogitea
+      - run: bunx @kaynooo/cli-changelog
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 ```
@@ -83,15 +83,15 @@ The package is published to the Forgejo npm registry. To install it from there, 
 
 ## Configuration
 
-Put a `changelogitea.config.{ts,mts,js,mjs,json}` file in the project root, or a `changelogitea` field in `package.json`. CLI flags override the file, which overrides `package.json`.
+Put a `changelog.config.{ts,mts,js,mjs,json}` file in the project root, or a `changelog` field in `package.json`. CLI flags override the file, which overrides `package.json`.
 
 ### Roll up patches into minor releases
 
 If you cut several patches between minor releases, `rollup` makes a minor (or major) note list every commit since the previous minor (or major), instead of only since the last patch:
 
 ```ts
-// changelogitea.config.ts
-import { defineConfig } from '@kaynooo/changelogitea'
+// changelog.config.ts
+import { defineConfig } from '@kaynooo/cli-changelog'
 
 export default defineConfig({
   rollup: {
@@ -112,8 +112,8 @@ Both default to `false`.
 After a `git merge --allow-unrelated-histories` (or any big merge), the note would list every commit the merge brought in. `firstParent` walks only the first parent of each merge, so the merge shows as itself:
 
 ```ts
-// changelogitea.config.ts
-import { defineConfig } from '@kaynooo/changelogitea'
+// changelog.config.ts
+import { defineConfig } from '@kaynooo/cli-changelog'
 
 export default defineConfig({
   firstParent: true,
@@ -129,8 +129,8 @@ This also drops the commits of a feature branch merged with a merge commit: only
 Commit lines say what changed, not why it matters. `highlights` points at a Markdown page you write by hand, one `## <version>` section per release, and opens the notes with the section of the version being released, under **🌟 Highlights**, ending on a link to it:
 
 ```ts
-// changelogitea.config.ts
-import { defineConfig } from '@kaynooo/changelogitea'
+// changelog.config.ts
+import { defineConfig } from '@kaynooo/cli-changelog'
 
 export default defineConfig({
   highlights: {
@@ -154,7 +154,7 @@ export default defineConfig({
 ## Preview Locally
 
 ```bash
-bunx @kaynooo/changelogitea --dry
+bunx @kaynooo/cli-changelog --dry
 ```
 
 ## Undo a Release
@@ -162,13 +162,13 @@ bunx @kaynooo/changelogitea --dry
 Rolled a bad release? `undo` deletes the remote tag, the local tag, and soft-resets the version-bump commit (changes are kept in your working tree). The commit is only reset when the tag points at `HEAD`.
 
 ```bash
-bunx @kaynooo/changelogitea undo v1.4.2
+bunx @kaynooo/cli-changelog undo v1.4.2
 ```
 
 The tag is optional - omit it to undo the latest tag (you'll be warned which one):
 
 ```bash
-bunx @kaynooo/changelogitea undo
+bunx @kaynooo/cli-changelog undo
 ```
 
 The Gitea release note is **not** removed by default - you're asked about it interactively. Pass `--note` to include it non-interactively.

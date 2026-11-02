@@ -1,5 +1,5 @@
 {
-  "name": "@kaynooo/gitlab-tools",
+  "name": "@kaynooo/cli-gitlab",
   "type": "module",
   "version": "0.3.0",
   "description": "gl: GitLab pipelines waited on and their failed jobs' traces read from the terminal, through glab.",

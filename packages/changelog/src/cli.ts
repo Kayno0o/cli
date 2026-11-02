@@ -17,7 +17,7 @@ const shared = {
   'token': { type: 'string', short: 't', description: 'Gitea token' },
   'from': { type: 'string', description: 'From tag' },
   'to': { type: 'string', description: 'To tag' },
-  'gitea': { type: 'string', description: 'Gitea repository, e.g. kaynooo/changelogitea' },
+  'gitea': { type: 'string', description: 'Gitea repository, e.g. kaynooo/cli' },
   'release-gitea': { type: 'string', description: 'Release Gitea repository, defaults to --gitea' },
   'name': { type: 'string', description: 'Name of the release' },
   'contributors': { type: 'boolean', description: 'Show contributors' },
@@ -90,7 +90,7 @@ async function withToken(options: ChangelogOptions) {
 
 // Forgejo's new-release page only reads `tag`, so the notes go to a file to paste instead of into the link.
 async function printManualRelease(config: ResolvedChangelogOptions, md: string, heading: string) {
-  const file = join(tmpdir(), `changelogitea-${config.to.replaceAll('/', '-')}.md`)
+  const file = join(tmpdir(), `changelog-${config.to.replaceAll('/', '-')}.md`)
 
   await Bun.write(file, md)
   console.log()
@@ -101,7 +101,7 @@ async function printManualRelease(config: ResolvedChangelogOptions, md: string, 
 }
 
 async function release(argv: string[]) {
-  const parsed = parse(argv, `usage: changelogitea release [options]
+  const parsed = parse(argv, `usage: changelog release [options]
 
 Exits 0 once released, written to --output or shown by --dry, 1 when the release could not be made (no token, the tag not on Forgejo, a shallow clone, an API error) or the Discord post failed, 2 on a usage error.`, shared, { allowNegative: true, positionals: [] })
 
@@ -111,7 +111,7 @@ Exits 0 once released, written to --output or shown by --dry, 1 when the release
 
   try {
     console.log()
-    console.log(colors.dim(`changelo${colors.bold('gitea')} `) + colors.dim(`v${version}`))
+    console.log(colors.dim(`changelog v${version}`))
 
     const { config, md, discord, commits } = await generate(options)
 
@@ -194,7 +194,7 @@ Exits 0 once released, written to --output or shown by --dry, 1 when the release
 }
 
 async function undo(argv: string[]) {
-  const { values: args, positionals } = parse(argv, `usage: changelogitea undo [tag] [options]
+  const { values: args, positionals } = parse(argv, `usage: changelog undo [tag] [options]
 
 Exits 0 once undone, with nothing to undo, on --dry or when the question is declined, 1 when a step fails, 2 on a usage error.`, undoFlags, { positionals: ['[tag]'] })
   let tag = positionals[0]
@@ -202,7 +202,7 @@ Exits 0 once undone, with nothing to undo, on --dry or when the question is decl
 
   try {
     console.log()
-    console.log(colors.dim(`changelo${colors.bold('gitea')} `) + colors.dim(`v${version}`))
+    console.log(colors.dim(`changelog v${version}`))
 
     if (tag === undefined) {
       tag = (await getGitTags())[0]
@@ -331,11 +331,11 @@ Exits 0 once undone, with nothing to undo, on --dry or when the question is decl
 }
 
 process.exitCode = await runCli({
-  name: 'changelogitea',
+  name: 'changelog',
   version,
   about: 'generate the release notes and publish them',
   replaces: 'writing the release notes by hand and posting them through the Forgejo UI',
-  examples: [['changelogitea --dry', 'the notes since the last tag, nothing published'], ['changelogitea undo v1.2.0 --dry', 'what undoing that release would remove']],
+  examples: [['changelog --dry', 'the notes since the last tag, nothing published'], ['changelog undo v1.2.0 --dry', 'what undoing that release would remove']],
   commands: {
     release: { summary: 'generate the release notes and publish them (the default)', run: release },
     undo: { summary: 'undo a release: delete the remote/local tag and reset the bump commit', run: undo },

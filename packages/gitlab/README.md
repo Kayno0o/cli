@@ -3,7 +3,7 @@
 GitLab pipelines from the terminal: wait for the one covering a commit, list them, and read what their failed jobs say, where a session would otherwise poll `glab api .../pipelines/<id>/jobs` in a sleep loop and parse it by hand.
 
 ```sh
-bun install -g @kaynooo/gitlab-tools
+bun install -g @kaynooo/cli-gitlab
 gl ci
 ```
 

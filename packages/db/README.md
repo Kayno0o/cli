@@ -3,7 +3,7 @@
 Read-only SQL against Postgres, MySQL and MariaDB from the terminal, for Claude Code: the query runs in a `READ ONLY` transaction that is always rolled back, a statement that would write is printed for you to run instead (unless the database is a `_test` one), and the connection URL and its password are never shown.
 
 ```sh
-bun install -g @kaynooo/db-tools
+bun install -g @kaynooo/cli-db
 ```
 
 ## Connection

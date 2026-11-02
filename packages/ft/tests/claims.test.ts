@@ -51,7 +51,7 @@ describe('holderSession', () => {
 describe('laneSuffix', () => {
   test('names a lane after the end of the session name, which holderSession reads back', () => {
     expect(laneSuffix('kayjs-60')).toBe('60')
-    expect(holderSession(`lane-${laneSuffix('forgejo-tools-46')}-12`, [session('kayjs-46'), session('forgejo-tools-46', 2)])?.name).toBe('kayjs-46')
+    expect(holderSession(`lane-${laneSuffix('cli-46')}-12`, [session('kayjs-46'), session('cli-46', 2)])?.name).toBe('kayjs-46')
     expect(laneSuffix('kayjs')).toBeUndefined()
     expect(laneSuffix('kayjs-')).toBeUndefined()
   })

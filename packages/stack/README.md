@@ -3,7 +3,7 @@
 Two stack helpers for Claude Code: a stable port per service name, and an audit of a compose release setup against its `release.config.ts`.
 
 ```sh
-bun install -g @kaynooo/stack-tools
+bun install -g @kaynooo/cli-stack
 ```
 
 ## Commands

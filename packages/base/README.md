@@ -3,7 +3,7 @@
 Runs a command at HEAD or another ref for Claude Code, where a session would otherwise reach for `git stash` to see whether a test fails without its change: `base` checks the ref out in a temporary worktree, runs the command there and removes it, the working tree untouched.
 
 ```sh
-bun install -g @kaynooo/base-tools
+bun install -g @kaynooo/cli-base
 base --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php
 ```
 
