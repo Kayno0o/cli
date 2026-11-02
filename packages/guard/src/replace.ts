@@ -28,7 +28,7 @@ const ERE_METAS = new Set([...BRE_METAS, '+', '?', '(', ')', '{', '}', '|'])
 const JS_SPECIALS = /[.*+?^${}()|[\]\\]/g
 
 const WHY = 'writes nothing unless each file matches as often as expected, where it rewrites files whatever it matched'
-const GENERIC = 'Run `sub --from <text> --to <text> <file>...` instead (`--regex`, `--all`, `-n N`, `--pairs -` for several in order, `--dry-run --diff` to look first).'
+const GENERIC = 'Run `sub --from <text> --to <text> <file>...` instead (`--regex`, `--all`, `-n N`, `--dry-run --diff` to look first). For several replacements or multi-line text, pipe SEARCH/REPLACE blocks from a quoted heredoc, no escaping: `sub <file> <<\'EOF\'`, then `<<<<<<< SEARCH`, the old lines, `=======`, the new lines and `>>>>>>> REPLACE` each on its own line, then `EOF`; blocks apply in order, a line naming a file before a block makes it edit that file.'
 
 interface Literal { value: string, end: number, flags?: string }
 
@@ -402,17 +402,44 @@ function fileWord(path: string): string {
   return PLAIN_WORD.test(path) ? path : quote(path)
 }
 
-// The sub command doing what the pairs do in the files: flags for one pair, `--pairs -` fed a heredoc for several.
+function flagsOf(pair: Pair): string {
+  return [pair.regex === true ? ' --regex' : '', pair.all === true ? ' --all' : '', pair.count === undefined ? '' : ` -n ${pair.count}`].join('')
+}
+
+// SEARCH/REPLACE blocks for the pairs, undefined when they cannot be written as blocks: flags that differ between pairs, or a text holding the heredoc's own terminator.
+function blocksOf(pairs: readonly Pair[]): string | undefined {
+  const [first] = pairs
+
+  if (first === undefined || pairs.some(pair => flagsOf(pair) !== flagsOf(first)))
+    return undefined
+
+  const lines = new Set(pairs.flatMap(pair => [...pair.from.split('\n'), ...pair.to.split('\n')]))
+
+  if (lines.has('EOF'))
+    return undefined
+
+  let width = 7
+
+  while (lines.has('='.repeat(width)) || lines.has(`${'>'.repeat(width)} REPLACE`))
+    width++
+
+  return pairs.map(pair => `${'<'.repeat(width)} SEARCH\n${pair.from}\n${'='.repeat(width)}\n${pair.to}\n${'>'.repeat(width)} REPLACE`).join('\n')
+}
+
+// The sub command doing what the pairs do in the files: flags for one single-line pair, SEARCH/REPLACE blocks in a heredoc for several pairs or multi-line text, `--pairs` JSON when blocks cannot carry them.
 export function subCommand(pairs: readonly Pair[], files: readonly string[]): string {
   const targets = files.length === 0 ? '<file>' : files.map(fileWord).join(' ')
   const [pair] = pairs
 
-  if (pairs.length > 1 || pair === undefined)
-    return `sub --pairs - ${targets} <<'PAIRS'\n${JSON.stringify(pairs)}\nPAIRS`
+  if (pairs.length === 1 && pair !== undefined && !pair.from.includes('\n') && !pair.to.includes('\n'))
+    return `sub --from ${quote(pair.from)} --to ${quote(pair.to)}${flagsOf(pair)} ${targets}`
 
-  const flags = [pair.regex === true ? ' --regex' : '', pair.all === true ? ' --all' : '', pair.count === undefined ? '' : ` -n ${pair.count}`].join('')
+  const blocks = pair === undefined || pairs.some(({ from }) => from === '') ? undefined : blocksOf(pairs)
 
-  return `sub --from ${quote(pair.from)} --to ${quote(pair.to)}${flags} ${targets}`
+  if (blocks !== undefined)
+    return `sub${pair === undefined ? '' : flagsOf(pair)} ${targets} <<'EOF'\n${blocks}\nEOF`
+
+  return `sub --pairs - ${targets} <<'PAIRS'\n${JSON.stringify(pairs)}\nPAIRS`
 }
 
 function route(what: string, pairs: Pair[] | undefined, files: string[]): string {

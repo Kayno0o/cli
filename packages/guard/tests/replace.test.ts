@@ -47,7 +47,7 @@ describe('replace scripts', () => {
   test('reads a python heredoc asserting its count, its texts in variables', () => {
     const command = 'python3 - <<\'EOF\'\nfrom pathlib import Path\np = Path(\'src/a.ts\')\ns = p.read_text()\nold = """  return a\n"""\nnew = \'  return b\\n\'\nassert s.count(old) == 1\np.write_text(s.replace(old, new))\nEOF'
 
-    expect(suggested(command)).toBe('sub --from \'  return a\n\' --to \'  return b\n\' src/a.ts')
+    expect(suggested(command)).toBe('sub src/a.ts <<\'EOF\'\n<<<<<<< SEARCH\n  return a\n\n=======\n  return b\n\n>>>>>>> REPLACE\nEOF')
     expect(replaceViolation(command)).toStartWith('A python script replacing text')
   })
 
@@ -55,6 +55,14 @@ describe('replace scripts', () => {
     const command = 'python3 -c "import pathlib; p = pathlib.Path(\'a.md\'); p.write_text(p.read_text().replace(\'x\', \'y\').replace(\'z\', \'w\', 2))"'
 
     expect(suggested(command)).toBe('sub --pairs - a.md <<\'PAIRS\'\n[{"from":"x","to":"y","all":true},{"from":"z","to":"w","count":2}]\nPAIRS')
+  })
+
+  test('hands several pairs with the same flags over as SEARCH/REPLACE blocks, a longer fence around a marker line', () => {
+    expect(suggested('sed -i -e \'s/a/b/\' -e \'s/c/d/\' x')).toBe('sub x <<\'EOF\'\n<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE\n<<<<<<< SEARCH\nc\n=======\nd\n>>>>>>> REPLACE\nEOF')
+
+    const command = 'python3 - <<\'EOF\'\np = \'a.md\'\ns = open(p).read()\nold = """Title\n=======\n"""\nnew = "T\\n"\nassert s.count(old) == 1\nopen(p, \'w\').write(s.replace(old, new))\nEOF'
+
+    expect(suggested(command)).toContain('<<<<<<<< SEARCH\nTitle\n=======\n\n========\nT\n\n>>>>>>>> REPLACE')
   })
 
   test('reads a bun -e script, a regex literal included', () => {
