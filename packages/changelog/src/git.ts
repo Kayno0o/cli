@@ -1,6 +1,6 @@
 import type { ChangelogOptions } from './types'
-import { $ } from 'bun'
 import { parseSemver, validateSemver } from '@kaynooo/utils'
+import { $ } from 'bun'
 
 const gitSuffixRE = /\.git$/
 const sshRegex = /(?:ssh:\/\/[^/]+\/|git@[^:]+:)(\w[\w.-]+)\/(\w[\w.-]+)$/i
@@ -33,12 +33,12 @@ export function getSafeTagTemplate(template: string) {
   return template.includes('%s') ? template : `${template}%s`
 }
 
-export function getVersionString(template: string, tag: string) {
+export function getVersionString(template: string, tag: string): string {
   const pattern = template.replace(/%s/g, '(.+)')
   const regex = new RegExp(`^${pattern}$`)
   const match = regex.exec(tag)
 
-  return match ? match[1] : tag
+  return match?.[1] ?? tag
 }
 
 export async function getGitTags(firstParent = false) {
@@ -54,9 +54,9 @@ export async function getGitTags(firstParent = false) {
   let match
 
   while (match !== null) {
-    const tag = match?.[1].trim()
+    const tag = match?.[1]?.trim()
 
-    if (tag) {
+    if (tag !== undefined && tag !== '') {
       tagList.push(tag)
     }
 

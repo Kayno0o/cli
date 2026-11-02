@@ -1,22 +1,19 @@
-import { $ } from 'bun'
-import { afterAll, expect, it } from 'bun:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
+import { $ } from 'bun'
+import { expect, it } from 'bun:test'
 import { getGitDiff } from '../src/changelog'
 import { generate } from '../src/generate'
 import { getFirstGitCommit } from '../src/git'
+import { inside } from './fixture'
 
-const dirs: string[] = []
-
-afterAll(() => Promise.all(dirs.map(dir => rm(dir, { recursive: true, force: true }))))
+const tempDir = tempDirs()
 
 // Main has a root, an optional v1.0.0 tag, then a merge of an unrelated history (carrying a later-dated, unprefixed 9.5.0 tag when tagged), then one more commit.
 async function mergedRepo(tagged: boolean) {
-  const dir = await mkdtemp(join(tmpdir(), 'changelogitea-first-parent-'))
-
-  dirs.push(dir)
-  const git = (...args: string[]) => $`git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false ${args}`.cwd(dir).quiet()
+  const dir = tempDir('changelog-first-parent-')
+  const git = async (...args: string[]) => $`git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false ${args}`.cwd(dir).quiet()
   const commit = async (file: string, message: string, date: string) => {
     await writeFile(join(dir, file), message)
     await git('add', file)
@@ -45,19 +42,6 @@ async function mergedRepo(tagged: boolean) {
   return dir
 }
 
-async function inside<T>(dir: string, fn: () => Promise<T>) {
-  const cwd = process.cwd()
-
-  process.chdir(dir)
-
-  try {
-    return await fn()
-  }
-  finally {
-    process.chdir(cwd)
-  }
-}
-
 it('lists a merge on its own with firstParent, and its imported commits without', async () => {
   const dir = await mergedRepo(false)
 
@@ -80,7 +64,7 @@ it('generates from a tag before the merge with only first-parent commits', async
     const { commits } = await generate({ firstParent: true, from: 'v1.0.0', to: 'HEAD', contributors: false, repo: 'o/r' })
     const descriptions = commits.map(c => c.description)
 
-    expect(descriptions).toEqual(expect.arrayContaining(['merge other', 'after merge', 'after tag']))
+    expect(['merge other', 'after merge', 'after tag'].filter(wanted => !descriptions.includes(wanted))).toEqual([])
     expect(descriptions).not.toContain('imported one')
     expect(descriptions).not.toContain('imported two')
   })

@@ -46,7 +46,7 @@ function fitDescription(head: string[], lines: string[], tail: string) {
 
     const open = openFence(shown)
 
-    if (open)
+    if (open !== undefined)
       shown.push(open)
 
     const text = fitCommits([...shown, '…', head.at(-1)!], lines, tail)
@@ -65,8 +65,8 @@ function openFence(lines: string[]) {
   for (const line of lines) {
     const marker = fenceRE.exec(line)?.[1]
 
-    if (marker)
-      open = open && marker.startsWith(open) ? undefined : open ?? marker
+    if (marker !== undefined)
+      open = open !== undefined && marker.startsWith(open) ? undefined : open ?? marker
   }
 
   return open
@@ -101,7 +101,7 @@ export function generateDiscordPayload(commits: Commit[], options: ResolvedChang
     lines.push('', `**${formatTitle(section.title, options)}**`)
 
     for (const commit of section.commits.toReversed())
-      lines.push(`- ${formatLine(commit, options, commit.scope ? `**${options.scopeMap[commit.scope] || commit.scope}**: ` : '', true)}`)
+      lines.push(`- ${formatLine(commit, options, commit.scope ? `**${options.scopeMap[commit.scope] ?? commit.scope}**: ` : '', true)}`)
   }
 
   if (!sections.length && !folded.length)
@@ -109,8 +109,9 @@ export function generateDiscordPayload(commits: Commit[], options: ResolvedChang
 
   const links = `[full notes](${releaseUrl(options)}) · [diff](${compareUrl(options)})`
   const tail = folded.length ? `${formatTitle(options.titles.maintenance!, options)} *${foldedCounts(folded, options)}* · ${links}` : links
-  const authors = contributors.map(c => c.login || c.name).join(', ')
+  const authors = contributors.map(c => c.login ?? c.name).join(', ')
   const range = `${shortRef(options.from)} → ${shortRef(options.to)}`
+  const avatar = contributors.find(c => c.avatar !== undefined)?.avatar
 
   return {
     embeds: [{
@@ -118,7 +119,7 @@ export function generateDiscordPayload(commits: Commit[], options: ResolvedChang
       url: releaseUrl(options),
       color: commits.some(c => c.isBreaking) ? breakingColor : color,
       description: fitDescription(highlights ? highlightLines(highlights, options) : [], lines, tail),
-      footer: { text: authors ? `${authors} · ${range}` : range, icon_url: contributors.find(c => c.avatar)?.avatar },
+      footer: { text: authors ? `${authors} · ${range}` : range, ...(avatar === undefined ? {} : { icon_url: avatar }) },
       timestamp: new Date().toISOString(),
     }],
   }

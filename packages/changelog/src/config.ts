@@ -60,7 +60,7 @@ async function loadConfigFile(cwd: string): Promise<ChangelogOptions> {
     const path = join(cwd, name)
 
     if (await Bun.file(path).exists())
-      return (await import(path)).default ?? {}
+      return (await import(path) as { default?: ChangelogOptions }).default ?? {}
   }
 
   return {}
@@ -69,14 +69,14 @@ async function loadConfigFile(cwd: string): Promise<ChangelogOptions> {
 async function loadPackageConfig(cwd: string): Promise<ChangelogOptions> {
   const file = Bun.file(join(cwd, 'package.json'))
 
-  return !await file.exists() ? {} : (await file.json()).changelogitea ?? {}
+  return !await file.exists() ? {} : (await file.json() as { changelogitea?: ChangelogOptions }).changelogitea ?? {}
 }
 
 // Layers, lowest first: defaults, the package.json `changelogitea` field, `changelogitea.config.*`, then the options passed in.
 export async function loadConfig(options: ChangelogOptions, cwd = process.cwd()): Promise<ChangelogOptions> {
   const [packageConfig, fileConfig] = await Promise.all([loadPackageConfig(cwd), loadConfigFile(cwd)])
 
-  return mergeLayers(defaultConfig, packageConfig, fileConfig, options) as ChangelogOptions
+  return mergeLayers(defaultConfig, packageConfig, fileConfig, options)
 }
 
 export async function resolveConfig(options: ChangelogOptions) {
@@ -94,13 +94,15 @@ export async function resolveConfig(options: ChangelogOptions) {
     config.tag,
     config.rollup,
     config.firstParent,
-  ) || await getFirstGitCommit(config.firstParent)
-  // @ts-expect-error backward compatibility
-  config.repo ||= config.gitea || await getGiteaRepo()
-  // @ts-expect-error backward compatibility
-  config.releaseRepo ||= config.releaseGithub || config.repo
+  ) ?? await getFirstGitCommit(config.firstParent)
+
+  // The option names it had before Forgejo, still read from older configs.
+  const legacy = config as ChangelogOptions & { gitea?: string, releaseGithub?: string }
+
+  config.repo ||= legacy.gitea ?? await getGiteaRepo()
+  config.releaseRepo ||= legacy.releaseGithub ?? config.repo
   config.prerelease ??= isPrerelease(config.to)
-  config.discordWebhook ??= process.env.DISCORD_WEBHOOK || ''
+  config.discordWebhook ??= process.env.DISCORD_WEBHOOK ?? ''
 
   if (typeof config.repo !== 'string')
     throw new Error(`Invalid Gitea repository, expected a string but got ${JSON.stringify(config.repo)}`)

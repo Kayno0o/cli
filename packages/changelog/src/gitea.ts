@@ -46,7 +46,7 @@ export async function sendRelease(
   const body = {
     body: content,
     draft: options.draft || false,
-    name: options.name || options.to,
+    name: options.name ?? options.to,
     prerelease: options.prerelease,
     tag_name: options.to,
   }
@@ -122,11 +122,11 @@ const excludeAuthors = [
 ]
 
 export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorInfo) {
-  if (info.login)
+  if ((info.login ?? '') !== '')
     return info
 
   // token not provided, skip gitea resolving
-  if (!options.token)
+  if ((options.token ?? '') === '')
     return info
 
   // A commit names its author's account exactly, so only an author with no commit of their own, a co-author, is searched by email.
@@ -142,7 +142,7 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
     catch {}
   }
 
-  if (info.login)
+  if ((info.login ?? '') !== '')
     return info
 
   try {
@@ -153,8 +153,12 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
 
     const user = data.data.find(user => user.email.toLowerCase() === info.email.toLowerCase())
 
-    info.login = user?.login
-    info.avatar = user?.avatar_url
+    if (user !== undefined) {
+      info.login = user.login
+
+      if (user.avatar_url !== undefined)
+        info.avatar = user.avatar_url
+    }
   }
   catch {}
 
@@ -185,12 +189,12 @@ export async function resolveAuthors(commits: Commit[], options: ChangelogOption
   const nameSet = new Set<string>()
 
   return resolved
-    .sort((a, b) => (a.login || a.name).localeCompare(b.login || b.name))
+    .sort((a, b) => (a.login ?? a.name).localeCompare(b.login ?? b.name))
     .filter((i) => {
-      if (i.login && loginSet.has(i.login))
+      if (i.login !== undefined && loginSet.has(i.login))
         return false
 
-      if (i.login) {
+      if (i.login !== undefined) {
         loginSet.add(i.login)
       }
       else {
@@ -249,7 +253,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
       }
     }
     catch (error) {
-      console.error(colors.red(`Failed to process glob pattern "${pattern}": ${error}`))
+      console.error(colors.red(`Failed to process glob pattern "${pattern}": ${String(error)}`))
       // Keep the original pattern as fallback
       expandedAssets.push(pattern)
     }
@@ -295,7 +299,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
       console.log(colors.green(`Uploaded ${fileName} successfully.`))
     }
     catch (error) {
-      console.error(colors.red(`Failed to upload ${fileName}: ${error}`))
+      console.error(colors.red(`Failed to upload ${fileName}: ${String(error)}`))
     }
   }
 }

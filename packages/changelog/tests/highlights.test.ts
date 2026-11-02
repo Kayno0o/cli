@@ -1,9 +1,9 @@
 import type { RawGitCommit } from '../src/changelog'
 import type { Commit, ResolvedChangelogOptions } from '../src/types'
-import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
+import { describe, expect, it } from 'bun:test'
 import { parseGitCommit } from '../src/changelog'
 import { loadConfig } from '../src/config'
 import { generateDiscordPayload } from '../src/discord'
@@ -12,13 +12,7 @@ import { generateMarkdown } from '../src/markdown'
 
 const PAGE = 'https://docs.example/guides/whats-new/'
 
-let dir: string
-
-beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'changelogitea-highlights-'))
-})
-
-afterAll(() => rm(dir, { recursive: true, force: true }))
+const dir = tempDirs()('changelog-highlights-')
 
 async function options(overrides: Partial<ResolvedChangelogOptions> = {}) {
   return await loadConfig({ baseUrl: 'forge.example', repo: 'o/r', releaseRepo: 'o/r', from: 'v1.0.0', to: 'v1.1.0', ...overrides }, dir) as ResolvedChangelogOptions

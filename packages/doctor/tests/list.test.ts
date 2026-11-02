@@ -63,10 +63,11 @@ describe('describeBin with a declared bin', () => {
 describe('agent-tools list', () => {
   test('prints one line per bin, what it replaces after the summary', async () => {
     const { result, out } = await capture(async () => list([], fakeHost({ gst: JSON.stringify(GST) })))
-    const lines = out.split('\n')
+    // The names are padded to the longest bin's, which changes as bins come and go.
+    const lines = out.split('\n').map(line => line.replace(/^(\S+) +/, '$1 '))
 
     expect(result).toBe(0)
-    expect(lines).toContain('gst          the repository in one line; instead of git status --short')
-    expect(lines).toContain('gc           not installed: bun install -g @kaynooo/git-tools')
+    expect(lines).toContain('gst the repository in one line; instead of git status --short')
+    expect(lines).toContain('gc not installed: bun install -g @kaynooo/git-tools')
   })
 })

@@ -24,12 +24,14 @@ export function groupCommits(commits: Commit[], options: ResolvedChangelogOption
   const folded: Section[] = []
 
   for (const [type, config] of Object.entries(options.types)) {
-    if (typeof config === 'boolean' || !byType[type]?.length)
+    const typed = byType[type] ?? []
+
+    if (typeof config === 'boolean' || typed.length === 0)
       continue
 
-    const target = config.folded ? folded : sections
+    const target = config.folded === true ? folded : sections
 
-    target.push({ title: config.title, commits: byType[type] })
+    target.push({ title: config.title, commits: typed })
   }
 
   return { sections, folded }
@@ -61,7 +63,7 @@ export function userUrl(login: string, options: ResolvedChangelogOptions) {
 }
 
 function formatIssue(ref: Reference, options: ResolvedChangelogOptions, withTitle: boolean) {
-  const text = withTitle && ref.title ? `${ref.value} ${ref.title}` : ref.value
+  const text = withTitle && ref.title !== undefined ? `${ref.value} ${ref.title}` : ref.value
 
   return `[${text}](${repoUrl(options)}/issues/${ref.value.slice(1)})`
 }
@@ -86,7 +88,7 @@ export function foldedCounts(folded: Section[], options: ResolvedChangelogOption
 }
 
 export function formatAuthors(contributors: AuthorInfo[], options: ResolvedChangelogOptions) {
-  return join(contributors.map(c => c.login ? `[@${c.login}](${userUrl(c.login, options)})` : `**${c.name}**`))
+  return join(contributors.map(c => c.login !== undefined ? `[@${c.login}](${userUrl(c.login, options)})` : `**${c.name}**`))
 }
 
 function summaryLabel(title: string) {
@@ -117,18 +119,18 @@ function formatSection(section: Section, options: ResolvedChangelogOptions) {
   const scopes = groupBy(section.commits, c => c.scope)
 
   // Nesting under scopes only pays off when one of them holds several commits.
-  const nestable = Object.entries(scopes).some(([scope, commits]) => scope && commits.length > 1)
+  const nestable = Object.entries(scopes).some(([scope, commits]) => scope !== '' && commits.length > 1)
 
-  for (const scope of Object.keys(scopes).sort()) {
-    const scopeText = `**${options.scopeMap[scope] || scope}**`
-    const nested = nestable && scope && (options.group === true || (options.group === 'multiple' && scopes[scope].length > 1))
-    const prefix = scope && !nested ? `${scopeText}: ` : ''
+  for (const [scope, commits] of Object.entries(scopes).sort(([a], [b]) => a.localeCompare(b))) {
+    const scopeText = `**${options.scopeMap[scope] ?? scope}**`
+    const nested = nestable && scope !== '' && (options.group === true || (options.group === 'multiple' && commits.length > 1))
+    const prefix = scope !== '' && !nested ? `${scopeText}: ` : ''
     const padding = nested ? '  ' : ''
 
     if (nested)
       lines.push(`- ${scopeText}:`)
 
-    for (const commit of scopes[scope].toReversed())
+    for (const commit of commits.toReversed())
       lines.push(`${padding}- ${formatLine(commit, options, prefix)}`)
   }
 
@@ -137,7 +139,7 @@ function formatSection(section: Section, options: ResolvedChangelogOptions) {
 
 function formatAvatars(contributors: AuthorInfo[], options: ResolvedChangelogOptions) {
   return contributors
-    .filter(c => c.login && c.avatar)
+    .filter(c => c.login !== undefined && c.avatar !== undefined)
     .map(c => `<a href="${userUrl(c.login!, options)}"><img src="${c.avatar}" width="28" height="28" alt="@${c.login}"></a>`)
     .join(' ')
 }

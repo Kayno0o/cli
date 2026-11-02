@@ -1,4 +1,4 @@
-import type { LinkMap, ResolvedChangelogOptions } from './types'
+import type { ChangelogOptions, LinkMap, ResolvedChangelogOptions } from './types'
 import { isAbsolute, join } from 'node:path'
 import { getVersionString } from './git'
 
@@ -89,7 +89,7 @@ export function parseHighlights(source: string, version: string, url: string, li
   for (const line of lines) {
     const marker = fenceRE.exec(line)?.[1]
 
-    if (!fence && !marker) {
+    if (fence === undefined && marker === undefined) {
       const heading = headingRE.exec(line)
 
       if (heading?.[1] === '##') {
@@ -108,11 +108,11 @@ export function parseHighlights(source: string, version: string, url: string, li
       }
     }
 
-    if (marker)
-      fence = fence && marker.startsWith(fence) ? undefined : fence ?? marker
+    if (marker !== undefined)
+      fence = fence !== undefined && marker.startsWith(fence) ? undefined : fence ?? marker
 
     if (inside)
-      section.push(fence || marker ? line : resolveLinks(line, url, link))
+      section.push(fence !== undefined || marker !== undefined ? line : resolveLinks(line, url, link))
   }
 
   while (section.length && !section[0]!.trim())
@@ -126,10 +126,13 @@ export function parseHighlights(source: string, version: string, url: string, li
 
 // The `highlights.file` section of the version being released, or nothing without the option, the file or a section for it.
 export async function readHighlights(options: ResolvedChangelogOptions, cwd = process.cwd()): Promise<Highlights | undefined> {
-  if (!options.highlights)
+  // Resolved options type every key as set, but highlights stays unset without the option.
+  const highlights = options.highlights as ChangelogOptions['highlights']
+
+  if (highlights === undefined)
     return undefined
 
-  const { file, url, link } = options.highlights
+  const { file, url, link } = highlights
   const source = Bun.file(isAbsolute(file) ? file : join(cwd, file))
 
   if (!await source.exists())

@@ -7,18 +7,11 @@ export type SemverBumpType = 'major' | 'premajor' | 'minor' | 'preminor' | 'patc
 
 export type RepoProvider = 'github' | 'gitlab' | 'bitbucket'
 
-export interface RepoConfig {
-  domain?: string
-  repo?: string
-  provider?: RepoProvider
-  token?: string
-}
-
 export interface ChangelogConfig {
   cwd: string
   types: Record<string, { title: string, semver?: SemverBumpType, folded?: boolean } | boolean>
   scopeMap: Record<string, string>
-  repo?: RepoConfig | string
+  repo?: string
   tokens: Partial<Record<RepoProvider, string>>
   from: string
   to: string
@@ -67,15 +60,15 @@ export interface GitCommit extends RawGitCommit {
   isBreaking: boolean
 }
 
-const ConventionalCommitRegex = /(?<emoji>:.+:|(\uD83C[\uDF00-\uDFFF])|(\uD83D[\uDC00-\uDE4F\uDE80-\uDEFF])|[\u2600-\u2B55])?( *)(?<type>[a-z]+)(\((?<scope>.+)\))?(?<breaking>!)?: (?<description>.+)/i
-const CoAuthoredByRegex = /co-authored-by:\s*(?<name>\S[^<]*)(<(?<email>[^>]+)>)/gi
+const ConventionalCommitRegex = /(?::.+:|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDE4F\uDE80-\uDEFF]|[\u2600-\u2B55])? *(?<type>[a-z]+)(?:\((?<scope>.+)\))?(?<breaking>!)?: (?<description>.+)/i
+const CoAuthoredByRegex = /co-authored-by:\s*(?<name>\S[^<]*)<(?<email>[^>]+)>/gi
 const PullRequestRE = /\([ a-z]*(#\d+)\s*\)/g
 const IssueRE = /(#\d+)/g
 const BreakingBodyRE = /breaking change:/i
 const TicketLineRE = /^(#\d+) - (.+)$/gm
 
 export async function getGitDiff(from: string | undefined, to = 'HEAD', firstParent = false): Promise<RawGitCommit[]> {
-  const range = `${from ? `${from}...` : ''}${to}`
+  const range = `${from !== undefined && from !== '' ? `${from}...` : ''}${to}`
   const pretty = '----%n%s|%h|%an|%ae%n%b'
   const flags = firstParent ? ['--first-parent'] : []
   const output = (await $`git --no-pager log ${range} ${flags} --pretty=${pretty} --name-status`.quiet().text()).trim()
@@ -84,8 +77,8 @@ export async function getGitDiff(from: string | undefined, to = 'HEAD', firstPar
     .split('----\n')
     .splice(1)
     .map((line) => {
-      const [firstLine, ...body] = line.split('\n')
-      const [message, shortHash, authorName, authorEmail] = firstLine.split('|')
+      const [firstLine = '', ...body] = line.split('\n')
+      const [message = '', shortHash = '', authorName = '', authorEmail = ''] = firstLine.split('|')
 
       return {
         message,
@@ -102,30 +95,29 @@ export function parseGitCommit(commit: RawGitCommit, config: ChangelogConfig): G
   if (!match?.groups)
     return null
 
-  const type = match.groups.type
+  const type = match.groups.type ?? ''
   const hasBreakingBody = BreakingBodyRE.test(commit.body)
-  let scope = match.groups.scope || ''
-
-  scope = config.scopeMap[scope] || scope
-  const isBreaking = Boolean(match.groups.breaking || hasBreakingBody)
-  let description = match.groups.description
+  const rawScope = match.groups.scope ?? ''
+  const scope = config.scopeMap[rawScope] ?? rawScope
+  const isBreaking = match.groups.breaking !== undefined || hasBreakingBody
+  let description = match.groups.description ?? ''
   const references: Reference[] = []
 
   for (const m of description.matchAll(PullRequestRE))
-    references.push({ type: 'pull-request', value: m[1] })
+    references.push({ type: 'pull-request', value: m[1]! })
 
   for (const m of description.matchAll(IssueRE)) {
     if (!references.some(i => i.value === m[1]))
-      references.push({ type: 'issue', value: m[1] })
+      references.push({ type: 'issue', value: m[1]! })
   }
 
   for (const m of commit.body.matchAll(TicketLineRE)) {
     const known = references.find(i => i.value === m[1])
 
     if (known)
-      known.title = m[2].trim()
+      known.title = m[2]!.trim()
     else
-      references.push({ type: 'issue', value: m[1], title: m[2].trim() })
+      references.push({ type: 'issue', value: m[1]!, title: m[2]!.trim() })
   }
 
   references.push({ value: commit.shortHash, type: 'hash' })
@@ -135,8 +127,8 @@ export function parseGitCommit(commit: RawGitCommit, config: ChangelogConfig): G
 
   for (const m of commit.body.matchAll(CoAuthoredByRegex)) {
     authors.push({
-      name: (m.groups?.name || '').trim(),
-      email: (m.groups?.email || '').trim(),
+      name: (m.groups?.name ?? '').trim(),
+      email: (m.groups?.email ?? '').trim(),
     })
   }
 

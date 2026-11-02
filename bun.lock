@@ -20,6 +20,19 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/changelog": {
+      "name": "@kaynooo/changelogitea",
+      "version": "1.9.1",
+      "bin": {
+        "changelogitea": "./dist/cli.js",
+      },
+      "dependencies": {
+        "@kaynooo/utils": "^2.31.0",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/check": {
       "name": "@kaynooo/check-tools",
       "version": "0.7.0",
@@ -239,6 +252,8 @@
     "@joplin/turndown-plugin-gfm": ["@joplin/turndown-plugin-gfm@1.0.68", "", {}, "sha512-m8DfAQNC/V7g0j5H6Jv60WhekBBjodD+zTPGrU+g2m+ux/z8ZX07KQIl6kaAmbKwfvsQhC04op52g63I78sVgg=="],
 
     "@kaynooo/base-tools": ["@kaynooo/base-tools@workspace:packages/base"],
+
+    "@kaynooo/changelogitea": ["@kaynooo/changelogitea@workspace:packages/changelog"],
 
     "@kaynooo/check-tools": ["@kaynooo/check-tools@workspace:packages/check"],
 

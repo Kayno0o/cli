@@ -1,4 +1,4 @@
-import type { ChangelogConfig, GitCommit, RepoConfig } from './changelog'
+import type { ChangelogConfig, GitCommit } from './changelog'
 
 export type ChangelogenOptions = ChangelogConfig
 
@@ -117,7 +117,7 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   /**
    * Release repository, defaults to `repo`
    */
-  releaseRepo?: RepoConfig | string
+  releaseRepo?: string
 
   /**
    * Can be set to a custom tag string

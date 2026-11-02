@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'bun:test'
-import { mkdtemp } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
+import { describe, expect, it } from 'bun:test'
 import { version } from '../package.json'
 
 const CLI = join(import.meta.dir, '../src/cli.ts')
+const tempDir = tempDirs()
 
 async function run(args: string[], cwd = import.meta.dir) {
   const proc = Bun.spawn(['bun', CLI, ...args], { cwd, env: { ...process.env, GITHUB_TOKEN: 'none' }, stdout: 'pipe', stderr: 'pipe' })
@@ -57,7 +57,7 @@ describe('cli', () => {
   })
 
   it('exits 1 when undo fails outside a git repo', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'changelogitea-cli-'))
+    const dir = tempDir('changelog-cli-')
 
     expect((await run(['undo'], dir)).code).toBe(1)
   })

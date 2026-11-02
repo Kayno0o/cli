@@ -2,13 +2,13 @@
 
 import type { Options } from '@kaynooo/cli-kit'
 import type { ChangelogOptions, ResolvedChangelogOptions } from './types'
-import { $ } from 'bun'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse, runCli } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { sendDiscordWebhook } from '@kaynooo/utils'
 import { colors } from '@kaynooo/utils/tools/colors'
+import { $ } from 'bun'
 import { version } from '../package.json'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
 import { deleteLocalTag, deleteRemoteGitTag, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
@@ -41,9 +41,14 @@ const undoFlags = {
 
 type Flags = NonNullable<ReturnType<typeof parse<typeof shared>>>['values']
 
-// The flags as config options; an absent flag stays undefined so the config file keeps the say.
+// Keeps only the keys given a value.
+function defined<T extends object>(values: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined)) as { [K in keyof T]?: Exclude<T[K], undefined> }
+}
+
+// The flags as config options; an absent flag is left out so the config file keeps the say.
 function toOptions(args: Flags): ChangelogOptions {
-  return {
+  return defined({
     token: args.token,
     from: args.from,
     to: args.to,
@@ -61,7 +66,7 @@ function toOptions(args: Flags): ChangelogOptions {
     discordWebhook: args['discord-webhook'],
     dry: args.dry,
     assets: args.assets,
-  }
+  })
 }
 
 async function ask(question: string) {
@@ -78,9 +83,9 @@ async function readTokenFromGiteaCli() {
 }
 
 async function withToken(options: ChangelogOptions) {
-  const token = options.token || process.env.GITHUB_TOKEN || await readTokenFromGiteaCli()
+  const token = [options.token, process.env.GITHUB_TOKEN].find(value => value !== undefined && value !== '') ?? await readTokenFromGiteaCli()
 
-  return token ? { ...options, token } : options
+  return token !== '' ? { ...options, token } : options
 }
 
 // Forgejo's new-release page only reads `tag`, so the notes go to a file to paste instead of into the link.
@@ -96,7 +101,9 @@ async function printManualRelease(config: ResolvedChangelogOptions, md: string, 
 }
 
 async function release(argv: string[]) {
-  const parsed = parse(argv, 'usage: changelogitea release [options]', shared, { allowNegative: true, positionals: [] })
+  const parsed = parse(argv, `usage: changelogitea release [options]
+
+Exits 0 once released, written to --output or shown by --dry, 1 when the release could not be made (no token, the tag not on Forgejo, a shallow clone, an API error) or the Discord post failed, 2 on a usage error.`, shared, { allowNegative: true, positionals: [] })
 
   const options = await withToken(toOptions(parsed.values))
   let generated: { config: ResolvedChangelogOptions, md: string } | undefined
@@ -166,7 +173,7 @@ async function release(argv: string[]) {
         console.log(colors.green('Posted to Discord'))
       }
       catch (e) {
-        console.error(colors.red(`Released, but the Discord post failed: ${e}`))
+        console.error(colors.red(`Released, but the Discord post failed: ${String(e)}`))
         code = 1
       }
     }
@@ -176,7 +183,7 @@ async function release(argv: string[]) {
   catch (e) {
     console.error(colors.red(String(e)))
 
-    if (e instanceof Error && e.stack)
+    if (e instanceof Error && e.stack !== undefined)
       console.error(colors.dim(e.stack.split('\n').slice(1).join('\n')))
 
     if (generated)
@@ -187,7 +194,9 @@ async function release(argv: string[]) {
 }
 
 async function undo(argv: string[]) {
-  const { values: args, positionals } = parse(argv, 'usage: changelogitea undo [tag] [options]', undoFlags, { positionals: ['[tag]'] })
+  const { values: args, positionals } = parse(argv, `usage: changelogitea undo [tag] [options]
+
+Exits 0 once undone, with nothing to undo, on --dry or when the question is declined, 1 when a step fails, 2 on a usage error.`, undoFlags, { positionals: ['[tag]'] })
   let tag = positionals[0]
   const options = await withToken(toOptions(args))
 
@@ -195,10 +204,10 @@ async function undo(argv: string[]) {
     console.log()
     console.log(colors.dim(`changelo${colors.bold('gitea')} `) + colors.dim(`v${version}`))
 
-    if (!tag) {
+    if (tag === undefined) {
       tag = (await getGitTags())[0]
 
-      if (!tag) {
+      if (tag === undefined) {
         console.log(colors.yellow('No tags found, nothing to undo.'))
 
         return 0
@@ -314,7 +323,7 @@ async function undo(argv: string[]) {
   catch (e) {
     console.error(colors.red(String(e)))
 
-    if (e instanceof Error && e.stack)
+    if (e instanceof Error && e.stack !== undefined)
       console.error(colors.dim(e.stack.split('\n').slice(1).join('\n')))
 
     return 1
@@ -325,6 +334,8 @@ process.exitCode = await runCli({
   name: 'changelogitea',
   version,
   about: 'generate the release notes and publish them',
+  replaces: 'writing the release notes by hand and posting them through the Forgejo UI',
+  examples: [['changelogitea --dry', 'the notes since the last tag, nothing published'], ['changelogitea undo v1.2.0 --dry', 'what undoing that release would remove']],
   commands: {
     release: { summary: 'generate the release notes and publish them (the default)', run: release },
     undo: { summary: 'undo a release: delete the remote/local tag and reset the bump commit', run: undo },

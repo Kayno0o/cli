@@ -1,22 +1,18 @@
 import type { RawGitCommit } from '../src/changelog'
 import type { AuthorInfo, Commit, ResolvedChangelogOptions } from '../src/types'
-import { $ } from 'bun'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
+import { $ } from 'bun'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import { parseGitCommit } from '../src/changelog'
 import { loadConfig } from '../src/config'
 import { generateDiscordPayload } from '../src/discord'
 import { generateMarkdown } from '../src/markdown'
+import { releasedRepo } from './fixture'
 
-let dir: string
-
-beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'changelogitea-notes-'))
-})
-
-afterAll(() => rm(dir, { recursive: true, force: true }))
+const tempDir = tempDirs()
+const dir = tempDir('changelog-notes-')
 
 async function options(overrides: Partial<ResolvedChangelogOptions> = {}) {
   return await loadConfig({ baseUrl: 'forge.example', repo: 'o/r', releaseRepo: 'o/r', from: 'v1.0.0', to: 'v1.1.0', ...overrides }, dir) as ResolvedChangelogOptions
@@ -142,7 +138,7 @@ describe('config', () => {
     await writeFile(join(cwd, 'package.json'), JSON.stringify({ changelogitea: { group: 'multiple', tag: 'pkg-%s', titles: { maintenance: 'Chores' } } }))
     await writeFile(join(cwd, 'changelogitea.config.ts'), 'export default { tag: \'file-%s\', assets: [\'a\'], types: { feat: { title: \'Added\' } } }')
 
-    const config = await loadConfig({ assets: ['b'], capitalize: undefined, emoji: false }, cwd)
+    const config = await loadConfig({ assets: ['b'], emoji: false }, cwd)
 
     expect(config.group).toBe('multiple')
     expect(config.tag).toBe('file-%s')
@@ -157,11 +153,12 @@ describe('config', () => {
 
 it('cli writes the notes to --output, reading negated flags', async () => {
   const output = join(dir, 'notes.md')
+  const { dir: cwd, from, to } = await releasedRepo(tempDir('changelog-released-'))
 
-  await $`bun ${join(import.meta.dir, '../src/cli.ts')} --from fe0e9ea9a08a817b7ba849ebbecd556a274c79d1 --to 1f352da7c4763d4dba7861ef78443f9f731c6573 --no-emoji --no-contributors --output ${output}`.quiet()
+  await $`bun ${join(import.meta.dir, '../src/cli.ts')} --from ${from} --to ${to} --no-emoji --no-contributors --output ${output}`.cwd(cwd).quiet()
 
   const md = await Bun.file(output).text()
 
-  expect(md).toStartWith('> **1 fixed · 2 maintenance** · `fe0e9ea` → `1f352da`')
+  expect(md).toStartWith(`> **1 fixed · 2 maintenance** · \`${from.slice(0, 7)}\` → \`${to.slice(0, 7)}\``)
   expect(md).toContain('### Fixed')
 })

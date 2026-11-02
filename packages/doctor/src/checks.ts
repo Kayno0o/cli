@@ -22,6 +22,7 @@ export interface Host {
 // Every agent-tools package and the bins it installs; the repo's tests check it against packages/*.
 export const TOOLS: Record<string, string[]> = {
   '@kaynooo/base-tools': ['base', 'proof'],
+  '@kaynooo/changelogitea': ['changelogitea'],
   '@kaynooo/check-tools': ['check', 'fix', 'errs'],
   '@kaynooo/code-tools': ['peek', 'todo-scan', 'hotspots'],
   '@kaynooo/db-tools': ['db'],
