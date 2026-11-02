@@ -101,6 +101,31 @@ describe('failureExcerpt', () => {
     expect(text).not.toContain('PASS')
   })
 
+  test('vitest: from the first failed test, without the progress tree', async () => {
+    const text = failureExcerpt(await fixture('errs/vitest.txt'))
+
+    expect(text.trimStart()).toStartWith('FAIL  e2e/flow.spec.ts')
+    expect(text).toContain('AssertionError: expected 3 to be 4')
+    expect(text).toContain('Tests  3 failed | 1 passed (4)')
+    expect(text).not.toContain('RUN  v')
+  })
+
+  test('playwright: from the first numbered failure, with the totals', async () => {
+    const text = failureExcerpt(await fixture('errs/playwright-list.txt'))
+
+    expect(text.trimStart()).toStartWith('1) e2e/flow.spec.ts:7:1 › fails on assertion')
+    expect(text).toContain('1 flaky')
+    expect(text).not.toContain('Running 4 tests')
+  })
+
+  test('php-cs-fixer: one line per file with its fixers, without the diffs', async () => {
+    const text = failureExcerpt(await fixture('errs/php-cs-fixer-diff.txt'))
+    const listing = failureExcerpt(await fixture('errs/php-cs-fixer-v.txt'))
+
+    expect(text.split('\n').map(line => line.trim())).toEqual(['1) src/Calc.php', '2) src/Bad.php', 'Found 2 of 2 files that can be fixed in 0.007 seconds, 20.00 MB memory used'])
+    expect(listing).toContain('1) src/Calc.php (blank_line_after_opening_tag, blank_lines_before_namespace)')
+  })
+
   test('strips colours, and falls back to the last lines of a format it does not know', () => {
     const lines = Array.from({ length: 50 }, (_, index) => `\u001B[31mline ${index}\u001B[0m`)
     const text = failureExcerpt(lines.join('\n'))

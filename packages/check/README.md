@@ -27,7 +27,7 @@ Scripts always go through `bun run`, so a `check` script of `$npm_execpath check
 
 ## Output
 
-A passing step is one line: `ok    lint  1.0s  <log path>`. A failing step prints `FAIL`, its command and log path, then only what failed, recognised from the output: `bun test` (failed tests with their own output), `bun check`, tsc, tsgo and vue-tsc (plain and pretty), eslint and keslint (stylish), PHPStan, PHPUnit, ParaTest (a crashed worker included) and Pest. Any other format shows the last 30 lines, and an excerpt is capped at 100 lines. Each step's full output is saved to `<run folder>/<step>.log`, for grep: one folder per run under `$XDG_RUNTIME_DIR/agent-tools/check` (`~/.cache/agent-tools/check` without it), only the user can enter it, files are mode 0600, and runs older than three days are removed. `--only` naming no step fails instead of passing silently.
+A passing step is one line: `ok    lint  1.0s  <log path>`. A failing step prints `FAIL`, its command and log path, then only what failed, recognised from the output: `bun test` (failed tests with their own output), `bun check`, tsc, tsgo and vue-tsc (plain and pretty), eslint and keslint (stylish), Vitest, Playwright, PHP CS Fixer (its dry-run listing without the diffs), PHPStan, PHPUnit, ParaTest (a crashed worker included) and Pest. Any other format shows the last 30 lines, and an excerpt is capped at 100 lines. Each step's full output is saved to `<run folder>/<step>.log`, for grep: one folder per run under `$XDG_RUNTIME_DIR/agent-tools/check` (`~/.cache/agent-tools/check` without it), only the user can enter it, files are mode 0600, and runs older than three days are removed. `--only` naming no step fails instead of passing silently.
 
 SIGINT, SIGTERM and SIGHUP go to the running step's whole process group and `check` stops there. `--timeout` (`-t`, `30s`, `5m`) ends a step and everything it started.
 
@@ -65,8 +65,16 @@ errs -- bun test                # run a command, parse its output
 errs --json -- keslint src      # {errors, unrecognised, log?, code?}
 ```
 
-Turns tsc, tsgo and vue-tsc (plain and pretty), bun check, eslint and keslint (stylish) and bun test logs into one `file:line:col: message (rule)` line per error, so a session reads the failures without the log. A failed bun test reads `file:line:col: <test name>: <assertion> (expected X, received Y)`, located at the first stack frame of its error, and an eslint warning is prefixed `warning:`. Absolute paths under the current folder are printed relative.
+Turns tsc, tsgo and vue-tsc (plain and pretty), bun check, eslint and keslint (stylish), bun test, vitest, playwright, phpunit, paratest, phpstan and php-cs-fixer logs into one `file:line:col: message (rule)` line per error, so a session reads the failures without the log. A failed bun test reads `file:line:col: <test name>: <assertion> (expected X, received Y)`, located at the first stack frame of its error, and an eslint warning is prefixed `warning:`. Absolute paths under the current folder are printed relative.
 
-`--json` prints `{errors: [{tool, file, line, column, rule?, severity, message, test?}], unrecognised, log?, code?}`. Lines no format recognised are never dropped silently: their count goes to stderr, with the path of the full log. A command run after `--` has its whole output saved with the same log writer as `out`, and `log` is that file (the file given when a log is read, nothing for stdin). A first argument that is neither an option nor an existing file starts the command, so the `--` is optional.
+| Tool | Read from | One error per |
+| --- | --- | --- |
+| `phpunit`, `paratest` (9 to 12, colours or not) | the "There was 1 error" and "There were 3 failures" listings | failed or errored test: `file:line: Class::test: message`, at the first file under its trace, an assertion diff cut to its changed lines. Risky tests, warnings, deprecations and notices are never counted |
+| `phpstan` | the default table, `--error-format=raw` and `json` | message: `file:line: message (identifier)`, a wrapped table message joined, problems with no file at line 0 |
+| `php-cs-fixer` | `fix --dry-run` (`-v` names the fixers, `--diff` is skipped) | file: `file:0:0: style issues to fix (fixer, fixer)` |
+| `playwright` | the list and line reporters | failed test: the spec file and line of the first stack frame, the first error line and `expected X, received Y`. A test that passed on retry is flaky and not reported |
+| `vitest` | the default and verbose reporters | failed test, or suite that failed to load, at its first `file:line:col` frame |
+
+`--json` prints `{errors: [{tool, file, line, column, rule?, severity, message, test?}], unrecognised, log?, code?}`, `tool` one of `tsc`, `eslint`, `bun check`, `bun test`, `vitest`, `playwright`, `phpunit`, `phpstan` or `php-cs-fixer`. Lines no format recognised are never dropped silently: their count goes to stderr, with the path of the full log. A command run after `--` has its whole output saved with the same log writer as `out`, and `log` is that file (the file given when a log is read, nothing for stdin). A first argument that is neither an option nor an existing file starts the command, so the `--` is optional.
 
 Exit code 0 when no error was found and the command, if any, passed, 1 when errors were found or the command failed, 2 on bad usage.

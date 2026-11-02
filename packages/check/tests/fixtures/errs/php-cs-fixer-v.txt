@@ -1,0 +1,18 @@
+Setting PHP_CS_FIXER_IGNORE_ENV environment variable is deprecated and will be removed in 4.0, use unsupportedPhpVersionAllowed config instead.
+Unable to determine minimum PHP version supported by your project from composer.json: Failed to read file "composer.json".
+If you need help while solving warnings, ask at https://github.com/PHP-CS-Fixer/PHP-CS-Fixer/discussions/, we will help you!
+
+PHP CS Fixer 3.93.1 Exceptional Exception by Fabien Potencier, Dariusz Ruminski and contributors.
+PHP runtime: 8.5.12
+Loaded config default from "/repo/.php-cs-fixer.dist.php".
+Running analysis on 23 cores with 10 files per process.
+Parallel runner is an experimental feature and may be unstable, use it at your own risk. Feedback highly appreciated!
+Paths from configuration have been overridden by paths provided as command arguments.
+Rules from configuration have been overridden by rules provided as command argument.
+ 0/2 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%
+ 2/2 [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
+
+   1) src/Calc.php (blank_line_after_opening_tag, blank_lines_before_namespace)
+   2) src/Bad.php (array_syntax, class_definition, function_declaration, blank_line_after_opening_tag, braces_position, statement_indentation, blank_line_after_namespace)
+
+Found 2 of 2 files that can be fixed in 0.009 seconds, 20.00 MB memory used

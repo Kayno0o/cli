@@ -1,4 +1,6 @@
 import { stripAnsi } from '@kaynooo/cli-kit'
+import { collectPlaywright, collectVitest, E2E_NOISE } from './e2e'
+import { collectCsFixer, collectPhpstan, collectPhpunit, PHP_NOISE } from './php'
 
 const BASH_ECHO = /^\$ /
 const DURATION = / \[[\d.]+m?s\]$/
@@ -17,6 +19,10 @@ const ESLINT_SUMMARY = /^(?:✖ )?\d+ problems? \(/
 const PHPSTAN_TABLE = /^\s*-{3,} -{3,}/
 const PHPSTAN_NOISE = /^\s*\[OK\]/
 const PHP_FAILURES = /^(?:There w(?:as|ere) \d+ (?:failure|error|risky|warning)|\s+(?:FAIL|FAILED)\s+\S|In \S+\.php line \d+:$)/
+const VITEST_FAIL_LINE = /^ FAIL {2}\S/
+const PLAYWRIGHT_FAIL_LINE = /^ {2}1\) .+:\d+:\d+ › .+ ─+$/
+const CS_FIXER_LINE = /^\s+\d+\) \S.*\.php(?: \(.+\))?$/
+const CS_FIXER_TOTAL = /^Found \d+ of \d+ files/
 const MAX_TESTS = 10
 const MAX_LINES = 100
 const TAIL = 30
@@ -143,7 +149,28 @@ export const php: Parser = (lines) => {
   return start === -1 ? undefined : lines.slice(start)
 }
 
-const PARSERS: Parser[] = [bunTest, bunCheck, tsc, eslint, phpstan, php]
+// Vitest's failure blocks, from the first ` FAIL ` line to the end.
+export const vitest: Parser = (lines) => {
+  const start = lines.findIndex(line => VITEST_FAIL_LINE.test(line))
+
+  return start === -1 ? undefined : lines.slice(start)
+}
+
+// Playwright's numbered failures, from the first one to the end.
+export const playwright: Parser = (lines) => {
+  const start = lines.findIndex(line => PLAYWRIGHT_FAIL_LINE.test(line))
+
+  return start === -1 ? undefined : lines.slice(start)
+}
+
+// PHP CS Fixer's dry-run listing, one line per file with its fixers, without the diffs.
+export const phpCsFixer: Parser = (lines) => {
+  const files = lines.filter(line => CS_FIXER_LINE.test(line) || CS_FIXER_TOTAL.test(line))
+
+  return files.some(line => CS_FIXER_LINE.test(line)) ? files : undefined
+}
+
+const PARSERS: Parser[] = [bunTest, bunCheck, tsc, eslint, vitest, playwright, phpCsFixer, phpstan, php]
 
 function squeeze(lines: string[]): string[] {
   const out: string[] = []
@@ -174,7 +201,7 @@ export function failureExcerpt(output: string): string {
 }
 
 export interface ToolError {
-  tool: 'tsc' | 'eslint' | 'bun check' | 'bun test'
+  tool: 'tsc' | 'eslint' | 'bun check' | 'bun test' | 'phpunit' | 'phpstan' | 'php-cs-fixer' | 'playwright' | 'vitest'
   file: string
   line: number
   column: number
@@ -197,11 +224,11 @@ const BUN_TEST_FRAME = /^\s+at (?:.*? \()?(.+?):(\d+):(\d+)\)?$/
 const BUN_TEST_FILE = /^\S+\.test\.[jt]sx?:$/
 const NOISE = /^(?:bun test v|Errors {2}Files$|Ran \d+ tests?|note: |\s*\d+ expect\(\) calls|\s+\d+\s+\S+:\d+$|\s*\d+ errors? and \d+ warnings? potentially fixable)/
 
-type Collector = (lines: string[], used: Set<number>) => ToolError[]
+export type Collector = (lines: string[], used: Set<number>) => ToolError[]
 
 // Blank lines and the headers and totals the tools print around their errors.
 function isNoise(line: string): boolean {
-  return line.trim() === '' || [NOISE, BUN_TEST_SUMMARY, BUN_CHECK_SUMMARY, TSC_SUMMARY, ESLINT_SUMMARY, BOUNDARY, BASH_ECHO].some(pattern => pattern.test(line))
+  return line.trim() === '' || [NOISE, BUN_TEST_SUMMARY, BUN_CHECK_SUMMARY, TSC_SUMMARY, ESLINT_SUMMARY, BOUNDARY, BASH_ECHO, ...PHP_NOISE, ...E2E_NOISE].some(pattern => pattern.test(line))
 }
 
 const collectBunCheck: Collector = (lines, used) => {
@@ -336,7 +363,7 @@ const collectEslint: Collector = (lines, used) => {
   return errors
 }
 
-const COLLECTORS: Collector[] = [collectBunCheck, collectBunTest, collectTsc, collectEslint]
+const COLLECTORS: Collector[] = [collectBunCheck, collectBunTest, collectVitest, collectPlaywright, collectPhpunit, collectPhpstan, collectCsFixer, collectTsc, collectEslint]
 
 // Every error the known formats report, each format's in its own order, and how many non-blank lines none of them accounted for.
 export function parseErrors(output: string): ParsedErrors {

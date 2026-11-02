@@ -1,0 +1,101 @@
+
+Running 4 tests using 1 worker
+
+  ✓  1 e2e/flow.spec.ts:3:1 › passes (5ms)
+  ✘  2 e2e/flow.spec.ts:7:1 › fails on assertion (5ms)
+  ✘  3 e2e/flow.spec.ts:7:1 › fails on assertion (retry #1) (8ms)
+  ✘  4 e2e/flow.spec.ts:12:3 › group › throws inside (2ms)
+  ✘  5 e2e/flow.spec.ts:12:3 › group › throws inside (retry #1) (1ms)
+  ✘  6 e2e/flow.spec.ts:17:1 › flaky (3ms)
+  ✓  7 e2e/flow.spec.ts:17:1 › flaky (retry #1) (4ms)
+
+
+  1) e2e/flow.spec.ts:7:1 › fails on assertion ─────────────────────────────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "world"
+    Received: "hello"
+
+       6 |
+       7 | test('fails on assertion', async () => {
+    >  8 |   expect('hello').toBe('world')
+         |                   ^
+       9 | })
+      10 |
+      11 | test.describe('group', () => {
+        at /repo/e2e/flow.spec.ts:8:19
+
+    Error Context: test-results/flow-fails-on-assertion/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "world"
+    Received: "hello"
+
+       6 |
+       7 | test('fails on assertion', async () => {
+    >  8 |   expect('hello').toBe('world')
+         |                   ^
+       9 | })
+      10 |
+      11 | test.describe('group', () => {
+        at /repo/e2e/flow.spec.ts:8:19
+
+    Error Context: test-results/flow-fails-on-assertion-retry1/error-context.md
+
+  2) e2e/flow.spec.ts:12:3 › group › throws inside ─────────────────────────────────────────────────
+
+    Error: kaboom
+
+      11 | test.describe('group', () => {
+      12 |   test('throws inside', async () => {
+    > 13 |     throw new Error('kaboom')
+         |           ^
+      14 |   })
+      15 | })
+      16 |
+        at /repo/e2e/flow.spec.ts:13:11
+
+    Error Context: test-results/flow-group-throws-inside/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: kaboom
+
+      11 | test.describe('group', () => {
+      12 |   test('throws inside', async () => {
+    > 13 |     throw new Error('kaboom')
+         |           ^
+      14 |   })
+      15 | })
+      16 |
+        at /repo/e2e/flow.spec.ts:13:11
+
+    Error Context: test-results/flow-group-throws-inside-retry1/error-context.md
+
+  3) e2e/flow.spec.ts:17:1 › flaky ─────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      16 |
+      17 | test('flaky', async ({}, info) => {
+    > 18 |   expect(info.retry).toBeGreaterThan(0)
+         |                      ^
+      19 | })
+      20 |
+        at /repo/e2e/flow.spec.ts:18:22
+
+    Error Context: test-results/flow-flaky/error-context.md
+
+  2 failed
+    e2e/flow.spec.ts:7:1 › fails on assertion ──────────────────────────────────────────────────────
+    e2e/flow.spec.ts:12:3 › group › throws inside ──────────────────────────────────────────────────
+  1 flaky
+    e2e/flow.spec.ts:17:1 › flaky ──────────────────────────────────────────────────────────────────
+  1 passed (2.3s)

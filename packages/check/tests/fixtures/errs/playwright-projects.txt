@@ -1,0 +1,43 @@
+
+Running 3 tests using 2 workers
+
+  ✘  1 [chromium] › e2e/login.spec.ts:5:1 › logs in (30.0s)
+  ✓  2 [firefox] › e2e/login.spec.ts:5:1 › logs in (1.2s)
+  ✘  3 [firefox] › e2e/login.spec.ts:12:1 › shows the board (retry #1) (31.0s)
+
+
+  1) [chromium] › e2e/login.spec.ts:5:1 › logs in ──────────────────────────────────────────────────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Log in' })
+
+       8 |   await page.goto('/')
+    >  9 |   await page.getByRole('button', { name: 'Log in' }).click()
+         |                                                      ^
+      10 | })
+        at /app/e2e/login.spec.ts:9:54
+
+  2) [firefox] › e2e/login.spec.ts:12:1 › shows the board ──────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Board')
+    Expected: visible
+    Received: <element(s) not found>
+
+        at /app/e2e/login.spec.ts:14:38
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+        at /app/e2e/login.spec.ts:14:38
+
+  1 failed
+    [chromium] › e2e/login.spec.ts:5:1 › logs in ───────────────────────────────────────────────────
+  1 flaky
+    [firefox] › e2e/login.spec.ts:12:1 › shows the board ───────────────────────────────────────────
+  1 passed (1.1m)

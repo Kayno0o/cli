@@ -77,6 +77,123 @@ describe('parseErrors', () => {
     expect(parseErrors(log).errors).toHaveLength(1)
   })
 
+  test('phpunit 12: each failed or errored test with its location, a short diff, risky tests and deprecations left out', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('phpunit-12.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors.map(error => [error.file, error.line, error.test, error.message])).toEqual([
+      ['/repo/tests/CalcTest.php', 27, 'Tests\\CalcTest::testBoom', 'RuntimeException: boom happened'],
+      ['/repo/tests/CalcTest.php', 17, 'Tests\\CalcTest::testWrong', 'Failed asserting that 4 is identical to 5.'],
+      ['/repo/tests/CalcTest.php', 22, 'Tests\\CalcTest::testArray', 'Failed asserting that two arrays are identical. (- \'b\' => 2, | + \'b\' => 3,)'],
+      ['/repo/tests/CalcTest.php', 37, 'Tests\\CalcTest::testMultiline', 'Failed asserting that two strings are identical. (- line two\' | + line 2\')'],
+    ])
+    expect(errors.every(error => error.tool === 'phpunit')).toBe(true)
+
+    const issues = parseErrors(await fixture('phpunit-12-issues.txt'))
+
+    expect(issues.errors).toEqual([])
+    expect(issues.unrecognised).toBe(0)
+  })
+
+  test('phpunit 10 and 9: the first file under a stack trace, a data set kept in the name', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('phpunit-10.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors).toEqual([
+      { tool: 'phpunit', file: '/app/tests/MailerTest.php', line: 14, column: 0, severity: 'error', message: 'Failed asserting that false is true.', test: 'Tests\\MailerTest::testSends with data set #0 (\'a@b.fr\', 2)' },
+    ])
+
+    expect(parseErrors(await Bun.file(new URL('fixtures/phpunit.txt', import.meta.url)).text()).errors.map(error => error.line)).toEqual([14])
+  })
+
+  test('paratest prints the same listing as phpunit', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('paratest-12.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors.map(error => error.test)).toEqual(['Tests\\CalcTest::testBoom', 'Tests\\CalcTest::testWrong', 'Tests\\CalcTest::testArray', 'Tests\\CalcTest::testMultiline'])
+  })
+
+  test('phpunit: coloured output reads the same', async () => {
+    const coloured = (await fixture('phpunit-12.txt')).replaceAll('Failed asserting', '\u001B[41mFailed asserting\u001B[0m')
+
+    expect(parseErrors(coloured).errors.map(error => error.message)).toEqual(parseErrors(await fixture('phpunit-12.txt')).errors.map(error => error.message))
+  })
+
+  test('phpstan table: file, line, message and the identifier as the rule, a wrapped message joined', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('phpstan-table.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors.map(error => [error.file, error.line, error.rule])).toEqual([['Bad.php', 4, 'missingType.return'], ['Bad.php', 4, 'missingType.parameter'], ['Calc.php', 14, 'method.notFound'], ['Calc.php', 20, 'return.type']])
+    expect(errors[0]).toMatchObject({ tool: 'phpstan', message: 'Method App\\Bad::f() has no return type specified.' })
+  })
+
+  test('phpstan table: wrapped lines, tips and the table of errors with no file', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('phpstan-general.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors).toHaveLength(3)
+    expect(errors[1]?.message).toBe('Parameter #1 $user of method App\\Service\\Mailer::send() expects App\\Entity\\User, null given.')
+    expect(errors[2]).toMatchObject({ file: '', line: 0, message: 'Ignored error pattern #Unused# was not matched in reported errors.' })
+  })
+
+  test('phpstan raw and json carry the same errors', async () => {
+    const raw = parseErrors(await fixture('phpstan-raw.txt'))
+    const json = parseErrors(await fixture('phpstan-json.txt'))
+
+    expect(raw.unrecognised + json.unrecognised).toBe(0)
+    expect(raw.errors.map(error => [error.file, error.line, error.message])).toEqual(json.errors.map(error => [error.file, error.line, error.message]))
+    expect(raw.errors).toHaveLength(4)
+    expect(json.errors[2]).toMatchObject({ tool: 'phpstan', file: '/repo/src/Calc.php', line: 14, rule: 'method.notFound' })
+  })
+
+  test('phpstan: no error is no error', async () => {
+    expect(parseErrors(await fixture('phpstan-ok.txt'))).toEqual({ errors: [], unrecognised: 0 })
+  })
+
+  test('php-cs-fixer: one error per file with its fixers, the diffs skipped', async () => {
+    const listed = parseErrors(await fixture('php-cs-fixer-v.txt'))
+    const diffed = parseErrors(await fixture('php-cs-fixer-diff.txt'))
+
+    expect(listed.unrecognised + diffed.unrecognised).toBe(0)
+    expect(listed.errors).toHaveLength(2)
+    expect(listed.errors[0]).toEqual({ tool: 'php-cs-fixer', file: 'src/Calc.php', line: 0, column: 0, rule: 'blank_line_after_opening_tag, blank_lines_before_namespace', severity: 'error', message: 'style issues to fix' })
+    expect(diffed.errors.map(error => error.file)).toEqual(['src/Calc.php', 'src/Bad.php'])
+  })
+
+  test('playwright: failures at their frame with the first error line, a test that passed on retry left out', async () => {
+    for (const name of ['playwright-list.txt', 'playwright-line.txt']) {
+      const { errors, unrecognised } = parseErrors(await fixture(name))
+
+      expect(unrecognised).toBe(0)
+      expect(errors).toEqual([
+        { tool: 'playwright', file: '/repo/e2e/flow.spec.ts', line: 8, column: 19, severity: 'error', message: 'Error: expect(received).toBe(expected) // Object.is equality (expected "world", received "hello")', test: 'fails on assertion' },
+        { tool: 'playwright', file: '/repo/e2e/flow.spec.ts', line: 13, column: 11, severity: 'error', message: 'Error: kaboom', test: 'group › throws inside' },
+      ])
+    }
+  })
+
+  test('playwright: projects name the test, a timeout is the message, flaky tests are told apart per project', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('playwright-projects.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors).toEqual([
+      { tool: 'playwright', file: '/app/e2e/login.spec.ts', line: 9, column: 54, severity: 'error', message: 'Test timeout of 30000ms exceeded.', test: '[chromium] logs in' },
+    ])
+  })
+
+  test('vitest: each failed test at its frame, a suite that failed to load without a test', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('vitest.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors.map(error => [error.tool, error.file, error.line, error.column, error.test])).toEqual([
+      ['vitest', 'e2e/flow.spec.ts', 3, 1, undefined],
+      ['vitest', 'tests/math.test.ts', 13, 23, 'math > adds wrong'],
+      ['vitest', 'tests/math.test.ts', 17, 33, 'math > compares objects'],
+      ['vitest', 'tests/math.test.ts', 21, 11, 'math > throws'],
+    ])
+    expect(errors[1]?.message).toBe('AssertionError: expected 3 to be 4 // Object.is equality')
+  })
+
   test('counts the lines no format recognised', () => {
     const { errors, unrecognised } = parseErrors('who knows\na.ts(1,2): error TS1: bad\n\nsomething else\n')
 

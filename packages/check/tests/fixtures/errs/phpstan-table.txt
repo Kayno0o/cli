@@ -1,0 +1,21 @@
+ ------ -------------------------------------------------------------- 
+  Line   Bad.php                                                       
+ ------ -------------------------------------------------------------- 
+  4      Method App\Bad::f() has no return type specified.             
+         🪪  missingType.return                                        
+  4      Method App\Bad::f() has parameter $x with no type specified.  
+         🪪  missingType.parameter                                     
+ ------ -------------------------------------------------------------- 
+
+ ------ ----------------------------------------------------------------------- 
+  Line   Calc.php                                                               
+ ------ ----------------------------------------------------------------------- 
+  14     Call to an undefined method App\Calc::missing().                       
+         🪪  method.notFound                                                    
+  20     Method App\Calc::list() should return array<string> but returns array  
+         <int, int>.                                                            
+         🪪  return.type                                                        
+ ------ ----------------------------------------------------------------------- 
+
+ [ERROR] Found 4 errors                                                         
+

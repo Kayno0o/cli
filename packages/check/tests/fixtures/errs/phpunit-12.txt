@@ -1,0 +1,51 @@
+PHPUnit 12.5.8 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.5.12
+Configuration: /repo/phpunit.xml
+
+.FFE.F                                                              6 / 6 (100%)
+
+Time: 00:00.002, Memory: 16.00 MB
+
+There was 1 error:
+
+1) Tests\CalcTest::testBoom
+RuntimeException: boom happened
+
+/repo/tests/CalcTest.php:27
+
+--
+
+There were 3 failures:
+
+1) Tests\CalcTest::testWrong
+Failed asserting that 4 is identical to 5.
+
+/repo/tests/CalcTest.php:17
+
+2) Tests\CalcTest::testArray
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     'a' => 1,
+-    'b' => 2,
++    'b' => 3,
+ ]
+
+/repo/tests/CalcTest.php:22
+
+3) Tests\CalcTest::testMultiline
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+ 'line one
+-line two'
++line 2'
+
+/repo/tests/CalcTest.php:37
+
+ERRORS!
+Tests: 6, Assertions: 4, Errors: 1, Failures: 3.

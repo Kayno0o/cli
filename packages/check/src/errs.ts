@@ -8,10 +8,10 @@ import { saveLog } from './run'
 const usage = `errs [options] [log]
 errs [options] -- <command> [args...]
 
-Prints one \`file:line:col: message (rule)\` line per error found in a tsc, tsgo, vue-tsc, bun check, eslint, keslint or bun test log, read from the file given, from stdin (no argument or -), or from the output of the command run after --.
+Prints one \`file:line:col: message (rule)\` line per error found in a tsc, tsgo, vue-tsc, bun check, eslint, keslint, bun test, vitest, playwright (list and line reporters), phpunit, paratest, phpstan (table, raw and json) or php-cs-fixer log, read from the file given, from stdin (no argument or -), or from the output of the command run after --.
 The lines no format recognised are counted on stderr, never dropped silently, and a command's full output is saved to a log file whose path is printed with that count.
 Exits 0 when no error was found and the command, if any, passed, 1 when errors were found or the command failed, 2 on a usage error.
---json prints {errors: [{tool, file, line, column, rule, severity, message, test?}], unrecognised, log?, code?}.`
+--json prints {errors: [{tool, file, line, column, rule, severity, message, test?}], unrecognised, log?, code?}, tool one of tsc, eslint, bun check, bun test, vitest, playwright, phpunit, phpstan, php-cs-fixer.`
 
 const options = {
   json: jsonOption(),
@@ -67,7 +67,7 @@ export async function errs(args: string[], cwd = process.cwd()): Promise<number>
   // Bun drops a leading `--` before the script sees it, so a first word that is neither an option nor an existing file starts the command.
   const first = args[0]
   const bare = first !== undefined && !first.startsWith('-') && !await Bun.file(first).exists()
-  const parsed = parse(bare ? [] : args, usage, options, { rest: true, replaces: 'reading raw tsc, eslint or bun test logs', examples: [['errs -- bun run check', 'the type errors of a run'], ['bun test 2>&1 | errs', 'the failed tests from stdin']] })
+  const parsed = parse(bare ? [] : args, usage, options, { rest: true, replaces: 'reading raw tsc, eslint, phpunit, phpstan or playwright logs, or grepping a test summary out of them', examples: [['errs -- bun run check', 'the type errors of a run'], ['bun test 2>&1 | errs', 'the failed tests from stdin'], ['errs -- vendor/bin/phpunit', 'each failed PHP test with its file and line']] })
 
   if (parsed.positionals.length > 1)
     fail(`give one log, or a command after --\n\n${usage}`)
