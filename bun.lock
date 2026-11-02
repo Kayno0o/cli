@@ -153,7 +153,7 @@
     },
     "packages/pkg": {
       "name": "@kaynooo/pkg-tools",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "bin": {
         "pkg": "./dist/cli.js",
       },
