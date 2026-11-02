@@ -1,6 +1,6 @@
 import type { Run } from '../runs'
 import process from 'node:process'
-import { badge, duration, fail, formatDuration, paint, parse, runHint, waitForCi } from '@kaynooo/cli-kit'
+import { badge, duration, fail, formatElapsed, paint, parse, runHint, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
 
@@ -130,7 +130,7 @@ export async function ci(args: string[]): Promise<number> {
     },
     // The runs followed and their state, on a terminal, under a line for the wait itself.
     lines: (spinner, found, started) => [
-      `${spinner} CI on ${short} ${dim(formatDuration(Date.now() - started))}`,
+      `${spinner} CI on ${short} ${dim(formatElapsed(Date.now() - started))}`,
       ...(found ?? []).map(run => `  ${badge(run.status, process.stderr)} ${run.workflow_id} ${dim(`run ${run.id}`)}`),
     ],
   })

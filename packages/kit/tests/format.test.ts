@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { formatAge, formatChange, formatDelta, formatDuration, formatPercent, formatSeconds, printJson, table } from '../src/format'
+import { formatAge, formatChange, formatDelta, formatDuration, formatElapsed, formatPercent, formatSeconds, printJson, table } from '../src/format'
 
 describe('format', () => {
   test('gives the largest unit and the next one when not zero', () => {
@@ -14,6 +14,10 @@ describe('format', () => {
 
   test('pads every column but the last', () => {
     expect(table([['a', 'long', 'x'], ['bb', 'c', 'y']])).toBe('a   long  x\nbb  c     y')
+  })
+
+  test('formatElapsed counts whole seconds like a clock', () => {
+    expect([formatElapsed(-5), formatElapsed(999), formatElapsed(22_400), formatElapsed(59_999), formatElapsed(75_000)]).toEqual(['0s', '0s', '22s', '59s', '1m 15s'])
   })
 
   test('formatDuration keeps a decimal under a minute', () => {

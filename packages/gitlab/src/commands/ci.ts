@@ -1,6 +1,6 @@
 import type { Pipeline } from '../pipelines'
 import process from 'node:process'
-import { badge, duration, fail, formatDuration, paint, parse, waitForCi } from '@kaynooo/cli-kit'
+import { badge, duration, fail, formatElapsed, paint, parse, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
 import { failureReport, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
@@ -96,7 +96,7 @@ export async function ci(args: string[]): Promise<number> {
     },
     // The pipeline followed and its state, on a terminal, under a line for the wait itself.
     lines: (spinner, found, started) => [
-      `${spinner} CI on ${short} ${dim(formatDuration(Date.now() - started))}`,
+      `${spinner} CI on ${short} ${dim(formatElapsed(Date.now() - started))}`,
       ...found === undefined ? [] : [`  ${badge(found.status, process.stderr)} pipeline ${dim(String(found.id))}`],
     ],
   })

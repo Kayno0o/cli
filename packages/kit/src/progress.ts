@@ -1,6 +1,6 @@
 import type { Colors } from './style'
 import process from 'node:process'
-import { formatDuration } from './format'
+import { formatDuration, formatElapsed } from './format'
 import { holdSignals } from './process'
 import { marked, paint, takesControlCodes } from './style'
 
@@ -52,7 +52,7 @@ export interface ProgressLine {
 type Env = Record<string, string | undefined>
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const FRAME_MS = 80
+const FRAME_MS = 200
 const BAR_WIDTH = 20
 // Back to the start of the line, then erases it.
 const CLEAR_LINE = '\r\x1B[2K'
@@ -245,7 +245,7 @@ function progressParts({ step, done, total, unit }: Progress, spinner: string, m
     )
   }
 
-  parts.push({ text: ` ${(ms / 1000).toFixed(1)}s`, tint: colors => colors.dim })
+  parts.push({ text: ` ${formatElapsed(ms)}`, tint: colors => colors.dim })
 
   return parts
 }

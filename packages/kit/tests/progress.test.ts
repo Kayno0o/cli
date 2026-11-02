@@ -41,10 +41,10 @@ describe('the progress line', () => {
   })
 
   it('shows a bar and a count where the total is known, and the time alone where it is not', () => {
-    expect(progressText({ step: 'prerendering', done: 5, total: 10, unit: 'routes' }, '⠋', 1520)).toBe('⠋ prerendering ██████████░░░░░░░░░░ 5/10 routes 1.5s')
-    expect(progressText({ step: 'encoding images', done: 12, total: 10 }, '⠙', 0)).toBe('⠙ encoding images ████████████████████ 10/10 0.0s')
-    expect(progressText({ step: 'bundling' }, '⠹', 240)).toBe('⠹ bundling 0.2s')
-    expect(progressText({ step: 'bundling', done: 0, total: 0 }, '⠹', 240)).toBe('⠹ bundling 0.2s')
+    expect(progressText({ step: 'prerendering', done: 5, total: 10, unit: 'routes' }, '⠋', 1520)).toBe('⠋ prerendering ██████████░░░░░░░░░░ 5/10 routes 1s')
+    expect(progressText({ step: 'encoding images', done: 12, total: 10 }, '⠙', 0)).toBe('⠙ encoding images ████████████████████ 10/10 0s')
+    expect(progressText({ step: 'bundling' }, '⠹', 240)).toBe('⠹ bundling 0s')
+    expect(progressText({ step: 'bundling', done: 0, total: 0 }, '⠹', 61_900)).toBe('⠹ bundling 1m 1s')
   })
 
   it('redraws one line in place, cut to the terminal\'s width', () => {
@@ -89,7 +89,7 @@ describe('the progress line', () => {
         line.update({ step: 'prerendering', done, total: 50, unit: 'routes' })
 
       expect(written.slice(drawn)).toHaveLength(1)
-      expect(stripAnsi(written.at(-1)!)).toEndWith(' 0/50 routes 0.0s')
+      expect(stripAnsi(written.at(-1)!)).toEndWith(' 0/50 routes 0s')
 
       // The count shows with the next frame of the spinner's timer.
       for (const limit = Date.now() + 5000; !stripAnsi(written.at(-1)!).includes(' 50/50 routes ') && Date.now() < limit;)
@@ -285,7 +285,7 @@ describe('the task list', () => {
 
     const shown = written.map(stripAnsi)
 
-    expect(shown[1]).toMatch(/^\r⠙ lint 0\.0s\n⠙ test 0\.0s$/)
+    expect(shown[1]).toMatch(/^\r⠙ lint 0s\n⠙ test 0s$/)
     expect(shown.find(text => text.startsWith('✓ lint'))).toMatch(/^✓ lint \d\.\ds\n$/)
     expect(shown.at(-1)).toBe('✗ test: 2 failed\n')
   })

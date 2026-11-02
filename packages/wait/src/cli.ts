@@ -3,7 +3,7 @@
 import type { Line } from './conditions'
 import { existsSync } from 'node:fs'
 import process from 'node:process'
-import { duration, fail, formatDuration, jsonOption, paint, parse, printJson, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { version } from '../package.json'
 import { FileWatch, portProblem, urlCheck } from './conditions'
@@ -79,7 +79,7 @@ async function waitTask(args: string[]): Promise<number> {
   const timeout = duration(values.timeout, 'timeout', 5 * 60_000)
   const started = Date.now()
   const { dim } = paint(process.stderr)
-  const region = liveRegion(spinner => [`${spinner} task ${task}: still running ${dim(formatDuration(Date.now() - started))}`])
+  const region = liveRegion(spinner => [`${spinner} task ${task}: still running ${dim(formatElapsed(Date.now() - started))}`])
   let code: number | undefined
 
   try {
@@ -154,7 +154,7 @@ async function main(args: string[]): Promise<number> {
   const { dim } = paint(process.stderr)
   // What is still awaited, on a terminal: a line per condition with what it last saw.
   const region = liveRegion((spinner) => {
-    const waited = dim(formatDuration(Date.now() - started))
+    const waited = dim(formatElapsed(Date.now() - started))
     const left = [
       watch === undefined || watch.done ? undefined : `${watch.path}: ${watch.exists ? 'no --until line yet' : 'does not exist yet'}`,
       portLeft === undefined ? undefined : `${host}:${port}: ${portLeft}`,

@@ -30,6 +30,11 @@ export function formatDuration(ms: number): string {
   return ms < 60_000 ? `${(Math.max(0, ms) / 1000).toFixed(1)}s` : formatSeconds(ms / 1000)
 }
 
+// Whole seconds counted like a clock, for a counter redrawn while it runs: tenths would change on every frame.
+export function formatElapsed(ms: number): string {
+  return formatSeconds(Math.floor(Math.max(0, ms) / 1000))
+}
+
 // The text up to the first separator, or all of it.
 export function upTo(text: string, separator: string): string {
   const end = text.indexOf(separator)

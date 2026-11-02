@@ -4,7 +4,7 @@ import type { Fetcher, Packument, Registry } from '../registry'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
-import { duration, Exit, fail, formatDuration, note, ok, parse, problem, runCommand, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, Exit, fail, formatDuration, formatElapsed, note, ok, parse, problem, runCommand, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { loadConfigs, loadSettings, registryFor } from '../config'
 import { addCommand, findConsumers, isLocal } from '../consumers'
@@ -74,7 +74,7 @@ export async function servedVersion(name: string, version: string | undefined, s
   const registry = registryFor(name, settings.configs)
   const host = new URL(registry.url).host
   const started = Date.now()
-  const region = liveRegion(spinner => [`${spinner} waiting for ${host} to serve ${name}@${version} ${formatDuration(Date.now() - started)}`])
+  const region = liveRegion(spinner => [`${spinner} waiting for ${host} to serve ${name}@${version} ${formatElapsed(Date.now() - started)}`])
 
   let lastError = ''
 
