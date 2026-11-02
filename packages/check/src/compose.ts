@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, runCommand } from '@kaynooo/cli-kit'
+import { fail, runCommand, warn } from '@kaynooo/cli-kit'
 
 // The files `docker compose` reads on its own, a project's own first and its override merged over it.
 const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml']
@@ -70,12 +70,17 @@ export function toolWords(program: string): string[] {
   return TOOL_WORDS[name] ?? (program.includes('vendor/bin/') ? ['php'] : [])
 }
 
-async function readFiles(dir: string, names: string[]): Promise<string | undefined> {
+interface ComposeFile {
+  name: string
+  text: string
+}
+
+async function readFiles(dir: string, names: string[]): Promise<ComposeFile | undefined> {
   for (const name of names) {
     const handle = Bun.file(join(dir, name))
 
     if (await handle.exists())
-      return handle.text()
+      return { name, text: await handle.text() }
   }
 
   return undefined
@@ -84,7 +89,7 @@ async function readFiles(dir: string, names: string[]): Promise<string | undefin
 // Variables a compose file can interpolate: the process's, then the project's .env.
 async function variables(composeDir: string): Promise<Record<string, string>> {
   const env: Record<string, string> = {}
-  const text = await readFiles(composeDir, ['.env']) ?? ''
+  const text = (await readFiles(composeDir, ['.env']))?.text ?? ''
 
   for (const line of text.split('\n')) {
     const match = ENV_LINE.exec(line)
@@ -179,29 +184,61 @@ function parseServices(text: string, composeDir: string, env: Record<string, str
   return services
 }
 
-// The services of the compose project in a folder, the override file's mounts added to the base file's; undefined when the folder has none or it cannot be read.
-export async function readServices(composeDir: string): Promise<Service[] | undefined> {
+// The files of the project in a folder, in merge order: the ones COMPOSE_FILE names (from the environment or the project's .env), else the base file and its override. Empty when the folder has none.
+async function composeFiles(composeDir: string, env: Record<string, string>): Promise<ComposeFile[]> {
+  const listed = env.COMPOSE_FILE
+
+  if (listed !== undefined && listed !== '') {
+    const files: ComposeFile[] = []
+    const separator = env.COMPOSE_PATH_SEPARATOR
+
+    for (const name of listed.split(separator === undefined || separator === '' ? ':' : separator).filter(entry => entry !== '')) {
+      const file = Bun.file(resolve(composeDir, name))
+
+      if (!await file.exists())
+        return []
+
+      files.push({ name, text: await file.text() })
+    }
+
+    return files
+  }
+
   const base = await readFiles(composeDir, COMPOSE_FILES)
 
   if (base === undefined)
+    return []
+
+  const override = await readFiles(composeDir, OVERRIDE_FILES)
+
+  return override === undefined ? [base] : [base, override]
+}
+
+// The services of the compose project in a folder, each later file's mounts added to the earlier ones'; undefined when the folder has no project, a failure naming the file when one does not parse.
+export async function readServices(composeDir: string): Promise<Service[] | undefined> {
+  const env = await variables(composeDir)
+  const files = await composeFiles(composeDir, env)
+
+  if (files.length === 0)
     return undefined
 
-  const env = await variables(composeDir)
-  let services: Map<string, RawService & { mounts: Mount[] }>
+  const services = new Map<string, RawService & { mounts: Mount[] }>()
 
-  try {
-    services = parseServices(base, composeDir, env)
+  for (const file of files) {
+    let parsed: Map<string, RawService & { mounts: Mount[] }>
 
-    const override = await readFiles(composeDir, OVERRIDE_FILES)
+    try {
+      parsed = parseServices(file.text, composeDir, env)
+    }
+    catch (error) {
+      fail(`cannot read ${join(composeDir, file.name)}: ${error instanceof Error ? error.message : String(error)}`, 1, 'fix the file, or run on the host with --host')
+    }
 
-    for (const [name, extra] of override === undefined ? [] : parseServices(override, composeDir, env)) {
+    for (const [name, extra] of parsed) {
       const known = services.get(name)
 
       services.set(name, known === undefined ? extra : { ...known, ...extra, mounts: [...known.mounts, ...extra.mounts], image: extra.image ?? known.image, build: extra.build ?? known.build })
     }
-  }
-  catch {
-    return undefined
   }
 
   return [...services].map(([name, service]) => ({ name, mounts: service.mounts, profile: `${name} ${typeof service.image === 'string' ? service.image : ''} ${buildText(service.build)}`.toLowerCase() }))
@@ -237,6 +274,9 @@ function containerPath(service: Service, dir: string): string | undefined {
   return inside === '' ? deepest.target : join(deepest.target, inside)
 }
 
+// The projects already reported as run on the host for lack of docker, so the notice comes once.
+const noticed = new Set<string>()
+
 // The service of the nearest compose project that bind-mounts `dir`, or undefined to run on the host. A service that is down is not skipped here, as the answer must not depend on what runs. Several services mounting it: the one whose name, image or build names the command's tool, else the call fails asking for --in.
 export async function place(dir: string, program: string, { service, host }: PlaceSettings = {}): Promise<Placement | undefined> {
   if (host === true)
@@ -258,6 +298,19 @@ export async function place(dir: string, program: string, { service, host }: Pla
   if (found === undefined) {
     if (service !== undefined)
       fail(`--in ${service}: no compose project mounts ${dir}`)
+
+    return undefined
+  }
+
+  // Without docker (a devcontainer, CI) there is no container to reach.
+  if (Bun.which('docker', { PATH: process.env.PATH ?? '' }) === null) {
+    if (service !== undefined)
+      fail(`--in ${service}: docker not found`)
+
+    if (!noticed.has(found.composeDir)) {
+      noticed.add(found.composeDir)
+      warn(`host, docker not found: the compose project in ${found.composeDir} is not reached`)
+    }
 
     return undefined
   }

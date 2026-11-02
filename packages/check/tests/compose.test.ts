@@ -1,20 +1,42 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { capture } from '@kaynooo/cli-kit/test'
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
 import { place } from '../src/compose'
 import { errs } from '../src/errs'
 import { fix } from '../src/fix'
 import { discover, discoverProjects } from '../src/steps'
 
-process.env.XDG_RUNTIME_DIR = mkdtempSync(join(tmpdir(), 'compose-runtime-'))
+// Every temp folder of the file, removed once it ends.
+const made: string[] = []
+
+function temp(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix))
+
+  made.push(dir)
+
+  return dir
+}
+
+afterAll(() => {
+  for (const dir of made)
+    rmSync(dir, { recursive: true, force: true })
+})
+
+process.env.XDG_RUNTIME_DIR = temp('compose-runtime-')
+
+// place() needs a docker on the PATH to reach a service; the cases that call it have this stub, which does nothing.
+const stub = temp('compose-stub-')
+
+writeFileSync(join(stub, 'docker'), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+process.env.PATH = `${stub}:${process.env.PATH}`
 
 // A throwaway repository: a .git folder and the files given, parent folders created.
 function project(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'compose-project-'))
+  const root = temp('compose-project-')
 
   mkdirSync(join(root, '.git'))
 
@@ -33,7 +55,7 @@ const SCRIPTS = JSON.stringify({ scripts: { 'check': 'echo types ok', 'lint': 'e
 interface FakeDocker { calls: () => Promise<string[]> }
 
 async function withDocker(running: string[], map: Record<string, string>, run: (docker: FakeDocker) => Promise<void>): Promise<void> {
-  const bin = mkdtempSync(join(tmpdir(), 'compose-docker-'))
+  const bin = temp('compose-docker-')
   const script = [
     '#!/bin/sh',
     `echo "$*" >> ${bin}/calls`,
@@ -136,7 +158,7 @@ describe('place', () => {
 
   test('a compose file above the folder is found up to the repository root only', async () => {
     const root = project({ 'compose.yml': COMPOSE, 'api/.keep': '' })
-    const outside = mkdtempSync(join(tmpdir(), 'compose-outside-'))
+    const outside = temp('compose-outside-')
 
     writeFileSync(join(outside, 'compose.yml'), COMPOSE)
     mkdirSync(join(outside, 'sub'))
@@ -180,6 +202,70 @@ describe('place', () => {
 
     expect(await failure(place(root, 'bun', { service: 'nope' }))).toContain('no such service, found app, db')
     expect(await failure(place(root, 'bun', { service: 'db' }))).toContain('the service does not mount')
+  })
+})
+
+describe('place without docker, with COMPOSE_FILE, with a broken file', () => {
+  test('no docker on the PATH: the step runs on the host and says so once', async () => {
+    const root = project({ 'compose.yml': COMPOSE, 'package.json': SCRIPTS })
+    const bin = temp('compose-nodocker-')
+
+    symlinkSync(Bun.which('sh') ?? '/bin/sh', join(bin, 'sh'))
+    symlinkSync(process.execPath, join(bin, 'bun'))
+
+    const path = process.env.PATH
+
+    try {
+      process.env.PATH = bin
+
+      const first = await capture(async () => check(['--only', 'check'], root))
+      const second = await capture(async () => check(['--only', 'lint'], root))
+
+      expect(first.result).toBe(0)
+      expect(first.out).toContain('ok    check')
+      expect(first.err).toContain('host, docker not found')
+      expect(second.result).toBe(0)
+      expect(second.err).toBe('')
+      expect(await failure(place(root, 'bun', { service: 'app' }))).toContain('--in app: docker not found')
+    }
+    finally {
+      process.env.PATH = path
+    }
+  })
+
+  test('COMPOSE_FILE names the files, relative to the project folder, split by COMPOSE_PATH_SEPARATOR', async () => {
+    const root = project({ 'stack/base.yml': 'services:\n  app:\n    image: oven/bun:1\n', 'stack/mounts.yml': 'services:\n  app:\n    volumes:\n      - .:/app\n' })
+    const saved = { file: process.env.COMPOSE_FILE, separator: process.env.COMPOSE_PATH_SEPARATOR }
+
+    try {
+      process.env.COMPOSE_FILE = 'stack/base.yml:stack/mounts.yml'
+      expect(await place(root, 'bun')).toEqual({ service: 'app', composeDir: root, workdir: '/app' })
+
+      process.env.COMPOSE_FILE = 'stack/base.yml;stack/mounts.yml'
+      process.env.COMPOSE_PATH_SEPARATOR = ';'
+      expect(await place(root, 'bun')).toMatchObject({ service: 'app' })
+
+      process.env.COMPOSE_FILE = 'stack/base.yml'
+      expect(await place(root, 'bun')).toBeUndefined()
+    }
+    finally {
+      for (const [name, value] of [['COMPOSE_FILE', saved.file], ['COMPOSE_PATH_SEPARATOR', saved.separator]] as const) {
+        if (value === undefined)
+          delete process.env[name]
+        else
+          process.env[name] = value
+      }
+    }
+  })
+
+  test('a compose file that does not parse fails naming it and pointing at --host', async () => {
+    const root = project({ 'compose.yml': 'services:\n  app: [\n', 'package.json': SCRIPTS })
+    const message = await failure(check(['--only', 'check'], root))
+
+    expect(message).toContain(join(root, 'compose.yml'))
+    expect(message).toMatch(/cannot read/)
+    expect((await capture(async () => check(['--host', '--only', 'check'], root))).result).toBe(0)
+    expect(await failure(errs(['--', 'true'], root))).toContain(join(root, 'compose.yml'))
   })
 })
 
@@ -289,7 +375,7 @@ describe('check in a compose service', () => {
 
   test('--slot queues the docker command, quoted whole', async () => {
     const root = project({ 'compose.yml': COMPOSE, 'package.json': SCRIPTS })
-    const bin = mkdtempSync(join(tmpdir(), 'compose-slot-'))
+    const bin = temp('compose-slot-')
     const path = process.env.PATH
 
     writeFileSync(join(bin, 'slot'), `#!/bin/sh\necho "$*" >> ${bin}/calls\nshift\nexec "$@"\n`, { mode: 0o755 })
