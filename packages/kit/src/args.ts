@@ -6,8 +6,19 @@ import { upTo } from './format'
 import { paint } from './style'
 import { closest } from './text'
 
-// A string option taking `choices` accepts only those values: another is a usage error naming them, the help shows them as the value and `__complete` offers them.
-export type Options = Record<string, ParseArgsOptionDescriptor & { description?: string, choices?: readonly string[] }>
+interface OptionExtras {
+  description?: string
+  // A string option taking `choices` accepts only those values: another is a usage error naming them, the help shows them as the value and `__complete` offers them.
+  choices?: readonly string[]
+  // A string option whose value may be left out (`--out [n]`): bare, it reads `bare`. A next word is its value unless it starts with a dash or, given `accepts`, does not match it, and then stays a positional.
+  optional?: { bare: string, accepts?: RegExp }
+  // Options it cannot be given with, a usage error naming both when they are.
+  conflicts?: readonly string[]
+  // With `allowNegative`, a boolean option's `--no-<name>` as the help and `__complete` list it, with this description; the positive flag is then left out of both unless it has a `description` of its own, for a flag that defaults on.
+  negative?: string
+}
+
+export type Options = Record<string, ParseArgsOptionDescriptor & OptionExtras>
 
 // The `--json` flag every CLI words alike: `print JSON`, then what it holds when given.
 export function jsonOption(holds?: string) {
@@ -110,7 +121,8 @@ export function exampleRows(examples: Example[], colors = paint(process.stdout))
 export function optionRows(options: Options, colors = paint(process.stdout)): string[] {
   const rows = Object.entries(options).map(([name, option]) => {
     const short = option.short === undefined ? '    ' : `${colors.cyan(`-${option.short}`)}, `
-    const placeholder = option.choices === undefined ? '<value>' : `<${option.choices.join('|')}>`
+    const named = option.choices === undefined ? '<value>' : `<${option.choices.join('|')}>`
+    const placeholder = option.optional === undefined ? named : `[${named}]`
     const value = option.type === 'string' ? ` ${colors.dim(placeholder)}` : ''
 
     return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? placeholder.length + 1 : 0), description: option.description ?? '' }
@@ -185,8 +197,10 @@ export function parse<const T extends Options, const Names extends readonly stri
   const output = Object.fromEntries(Object.entries(OUTPUT_OPTIONS).filter(([name]) => !(name in options))) as Omit<typeof OUTPUT_OPTIONS, keyof T>
   const all = { ...options, ...output, help: { type: 'boolean', short: 'h', description: 'show this help' } } as const
 
+  const listing = listed(all, settings.allowNegative === true)
+
   if (completion.active)
-    throw new Completing(all)
+    throw new Completing(listing)
 
   const separator = settings.rest === true ? args.indexOf('--') : -1
   const own = separator === -1 ? args : args.slice(0, separator)
@@ -195,7 +209,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   let parsed
 
   try {
-    parsed = parseArgs({ args: joinDashValues(own, all), options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
+    parsed = parseArgs({ args: joinDashValues(withBare(own, all), all), options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
   }
   catch (error) {
     const message = parseError(error)
@@ -208,17 +222,62 @@ export function parse<const T extends Options, const Names extends readonly stri
   applyOutput('color' in output ? values.color as string | undefined : undefined, 'plain' in output ? values.plain as boolean | undefined : undefined)
 
   if (values.help === true) {
-    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings)) : helpText(usage, all, undefined, settings))
+    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings)) : helpText(usage, listing, undefined, settings))
 
     throw new HelpShown()
   }
 
   checkChoices(parsed.values, all)
+  checkConflicts(parsed.values, all)
 
   if (settings.positionals !== undefined)
     checkPositionals(parsed.positionals, settings.positionals)
 
   return { ...parsed, values: parsed.values as Chosen<T, typeof parsed.values>, positionals: parsed.positionals as Slots<Names>, rest }
+}
+
+// The options as the help and `__complete` list them: with `allowNegative`, `--no-<name>` for an option with a `negative` description, in place of the positive flag when that has none of its own.
+function listed(options: Options, allowNegative: boolean): Options {
+  if (!allowNegative)
+    return options
+
+  return Object.fromEntries(Object.entries(options).flatMap(([name, option]): [string, Options[string]][] => {
+    if (option.type !== 'boolean' || option.negative === undefined)
+      return [[name, option]]
+
+    return [...option.description === undefined ? [] : [[name, option] as [string, Options[string]]], [`no-${name}`, { type: 'boolean', description: option.negative }]]
+  }))
+}
+
+// The arguments with an optional-value option typed bare given its fallback, ahead of the next argument: `--out` becomes `--out 1` unless a value follows it.
+function withBare(args: string[], options: Options): string[] {
+  const bare = new Map<string, NonNullable<Options[string]['optional']>>(Object.entries(options).flatMap(([name, { short, optional }]) => optional === undefined ? [] : [[`--${name}`, optional] as const, ...short === undefined ? [] : [[`-${short}`, optional] as const]]))
+
+  if (bare.size === 0)
+    return args
+
+  const separator = args.indexOf('--')
+  const own = separator === -1 ? args : args.slice(0, separator)
+
+  return [...own.flatMap((arg, index) => {
+    const optional = bare.get(arg)
+    const next = own[index + 1]
+    const value = next !== undefined && (optional?.accepts === undefined ? !next.startsWith('-') : optional.accepts.test(next))
+
+    return optional === undefined || value ? [arg] : [arg, optional.bare]
+  }), ...separator === -1 ? [] : args.slice(separator)]
+}
+
+// A usage error for two options given together that one of them declares in conflict with the other.
+function checkConflicts(values: Record<string, unknown>, options: Options): void {
+  const given = (name: string) => values[name] !== undefined && values[name] !== false
+
+  for (const [name, { conflicts = [] }] of Object.entries(options)) {
+    const other = given(name) ? conflicts.find(given) : undefined
+
+    if (other !== undefined)
+      badUsage(`--${name} cannot be used with --${other}`)
+  }
 }
 
 // A usage error for an option given a value outside its `choices`, in parseArgs' own order.

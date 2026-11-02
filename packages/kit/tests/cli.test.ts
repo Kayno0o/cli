@@ -175,6 +175,16 @@ describe('__complete', () => {
     },
   }
 
+  test('offers --no-<flag> for a negatable flag, and the positive one only with a description of its own', async () => {
+    const toggling = { ...cli, commands: { ...cli.commands, sync: { summary: 'syncs', run: async (args: string[]) => {
+      parse(args, 'sync', { refresh: { type: 'boolean', negative: 'keep the cached copy' }, md: { type: 'boolean', description: 'markdown', negative: 'no markdown' } }, { allowNegative: true })
+
+      return 0
+    } } } }
+
+    expect((await capture(async () => runCli(toggling, ['__complete', 'sync', '--']))).out).toStartWith('--no-refresh\tkeep the cached copy\n--md\tmarkdown\n--no-md\tno markdown\n')
+  })
+
   test('offers the choices of the string option just typed', async () => {
     const choosing = { ...cli, commands: { ...cli.commands, pick: { summary: 'picks', run: async (args: string[]) => {
       parse(args, 'pick', { bump: { type: 'string', short: 'b', choices: ['patch', 'minor'] }, name: { type: 'string' } })

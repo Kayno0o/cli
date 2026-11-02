@@ -2,7 +2,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { duration, Exit, HelpShown, jsonOption, oneOf, optionRows, paint, parse, readInput, UsageError, wholeNumber } from '../src'
-import { tempDirs } from '../src/test'
+import { capture, tempDirs } from '../src/test'
 
 const temp = tempDirs()
 
@@ -157,6 +157,66 @@ describe('choices', () => {
   test('checks a positional against a set the same way', () => {
     expect(oneOf('minor', '<bump>', ['patch', 'minor'])).toBe('minor')
     expect(() => oneOf('big', '<bump>', ['patch', 'minor'])).toThrow('<bump> takes one of patch, minor, not big')
+  })
+})
+
+describe('optional values', () => {
+  const depth = { out: { type: 'string', short: 'o', description: 'depth', optional: { bare: '1', accepts: /^\d+$/ } }, all: { type: 'boolean' } } as const
+
+  test('reads the fallback bare, and keeps a next word that is no value as a positional', () => {
+    expect(parse(['--out'], 'u', depth)).toMatchObject({ values: { out: '1' }, positionals: [] })
+    expect(parse(['--out', 'proj'], 'u', depth)).toMatchObject({ values: { out: '1' }, positionals: ['proj'] })
+    expect(parse(['-o', '--all'], 'u', depth)).toMatchObject({ values: { out: '1', all: true } })
+    expect(parse(['proj', '--out'], 'u', depth)).toMatchObject({ values: { out: '1' }, positionals: ['proj'] })
+  })
+
+  test('takes a value that follows it, or is joined to it', () => {
+    expect(parse(['--out', '3', 'proj'], 'u', depth)).toMatchObject({ values: { out: '3' }, positionals: ['proj'] })
+    expect(parse(['--out=2'], 'u', depth).values.out).toBe('2')
+  })
+
+  test('leaves what follows a `--` alone, and without `accepts` takes any word not starting with a dash', () => {
+    expect(parse(['--out', '--', 'x'], 'u', depth)).toMatchObject({ values: { out: '1' }, positionals: ['x'] })
+    expect(parse(['--out', 'proj'], 'u', { out: { type: 'string', optional: { bare: '1' } } }).values.out).toBe('proj')
+  })
+
+  test('shows the value in brackets in the help', () => {
+    expect(optionRows(depth, paint({ isTTY: false }))[0]).toBe('  -o, --out [<value>]  depth')
+  })
+})
+
+describe('conflicts', () => {
+  const formats = { md: { type: 'boolean', conflicts: ['pdf'] }, pdf: { type: 'boolean' } } as const
+
+  test('refuses two options given together, naming both', () => {
+    expect(() => parse(['--md', '--pdf'], 'u', formats)).toThrow('--md cannot be used with --pdf')
+    expect(parse(['--md'], 'u', formats).values.md).toBe(true)
+    expect(parse(['--pdf'], 'u', formats).values.pdf).toBe(true)
+  })
+
+  test('does not count a negated flag as given', () => {
+    expect(parse(['--no-md', '--pdf'], 'u', formats, { allowNegative: true }).values).toEqual({ md: false, pdf: true })
+  })
+})
+
+describe('negative', () => {
+  const refresh = { refresh: { type: 'boolean', negative: 'keep the cached copy' }, md: { type: 'boolean', description: 'markdown', negative: 'no markdown' } } as const
+
+  test('lists --no-<flag> with its description in place of a positive flag that has none', async () => {
+    const help = async (settings: { allowNegative?: boolean }) => (await capture(async () => {
+      expect(() => parse(['--help'], 'u', refresh, settings)).toThrow(HelpShown)
+
+      return 0
+    })).out
+
+    expect(await help({ allowNegative: true })).toContain('      --no-refresh     keep the cached copy\n      --md             markdown\n      --no-md          no markdown\n')
+    expect(await help({})).toContain('--refresh')
+    expect(await help({})).not.toContain('--no-refresh')
+  })
+
+  test('parses the negation only with allowNegative', () => {
+    expect(parse(['--no-refresh'], 'u', refresh, { allowNegative: true }).values.refresh).toBe(false)
+    expect(() => parse(['--no-refresh'], 'u', refresh)).toThrow(UsageError)
   })
 })
 
