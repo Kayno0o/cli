@@ -78,6 +78,21 @@ function hostOf(url: URL): string {
 
 const isLocal = (host: string) => host === '' || host.startsWith('/') || LOCAL_HOSTS.has(host)
 
+// Docker's default bridge networks, 172.16.0.0/12, where a container db reaches a service with nothing published.
+const DOCKER_NETWORK = /^172\.(?:1[6-9]|2\d|3[01])\./
+
+// MySQL 8's default login sends the password under the server's RSA key when there is no TLS: fetching that key is only safe where nobody sits on the path, this machine or its docker networks.
+export function allowsKeyRetrieval(url: string): boolean {
+  try {
+    const host = hostOf(new URL(url))
+
+    return isLocal(host) || DOCKER_NETWORK.test(host)
+  }
+  catch {
+    return false
+  }
+}
+
 // The compose service a hostname names: the service called so, else the only service of the URL's engine answering to it on a network.
 function serviceNamed(services: Service[], host: string, dialect: Dialect): Service | undefined {
   const exact = services.find(candidate => candidate.name.toLowerCase() === host)
@@ -169,7 +184,7 @@ function toResult(rows: Row[] & { count?: number, affectedRows?: number }): Resu
 
 // The Bun SQL client, which speaks Postgres and MySQL alike. A read session is read-only from the start: Postgres by `default_transaction_read_only` at connect and a READ ONLY transaction, MySQL by `START TRANSACTION READ ONLY` on a reserved connection.
 export const bunConnect: Connect = (url, dialect, readOnly) => {
-  const sql = new SQL({ url, max: 1, connectionTimeout: 10, ...dialect === 'postgres' ? { connection: { ...SESSION_SETTINGS, ...readOnly ? { default_transaction_read_only: 'on' } : {} } } : {} })
+  const sql = new SQL({ url, max: 1, connectionTimeout: 10, ...dialect === 'postgres' ? { connection: { ...SESSION_SETTINGS, ...readOnly ? { default_transaction_read_only: 'on' } : {} } } : { allowPublicKeyRetrieval: allowsKeyRetrieval(url) } })
 
   return {
     async transaction(work, isReadOnly) {

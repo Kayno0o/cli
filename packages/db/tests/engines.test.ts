@@ -3,7 +3,7 @@ import { Exit } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { sqlViolation } from '../src/clients'
 import { testWriteBlockers } from '../src/guard'
-import { connectionUrl, databaseOfUrl, dialectOf, mysqlTransaction, readRows, writeRows } from '../src/run'
+import { allowsKeyRetrieval, connectionUrl, databaseOfUrl, dialectOf, mysqlTransaction, readRows, writeRows } from '../src/run'
 
 const PASSWORD = 'never-printed-pw-4417'
 const MYSQL_URL = `mysql://app:${PASSWORD}@127.0.0.1:3306/app_test`
@@ -334,5 +334,15 @@ describe('the MySQL forms of a write', () => {
   test('and reading still passes', async () => {
     for (const statement of ['select replace(name, \'a\', \'b\') from t', 'show tables', 'describe users'])
       expect(await violation(`mysql -e "${statement}"`)).toBeNull()
+  })
+})
+
+describe('allowsKeyRetrieval, MySQL 8 logging in without TLS', () => {
+  test('fetches the server key on this machine and its docker networks only', () => {
+    for (const url of ['mysql://app:pw@127.0.0.1:43306/app_test', 'mysql://app:pw@localhost/app', 'mysql://app:pw@[::1]:3306/app', 'mysql://app:pw@172.18.0.3:3306/app', 'mysql://app:pw@172.31.255.1/app'])
+      expect(allowsKeyRetrieval(url)).toBe(true)
+
+    for (const url of ['mysql://app:pw@db.example.com/app', 'mysql://app:pw@192.168.1.20/app', 'mysql://app:pw@172.32.0.1/app', 'mysql://app:pw@10.0.0.5/app', 'not a url'])
+      expect(allowsKeyRetrieval(url)).toBe(false)
   })
 })
