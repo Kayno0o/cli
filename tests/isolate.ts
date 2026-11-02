@@ -12,3 +12,5 @@ afterAll(() => rmSync(config, { recursive: true, force: true }))
 process.env.XDG_CONFIG_HOME = config
 process.env.GLAB_CONFIG_DIR = join(config, 'glab-cli')
 process.env.GH_CONFIG_DIR = join(config, 'gh')
+// Every tool's state too, such as out's stats, so no test adds to the real ones.
+process.env.XDG_STATE_HOME = join(config, 'state')
