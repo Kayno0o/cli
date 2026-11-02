@@ -1,10 +1,10 @@
+import type { Session } from '@kaynooo/cli-kit'
 import type { Issue } from '../src/issues'
-import type { Session } from '../src/sessions'
 import process from 'node:process'
+import { currentSession } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../src/claims'
 import { renderBoard, standing } from '../src/commands/board'
-import { currentSession } from '../src/sessions'
 
 const session = (name: string, pid = 1): Session => ({ name, pid, status: 'busy', cwd: '/w' })
 const at = (minute: number) => `2026-10-22T21:${String(minute).padStart(2, '0')}:00+02:00`

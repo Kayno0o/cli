@@ -1,5 +1,5 @@
+import type { Session } from '@kaynooo/cli-kit'
 import type { Run } from '../src/runs'
-import type { Session } from '../src/sessions'
 import { chmod, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

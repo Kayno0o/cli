@@ -1,16 +1,15 @@
+import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue } from '../issues'
 import type { Run } from '../runs'
-import type { Session } from '../sessions'
 import process from 'node:process'
-import { formatAge, jsonOption, parse, printJson, runCommand, table, truncate, upTo } from '@kaynooo/cli-kit'
+import { currentSession, formatAge, jsonOption, liveSessions, parse, printJson, runCommand, table, truncate, upTo } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { boxes } from '../checklist'
 import { latestClaim } from '../claims'
 import { defaultBranch, git, gitOk } from '../git'
 import { commentsOfAll, openIssues, sessionAuthor } from '../issues'
 import { FINISHED, newestPerWorkflow, recentRuns } from '../runs'
-import { currentSession, liveSessions } from '../sessions'
 import { standing } from './board'
 
 const RUNS_SCANNED = 50

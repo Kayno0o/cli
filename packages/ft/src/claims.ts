@@ -1,4 +1,4 @@
-import type { Session } from './sessions'
+import type { Session } from '@kaynooo/cli-kit'
 
 // The comments sessions post to take an issue and to give it back.
 const TAKEN = /^\s*taken by session ([\w.@:-]+?)\.?\s*$/i

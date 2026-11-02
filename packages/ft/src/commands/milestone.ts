@@ -1,9 +1,8 @@
 import type { Milestone } from '../milestones'
-import { capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
+import { capped, fail, jsonOption, limitOf, limitOptions, liveSessions, parse, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { openIssues } from '../issues'
 import { closeMilestone, createMilestone, dueDate, dueOn, findMilestone, listMilestones, progress } from '../milestones'
-import { liveSessions } from '../sessions'
 import { boardJson, boardRows, renderBoard } from './board'
 
 const TITLE_WIDTH = 60

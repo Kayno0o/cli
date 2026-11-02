@@ -1,13 +1,12 @@
+import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
-import type { Session } from '../sessions'
-import { capped, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, parse, printHint, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
+import { capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, liveSessions, parse, printHint, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
 import { comment, commentsOf, commentsOfAll, getIssue, openIssues, sessionAuthor } from '../issues'
 import { findMilestone } from '../milestones'
-import { currentSession, liveSessions } from '../sessions'
 
 const LINE_START = /^/gm
 const TITLE_WIDTH = 80
