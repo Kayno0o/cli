@@ -68,7 +68,7 @@
     },
     "packages/edit": {
       "name": "@kaynooo/edit-tools",
-      "version": "0.1.2",
+      "version": "0.2.0",
       "bin": {
         "sub": "./dist/cli.js",
       },
