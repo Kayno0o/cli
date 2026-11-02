@@ -1,5 +1,6 @@
 import type { Pipeline } from '../pipelines'
-import { duration, fail, parse, waitForCi } from '@kaynooo/cli-kit'
+import process from 'node:process'
+import { badge, duration, fail, formatDuration, paint, parse, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
 import { failureReport, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
@@ -67,6 +68,7 @@ export async function ci(args: string[]): Promise<number> {
     return undefined
   }
 
+  const { dim } = paint(process.stderr)
   const pipeline = await waitForCi<Pipeline>({
     tool: 'gl ci',
     short,
@@ -92,6 +94,11 @@ export async function ci(args: string[]): Promise<number> {
 
       return { message: `pipeline ${found.id} on ${short} has waited ${STALLED / 60_000} minutes for a runner: ${waiting.map(job => `${job.name}${job.tag_list.length === 0 ? '' : ` (tags ${job.tag_list.join(', ')})`}`).join('; ')}` }
     },
+    // The pipeline followed and its state, on a terminal, under a line for the wait itself.
+    lines: (spinner, found, started) => [
+      `${spinner} CI on ${short} ${dim(formatDuration(Date.now() - started))}`,
+      ...found === undefined ? [] : [`  ${badge(found.status, process.stderr)} pipeline ${dim(String(found.id))}`],
+    ],
   })
 
   if (pipeline.status === 'canceled' || pipeline.status === 'skipped')

@@ -15,7 +15,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft runs` | recent runs with workflow, ref, duration and age (`-n`, `--sha`, `-w test.yml`, `--json`) |
 | `ft ci [ref]` | waits for the push runs covering a commit on the default branch and prints each failed test's output |
 | `ft watch` | waits for the runs in progress, or `--after <id>` those newer than a run |
-| `ft logs <run>` | what the failed jobs of a run say went wrong, `--full` for whole logs |
+| `ft logs <run>` | what the failed jobs of a run say went wrong, `-j <name or id>` picks a job, `--full` for whole logs |
 | `ft release <level>` | waits for the runs on HEAD, pushing it first when origin lacks it, then `bun pm version`, one atomic push of branch and tag, and waits for the runs and the registry; `-p <folder>` releases one workspace package as `<folder>-v<version>` |
 | `ft board` | open issues: available, taken by a live session, or claimed with no live session here, each claim with its boxes left and a stale one with its latest note (`-q <regex>` on titles, `--state available\|taken\|away`, `-L`, `-m <milestone>`, `--json`) |
 | `ft digest` | one screen for a session starting cold: the issues this session holds with their boxes left, claims no live session answers to, red or running CI on the default branch, unpushed commits, dirty files and TODO comments naming a closed issue (needs `todo-scan` on the PATH; empty sections left out, `--json`) |

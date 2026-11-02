@@ -31,12 +31,43 @@ export interface Job {
 export const FINISHED = new Set(['success', 'failed', 'canceled', 'skipped', 'manual'])
 const PAGE = 100
 
-export async function recentPipelines(limit: number, repo?: string, ref?: string): Promise<Pipeline[]> {
-  return projectApi<Pipeline[]>(`pipelines?per_page=${Math.min(limit, PAGE)}${ref === undefined ? '' : `&ref=${encodeURIComponent(ref)}`}`, repo)
+// A list read page by page, GitLab capping a page at 100, until a short page ends it or `enough` items were read (an infinite one reads them all); `exhausted` is false when it stopped with more possibly left.
+async function pagedList<T>(path: string, repo: string | undefined, enough = Number.POSITIVE_INFINITY): Promise<{ items: T[], exhausted: boolean }> {
+  const items: T[] = []
+  const joiner = path.includes('?') ? '&' : '?'
+
+  for (let page = 1; ; page++) {
+    const list = await projectApi<T[]>(`${path}${joiner}per_page=${PAGE}&page=${page}`, repo)
+
+    items.push(...list)
+
+    if (list.length < PAGE)
+      return { items, exhausted: true }
+
+    if (items.length > enough)
+      return { items, exhausted: false }
+  }
 }
 
+const pipelinesPath = (filters: string[]) => `pipelines${filters.length === 0 ? '' : `?${filters.join('&')}`}`
+
+export interface PipelineListing {
+  pipelines: Pipeline[]
+  // How many more pipelines the listing left out, at least that many when `exact` is false.
+  more: number
+  exact: boolean
+}
+
+// The newest pipelines, `limit` of them, paged since GitLab caps a page (an infinite limit reads them all), with how many were left out.
+export async function recentPipelines(limit: number, repo?: string, ref?: string): Promise<PipelineListing> {
+  const { items, exhausted } = await pagedList<Pipeline>(pipelinesPath(ref === undefined ? [] : [`ref=${encodeURIComponent(ref)}`]), repo, limit)
+
+  return { pipelines: items.slice(0, limit), more: Math.max(0, items.length - limit), exact: exhausted }
+}
+
+// Every pipeline of a commit, paged since GitLab caps a page.
 export async function pipelinesOn(sha: string, repo?: string, ref?: string): Promise<Pipeline[]> {
-  return projectApi<Pipeline[]>(`pipelines?sha=${sha}&per_page=${PAGE}${ref === undefined ? '' : `&ref=${encodeURIComponent(ref)}`}`, repo)
+  return (await pagedList<Pipeline>(pipelinesPath([`sha=${sha}`, ...ref === undefined ? [] : [`ref=${encodeURIComponent(ref)}`]]), repo)).items
 }
 
 export async function pipelineById(id: number, repo?: string): Promise<Pipeline> {
@@ -44,7 +75,7 @@ export async function pipelineById(id: number, repo?: string): Promise<Pipeline>
 }
 
 export async function jobsOf(pipeline: number, repo?: string): Promise<Job[]> {
-  return projectApi<Job[]>(`pipelines/${pipeline}/jobs?per_page=${PAGE}`, repo)
+  return (await pagedList<Job>(`pipelines/${pipeline}/jobs`, repo)).items
 }
 
 export async function jobTrace(job: number, repo?: string): Promise<string> {

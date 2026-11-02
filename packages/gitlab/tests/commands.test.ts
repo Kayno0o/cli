@@ -70,7 +70,7 @@ describe('gl runs', () => {
     expect(header).toMatch(/^ID\s+STATUS\s+REF\s+SOURCE\s+SHA\s+TOOK\s+CREATED\s+TITLE$/)
     expect(rows[0]).toMatch(/^6\s+running\s+main\s+push\s+fffffff\s+-\s+/)
     expect(rows[1]).toMatch(/^5\s+success\s+main\s+push\s+\w{7}\s+2m 5s\s+\S+ ago\s+two$/)
-    expect(calls).toEqual(['projects/group%2Fsub%2Fapp/pipelines?per_page=10'])
+    expect(calls).toEqual(['projects/group%2Fsub%2Fapp/pipelines?per_page=100&page=1'])
   })
 })
 

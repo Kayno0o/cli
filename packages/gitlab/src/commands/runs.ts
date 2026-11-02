@@ -1,16 +1,20 @@
-import { formatAge, formatSeconds, jsonOption, parse, printJson, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import type { PipelineListing } from '../pipelines'
+import { formatAge, formatSeconds, jsonOption, limitOf, limitOptions, moreFooter, parse, printJson, table, truncate } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { resolveCommit, subjects } from '../git'
 import { FINISHED, pipelinesOn, recentPipelines } from '../pipelines'
 
 const usage = `gl runs [--sha <ref>]
 
-Lists recent pipelines with their ref, source, commit, duration and age, the commit's subject when the clone has it.
+Lists recent pipelines with their ref, source, commit, duration and age, the commit's subject when the clone has it, ten by default with the count of the rest (--full for all of them).
 
 Exits 0 when it listed them, 1 when GitLab or git cannot be read, 2 on a usage error.`
 
+const DEFAULT_LIMIT = 10
+
 const options = {
-  limit: { type: 'string', short: 'n', description: 'how many pipelines (10, at most 100)' },
+  limit: { ...limitOptions(DEFAULT_LIMIT).limit, short: 'n' },
+  full: limitOptions(DEFAULT_LIMIT).full,
   sha: { type: 'string', short: 's', description: 'only the pipelines of this commit' },
   branch: { type: 'string', short: 'b', description: 'only the pipelines of this branch or tag' },
   json: jsonOption(),
@@ -19,15 +23,21 @@ const options = {
 
 const TITLE_WIDTH = 70
 
+// Every pipeline of a commit, cut to `limit` with the count of the rest.
+async function onCommit(sha: string, limit: number, repo: string | undefined, ref: string | undefined): Promise<PipelineListing> {
+  const found = await pipelinesOn(sha, repo, ref)
+
+  return { pipelines: found.slice(0, limit), more: Math.max(0, found.length - limit), exact: true }
+}
+
 export async function runs(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
   const { values } = parsed
-  const limit = wholeNumber(values.limit, 'limit', 10)
-  const found = values.sha === undefined
+  const limit = limitOf({ limit: values.limit, full: values.full }, DEFAULT_LIMIT)
+  const { pipelines: list, more, exact } = values.sha === undefined
     ? await recentPipelines(limit, values.repo, values.branch)
-    : await pipelinesOn(await resolveCommit(values.sha), values.repo, values.branch)
-  const list = found.slice(0, limit)
+    : await onCommit(await resolveCommit(values.sha), limit, values.repo, values.branch)
   const titles = await subjects([...new Set(list.map(pipeline => pipeline.sha))])
 
   if (values.json === true) {
@@ -47,6 +57,9 @@ export async function runs(args: string[]): Promise<number> {
     ['ID', 'STATUS', 'REF', 'SOURCE', 'SHA', 'TOOK', 'CREATED', 'TITLE'],
     ...list.map(pipeline => [String(pipeline.id), pipeline.status, pipeline.ref, pipeline.source, pipeline.sha.slice(0, 7), FINISHED.has(pipeline.status) ? formatSeconds((Date.parse(pipeline.updated_at) - Date.parse(pipeline.created_at)) / 1000) : '-', formatAge(pipeline.created_at), truncate(titles.get(pipeline.sha) ?? '', TITLE_WIDTH)]),
   ]))
+
+  if (more > 0)
+    console.log(exact ? moreFooter(more) : `${more}+ more, rerun with --full`)
 
   return 0
 }

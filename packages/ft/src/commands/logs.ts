@@ -12,14 +12,14 @@ With no failed job it prints every job's last lines; --full prints whole logs.
 Exits 0 when it printed the logs, 1 when Forgejo cannot be read, 2 on a usage error or a job the run lacks.`
 
 const options = {
-  job: { type: 'string', short: 'j', description: 'only this job, by name' },
+  job: { type: 'string', short: 'j', description: 'only this job, by name or id' },
   full: { type: 'boolean', short: 'f', description: 'the whole log, timestamps stripped' },
   ...repoOption,
 } as const
 
-function pickJobs(jobs: Job[], name: string | undefined): Job[] {
-  if (name !== undefined)
-    return jobs.filter(job => job.name === name)
+export function pickJobs(jobs: Job[], wanted: string | undefined): Job[] {
+  if (wanted !== undefined)
+    return jobs.filter(job => job.name === wanted || String(job.id) === wanted)
 
   const failed = jobs.filter(job => job.status === 'failure')
 
