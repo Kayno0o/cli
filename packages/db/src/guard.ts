@@ -13,8 +13,9 @@ export interface Verdict {
   statements: number
 }
 
-const WORD_START = /[a-z_]/i
-const WORD_PART = /[\w$]/
+// A name may hold any non-ASCII character in MySQL and Postgres, so one belongs to a word and never stands as punctuation.
+const WORD_START = /[a-z_\P{ASCII}]/iu
+const WORD_PART = /[\w$\P{ASCII}]/u
 const SPACE = /\s/
 const ESCAPE_PREFIX = /e/i
 const DOLLAR_TAG = /^\$(?:[a-z_]\w*)?\$/i
@@ -299,7 +300,8 @@ function foreignDatabases(statement: Token[], database: string): string[] {
   const found: string[] = []
 
   for (const [index, token] of statement.entries()) {
-    if ((token.kind === 'word' || token.kind === 'quoted') && isPunct(statement[index + 1], '.') && !isPunct(statement[index - 1], '.') && token.text.toLowerCase() !== database.toLowerCase())
+    // A system variable, `@@global.x`, is no database.
+    if ((token.kind === 'word' || token.kind === 'quoted') && !isPunct(statement[index - 1], '@') && isPunct(statement[index + 1], '.') && !isPunct(statement[index - 1], '.') && token.text.toLowerCase() !== database.toLowerCase())
       found.push(token.text)
   }
 

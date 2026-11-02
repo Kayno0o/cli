@@ -3,7 +3,7 @@ import { Exit } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { sqlViolation } from '../src/clients'
 import { testWriteBlockers } from '../src/guard'
-import { connectionUrl, databaseOfUrl, dialectOf, readRows, writeRows } from '../src/run'
+import { connectionUrl, databaseOfUrl, dialectOf, mysqlTransaction, readRows, writeRows } from '../src/run'
 
 const PASSWORD = 'never-printed-pw-4417'
 const MYSQL_URL = `mysql://app:${PASSWORD}@127.0.0.1:3306/app_test`
@@ -15,7 +15,7 @@ interface Stub {
 }
 
 // A SQL runner that answers for the server: which database the session is on, what a failing statement says, and what rows come back. Nothing connects anywhere.
-function stub(options: { actual?: string, failing?: RegExp, rows?: Record<string, unknown>[] } = {}): Stub {
+function stub(options: { actual?: string, failing?: RegExp, failure?: Error, rows?: Record<string, unknown>[] } = {}): Stub {
   const calls: string[] = []
   const connect: Stub['connect'] = (_url, _dialect, readOnly) => {
     calls.push(`connect ${readOnly ? 'read-only' : 'read-write'}`)
@@ -30,7 +30,7 @@ function stub(options: { actual?: string, failing?: RegExp, rows?: Record<string
               calls.push(statement)
 
               if (options.failing?.test(statement) === true)
-                throw new Error(`syntax error near ${PASSWORD}`)
+                throw options.failure ?? new Error(`syntax error near ${PASSWORD}`)
 
               if ((/current_database\(\)|select database\(\)/).test(statement))
                 return Object.assign([{ name: options.actual ?? 'app_test' }], { affected: 1 })
@@ -97,10 +97,17 @@ describe('readRows on MySQL', () => {
   })
 
   test('reads a statement the wrapping does not fit whole', async () => {
-    const { calls, connect } = stub({ failing: /db_rows/, rows: [{ id: 1 }] })
+    const { calls, connect } = stub({ failing: /db_rows/, failure: Object.assign(new Error('Duplicate column name \'id\''), { errno: 1060 }), rows: [{ id: 1 }] })
 
     expect(await readRows(MYSQL_URL, 'select id, id from users', [], 5, connect)).toEqual([{ id: 1 }])
     expect(calls.filter(call => call.startsWith('select'))).toEqual(['select * from (\nselect id, id from users\n) as db_rows limit 6', 'select id, id from users'])
+  })
+
+  test('rethrows an error the wrapping did not cause instead of running the statement again', async () => {
+    const { calls, connect } = stub({ failing: /db_rows/, failure: Object.assign(new Error('Query execution was interrupted'), { errno: 3024 }) })
+
+    expect(await exitMessage(async () => readRows(MYSQL_URL, 'select name from users', [], 5, connect))).toContain('interrupted')
+    expect(calls.filter(call => call.startsWith('select'))).toHaveLength(1)
   })
 
   test('scrubs the password from the error of the database', async () => {
@@ -109,6 +116,54 @@ describe('readRows on MySQL', () => {
 
     expect(message).toContain('syntax error')
     expect(message).not.toContain(PASSWORD)
+  })
+})
+
+describe('mysqlTransaction', () => {
+  function connection(failing?: RegExp) {
+    const calls: string[] = []
+
+    return {
+      calls,
+      unsafe: async (statement: string) => {
+        calls.push(statement)
+
+        if (failing?.test(statement) === true)
+          throw new Error('lost connection')
+
+        return []
+      },
+    }
+  }
+
+  test('starts a read-only transaction on the connection that runs the statement, rolled back when the work throws', async () => {
+    const conn = connection()
+
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(mysqlTransaction(conn, async (tx) => {
+      await tx.unsafe('select 1')
+
+      throw new Error('stop')
+    }, true)).rejects.toThrow('stop')
+    expect(conn.calls.filter(call => !call.startsWith('SET SESSION max_'))).toEqual(['START TRANSACTION READ ONLY', 'select 1', 'ROLLBACK'])
+  })
+
+  test('commits a write', async () => {
+    const conn = connection()
+
+    await mysqlTransaction(conn, async (tx) => {
+      await tx.unsafe('update t set a = 1')
+    }, false)
+    expect(conn.calls.filter(call => !call.startsWith('SET SESSION max_'))).toEqual(['START TRANSACTION', 'update t set a = 1', 'COMMIT'])
+  })
+
+  test('keeps the error of the work when the rollback fails too', async () => {
+    const conn = connection(/ROLLBACK/)
+
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(mysqlTransaction(conn, async () => {
+      throw new Error('stop')
+    }, true)).rejects.toThrow('stop')
   })
 })
 
@@ -184,6 +239,8 @@ const MYSQL_ESCAPES: [string, string][] = [
   ['rename table t to other.t', 'names the database other'],
   ['select * from information_schema.tables', 'names the database information_schema'],
   ['update t set a = (select count(*) from prod.5t)', 'names the database prod'],
+  ['insert into prod_é.t values (1)', 'names the database prod_é'],
+  ['drop table 日本.t', 'names the database 日本'],
   ['drop database prod', 'defines a database'],
   ['drop schema prod', 'defines a schema'],
   ['create database other', 'defines a database'],
@@ -251,6 +308,11 @@ describe('testWriteBlockers, the escapes from a _test database', () => {
 
     for (const sql of ['insert into t values (1) on conflict do nothing', 'select nextval(\'s\')', 'update public.t set a = 1', 'create table t (role text)', 'drop schema if exists x cascade'])
       expect(testWriteBlockers(sql, 'postgres', 'app_test')).toEqual([])
+  })
+
+  test('a system variable is no database', () => {
+    expect(testWriteBlockers('update t set a = (select @@global.max_connections)', 'mysql', 'app_test')).toEqual([])
+    expect(testWriteBlockers('update t set a = (select @@session.sql_mode)', 'mysql', 'app_test')).toEqual([])
   })
 
   test('keeps the qualifier check on the connected database, not on the name in the URL', () => {

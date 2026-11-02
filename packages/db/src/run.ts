@@ -26,6 +26,8 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 const BRACKETS = /^\[|\]$/g
 const POSTGRES_SCHEMES = new Set(['postgres:', 'postgresql:'])
 const MYSQL_SCHEMES = new Set(['mysql:', 'mysql2:', 'mariadb:'])
+// ER_PARSE_ERROR and ER_DUP_FIELDNAME: what a statement wrapped in a derived table can raise without having raised it bare.
+const WRAP_ERRNOS = new Set([1064, 1060])
 const MYSQL_TIMEOUTS = ['SET SESSION max_execution_time = 30000', 'SET SESSION max_statement_time = 30']
 
 // A write only runs on a database whose name ends so.
@@ -165,18 +167,16 @@ function toResult(rows: Row[] & { count?: number, affectedRows?: number }): Resu
   return Object.assign([...rows], { affected: rows.count ?? rows.affectedRows ?? rows.length })
 }
 
-// The Bun SQL client, which speaks Postgres and MySQL alike. A read session is read-only from the start: Postgres by `default_transaction_read_only` at connect and a READ ONLY transaction, MySQL by `SET SESSION TRANSACTION READ ONLY` before the transaction begins.
+// The Bun SQL client, which speaks Postgres and MySQL alike. A read session is read-only from the start: Postgres by `default_transaction_read_only` at connect and a READ ONLY transaction, MySQL by `START TRANSACTION READ ONLY` on a reserved connection.
 export const bunConnect: Connect = (url, dialect, readOnly) => {
   const sql = new SQL({ url, max: 1, connectionTimeout: 10, ...dialect === 'postgres' ? { connection: { ...SESSION_SETTINGS, ...readOnly ? { default_transaction_read_only: 'on' } : {} } } : {} })
 
   return {
     async transaction(work, isReadOnly) {
-      const run = async (tx: SQL) => work({ unsafe: async (statement, params) => toResult(await tx.unsafe<Row[]>(statement, params)) })
-
       if (dialect === 'postgres') {
         const body = async (tx: SQL) => {
           await tx.unsafe(`SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT}'`)
-          await run(tx)
+          await work({ unsafe: async (statement, params) => toResult(await tx.unsafe<Row[]>(statement, params)) })
         }
 
         await (isReadOnly ? sql.begin('read only', body) : sql.begin(body))
@@ -184,19 +184,15 @@ export const bunConnect: Connect = (url, dialect, readOnly) => {
         return
       }
 
-      if (isReadOnly)
-        await sql.unsafe('SET SESSION TRANSACTION READ ONLY')
+      // One reserved connection carries the settings and the transaction, so a reconnect cannot drop the read-only mode in between.
+      const connection = await sql.reserve()
 
-      for (const timeout of MYSQL_TIMEOUTS) {
-        try {
-          await sql.unsafe(timeout)
-        }
-        catch {
-          // MySQL and MariaDB name this setting differently, so the other server refuses one of the two.
-        }
+      try {
+        await mysqlTransaction({ unsafe: async (statement, params) => connection.unsafe<Row[]>(statement, params) }, work, isReadOnly)
       }
-
-      await sql.begin(run)
+      finally {
+        connection.release()
+      }
     },
     async close() {
       await sql.close()
@@ -204,7 +200,39 @@ export const bunConnect: Connect = (url, dialect, readOnly) => {
   }
 }
 
-// MySQL has no cursor to declare, so a select is wrapped to stop at limit + 1 rows, and read whole when the wrapping does not parse.
+// Runs the work in a transaction on one MySQL connection: `START TRANSACTION READ ONLY` is the read-only mode itself, sent on the very connection that runs the statement.
+export async function mysqlTransaction(connection: { unsafe: (statement: string, params?: unknown[]) => Promise<Row[]> }, work: (tx: Tx) => Promise<void>, readOnly: boolean): Promise<void> {
+  for (const timeout of MYSQL_TIMEOUTS) {
+    try {
+      await connection.unsafe(timeout)
+    }
+    catch {
+      // MySQL and MariaDB name this setting differently, so the other server refuses one of the two.
+    }
+  }
+
+  await connection.unsafe(readOnly ? 'START TRANSACTION READ ONLY' : 'START TRANSACTION')
+
+  try {
+    await work({ unsafe: async (statement, params) => toResult(await connection.unsafe(statement, params)) })
+  }
+  catch (error) {
+    try {
+      await connection.unsafe('ROLLBACK')
+    }
+    catch {
+      // The connection is gone, which rolls the transaction back as well.
+    }
+
+    throw error
+  }
+
+  await connection.unsafe('COMMIT')
+}
+
+const isWrapError = (error: unknown) => error instanceof Error && WRAP_ERRNOS.has((error as Error & { errno?: number }).errno ?? 0)
+
+// MySQL has no cursor to declare, so a select is wrapped to stop at limit + 1 rows, and read whole when the wrapping itself is refused (a parse error, or two columns of one name); any other error, a timeout or a lost connection, is the statement's own.
 async function fetchRows(tx: Tx, dialect: Dialect, statement: string, params: unknown[], limit: number | undefined): Promise<Row[]> {
   if (limit === undefined || !CURSOR_STARTS.test(statement))
     return tx.unsafe(statement, params)
@@ -218,7 +246,10 @@ async function fetchRows(tx: Tx, dialect: Dialect, statement: string, params: un
   try {
     return await tx.unsafe(`select * from (\n${statement.replace(TRAILING_SEMICOLONS, '')}\n) as ${CURSOR} limit ${limit + 1}`, params)
   }
-  catch {
+  catch (error) {
+    if (!isWrapError(error))
+      throw error
+
     return tx.unsafe(statement, params)
   }
 }
