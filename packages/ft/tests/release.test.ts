@@ -2,12 +2,68 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { capture } from '@kaynooo/cli-kit/test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
-import { commitPackageBump, nextVersion, release, taggedVersion } from '../src/commands/release'
+import { commitPackageBump, nextVersion, release, taggedVersion, testsPass } from '../src/commands/release'
 import { timing } from '../src/commands/watch'
 import { withFakeTea } from './fake-tea'
+
+const temp = tempDirs()
+
+describe('testsPass on a commit origin has', () => {
+  const run = (sha: string, status: string) => ({ id: 7, commit_sha: sha, event: 'push', status, workflow_id: 'test.yml', prettyref: 'main', html_url: 'https://forge/runs/7', title: 'feat', duration: 60e9 })
+
+  async function pushedRepo(): Promise<string> {
+    const root = temp('ft-tests-pass-')
+
+    await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${root}/work`.quiet()
+    await $`git -C ${root}/work -c user.name=t -c user.email=t@t commit -q --allow-empty -m init && git -C ${root}/work push -q origin main`.quiet()
+
+    return join(root, 'work')
+  }
+
+  async function inRepo<T>(work: string, poll: number, body: () => Promise<T>): Promise<T> {
+    const home = process.cwd()
+    const saved = timing.poll
+
+    process.chdir(work)
+    timing.poll = poll
+
+    try {
+      return await body()
+    }
+    finally {
+      timing.poll = saved
+      process.chdir(home)
+    }
+  }
+
+  test('neither waits for nor prints runs that already passed, as after the previous release', async () => {
+    const work = await pushedRepo()
+    const sha = (await $`git -C ${work} rev-parse HEAD`.text()).trim()
+
+    await withFakeTea({ issues: [], runs: [run(sha, 'success')] }, async () => {
+      // A poll this slow would time the test out, so passing proves the wait was skipped.
+      const { result, out } = await inRepo(work, 60_000, async () => capture(async () => testsPass(sha, 'main', 1000)))
+
+      expect(result).toBe(true)
+      expect(out).toBe('')
+    })
+  })
+
+  test('says what it waits for when they have not passed', async () => {
+    const work = await pushedRepo()
+    const sha = (await $`git -C ${work} rev-parse HEAD`.text()).trim()
+
+    await withFakeTea({ issues: [], runs: [run(sha, 'failure')] }, async () => {
+      const { result, out } = await inRepo(work, 1, async () => capture(async () => testsPass(sha, 'main', 1000)))
+
+      expect(result).toBe(false)
+      expect(out).toStartWith(`main at ${sha.slice(0, 7)} is on origin, waiting for its runs before the bump\ntest.yml run 7 on main: failure in 1m\n`)
+    })
+  })
+})
 
 describe('taggedVersion', () => {
   test('reads the version of a root or a package tag', () => {

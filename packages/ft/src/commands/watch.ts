@@ -137,7 +137,7 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
 // ` in 3m 2s` once a run is over, ` for 1m 12s` while it runs or waits, nothing before a second has passed.
 function elapsed(run: Run, seen: number): string {
   if (FINISHED.has(run.status))
-    return run.duration > 0 ? ` in ${formatDuration(runSeconds(run) * 1000)}` : ''
+    return run.duration > 0 ? ` in ${formatSeconds(runSeconds(run))}` : ''
 
   const seconds = Math.floor((Date.now() - (startedAt(run) ?? seen)) / 1000)
 
