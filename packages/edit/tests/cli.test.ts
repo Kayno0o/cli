@@ -188,3 +188,125 @@ describe('sub', () => {
     expect(sub(['-p', '-', '-f', 'a', 'a.ts'], '[]').err).toContain('give either --pairs or --from and --to')
   })
 })
+
+function block(from: string, to: string, name = ''): string {
+  return `${name === '' ? '' : `${name}\n`}<<<<<<< SEARCH\n${from}\n=======\n${to}\n>>>>>>> REPLACE\n`
+}
+
+describe('sub blocks on stdin', () => {
+  test('applies several blocks in order, multi-line text with quotes and backslashes untouched', () => {
+    file('a.php', 'function f() {\n    echo "a\\n";\n}\nlast\n')
+    const result = sub(['a.php'], `${block('    echo "a\\n";\n}', '    echo "b\\n";\n    return 1;\n}')}\n${block('return 1;', 'return 2;')}`)
+
+    expect(result.code).toBe(0)
+    expect(read('a.php')).toBe('function f() {\n    echo "b\\n";\n    return 2;\n}\nlast\n')
+    expect(result.out).toContain('a.php: 2 replacements')
+  })
+
+  test('writes nothing when one block does not match, naming it', () => {
+    file('a.ts', 'one\ntwo\n')
+    const result = sub(['a.ts'], block('one', '1') + block('three', '3'))
+
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('pair 2: matched 0 times')
+    expect(read('a.ts')).toBe('one\ntwo\n')
+  })
+
+  test('refuses a SEARCH matching twice, and takes --all as a default', () => {
+    file('a.ts', 'x\nx\n')
+
+    expect(sub(['a.ts'], block('x', 'y')).err).toContain('matched 2 times, expected 1')
+    expect(sub(['--all', 'a.ts'], block('x', 'y')).code).toBe(0)
+    expect(read('a.ts')).toBe('y\ny\n')
+  })
+
+  test('an empty REPLACE deletes, a neighbouring line included for whole lines', () => {
+    file('a.ts', 'a\nb\nc\n')
+
+    expect(sub(['a.ts'], '<<<<<<< SEARCH\nb\n=======\n>>>>>>> REPLACE\n').code).toBe(0)
+    expect(read('a.ts')).toBe('a\n\nc\n')
+    expect(sub(['a.ts'], block('a\n', 'a')).code).toBe(0)
+    expect(read('a.ts')).toBe('a\nc\n')
+  })
+
+  test('keeps CRLF and a missing trailing newline', () => {
+    file('crlf.txt', 'a\r\nb\r\nc')
+    sub(['crlf.txt'], block('a\nb', 'x\ny\nz'))
+
+    expect(read('crlf.txt')).toBe('x\r\ny\r\nz\r\nc')
+  })
+
+  test('blocks naming their files edit several files, all or nothing', () => {
+    file('a.ts', 'a\n')
+    file('b.ts', 'b\n')
+
+    expect(sub([], block('a', 'A', 'a.ts') + block('b', 'B', './b.ts')).code).toBe(0)
+    expect(read('a.ts') + read('b.ts')).toBe('A\nB\n')
+
+    file('a.ts', 'a\n')
+    file('b.ts', 'b\n')
+    const failing = sub([], block('a', 'A', 'a.ts') + block('zzz', 'B', 'b.ts'))
+
+    expect(failing.code).toBe(1)
+    expect(failing.err).toContain('b.ts: matched 0 times')
+    expect(read('a.ts')).toBe('a\n')
+  })
+
+  test('mixes file-less blocks with the file arguments and named blocks', () => {
+    file('a.ts', 'a z\n')
+    file('b.ts', 'b z\n')
+    sub(['a.ts'], block('z', 'Z') + block('b', 'B', 'b.ts'))
+
+    expect(read('a.ts')).toBe('a Z\n')
+    expect(read('b.ts')).toBe('B z\n')
+  })
+
+  test('a longer opener lets a marker line sit in the text', () => {
+    file('a.md', 'Title\n=======\nbody\n')
+    const result = sub(['a.md'], '<<<<<<<<<< SEARCH\nTitle\n=======\n==========\nNew\n=======\n>>>>>>>>>> REPLACE\n')
+
+    expect(result.code).toBe(0)
+    expect(read('a.md')).toBe('New\n=======\nbody\n')
+  })
+
+  test('honours --dry-run and --diff', () => {
+    file('a.ts', 'one\n')
+    const result = sub(['--dry-run', '--diff', 'a.ts'], block('one', 'two'))
+
+    expect(result.out).toContain('-one')
+    expect(result.out).toContain('+two')
+    expect(read('a.ts')).toBe('one\n')
+  })
+
+  test('refuses malformed blocks and a block with no file', () => {
+    file('a.ts', 'one\n')
+
+    expect(sub(['a.ts'], '<<<<<<< SEARCH\none\n=======\ntwo\n').err).toContain('never reaches')
+    expect(sub(['a.ts'], 'nothing here\n').err).toContain('is not followed by a block')
+    expect(sub(['a.ts'], '').err).toContain('no <<<<<<< SEARCH block')
+    expect(sub([], block('one', 'two')).err).toContain('names no file')
+    expect(sub(['a.ts'], block('', 'two')).err).toContain('--from is empty')
+    expect(sub(['a.ts', 'b.ts'], block('one', 'two', 'a.ts')).err).toContain('no block applies to b.ts')
+  })
+
+  test('shows the block format in its help', () => {
+    expect(sub(['--help']).out).toContain('<<<<<<< SEARCH')
+  })
+})
+
+describe('sub --pairs inline', () => {
+  test('takes inline JSON when the value starts with [', () => {
+    file('a.ts', 'a b\n')
+
+    expect(sub(['--pairs', '[{"from":"a","to":"x"},{"from":"b","to":"y"}]', 'a.ts']).code).toBe(0)
+    expect(read('a.ts')).toBe('x y\n')
+  })
+
+  test('refuses an unknown key naming the known ones', () => {
+    file('a.ts', 'a\n')
+    const result = sub(['--pairs', '[{"from":"a","to":"b","n":2}]', 'a.ts'])
+
+    expect(result.code).toBe(2)
+    expect(result.err).toContain('unknown key n, known: from, to, count, all, regex')
+  })
+})

@@ -3,13 +3,29 @@
 import type { Diff } from './diff'
 import type { Pair } from './replace'
 import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { normalize } from 'node:path'
 import process from 'node:process'
 import { Exit, fail, parse, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
+import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
 import { applyPairs, compile, listLines } from './replace'
 
-const USAGE = 'sub [options] <file>...: replaces text in files, writing nothing unless every replacement matches as often as expected\n\nExits 0 when it wrote every replacement, 1 when one did not match or a file cannot be written (nothing is written), 2 on a usage error.'
+const USAGE = `sub [options] <file>...: replaces text in files, writing nothing unless every replacement matches as often as expected
+
+Multi-line text: give no --from, --to or --pairs and pipe SEARCH/REPLACE blocks on stdin from a quoted heredoc, which needs no escaping. The blocks apply in order to the files on the command line, each matching exactly once unless --count or --all says otherwise:
+
+sub src/a.php <<'EOF'
+<<<<<<< SEARCH
+old lines
+=======
+new lines
+>>>>>>> REPLACE
+EOF
+
+A line naming a file before a block makes it apply to that file alone, so one call edits several files (no file argument needed when every block names one). An empty REPLACE deletes the SEARCH text; to drop whole lines, put the neighbouring line in both. When the text holds a marker line itself (a Markdown '=======' underline), open with more characters, '<<<<<<<<<< SEARCH', and divide and close with as many '=' and '>' too.
+
+Exits 0 when it wrote every replacement, 1 when one did not match or a file cannot be written (nothing is written), 2 on a usage error.`
 
 const OPTIONS = {
   'from': { type: 'string', short: 'f', description: 'text to find, taken literally' },
@@ -17,7 +33,7 @@ const OPTIONS = {
   'count': { type: 'string', short: 'n', description: 'matches expected in each file (default 1)' },
   'all': { type: 'boolean', short: 'a', description: 'replace every match, expecting at least one in each file' },
   'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1 and $<name>' },
-  'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?} applied in order, from a file or - for stdin' },
+  'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?} applied in order: inline when it starts with [, else a file or - for stdin' },
   'diff': { type: 'boolean', short: 'd', description: 'print each file\'s unified diff' },
   'dry-run': { type: 'boolean', description: 'show what would change without writing' },
 } as const
@@ -27,6 +43,8 @@ interface Defaults {
   all: boolean
   regex: boolean
 }
+
+const PAIR_KEYS = ['from', 'to', 'count', 'all', 'regex']
 
 function checkPattern(pair: Pair, label: string) {
   if (pair.from === '')
@@ -49,7 +67,11 @@ function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   if (typeof item !== 'object' || item === null || Array.isArray(item))
     fail(`${label}give an object {from, to}`)
 
-  const { from, to, count, all, regex } = item as Record<string, unknown>
+  const { from, to, count, all, regex, ...rest } = item as Record<string, unknown>
+  const unknown = Object.keys(rest)
+
+  if (unknown.length > 0)
+    fail(`${label}unknown key${unknown.length === 1 ? '' : 's'} ${unknown.join(', ')}, known: ${PAIR_KEYS.join(', ')}`)
 
   if (typeof from !== 'string' || typeof to !== 'string')
     fail(`${label}from and to must both be strings`)
@@ -71,7 +93,7 @@ async function readPairs(path: string, defaults: Defaults): Promise<Pair[]> {
   let items: unknown
 
   try {
-    items = JSON.parse(await readInput(path, { noStdin: 'pipe the pairs on stdin, or give their file to --pairs' }))
+    items = JSON.parse(path.trimStart().startsWith('[') ? path : await readInput(path, { noStdin: 'pipe the pairs on stdin, or give their file to --pairs' }))
   }
   catch (error) {
     if (error instanceof Exit)
@@ -130,39 +152,77 @@ function writeAtomic(path: string, text: string) {
   }
 }
 
+// The pairs each file gets: the one set of --from/--to or --pairs for every file argument, or the stdin blocks, each for the file it names or else for the file arguments.
+async function plan(values: { from?: string, to?: string, pairs?: string }, files: string[], defaults: Defaults): Promise<Map<string, Pair[]>> {
+  const edits = new Map<string, Pair[]>()
+
+  if (values.pairs !== undefined || values.from !== undefined || values.to !== undefined) {
+    if (files.length === 0)
+      fail(`give at least one file\n\n${USAGE}`)
+
+    let pairs: Pair[]
+
+    if (values.pairs !== undefined) {
+      if (values.from !== undefined || values.to !== undefined)
+        fail('give either --pairs or --from and --to')
+
+      pairs = await readPairs(values.pairs, defaults)
+    }
+    else {
+      if (values.from === undefined || values.to === undefined)
+        fail(`give --from and --to (--to '' deletes), or --pairs\n\n${USAGE}`)
+
+      pairs = [{ from: values.from, to: values.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex }]
+      checkPattern(pairs[0] as Pair, '')
+    }
+
+    for (const path of files)
+      edits.set(path, pairs)
+
+    return edits
+  }
+
+  const blocks = parseBlocks(await readInput('-', { noStdin: `give --from and --to, or pipe SEARCH/REPLACE blocks on stdin\n\n${USAGE}` }))
+
+  if (typeof blocks === 'string')
+    fail(`blocks: ${blocks}`)
+
+  for (const [i, block] of blocks.entries()) {
+    const pair: Pair = { from: block.from, to: block.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex }
+    const targets = block.file === undefined ? files : [normalize(block.file)]
+
+    checkPattern(pair, `block ${i + 1}: `)
+
+    if (targets.length === 0)
+      fail(`block ${i + 1} names no file and none is given as an argument`)
+
+    for (const path of targets)
+      edits.set(path, [...edits.get(path) ?? [], pair])
+  }
+
+  for (const path of files) {
+    if (!edits.has(path))
+      fail(`no block applies to ${path}`)
+  }
+
+  return edits
+}
+
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
+  const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub src/a.php <<\'EOF\' (SEARCH/REPLACE blocks, see above)', 'multi-line text, no escaping'], ['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
 
   const { values, positionals } = parsed
-  const files = [...new Set(positionals)]
-
-  if (files.length === 0)
-    fail(`give at least one file\n\n${USAGE}`)
+  const files = [...new Set(positionals.map(path => normalize(path)))]
 
   if (values.count !== undefined && values.all === true)
     fail('--count and --all exclude each other')
 
   const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true, regex: values.regex === true }
-  let pairs: Pair[]
-
-  if (values.pairs !== undefined) {
-    if (values.from !== undefined || values.to !== undefined)
-      fail('give either --pairs or --from and --to')
-
-    pairs = await readPairs(values.pairs, defaults)
-  }
-  else {
-    if (values.from === undefined || values.to === undefined)
-      fail(`give --from and --to (--to '' deletes), or --pairs\n\n${USAGE}`)
-
-    pairs = [{ from: values.from, to: values.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex }]
-    checkPattern(pairs[0] as Pair, '')
-  }
-
+  const edits = await plan(values, files, defaults)
   const changes: { path: string, before: string, after: string, lines: number[], diff?: Diff }[] = []
   const problems: string[] = []
 
-  for (const path of files) {
+  for (const [path, pairs] of edits) {
     if (!existsSync(path)) {
       problems.push(`${path}: no such file`)
 
