@@ -1,7 +1,9 @@
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, test } from 'bun:test'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const CLIS = ['ft', 'env', 'db', 'check', 'pkg', 'out', 'stack', 'edit', 'base', 'git', 'wait', 'gitlab', 'guard']
+// Every package shipping a bin, so a new one is covered without being listed.
+const CLIS = readdirSync(`${ROOT}packages`).filter(dir => (JSON.parse(readFileSync(`${ROOT}packages/${dir}/package.json`, 'utf8')) as { bin?: unknown }).bin !== undefined)
 
 interface Manifest { version: string, bin: Record<string, string> }
 
