@@ -122,7 +122,7 @@ describe('duration', () => {
   })
 
   test('refuses anything else', () => {
-    expect(() => duration('5 min', 'timeout', 0)).toThrow(new Exit('--timeout takes a duration such as 30s, 5m or 1h, not 5 min', 2))
+    expect(() => duration('5 min', 'timeout', 0)).toThrow(new Exit('--timeout takes a duration such as 30s, 5m, 1h or 7d, not 5 min', 2))
     expect(() => duration('0', 'timeout', 0)).toThrow(Exit)
   })
 })
