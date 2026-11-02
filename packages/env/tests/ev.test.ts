@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
+import { entries, parseDotenv } from '../src/dotenv'
 
 const CLI = new URL('../src/ev.ts', import.meta.url).pathname
 
@@ -179,6 +180,47 @@ describe('ev', () => {
     for (const result of [replaced, appended, list, ev(['cp', 'NOPE', '--from', '.env.a', '--to', '.env.c'])]) {
       expect(result.out + result.err).not.toContain(secret)
       expect(result.out + result.err).not.toMatch(/Zx9Cv8/)
+    }
+  })
+
+  test('set and cp keep an awkward value byte for byte, drop one trailing newline of stdin and leave other lines alone', async () => {
+    const value = 'a"b\'c\\d $HOME #not-a-comment\nsecond line\\n end'
+    const before = '# keep me\n\nA=1   # trailing\nexport B="two words"\n'
+
+    await write('.env.a', before)
+    expect(ev(['set', 'AWKWARD', '.env.a'], `${value}\n`).code).toBe(0)
+    expect(entries(parseDotenv(await read('.env.a'))).get('AWKWARD')).toBe(value)
+    expect(await read('.env.a')).toStartWith(before)
+
+    await write('.env.b', '# other\nC=3\n')
+    expect(ev(['cp', 'AWKWARD', '--from', '.env.a', '--to', '.env.b']).code).toBe(0)
+    expect(entries(parseDotenv(await read('.env.b'))).get('AWKWARD')).toBe(value)
+    expect((await read('.env.b')).startsWith('# other\nC=3\n')).toBe(true)
+  })
+
+  test('writes keep the file mode, create a file as 0600 and leave no temp file behind', async () => {
+    await write('.env.a', 'A=1\n')
+    await chmod(join(dir, '.env.a'), 0o640)
+
+    expect(ev(['set', 'B', '.env.a'], '2').code).toBe(0)
+    expect((await stat(join(dir, '.env.a'))).mode & 0o777).toBe(0o640)
+
+    expect(ev(['cp', 'A', '--from', '.env.a', '--to', '.env.new']).code).toBe(0)
+    expect((await stat(join(dir, '.env.new'))).mode & 0o777).toBe(0o600)
+    expect(ev(['unset', 'B', '.env.a']).code).toBe(0)
+    expect((await readdir(dir)).sort()).toEqual(['.env.a', '.env.new'])
+  })
+
+  test.skipIf(process.getuid?.() === 0)('a failed write leaves the original file as it was', async () => {
+    await write('.env.a', 'A=1\n')
+    await chmod(dir, 0o500)
+
+    try {
+      expect(ev(['set', 'B', '.env.a'], '2').code).not.toBe(0)
+      expect(await read('.env.a')).toBe('A=1\n')
+    }
+    finally {
+      await chmod(dir, 0o700)
     }
   })
 
