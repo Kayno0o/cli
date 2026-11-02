@@ -106,7 +106,8 @@ async function main(argv: string[]): Promise<number> {
       return exitCodeOf(null, signals.signal)
     }
 
-    const commit = await git(['commit', '--only', '--cleanup=whitespace', '-m', message, '--', ...paths], LITERAL)
+    // The paths are literal one by one rather than through GIT_LITERAL_PATHSPECS, which the commit's hooks would inherit and read their own globs by.
+    const commit = await git(['commit', '--only', '--cleanup=whitespace', '-m', message, '--', ...paths.map(path => `:(literal)${path}`)])
 
     if (commit.code !== 0) {
       await unstage(paths)
