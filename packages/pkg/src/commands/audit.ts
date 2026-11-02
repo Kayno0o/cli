@@ -4,7 +4,7 @@ import type { Locked } from '../lockfile'
 import type { Fetcher, Packument, Registry } from '../registry'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { isSeverity, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
@@ -16,7 +16,7 @@ const usage = `pkg audit [dir]
 Reads the bun.lock in the folder (the current one by default) and runs on every registry package it pins the checks \`pkg check\` runs before an add: age, install scripts, a deprecated version, a near miss of a popular name, and the licence allowlist of the pkg config. It also lists the known advisories of each version, with the GHSA, the severity and the fixed version, from the registry's bulk advisory endpoint, the one \`bun audit\` reads.
 Findings are grouped per package, each registry package looked up once per run.
 
-Exits 0 when nothing blocks, 1 when a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --audit-level, 2 on a usage error or without a bun.lock.`
+Exits 0 when nothing blocks, 1 when a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --audit-level, 2 when the registry could not be reached or answered badly (a warning says which, and nothing is reported as clean), on a usage error or without a bun.lock.`
 
 const options = {
   'json': jsonOption('[{name, version, license, blocked, warnings, advisories}] for the packages with a finding'),
@@ -50,8 +50,14 @@ function hasFinding(audited: Audited): boolean {
   return audited.blocked || audited.warnings.length > 0 || audited.advisories.length > 0
 }
 
+export interface Audit {
+  audited: Audited[]
+  // What stopped the advisories of a registry from being read, so that "no advisory" is not taken for "none known".
+  unavailable: string[]
+}
+
 // Every locked package through the same analysis as `pkg check`, one registry lookup per name and one advisory request per registry.
-export async function auditPackages(packages: Locked[], context: AuditContext): Promise<Audited[]> {
+export async function auditPackages(packages: Locked[], context: AuditContext): Promise<Audit> {
   const packuments = new Map<string, Promise<Packument | undefined>>()
   const lookup = async (name: string, registry: Registry): Promise<Packument | undefined> => {
     const key = `${registry.url}|${name}`
@@ -72,9 +78,16 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
   }
 
   const advisories: Record<string, Advisory[]> = {}
+  const unavailable: string[] = []
 
-  for (const { registry, versions } of registries.values())
-    Object.assign(advisories, await fetchAdvisories(versions, registry, context.fetcher))
+  for (const { registry, versions } of registries.values()) {
+    const fetched = await fetchAdvisories(versions, registry, context.fetcher)
+
+    Object.assign(advisories, fetched.found)
+
+    if (fetched.unavailable !== undefined)
+      unavailable.push(fetched.unavailable)
+  }
 
   const audited: Audited[] = []
 
@@ -88,7 +101,7 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
     })))
   }
 
-  return audited
+  return { audited, unavailable }
 }
 
 export function renderAudit(findings: Audited[], total: number): string {
@@ -122,12 +135,19 @@ export async function audit(args: string[]): Promise<number> {
     level,
     ignore: values.ignore ?? [],
   }
-  const findings = (await auditPackages(packages, context)).filter(hasFinding)
+  const { audited, unavailable } = await auditPackages(packages, context)
+  const findings = audited.filter(hasFinding)
 
   if (values.json === true)
     printJson(findings)
   else
     console.log(renderAudit(findings, packages.length))
 
-  return findings.some(each => each.blocked) ? 1 : 0
+  for (const reason of unavailable)
+    warn(`${reason}, so its advisories are not checked`)
+
+  if (findings.some(each => each.blocked))
+    return 1
+
+  return unavailable.length > 0 ? 2 : 0
 }

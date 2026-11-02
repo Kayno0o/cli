@@ -24,10 +24,16 @@ function resemblance(name: string, popular: string): string | undefined {
   if (squash(name) === squash(popular))
     return `${popular} spelled with other separators or case`
 
-  const edits = distance(name, popular)
-  const allowed = Math.min(name.length, popular.length) >= MIN_LENGTH * 2 ? 2 : 1
+  const shortest = Math.min(name.length, popular.length)
+  const allowed = shortest >= MIN_LENGTH * 2 ? 2 : 1
 
-  return Math.min(name.length, popular.length) >= MIN_LENGTH && edits <= allowed ? `${popular}, ${edits} ${edits === 1 ? 'edit' : 'edits'} away` : undefined
+  // names further apart in length than the edits allowed cannot match, which spares the distance computation
+  if (shortest < MIN_LENGTH || Math.abs(name.length - popular.length) > allowed)
+    return undefined
+
+  const edits = distance(name, popular)
+
+  return edits <= allowed ? `${popular}, ${edits} ${edits === 1 ? 'edit' : 'edits'} away` : undefined
 }
 
 // Up to three popular names this one looks like, closest first; none when the name is itself popular.

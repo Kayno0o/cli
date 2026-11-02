@@ -4,16 +4,16 @@ import type { Fetcher } from '../registry'
 import { fail, formatAge, jsonOption, parse, printJson, table, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
-import { loadConfigs, loadSettings, registryFor } from '../config'
-import { fetchDownloads, fetchPackument, isPublic } from '../registry'
+import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor } from '../config'
+import { fetchDownloads, fetchPackument, isPublic, unreachable } from '../registry'
 
 const usage = `pkg [check] <name>[@version]...
 
 Checks npm packages before they are added: whether the name exists, the latest and the newest version at least two weeks old, weekly downloads, licence, repository, install scripts and a near miss of a popular name.
 
-A \`.pkgrc.json\` (or ~/.config/pkg/config.json) with \`licenses\` (SPDX ids) refuses a licence outside the list or a missing one, and \`blockSeverity\` (low, moderate, high, critical) refuses a version with an advisory at that level or above.
+A \`.pkgrc.json\` (or ~/.config/pkg/config.json) with \`licenses\` (SPDX ids) refuses a licence outside the list or a missing one, and \`blockSeverity\` (low, moderate, high, critical; high when unset) refuses a version with an advisory at that level or above.
 
-Exits 0 when every package passes, 1 when one is missing, the version asked for is under the minimum age, its licence is outside the allowlist or an advisory reaches the threshold, 2 on a usage error.`
+Exits 0 when every package passes, 1 when one is blocked (missing, the version asked for is under the minimum age or has no date, its licence is outside the allowlist or an advisory reaches the threshold), 2 when it could not check (the registry unreachable, slow or answering badly, a broken .pkgrc.json, bunfig.toml or .npmrc) or on a usage error.`
 
 const options = {
   'json': jsonOption(),
@@ -37,14 +37,22 @@ export async function checkPackage(text: string, context: Context): Promise<Repo
 
   const input: AnalyzeInput = { spec, packument, downloads, registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings?.licenses }
   const report = analyze(input)
-  const { blockSeverity } = context.settings ?? {}
+  const blockSeverity = context.settings?.blockSeverity ?? DEFAULT_BLOCK_SEVERITY
 
-  if (blockSeverity === undefined || report.version === undefined)
+  if (report.version === undefined)
     return report
 
-  const found = await fetchAdvisories({ [spec.name]: [report.version] }, registry, context.fetcher)
+  const { found, unavailable, isUnsupported } = await fetchAdvisories({ [spec.name]: [report.version] }, registry, context.fetcher)
 
-  return analyze({ ...input, blockSeverity, advisories: advisoriesFor(found[spec.name], report.version) })
+  if (unavailable !== undefined && isUnsupported !== true)
+    return unreachable(unavailable)
+
+  const checked = analyze({ ...input, blockSeverity, advisories: advisoriesFor(found[spec.name], report.version) })
+
+  if (unavailable !== undefined)
+    checked.warnings.push(`${unavailable}, so its known advisories are not checked`)
+
+  return checked
 }
 
 function when(release: { published?: string | undefined } | undefined, now: number): string {

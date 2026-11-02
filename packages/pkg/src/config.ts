@@ -2,7 +2,7 @@ import type { Registry } from './registry'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { PUBLIC_REGISTRY } from './registry'
+import { PUBLIC_REGISTRY, unreachable } from './registry'
 
 // What one .npmrc or bunfig.toml says about registries: a default, one per scope, and tokens by registry address without its protocol.
 export interface RegistryConfig {
@@ -17,6 +17,8 @@ const COMMENT = /^\s*[#;]/
 const SCOPE_REGISTRY = /^(@[^:]+):registry$/
 const AUTH_TOKEN = /^(\/\/.+?):_authToken$/
 const PROTOCOL = /^\w+:/
+const TRAILING_SLASHES = /\/+$/
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 const QUOTES = /^(["'])(.*)\1$/
 
 function expand(value: string, env: Record<string, string | undefined>): string | undefined {
@@ -32,6 +34,11 @@ function expand(value: string, env: Record<string, string | undefined>): string 
   return missing ? undefined : expanded
 }
 
+// The value itself, undefined when it refers to an environment variable.
+function literal(value: string): string | undefined {
+  return expand(value, {}) === value ? value : undefined
+}
+
 export function parseNpmrc(text: string, env: Record<string, string | undefined>): RegistryConfig {
   const config: RegistryConfig = { scopes: {}, tokens: {}, scopeTokens: {} }
 
@@ -42,13 +49,14 @@ export function parseNpmrc(text: string, env: Record<string, string | undefined>
       continue
 
     const key = line.slice(0, at).trim()
-    const value = expand(line.slice(at + 1).trim().replace(QUOTES, '$2'), env)
+    const scope = SCOPE_REGISTRY.exec(key)?.[1]
+    const tokenFor = AUTH_TOKEN.exec(key)?.[1]
+    const raw = line.slice(at + 1).trim().replace(QUOTES, '$2')
+    // only a token reads the environment: a registry address built from it would let a repo's .npmrc send a variable's value to any host
+    const value = tokenFor === undefined ? literal(raw) : expand(raw, env)
 
     if (value === undefined || value === '')
       continue
-
-    const scope = SCOPE_REGISTRY.exec(key)?.[1]
-    const tokenFor = AUTH_TOKEN.exec(key)?.[1]
 
     if (scope !== undefined)
       config.scopes[scope] = value
@@ -67,7 +75,7 @@ function bunEntry(entry: BunRegistry, env: Record<string, string | undefined>): 
   const url = typeof entry === 'string' ? entry : entry.url
   const token = typeof entry === 'string' || entry.token === undefined ? undefined : expand(entry.token, env)
 
-  return { ...url === undefined ? {} : { url: expand(url, env) ?? url }, ...token === undefined ? {} : { token } }
+  return { ...url === undefined || literal(url) === undefined ? {} : { url }, ...token === undefined ? {} : { token } }
 }
 
 export function parseBunfig(text: string, env: Record<string, string | undefined>): RegistryConfig {
@@ -97,30 +105,43 @@ export function parseBunfig(text: string, env: Record<string, string | undefined
   return config
 }
 
-// The token of the longest key that prefixes the registry address, as npm does.
+// The token of the longest key that prefixes the registry address on a path boundary (`//host` never matches `//host.evil/`), as npm does.
 function tokenFor(config: RegistryConfig, url: string): string | undefined {
-  const address = url.replace(PROTOCOL, '')
-  const best = Object.keys(config.tokens).filter(key => address.startsWith(key)).sort((a, b) => b.length - a.length)[0]
+  const address = `${url.replace(PROTOCOL, '').replace(TRAILING_SLASHES, '')}/`
+  const best = Object.keys(config.tokens).filter(key => address.startsWith(`${key.replace(TRAILING_SLASHES, '')}/`)).sort((a, b) => b.length - a.length)[0]
 
   return best === undefined ? undefined : config.tokens[best]
 }
 
-// The registry a package name is installed from: a scope's own registry, else the default, the nearest config winning.
+// A token goes over https, or over http to the machine itself, never in clear to another host.
+function mayCarryToken(url: string): boolean {
+  const { protocol, hostname } = new URL(url)
+
+  return protocol === 'https:' || LOCAL_HOSTS.has(hostname)
+}
+
+// The registry a package name is installed from: a scope's own registry wherever a config sets it, else the nearest default, as npm picks it.
 export function registryFor(name: string, configs: RegistryConfig[]): Registry {
   const scope = name.startsWith('@') ? name.slice(0, name.indexOf('/')) : undefined
+  const scoped = scope === undefined ? undefined : configs.find(config => config.scopes[scope] !== undefined)
+  const url = (scope === undefined ? undefined : scoped?.scopes[scope]) ?? configs.find(config => config.registry !== undefined)?.registry
 
-  for (const config of configs) {
-    const url = scope === undefined ? config.registry : config.scopes[scope] ?? config.registry
+  if (url === undefined)
+    return { url: PUBLIC_REGISTRY }
 
-    if (url === undefined)
-      continue
+  const token = (scope === undefined ? undefined : scoped?.scopeTokens[scope]) ?? configs.map(other => tokenFor(other, url)).find(found => found !== undefined)
 
-    const token = (scope === undefined ? undefined : config.scopeTokens[scope]) ?? tokenFor(config, url) ?? configs.map(other => tokenFor(other, url)).find(found => found !== undefined)
+  return { url, token: mayCarryToken(url) ? token : undefined }
+}
 
-    return { url, token }
+// Parses a config file, ending the command on exit 2 ("could not check") when its text is broken.
+function readable<T>(path: string, parse: () => T): T {
+  try {
+    return parse()
   }
-
-  return { url: PUBLIC_REGISTRY }
+  catch (error) {
+    return unreachable(`${path} cannot be read: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 async function readIfThere(path: string): Promise<string | undefined> {
@@ -146,7 +167,7 @@ export async function loadConfigs(cwd = process.cwd(), env: Record<string, strin
     const npmrc = await readIfThere(join(dir, '.npmrc'))
 
     if (bunfig !== undefined)
-      configs.push(parseBunfig(bunfig, env))
+      configs.push(readable(join(dir, 'bunfig.toml'), () => parseBunfig(bunfig, env)))
 
     if (npmrc !== undefined)
       configs.push(parseNpmrc(npmrc, env))
@@ -158,6 +179,9 @@ export async function loadConfigs(cwd = process.cwd(), env: Record<string, strin
 export const SEVERITIES = ['low', 'moderate', 'high', 'critical'] as const
 
 export type Severity = typeof SEVERITIES[number]
+
+// The level `pkg check` refuses at when no config sets blockSeverity.
+export const DEFAULT_BLOCK_SEVERITY: Severity = 'high'
 
 // What pkg's own config file sets: the SPDX licences allowed, and the advisory severity at which a package is refused.
 export interface PkgSettings {
@@ -202,7 +226,7 @@ export async function loadSettings(cwd = process.cwd(), home = homedir()): Promi
     if (text === undefined)
       continue
 
-    const found = parseSettings(text)
+    const found = readable(file, () => parseSettings(text))
 
     settings.licenses ??= found.licenses
     settings.blockSeverity ??= found.blockSeverity

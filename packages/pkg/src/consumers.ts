@@ -20,8 +20,8 @@ export interface Consumer {
 // Folders never holding a consumer of their own.
 const SKIPPED = new Set(['node_modules', 'dist', 'build', 'vendor', 'target', 'coverage'])
 const MAX_DEPTH = 5
-// Specs naming a local copy rather than a registry version.
-const LOCAL_SPEC = /^(?:workspace|link|file|portal):/
+// Specs that are not a registry version or range: workspace:, link:, file:, git+, github:, tarball URLs, npm: aliases, catalog: and owner/repo shorthands.
+const LOCAL_SPEC = /[:/]/
 
 function packageFiles(dir: string, depth: number, found: string[]): string[] {
   let entries
@@ -79,6 +79,7 @@ export function findConsumers(name: string, root: string): Consumer[] {
   return consumers
 }
 
+// Whether the dependency is on something other than a registry version, which a bump must not overwrite.
 export function isLocal(consumer: Consumer): boolean {
   return LOCAL_SPEC.test(consumer.spec)
 }

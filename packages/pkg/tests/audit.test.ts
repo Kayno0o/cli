@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { advisoriesFor, filterAdvisories } from '../src/advisories'
+import { advisoriesFor, filterAdvisories, fixedVersion } from '../src/advisories'
 import { auditPackages, renderAudit } from '../src/commands/audit'
 import { checkPackage } from '../src/commands/check'
 import { loadSettings, parseSettings } from '../src/config'
@@ -21,6 +21,8 @@ function packument(name: string, versions: Record<string, { license?: string }>)
 const PACKUMENTS: Record<string, unknown> = {
   'https://registry.npmjs.org/mit-lib': packument('mit-lib', { '1.0.0': { license: 'MIT' } }),
   'https://registry.npmjs.org/gpl-lib': packument('gpl-lib', { '2.0.0': { license: 'GPL-3.0-only' } }),
+  'https://registry.npmjs.org/evil-lib': packument('evil-lib', { '1.0.0': { license: 'MIT' } }),
+  'https://registry.npmjs.org/@evil%2fscoped': packument('@evil/scoped', { '2.0.0': { license: 'MIT' } }),
   'https://registry.npmjs.org/none-lib': packument('none-lib', { '1.0.0': {} }),
   'https://registry.npmjs.org/dual-lib': packument('dual-lib', { '1.0.0': { license: '(GPL-3.0-only OR Apache-2.0)' } }),
   'https://registry.npmjs.org/vuln-lib': packument('vuln-lib', { '1.0.0': { license: 'MIT' }, '1.2.0': { license: 'MIT' }, '2.0.0': { license: 'MIT' } }),
@@ -140,12 +142,24 @@ describe('advisories', () => {
     expect(seen.find(each => each.method === 'POST')).toEqual({ url: 'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk', method: 'POST', body: '{"vuln-lib":["1.0.0"]}' })
   })
 
-  test('check asks for no advisories without a threshold', async () => {
+  test('check blocks at high with no threshold configured', async () => {
     const { fetcher, seen } = registry()
+    const report = await checkPackage('vuln-lib@1.0.0', { configs: [], minAgeDays: 14, now: NOW, fetcher })
 
-    await checkPackage('vuln-lib@1.0.0', { configs: [], minAgeDays: 14, now: NOW, fetcher })
+    expect(seen.some(each => each.method === 'POST')).toBe(true)
+    expect(report.blocked).toBe(true)
+  })
 
-    expect(seen.some(each => each.method === 'POST')).toBe(false)
+  test('a vulnerable prerelease is reported', () => {
+    const raw = ADVISORIES['vuln-lib'].map(each => ({ id: each.id, ghsa: each.url.split('/').at(-1), url: each.url, title: each.title, severity: each.severity as 'high' | 'low', vulnerable: each.vulnerable_versions }))
+
+    expect(advisoriesFor(raw, '1.0.0-beta.1').map(each => each.id)).toEqual([11, 12])
+  })
+
+  test('fixedVersion reads the exclusive upper bound of the range the version is in', () => {
+    expect(fixedVersion('>=1.0.0 <1.2.0 || >=2.0.0 <2.1.0', '2.0.5')).toBe('2.1.0')
+    expect(fixedVersion('<=1.2.0', '1.0.0')).toBeUndefined()
+    expect(fixedVersion('<1.2.0', '1.5.0')).toBeUndefined()
   })
 })
 
@@ -159,12 +173,16 @@ const LOCK = `{
     "a/vuln-lib": ["vuln-lib@1.2.0", "", {}, "sha512-d"],
     "root-tool": ["root-tool@workspace:packages/tool"],
     "git-lib": ["git-lib@github:owner/repo#abc"],
+    "lodash": ["lodash@npm:evil-lib@1.0.0", "", {}, "sha512-e"],
+    "@s/alias": ["@s/alias@npm:@evil/scoped@2.0.0", "", {}, "sha512-f"],
   },
 }`
 
 describe('parseBunLock', () => {
-  test('lists registry packages once per version, leaving workspace and git sources out', () => {
+  test('lists registry packages once per version, leaving workspace and git sources out and reading an npm alias as the package it names', () => {
     expect(parseBunLock(LOCK)).toEqual([
+      { name: '@evil/scoped', version: '2.0.0' },
+      { name: 'evil-lib', version: '1.0.0' },
       { name: 'gpl-lib', version: '2.0.0' },
       { name: 'mit-lib', version: '1.0.0' },
       { name: 'vuln-lib', version: '1.0.0' },
@@ -178,7 +196,7 @@ describe('auditPackages', () => {
 
   test('groups licence and advisory findings per package, looking each name up once', async () => {
     const { fetcher, seen } = registry()
-    const audited = await auditPackages(parseBunLock(LOCK), base(fetcher))
+    const { audited } = await auditPackages(parseBunLock(LOCK), base(fetcher))
     const findings = audited.filter(each => each.blocked || each.warnings.length > 0 || each.advisories.length > 0)
 
     expect(findings.map(each => `${each.name}@${each.version}`)).toEqual(['gpl-lib@2.0.0', 'vuln-lib@1.0.0', 'vuln-lib@1.2.0'])
@@ -192,8 +210,18 @@ describe('auditPackages', () => {
 
   test('--audit-level and --ignore narrow the advisories, an unblocked package stays clean', async () => {
     const { fetcher } = registry()
-    const audited = await auditPackages(parseBunLock(LOCK), { ...base(fetcher), settings: {}, level: 'high', ignore: ['GHSA-aaaa-bbbb-cccc'] })
+    const { audited } = await auditPackages(parseBunLock(LOCK), { ...base(fetcher), settings: {}, level: 'high', ignore: ['GHSA-aaaa-bbbb-cccc'] })
 
     expect(audited.every(each => !each.blocked && each.advisories.length === 0)).toBe(true)
+  })
+
+  test('an advisory lookup that fails is reported as unavailable, not as no advisory', async () => {
+    const { fetcher } = registry()
+    const failing: Fetcher = async (url, init) => url.endsWith('/bulk') ? new Response('down', { status: 503 }) : fetcher(url, init)
+    const { audited, unavailable } = await auditPackages(parseBunLock(LOCK), { ...base(failing), settings: {} })
+
+    expect(unavailable).toHaveLength(1)
+    expect(unavailable[0]).toContain('503')
+    expect(audited.every(each => each.advisories.length === 0)).toBe(true)
   })
 })

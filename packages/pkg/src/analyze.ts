@@ -4,9 +4,12 @@ import type { Packument, Version } from './registry'
 import { filterAdvisories } from './advisories'
 import { isLicenseAllowed } from './licenses'
 import { nearMisses } from './nearmiss'
+import { PUBLIC_REGISTRY } from './registry'
+import { isRange } from './semver'
 
 export const DEFAULT_MIN_AGE_DAYS = 14
 const DAY = 86_400_000
+const PUBLIC_HOST = new URL(PUBLIC_REGISTRY).host
 const INSTALL_SCRIPTS = ['preinstall', 'install', 'postinstall'] as const
 const GIT_PREFIX = /^git\+/
 const VERSION_SEPARATOR = /(?<=.)@/
@@ -67,6 +70,9 @@ function resolve(packument: Packument, request: string | undefined): string | un
 
   if (versions.includes(wanted))
     return wanted
+
+  if (!isRange(wanted))
+    return undefined
 
   return versions.filter(version => Bun.semver.satisfies(version, wanted)).sort(Bun.semver.order).at(-1)
 }
@@ -150,7 +156,11 @@ export function analyze(input: AnalyzeInput): Report {
   const age = ageDays(report.published, now)
 
   if (age === undefined) {
-    report.warnings.push(`${registry} gives no publish date for ${version}, its age cannot be checked`)
+    // npmjs.org always dates a version, so a missing date there is a way round the age check
+    const isBlocking = minAgeDays > 0 && registry === PUBLIC_HOST
+
+    report.blocked ||= isBlocking
+    report.warnings.push(`${registry} gives no publish date for ${version}, its age cannot be checked${isBlocking ? ' and it is refused' : ''}`)
   }
   else if (age < minAgeDays) {
     report.blocked = true

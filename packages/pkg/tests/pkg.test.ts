@@ -1,9 +1,15 @@
 import type { Fetcher } from '../src/registry'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Exit } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
+import { fetchAdvisories } from '../src/advisories'
 import { parseSpec } from '../src/analyze'
 import { checkPackage, render } from '../src/commands/check'
-import { parseBunfig, parseNpmrc, registryFor } from '../src/config'
+import { loadConfigs, loadSettings, parseBunfig, parseNpmrc, registryFor } from '../src/config'
 import { nearMisses } from '../src/nearmiss'
+import { fetchDownloads, fetchPackument } from '../src/registry'
 
 const FIXTURES = new URL('fixtures/', import.meta.url)
 
@@ -23,6 +29,7 @@ async function recorded(): Promise<{ fetcher: Fetcher, seen: { url: string, auth
     'https://registry.npmjs.org/esbuild': { status: 200, body: await fixture('esbuild.json') },
     'https://registry.npmjs.org/@types%2fnode': { status: 200, body: await fixture('types-node.json') },
     'https://registry.npmjs.org/definitely-not-a-pkg-zzq': await fixture('registry-missing.json'),
+    'https://registry.npmjs.org/-/npm/v1/security/advisories/bulk': { status: 200, body: {} },
     'https://api.npmjs.org/downloads/point/last-week/left-pad': await fixture('downloads-left-pad.json'),
     'https://api.npmjs.org/downloads/point/last-week/esbuild': await fixture('downloads-esbuild.json'),
     'https://api.npmjs.org/downloads/point/last-week/definitely-not-a-pkg-zzq': await fixture('downloads-missing.json'),
@@ -115,12 +122,15 @@ describe('checkPackage', () => {
     const scoped: Fetcher = async (url, init) => {
       seen.push({ url, authorization: (init?.headers as Record<string, string> | undefined)?.authorization })
 
-      return Response.json(body)
+      return Response.json(init?.method === 'POST' ? {} : body)
     }
     const report = await checkPackage('@types/node', { configs, fetcher: scoped, minAgeDays: 14 })
 
     expect(report.registry).toBe('registry.example.test')
-    expect(seen).toEqual([{ url: 'https://registry.example.test/npm/@types%2fnode', authorization: 'Bearer secret' }])
+    expect(seen).toEqual([
+      { url: 'https://registry.example.test/npm/@types%2fnode', authorization: 'Bearer secret' },
+      { url: 'https://registry.example.test/npm/-/npm/v1/security/advisories/bulk', authorization: 'Bearer secret' },
+    ])
     expect(report.downloads).toBeUndefined()
   })
 
@@ -162,6 +172,197 @@ describe('registry configuration', () => {
     const far = parseNpmrc('@kaynooo:registry=https://far.test/', {})
 
     expect(registryFor('@kaynooo/a', [near, far]).url).toBe('https://near.test/')
+  })
+
+  test('lets a scope key win over a nearer default registry, as npm does', () => {
+    const near = parseNpmrc('registry=https://near.test/', {})
+    const far = parseNpmrc('@kaynooo:registry=https://far.test/', {})
+
+    expect(registryFor('@kaynooo/a', [near, far]).url).toBe('https://far.test/')
+    expect(registryFor('@other/a', [near, far]).url).toBe('https://near.test/')
+    expect(registryFor('left-pad', [near, far]).url).toBe('https://near.test/')
+  })
+
+  test('matches a token on a path boundary and never sends it over plain http', () => {
+    const config = parseNpmrc('registry=https://host.test/npm\n//host.test:_authToken=abc\n//host.test.evil/:_authToken=bad', {})
+    const other = parseNpmrc('registry=https://host.test.evil/\n//host.test:_authToken=abc', {})
+    const plain = parseNpmrc('registry=http://host.test/\n//host.test/:_authToken=abc', {})
+    const local = parseNpmrc('registry=http://localhost:4873/\n//localhost:4873/:_authToken=abc', {})
+
+    expect(registryFor('a', [config]).token).toBe('abc')
+    expect(registryFor('a', [other]).token).toBeUndefined()
+    expect(registryFor('a', [plain]).token).toBeUndefined()
+    expect(registryFor('a', [local]).token).toBe('abc')
+  })
+
+  test('reads the environment for a token only, not for a registry address', () => {
+    const config = parseNpmrc(`registry=https://${BRACED_TOKEN}.evil.test/\n@kaynooo:registry=https://x.test/\n`, { TOKEN: 'secret' })
+    const bunfig = parseBunfig('[install]\nregistry = "https://$TOKEN.evil.test/"', { TOKEN: 'secret' })
+
+    expect(config.registry).toBeUndefined()
+    expect(bunfig.registry).toBeUndefined()
+  })
+
+  test('ends on exit 2, could not check, for a broken config file', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pkg-config-'))
+
+    writeFileSync(join(dir, 'bunfig.toml'), '[install\nbroken')
+    writeFileSync(join(dir, '.pkgrc.json'), '{ nope')
+
+    const thrown = async (run: () => Promise<unknown>): Promise<unknown> => {
+      try {
+        return await run()
+      }
+      catch (error) {
+        return error
+      }
+    }
+    const configs = await thrown(async () => loadConfigs(dir, {}, dir))
+    const settings = await thrown(async () => loadSettings(dir, dir))
+
+    expect(configs).toBeInstanceOf(Exit)
+    expect((configs as Exit).code).toBe(2)
+    expect((configs as Exit).message).toContain('could not check')
+    expect((settings as Exit).code).toBe(2)
+  })
+
+  test('loads every config from the directory up, then the home', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'pkg-home-'))
+    const dir = join(home, 'a', 'b')
+
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, '.npmrc'), 'registry=https://near.test/')
+    writeFileSync(join(home, 'bunfig.toml'), '[install.scopes]\n"@x" = "https://home.test/"')
+
+    const configs = await loadConfigs(dir, {}, home)
+
+    expect(configs.map(each => each.registry ?? Object.values(each.scopes)[0])).toEqual(['https://near.test/', 'https://home.test/'])
+  })
+})
+
+describe('fetchDownloads', () => {
+  test('reads the weekly count, undefined for an unknown name or an unreadable answer', async () => {
+    expect(await fetchDownloads('left-pad', async () => Response.json({ downloads: 42 }))).toBe(42)
+    expect(await fetchDownloads('nope', async () => new Response('{}', { status: 404 }))).toBeUndefined()
+    expect(await fetchDownloads('nope', async () => new Response('<html>', { status: 200 }))).toBeUndefined()
+  })
+})
+
+describe('registry failures end on exit 2', () => {
+  const registry = { url: 'https://registry.test' }
+  const failure = async (fetcher: Fetcher, name = 'left-pad'): Promise<unknown> => {
+    try {
+      return await fetchPackument(name, registry, fetcher)
+    }
+    catch (error) {
+      return error
+    }
+  }
+
+  test('an unreachable registry, a 502, a 200 HTML page and another package\'s metadata', async () => {
+    for (const fetcher of [
+      async () => Promise.reject(new Error('connection refused')),
+      async () => new Response('bad gateway', { status: 502 }),
+      async () => new Response('<html>captive portal</html>', { status: 200 }),
+      async () => Response.json({ name: 'something-else' }),
+    ]) {
+      const error = await failure(fetcher)
+
+      expect(error).toBeInstanceOf(Exit)
+      expect((error as Exit).code).toBe(2)
+      expect((error as Exit).message).toStartWith('could not check: ')
+    }
+  })
+
+  test('a missing package is undefined, an invalid name is refused before any request, every request has a deadline', async () => {
+    let signal: AbortSignal | null | undefined
+
+    expect(await fetchPackument('left-pad', registry, async (_url, init) => {
+      signal = init?.signal
+
+      return new Response('{}', { status: 404 })
+    })).toBeUndefined()
+    expect(signal).toBeInstanceOf(AbortSignal)
+    expect(((await failure(async () => new Response('{}'), '../etc/passwd')) as Exit).message).toContain('not a valid npm package name')
+  })
+})
+
+describe('analyze edge cases', () => {
+  const dated = (time: Record<string, string>): Fetcher => async (url) => {
+    if (url.endsWith('/bulk'))
+      return Response.json({})
+
+    return Response.json({ 'name': 'some-lib', 'dist-tags': { latest: '1.0.0' }, time, 'versions': { '1.0.0': { version: '1.0.0' }, '1.1.0': { version: '1.1.0' } } })
+  }
+
+  test('an invalid range resolves to nothing instead of the highest version', async () => {
+    const report = await checkPackage('some-lib@banana', { configs: [], minAgeDays: 14, fetcher: dated({ '1.0.0': '2020-01-01T00:00:00.000Z' }) })
+
+    expect(report.version).toBeUndefined()
+    expect(report.blocked).toBe(true)
+  })
+
+  test('a version with no publish time is refused on the public registry, a warning elsewhere or with no minimum age', async () => {
+    const fetcher = dated({})
+    const publicRegistry = await checkPackage('some-lib', { configs: [], minAgeDays: 14, fetcher })
+    const noMinimum = await checkPackage('some-lib', { configs: [], minAgeDays: 0, fetcher })
+    const private_ = await checkPackage('some-lib', { configs: [parseNpmrc('registry=https://private.test/', {})], minAgeDays: 14, fetcher })
+
+    expect(publicRegistry.blocked).toBe(true)
+    expect(publicRegistry.warnings.join()).toContain('no publish date')
+    expect(noMinimum.blocked).toBe(false)
+    expect(private_.blocked).toBe(false)
+  })
+
+  test('a long name far from every popular name skips the edit distance', () => {
+    const started = performance.now()
+    const names = Array.from({ length: 1500 }, (_, index) => `@scope${index}/package-with-a-long-name-${index}`)
+
+    for (const name of names)
+      nearMisses(name)
+
+    expect(performance.now() - started).toBeLessThan(2000)
+  })
+})
+
+describe('bad advisory answers are not read as none', () => {
+  const registry = { url: 'https://registry.test' }
+
+  test('an unreachable registry, a 500 and a non-JSON page say why; a missing endpoint is unsupported', async () => {
+    const rejected = await fetchAdvisories({ a: ['1.0.0'] }, registry, async () => Promise.reject(new Error('timeout')))
+    const broken = await fetchAdvisories({ a: ['1.0.0'] }, registry, async () => new Response('x', { status: 500 }))
+    const html = await fetchAdvisories({ a: ['1.0.0'] }, registry, async () => new Response('<html>'))
+    const missing = await fetchAdvisories({ a: ['1.0.0'] }, registry, async () => new Response('{}', { status: 404 }))
+    const none = await fetchAdvisories({ a: ['1.0.0'] }, registry, async () => Response.json({}))
+
+    expect(rejected.unavailable).toContain('timeout')
+    expect(broken.unavailable).toContain('500')
+    expect(html.unavailable).toContain('not JSON')
+    expect(missing).toMatchObject({ isUnsupported: true })
+    expect(none.unavailable).toBeUndefined()
+  })
+
+  test('check ends on exit 2 when the advisories cannot be read, and only warns without an endpoint', async () => {
+    const answering = (status: number): Fetcher => async (url) => {
+      if (url.endsWith('/bulk'))
+        return new Response('{}', { status })
+
+      return Response.json({ 'name': 'left-pad', 'dist-tags': { latest: '1.0.0' }, 'versions': { '1.0.0': { version: '1.0.0' } }, 'time': { '1.0.0': '2020-01-01T00:00:00.000Z' } })
+    }
+    const context = (status: number) => ({ configs: [], settings: {}, minAgeDays: 14, fetcher: answering(status) })
+
+    try {
+      await checkPackage('left-pad', context(502))
+      expect.unreachable()
+    }
+    catch (error) {
+      expect((error as Exit).code).toBe(2)
+    }
+
+    const report = await checkPackage('left-pad', context(404))
+
+    expect(report.blocked).toBe(false)
+    expect(report.warnings.join()).toContain('no advisory endpoint')
   })
 })
 
