@@ -48,10 +48,26 @@ describe('watchRuns output', () => {
 
   test('on a terminal, redraws one line per run and leaves each run\'s last status once', async () => {
     const { written, out } = stream(true)
+    // A terminal only takes control codes when nothing turns them off, as `check` does for its steps.
+    const saved = { NO_COLOR: process.env.NO_COLOR, NODE_DISABLE_COLORS: process.env.NODE_DISABLE_COLORS, TERM: process.env.TERM }
 
-    await withFastPoll([run(2, 'success'), run(1, 'success')], async () => {
-      expect(await watchRuns(runs => runs, 1000, undefined, undefined, out)).toBe(0)
-    })
+    try {
+      delete process.env.NO_COLOR
+      delete process.env.NODE_DISABLE_COLORS
+      process.env.TERM = 'xterm-256color'
+
+      await withFastPoll([run(2, 'success'), run(1, 'success')], async () => {
+        expect(await watchRuns(runs => runs, 1000, undefined, undefined, out)).toBe(0)
+      })
+    }
+    finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined)
+          delete process.env[name]
+        else
+          process.env[name] = value
+      }
+    }
 
     const text = written.join('')
     const left = Bun.stripANSI(text.slice(text.lastIndexOf('\x1B[2K') + 4))
