@@ -7,7 +7,7 @@ import { version } from '../package.json'
 import { git } from './git'
 import { parseStatus, summary } from './status'
 
-const USAGE = 'gst [--log N]: the repository\'s branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked\n\nExits 0 when it printed the status, 1 outside a git repository, 2 on a usage error.'
+const USAGE = 'gst [--log N]: the repository\'s branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked\n\nExits 0 when it printed the status, 2 outside a git repository or on a usage error.'
 
 const OPTIONS = {
   log: { type: 'string', short: 'l', description: 'add the last N commits as <sha7> <title>' },
@@ -37,7 +37,7 @@ async function main(argv: string[]): Promise<number> {
   const status = read.code === 0 ? parseStatus(read.stdout) : null
 
   if (status === null)
-    fail(read.stderr.trim() || 'not inside a git repository', 1)
+    fail(read.stderr.trim() || 'not inside a git repository')
 
   const commits = log?.code === 0 ? log.stdout.trimEnd().split('\n').filter(Boolean).map(line => line.split('\0')) : []
 

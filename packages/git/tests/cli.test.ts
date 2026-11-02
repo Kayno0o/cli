@@ -83,7 +83,7 @@ describe('gst', () => {
     rmSync(join(dir, '.git'), { recursive: true })
     const result = gst()
 
-    expect(result.code).toBe(1)
+    expect(result.code).toBe(2)
     expect(result.err).toContain('not a git repository')
   })
 })
@@ -162,6 +162,22 @@ describe('gc', () => {
     expect(result.code).toBe(1)
     expect(result.err).toContain('git commit failed, the paths were unstaged')
     expect(git('status', '--porcelain')).toBe('?? a.ts')
+  })
+
+  test('takes a path with glob characters literally, committing nothing else', () => {
+    file('a[1].ts')
+    file('a1.ts')
+    const result = gc('fix: a', '--', 'a[1].ts')
+
+    expect(result.code).toBe(0)
+    expect(git('status', '--porcelain')).toBe('?? a1.ts')
+  })
+
+  test('outside a repository it exits 2', () => {
+    rmSync(join(dir, '.git'), { recursive: true })
+    file('a.ts')
+
+    expect(gc('fix: a', '--', 'a.ts').code).toBe(2)
   })
 
   test('asks for one quoted title and the paths after --', () => {

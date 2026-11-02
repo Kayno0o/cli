@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { BULLETS, commitMessageViolation, TITLE, TITLE_LINE, TOO_LONG, TRAILERS, WRAPPED } from '../src/message'
+import { BULLETS, commitMessageViolation, TITLE, TITLE_LINE, TITLE_TOO_LONG, TOO_LONG, TRAILERS, WRAPPED } from '../src/message'
 
 describe('commitMessageViolation', () => {
   const refused: [string, string, string][] = [
     ['a title that is no Conventional Commit', 'Fixed the band', TITLE],
     ['a co-author trailer', 'fix: x\n\nCo-Authored-By: Claude <noreply@anthropic.com>', TRAILERS],
     ['a generated-with line', 'fix: x\n\nGenerated with Claude Code', TRAILERS],
+    ['an unknown type', 'wip: x', TITLE],
+    ['a title over 100 characters', `fix: ${'x'.repeat(100)}`, TITLE_TOO_LONG],
+    ['a bullet list before a breaking footer', 'feat(api): drop v1\n\n- one\n- two\n\nBREAKING CHANGE: v1 is gone', BULLETS],
     ['a title running over two lines', 'fix: x\nand y', TITLE_LINE],
     ['a bullet list body', 'fix: x\n\n- one\n- two', BULLETS],
     ['three body lines', 'fix: x\n\nOne.\nTwo.\nThree.', TOO_LONG],
@@ -27,6 +30,7 @@ describe('commitMessageViolation', () => {
     ['a title git writes', 'Merge branch \'x\''],
     ['a breaking change giving full details', 'feat(api)!: drop v1\n\n- one\n- two\n- three'],
     ['a breaking change footer', 'feat(api): drop v1\n\nRoutes move.\nClients break.\nBREAKING CHANGE: v1 is gone'],
+    ['a body sentence starting with Generated with', 'fix: x\n\nGenerated with the new codegen.'],
     ['a title naming generated code', 'fix: types generated with openapi'],
     ['surrounding blank lines and trailing spaces', '\nfix: x  \n\n'],
   ]

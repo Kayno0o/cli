@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 
 import process from 'node:process'
-import { fail, parse, runHint, runMain } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, parse, runHint, runMain } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { git } from './git'
 import { commitMessageViolation, RULE, TICKET } from './message'
 
-const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged\n\nExits 0 when it committed, 1 when the message is refused or git fails (nothing is committed), 2 on a usage error.'
+const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged\n\nExits 0 when it committed, 1 when the message is refused or git fails (nothing is committed), 2 on a usage error or outside a git repository, 128 plus the signal when interrupted.'
 
 const OPTIONS = {
   message: { type: 'string', short: 'm', multiple: true, description: 'a line on what changed, at most two' },
@@ -14,6 +14,9 @@ const OPTIONS = {
 } as const
 
 const RENAME = /^[RC]\d*$/
+const NOT_A_REPOSITORY = /not a git repository/i
+// Every path given is a file name, never a glob or a pathspec magic like :(top).
+const LITERAL = { ...process.env, GIT_LITERAL_PATHSPECS: '1' }
 
 // The message as git will store it: the title, the description lines, then the ticket lines, each block after a blank line.
 function messageOf(title: string, lines: string[], tickets: string[]): string {
@@ -21,10 +24,10 @@ function messageOf(title: string, lines: string[], tickets: string[]): string {
 }
 
 async function checked(args: string[]): Promise<string> {
-  const { code, stdout, stderr } = await git(args)
+  const { code, stdout, stderr } = await git(args, LITERAL)
 
   if (code !== 0)
-    fail(`git ${args[0]} failed, nothing committed:\n${stderr.trim()}`, 1)
+    fail(`git ${args[0]} failed, nothing committed:\n${stderr.trim()}`, NOT_A_REPOSITORY.test(stderr) ? 2 : 1)
 
   return stdout
 }
@@ -39,9 +42,9 @@ async function stagedElsewhere(paths: string[]): Promise<string[]> {
 
 // Puts the index back as it was for the given paths after a refused commit.
 async function unstage(paths: string[]): Promise<void> {
-  const hasHead = (await git(['rev-parse', '--verify', '-q', 'HEAD'])).code === 0
+  const hasHead = (await git(['rev-parse', '--verify', '-q', 'HEAD'], LITERAL)).code === 0
 
-  await git(hasHead ? ['reset', '-q', '--', ...paths] : ['rm', '-r', '-q', '--cached', '--', ...paths])
+  await git(hasHead ? ['reset', '-q', '--', ...paths] : ['rm', '-r', '-q', '--cached', '--', ...paths], LITERAL)
 }
 
 function fileLine(line: string): string {
@@ -89,23 +92,36 @@ async function main(argv: string[]): Promise<number> {
   if (others.length > 0)
     fail(`nothing staged: the index already holds ${others.join(', ')}, which this commit would carry along`, 1, runHint(`git restore --staged -- ${others.join(' ')}`, 'unstage them, or name them in the paths too'))
 
-  await checked(['add', '--', ...paths])
+  const signals = holdSignals()
 
-  const commit = await git(['commit', '--cleanup=whitespace', '-m', message])
+  try {
+    await checked(['add', '--', ...paths])
 
-  if (commit.code !== 0) {
-    await unstage(paths)
-    console.error(`gc: git commit failed, the paths were unstaged:\n${(commit.stderr + commit.stdout).trim()}`)
+    if (signals.signal !== undefined) {
+      await unstage(paths)
 
-    return 1
+      return exitCodeOf(null, signals.signal)
+    }
+
+    const commit = await git(['commit', '--only', '--cleanup=whitespace', '-m', message, '--', ...paths], LITERAL)
+
+    if (commit.code !== 0) {
+      await unstage(paths)
+      console.error(`gc: git commit failed, the paths were unstaged:\n${(commit.stderr + commit.stdout).trim()}`)
+
+      return 1
+    }
+
+    const files = await checked(['show', '--format=%h %s', '--name-status', '-M', 'HEAD'])
+    const [head = '', ...lines] = files.trimEnd().split('\n')
+
+    console.log([head, ...lines.filter(Boolean).map(fileLine)].join('\n'))
+
+    return signals.signal === undefined ? 0 : exitCodeOf(null, signals.signal)
   }
-
-  const files = await checked(['show', '--format=%h %s', '--name-status', '-M', 'HEAD'])
-  const [head = '', ...lines] = files.trimEnd().split('\n')
-
-  console.log([head, ...lines.filter(Boolean).map(fileLine)].join('\n'))
-
-  return 0
+  finally {
+    signals.release()
+  }
 }
 
 process.exitCode = await runMain({ name: 'gc', version, run: main })
