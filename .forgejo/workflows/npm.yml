@@ -26,8 +26,10 @@ jobs:
           TAG: ${{ github.ref_name }}
 
       # cli-changelog only goes to the Forgejo registry: the action skips npmjs without a token.
+      # The repo .npmrc maps @kaynooo to git.kaynooo.fr and bun publish follows it, so the token has to be written for that host.
       - uses: https://git.kaynooo.fr/kaynooo/actions/npm-publish@v1
         with:
           working-directory: ${{ steps.package.outputs.directory }}
+          server: https://git.kaynooo.fr
           token: ${{ secrets.PACKAGE_TOKEN }}
           npm-token: ${{ steps.package.outputs.directory != 'packages/changelog' && secrets.NPM_TOKEN || '' }}
