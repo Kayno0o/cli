@@ -17,6 +17,8 @@ export type Command = {
   summary: Summary
   // The heading the command is listed under in the help, after those with none.
   group?: string
+  // Runs as usual but is left out of the help, the typo hints and `__complete`, for a command only a script or a shell binding calls.
+  hidden?: boolean
 } & (
   | { run: (args: string[]) => Promise<number> }
   // A group of subcommands dispatched the same way, with its own help; `commands` may be a function for a group made of lazy commands alone.
@@ -51,8 +53,9 @@ const LEVEL_OPTIONS = {
 const TOP_OPTIONS = { ...LEVEL_OPTIONS, version: { type: 'boolean', short: 'v', description: 'print the version' } } as const satisfies Options
 
 // The rows under `Commands:`, then a heading per group in the order first met, names aligned across them all.
-async function commandRows(commands: Commands, colors: Colors): Promise<string[]> {
-  const width = Math.max(...Object.keys(commands).map(name => name.length))
+async function commandRows(all: Commands, colors: Colors): Promise<string[]> {
+  const commands = shown(all)
+  const width = Math.max(0, ...Object.keys(commands).map(name => name.length))
   const groups = new Map<string, string[]>([['Commands:', []]])
   const summaries = await Promise.all(Object.values(commands).map(async ({ summary }) => resolveSummary(summary)))
 
@@ -65,6 +68,11 @@ async function commandRows(commands: Commands, colors: Colors): Promise<string[]
   }
 
   return [...groups].filter(([, rows]) => rows.length > 0).flatMap(([heading, rows], index) => [...index === 0 ? [] : [''], colors.bold(heading), ...rows])
+}
+
+// The commands that are not hidden.
+function shown(commands: Commands): Commands {
+  return Object.fromEntries(Object.entries(commands).filter(([, { hidden }]) => hidden !== true))
 }
 
 // The output flags typed before the command name, applied and dropped: `ft --plain runs`.
@@ -254,7 +262,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   }
 
   if (command === undefined) {
-    const meant = closest(name, Object.keys(level.commands))
+    const meant = closest(name, Object.keys(shown(level.commands)))
 
     printError(prefix, `no command ${name}`, meant === undefined ? `run ${prefix} --help for its commands` : `did you mean ${meant}?`)
 
@@ -298,10 +306,14 @@ async function optionsOf(run: (args: string[]) => Promise<number>): Promise<Opti
   return {}
 }
 
-// A leaf command's candidates: its long options for a word starting with a dash, else paths.
+// A leaf command's candidates: the choices of the string option just typed, its long options for a word starting with a dash, else paths.
 async function leafCandidates(run: (args: string[]) => Promise<number>, words: string[]): Promise<string[]> {
-  if (!(words.at(-1) ?? '').startsWith('-'))
-    return [FILES]
+  if (!(words.at(-1) ?? '').startsWith('-')) {
+    const flag = words.at(-2)
+    const option = flag?.startsWith('-') === true ? Object.entries(await optionsOf(run)).find(([name, { short }]) => flag === `--${name}` || flag === `-${short}`)?.[1] : undefined
+
+    return option?.type === 'string' && option.choices !== undefined ? [...option.choices] : [FILES]
+  }
 
   return Object.entries(await optionsOf(run)).map(([name, option]) => option.description === undefined ? `--${name}` : `--${name}\t${option.description}`)
 }
@@ -319,7 +331,7 @@ async function candidates(scope: Scope, defaultCommand: string | undefined, word
   }
 
   if (listing)
-    return Promise.all(Object.entries(commands).map(async ([name, { summary }]) => `${name}\t${await resolveSummary(summary)}`))
+    return Promise.all(Object.entries(shown(commands)).map(async ([name, { summary }]) => `${name}\t${await resolveSummary(summary)}`))
 
   if (command === undefined) {
     const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]

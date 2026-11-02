@@ -118,6 +118,20 @@ describe('runCli', () => {
   })
 })
 
+describe('hidden commands', () => {
+  const hiding = { ...cli, commands: { ...cli.commands, names: { summary: 'for the shell', hidden: true, run: cli.commands.echo.run } } }
+
+  test('run as usual but stay out of the help and the completion', async () => {
+    expect((await capture(async () => runCli(hiding, ['names', 'a']))).out).toBe('a\n')
+    expect((await capture(async () => runCli(hiding, ['--help']))).out).not.toContain('names')
+    expect((await capture(async () => runCli(hiding, ['__complete', '']))).out).not.toContain('names')
+  })
+
+  test('are never named by a typo hint', async () => {
+    expect((await capture(async () => runCli(hiding, ['name']))).err).toBe('error: demo: no command name\n  hint: run demo --help for its commands\n')
+  })
+})
+
 describe('runMain', () => {
   const main = (run: (args: string[]) => Promise<number>) => ({ name: 'solo', version: '0.4.0', run })
 
@@ -160,6 +174,18 @@ describe('__complete', () => {
       } },
     },
   }
+
+  test('offers the choices of the string option just typed', async () => {
+    const choosing = { ...cli, commands: { ...cli.commands, pick: { summary: 'picks', run: async (args: string[]) => {
+      parse(args, 'pick', { bump: { type: 'string', short: 'b', choices: ['patch', 'minor'] }, name: { type: 'string' } })
+
+      return 0
+    } } } }
+
+    expect((await capture(async () => runCli(choosing, ['__complete', 'pick', '--bump', '']))).out).toBe('patch\nminor\n')
+    expect((await capture(async () => runCli(choosing, ['__complete', 'pick', '-b', 'm']))).out).toBe('patch\nminor\n')
+    expect((await capture(async () => runCli(choosing, ['__complete', 'pick', '--name', '']))).out).toBe('__files__\n')
+  })
 
   test('lists the commands, or a group\'s, with their summaries', async () => {
     expect((await capture(async () => runCli(parsing, ['__complete', '']))).out).toBe('echo\tprints its arguments\nboom\tfails\nplan\ta group\nport\tparses first\n')

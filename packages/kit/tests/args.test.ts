@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { duration, Exit, HelpShown, jsonOption, optionRows, paint, parse, readInput, UsageError, wholeNumber } from '../src'
+import { duration, Exit, HelpShown, jsonOption, oneOf, optionRows, paint, parse, readInput, UsageError, wholeNumber } from '../src'
 import { tempDirs } from '../src/test'
 
 const temp = tempDirs()
@@ -126,6 +126,29 @@ describe('duration', () => {
   test('refuses anything else', () => {
     expect(() => duration('5 min', 'timeout', 0)).toThrow(new Exit('--timeout takes a duration such as 30s, 5m, 1h or 7d, not 5 min', 2))
     expect(() => duration('0', 'timeout', 0)).toThrow(Exit)
+  })
+})
+
+describe('choices', () => {
+  const bump = { bump: { type: 'string', description: 'the bump', choices: ['patch', 'minor', 'major'] } } as const
+
+  test('accepts a value in the set, or none', () => {
+    expect(parse(['--bump', 'minor'], 'u', bump).values.bump).toBe('minor')
+    expect(parse([], 'u', bump).values.bump).toBeUndefined()
+  })
+
+  test('refuses another, naming the allowed ones', () => {
+    expect(() => parse(['--bump', 'big'], 'u', bump)).toThrow('--bump takes one of patch, minor, major, not big')
+    expect(() => parse(['--bump', 'patch', '--bump', 'big'], 'u', { bump: { ...bump.bump, multiple: true } })).toThrow(UsageError)
+  })
+
+  test('shows them as the option\'s value in the help', () => {
+    expect(optionRows(bump, paint({ isTTY: false }))).toEqual(['      --bump <patch|minor|major>  the bump'])
+  })
+
+  test('checks a positional against a set the same way', () => {
+    expect(oneOf('minor', '<bump>', ['patch', 'minor'])).toBe('minor')
+    expect(() => oneOf('big', '<bump>', ['patch', 'minor'])).toThrow('<bump> takes one of patch, minor, not big')
   })
 })
 

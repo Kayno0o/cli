@@ -6,7 +6,8 @@ import { upTo } from './format'
 import { paint } from './style'
 import { closest } from './text'
 
-export type Options = Record<string, ParseArgsOptionDescriptor & { description?: string }>
+// A string option taking `choices` accepts only those values: another is a usage error naming them, the help shows them as the value and `__complete` offers them.
+export type Options = Record<string, ParseArgsOptionDescriptor & { description?: string, choices?: readonly string[] }>
 
 // The `--json` flag every CLI words alike: `print JSON`, then what it holds when given.
 export function jsonOption(holds?: string) {
@@ -109,9 +110,10 @@ export function exampleRows(examples: Example[], colors = paint(process.stdout))
 export function optionRows(options: Options, colors = paint(process.stdout)): string[] {
   const rows = Object.entries(options).map(([name, option]) => {
     const short = option.short === undefined ? '    ' : `${colors.cyan(`-${option.short}`)}, `
-    const value = option.type === 'string' ? ` ${colors.dim('<value>')}` : ''
+    const placeholder = option.choices === undefined ? '<value>' : `<${option.choices.join('|')}>`
+    const value = option.type === 'string' ? ` ${colors.dim(placeholder)}` : ''
 
-    return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? ' <value>'.length : 0), description: option.description ?? '' }
+    return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? placeholder.length + 1 : 0), description: option.description ?? '' }
   })
   const width = Math.max(0, ...rows.map(row => row.width))
 
@@ -202,10 +204,35 @@ export function parse<const T extends Options, const Names extends readonly stri
     throw new HelpShown()
   }
 
+  checkChoices(parsed.values, all)
+
   if (settings.positionals !== undefined)
     checkPositionals(parsed.positionals, settings.positionals)
 
   return { ...parsed, positionals: parsed.positionals as Slots<Names>, rest }
+}
+
+// A usage error for an option given a value outside its `choices`, in parseArgs' own order.
+function checkChoices(values: Record<string, unknown>, options: Options): void {
+  for (const [name, option] of Object.entries(options)) {
+    if (option.choices === undefined)
+      continue
+
+    const given = values[name]
+
+    for (const value of Array.isArray(given) ? given : [given]) {
+      if (typeof value === 'string')
+        oneOf(value, name, option.choices)
+    }
+  }
+}
+
+// The value when it is one of `choices`, else a usage error naming them: `--bump takes one of patch, minor, major, not big`. A name written `<bump>` is a positional and is printed as is, any other is an option printed `--name`.
+export function oneOf<const Choices extends readonly string[]>(value: string, name: string, choices: Choices): Choices[number] {
+  if (!choices.includes(value))
+    badUsage(`${name.startsWith('<') ? name : `--${name}`} takes one of ${choices.join(', ')}, not ${value}`)
+
+  return value
 }
 
 function checkPositionals(given: string[], names: readonly string[]): void {
