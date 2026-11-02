@@ -175,6 +175,7 @@
       "version": "0.3.2",
       "bin": {
         "waitfor": "./dist/cli.js",
+        "slot": "./dist/slot-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
