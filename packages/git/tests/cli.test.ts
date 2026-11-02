@@ -177,7 +177,7 @@ describe('gc', () => {
     expect(git('status', '--porcelain')).toBe('?? a.ts')
   })
 
-  test('a hook globbing the index still sees the new file, gc's literal pathspecs staying out of the hook's environment', () => {
+  test('a hook globbing the index still sees the new file, the literal pathspecs staying out of its environment', () => {
     mkdirSync(join(dir, '.git/hooks'), { recursive: true })
     writeFileSync(join(dir, '.git/hooks/pre-commit'), '#!/bin/sh\ngit ls-files --error-unmatch -- "sub/*.fish" >/dev/null || { echo "sub/new.fish is not in the index" >&2; exit 1; }\n', { mode: 0o755 })
     mkdirSync(join(dir, 'sub'))
