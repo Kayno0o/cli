@@ -1,0 +1,59 @@
+{
+  "name": "@kaynooo/changelogitea",
+  "type": "module",
+  "version": "1.9.1",
+  "description": "Generate changelog for Gitea.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/changelogitea#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/changelogitea.git"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/changelogitea/issues",
+  "keywords": [
+    "gitea",
+    "release",
+    "releases",
+    "conventional",
+    "changelog",
+    "log"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "changelogitea": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "scripts": {
+    "check": "tsgo --noEmit --strict",
+    "build": "rm -rf ./dist && bun run scripts/build.ts && tsgo -p tsconfig.build.json",
+    "lint:fix": "bunx --bun eslint --fix",
+    "lint": "bunx --bun eslint",
+    "test": "bun test",
+    "cli": "bun src/cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "0.6.1",
+    "@kaynooo/eslint": "^7.1.1",
+    "@kaynooo/utils": "^2.23.0",
+    "@types/bun": "^1.3.14",
+    "@types/debug": "^4.1.13",
+    "@typescript/native-preview": "^7.0.0-dev.20260707.2",
+    "eslint": "^10.7.0",
+    "typescript": "6"
+  }
+}
