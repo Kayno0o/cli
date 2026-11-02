@@ -1,4 +1,6 @@
-# waitfor
+# waitfor and slot
+
+`slot` is documented after `waitfor`, below.
 
 Waits for a background build or server for Claude Code, where a session would otherwise `sleep 30; tail -c 2000 build.log` or hand-write an `until` loop: `waitfor` returns as soon as the log line shows, the port listens or the URL answers, and stops early on an error line.
 
@@ -23,3 +25,27 @@ waitfor task b92stimuo
 - `--timeout` takes `30s`, `5m`, `1h` or a bare number of seconds, 5 minutes by default. On a timeout stderr names what is still missing (the file absent, the connection error, the status answered) and the file's last 20 lines.
 - Exit codes: 0 every condition met, 1 a `--fail` line, 2 a timeout or a usage error.
 - Named `waitfor` so as not to shadow the shell's `wait`.
+
+# slot
+
+Heavy commands from parallel Claude Code sessions (phpunit, playwright, vue-tsc, eslint) queue behind a machine-wide set of slots instead of overloading the machine, and a named lock keeps two runs off one shared resource such as a test database.
+
+```sh
+slot -- bunx vue-tsc
+slot --lock booki-test-db -- vendor/bin/phpunit
+slot -n 6 -t 10m -- bun test
+slot ls
+check --slot
+```
+
+## Behaviour
+
+- `slot -- <cmd>` waits for a free slot, runs the command with the terminal's stdin, stdout and stderr and exits with its code (a signal's `128 + n`, 127 when it cannot start). The slots are shared by every session, worktree and shell of the user; there are half as many as CPUs by default, `-n` sets the count (every caller should use the same one).
+- `--lock <name>` also holds a named lock, repeatable, across sessions and worktrees. The locks are taken first, in name order, and the slot last, so a command never occupies a slot while it waits for a lock. `--no-slot` takes the locks alone.
+- Slots and locks are `flock`s on files, called through `bun:ffi`: the kernel drops one with its holder, so a `slot` killed with SIGKILL frees what it held, and nothing is cleaned up by pid or timestamp. The command it started is not killed with it.
+- A `slot` inside a slotted command does not wait for another slot or for a lock the outer one holds (the `SLOT_HOLDING` variable lists them), so a script and the commands it runs may both be wrapped, and `check --slot` over a script calling `slot` cannot deadlock.
+- When it has to wait, stderr gets one line naming who holds what it needs: the session, the command and for how long. `--timeout` (`-t`, `30s`, `5m`, a bare number of seconds) gives up with exit 2; it waits forever by default.
+- `slot ls` lists the holders (`slot 2`, `lock booki-test-db`) and the waiters with their session (found as `ft take` finds it, through `~/.claude/sessions`), command and age, `--json` as `{slots, busy, entries}`. A waiter that died is dropped from the list.
+- `slot ls` is the listing even as a first word, `slot -- ls` being read as `slot ls` because Bun drops a leading `--`: write `slot -n 4 -- ls` for the command.
+- State lives in `$XDG_RUNTIME_DIR/agent-tools/slot` (`~/.cache/agent-tools/slot` without it), only the user can enter it; `$SLOT_DIR` points elsewhere.
+- Exit codes: the command's, 2 on a timeout or a usage error.

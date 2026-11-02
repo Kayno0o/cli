@@ -8,6 +8,7 @@ check            # run every step found
 check --list     # print the steps and the commands that run them
 check --only lint,test
 check --timeout 5m   # end a step still running after 5 minutes, exit 2
+check --slot     # queue each step behind the machine-wide slots of `slot` (@kaynooo/wait-tools)
 check --json     # [{name, command, ok, ms, log, failed?}] once every step ran
 ```
 

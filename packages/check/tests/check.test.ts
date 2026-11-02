@@ -114,6 +114,29 @@ describe('check', () => {
     expect(out.trimEnd().split('\n')).toHaveLength(2)
   })
 
+  test('--slot runs each step through the slot bin, and fails when there is none', async () => {
+    const bin = mkdtempSync(join(tmpdir(), 'check-slot-'))
+    const calls = join(bin, 'calls')
+    const path = process.env.PATH
+
+    writeFileSync(join(bin, 'slot'), `#!/bin/sh\necho "$@" >> ${calls}\nshift\nexec "$@"\n`, { mode: 0o755 })
+
+    try {
+      process.env.PATH = `${bin}:${path}`
+
+      const { result } = await capture(async () => check(['--slot', '--only', 'check,test'], repo('js')))
+
+      expect(result).toBe(0)
+      expect((await Bun.file(calls).text()).trim().split('\n')).toEqual(['-- sh -c bun run check', '-- sh -c bun run test'])
+
+      process.env.PATH = '/nonexistent'
+      expect(await failure(check(['--slot'], repo('js')))).toContain('--slot needs the slot bin')
+    }
+    finally {
+      process.env.PATH = path
+    }
+  })
+
   test('--only with a step the repo lacks fails with the steps found', async () => {
     expect(await failure(check(['--only', 'test,nope'], repo('make')))).toContain('no nope step here, found test')
   })

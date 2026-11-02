@@ -2,7 +2,7 @@
   "name": "@kaynooo/wait-tools",
   "type": "module",
   "version": "0.3.2",
-  "description": "waitfor: waits for a log line, a listening port or a URL answering, for Claude Code, instead of sleep and polling loops.",
+  "description": "waitfor and slot: waits for a log line, a listening port or a URL answering, and queues heavy commands behind machine-wide slots and named locks, for Claude Code, instead of sleep and polling loops.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://git.kaynooo.fr/kaynooo/agent-tools/src/branch/main/packages/wait#readme",
@@ -20,7 +20,8 @@
     "port"
   ],
   "bin": {
-    "waitfor": "./dist/cli.js"
+    "waitfor": "./dist/cli.js",
+    "slot": "./dist/slot-cli.js"
   },
   "files": [
     "dist"
@@ -32,7 +33,7 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "build": "$npm_execpath build src/cli.ts src/slot-cli.ts --target bun --outdir dist",
     "waitfor": "$npm_execpath src/cli.ts"
   },
   "devDependencies": {

@@ -35,7 +35,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/out-tools': ['out'],
   '@kaynooo/pkg-tools': ['pkg'],
   '@kaynooo/stack-tools': ['stack'],
-  '@kaynooo/wait-tools': ['waitfor'],
+  '@kaynooo/wait-tools': ['waitfor', 'slot'],
 }
 
 export const FORGE = 'git.kaynooo.fr'

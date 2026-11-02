@@ -5,7 +5,7 @@ import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, 
 import { logDirectory, outcomeJson, printOutcome, runStep } from './run'
 import { discover, STEP_NAMES } from './steps'
 
-const usage = `check [--only <steps>] [--timeout <duration>] [--list]
+const usage = `check [--only <steps>] [--timeout <duration>] [--slot] [--list]
 
 Runs the repo's check, typecheck, lint and test steps, from package.json scripts (through bun run), composer.json, a Justfile or a Makefile.
 A passing step is one line, a failing one shows only what failed, and each step's full output is saved to the file whose path ends its line.
@@ -17,8 +17,14 @@ const options = {
   list: { type: 'boolean', short: 'l', description: 'print the steps found and the commands that run them, without running them' },
   only: { type: 'string', short: 'o', description: `comma separated steps to run, among ${STEP_NAMES.join(', ')}` },
   timeout: { type: 'string', short: 't', description: 'longest a step may run before it is ended (30s, 5m, 1h), none by default' },
+  slot: { type: 'boolean', description: 'run each step through slot, queued behind the machine-wide slots of the other sessions (needs the slot bin)' },
   json: jsonOption(),
 } as const
+
+// The command as `sh -c` takes it inside a slot.
+function slotted(command: string): string {
+  return `slot -- sh -c '${command.replaceAll('\'', '\'\\\'\'')}'`
+}
 
 const COMMA = /\s*,\s*/
 
@@ -62,6 +68,9 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
     return 0
   }
 
+  if (parsed.values.slot === true && Bun.which('slot', { PATH: process.env.PATH ?? '' }) === null)
+    fail('--slot needs the slot bin: bun install -g @kaynooo/wait-tools')
+
   const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
   const directory = await logDirectory(cwd)
   const held = holdSignals()
@@ -71,7 +80,7 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   try {
     for (const step of steps) {
       const logFile = join(directory, `${step.name}.log`)
-      const outcome = await runStep(step.command, cwd, logFile, { ...(timeoutMs === undefined ? {} : { timeoutMs }), held })
+      const outcome = await runStep(parsed.values.slot === true ? slotted(step.command) : step.command, cwd, logFile, { ...(timeoutMs === undefined ? {} : { timeoutMs }), held })
 
       if (!json)
         printOutcome(step.name, width, step.command, logFile, outcome)
