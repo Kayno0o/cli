@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-env",
   "type": "module",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "description": "ev lists and edits .env files with secrets masked, redact masks secrets in any piped output.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
