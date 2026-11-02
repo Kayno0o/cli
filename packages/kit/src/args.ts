@@ -1,4 +1,5 @@
 import type { ParseArgsOptionDescriptor } from 'node:util'
+import { fstatSync } from 'node:fs'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
 import { upTo } from './format'
@@ -306,6 +307,13 @@ export function duration(value: string | undefined, name: string, fallback: numb
     badUsage(`--${name} takes a duration such as 30s, 5m or 1h, not ${value}`)
 
   return ms
+}
+
+// Whether stdin is a pipe or a file to read, rather than a terminal or /dev/null that would leave a command waiting or reading nothing.
+export function isStdinPiped(): boolean {
+  const stat = fstatSync(0)
+
+  return stat.isFIFO() || stat.isFile()
 }
 
 export interface InputSettings {
