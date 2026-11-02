@@ -21,6 +21,11 @@ const GREPS = new Set(['grep', 'egrep', 'fgrep'])
 const GREP_VALUE_OPTIONS = new Set(['-e', '-f', '-m', '-A', '-B', '-C', '-d', '-D', '--regexp', '--file', '--max-count', '--include', '--exclude', '--exclude-dir', '--exclude-from', '--context', '--after-context', '--before-context', '--label', '--binary-files', '--directories', '--devices'])
 const RG_VALUE_OPTIONS = new Set(['-e', '-f', '-g', '-t', '-T', '-m', '-A', '-B', '-C', '-j', '-d', '--regexp', '--file', '--glob', '--iglob', '--type', '--type-not', '--max-count', '--context', '--after-context', '--before-context', '--threads', '--max-depth', '--max-filesize'])
 const PATTERN_OPTIONS = new Set(['-e', '-f', '--regexp', '--file'])
+const NAMES_ONLY_SHORT = new Set('lLcq')
+const NAMES_ONLY_LONG = new Set(['--files-with-matches', '--files-without-match', '--count', '--count-matches', '--quiet', '--silent'])
+const FIND_ACTIONS = new Set(['-exec', '-execdir', '-ok', '-okdir', '-delete', '-fprint', '-fprint0', '-fprintf', '-fls'])
+// What a script needs to open a file or run a command: file, process and shell APIs, imports, command substitution and backticks.
+const CAN_REACH_FILES = /read|write|open|exec|spawn|system|popen|import|require|eval|load|fetch|glob|stream|source|getline|constructor|file(?!s\b)|\bcat\b|\b(?:Bun|Deno|fs|os|io|sh|bash|process|globalThis|window|Function|qx)\b|\$\s*[`({]|`/i
 const HIDDEN_FLAGS = /^(?:-u{2,}|--hidden|-\.)$/i
 const REGEX_SPECIALS = /[.+^${}()|\\[\]]/g
 const NEGATED_CLASS = /^!/
@@ -58,6 +63,17 @@ const FORMAT_OPTIONS = new Set(['-f', '--format'])
 const WHOLE_FORMAT = /Env|\{\{\s*json\s+\.\s*\}\}|^json$/
 
 export const USE_EV = '.env files hold secrets that must never reach the transcript, so they are not read, edited or printed directly. Use `ev` instead: `ev list`, `ev get KEY` (masked), `ev grep <regex>` for the keys matching it, `ev show <rev>:<file>` for one at a git revision, `printf %s "$value" | ev set KEY [file]` (`--empty` for an empty value), `ev unset KEY`, `ev cp KEY --from .env --to .env.local`, `ev mv KEY --from .env --to .env.local`, `ev diff a b`, `ev missing`; and pipe output that may carry a secret through `redact`, as `docker compose exec <svc> printenv | redact` or `docker compose config | redact`. If `ev` is missing: `bun install -g @kaynooo/env-tools`.'
+
+export const USE_EV_SEARCH = 'To search them, `ev grep <regex>` prints the matching keys, masked. `grep -l`, `-L` and `-c` (file names and counts) are allowed, and a tree-wide search can run as `rg <regex>`, which skips gitignored files, or `grep -r --exclude=\'.env*\' <regex> .`.'
+
+// Whether a piece of the command is a grep-family search, which the refusal then advises on.
+export function isSearchCommand(command: string): boolean {
+  return splitCommand(command).some((piece) => {
+    const { program } = parseCommand(piece.command)
+
+    return GREPS.has(program) || program === 'rg' || program === 'ag'
+  })
+}
 
 // The name past the last `/`, or past the `:` of `HEAD~1:api/.env` as git spells a file at a revision; the `.env*` glob reaches one too.
 export function isEnvFile(path: string): boolean {
@@ -171,9 +187,98 @@ function variantsOf(word: Word, variables: ReadonlyMap<string, string[]>): strin
   return found.flatMap(each => word.hasBrace ? braceExpand(each) : [each])
 }
 
-// Whether code run by an interpreter names an env file or dumps the environment of a Python process.
-function codeReadsEnv(found: readonly Word[]): boolean {
-  return found.some((word, i) => (word.isProse || CODE_OPTIONS.has(found[i - 1]?.text ?? '')) && (PYTHON_ENVIRON.test(word.text) || [...word.text.matchAll(ENV_NAME_IN_CODE)].some(match => isEnvFile(match[1] ?? ''))))
+// Whether code names an env file and could open it: a mention in code that calls nothing able to read a file, run a command or import a module (`/\.env files/.test(x)`) is only text. Deliberately generous, so a doubtful script stays refused.
+function codeReadsEnvFile(code: string): boolean {
+  return [...code.matchAll(ENV_NAME_IN_CODE)].some(match => isEnvFile(match[1] ?? '')) && CAN_REACH_FILES.test(code)
+}
+
+// Whether code run by an interpreter, given as an argument or fed as a heredoc, reads an env file or dumps the environment of a Python process.
+function codeReadsEnv(found: readonly Word[], heredocs: readonly string[]): boolean {
+  const sources = [...found.filter((word, i) => word.isProse || CODE_OPTIONS.has(found[i - 1]?.text ?? '')).map(word => word.text), ...heredocs]
+
+  return sources.some(code => PYTHON_ENVIRON.test(code) || codeReadsEnvFile(code))
+}
+
+// Whether the grep family lists file names or counts matches only (`grep -l`, `-L`, `-c`, `-q`), which prints no line of a file.
+function printsNamesOnly(program: string, args: readonly string[]): boolean {
+  const isGrep = GREPS.has(program)
+
+  if (!isGrep && program !== 'rg')
+    return false
+
+  const valueLetters = valueLettersOf(isGrep ? GREP_VALUE_OPTIONS : RG_VALUE_OPTIONS)
+
+  for (const arg of args) {
+    if (arg === '--')
+      return false
+
+    if (NAMES_ONLY_LONG.has(arg))
+      return true
+
+    if (!SHORT_FLAGS.test(arg))
+      continue
+
+    // a cluster ends at the first option taking a value, which swallows the rest of it
+    for (const letter of arg.slice(1)) {
+      if (valueLetters.has(letter))
+        break
+
+      if (NAMES_ONLY_SHORT.has(letter))
+        return true
+    }
+  }
+
+  return false
+}
+
+// `find` only printing the names it matches, with no action that runs a command or writes a file.
+function listsFiles(program: string, args: readonly string[]): boolean {
+  return program === 'find' && !args.some(arg => FIND_ACTIONS.has(arg))
+}
+
+// The letters of the short options taking a value.
+function valueLettersOf(valueOptions: ReadonlySet<string>): Set<string> {
+  return new Set([...valueOptions].filter(option => option.length === 2 && !option.startsWith('--')).map(option => option.slice(1)))
+}
+
+// The index in `args` of the pattern a search program is given, undefined when `-e` or `-f` gives it, even glued to a cluster as in `-ne KEY`: it is a regex, never a file.
+function patternIndex(args: readonly string[], valueOptions: ReadonlySet<string>): number | undefined {
+  const valueLetters = valueLettersOf(valueOptions)
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? ''
+
+    if (arg.startsWith('--regexp=') || arg.startsWith('--file='))
+      return undefined
+
+    if (!arg.startsWith('-') || arg === '-')
+      return i
+
+    if (arg.startsWith('--')) {
+      if (PATTERN_OPTIONS.has(arg))
+        return undefined
+
+      if (valueOptions.has(arg))
+        i++
+
+      continue
+    }
+
+    // a cluster of short options ends at the first one taking a value, glued after it or the next word
+    const at = [...arg.slice(1)].findIndex(letter => valueLetters.has(letter))
+    const letter = arg[at + 1]
+
+    if (at === -1)
+      continue
+
+    if (letter === 'e' || letter === 'f')
+      return undefined
+
+    if (at === arg.length - 2)
+      i++
+  }
+
+  return undefined
 }
 
 // The index of the first word that is no option, past the values the options given take.
@@ -233,13 +338,20 @@ function readsEnv(piece: Piece, variables: ReadonlyMap<string, string[]>): boole
   if (program === '' || HARMLESS.has(program) || (program === 'git' && GIT_HARMLESS.has(args[0] ?? '')))
     return false
 
-  if (INTERPRETERS.has(program) && codeReadsEnv(found))
+  if (INTERPRETERS.has(program) && codeReadsEnv(found, piece.heredocs))
     return true
+
+  if (printsNamesOnly(program, args) || listsFiles(program, args))
+    return false
 
   // a git pathspec like `:!.env` leaves the file out
   const isExclusion = (word: Word) => program === 'git' && GIT_EXCLUDE.test(word.text)
+  // the pattern of a search is a regex, not a file
+  const isSearch = GREPS.has(program) || program === 'rg' || program === 'ag'
+  const patternAt = isSearch ? patternIndex(args, GREPS.has(program) ? GREP_VALUE_OPTIONS : RG_VALUE_OPTIONS) : undefined
+  const pattern = patternAt === undefined ? undefined : found.length - args.length + patternAt
 
-  return found.some((word, index) => !word.isProse && !isExclusion(word) && variantsOf(word, variables).some(variant => namesEnvFile(variant, found[index - 1]?.text, word.hasGlob)))
+  return found.some((word, index) => index !== pattern && !word.isProse && !isExclusion(word) && variantsOf(word, variables).some(variant => namesEnvFile(variant, found[index - 1]?.text, word.hasGlob)))
 }
 
 // The operands of a search program: its words less the options, their values and the pattern, which `-e` or `-f` may have already given.
@@ -266,7 +378,7 @@ function operandsOf(args: readonly string[], valueOptions: ReadonlySet<string>):
 function searchesEnv(program: string, args: readonly string[]): boolean {
   const isGrep = GREPS.has(program)
 
-  if (!isGrep && program !== 'rg' && program !== 'ag')
+  if ((!isGrep && program !== 'rg' && program !== 'ag') || printsNamesOnly(program, args))
     return false
 
   const isRecursive = args.some(arg => (SHORT_FLAGS.test(arg) && HAS_R.test(arg)) || arg === '--recursive' || arg === '--dereference-recursive')

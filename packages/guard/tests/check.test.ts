@@ -127,6 +127,22 @@ describe('SQL', () => {
 describe('env files', () => {
   cases('env', ['cat .env', 'grep TOKEN .env.local', 'cat <<EOF\nmentions .env\nEOF\ncat .env'], ['ev list', 'cat .env.example', 'cat > notes.md <<\'EOF\'\nnever cat .env\nEOF'])
 
+  test('points a refused search at ev grep and the routes that work', async () => {
+    for (const command of ['rg -n TRUSTED_PROXIES api/.env* compose.yaml', 'grep -rn "commit-message-style" .']) {
+      const { violations } = await checkCommand(command, context())
+
+      expect(violations[0]?.message).toContain('ev grep <regex>')
+      expect(violations[0]?.message).toContain('--exclude=')
+    }
+
+    expect((await checkCommand('cat .env', context())).violations[0]?.message).not.toContain('--exclude=')
+  })
+
+  test('lets a listing of file names through', async () => {
+    for (const command of ['ls -a | grep -E \'^\\.env\'', 'grep -l GCU_API_TOKEN .env*', 'bun -e \'console.log(/\\.env files/.test("x"))\''])
+      expect(await rules(command)).toEqual([])
+  })
+
   test('refuses a file tool opening one, not a template', () => {
     expect(checkPath('/repo/apps/api/.env.production')?.rule).toBe('env')
     expect(checkPath('/repo/.env.example')).toBeNull()

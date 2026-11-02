@@ -1,3 +1,4 @@
+import { commandsRun } from '@kaynooo/cli-kit/shell'
 import { describe, expect, test } from 'bun:test'
 import { isEnvFile, touchesEnv } from '../src/guard'
 
@@ -24,6 +25,55 @@ describe('touchesEnv', () => {
       expect(touchesEnv(command)).toBe(false)
     })
   }
+})
+
+describe('touchesEnv, commands that print no value', () => {
+  const allowed = ['ls -a | grep -E \'^\\.env\'', 'grep -l GCU_API_TOKEN .env*', 'grep -L KEY .env', 'grep -c KEY .env', 'grep -rl KEY .env.local', 'grep -ql KEY .env', 'grep --files-with-matches KEY .env', 'rg -l KEY .env', 'rg --count KEY .env', 'find . -name \'.env*\'', 'find . -maxdepth 2 -name .env -print', 'git ls-files .env', 'bun -e \'console.log(/\\.env files/.test("x"))\'', 'bun -e \'console.log("the .env files")\'', 'python3 - <<\'EOF\'\nprint(\'the .env files\')\nEOF', 'python3 -c \'print("mentions .env")\'', 'grep -rl KEY .']
+
+  for (const command of allowed) {
+    test(`lets ${command} through`, () => {
+      expect(touchesEnv(command)).toBe(false)
+    })
+  }
+
+  const refused = [
+    'grep KEY .env',
+    'grep -n KEY .env',
+    'grep -i -e KEY .env',
+    'grep -nl KEY .env | cat .env',
+    'grep -ecl .env',
+    'grep -m1 KEY .env',
+    'rg -n TRUSTED_PROXIES api/.env* compose.yaml',
+    'rg -o KEY .env',
+    'grep -rn KEY .',
+    'grep -rn "commit-message-style" .',
+    'grep -l KEY .env && cat .env',
+    'find . -name .env -exec cat {} \\;',
+    'find . -name \'.env*\' -execdir cat {} +',
+    'find . -name .env -fprint /dev/stdout',
+    'cat .env',
+    'bun -e \'console.log(await Bun.file(".env").text())\'',
+    'bun -e \'import { $ } from "bun"; await $`cat .env`\'',
+    'bun -e \'Bun.spawn(["cat", ".env"])\'',
+    'bun -e \'console.log(require("fs").readFileSync(".env", "utf8"))\'',
+    'python3 -c \'print(open(".env").read())\'',
+    'python3 - <<\'EOF\'\nprint(open(".env").read())\nEOF',
+    'bun - <<\'EOF\'\nconsole.log(await Bun.file(".env").text())\nEOF',
+    'bun - <<\'EOF\'\nimport { $ } from "bun"\nawait $`cat .env`\nEOF',
+    'awk \'BEGIN { while ((getline line < ".env") > 0) print line }\'',
+    'perl -e \'print `cat .env`\'',
+  ]
+
+  for (const command of refused) {
+    test(`still refuses ${command}`, () => {
+      expect(touchesEnv(command)).toBe(true)
+    })
+  }
+
+  test('refuses a heredoc piped to sh that reads an env file', () => {
+    expect(commandsRun('sh <<\'EOF\'\ncat .env\nEOF').some(each => touchesEnv(each))).toBe(true)
+    expect(commandsRun('cat > a.sh <<\'EOF\'\ncat .env\nEOF').some(each => touchesEnv(each))).toBe(false)
+  })
 })
 
 describe('touchesEnv, the shapes that once got through', () => {
