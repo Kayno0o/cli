@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
@@ -119,7 +119,11 @@ describe('out', () => {
   })
 
   test('prints the output untouched when folding it would not make it shorter', () => {
-    expect(out('-n', '5', '--', 'seq', '1', '6')).toEqual({ code: 0, out: '1\n2\n3\n4\n5\n6\n', err: '' })
+    const runtime = temp('out-unfolded-')
+    const result = Bun.spawnSync([process.execPath, CLI, '-n', '5', '--', 'seq', '1', '6'], { stdout: 'pipe', stderr: 'pipe', env: { ...ENV, XDG_RUNTIME_DIR: runtime } })
+
+    expect({ code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }).toEqual({ code: 0, out: '1\n2\n3\n4\n5\n6\n', err: '' })
+    expect(readdirSync(runtime, { recursive: true }).filter(name => String(name).endsWith('.log'))).toEqual([])
   })
 
   test('takes the threshold with -n', () => {

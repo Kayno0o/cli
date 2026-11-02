@@ -137,7 +137,8 @@ describe('sub', () => {
 
     expect(sub(['-r', '-f', '^(sha: ")old', '-t', '${1}0123', 'a.ts']).code).toBe(0)
     expect(sub(['-r', '-f', '^(?<key>key: ")old', '-t', '${key}9$${1}', 'a.ts']).code).toBe(0)
-    expect(read('a.ts')).toBe('sha: "0123"\nkey: "9${1}"\n')
+    expect(sub(['-r', '-f', '^sha', '-t', '${0}1', 'a.ts']).code).toBe(0)
+    expect(read('a.ts')).toBe('sha1: "0123"\nkey: "9${1}"\n')
   })
   /* eslint-enable no-template-curly-in-string */
 

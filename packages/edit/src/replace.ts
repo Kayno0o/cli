@@ -68,13 +68,16 @@ export function compile(source: string): RegExp {
   return new RegExp(source, 'gm')
 }
 
-// String.replace leaves ${1} and ${name} as they are, so they become $01 and $<name>: the two-digit form keeps digits typed after the group out of its number.
+// String.replace leaves ${1} and ${name} as they are, so they become $01 and $<name>: the two-digit form keeps digits typed after the group out of its number; ${0} is the whole match.
 function bracedGroups(to: string): string {
   return to.replace(BRACED_GROUP, (whole, group: string | undefined) => {
     if (group === undefined)
       return whole
 
-    return DIGITS.test(group) ? `$${group.padStart(2, '0')}` : `$<${group}>`
+    if (!DIGITS.test(group))
+      return `$<${group}>`
+
+    return Number(group) === 0 ? '$&' : `$${group.padStart(2, '0')}`
   })
 }
 

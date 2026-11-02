@@ -1,6 +1,6 @@
 # cli
 
-CLIs built for Claude Code sessions, each published on its own from `packages/` to npmjs under the `@kaynooo` scope: `bun install -g @kaynooo/<package>`. Only `@kaynooo/cli-changelog` stays on the Forgejo registry.
+CLIs built for Claude Code sessions, each published on its own from `packages/` to npmjs as `@kaynooo/cli-<name>`: `bun add -g @kaynooo/cli-<name>`. Only `@kaynooo/cli-changelog` stays on the Forgejo registry.
 
 | Package | Bin | What it does |
 | --- | --- | --- |

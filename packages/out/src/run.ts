@@ -1,5 +1,5 @@
 import type { Chunk } from '@kaynooo/cli-kit'
-import { writeSync } from 'node:fs'
+import { closeSync, rmSync, writeSync } from 'node:fs'
 import process from 'node:process'
 import { holdSignals, runCommand } from '@kaynooo/cli-kit'
 import { fold, shouldFold } from './fold'
@@ -72,6 +72,16 @@ class Recorder {
   // The log's path, writing the held output to a new one when none was started.
   save(): string {
     return this.startLog().path
+  }
+
+  // Removes the log a fold opened, once the output is printed untouched after all.
+  discard(): void {
+    if (this.log === undefined)
+      return
+
+    closeSync(this.log.fd)
+    rmSync(this.log.path, { force: true })
+    this.log = undefined
   }
 
   get text(): string {
@@ -185,6 +195,7 @@ function present(recorder: Recorder, threshold: number): number {
 
   // A fold leaving little out can come out longer than the output once its header is added.
   if (!recorder.overflowing && Buffer.byteLength(printed) >= recorder.bytes) {
+    recorder.discard()
     replay(recorder.chunks)
 
     return recorder.bytes

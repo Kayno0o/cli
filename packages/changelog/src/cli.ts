@@ -204,7 +204,7 @@ Exits 0 once undone, with nothing to undo, on --dry or when the question is decl
     console.log()
     console.log(colors.dim(`changelog v${version}`))
 
-    if (tag === undefined) {
+    if (tag === undefined || tag === '') {
       tag = (await getGitTags())[0]
 
       if (tag === undefined) {
