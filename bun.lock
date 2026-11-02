@@ -173,7 +173,7 @@
     },
     "packages/wait": {
       "name": "@kaynooo/wait-tools",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "bin": {
         "waitfor": "./dist/cli.js",
       },
