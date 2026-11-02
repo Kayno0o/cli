@@ -9,6 +9,7 @@ peek --def parseCommand
 peek --refs parseCommand packages/guard
 peek --outline src/cli.ts README.md
 peek --around 'TODO|FIXME' -C 2 src
+errs -- bun check | peek
 todo-scan
 todo-scan --stale
 hotspots --since '3 months ago' --limit 10
@@ -21,6 +22,7 @@ hotspots --since '3 months ago' --limit 10
 - `--refs <symbol>` lists the lines naming the symbol as a whole word, grouped by file, one trimmed line each.
 - `--outline <file>...` lists the declarations at the top of each file and the members one level inside its classes, with their line numbers; a Markdown file lists its headings.
 - `--around <regex> -C <n>` prints the `n` (3) lines on each side of each matching line, spans that touch merged.
+- Piped into with no file and no mode, it reads the `path:line` opening each line of the input (`errs`, `rg -n`, `grep -n`, a linter's `path:line:col`, tsc's `path(line,col)`) and prints the `-C` (3) lines around each, spans that touch merged and files in the order first named; a path outside the repository or not readable is skipped, and nothing readable exits 1.
 - `--json` prints the spans as `[{path, from, to, lines}]`, `--refs` as `[{path, line, text}]` and `--outline` as `[{path, line, depth, text}]`, the lines never cut; a failure prints as `{"error"}` on stderr.
 - `--def`, `--refs` and `--around` look through the paths given, the files git keeps here by default (`git ls-files` with the untracked files `.gitignore` lets through), and outside a repository a walk leaving dot folders and `node_modules`, `dist`, `build`, `vendor`, `target`, `coverage` out; binary files and files over 2 MB are skipped.
 - The symbols are found by pattern, not by a type checker: a name declared twice in a file shows twice, and a symbol re-exported under another name is not followed.

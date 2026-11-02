@@ -4,10 +4,10 @@ import type { Span } from './source'
 import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { badUsage, capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, capped, fail, isStdinPiped, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { listFiles, readText } from './files'
-import { around, definitions, outline, usages } from './source'
+import { around, definitions, locations, outline, spansAround, usages } from './source'
 
 const USAGE = `peek [options] <file[:from-to]>...: prints files or line spans with their line numbers, several in one call
 
@@ -16,6 +16,7 @@ peek --def <symbol> [path...]          the whole declaration of the symbol, its 
 peek --refs <symbol> [path...]         the lines naming the symbol, grouped by file
 peek --outline <file>...               the declarations and class members, a Markdown file's headings
 peek --around <regex> [-C 3] [path...] the lines around each match, overlapping ones merged
+<output> | peek [-C 3]                 the lines around each path:line the output opens a line with (errs, rg -n, grep -n, tsc, linters)
 The paths default to the files git keeps here (.gitignore holds).
 --refs lists at most 100 lines, the count of the rest after them (--limit <n>, --full for all).
 --json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}], --outline as [{path, line, depth, text}], the lines never cut and the rows never counted off unless --limit is given.
@@ -30,7 +31,7 @@ const OPTIONS = {
   refs: { type: 'string', short: 'r', description: 'list the lines naming this symbol' },
   outline: { type: 'boolean', short: 'o', description: 'list the declarations of the files given' },
   around: { type: 'string', short: 'a', description: 'print the lines around the matches of this regular expression' },
-  context: { type: 'string', short: 'C', description: 'lines on each side of an --around match (3)' },
+  context: { type: 'string', short: 'C', description: 'lines on each side of an --around match or a piped location (3)' },
   ...limitOptions(REFS_LIMIT),
   json: jsonOption(),
 } as const
@@ -50,21 +51,40 @@ async function readableRoot(): Promise<string> {
   return realpathSync(ran.code === 0 ? ran.text.trim() : process.cwd())
 }
 
-// Refuses a path whose real location, a symlink followed, lies outside the repository, so peek reads no more than a grep of the repository would.
-async function checkInside(path: string): Promise<void> {
+// Whether a path's real location, a symlink followed, lies outside the repository; a path that does not exist is not.
+async function isOutside(path: string): Promise<boolean> {
   let real
 
   try {
     real = realpathSync(resolve(process.cwd(), path))
   }
   catch {
-    return
+    return false
   }
 
   const inRoot = relative(await readableRoot(), real)
 
-  if (inRoot === '..' || inRoot.startsWith(PARENT) || isAbsolute(inRoot))
+  return inRoot === '..' || inRoot.startsWith(PARENT) || isAbsolute(inRoot)
+}
+
+// Refuses a path outside the repository, so peek reads no more than a grep of the repository would.
+async function checkInside(path: string): Promise<void> {
+  if (await isOutside(path))
     badUsage(`${path} is outside the repository`)
+}
+
+// The spans around the locations piped in, a path outside the repository or not readable left out.
+async function pipedSpans(text: string, context: number): Promise<Span[]> {
+  const spans: Span[] = []
+
+  for (const [path, numbers] of locations(text)) {
+    const source = await isOutside(path) ? undefined : await readText(resolve(process.cwd(), path))
+
+    if (source !== undefined)
+      spans.push(...spansAround(path, source.replace(TRAILING_NEWLINE, '').split('\n').length, numbers, context))
+  }
+
+  return spans
 }
 
 async function textOf(path: string): Promise<string> {
@@ -156,8 +176,21 @@ async function main(args: string[]): Promise<number> {
   if (modes.length > 1)
     badUsage('give one of --def, --refs, --outline and --around')
 
-  if (values.context !== undefined && values.around === undefined)
-    badUsage('-C goes with --around')
+  const isPiped = modes.length === 0 && positionals.length === 0 && isStdinPiped()
+
+  if (values.context !== undefined && values.around === undefined && !isPiped)
+    badUsage('-C goes with --around or with locations piped in')
+
+  if (isPiped) {
+    const spans = await pipedSpans(await Bun.stdin.text(), wholeNumber(values.context, 'context', 3, 0))
+
+    if (spans.length === 0)
+      fail('no path:line of a readable file in what was piped in', 1)
+
+    await printSpans(spans, json)
+
+    return 0
+  }
 
   if (values.def !== undefined) {
     const spans: Span[] = []

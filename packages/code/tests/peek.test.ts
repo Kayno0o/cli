@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { definitions, outline } from '../src/source'
+import { definitions, locations, outline, spansAround } from '../src/source'
 
 const CLI = new URL('../src/peek.ts', import.meta.url).pathname
 
@@ -40,7 +40,12 @@ export class Counter {
 let dir = ''
 
 function peek(...args: string[]) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: dir, stdout: 'pipe', stderr: 'pipe' })
+  return piped(undefined, ...args)
+}
+
+// peek with `input` on stdin, or /dev/null when there is none.
+function piped(input: string | undefined, ...args: string[]) {
+  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: dir, stdin: input === undefined ? 'ignore' : Buffer.from(input), stdout: 'pipe', stderr: 'pipe' })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -64,6 +69,38 @@ describe('definitions', () => {
 
   test('takes a Python body by its indentation', () => {
     expect(definitions('def a():\n    return 1\n\n    # still a\n\ndef b():\n    pass\n', 'x.py', 'a')).toEqual([{ path: 'x.py', from: 1, to: 4 }])
+  })
+})
+
+describe('locations piped in', () => {
+  test('reads the path:line opening a line of errs, rg -n, a linter or tsc, and nothing else', () => {
+    const text = [
+      'src/a.ts:12:3: Unsafe argument (ts/no-unsafe-argument)',
+      './src/b.ts:3:console.log(addOne(2))',
+      'src/a.ts(30,5): error TS2345: Argument of type',
+      '\u001B[35msrc/a.ts\u001B[0m:4:export function addOne',
+      'error: 2 problems',
+      'see https://example.com:8080/x',
+      '  12 |     const x = 1',
+    ].join('\n')
+
+    expect([...locations(text)]).toEqual([['src/a.ts', [12, 30, 4]], ['src/b.ts', [3]]])
+  })
+
+  test('merges the spans of close lines and leaves out a line past the end', () => {
+    expect(spansAround('a.ts', 30, [12, 4, 30, 14, 99], 2)).toEqual([{ path: 'a.ts', from: 2, to: 6 }, { path: 'a.ts', from: 10, to: 16 }, { path: 'a.ts', from: 28, to: 30 }])
+  })
+
+  test('peek prints the lines around each location piped in, skipping paths it cannot or may not read', () => {
+    const result = piped('src/b.ts:3:1: error\nsrc/a.ts:7:3: warning\n/etc/passwd:1:x\nmissing.ts:4:2: gone\n', '-C', '1')
+
+    expect(result.code).toBe(0)
+    expect(result.out).toBe('src/b.ts:2-3\n2  \n3  console.log(addOne(2))\n\nsrc/a.ts:6-8\n6  \n7    return value + 1\n8  }\n')
+  })
+
+  test('peek exits 1 when nothing piped in names a readable file, and -C stays refused alone', () => {
+    expect(piped('all good\n').code).toBe(1)
+    expect(peek('-C', '2').code).toBe(2)
   })
 })
 

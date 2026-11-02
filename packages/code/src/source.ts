@@ -5,6 +5,8 @@ export interface Span {
   to: number
 }
 
+// A location opening a line of tool output: `path:line`, `path:line:col` or tsc's `path(line,col)`, as errs, grep -n, rg -n and linters print them.
+const LOCATION = /^(?:\.\/)?([^\s:()]+)(?::(\d+)(?::\d+)?|\((\d+),\d+\))(?=[:\s)]|$)/
 // The keywords a declaration opens with, in TS, JS, Python, Go, Rust and PHP.
 const DECLARATION = /^(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function\*?|class|interface|type|enum|const|let|var|namespace|module|def|func|fn|struct|trait|impl)\s/
 // A member of a class or an object: modifiers, the name, maybe type parameters, then its parameters.
@@ -210,14 +212,17 @@ export function outline(text: string, path: string): OutlineEntry[] {
 // The spans around each line matching, `context` lines on each side, overlapping ones merged.
 export function around(text: string, path: string, pattern: RegExp, context: number): Span[] {
   const lines = text.replace(TRAILING_NEWLINE, '').split('\n')
+
+  return spansAround(path, lines.length, lines.flatMap((line, i) => pattern.test(line) ? [i + 1] : []), context)
+}
+
+// The spans around the lines numbered, `context` lines on each side within the file's `count` lines, overlapping ones merged; a line past the end is left out.
+export function spansAround(path: string, count: number, numbers: readonly number[], context: number): Span[] {
   const spans: Span[] = []
 
-  for (const [i, line] of lines.entries()) {
-    if (!pattern.test(line))
-      continue
-
-    const from = Math.max(1, i + 1 - context)
-    const to = Math.min(lines.length, i + 1 + context)
+  for (const number of [...new Set(numbers)].filter(each => each >= 1 && each <= count).sort((a, b) => a - b)) {
+    const from = Math.max(1, number - context)
+    const to = Math.min(count, number + context)
     const previous = spans.at(-1)
 
     if (previous !== undefined && from <= previous.to + 1)
@@ -227,4 +232,18 @@ export function around(text: string, path: string, pattern: RegExp, context: num
   }
 
   return spans
+}
+
+// The line numbers each path is named with in the text, the paths in the order they first appear.
+export function locations(text: string): Map<string, number[]> {
+  const found = new Map<string, number[]>()
+
+  for (const line of Bun.stripANSI(text).split('\n')) {
+    const match = LOCATION.exec(line.trim())
+
+    if (match?.[1] !== undefined)
+      found.set(match[1], [...found.get(match[1]) ?? [], Number(match[2] ?? match[3])])
+  }
+
+  return found
 }
