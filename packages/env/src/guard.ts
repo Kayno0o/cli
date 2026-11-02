@@ -236,7 +236,10 @@ function readsEnv(piece: Piece, variables: ReadonlyMap<string, string[]>): boole
   if (INTERPRETERS.has(program) && codeReadsEnv(found))
     return true
 
-  return found.some((word, index) => !word.isProse && variantsOf(word, variables).some(variant => namesEnvFile(variant, found[index - 1]?.text, word.hasGlob)))
+  // a git pathspec like `:!.env` leaves the file out
+  const isExclusion = (word: Word) => program === 'git' && GIT_EXCLUDE.test(word.text)
+
+  return found.some((word, index) => !word.isProse && !isExclusion(word) && variantsOf(word, variables).some(variant => namesEnvFile(variant, found[index - 1]?.text, word.hasGlob)))
 }
 
 // The operands of a search program: its words less the options, their values and the pattern, which `-e` or `-f` may have already given.
