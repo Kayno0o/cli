@@ -1,4 +1,5 @@
 import { isPlain, shellQuote, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
+import { FOLD_LINES } from './fold'
 
 const ASSIGNMENT = /^\w+=/
 const EXCLUDED = /(?:^|\s)(?:--json|--help|--version|-h|--watch(?:-?all|=\S*)?|--watchAll)(?:\s|$)/
@@ -10,9 +11,9 @@ const BUN_SCRIPT = /^(?:build|check|lint|typecheck|types|test|ci|verify|compile)
 const BUN_TOOLS = new Set(['tsc', 'tsgo', 'eslint', 'keslint', 'vitest', 'jest', 'prettier', 'playwright', 'biome', 'vue-tsc'])
 const BUN_SUBCOMMANDS = new Set(['install', 'i', 'add', 'remove', 'rm', 'update', 'test', 'check', 'lint', 'build'])
 const STDERR_MERGE = /\s+2>&1$/
-const FILTERS = new Set(['tail', 'head', 'grep'])
-// grep flags that print something other than the matching lines, which out's folding would not give back.
-const GREP_SUMMARY = /^(?:-[a-zA-Z]*[cqlL]|--(?:count|quiet|silent|files-with(?:out)?-match(?:es)?)$)/
+const CUTS = new Set(['tail', 'head'])
+// The plain line count of a tail or head: `-200`, `-n 200`, `-n200` or `--lines=200`.
+const CUT_COUNT = /^(?:-n ?|--lines=|-)(\d+)$/
 const PHP_VALUE_OPTIONS = new Set(['-d', '-c', '-z'])
 const BUNX_VALUE_OPTIONS = new Set(['-p', '--package'])
 // Options taking a value, per container command, so the service or container name after them is found.
@@ -119,17 +120,16 @@ function scan(command: string): Scan {
   return { segments: segments.map(segment => segment.trim()).filter(segment => segment !== ''), plain, pipes }
 }
 
+// A tail or head keeping at least as many lines as out leaves unfolded, so out shows no more than it would; a grep or a shorter cut shows less, so the line is left as it is.
 function isFilter(stage: string): boolean {
   const { segments, plain } = scan(stage)
   const [bin, ...args] = tokenize(stage)
+  const count = CUT_COUNT.exec(args.join(' '))?.[1]
 
-  if (!plain || segments.length !== 1 || bin === undefined || !FILTERS.has(bin))
-    return false
-
-  return bin !== 'grep' || !args.some(arg => GREP_SUMMARY.test(arg))
+  return plain && segments.length === 1 && bin !== undefined && CUTS.has(bin) && count !== undefined && Number(count) >= FOLD_LINES
 }
 
-// The line without its trailing `| tail`, `| head` and `| grep` stages and the `2>&1` feeding them, as out keeps the failures they would have picked out, and those stages in pipeline order.
+// The line without its trailing long `| tail` and `| head` stages and the `2>&1` feeding them, as out keeps the failures they would have picked out, and those stages in pipeline order.
 function withoutFilters(command: string): { rest: string, stages: string[] } {
   let rest = command
   const stages: string[] = []
@@ -162,7 +162,7 @@ function isCd(segment: string): boolean {
   return segment === 'cd' || segment.startsWith('cd ')
 }
 
-// True when the line is made only of listed noisy commands (and cd), with no pipe, redirect, background or substitution, and at least one command is listed; a final pipe into tail, head or grep is dropped first.
+// True when the line is made only of listed noisy commands (and cd), with no pipe, redirect, background or substitution, and at least one command is listed; a final pipe into a long tail or head is dropped first.
 export function shouldWrap(command: string): boolean {
   const { segments, plain } = scan(withoutFilters(command.trim()).rest)
 
@@ -172,7 +172,7 @@ export function shouldWrap(command: string): boolean {
   return segments.every(segment => isCd(segment) || listedSegment(segment))
 }
 
-// The command line to run instead: `out -- <cmd>` without the final tail, head or grep pipe, each dropped stage passed as `--was` for out's stats, through `sh -c` when it chains commands or starts with an assignment.
+// The command line to run instead: `out -- <cmd>` without the final long tail or head pipe, each dropped stage passed as `--was` for out's stats, through `sh -c` when it chains commands or starts with an assignment.
 export function wrap(command: string): string {
   const { rest, stages } = withoutFilters(command.trim())
   const out = ['out', ...stages.flatMap(stage => ['--was', shellQuote(stage)]), '--'].join(' ')

@@ -49,6 +49,12 @@ describe('shouldWrap', () => {
     'bun test | grep -c pass',
     'bun test | grep -vq pass',
     'bun test | tail -5 && git status',
+    'bun test 2>&1 | tail -40',
+    'bun test | head -n 149',
+    'bun test | tail -n +5',
+    'docker compose exec -T php vendor/bin/phpunit | grep -E "FAIL|Tests:"',
+    'bun test | grep -C3 FAIL',
+    'bun run test 2>&1 | grep -v skip | head -200',
     'docker compose exec php bin/console cache:clear',
     'docker compose exec php sh -c "vendor/bin/phpunit"',
     'docker compose up -d',
@@ -77,11 +83,10 @@ describe('shouldWrap', () => {
   })
 
   test.each([
-    'bun test 2>&1 | tail -40',
-    'docker compose exec -T php vendor/bin/phpunit | grep -E "FAIL|Tests:"',
-    'bun run test 2>&1 | grep -v skip | head -20',
-    'bun test | grep -C3 FAIL',
-  ])('wraps %s, its final filters dropped', (command) => {
+    'bun test 2>&1 | tail -150',
+    'bun test | head -n 200',
+    'bun test | tail -n300 | head --lines=200',
+  ])('wraps %s, its final long tail or head dropped', (command) => {
     expect(shouldWrap(command)).toBe(true)
   })
 })
@@ -98,8 +103,8 @@ describe('wrap', () => {
     expect(wrap('cd a && bun test -t \'x\'')).toBe('out -- sh -c \'cd a && bun test -t \'\\\'\'x\'\\\'\'\'')
   })
 
-  test('drops a final tail, head or grep and the 2>&1 feeding it, passing each stage as --was', () => {
-    expect(wrap('bun test 2>&1 | tail -40')).toBe('out --was \'tail -40\' -- bun test')
-    expect(wrap('cd a && bun run test 2>&1 | grep -v skip | head -20')).toBe('out --was \'grep -v skip\' --was \'head -20\' -- sh -c \'cd a && bun run test\'')
+  test('drops a final long tail or head and the 2>&1 feeding it, passing each stage as --was', () => {
+    expect(wrap('bun test 2>&1 | tail -150')).toBe('out --was \'tail -150\' -- bun test')
+    expect(wrap('cd a && bun run test 2>&1 | tail -n 300 | head -200')).toBe('out --was \'tail -n 300\' --was \'head -200\' -- sh -c \'cd a && bun run test\'')
   })
 })

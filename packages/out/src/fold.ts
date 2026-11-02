@@ -6,6 +6,8 @@ export interface FoldOptions {
   logPath: string
 }
 
+// The longest output out leaves untouched unless told otherwise.
+export const FOLD_LINES = 150
 const HEAD = 40
 const TAIL = 60
 const MAX_BLOCK = 20

@@ -183,6 +183,13 @@ function present(recorder: Recorder, threshold: number): number {
     printed = text.split('\n').slice(-FALLBACK_LINES).join('\n')
   }
 
+  // A fold leaving little out can come out longer than the output once its header is added.
+  if (!recorder.overflowing && Buffer.byteLength(printed) >= recorder.bytes) {
+    replay(recorder.chunks)
+
+    return recorder.bytes
+  }
+
   process.stdout.write(printed)
 
   return Buffer.byteLength(printed)

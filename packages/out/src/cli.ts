@@ -3,6 +3,7 @@
 import process from 'node:process'
 import { badUsage, duration, fail, isStdinPiped, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
+import { FOLD_LINES } from './fold'
 import { readPiped, run } from './run'
 import { readEntries, renderSummary, statsPath, summarize } from './stats'
 
@@ -45,7 +46,7 @@ async function main(argv: string[]): Promise<number> {
     badUsage('--since and --json go with --stats')
 
   const command = bare ? argv : parsed.rest ?? []
-  const lines = wholeNumber(values.lines, 'lines', 150)
+  const lines = wholeNumber(values.lines, 'lines', FOLD_LINES)
   const was = values.was ?? []
 
   if (command.length === 0 && parsed.positionals.length === 0 && isStdinPiped())

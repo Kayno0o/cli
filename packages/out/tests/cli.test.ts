@@ -118,8 +118,12 @@ describe('out', () => {
     expect(await child.exited).toBe(143)
   })
 
+  test('prints the output untouched when folding it would not make it shorter', () => {
+    expect(out('-n', '5', '--', 'seq', '1', '6')).toEqual({ code: 0, out: '1\n2\n3\n4\n5\n6\n', err: '' })
+  })
+
   test('takes the threshold with -n', () => {
-    expect(out('-n', '5', '--', 'seq', '1', '6').out).toContain('full log:')
+    expect(out('-n', '5', '--', 'seq', '1', '100').out).toContain('full log:')
     expect(out('-n', '6', '--', 'seq', '1', '6').out).toBe('1\n2\n3\n4\n5\n6\n')
     expect(out('-n', 'x', '--', 'seq', '1', '6').code).toBe(2)
   })
