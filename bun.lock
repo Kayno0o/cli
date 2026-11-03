@@ -175,7 +175,7 @@
     },
     "packages/pick": {
       "name": "@kaynooo/cli-pick",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "pick": "./dist/pick.js",
       },
