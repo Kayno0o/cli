@@ -16,7 +16,8 @@
   "bin": {
     "check": "./dist/cli.js",
     "fix": "./dist/fix-cli.js",
-    "errs": "./dist/errs-cli.js"
+    "errs": "./dist/errs-cli.js",
+    "j": "./dist/j-cli.js"
   },
   "files": ["dist"],
   "engines": {
@@ -26,7 +27,7 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts src/fix-cli.ts src/errs-cli.ts --target bun --outdir dist"
+    "build": "$npm_execpath build src/cli.ts src/fix-cli.ts src/errs-cli.ts src/j-cli.ts --target bun --outdir dist"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"

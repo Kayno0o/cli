@@ -107,3 +107,22 @@ Turns tsc, tsgo and vue-tsc (plain and pretty), bun check, eslint and keslint (s
 `--json` prints `{errors: [{tool, file, line, column, rule?, severity, message, test?}], unrecognised, log?, code?}`, `tool` one of `tsc`, `eslint`, `bun check`, `bun test`, `vitest`, `playwright`, `phpunit`, `phpstan`, `php-cs-fixer`, `go`, `cargo`, `ruff` or `pytest`. Lines no format recognised are never dropped silently: their count goes to stderr, with the path of the full log. A command run after `--` has its whole output saved with the same log writer as `out`, and `log` is that file (the file given when a log is read, nothing for stdin). A first argument that is neither an option nor an existing file starts the command, so the `--` is optional. A command runs in the compose service mounting the current folder like a `check` step does (see above), `--in` and `--host` applying only to a command; a service that is down exits 1 with the service named.
 
 Exit code 0 when no error was found and the command, if any, passed, 1 when errors were found or the command failed, 2 on bad usage.
+
+## j
+
+`j` picks a recipe, script or task of the repo with fzf and runs it.
+
+```sh
+j                  # pick one; the ones run last come first, per folder
+j test             # run it without the picker
+j api/test --watch # a child folder's, the words after the name are its arguments
+j just:check       # the one of a runner, when several share the name
+j -                # the last one again, with the same arguments
+j --json           # list what can run: [{id, key, runner, dir, name, doc, parameters}]
+```
+
+It reads a `justfile`, a `Makefile` (a `## doc` comment above a target or after it documents it), the scripts of a `package.json` (run through the package manager its `packageManager` field or lockfile names), `composer.json` scripts, `deno.json` tasks, a `Taskfile`, mise tasks and a `pyproject.toml` (poe tasks and `[project.scripts]`). The folder's own manifests are looked up the parents as far as the repository root; child folders and workspace packages only count the files they hold, their entries being named `api/test` and run with `env -C api`.
+
+A name several entries share opens the picker on those alone, unless it comes qualified by its runner (`just:check`, `bun:api/test`). A required parameter of a recipe not given after the name is asked for. Without fzf or a terminal, `j` lists what can run instead, a note on stderr telling why.
+
+Hidden flags for the shell and the tmux integration: `--list` prints the rows term shows as JSON (`label`, `hint`, `typed`, `preview`, `editsTyped`), `--names` the names with a description for the completions (`name<TAB>description`, a qualified form on its own line for a name several runners share), `--show <kind> <dir> <name>` the preview of one, `--record <id> [args...]` notes a run, and `--emit [name] [args...]` prints what tmux_pick reads: `run`, the words typed back, the id to record, then one line per word of the command, `=fixed`, `+given` or `?name` for a parameter to ask.
