@@ -40,6 +40,7 @@
         "check": "./dist/cli.js",
         "fix": "./dist/fix-cli.js",
         "errs": "./dist/errs-cli.js",
+        "j": "./dist/j-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -83,6 +84,7 @@
       "bin": {
         "dc": "./dist/dc-cli.js",
         "dx": "./dist/dx-cli.js",
+        "sf": "./dist/sf-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -132,10 +134,11 @@
     },
     "packages/git": {
       "name": "@kaynooo/cli-git",
-      "version": "0.5.2",
+      "version": "0.6.0",
       "bin": {
         "gst": "./dist/gst.js",
         "gc": "./dist/gc.js",
+        "gb": "./dist/gb.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
