@@ -57,9 +57,9 @@ describe('j', () => {
   test('prints --names, --list and --emit', () => {
     expect(j('--names').out).toBe('greet\tmake, bun\nmake:greet\tSay hi\nbun:greet\tbun\necho\tbun\n')
     expect(JSON.parse(j('--list').out)).toEqual([
-      { label: 'make greet', hint: 'Say hi', typed: 'make:greet', preview: ['--show', 'make', '.', 'greet'], editsTyped: true },
-      { label: 'bun echo', hint: '', typed: 'echo', preview: ['--show', 'package', '.', 'echo'], editsTyped: true },
       { label: 'bun greet', hint: '', typed: 'bun:greet', preview: ['--show', 'package', '.', 'greet'], editsTyped: true },
+      { label: 'bun echo', hint: '', typed: 'echo', preview: ['--show', 'package', '.', 'echo'], editsTyped: true },
+      { label: 'make greet', hint: 'Say hi', typed: 'make:greet', preview: ['--show', 'make', '.', 'greet'], editsTyped: true },
     ])
     expect(j('--emit', 'bun:echo', 'x').out).toBe('run\necho\nbun:echo\n=bun\n=run\n=echo\n+x\n')
     expect(j('--emit').code).toBe(1)
