@@ -24,6 +24,7 @@ Every rule reads the command with one shell parser (`packages/kit/src/shell.ts`)
 
 ## Behaviour
 
+- `guard rules [--json]` lists every rule with what it refuses, its route and where it runs. A test checks that `guard check` and `guard hook` give the same refusals for a corpus of commands.
 - `guard check <command>` takes the command as one argument, or from stdin with `-` or when none is given; `--cwd` is the directory it runs in, for the files and lockfiles the rules read.
 - Clean: nothing printed, exit 0. Broken: one `<rule>: <route>` line per broken rule, exit 1.
 - Some rules rewrite rather than refuse: an install with the wrong manager runs with the pinned one, and a noisy test, lint or build run goes through `out` when it is installed (`--no-wrap` to skip). The text output says `runs as: <command>` and why.

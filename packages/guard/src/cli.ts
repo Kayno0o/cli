@@ -10,6 +10,7 @@ import { fail, jsonOption, parse, readInput, runCli, runCommand } from '@kaynooo
 import { version } from '../package.json'
 import { checkCommand, checkPath } from './check'
 import { EVENTS, hook } from './hook'
+import { RULES } from './rules'
 
 const checkUsage = `guard check [options] [<command> | -]
 
@@ -112,6 +113,31 @@ function path(args: string[]): number {
   return violations.length > 0 ? 1 : 0
 }
 
+const rulesUsage = `guard rules [--json]
+
+Lists every rule \`guard check\` and \`guard hook\` apply: its name as a violation carries it, what it refuses, the route its refusal points at and where it runs.
+
+Exits 0 once it listed them.`
+
+const rulesOptions = {
+  json: jsonOption('[{name, refuses, route, runs}]'),
+} as const
+
+function rules(args: string[]): number {
+  const parsed = parse(args, rulesUsage, rulesOptions)
+
+  if (parsed.values.json === true) {
+    console.log(JSON.stringify(RULES))
+
+    return 0
+  }
+
+  for (const rule of RULES)
+    console.log(`${rule.name.padEnd(16)} ${rule.refuses}\n${' '.repeat(16)} -> ${rule.route}${rule.runs === 'hook' ? ' (hook only)' : ''}`)
+
+  return 0
+}
+
 function machine(): Machine {
   const home = homedir()
   const stateDir = `${process.env.XDG_STATE_HOME ?? `${home}/.local/state`}/guard`
@@ -166,6 +192,7 @@ process.exitCode = await runCli({
   commands: {
     check: { run: check, summary: 'check a shell command, printing each broken rule with its route' },
     path: { run: async args => Promise.resolve(path(args)), summary: 'check a path a file tool would open' },
+    rules: { run: async args => Promise.resolve(rules(args)), summary: 'list every rule with what it refuses and its route' },
     hook: { run: hookCommand, summary: 'answer a Claude Code hook event, JSON in and out' },
   },
   defaultCommand: 'check',
