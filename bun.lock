@@ -225,7 +225,7 @@
     },
     "packages/sweep": {
       "name": "@kaynooo/cli-sweep",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "sweep": "./dist/sweep.js",
       },
