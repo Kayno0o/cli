@@ -1,3 +1,4 @@
+import { stripAnsi } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { looksLikeDiff, renderDiff } from '../src/diff'
 import { themeFor } from '../src/theme'
@@ -37,5 +38,13 @@ describe('renderDiff', () => {
 
   test('counts a hunk without a length as one line', () => {
     expect(renderDiff('@@ -3 +3 @@\n-a\n+b\n--- next', colour).split('\n')[3]).toBe('\u001B[2m--- next\u001B[22m')
+  })
+})
+
+describe('a miscounted hunk', () => {
+  test('resyncs on the next header', () => {
+    const out = stripAnsi(renderDiff('@@ -1,5 +1,5 @@\n-a\n+b\ndiff --git a/x b/x\n--- a/x\n+++ b/x\n', colour))
+
+    expect(out).toContain('diff x')
   })
 })

@@ -5,6 +5,7 @@ const TRAILING_NEWLINE = /\n$/
 const HUNK = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@(.*)$/
 const FILE_HEADER = /^diff --git a\/(.*) b\/(.*)$/
 const COMMIT = /^(commit )([0-9a-f]{7,40})(.*)$/
+const HUNK_LINE = new Set([' ', '+', '-', '\\'])
 const MARKERS = /^(?:--- |\+\+\+ )/
 const META = /^(?:index |old mode |new mode |deleted file mode |new file mode |similarity index |dissimilarity index |rename from |rename to |copy from |copy to |Binary files |GIT binary patch)/
 const COMMIT_META = /^(?:Author|Date|Merge|AuthorDate|Commit|CommitDate):/
@@ -21,7 +22,11 @@ export function renderDiff(text: string, theme: Theme): string {
   let oldLeft = 0
   let newLeft = 0
 
-  const lines = stripAnsi(text).replace(TRAILING_NEWLINE, '').split('\n').map((line) => {
+  const lines = stripAnsi(text).replaceAll('\r', '').replace(TRAILING_NEWLINE, '').split('\n').map((line) => {
+    // A line that cannot belong to a hunk means its counts were off, so the rest is read as headers again.
+    if ((oldLeft > 0 || newLeft > 0) && line !== '' && !HUNK_LINE.has(line[0] ?? ''))
+      oldLeft = newLeft = 0
+
     if (oldLeft > 0 || newLeft > 0) {
       const mark = line[0]
 

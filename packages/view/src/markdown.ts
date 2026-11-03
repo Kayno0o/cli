@@ -1,6 +1,6 @@
 import type { Align } from '@kaynooo/cli-kit'
 import type { Theme } from './theme'
-import { textWidth } from '@kaynooo/cli-kit'
+import { stripAnsi, textWidth } from '@kaynooo/cli-kit'
 
 export interface RenderSettings {
   theme: Theme
@@ -16,6 +16,8 @@ const BODY = '\u0003'
 const NESTED = '\u0005'
 const CELL = '\u0006'
 const ROW = '\u0007'
+// Starts a block, so a tight list item can tell its text from the block that follows it.
+const BLOCK = '\u0008'
 
 const BULLETS = ['•', '◦', '▪']
 const MAX_RULE = 60
@@ -23,6 +25,10 @@ const MIN_ROOM = 20
 const MIN_COLUMN = 8
 const COLUMN_GAP = 2
 const TRAILING_BREAKS = /\n+$/
+
+function block(text: string): string {
+  return `${BLOCK}${text}`
+}
 
 function reflow(text: string, first = '', rest = ''): string {
   return `${FIRST}${first}${REST}${rest}${BODY}${text}`
@@ -102,28 +108,36 @@ function renderTable(rows: string[][], aligns: Align[], width: number, theme: Th
   return lines.join('\n')
 }
 
+// The text without terminal escapes or control characters that would draw on the terminal or collide with the markers above; tabs and line breaks stay.
+function printable(source: string): string {
+  return Array.from(stripAnsi(source.replaceAll('\r\n', '\n'))).filter(char => char >= ' ' || char === '\n' || char === '\t').join('')
+}
+
 export function renderMarkdown(source: string, { theme, width }: RenderSettings): string {
   const bar = theme.dim('│ ')
   const quote = theme.dim('▎ ')
   let aligns: Align[] = []
 
-  const rendered = Bun.markdown.render(source, {
-    heading: (children, { level }) => `${reflow(theme.heading(children), theme.dim(`${'#'.repeat(level)} `), ' '.repeat(level + 1))}\n\n`,
-    paragraph: children => `${reflow(children.replaceAll('\n', ' '))}\n\n`,
+  const rendered = Bun.markdown.render(printable(source), {
+    heading: (children, { level }) => block(`${reflow(theme.heading(children), theme.dim(`${'#'.repeat(level)} `), ' '.repeat(level + 1))}\n\n`),
+    paragraph: children => block(`${reflow(children.replaceAll('\n', ' '))}\n\n`),
     strong: theme.bold,
     emphasis: theme.italic,
     strikethrough: theme.strike,
     codespan: theme.code,
     link: (children, { href }) => theme.link(children, href),
     image: (children, { src }) => theme.dim(`[image: ${children === '' ? src : children}]`),
-    html: theme.dim,
-    code: children => `${trimmed(children).split('\n').map(line => `${bar}${line}`).join('\n')}\n\n`,
-    blockquote: children => `${indent(trimmed(children), quote, quote)}\n\n`,
-    hr: () => `${theme.dim('─'.repeat(Math.min(width, MAX_RULE)))}\n\n`,
-    list: (children, { depth }) => `${depth > 0 ? NESTED : ''}${trimmed(children)}\n\n`,
+    html: children => block(`${theme.dim(trimmed(children))}\n\n`),
+    code: children => block(`${trimmed(children).split('\n').map(line => `${bar}${line}`).join('\n')}\n\n`),
+    blockquote: children => block(`${indent(trimmed(children.replaceAll(BLOCK, '')), quote, quote)}\n\n`),
+    hr: () => block(`${theme.dim('─'.repeat(Math.min(width, MAX_RULE)))}\n\n`),
+    list: (children, { depth }) => depth > 0 ? `${NESTED}${trimmed(children)}\n\n` : block(`${trimmed(children)}\n\n`),
     listItem: (children, { index, ordered, start, depth, checked }) => {
       const [head = '', ...nested] = children.split(NESTED)
-      const text = head.includes(FIRST) ? trimmed(head) : reflow(head.trim().replaceAll('\n', ' '))
+      const blocksAt = head.indexOf(BLOCK)
+      const inline = (blocksAt === -1 ? head : head.slice(0, blocksAt)).trim()
+      const blocks = blocksAt === -1 ? '' : trimmed(head.slice(blocksAt).replaceAll(BLOCK, ''))
+      const text = [inline === '' ? '' : reflow(inline.replaceAll('\n', ' ')), blocks].filter(part => part !== '').join('\n') || reflow('')
       let marker = theme.accent(BULLETS[depth % BULLETS.length] ?? '•')
 
       if (checked !== undefined)
@@ -146,9 +160,9 @@ export function renderMarkdown(source: string, { theme, width }: RenderSettings)
 
       aligns = []
 
-      return `${drawn}\n\n`
+      return block(`${drawn}\n\n`)
     },
   })
 
-  return `${finish(trimmed(rendered), width)}\n`
+  return `${finish(trimmed(rendered.replaceAll(BLOCK, '')), width)}\n`
 }

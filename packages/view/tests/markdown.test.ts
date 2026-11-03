@@ -1,3 +1,4 @@
+import { stripAnsi } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { renderMarkdown } from '../src/markdown'
 import { themeFor } from '../src/theme'
@@ -47,5 +48,22 @@ describe('renderMarkdown', () => {
     expect(out).toContain('\u001B[33mcode\u001B[39m')
     expect(out).toContain('\u001B[1mbold\u001B[22m')
     expect(Bun.stripANSI(out)).toBe('# Title\n\nsome code and bold\n')
+  })
+})
+
+describe('block content and control characters', () => {
+  test('a quote inside a tight list item stays on its own lines', () => {
+    const out = stripAnsi(renderMarkdown('- item\n  > quoted\n- next\n', { theme: plain, width: 40 }))
+
+    expect(Array.from(out).some(char => char < ' ' && char !== '\n')).toBe(false)
+    expect(out).toContain('quoted')
+    expect(out).toContain('next')
+  })
+
+  test('control characters in the source never reach the output', () => {
+    const out = renderMarkdown('hello \u0001\u0005 world \u001B]0;title\u0007\n', { theme: plain, width: 40 })
+
+    expect(Array.from(out).some(char => char < ' ' && char !== '\n')).toBe(false)
+    expect(stripAnsi(out)).toContain('hello')
   })
 })
