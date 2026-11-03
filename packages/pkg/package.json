@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-pkg",
   "type": "module",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "pkg: check an npm package before it is added, for a guessed name, a version under two weeks old and install scripts.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
