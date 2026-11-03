@@ -77,6 +77,17 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/docker": {
+      "name": "@kaynooo/cli-docker",
+      "version": "0.1.0",
+      "bin": {
+        "dc": "./dist/dc-cli.js",
+        "dx": "./dist/dx-cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/doctor": {
       "name": "@kaynooo/cli-doctor",
       "version": "0.4.0",
@@ -322,6 +333,8 @@
     "@kaynooo/cli-db": ["@kaynooo/cli-db@workspace:packages/db"],
 
     "@kaynooo/cli-dev": ["@kaynooo/cli-dev@workspace:packages/dev"],
+
+    "@kaynooo/cli-docker": ["@kaynooo/cli-docker@workspace:packages/docker"],
 
     "@kaynooo/cli-doctor": ["@kaynooo/cli-doctor@workspace:packages/doctor"],
 
