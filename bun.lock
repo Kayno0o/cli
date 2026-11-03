@@ -79,7 +79,7 @@
     },
     "packages/docker": {
       "name": "@kaynooo/cli-docker",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "dc": "./dist/dc-cli.js",
         "dx": "./dist/dx-cli.js",
