@@ -1,0 +1,40 @@
+{
+  "name": "@kaynooo/cli-probe",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "probe: a site's HTTP version, redirect chain, timings, addresses, TLS certificate and notable headers in one call, with warnings.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/probe#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/probe"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "http",
+    "tls",
+    "curl"
+  ],
+  "bin": {
+    "probe": "./dist/probe.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/probe.ts --target bun --outdir dist",
+    "probe": "$npm_execpath src/probe.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
