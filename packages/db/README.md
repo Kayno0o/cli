@@ -23,6 +23,7 @@ bun install -g @kaynooo/cli-db
 | --- | --- |
 | `db "<sql>"` / `db query` | runs one read-only statement, as an argument or on stdin |
 | `db tables` | tables and views with an estimated row count (Postgres: outside the system schemas, MySQL: the connected database) |
+| `db sample <table>` | a few rows of a table (`-n`, `--where`), sensitive columns masked; `db count <table>` the number of rows |
 | `db describe <table>` | columns with type, nullability, default and primary key (`schema.table` to pick a schema, the database on MySQL) |
 | `db dbs` | databases the connection may open, with their size, the one read marked `current` |
 

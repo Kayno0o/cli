@@ -5,6 +5,7 @@ import { runCli } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { query } from './commands/query'
 import { databases, describe, tables } from './commands/schema'
+import { count, sample } from './commands/table'
 
 process.exitCode = await runCli({
   name: 'db',
@@ -16,6 +17,8 @@ process.exitCode = await runCli({
     query: { run: query, summary: 'run one read-only statement (the default: db "<sql>"), a write runs on a _test database and is printed otherwise' },
     tables: { run: tables, summary: 'list tables and views with an estimated row count' },
     describe: { run: describe, summary: 'columns of a table with type, nullability, default and primary key' },
+    sample: { run: sample, summary: 'a few rows of a table, sensitive columns masked' },
+    count: { run: count, summary: 'the number of rows of a table, optionally matching --where' },
     dbs: { run: databases, summary: 'databases the connection may open, with their size' },
   },
   defaultCommand: 'query',

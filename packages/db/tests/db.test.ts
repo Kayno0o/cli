@@ -183,6 +183,19 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
     expect(columns.out).toContain('true')
   })
 
+  test('samples and counts a table, masking like a query', async () => {
+    const sampled = await db(['sample', 'users', '-n', '2'])
+    const counted = await db(['count', 'users', '--where', 'id <= 3', '--json'])
+
+    expect(sampled.code).toBe(0)
+    expect(sampled.out).toContain('user1')
+    expect(sampled.out).not.toContain('u1@x.io')
+    expect(sampled.out).not.toContain('user3')
+    expect(JSON.parse(counted.out)).toMatchObject({ rows: [{ count: '3' }] })
+    expect((await db(['count', 'users', '--where', '1=1; delete from audit'])).code).not.toBe(0)
+    expect((await db(['count', 'users; drop table users'])).code).toBe(2)
+  })
+
   test('never prints the url or password, even in errors', async () => {
     const wrong = await db(['select * from missing_table'])
     const badPassword = await db(['select 1'], { DATABASE_URL: url.replace(PASSWORD, 'nope') })
