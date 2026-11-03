@@ -5,15 +5,17 @@ import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
 import { shellQuote } from '@kaynooo/cli-kit/shell'
 import { place, placeOptions, placeSettings, programOf, shellIn, Stack } from './compose'
+import { changedPaths, narrow } from './narrow'
 import { logDirectory, outcomeJson, printOutcome, refusedStep, runStep } from './run'
 import { discoverProjects, STEP_NAMES } from './steps'
 
-const usage = `check [--only <steps>] [--timeout <duration>] [--slot] [--in <service> | --host] [--list]
+const usage = `check [--only <steps>] [--changed] [--timeout <duration>] [--slot] [--in <service> | --host] [--list]
 
 Runs the repo's check, typecheck, lint and test steps, from package.json scripts (through bun run), composer.json, a Justfile or a Makefile, and for PHP from phpstan.neon (typecheck), .php-cs-fixer.dist.php (lint, dry-run) and phpunit.xml.dist (test) when composer.json has no such script.
 A folder without steps but with subfolders that have some (api/ and client/) runs each one's, each line naming its subfolder.
 A step runs inside the docker compose service that bind-mounts its folder (found in compose.yml, compose.yaml or docker-compose.yml, up to the repository root), at the matching path; a service that is down is never started, the step fails naming it. --in picks the service, --host forces the host.
 A passing step is one line, a failing one shows only what failed, and each step's full output is saved to the file whose path ends its line.
+With --changed, lint and test run on the files changed against HEAD (staged, unstaged and untracked) when their script is a bare linter (keslint, eslint, oxlint) or a bare \`bun test\`: lint on the changed source files, test on the changed test files and the tests next to the changed sources. Every other step, and a test step finding no test for the diff, runs in full and the line says so.
 A step still running after --timeout is ended with everything it started, but not what it started inside a container.
 Exits 0 when every step passed, 1 when one failed, 2 on bad usage, when no step is found or when a step timed out.
 --json prints [{name, command, in?, ok, ms, log, failed?}] once every step ran, --list --json [{name, command, source, in?}], in the compose service the step ran in.`
@@ -22,6 +24,7 @@ const options = {
   list: { type: 'boolean', short: 'l', description: 'print the steps found, the commands that run them and where (host or service), without running them' },
   only: { type: 'string', short: 'o', description: `comma separated steps to run, among ${STEP_NAMES.join(', ')}` },
   timeout: { type: 'string', short: 't', description: 'longest a step may run before it is ended (30s, 5m, 1h), none by default' },
+  changed: { type: 'boolean', short: 'c', description: 'narrow lint and test to the files changed against HEAD (a bare linter script, a bare bun test script), every other step runs in full and says so' },
   slot: { type: 'boolean', description: 'run each step through slot, queued behind the machine-wide slots of the other sessions (needs the slot bin)' },
   ...placeOptions,
   json: jsonOption(),
@@ -33,6 +36,8 @@ interface Planned extends Step {
   // `api/lint` for a subfolder's step, the step's name otherwise.
   label: string
   placement: Placement | undefined
+  // Said after the command when --changed narrowed it, or could not.
+  note?: string
 }
 
 // The command as `sh -c` takes it inside a slot.
@@ -69,6 +74,29 @@ async function plan(steps: (Step & { project: Project })[], settings: ReturnType
   return planned
 }
 
+// The steps narrowed to what the working tree changes against HEAD, each said on its line.
+async function narrowed(steps: Planned[]): Promise<Planned[]> {
+  const cache = new Map<string, string[]>()
+  const result: Planned[] = []
+
+  for (const step of steps) {
+    if (!cache.has(step.dir)) {
+      const paths = await changedPaths(step.dir)
+
+      if (paths === undefined)
+        fail('--changed needs a git repository')
+
+      cache.set(step.dir, paths)
+    }
+
+    const { command, note } = await narrow(step, step.dir, cache.get(step.dir) ?? [])
+
+    result.push({ ...step, command, note })
+  }
+
+  return result
+}
+
 // What the shell runs for a step: its command, inside the compose service when it has one.
 function launch(step: Planned): string {
   return step.placement === undefined ? step.command : shellIn(step.placement, step.command)
@@ -84,7 +112,8 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   if (found.length === 0)
     fail(`no ${STEP_NAMES.join(', ')} step in package.json, composer.json, a Justfile, a Makefile or a PHP tool's config, nor in a subfolder`)
 
-  const steps = await plan(pick(found, parsed.values.only), settings)
+  const planned = await plan(pick(found, parsed.values.only), settings)
+  const steps = parsed.values.changed === true ? await narrowed(planned) : planned
   const json = parsed.values.json === true
 
   if (parsed.values.list === true) {
@@ -114,7 +143,7 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
       const outcome = down === undefined ? await runStep(command, step.dir, logFile, { ...(timeoutMs === undefined ? {} : { timeoutMs }), held }) : await refusedStep(down, logFile)
 
       if (!json)
-        printOutcome(step.label, width, step.placement === undefined ? step.command : `${step.command} (in ${step.placement.service})`, logFile, outcome)
+        printOutcome(step.label, width, `${step.command}${step.note === undefined ? '' : ` (${step.note})`}${step.placement === undefined ? '' : ` (in ${step.placement.service})`}`, logFile, outcome)
 
       outcomes.push(outcomeJson(step.label, step.command, logFile, outcome, step.placement?.service))
 

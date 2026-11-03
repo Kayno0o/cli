@@ -44,6 +44,7 @@ Acme repos run their tools in a container, so `check`, `fix` and `errs -- <comma
 - No `docker` on the PATH (a devcontainer, CI): there is no container to reach, so the step runs on the host and stderr says `host, docker not found` once per project; `--in <service>` fails instead.
 - A compose file that does not parse fails the call naming the file and the parse error, and points at `--host`; it never falls back to the host silently, even without docker.
 - `--slot` queues the whole docker command. `--timeout` ends the `docker compose exec` client, which does not always end what it started inside the container.
+- `check --changed` (`-c`) narrows `lint` to the changed source files (staged, unstaged and untracked, against HEAD) when its script is a bare `keslint`, `eslint` or `oxlint`, and `test` to the changed test files and the tests next to changed sources (same folder, `tests/`, `../tests/`) when its script is a bare `bun test`. Every other step runs in full and its line says so, a test step finding no test for the diff included. The typecheck is never narrowed.
 - `fix` runs the project's scripts and `php-cs-fixer` in the service, and keeps its own formatters (`justfile`, `go`, `rust`, `python`, `makefile`) on the host. The recursion guard variable is passed into the container.
 
 ## Output
