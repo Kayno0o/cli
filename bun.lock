@@ -47,7 +47,7 @@
     },
     "packages/code": {
       "name": "@kaynooo/cli-code",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "bin": {
         "peek": "./dist/peek.js",
         "todo-scan": "./dist/todo-scan.js",
