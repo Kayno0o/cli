@@ -1,6 +1,7 @@
 import type { Entry } from './scan'
+import { existsSync } from 'node:fs'
 import { lstat, rm } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { basename, join } from 'node:path'
 import { runTool } from '@kaynooo/cli-kit'
 import { FOLDER_NAMES } from './scan'
 
@@ -18,6 +19,9 @@ async function removeFolder(entry: Entry): Promise<Outcome> {
     if (stat.isSymbolicLink() || !stat.isDirectory() || !FOLDER_NAMES.has(basename(entry.path)))
       return { path: entry.path, removed: false, error: 'no longer a plain folder' }
 
+    if (existsSync(join(entry.path, '.git')))
+      return { path: entry.path, removed: false, error: 'holds a git repository' }
+
     await rm(entry.path, { recursive: true, force: true })
 
     return { path: entry.path, removed: true }
@@ -29,8 +33,11 @@ async function removeFolder(entry: Entry): Promise<Outcome> {
 
 // Never forced: git refuses a worktree that turned dirty or locked since the scan.
 async function removeWorktree(entry: Entry): Promise<Outcome> {
+  if (entry.repo === undefined)
+    return { path: entry.path, removed: false, error: 'no repository known' }
+
   try {
-    const ran = await runTool('git worktree remove', ['git', '-C', entry.repo ?? '', 'worktree', 'remove', entry.path])
+    const ran = await runTool('git worktree remove', ['git', '-C', entry.repo, 'worktree', 'remove', entry.path])
 
     return ran.code === 0 ? { path: entry.path, removed: true } : { path: entry.path, removed: false, error: ran.stderr.trim() }
   }

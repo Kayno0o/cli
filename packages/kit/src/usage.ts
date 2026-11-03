@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import process from 'node:process'
 import { CLI_FOLDER } from './logs'
 
@@ -14,7 +14,9 @@ export interface UsageEntry {
   unknown?: string
 }
 
-const UNKNOWN_OPTION = /unknown option '(-[\w-]+)/
+const UNKNOWN_OPTION = /unknown option '(--[a-z][a-z0-9-]*)[=']/
+// A long name, or a single letter: anything else is an argument that happens to start with a dash, such as `-secret`.
+const FLAG_NAME = /^(?:--[a-z][a-z0-9-]*|-[a-zA-Z])$/
 const LONGEST_NAME = 40
 
 // Set when a run reported a usage error, so the entry of that run can name the option.
@@ -24,8 +26,15 @@ export function noteUsageError(message: string): void {
   usageError = message
 }
 
+// XDG_STATE_HOME when it is an absolute path, else ~/.local/state, as the spec says an empty or relative value is ignored.
+export function stateHome(env: Record<string, string | undefined> = process.env): string {
+  const dir = env.XDG_STATE_HOME
+
+  return dir !== undefined && isAbsolute(dir) ? dir : join(homedir(), '.local', 'state')
+}
+
 export function usagePath(env: Record<string, string | undefined> = process.env): string {
-  return join(env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), CLI_FOLDER, 'usage.jsonl')
+  return join(stateHome(env), CLI_FOLDER, 'usage.jsonl')
 }
 
 // Whether runs are recorded: never under `bun test`, and not once KAYNOOO_CLI_NO_USAGE is set to anything but 0 or an empty value.
@@ -40,7 +49,7 @@ export function flagNames(argv: readonly string[]): string[] {
   const end = argv.indexOf('--')
   const names = (end === -1 ? argv : argv.slice(0, end)).filter(word => word.startsWith('-') && word !== '-').map(word => word.includes('=') ? word.slice(0, word.indexOf('=')) : word)
 
-  return [...new Set(names)].filter(name => name.length <= LONGEST_NAME)
+  return [...new Set(names)].filter(name => name.length <= LONGEST_NAME && FLAG_NAME.test(name))
 }
 
 // The entry for a run that exited with `code`, with the unknown option a usage error named.

@@ -6,7 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, 
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, readInput, runCli, runCommand } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, readInput, runCli, runCommand, stateHome } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { checkCommand, checkPath } from './check'
 import { EVENTS, hook } from './hook'
@@ -140,7 +140,7 @@ function rules(args: string[]): number {
 
 function machine(): Machine {
   const home = homedir()
-  const stateDir = `${process.env.XDG_STATE_HOME ?? `${home}/.local/state`}/guard`
+  const stateDir = `${stateHome()}/guard`
 
   return {
     home,

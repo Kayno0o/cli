@@ -104,14 +104,14 @@ async function realOf(path: string): Promise<string | undefined> {
 
 const HEADS_PREFIX = /^refs\/heads\//
 
-async function gitIn(cwd: string, args: string[]): Promise<{ code: number, stdout: string }> {
+async function gitIn(cwd: string, args: string[]): Promise<{ code: number, stdout: string, stderr: string }> {
   try {
-    const { code, stdout } = await runTool(`git ${args.join(' ')}`, ['git', '-C', cwd, ...args], { timeoutMs: 30_000 })
+    const { code, stdout, stderr } = await runTool(`git ${args.join(' ')}`, ['git', '-C', cwd, ...args], { timeoutMs: 30_000 })
 
-    return { code, stdout: stdout.trim() }
+    return { code, stdout: stdout.trim(), stderr }
   }
-  catch {
-    return { code: 1, stdout: '' }
+  catch (error) {
+    return { code: -1, stdout: '', stderr: String(error) }
   }
 }
 
@@ -131,10 +131,16 @@ function memo<T>(make: (key: string) => Promise<T>): (key: string) => Promise<T>
   }
 }
 
-const toplevelOf = memo(async (dir) => {
-  const { code, stdout } = await gitIn(dir, ['rev-parse', '--show-toplevel'])
+const NOT_A_REPO = /not a git repository/i
 
-  return code === 0 && stdout !== '' ? stdout : undefined
+// Outside a repository is told apart from git failing, which must never read as "safe to delete".
+const toplevelOf = memo(async (dir): Promise<{ top: string } | 'none' | 'failed'> => {
+  const { code, stdout, stderr } = await gitIn(dir, ['rev-parse', '--show-toplevel'])
+
+  if (code === 0 && stdout !== '')
+    return { top: stdout }
+
+  return NOT_A_REPO.test(stderr) ? 'none' : 'failed'
 })
 
 const lastCommitOf = memo(async (top) => {
@@ -168,9 +174,15 @@ type Verdict = { skip: string } | { entry: Omit<Entry, 'bytes'> }
 async function judgeFolder(path: string): Promise<Verdict> {
   const parent = dirname(path)
   const name = basename(path)
-  const top = await toplevelOf(parent)
+  const located = await toplevelOf(parent)
 
-  if (top === undefined)
+  if (located === 'failed')
+    return { skip: 'git failed' }
+
+  if (existsSync(join(path, '.git')))
+    return { skip: 'holds a git repository' }
+
+  if (located === 'none')
     return name === 'node_modules' ? { entry: { path, kind: 'folder', committedAt: undefined, action: 'remove' } } : { skip: 'not in a git repository' }
 
   const tracked = await gitIn(parent, ['ls-files', '--', name])
@@ -181,16 +193,21 @@ async function judgeFolder(path: string): Promise<Verdict> {
   if (name !== 'node_modules' && (await gitIn(parent, ['check-ignore', '-q', '--', name])).code !== 0)
     return { skip: 'not ignored by git' }
 
-  return { entry: { path, kind: 'folder', committedAt: await lastCommitOf(top), action: 'remove' } }
+  return { entry: { path, kind: 'folder', committedAt: await lastCommitOf(located.top), action: 'remove' } }
 }
 
 // A worktree is removable only when it is clean and every commit of its branch is on another branch or a remote.
 async function judgeWorktree(path: string): Promise<Verdict> {
   const repo = dirname(dirname(path))
-  const top = await toplevelOf(repo)
+  const located = await toplevelOf(repo)
 
-  if (top === undefined)
+  if (located === 'failed')
+    return { skip: 'git failed' }
+
+  if (located === 'none')
     return { skip: 'not in a git repository' }
+
+  const { top } = located
 
   const real = await realOf(path)
   const branches = await worktreesOf(top)

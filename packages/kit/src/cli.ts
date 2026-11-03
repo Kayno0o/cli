@@ -435,8 +435,12 @@ export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<nu
 
   const code = await dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
 
-  if (cli.usage !== false)
-    recordUsage(usageEntry(cli.name, commandPath(scopeOf(cli.commands, cli.extraCommands, cli.aliases), argv), argv, code))
+  if (cli.usage !== false) {
+    try {
+      recordUsage(usageEntry(cli.name, commandPath(scopeOf(cli.commands, cli.extraCommands, cli.aliases), argv), argv, code))
+    }
+    catch {}
+  }
 
   return code
 }
@@ -447,7 +451,8 @@ function commandPath(scope: Pick<Level, 'commands' | 'aliases'>, argv: readonly 
   let level = scope
 
   for (const word of argv.filter(each => !each.startsWith('-'))) {
-    const command = level.commands[level.aliases?.[word] ?? word]
+    const name = level.aliases !== undefined && Object.hasOwn(level.aliases, word) ? (level.aliases[word] ?? word) : word
+    const command: Level['commands'][string] | undefined = Object.hasOwn(level.commands, name) ? level.commands[name] : undefined
 
     if (command === undefined)
       break

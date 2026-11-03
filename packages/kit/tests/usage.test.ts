@@ -8,6 +8,16 @@ import { flagNames, noteUsageError, readUsage, recordUsage, summarizeUsage, usag
 const temp = tempDirs()
 
 describe('flagNames', () => {
+  test('drops dash-prefixed arguments that are not option names', () => {
+    expect(flagNames(['-secret', '--Token=abc', '-ab', '--ok', '-x'])).toEqual(['--ok', '-x'])
+  })
+
+  test('an empty or relative XDG_STATE_HOME is ignored', () => {
+    expect(usagePath({ XDG_STATE_HOME: '' })).toBe(usagePath({}))
+    expect(usagePath({ XDG_STATE_HOME: 'rel' })).toBe(usagePath({}))
+    expect(usagePath({ XDG_STATE_HOME: '/abs' })).toStartWith('/abs/')
+  })
+
   test('keeps flag names only, never values or arguments, and stops at --', () => {
     expect(flagNames(['query', '--limit=5', '-n', '3', 'select secret', '--json', '--', '--after'])).toEqual(['--limit', '-n', '--json'])
   })

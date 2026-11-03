@@ -19,14 +19,14 @@ function git(cwd: string, args: string[], env: Record<string, string> = {}): str
   return result.stdout.toString()
 }
 
-function sweep(args: string[]) {
-  const result = Bun.spawnSync([process.execPath, CLI, '--no-docker', ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, NO_COLOR: '1' } })
+function sweep(args: string[], env: Record<string, string> = {}) {
+  const result = Bun.spawnSync([process.execPath, CLI, '--no-docker', ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, NO_COLOR: '1', ...env } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
 
-function listing(args: string[]): Listing {
-  return JSON.parse(sweep([...args, '--json']).out) as Listing
+function listing(args: string[], env: Record<string, string> = {}): Listing {
+  return JSON.parse(sweep([...args, '--json'], env).out) as Listing
 }
 
 // A repo with one commit that ignores the folders sweep targets, `date` being its commit date.
@@ -107,6 +107,26 @@ describe('sweep', () => {
     expect(existsSync(join(a, 'build', 'tracked.js'))).toBe(true)
     expect(existsSync(join(outside, 'file'))).toBe(true)
     expect(existsSync(join(a, '.next', 'file'))).toBe(true)
+  })
+
+  test('skips a folder holding its own repository, and everything when git cannot run', () => {
+    const root = temp('sweep-')
+    const a = repo(root, 'a')
+
+    fill(join(a, 'node_modules'), 10)
+    fill(join(a, 'dist'), 10)
+    mkdirSync(join(a, 'dist', '.git'))
+
+    const nested = listing([root])
+
+    expect(nested.entries.map(entry => entry.path)).toEqual([join(a, 'node_modules')])
+    expect(nested.skipped.find(skip => skip.path === join(a, 'dist'))?.reason).toBe('holds a git repository')
+
+    const blind = listing([root], { PATH: '/nonexistent' })
+
+    expect(blind.entries).toEqual([])
+    expect(blind.skipped.map(skip => skip.reason)).toEqual(['git failed', 'git failed'])
+    expect(existsSync(join(a, 'node_modules', 'file'))).toBe(true)
   })
 
   test('a target folder counts only beside a Cargo.toml', () => {
