@@ -50,7 +50,7 @@ describe('j', () => {
   test('refuses a name several runners share without a terminal, and an unknown one', () => {
     expect(j('greet')).toMatchObject({ code: 1 })
     expect(j('greet').err).toContain('make:greet, bun:greet')
-    expect(j('make:greet').out).toBe('hi\n')
+    expect(j('bun:greet').out).toBe('package\n')
     expect(j('ech').err).toContain('did you mean echo?')
   })
 
