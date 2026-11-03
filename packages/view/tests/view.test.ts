@@ -38,3 +38,19 @@ describe('view', () => {
     expect(view(['a', 'b']).code).toBe(2)
   })
 })
+
+describe('view code', () => {
+  test('shows a source file by its extension, numbered only on request outside a terminal', () => {
+    const dir = temp('view-')
+
+    writeFileSync(join(dir, 'a.json'), '{"a": 1}\n')
+
+    expect(view([join(dir, 'a.json')]).out).toBe('{"a": 1}\n')
+    expect(view([join(dir, 'a.json'), '--lines']).out).toBe('1 │ {"a": 1}\n')
+  })
+
+  test('takes --lang for stdin and refuses an unknown language', () => {
+    expect(view(['--lang', 'ts'], '# not a heading\n').out).toBe('# not a heading\n')
+    expect(view(['--lang', 'nope'], 'x').code).toBe(2)
+  })
+})

@@ -15,6 +15,9 @@ export interface Theme {
   added: (text: string) => string
   removed: (text: string) => string
   accent: (text: string) => string
+  keyword: (text: string) => string
+  string: (text: string) => string
+  number: (text: string) => string
   link: (text: string, url: string) => string
 }
 
@@ -37,6 +40,9 @@ export function themeFor(stream: Stream = process.stdout, env: Record<string, st
     added: colors.green,
     removed: colors.red,
     accent,
+    keyword: colors.magenta,
+    string: colors.green,
+    number: colors.yellow,
     link: (text, url) => path(colors.underline(link(text, url, stream, env))),
   }
 }

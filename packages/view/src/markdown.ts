@@ -1,6 +1,7 @@
 import type { Align } from '@kaynooo/cli-kit'
 import type { Theme } from './theme'
 import { stripAnsi, textWidth } from '@kaynooo/cli-kit'
+import { highlight, languageOf } from './code'
 
 export interface RenderSettings {
   theme: Theme
@@ -128,7 +129,12 @@ export function renderMarkdown(source: string, { theme, width }: RenderSettings)
     link: (children, { href }) => theme.link(children, href),
     image: (children, { src }) => theme.dim(`[image: ${children === '' ? src : children}]`),
     html: children => block(`${theme.dim(trimmed(children))}\n\n`),
-    code: children => block(`${trimmed(children).split('\n').map(line => `${bar}${line}`).join('\n')}\n\n`),
+    code: (children, meta) => {
+      const language = languageOf(meta?.language ?? '')
+      const body = trimmed(children)
+
+      return block(`${(language === undefined ? body : highlight(body, language, theme)).split('\n').map(line => `${bar}${line}`).join('\n')}\n\n`)
+    },
     blockquote: children => block(`${indent(trimmed(children.replaceAll(BLOCK, '')), quote, quote)}\n\n`),
     hr: () => block(`${theme.dim('─'.repeat(Math.min(width, MAX_RULE)))}\n\n`),
     list: (children, { depth }) => depth > 0 ? `${NESTED}${trimmed(children)}\n\n` : block(`${trimmed(children)}\n\n`),

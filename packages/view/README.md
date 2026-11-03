@@ -9,10 +9,14 @@ bun add -g @kaynooo/cli-view
 | Command | What it does |
 | --- | --- |
 | `view README.md` | headings with their `#` marks, emphasis, lists with bullets by depth, numbers and task boxes, quotes and code blocks behind a bar, tables with wrapped cells, links as OSC 8 links |
+| `view src/app.ts`, `view config.yaml` | source highlighted (comments, strings, numbers, keywords, keys) behind line numbers on a terminal; ts, js, json, yaml, toml, ini, py, sh, css, html, sql, rs, go, php, java, c, rb, lua, Dockerfile, Makefile |
+| `view --lang ts`, `--no-lines` | read stdin as that language; leave the line numbers off |
 | `git diff \| view` | file headers, hunk ranges, added and removed lines coloured; a `git log -p` or `git show` too |
 | `view --diff`, `--markdown` | force the reading when the first line or the file name does not say |
 | `--width <n>`, `--no-pager` | wrap to a width instead of the terminal's, never page |
 
 The text is a file, or what is piped on stdin. A diff is recognised by its first line (`diff --git`, `--- `, `@@`, `commit <sha>`) or a `.diff` or `.patch` name; anything else is markdown. With `NO_COLOR`, a pipe or `--plain` it prints without colour: links as `text (url)`, images as `[image: alt]`.
 
-Not in v1: word-level diff highlighting and syntax highlighting of code blocks.
+Code blocks in markdown are highlighted by their language too. The highlighting is a light tokenizer, not a parser: it gets comments, strings, numbers and keywords right for the common languages, and leaves a language it does not know uncoloured.
+
+Not yet: word-level diff highlighting.
