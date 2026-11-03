@@ -3,27 +3,33 @@
 import type { Hotspot } from './churn'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badUsage, capped, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, table } from '@kaynooo/cli-kit'
+import { badUsage, capped, duration, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, table } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { churnSince, complexityOf, isCandidate, isGenerated } from './churn'
 import { listFiles, readText } from './files'
+import { worstUnit } from './units'
 
 const DEFAULT_SINCE = '6 months ago'
+const DEFAULT_BULK = 25
+const DAY_MS = 86_400_000
+const DEFAULT_HALF_LIFE = '90d'
 const DEFAULT_COUNT = 20
 
 const USAGE = `hotspots [options] [dir]: ranks the source files under dir (here by default) by complexity times churn, the ones both hard to read and often edited first, honouring .gitignore
 
-Complexity is the count of decision points in the file (branches, loops, cases, catches, boolean operators, ternaries) plus one, churn the commits touching it since --since (${DEFAULT_SINCE}), score their product. Test files and generated or built files are left out unless --all.
+Complexity is the count of decision points in the file (branches, loops, cases, catches, boolean operators, ternaries) plus one, churn the commits touching it since --since (${DEFAULT_SINCE}), score their product. A commit counts for less the older it is (half as much every --half-life, 0 for all alike) and a commit touching more than --bulk files, a format or rename sweep, is left out. Each file also shows its most complex declaration, found by indentation. Test files and generated or built files are left out unless --all.
 
 Lists at most ${DEFAULT_COUNT} files, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.
 
 Exits 0 when it ranked the files, 1 when no file has commits in the window, 2 on a usage error or outside a git repository.`
 
 const OPTIONS = {
-  since: { type: 'string', short: 's', description: `only count the commits since this date, as git reads it (${DEFAULT_SINCE})` },
+  'since': { type: 'string', short: 's', description: `only count the commits since this date, as git reads it (${DEFAULT_SINCE})` },
+  'half-life': { type: 'string', description: `how long until a commit counts half as much (${DEFAULT_HALF_LIFE}), 0 for no decay` },
+  'bulk': { type: 'string', description: `leave out the commits touching more files than this (${DEFAULT_BULK})` },
   ...limitOptions(DEFAULT_COUNT),
-  all: { type: 'boolean', short: 'a', description: 'keep test files and generated files' },
-  json: jsonOption('[{rank, path, score, churn, complexity, lines}], never cut unless --limit is given'),
+  'all': { type: 'boolean', short: 'a', description: 'keep test files and generated files' },
+  'json': jsonOption('[{rank, path, score, churn, recent, complexity, worst, lines}], never cut unless --limit is given'),
 } as const
 
 async function main(args: string[]): Promise<number> {
@@ -34,7 +40,13 @@ async function main(args: string[]): Promise<number> {
 
   const count = limitOf(values, DEFAULT_COUNT)
   const cwd = process.cwd()
-  const churn = await churnSince(cwd, values.since ?? DEFAULT_SINCE)
+  const bulk = Number(values.bulk ?? DEFAULT_BULK)
+
+  if (!Number.isInteger(bulk) || bulk < 1)
+    badUsage(`--bulk takes a number of files, not ${values.bulk}`)
+
+  const halfLifeMs = values['half-life'] === '0' ? 0 : duration(values['half-life'], 'half-life', 90 * DAY_MS)
+  const churn = await churnSince(cwd, values.since ?? DEFAULT_SINCE, { bulk, halfLifeMs })
 
   if (churn === undefined)
     fail('not a git repository, churn comes from its log')
@@ -54,7 +66,9 @@ async function main(args: string[]): Promise<number> {
 
     const complexity = complexityOf(text)
 
-    ranked.push({ path, score: complexity * touched, churn: touched, complexity, lines: text.split('\n').length - (text.endsWith('\n') ? 1 : 0) })
+    const worst = worstUnit(text)
+
+    ranked.push({ path, score: Math.round(complexity * touched.weight), churn: touched.commits, recent: Math.round(touched.weight * 10) / 10, complexity, worst: worst === undefined ? undefined : { name: worst.name, line: worst.line, complexity: worst.complexity }, lines: text.split('\n').length - (text.endsWith('\n') ? 1 : 0) })
   }
 
   if (ranked.length === 0)
@@ -71,7 +85,7 @@ async function main(args: string[]): Promise<number> {
     return 0
   }
 
-  console.log(table([['rank', 'score', 'churn', 'complexity', 'lines', 'file'], ...shown.map(row => [row.rank, row.score, row.churn, row.complexity, row.lines, row.path].map(String))], { header: true, align: ['right', 'right', 'right', 'right', 'right', 'left'] }))
+  console.log(table([['rank', 'score', 'churn', 'recent', 'complexity', 'lines', 'file', 'most complex declaration'], ...shown.map(row => [row.rank, row.score, row.churn, row.recent, row.complexity, row.lines, row.path, row.worst === undefined ? '' : `${row.worst.name} (${row.worst.complexity}, line ${row.worst.line})`].map(String))], { header: true, align: ['right', 'right', 'right', 'right', 'right', 'right', 'left', 'left'] }))
 
   if (footer !== undefined)
     console.log(footer)

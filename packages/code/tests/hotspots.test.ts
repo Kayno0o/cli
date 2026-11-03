@@ -63,10 +63,30 @@ describe('complexityOf', () => {
 
 describe('hotspots', () => {
   test('ranks by complexity times churn over the window, tests, generated and ignored files left out', () => {
-    const rows = JSON.parse(hotspots(['--json', '--since', '2026-01-01']).out) as { rank: number, path: string, score: number, churn: number, complexity: number, lines: number }[]
+    const rows = JSON.parse(hotspots(['--json', '--since', '2026-01-01', '--half-life', '0']).out) as { rank: number, path: string, score: number, churn: number, complexity: number, lines: number }[]
 
     expect(rows.map(row => [row.rank, row.path, row.churn, row.complexity, row.score])).toEqual([[1, 'src/branchy.ts', 3, 6, 18], [2, 'src/plain.ts', 5, 1, 5]])
     expect(rows[0]?.lines).toBe(9)
+  })
+
+  test('counts recent commits for more with a half-life, and leaves a bulk commit out', () => {
+    const decayed = JSON.parse(hotspots(['--json', '--since', '2026-01-01', '--half-life', '1d']).out) as { path: string, churn: number, recent: number }[]
+    const branchy = decayed.find(row => row.path === 'src/branchy.ts')
+
+    expect(branchy?.churn).toBe(3)
+    expect(branchy?.recent).toBeLessThan(1)
+
+    const sweep = JSON.parse(hotspots(['--json', '--since', '2026-01-01', '--half-life', '0', '--bulk', '1']).out) as { path: string, churn: number }[]
+
+    expect(sweep.map(row => [row.path, row.churn])).toEqual([['src/plain.ts', 2]])
+    expect(hotspots(['--bulk', 'x']).code).toBe(2)
+  })
+
+  test('names the most complex declaration of a file', () => {
+    const rows = JSON.parse(hotspots(['--json', '--since', '2026-01-01']).out) as { path: string, worst?: { name: string, line: number, complexity: number } }[]
+
+    expect(rows.find(row => row.path === 'src/branchy.ts')?.worst).toEqual({ name: 'export function f(a: number) {', line: 2, complexity: 6 })
+    expect(hotspots(['--since', '2026-01-01']).out).toContain('export function f(a: number) { (6, line 2)')
   })
 
   test('widens with an older --since, and keeps everything with --all', () => {
