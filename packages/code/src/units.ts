@@ -6,7 +6,7 @@ export interface Unit {
   complexity: number
 }
 
-const CONTAINER = /\b(?:class|impl|trait|interface|namespace|module|object|mod|struct|enum)\b/
+const CONTAINER = /^(?:(?:export|default|declare|abstract|final|readonly|public|pub|private|protected|internal|sealed|data|open)\s+)*(?:class|impl|trait|interface|namespace|module|object|mod|struct|enum)\b/
 const CLOSER = /^[\s)\]};]*$|^\s*(?:\/\/|\/\*|\*|#)/
 const LONGEST_NAME = 60
 
@@ -14,9 +14,9 @@ function indentOf(line: string): number {
   return line.length - line.trimStart().length
 }
 
-// A line that opens a declaration at `indent`: not blank, a closing bracket or a comment.
+// A line that opens a declaration at `indent`: not blank, a closing bracket, a comment or the lone brace under an Allman-style header.
 function opens(line: string, indent: number): boolean {
-  return line.trim() !== '' && indentOf(line) === indent && !CLOSER.test(line)
+  return line.trim() !== '' && line.trim() !== '{' && indentOf(line) === indent && !CLOSER.test(line)
 }
 
 // The declarations indented at `indent` with the lines up to the next one, a container (class, impl, ...) opened into its own members one level in.
