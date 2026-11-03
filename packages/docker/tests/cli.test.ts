@@ -10,6 +10,15 @@ describe('dx', () => {
   })
 })
 
+const DLOG = new URL('../src/dlog-cli.ts', import.meta.url).pathname
+
+describe('dlog', () => {
+  test('prints its version and its usage', () => {
+    expect(Bun.spawnSync([process.execPath, DLOG, '--version'], { stdout: 'pipe' }).stdout.toString().trim()).toBe(version)
+    expect(Bun.spawnSync([process.execPath, DLOG, '--help'], { stdout: 'pipe' }).stdout.toString()).toContain('dlog [service...]')
+  })
+})
+
 const SF = new URL('../src/sf-cli.ts', import.meta.url).pathname
 
 describe('sf', () => {

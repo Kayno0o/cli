@@ -15,7 +15,8 @@
   "keywords": ["env", "dotenv", "secrets", "redact", "mask"],
   "exports": {
     "./dotenv": "./src/dotenv.ts",
-    "./guard": "./src/guard.ts"
+    "./guard": "./src/guard.ts",
+    "./mask": "./src/mask.ts"
   },
   "bin": {
     "ev": "./dist/ev.js",

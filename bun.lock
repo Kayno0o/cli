@@ -83,10 +83,12 @@
       "version": "0.3.0",
       "bin": {
         "dc": "./dist/dc-cli.js",
+        "dlog": "./dist/dlog-cli.js",
         "dx": "./dist/dx-cli.js",
         "sf": "./dist/sf-cli.js",
       },
       "devDependencies": {
+        "@kaynooo/cli-env": "workspace:*",
         "@kaynooo/cli-kit": "workspace:*",
       },
     },

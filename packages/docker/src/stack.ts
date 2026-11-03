@@ -42,6 +42,9 @@ export interface Container {
   Service: string
   State: string
   Status: string
+  /** Empty for a container with no healthcheck. */
+  Health?: string
+  ExitCode?: number
 }
 
 const LABEL_FORMAT = ['project', 'project.config_files', 'project.environment_file', 'project.working_dir'].map(label => `{{.Label "com.docker.compose.${label}"}}`).join('\t')
@@ -158,7 +161,7 @@ export async function recordedNearby(): Promise<Labels[]> {
   return (await labels()).filter(stack => dirs.has(stack.workdir))
 }
 
-async function output(stack: Stack, args: string[]): Promise<string> {
+export async function output(stack: Stack, args: string[]): Promise<string> {
   const proc = Bun.spawn([...stack.list.argv, ...args], { cwd: stack.list.cwd, env: stack.list.env, stdout: 'pipe', stderr: 'pipe' })
 
   return (await proc.exited) === 0 ? new Response(proc.stdout).text() : ''

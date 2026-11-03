@@ -27,7 +27,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-check': ['check', 'fix', 'errs', 'j'],
   '@kaynooo/cli-code': ['peek', 'todo-scan', 'hotspots'],
   '@kaynooo/cli-db': ['db'],
-  '@kaynooo/cli-docker': ['dc', 'dx', 'sf'],
+  '@kaynooo/cli-docker': ['dc', 'dlog', 'dx', 'sf'],
   '@kaynooo/cli-doctor': ['doctor', 'cli'],
   '@kaynooo/cli-edit': ['sub'],
   '@kaynooo/cli-env': ['ev', 'redact'],
