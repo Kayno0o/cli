@@ -11,6 +11,8 @@ import { commitPackageBump, packageDir, rollBack, settleMilestone, waitForRegist
 import { LEVELS, taggedVersion, VERSION } from './release-version'
 import { watchRuns } from './watch'
 
+const SEVERAL = /[,:]/
+
 const usage = `ft release <patch|minor|major|x.y.z>
 ft release <level> -p <a,b:minor,...>
 ft release <level> --all
@@ -47,7 +49,7 @@ export async function release(args: string[]): Promise<number> {
   if (level !== undefined && !LEVELS.has(level) && !VERSION.test(level))
     fail(`${level} is no level nor x.y.z version`)
 
-  if (values.all === true || (/[,:]/).test(values.package ?? '')) {
+  if (values.all === true || SEVERAL.test(values.package ?? '')) {
     if (tagged || level === undefined)
       fail('--all and several packages take a level, not --tagged')
 
