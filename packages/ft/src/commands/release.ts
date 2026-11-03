@@ -5,19 +5,21 @@ import { $ } from 'bun'
 import { defaultBranch, fetchBranch, git, tagsAt } from '../git'
 import { recentRuns } from '../runs'
 import { limits, NO_RUN, testsPass } from './release-checks'
+import { parseTargets, publishable } from './release-many'
 import { printPlan } from './release-plan'
 import { commitPackageBump, packageDir, rollBack, settleMilestone, waitForRegistry } from './release-steps'
-import { taggedVersion, VERSION } from './release-version'
+import { LEVELS, taggedVersion, VERSION } from './release-version'
 import { watchRuns } from './watch'
 
-const LEVELS = new Set(['patch', 'minor', 'major', 'prepatch', 'preminor', 'premajor', 'prerelease'])
-
 const usage = `ft release <patch|minor|major|x.y.z>
+ft release <level> -p <a,b:minor,...>
+ft release <level> --all
 ft release --tagged
 
 Cuts a release from the default branch: first the commit it sits on is pushed and its runs waited for, so failing tests stop it before anything is bumped or tagged. Then \`bun pm version\` commits and tags the bump, one atomic push sends the branch and its tag, and it waits for the runs the push started and for the registry to serve the version.
 --tagged releases a version commit already tagged at HEAD instead, for repos bumping with their own script; the runs waited for first are then those of the commit below it.
 --package releases one workspace package of a monorepo on its own, tagged \`<folder>-v<version>\` (\`ft release patch -p ft\` tags packages/ft as ft-v0.3.0).
+--package takes several folders separated by commas, each optionally with its own level after a colon (\`-p ft:minor,db\` bumps ft by minor and db by the level given); --all takes every published package of the workspace. They are released one after the other and the run stops at the first one that fails, naming the ones not released.
 A refused or interrupted push drops the bump commit and its tag, so a retry starts clean; with --tagged the commit and tag are yours and stay.
 Once released, an open milestone titled like the version (\`1.2.0\`, \`v1.2.0\` or the tag) has its closed issues listed and is closed; a failure there only warns.
 --dry-run checks the same and prints the plan: the version bump, the tag, the pushes and the runs and registry it would wait for, changing nothing.
@@ -25,7 +27,8 @@ Exits 0 once released or planned, 1 when a run fails, origin refuses a push or t
 
 const options = {
   'tagged': { type: 'boolean', description: 'push the version commit and tag already at HEAD instead of bumping' },
-  'package': { type: 'string', short: 'p', description: 'workspace folder to release, a path or a name under packages/' },
+  'package': { type: 'string', short: 'p', description: 'workspace folder to release, a path or a name under packages/, several separated by commas' },
+  'all': { type: 'boolean', description: 'release every published package of the workspace, one after the other' },
   'no-registry': { type: 'boolean', description: 'do not wait for the registry to serve the new version' },
   'dry-run': { type: 'boolean', description: 'print what the release would do, changing nothing' },
   'timeout': { type: 'string', short: 't', description: 'how long to wait for the runs (15m), a bare number in minutes' },
@@ -43,6 +46,41 @@ export async function release(args: string[]): Promise<number> {
 
   if (level !== undefined && !LEVELS.has(level) && !VERSION.test(level))
     fail(`${level} is no level nor x.y.z version`)
+
+  if (values.all === true || (/[,:]/).test(values.package ?? '')) {
+    if (tagged || level === undefined)
+      fail('--all and several packages take a level, not --tagged')
+
+    if (values.all === true && values.package !== undefined)
+      fail('give --all or --package, not both')
+
+    const targets = parseTargets(values.package ?? (await publishable()).join(','), level)
+    const flags = [...values['dry-run'] === true ? ['--dry-run'] : [], ...values['no-registry'] === true ? ['--no-registry'] : [], ...values.timeout === undefined ? [] : ['--timeout', values.timeout]]
+
+    for (const [index, target] of targets.entries()) {
+      console.log(`== ${target.level} ${target.folder} (${index + 1}/${targets.length})`)
+
+      const stopped = (): void => console.error(`stopped at ${target.folder}, not released: ${targets.slice(index).map(each => each.folder).join(', ')}`)
+
+      try {
+        const code = await release([target.level, '--package', target.folder, ...flags])
+
+        if (code === 0)
+          continue
+
+        stopped()
+
+        return code
+      }
+      catch (error) {
+        stopped()
+
+        throw error
+      }
+    }
+
+    return 0
+  }
 
   const timeout = duration(values.timeout, 'timeout', 15 * 60_000, 'm')
   const dir = values.package === undefined ? undefined : await packageDir(values.package)
