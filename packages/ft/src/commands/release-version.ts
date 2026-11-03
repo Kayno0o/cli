@@ -1,3 +1,4 @@
+export const LEVELS = new Set(['patch', 'minor', 'major', 'prepatch', 'preminor', 'premajor', 'prerelease'])
 export const VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/
 const PARTS = /^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/
 const LAST_NUMBER = /\d+$/
