@@ -205,7 +205,7 @@
     },
     "packages/repos": {
       "name": "@kaynooo/cli-repos",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "repos": "./dist/repos.js",
       },
