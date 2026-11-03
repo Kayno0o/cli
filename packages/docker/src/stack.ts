@@ -52,12 +52,12 @@ const SKIPPED = new Set(['node_modules', 'vendor', 'dist', 'build', 'target', 'v
 export const ACTIONS: Action[] = ['shell', 'logs', 'restart', 'up', 'stop', 'build']
 
 /** The command behind `env -C` when it runs from another folder than this one. */
-function from(dir: string, command: string[]): string[] {
+export function from(dir: string, command: string[]): string[] {
   return dir === '.' ? command : ['env', '-C', dir, ...command]
 }
 
 /** The direct child folders, hidden and built ones aside. */
-function children(dir = '.'): string[] {
+export function children(dir = '.'): string[] {
   return readdirSync(dir, { withFileTypes: true })
     .filter(child => child.isDirectory() && !child.name.startsWith('.') && !SKIPPED.has(child.name))
     .map(child => child.name)
@@ -65,7 +65,7 @@ function children(dir = '.'): string[] {
 }
 
 /** The folder and its parents, relative to it, up to the repository root. */
-function up(dir: string): string[] {
+export function up(dir: string): string[] {
   const dirs: string[] = []
 
   for (let current = dir; ; current = join(current, '..')) {
