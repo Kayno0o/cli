@@ -36,6 +36,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-out': ['out'],
   '@kaynooo/cli-pkg': ['pkg'],
   '@kaynooo/cli-stack': ['stack'],
+  '@kaynooo/cli-view': ['view'],
   '@kaynooo/cli-wait': ['waitfor', 'slot'],
 }
 

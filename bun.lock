@@ -183,6 +183,16 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/view": {
+      "name": "@kaynooo/cli-view",
+      "version": "0.0.0",
+      "bin": {
+        "view": "./dist/view.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/wait": {
       "name": "@kaynooo/cli-wait",
       "version": "0.5.0",
@@ -282,6 +292,8 @@
     "@kaynooo/cli-pkg": ["@kaynooo/cli-pkg@workspace:packages/pkg"],
 
     "@kaynooo/cli-stack": ["@kaynooo/cli-stack@workspace:packages/stack"],
+
+    "@kaynooo/cli-view": ["@kaynooo/cli-view@workspace:packages/view"],
 
     "@kaynooo/cli-wait": ["@kaynooo/cli-wait@workspace:packages/wait"],
 

@@ -1,0 +1,40 @@
+{
+  "name": "@kaynooo/cli-view",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "view: markdown files and git diffs shown in the colours of the other @kaynooo CLIs, paged when long.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/view#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/view"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "markdown",
+    "diff",
+    "terminal"
+  ],
+  "bin": {
+    "view": "./dist/view.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/view.ts --target bun --outdir dist",
+    "view": "$npm_execpath src/view.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}

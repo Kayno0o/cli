@@ -19,6 +19,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 | [`@kaynooo/cli-guard`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers, in-place edits), each refusal naming the route |
 | [`@kaynooo/cli-code`](packages/code) | `peek`, `todo-scan`, `hotspots` | source read by spans, declarations, usages and outlines in one call; the TODO and issue-reference comments of a repository, those naming a closed issue flagged; the files ranked by complexity times git churn |
 | [`@kaynooo/cli-changelog`](packages/changelog) | `changelog` | a release's notes generated from its conventional commits and published as a Forgejo release, posted to Discord too; a release undone |
+| [`@kaynooo/cli-view`](packages/view) | `view` | a markdown file or a git diff shown in the colours of the other CLIs, wrapped to the terminal and paged when long |
 | [`@kaynooo/cli-doctor`](packages/doctor) | `doctor`, `cli` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix; every bin in one line, what it does and what it replaces, read from its own help |
 | [`@kaynooo/cli-kit`](packages/kit) | - | the CLI kit every @kaynooo CLI is built on: argument parsing with `--help`, the command dispatcher, prompts, the progress line, config loading, the shell command parser every guard reads with, and output helpers |
 
@@ -45,7 +46,7 @@ Two ways wire the bins into Claude Code, never both on one host:
 ### A host without the dotfiles
 
 ```sh
-bun install -g @kaynooo/cli-forgejo @kaynooo/cli-env @kaynooo/cli-db @kaynooo/cli-check @kaynooo/cli-pkg @kaynooo/cli-stack @kaynooo/cli-out @kaynooo/cli-edit @kaynooo/cli-base @kaynooo/cli-git @kaynooo/cli-wait @kaynooo/cli-gitlab @kaynooo/cli-guard @kaynooo/cli-code @kaynooo/cli-doctor
+bun install -g @kaynooo/cli-forgejo @kaynooo/cli-env @kaynooo/cli-db @kaynooo/cli-check @kaynooo/cli-pkg @kaynooo/cli-stack @kaynooo/cli-out @kaynooo/cli-edit @kaynooo/cli-base @kaynooo/cli-git @kaynooo/cli-wait @kaynooo/cli-gitlab @kaynooo/cli-guard @kaynooo/cli-code @kaynooo/cli-view @kaynooo/cli-doctor
 claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/cli.git
 ```
 
