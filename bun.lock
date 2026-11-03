@@ -9,6 +9,16 @@
         "@types/bun": "^1.4.4",
       },
     },
+    "packages/audit": {
+      "name": "@kaynooo/cli-audit",
+      "version": "0.0.0",
+      "bin": {
+        "audit": "./dist/audit.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/base": {
       "name": "@kaynooo/cli-base",
       "version": "0.4.1",
@@ -338,6 +348,8 @@
     "@isaacs/nonrecursive-glob-match": ["@isaacs/nonrecursive-glob-match@1.0.3", "", {}, "sha512-SI7kyKHq4XXDRozw+r9GlRZkia1ZkFrpLW98r2IC2Bpr8YkFGE3fvjzmxCG0x78A++69HmDNrDvSMYBZmHGpKA=="],
 
     "@joplin/turndown-plugin-gfm": ["@joplin/turndown-plugin-gfm@1.0.68", "", {}, "sha512-m8DfAQNC/V7g0j5H6Jv60WhekBBjodD+zTPGrU+g2m+ux/z8ZX07KQIl6kaAmbKwfvsQhC04op52g63I78sVgg=="],
+
+    "@kaynooo/cli-audit": ["@kaynooo/cli-audit@workspace:packages/audit"],
 
     "@kaynooo/cli-base": ["@kaynooo/cli-base@workspace:packages/base"],
 
