@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
-import { afterAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/probe.ts', import.meta.url).pathname
 const temp = tempDirs()
@@ -111,9 +111,13 @@ describe.skipIf(openssl === null)('probe against a local tls server', () => {
   const key = join(dir, 'key.pem')
   const cert = join(dir, 'cert.pem')
 
-  Bun.spawnSync([openssl ?? 'openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '5', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdout: 'ignore', stderr: 'ignore' })
+  // A skipped describe still runs its body, so the certificate and the server wait for a hook that a skip does not run.
+  let secure: ReturnType<typeof Bun.serve>
 
-  const secure = Bun.serve({ port: 0, hostname: '127.0.0.1', tls: { key: Bun.file(key), cert: Bun.file(cert) }, fetch: () => new Response('ok', { headers: { 'strict-transport-security': 'max-age=1', 'server': 'bun-test' } }) })
+  beforeAll(() => {
+    Bun.spawnSync([openssl ?? 'openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '5', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'], { stdout: 'ignore', stderr: 'ignore' })
+    secure = Bun.serve({ port: 0, hostname: '127.0.0.1', tls: { key: Bun.file(key), cert: Bun.file(cert) }, fetch: () => new Response('ok', { headers: { 'strict-transport-security': 'max-age=1', 'server': 'bun-test' } }) })
+  })
 
   afterAll(async () => secure.stop(true))
 
