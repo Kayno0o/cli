@@ -201,7 +201,7 @@ export function failureExcerpt(output: string): string {
 }
 
 export interface ToolError {
-  tool: 'tsc' | 'eslint' | 'bun check' | 'bun test' | 'phpunit' | 'phpstan' | 'php-cs-fixer' | 'playwright' | 'vitest'
+  tool: 'tsc' | 'eslint' | 'bun check' | 'bun test' | 'phpunit' | 'phpstan' | 'php-cs-fixer' | 'playwright' | 'vitest' | 'go' | 'cargo' | 'ruff' | 'pytest'
   file: string
   line: number
   column: number
@@ -222,13 +222,28 @@ const BUN_TEST_EXPECTED = /^Expected: (.*)$/
 const BUN_TEST_RECEIVED = /^Received: (.*)$/
 const BUN_TEST_FRAME = /^\s+at (?:.*? \()?(.+?):(\d+):(\d+)\)?$/
 const BUN_TEST_FILE = /^\S+\.test\.[jt]sx?:$/
+const GO_ERROR = /^\s*(?:vet: )?(\S+\.go):(\d+):(?:(\d+):)? (.+)$/
+const GO_NOISE = /^# \S+(?: \[\S+\])?$/
+const ARROW = /^\s*--> (.+?):(\d+):(\d+)$/
+const CARGO_HEADER = /^(error|warning)(?:\[(\w+)\])?: (.*)$/
+const CARGO_NOISE = /^(?:\s+(?:Compiling|Finished|Checking|Fresh|Running|Blocking) |error: (?:aborting due to|could not compile)|warning: .* generated \d+ warnings?|Some errors have detailed explanations|For more information about (?:this|an) error|To learn more, run the command again)/
+const RUFF_CONCISE = /^(\S+\.pyi?):(\d+):(\d+): ([A-Z]+\d+) (?:\[\*\] )?(.*)$/
+const RUFF_HEADER = /^([A-Z]{1,5}\d{1,4}) (?:\[\*\] )?(.+)$/
+const RUFF_NOISE = /^(?:Found \d+ errors?\.|\[\*\] \d+ fixable|No fixes available|All checks passed|help: |\s*(?:\|\s*)?$)/
+const PYTEST_LOCATION = /^(\S+\.py):(\d+): (\S.*)$/
+const PYTEST_E_LINE = /^E {3}(.*)$/
+const PYTEST_BANNER = /^={3,} (.*?) ={3,}$/
+const PYTEST_FAILURES = new Set(['FAILURES', 'ERRORS'])
+const PYTEST_SUMMARY_LINE = /^(?:FAILED|ERROR) \S/
+const PYTEST_EXCEPTION_END = /[\s:]/
+const PYTEST_NOISE = /^(?:platform |rootdir: |collected |plugins: |configfile: |cachedir: |\S+\.pyi? [.FEsxXR]+ +\[ *\d+%\]$|\S+\.py:\d+: $)/
 const NOISE = /^(?:bun test v|Errors {2}Files$|Ran \d+ tests?|note: |\s*\d+ expect\(\) calls|\s+\d+\s+\S+:\d+$|\s*\d+ errors? and \d+ warnings? potentially fixable)/
 
 export type Collector = (lines: string[], used: Set<number>) => ToolError[]
 
 // Blank lines and the headers and totals the tools print around their errors.
 function isNoise(line: string): boolean {
-  return line.trim() === '' || [NOISE, BUN_TEST_SUMMARY, BUN_CHECK_SUMMARY, TSC_SUMMARY, ESLINT_SUMMARY, BOUNDARY, BASH_ECHO, ...PHP_NOISE, ...E2E_NOISE].some(pattern => pattern.test(line))
+  return line.trim() === '' || [NOISE, BUN_TEST_SUMMARY, BUN_CHECK_SUMMARY, TSC_SUMMARY, ESLINT_SUMMARY, BOUNDARY, BASH_ECHO, GO_NOISE, CARGO_NOISE, RUFF_NOISE, PYTEST_NOISE, PYTEST_BANNER, ...PHP_NOISE, ...E2E_NOISE].some(pattern => pattern.test(line))
 }
 
 const collectBunCheck: Collector = (lines, used) => {
@@ -363,7 +378,121 @@ const collectEslint: Collector = (lines, used) => {
   return errors
 }
 
-const COLLECTORS: Collector[] = [collectBunCheck, collectBunTest, collectVitest, collectPlaywright, collectPhpunit, collectPhpstan, collectCsFixer, collectTsc, collectEslint]
+// `go build`, `go vet` and `go test` compile errors, `file:line:col: message` with an optional `vet: ` prefix.
+const collectGo: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+
+  for (const [index, line] of lines.entries()) {
+    const match = used.has(index) ? null : GO_ERROR.exec(line)
+
+    if (match === null)
+      continue
+
+    errors.push({ tool: 'go', file: match[1] ?? '', line: Number(match[2]), column: Number(match[3] ?? 0), severity: 'error', message: match[4] ?? '' })
+    used.add(index)
+  }
+
+  return errors
+}
+
+// A diagnostic whose header line is followed by ` --> file:line:col` and a code frame, as rustc and recent ruff print it.
+const collectArrowed: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+
+  for (const [index, line] of lines.entries()) {
+    const arrow = used.has(index) || index === 0 ? null : ARROW.exec(line)
+    const header = arrow === null ? null : lines[index - 1] ?? ''
+    const cargo = header === null ? null : CARGO_HEADER.exec(header)
+    const ruff = header === null || cargo !== null ? null : RUFF_HEADER.exec(header)
+
+    if (arrow === null || (cargo === null && ruff === null) || used.has(index - 1))
+      continue
+
+    const [, file, row, column] = arrow
+    const fields = { file: file ?? '', line: Number(row), column: Number(column) }
+
+    errors.push(cargo === null
+      ? { tool: 'ruff', ...fields, rule: ruff?.[1], severity: 'error', message: ruff?.[2] ?? '' }
+      : { tool: 'cargo', ...fields, rule: cargo[2], severity: cargo[1] === 'warning' ? 'warning' : 'error', message: cargo[3] ?? '' })
+    used.add(index - 1)
+    used.add(index)
+
+    // The code frame and the notes under the arrow, up to the blank line ending the diagnostic.
+    for (let frame = index + 1; frame < lines.length && (lines[frame] ?? '').trim() !== ''; frame++) {
+      if (CARGO_HEADER.test(lines[frame] ?? '') || RUFF_HEADER.test(lines[frame] ?? ''))
+        break
+
+      used.add(frame)
+    }
+  }
+
+  return errors
+}
+
+// Ruff's concise format, `file:line:col: CODE message`, which older versions also print as the header of each diagnostic.
+const collectRuff: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+
+  for (const [index, line] of lines.entries()) {
+    const match = used.has(index) ? null : RUFF_CONCISE.exec(line)
+
+    if (match === null)
+      continue
+
+    errors.push({ tool: 'ruff', file: match[1] ?? '', line: Number(match[2]), column: Number(match[3]), rule: match[4], severity: 'error', message: match[5] ?? '' })
+    used.add(index)
+  }
+
+  return errors
+}
+
+// pytest's failures section: each `file:line: Exception` location, the message from the `E` lines above it, the section and its short summary otherwise accounted for.
+const collectPytest: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+  const title = (line: string | undefined) => PYTEST_BANNER.exec(line ?? '')?.[1]
+  const start = lines.findIndex(line => PYTEST_FAILURES.has(title(line) ?? ''))
+
+  if (start === -1)
+    return errors
+
+  const end = lines.findIndex((line, index) => index > start && title(line) !== undefined && !PYTEST_FAILURES.has(title(line) ?? ''))
+  const stop = end === -1 ? lines.length : end
+  let message: string[] = []
+
+  for (let index = start; index < stop; index++) {
+    const line = lines[index] ?? ''
+    const failure = PYTEST_E_LINE.exec(line)
+
+    if (failure !== null) {
+      message.push((failure[1] ?? '').trim())
+    }
+    else {
+      const location = PYTEST_LOCATION.exec(line)
+
+      if (location !== null) {
+        const [exception = ''] = (location[3] ?? '').split(PYTEST_EXCEPTION_END)
+        const first = message[0] ?? ''
+        const text = first === '' || first.startsWith(exception) ? first || (location[3] ?? '') : `${location[3] ?? ''}: ${first}`
+
+        errors.push({ tool: 'pytest', file: location[1] ?? '', line: Number(location[2]), column: 0, severity: 'error', message: text })
+      }
+
+      if (line.trim() !== '')
+        message = []
+    }
+
+    used.add(index)
+  }
+
+  for (let index = stop; index < lines.length; index++) {
+    if (PYTEST_SUMMARY_LINE.test(lines[index] ?? ''))
+      used.add(index)
+  }
+
+  return errors
+}
+
+const COLLECTORS: Collector[] = [collectBunCheck, collectBunTest, collectVitest, collectPlaywright, collectPhpunit, collectPhpstan, collectCsFixer, collectPytest, collectArrowed, collectRuff, collectGo, collectTsc, collectEslint]
 
 // Every error the known formats report, each format's in its own order, and how many non-blank lines none of them accounted for.
 export function parseErrors(output: string): ParsedErrors {

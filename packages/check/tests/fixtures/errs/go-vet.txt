@@ -1,0 +1,3 @@
+# x
+# [x]
+vet: ./main.go:6:14: cannot use "s" (untyped string constant) as int value in variable declaration

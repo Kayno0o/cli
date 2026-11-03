@@ -279,3 +279,54 @@ describe('errs', () => {
     expect(err).toContain('1 line not recognised')
   })
 })
+
+describe('parseErrors: go, cargo, ruff and pytest', () => {
+  test('go build and go vet: file, line, column and message', async () => {
+    const build = parseErrors(await fixture('go-build.txt'))
+    const vet = parseErrors(await fixture('go-vet.txt'))
+
+    expect(build.unrecognised + vet.unrecognised).toBe(0)
+    expect(build.errors).toEqual([
+      { tool: 'go', file: './main.go', line: 6, column: 6, severity: 'error', message: 'declared and not used: a' },
+      { tool: 'go', file: './main.go', line: 6, column: 14, severity: 'error', message: 'cannot use "s" (untyped string constant) as int value in variable declaration' },
+      { tool: 'go', file: './main.go', line: 8, column: 2, severity: 'error', message: 'undefined: undefinedFn' },
+    ])
+    expect(vet.errors).toHaveLength(1)
+  })
+
+  test('cargo: the error code as the rule, the code frame skipped, warnings told apart', async () => {
+    const failed = parseErrors(await fixture('cargo.txt'))
+    const warned = parseErrors(await fixture('cargo-warn.txt'))
+
+    expect(failed.unrecognised + warned.unrecognised).toBe(0)
+    expect(failed.errors).toEqual([
+      { tool: 'cargo', file: 'src/main.rs', line: 2, column: 18, rule: 'E0308', severity: 'error', message: 'mismatched types' },
+      { tool: 'cargo', file: 'src/main.rs', line: 4, column: 5, rule: 'E0425', severity: 'error', message: 'cannot find function `nope` in this scope' },
+    ])
+    expect(warned.errors).toEqual([{ tool: 'cargo', file: 'src/main.rs', line: 2, column: 9, rule: undefined, severity: 'warning', message: 'unused variable: `unused`' }])
+  })
+
+  // Hand-written from ruff's documented output, as ruff is not installed here.
+  test('ruff: concise and full formats carry the same errors', async () => {
+    const concise = parseErrors(await fixture('ruff-concise.txt'))
+    const full = parseErrors(await fixture('ruff-full.txt'))
+
+    expect(concise.unrecognised + full.unrecognised).toBe(0)
+    expect(concise.errors).toEqual([
+      { tool: 'ruff', file: 'src/a.py', line: 1, column: 8, rule: 'F401', severity: 'error', message: '`os` imported but unused' },
+      { tool: 'ruff', file: 'src/a.py', line: 4, column: 89, rule: 'E501', severity: 'error', message: 'Line too long (101 > 88)' },
+    ])
+    expect(full.errors).toEqual(concise.errors)
+  })
+
+  // Hand-written from pytest's documented output, as pytest is not installed here.
+  test('pytest: the failing location with the assertion message', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('pytest.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors).toEqual([
+      { tool: 'pytest', file: 'tests/test_calc.py', line: 4, column: 0, severity: 'error', message: 'AssertionError: assert 3 == 4' },
+      { tool: 'pytest', file: 'src/calc.py', line: 3, column: 0, severity: 'error', message: 'ZeroDivisionError: division by zero' },
+    ])
+  })
+})

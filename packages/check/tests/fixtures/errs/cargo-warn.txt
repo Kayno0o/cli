@@ -1,0 +1,11 @@
+   Compiling r v0.1.0 (/repo)
+warning: unused variable: `unused`
+ --> src/main.rs:2:9
+  |
+2 |     let unused = 1;
+  |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_unused`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `r` (bin "r") generated 1 warning (run `cargo fix --bin "r" -p r` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s

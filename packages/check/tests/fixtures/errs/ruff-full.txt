@@ -1,0 +1,17 @@
+F401 [*] `os` imported but unused
+ --> src/a.py:1:8
+  |
+1 | import os
+  |        ^^
+  |
+help: Remove unused import: `os`
+
+E501 Line too long (101 > 88)
+ --> src/a.py:4:89
+  |
+4 | x = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  |                                                                                         ^^^^^^^^^^^^
+  |
+
+Found 2 errors.
+[*] 1 fixable with the `--fix` option.

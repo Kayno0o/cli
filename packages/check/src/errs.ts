@@ -11,11 +11,11 @@ const usage = `errs [options] [log]
 errs [options] -- <command> [args...]
 errs --in <service> | --host -- <command> [args...]
 
-Prints one \`file:line:col: message (rule)\` line per error found in a tsc, tsgo, vue-tsc, bun check, eslint, keslint, bun test, vitest, playwright (list and line reporters), phpunit, paratest, phpstan (table, raw and json) or php-cs-fixer log, read from the file given, from stdin (no argument or -), or from the output of the command run after --.
+Prints one \`file:line:col: message (rule)\` line per error found in a tsc, tsgo, vue-tsc, bun check, eslint, keslint, bun test, vitest, playwright (list and line reporters), phpunit, paratest, phpstan (table, raw and json), php-cs-fixer, go (build, vet), cargo (rustc), ruff (concise and full) or pytest log, read from the file given, from stdin (no argument or -), or from the output of the command run after --.
 The lines no format recognised are counted on stderr, never dropped silently, and a command's full output is saved to a log file whose path is printed with that count.
 A command runs inside the docker compose service that bind-mounts the current folder (found in compose.yml, compose.yaml or docker-compose.yml, up to the repository root), at the matching path, with its output read here; a service that is down is never started, the call fails naming it. --in picks the service, --host forces the host.
 Exits 0 when no error was found and the command, if any, passed, 1 when errors were found or the command failed, 2 on a usage error.
---json prints {errors: [{tool, file, line, column, rule, severity, message, test?}], unrecognised, log?, code?}, tool one of tsc, eslint, bun check, bun test, vitest, playwright, phpunit, phpstan, php-cs-fixer.`
+--json prints {errors: [{tool, file, line, column, rule, severity, message, test?}], unrecognised, log?, code?}, tool one of tsc, eslint, bun check, bun test, vitest, playwright, phpunit, phpstan, php-cs-fixer, go, cargo, ruff, pytest.`
 
 const options = {
   ...placeOptions,
