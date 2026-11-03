@@ -26,7 +26,7 @@ out --stats --since 7d
 
 - Each run appends a line to `$XDG_STATE_HOME/kaynooo-cli/out/stats.jsonl` (`~/.local/state/...` without it, folder 0700, file 0600): the time, the folder, the words naming the command, the bytes it printed, the bytes the session would have read without `out` and the bytes `out` showed. Only lowercase words without digits after the program are kept (`bun run build`, `docker compose exec`), so no argument, assignment or token reaches the file; a `sh -c` chain is named by its last command that is not a `cd`.
 - `--was '<stage>'` (repeatable, in pipeline order) names a `tail`, `head` or `grep` stage `out` stands in for, as the hook passes them when it drops one: the session would have read what that stage printed, so the saving counts against it. Output that folding would not make shorter is printed untouched, so `out` never shows more than the command printed. A stage it cannot read (`tail -f`, a long grep option it does not know) counts the whole output.
-- `out --stats [--since 7d] [--json]` prints the runs, how many were folded, the bytes printed and shown, and about how many tokens were saved (bytes / 4, an estimate), then the ten commands that saved the most.
+- `out --stats [--since 7d] [--json]` prints the runs, how many were folded, the bytes printed and shown, and about how many tokens were saved (bytes / 4, an estimate), then the ten commands that saved the most, with the share of runs folded and, per command, the median share of the output a folded run cut.
 
 ## Wrapping from a hook
 

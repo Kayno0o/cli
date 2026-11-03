@@ -75,4 +75,13 @@ describe('stats', () => {
     expect(renderSummary(summary, 'recorded')).toContain('about 17,600 tokens saved (bytes / 4)')
     expect(renderSummary(summarize([]), 'in the last 7d')).toBe('no run of out recorded in the last 7d')
   })
+
+  test('report the share of runs folded and the median cut of the folded runs per command', () => {
+    const summary = summarize([entry('bun test', 40_000, 40_000, 4000), entry('bun test', 40_000, 40_000, 20_000), entry('bun test', 10, 10, 10), entry('bun run lint', 100, 100, 100)])
+
+    expect(summary.foldedShare).toBe(50)
+    expect(summary.commands.find(each => each.command === 'bun test')?.medianCut).toBe(70)
+    expect(summary.commands.find(each => each.command === 'bun run lint')?.medianCut).toBeUndefined()
+    expect(renderSummary(summary, 'recorded')).toContain('(50%)')
+  })
 })

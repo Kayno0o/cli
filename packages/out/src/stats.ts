@@ -85,7 +85,20 @@ export interface Summary {
   bytes: number
   shown: number
   tokensSaved: number
-  commands: { command: string, runs: number, folded: number, tokensSaved: number }[]
+  // The share of runs folded, in percent.
+  foldedShare: number
+  // The median share of its baseline a folded run cut, in percent per command; undefined when none folded.
+  commands: { command: string, runs: number, folded: number, tokensSaved: number, medianCut?: number | undefined }[]
+}
+
+function median(values: number[]): number | undefined {
+  const sorted = values.toSorted((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+
+  if (sorted.length === 0)
+    return undefined
+
+  return sorted.length % 2 === 1 ? sorted[middle] : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
 }
 
 function tokens(bytes: number): number {
@@ -96,16 +109,23 @@ function formatNumber(value: number): string {
   return value.toLocaleString('en-US')
 }
 
+function cut(runs: readonly Entry[]): number | undefined {
+  const value = median(runs.filter(run => run.folded && run.baseline > 0).map(run => (1 - run.shown / run.baseline) * 100))
+
+  return value === undefined ? undefined : Math.round(value)
+}
+
 export function summarize(entries: readonly Entry[]): Summary {
   const commands = Map.groupBy(entries, entry => entry.command).entries().map(([command, runs]) => ({
     command,
     runs: runs.length,
     folded: runs.filter(run => run.folded).length,
     tokensSaved: tokens(runs.reduce((sum, run) => sum + run.baseline - run.shown, 0)),
+    medianCut: cut(runs),
   }))
   const sum = (field: 'bytes' | 'baseline' | 'shown') => entries.reduce((total, entry) => total + entry[field], 0)
 
-  return { runs: entries.length, folded: entries.filter(entry => entry.folded).length, bytes: sum('bytes'), shown: sum('shown'), tokensSaved: tokens(sum('baseline') - sum('shown')), commands: [...commands].sort((a, b) => b.tokensSaved - a.tokensSaved) }
+  return { runs: entries.length, folded: entries.filter(entry => entry.folded).length, bytes: sum('bytes'), shown: sum('shown'), tokensSaved: tokens(sum('baseline') - sum('shown')), foldedShare: entries.length === 0 ? 0 : Math.round(entries.filter(entry => entry.folded).length / entries.length * 100), commands: [...commands].sort((a, b) => b.tokensSaved - a.tokensSaved) }
 }
 
 export function renderSummary(summary: Summary, period: string): string {
@@ -115,7 +135,7 @@ export function renderSummary(summary: Summary, period: string): string {
   const top = summary.commands.slice(0, TOP).filter(each => each.tokensSaved !== 0)
 
   return [
-    `${formatNumber(summary.runs)} runs ${period}, ${formatNumber(summary.folded)} folded: ${formatNumber(summary.bytes)} bytes printed, ${formatNumber(summary.shown)} shown, about ${formatNumber(summary.tokensSaved)} tokens saved (bytes / ${BYTES_PER_TOKEN})`,
-    ...top.length === 0 ? [] : ['', table([['command', 'runs', 'folded', 'tokens saved'], ...top.map(each => [each.command, formatNumber(each.runs), formatNumber(each.folded), formatNumber(each.tokensSaved)])])],
+    `${formatNumber(summary.runs)} runs ${period}, ${formatNumber(summary.folded)} folded (${summary.foldedShare}%): ${formatNumber(summary.bytes)} bytes printed, ${formatNumber(summary.shown)} shown, about ${formatNumber(summary.tokensSaved)} tokens saved (bytes / ${BYTES_PER_TOKEN})`,
+    ...top.length === 0 ? [] : ['', table([['command', 'runs', 'folded', 'median cut', 'tokens saved'], ...top.map(each => [each.command, formatNumber(each.runs), formatNumber(each.folded), each.medianCut === undefined ? '-' : `${each.medianCut}%`, formatNumber(each.tokensSaved)])])],
   ].join('\n')
 }
