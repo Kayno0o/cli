@@ -1,7 +1,7 @@
 import type { Action, Service } from './stack'
 import process from 'node:process'
 import { closest, fail, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
-import { byRecency, record, runs } from './history'
+import { byRecency, record, runs } from '@kaynooo/cli-kit/fzf'
 import { KEY_LABELS, KEYS, pickService } from './picker'
 import { ACTIONS, allServices, commandFor, defaultAction, key, logsOf, serviceNamed, stateColor } from './stack'
 
@@ -46,7 +46,7 @@ function find(services: Service[], named: string): Service {
 
 // The rows term lists in place of the picker: what it types back for enter and for each key.
 function listed(services: Service[]): unknown[] {
-  return byRecency(services, runs(), key).map(service => ({
+  return byRecency(services, runs('dx'), key).map(service => ({
     label: key(service),
     hint: [service.state, service.ports, service.image].filter(Boolean).join(' · '),
     typed: key(service),
@@ -130,7 +130,7 @@ export async function dx(args: string[]): Promise<number> {
       return 0
     }
 
-    const picked = pickService(byRecency(services, runs(), key))
+    const picked = pickService(byRecency(services, runs('dx'), key))
 
     if (picked === undefined)
       return 1
@@ -139,7 +139,7 @@ export async function dx(args: string[]): Promise<number> {
     action = KEYS[picked.key]
   }
   else if (named === '-') {
-    const last = runs()[0]
+    const last = runs('dx')[0]
 
     service = last && services.find(candidate => key(candidate) === last.id)
 
@@ -160,7 +160,7 @@ export async function dx(args: string[]): Promise<number> {
   const chosen = action ?? defaultAction(service)
   const command = await commandFor(service, chosen)
 
-  record({ id: key(service), args: [chosen] })
+  record('dx', { id: key(service), args: [chosen] })
 
   if (emit) {
     console.log(['run', action === undefined ? key(service) : `${key(service)} ${action}`, '', ...command.map(word => `=${word}`)].join('\n'))

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { byRecency } from '../src/history'
+import { byRecency } from '../src/fzf'
 
 describe('byRecency', () => {
   test('puts the ones run last first, the rest keeping their order', () => {

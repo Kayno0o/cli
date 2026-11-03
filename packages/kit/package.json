@@ -23,7 +23,8 @@
     "./progress": "./src/progress.ts",
     "./prompt": "./src/prompt.ts",
     "./shell": "./src/shell.ts",
-    "./test": "./src/test.ts"
+    "./test": "./src/test.ts",
+    "./fzf": "./src/fzf.ts"
   },
   "files": ["src"],
   "engines": {
