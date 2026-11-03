@@ -215,7 +215,7 @@
     },
     "packages/stack": {
       "name": "@kaynooo/cli-stack",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "bin": {
         "stack": "./dist/cli.js",
       },
