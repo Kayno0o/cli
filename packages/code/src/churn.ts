@@ -13,7 +13,7 @@ export interface Hotspot {
 }
 
 // Source files only: anything else (docs, data, images, lockfiles) has no branches to count.
-const SOURCE = /\.(?:[cm]?[jt]sx?|vue|svelte|astro|py|go|rs|rb|php|java|kt|swift|cs|c|cc|cpp|h|hpp|scala|dart|lua|sh|zsh|fish)$/
+const SOURCE = /\.(?:[cm]?[jt]sx?|vue|svelte|astro|kay|py|go|rs|rb|php|java|kt|swift|cs|c|cc|cpp|h|hpp|scala|dart|lua|sh|zsh|fish)$/
 const TESTS = /(?:^|\/)(?:tests?|__tests__|spec|e2e|__mocks__|fixtures)\/|\.(?:test|spec|bench)\.[^/]+$|(?:^|\/)test_[^/]+$|_test\.(?:go|py)$/
 const GENERATED = /(?:^|\/)(?:dist|build|out|generated|\.nuxt|\.output|\.next)\/|\.min\.[cm]?js$|\.d\.ts$|\.(?:generated|gen)\.[^/]+$|\.pb\.go$|\.snap$/
 const LEADING_NEWLINE = /^\n/

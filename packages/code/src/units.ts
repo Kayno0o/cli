@@ -10,7 +10,13 @@ const CONTAINER = /^(?:(?:export|default|declare|abstract|final|readonly|public|
 const CLOSER = /^[\s)\]};]*$|^\s*(?:\/\/|\/\*|\*|#)/
 const LONGEST_NAME = 60
 // The markup and style blocks of a single-file component, which hold no declaration.
-const MARKUP_BLOCK = /^<(template|style)\b[\s\S]*?^<\/\1>/gm
+const MARKUP_BLOCK = /^<(template|style)\b[\s\S]*?\n<\/\1>/gm
+// A `.kay` file is a script between two `---` lines followed by its template.
+const KAY_FILE = /^---\n([\s\S]*?\n)---(?:\n|$)([\s\S]*)$/
+
+function blanked(text: string): string {
+  return '\n'.repeat(text.split('\n').length - 1)
+}
 
 function indentOf(line: string): number {
   return line.length - line.trimStart().length
@@ -51,8 +57,9 @@ function unitsAt(lines: readonly string[], from: number, to: number, indent: num
 }
 
 // The most complex declaration of a file, found by indentation alone so every language reads the same way; undefined when nothing is indented like a declaration.
-export function worstUnit(text: string): Unit | undefined {
-  const lines = text.replace(MARKUP_BLOCK, block => '\n'.repeat(block.split('\n').length - 1)).split('\n')
+export function worstUnit(text: string, path = ''): Unit | undefined {
+  const code = path.endsWith('.kay') ? text.replace(KAY_FILE, (_, script: string, template: string) => `\n${script}\n${blanked(template)}`) : text.replace(MARKUP_BLOCK, blanked)
+  const lines = code.split('\n')
   const top = unitsAt(lines, 0, lines.length, 0)
 
   return top.reduce<Unit | undefined>((worst, unit) => worst === undefined || unit.complexity > worst.complexity ? unit : worst, undefined)

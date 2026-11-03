@@ -66,7 +66,7 @@ async function main(args: string[]): Promise<number> {
 
     const complexity = complexityOf(text)
 
-    const worst = worstUnit(text)
+    const worst = worstUnit(text, path)
 
     ranked.push({ path, score: Math.round(complexity * touched.weight), churn: touched.commits, recent: Math.round(touched.weight * 10) / 10, complexity, worst: worst === undefined ? undefined : { name: worst.name, line: worst.line, complexity: worst.complexity }, lines: text.split('\n').length - (text.endsWith('\n') ? 1 : 0) })
   }

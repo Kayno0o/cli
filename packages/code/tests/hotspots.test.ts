@@ -56,7 +56,7 @@ describe('complexityOf', () => {
   })
 
   test('leaves tests and generated paths out', () => {
-    expect(['src/a.ts', 'lib/b.py'].map(isCandidate)).toEqual([true, true])
+    expect(['src/a.ts', 'lib/b.py', 'src/c.kay', 'app/d.vue', 'src/E.php'].map(isCandidate)).toEqual([true, true, true, true, true])
     expect(['tests/a.ts', 'src/a.test.ts', 'dist/a.js', 'src/a.d.ts', 'README.md', 'bun.lock'].map(isCandidate)).toEqual([false, false, false, false, false, false])
   })
 })

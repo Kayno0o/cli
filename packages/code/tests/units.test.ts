@@ -32,6 +32,12 @@ describe('worstUnit', () => {
     expect(worstUnit(vue)).toMatchObject({ name: 'function go(a) {', line: 2, complexity: 2 })
   })
 
+  test('reads the script of a .kay file and skips its template, keeping the line numbers', () => {
+    const kay = '---\nconst a = 1\nfunction go(x) {\n  if (x) return 1\n}\n---\nul\n  for b of c()\n    if b && d\n      li x\n'
+
+    expect(worstUnit(kay, 'a.kay')).toMatchObject({ name: 'function go(x) {', line: 3, complexity: 2 })
+  })
+
   test('has nothing to name in an empty file', () => {
     expect(worstUnit('')).toBeUndefined()
   })
