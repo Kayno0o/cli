@@ -337,6 +337,17 @@ describe('the MySQL forms of a write', () => {
   })
 })
 
+describe('a file a client is fed and cannot be read', () => {
+  const refused = async (command: string) => sqlViolation(command, async () => null)
+
+  test('is named with the reason and the way out', async () => {
+    expect(await refused('psql -U postgres < /work/fixture.sql')).toContain('/work/fixture.sql, which cannot be read here (missing when the command is checked')
+    expect(await refused('psql -f $S/fixture.sql')).toContain('its path holds a variable or substitution')
+    expect(await refused('psql -f /dev/zero')).toContain('(a device)')
+    expect(await refused('psql -f /work/fixture.sql')).toContain('file edit tool')
+  })
+})
+
 describe('allowsKeyRetrieval, MySQL 8 logging in without TLS', () => {
   test('fetches the server key on this machine and its docker networks only', () => {
     for (const url of ['mysql://app:pw@127.0.0.1:43306/app_test', 'mysql://app:pw@localhost/app', 'mysql://app:pw@[::1]:3306/app', 'mysql://app:pw@172.18.0.3:3306/app', 'mysql://app:pw@172.31.255.1/app'])

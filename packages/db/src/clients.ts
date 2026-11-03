@@ -32,7 +32,19 @@ const DEVICE_PATH = /^\/(?:dev|proc|sys)\//
 const STDIN_PATHS = new Set(['-', '/dev/stdin'])
 
 export const SQL_WRITE = 'Statements that write (INSERT, UPDATE, DELETE, DDL, migrations, fixtures) are handed over: list the exact command for the user to run. Only a clearly test-only database runs them directly.'
-export const SQL_UNREADABLE = 'A file this SQL client is fed cannot be read here (missing, a device, or too large), so what it runs is unknown. Hand over the exact command for the user to run.'
+const SHELL_SYNTAX = /[$`]/
+
+// Names the file and why it cannot be read, so the fix is clear: a path with a variable is not expanded here, and a file the same command writes does not exist yet when the command is checked.
+export function sqlUnreadable(path: string): string {
+  let cause = 'missing when the command is checked, or too large'
+
+  if (DEVICE_PATH.test(path))
+    cause = 'a device'
+  else if (SHELL_SYNTAX.test(path))
+    cause = 'its path holds a variable or substitution, which is not expanded here'
+
+  return `The SQL client is fed ${path}, which cannot be read here (${cause}), so what it runs is unknown. Write the file with the file edit tool in its own call and give a literal path, or run it on a database named *_test; otherwise hand over the exact command for the user to run.`
+}
 
 // What a client is given on its command line: the statements, the files it reads, the databases it names and its other operands.
 interface ClientInput { statements: string[], files: string[], databases: string[], operands: string[] }
@@ -187,10 +199,12 @@ export async function sqlViolation(command: string, read: (path: string) => Prom
     const isPiped = pieces[index - 1]?.separator === '|'
     // a file the client reads from stdin is its heredoc or what is piped in, not a path
     const paths = input.files.filter(path => !STDIN_PATHS.has(path))
-    const texts = await Promise.all([...paths, ...(isPiped && before?.program === 'cat' ? before.args.filter(arg => !arg.startsWith('-')) : [])].map(async path => fileText(path, read)))
+    const files = [...paths, ...(isPiped && before?.program === 'cat' ? before.args.filter(arg => !arg.startsWith('-')) : [])]
+    const texts = await Promise.all(files.map(async path => fileText(path, read)))
+    const unreadable = texts.indexOf(null)
 
-    if (texts.includes(null))
-      return SQL_UNREADABLE
+    if (unreadable !== -1)
+      return sqlUnreadable(files[unreadable] ?? '')
 
     // the statements a client is given: its own options, its heredoc body, the files it reads and what a printer pipes into it
     const statements = [
