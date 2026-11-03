@@ -1,0 +1,127 @@
+import type { State } from './state'
+
+/** How a part of the picker is drawn: the kit's roles, or plain text. */
+export interface Theme {
+  accent: (text: string) => string
+  label: (text: string) => string
+  value: (text: string) => string
+  id: (text: string) => string
+}
+
+export interface Size {
+  columns: number
+  rows: number
+}
+
+/** Lines, or a share of the terminal's rows. */
+export type Height = { lines: number } | { percent: number }
+
+export interface Layout {
+  height: number
+  listWidth: number
+  /** Zero when there is no room or no command for a preview pane. */
+  previewWidth: number
+}
+
+const MIN_HEIGHT = 4
+const PREVIEW_MIN_COLUMNS = 80
+const SEPARATOR = ' │ '
+const HEIGHT = /^(\d+)(%?)$/
+
+export const DEFAULT_HEIGHT: Height = { percent: 40 }
+
+export function parseHeight(text: string): Height | undefined {
+  const found = HEIGHT.exec(text)
+
+  if (found === null || Number(found[1]) < 1)
+    return undefined
+
+  return found[2] === '%' ? { percent: Math.min(100, Number(found[1])) } : { lines: Number(found[1]) }
+}
+
+/** The region the picker draws in: at least four lines unless the terminal has fewer, never more than the terminal. */
+export function layoutFor(size: Size, height: Height, previewing: boolean): Layout {
+  const wanted = 'lines' in height ? height.lines : Math.round(size.rows * height.percent / 100)
+  const rows = Math.min(size.rows, Math.max(MIN_HEIGHT, wanted))
+  const split = previewing && size.columns >= PREVIEW_MIN_COLUMNS
+  const listWidth = split ? Math.floor(size.columns / 2) : size.columns
+
+  return { height: rows, listWidth, previewWidth: split ? size.columns - listWidth - SEPARATOR.length : 0 }
+}
+
+interface Fitted {
+  text: string
+  width: number
+}
+
+/** Text cut to a width with a trailing ellipsis, each character at a position in `marked` drawn with `mark` and the others with `plain`. */
+function fit(text: string, width: number, plain: (text: string) => string, mark: (text: string) => string = plain, marked: ReadonlySet<number> = new Set()): Fitted {
+  const room = Bun.stringWidth(text) > width ? width - 1 : width
+  let out = ''
+  let used = 0
+  let at = 0
+
+  for (const char of text) {
+    const size = Bun.stringWidth(char)
+
+    if (used + size > room)
+      break
+
+    out += (marked.has(at) ? mark : plain)(char)
+    used += size
+    at += char.length
+  }
+
+  if (room < width) {
+    out += plain('…')
+    used += 1
+  }
+
+  return { text: out, width: used }
+}
+
+const identity = (text: string): string => text
+
+/** The column the query's caret sits at, one-based, on the first line. */
+export function caretColumn(state: State, layout: Layout): number {
+  return Math.min(layout.listWidth, Bun.stringWidth(state.prompt) + Bun.stringWidth(state.query) + 1)
+}
+
+function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {
+  const rows = layout.height - 2
+  const prefixWidth = state.multi ? 4 : 2
+  const top = Math.max(0, Math.min(state.cursor - Math.floor(rows / 2), state.matches.length - rows))
+  const marks = state.marked.size > 0 ? ` (${state.marked.size} marked)` : ''
+  const promptWidth = Bun.stringWidth(state.prompt)
+  const query = fit(state.query, Math.max(1, layout.listWidth - promptWidth), identity)
+  const count = fit(`  ${state.matches.length}/${state.items.length}${marks}`, layout.listWidth, theme.label)
+  const lines: Fitted[] = [{ text: theme.accent(state.prompt) + query.text, width: promptWidth + query.width }, count]
+
+  if (state.matches.length === 0)
+    lines.push(fit('  no match', layout.listWidth, theme.label))
+
+  for (const [offset, match] of state.matches.slice(top, top + rows).entries()) {
+    const current = top + offset === state.cursor
+    const pointer = current ? theme.accent('❯') : ' '
+    const mark = state.multi ? `${state.marked.has(match.index) ? theme.id('●') : ' '} ` : ''
+    const text = fit(state.items[match.index]!, layout.listWidth - prefixWidth, current ? theme.value : identity, theme.accent, new Set(match.positions))
+
+    lines.push({ text: `${pointer} ${mark}${text.text}`, width: prefixWidth + text.width })
+  }
+
+  return lines
+}
+
+/** The lines drawn for a state, exactly `layout.height` of them, the preview text in a pane on the right when there is one. */
+export function render(state: State, layout: Layout, theme: Theme, preview: readonly string[] = []): string[] {
+  const left = listLines(state, layout, theme)
+
+  return Array.from({ length: layout.height }, (_, row) => {
+    const list = left[row] ?? { text: '', width: 0 }
+
+    if (layout.previewWidth === 0)
+      return list.text
+
+    return `${list.text}${' '.repeat(Math.max(0, layout.listWidth - list.width))}${theme.label(SEPARATOR)}${fit(preview[row] ?? '', layout.previewWidth, identity).text}`
+  })
+}

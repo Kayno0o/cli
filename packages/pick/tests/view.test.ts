@@ -1,0 +1,98 @@
+import type { Theme } from '../src/view'
+import { describe, expect, test } from 'bun:test'
+import { createState, press } from '../src/state'
+import { caretColumn, layoutFor, parseHeight, render } from '../src/view'
+
+const plain: Theme = { accent: text => text, label: text => text, value: text => text, id: text => text }
+const tagged: Theme = { accent: text => `<${text}>`, label: text => `~${text}~`, value: text => `*${text}*`, id: text => `#${text}#` }
+
+describe('parseHeight', () => {
+  test('reads lines and percentages', () => {
+    expect(parseHeight('12')).toEqual({ lines: 12 })
+    expect(parseHeight('50%')).toEqual({ percent: 50 })
+    expect(parseHeight('250%')).toEqual({ percent: 100 })
+    expect(parseHeight('0')).toBeUndefined()
+    expect(parseHeight('tall')).toBeUndefined()
+    expect(parseHeight('-3')).toBeUndefined()
+  })
+})
+
+describe('layoutFor', () => {
+  test('takes the height from lines or percent, kept between four lines and the terminal', () => {
+    expect(layoutFor({ columns: 60, rows: 50 }, { percent: 40 }, false).height).toBe(20)
+    expect(layoutFor({ columns: 60, rows: 50 }, { lines: 2 }, false).height).toBe(4)
+    expect(layoutFor({ columns: 60, rows: 10 }, { lines: 30 }, false).height).toBe(10)
+    expect(layoutFor({ columns: 60, rows: 3 }, { lines: 30 }, false).height).toBe(3)
+  })
+
+  test('splits for a preview only when the terminal is wide enough', () => {
+    expect(layoutFor({ columns: 100, rows: 30 }, { lines: 10 }, true)).toEqual({ height: 10, listWidth: 50, previewWidth: 47 })
+    expect(layoutFor({ columns: 79, rows: 30 }, { lines: 10 }, true).previewWidth).toBe(0)
+    expect(layoutFor({ columns: 100, rows: 30 }, { lines: 10 }, false).previewWidth).toBe(0)
+  })
+})
+
+describe('render', () => {
+  const layout = layoutFor({ columns: 40, rows: 20 }, { lines: 6 }, false)
+
+  test('draws the prompt, the counts and the list with a pointer, exactly height lines', () => {
+    const lines = render(createState(['one', 'two', 'three'], { prompt: '? ' }), layout, plain)
+
+    expect(lines).toEqual(['? ', '  3/3', '❯ one', '  two', '  three', ''])
+  })
+
+  test('highlights the matched characters and the current line', () => {
+    const lines = render(createState(['foo-bar', 'xbxax'], { query: 'ba' }), layout, tagged)
+
+    expect(lines[0]).toBe('<> >ba')
+    expect(lines[2]).toBe('<❯> *f**o**o**-*<b><a>*r*')
+  })
+
+  test('shows marks in --multi and counts them', () => {
+    const state = press(createState(['one', 'two'], { multi: true }), 'tab')
+    const lines = render(state, layout, plain)
+
+    expect(lines[1]).toBe('  2/2 (1 marked)')
+    expect(lines[2]).toBe('  ● one')
+    expect(lines[3]).toBe('❯   two')
+  })
+
+  test('says so on an empty match list', () => {
+    const lines = render(createState(['one'], { query: 'zz' }), layout, plain)
+
+    expect(lines.slice(0, 3)).toEqual(['> zz', '  0/1', '  no match'])
+  })
+
+  test('scrolls to keep the highlighted line in view', () => {
+    const items = Array.from({ length: 30 }, (_, index) => `item${index}`)
+    let state = createState(items)
+
+    for (let step = 0; step < 20; step++)
+      state = press(state, 'down')
+
+    const lines = render(state, layout, plain)
+
+    expect(lines.filter(line => line.startsWith('❯'))).toEqual(['❯ item20'])
+    expect(lines).toHaveLength(6)
+  })
+
+  test('cuts a long line to the width with an ellipsis', () => {
+    const lines = render(createState(['a'.repeat(100)]), layout, plain)
+
+    expect(lines[2]).toBe(`❯ ${'a'.repeat(37)}…`)
+  })
+
+  test('draws the preview in a right pane, cut to its width and height', () => {
+    const wide = layoutFor({ columns: 80, rows: 20 }, { lines: 4 }, true)
+    const lines = render(createState(['one']), wide, plain, ['line a', 'b'.repeat(100)])
+
+    expect(lines).toHaveLength(4)
+    expect(lines[0]).toBe(`>${' '.repeat(39)} │ line a`)
+    expect(lines[1]).toBe(`  1/1${' '.repeat(35)} │ ${'b'.repeat(36)}…`)
+    expect(lines[3]).toBe(`${' '.repeat(40)} │ `)
+  })
+
+  test('the caret sits after the query', () => {
+    expect(caretColumn(createState(['a'], { query: 'ab' }), layout)).toBe(5)
+  })
+})

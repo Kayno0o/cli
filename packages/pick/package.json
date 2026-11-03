@@ -1,0 +1,40 @@
+{
+  "name": "@kaynooo/cli-pick",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "pick: a themed fuzzy selector, lines on stdin, the chosen one on stdout.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/pick#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/pick"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "fuzzy",
+    "selector",
+    "terminal"
+  ],
+  "bin": {
+    "pick": "./dist/pick.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/pick.ts --target bun --outdir dist",
+    "pick": "$npm_execpath src/pick.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
