@@ -17,6 +17,14 @@ doctor --json    # [{check, ok, detail, fix?}]
 
 A registry that does not answer leaves a package passing, with a note. Exit codes: 0 every check passed, 1 one failed, 2 a usage error.
 
+## cli stats
+
+```sh
+cli stats [--since 7d] [--json]   # runs per bin, failures, and the options usage errors did not know
+```
+
+Every bin records each run in `~/.local/state/kaynooo-cli/usage.jsonl`: the bin, its command, the flag names it saw (never values or arguments), the exit code and, on a usage error, the unknown option. `KAYNOOO_CLI_NO_USAGE=1` turns it off; `guard` never records.
+
 ## cli list
 
 ```sh
