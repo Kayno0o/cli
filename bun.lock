@@ -22,7 +22,7 @@
     },
     "packages/changelog": {
       "name": "@kaynooo/cli-changelog",
-      "version": "2.0.1",
+      "version": "2.1.0",
       "bin": {
         "changelog": "./dist/cli.js",
       },
