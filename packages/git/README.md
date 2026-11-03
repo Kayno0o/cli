@@ -1,4 +1,4 @@
-# gst and gc
+# gst, gc and gb
 
 Git for Claude Code, where a session would otherwise chain `git status --short` and `git log --oneline` to read the state, or `git add <paths> && git status && git commit -m ...` to commit and have the commit bounced over its message.
 
@@ -21,6 +21,15 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 - It also refuses, with nothing staged, a path with no change (unchanged, ignored or missing) and an index already holding files beyond the given paths, which the commit would carry along.
 - A path may be a directory or a deleted file. When git refuses the commit (a hook), the paths are unstaged again and git's output is shown.
 - Exit codes: 0 committed, 1 refused, 2 a usage error.
+
+## gb
+
+`gb [branch]` picks a git branch with fzf and switches to it: the branches last checked out first (from the reflog), then the other local ones, then the remote ones with no local branch yet. The header says where HEAD stands, each row how its branch stands against its upstream and whether it is merged into the base. Keys: enter switches (a remote branch gets its tracking branch), ctrl-n creates a branch named after the query, ctrl-d deletes the highlighted local branch with `git branch -d`, ctrl-r fetches and prunes. Without fzf or a terminal it lists the branches, as JSON with `--json`.
+
+- `gb <branch>` switches without the picker, a bare name finding the remote branch it would create; `gb -` goes back, `gb -c <name>` creates a branch, `gb -d <branch>` deletes a local one.
+- A branch checked out in another worktree needs a `cd`, which a command cannot do for its shell: `gb` prints the worktree's path on stdout and a hint on stderr.
+- Hidden flags for wrappers: `--emit` (with any of the above) prints the command as lines for a shell function to run, `--list` the rows as JSON for term, `--names` the branches with their last commit for shell completions, `--show <branch>` the preview and `--rows`, `--fetch` what ctrl-r reloads.
+- Exit codes: the git command's, 1 when no branch is picked or found, 2 outside a repository.
 
 ## Library
 
