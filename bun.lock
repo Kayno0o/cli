@@ -217,6 +217,18 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/proc": {
+      "name": "@kaynooo/cli-proc",
+      "version": "0.0.0",
+      "bin": {
+        "pid": "./dist/pid-cli.js",
+        "ports": "./dist/ports-cli.js",
+        "procs": "./dist/procs-cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/repos": {
       "name": "@kaynooo/cli-repos",
       "version": "0.1.0",
@@ -362,6 +374,8 @@
     "@kaynooo/cli-pkg": ["@kaynooo/cli-pkg@workspace:packages/pkg"],
 
     "@kaynooo/cli-probe": ["@kaynooo/cli-probe@workspace:packages/probe"],
+
+    "@kaynooo/cli-proc": ["@kaynooo/cli-proc@workspace:packages/proc"],
 
     "@kaynooo/cli-repos": ["@kaynooo/cli-repos@workspace:packages/repos"],
 

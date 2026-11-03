@@ -23,6 +23,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 | [`@kaynooo/cli-dev`](packages/dev) | `dev` | small developer utilities: random passwords and bcrypt hashes, JWT decoding, timestamps, UUIDs and ULIDs, base64, URL parts, file hashes |
 | [`@kaynooo/cli-pick`](packages/pick) | `pick` | a themed fuzzy selector, lines on stdin and the chosen one on stdout |
 | [`@kaynooo/cli-probe`](packages/probe) | `probe` | a site's HTTP version, redirects, timings, TLS certificate and notable headers in one call |
+| [`@kaynooo/cli-proc`](packages/proc) | `pid`, `ports`, `procs` | a process inspected from /proc (executable, parents, memory, limits, listening ports, masked environment); who listens on a port, Docker-published ports resolved to their compose service, with a safe `--kill`; leftover or heavy dev processes grouped by origin and cleaned dry-run first |
 | [`@kaynooo/cli-repos`](packages/repos) | `repos` | the repositories of the workspace that need attention: dirty, unpushed, behind, unreleased |
 | [`@kaynooo/cli-sweep`](packages/sweep) | `sweep` | reclaims node_modules, build output and clean worktrees across repos, dry by default |
 | [`@kaynooo/cli-view`](packages/view) | `view` | a markdown file or a git diff shown in the colours of the other CLIs, wrapped to the terminal and paged when long |

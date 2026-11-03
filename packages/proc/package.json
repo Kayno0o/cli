@@ -1,0 +1,38 @@
+{
+  "name": "@kaynooo/cli-proc",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "pid, ports, procs: one process inspected, who listens on a port, and leftover or heavy dev processes cleaned, read straight from /proc (Linux).",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/proc#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/proc"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": ["process", "port", "proc", "kill", "cli", "bun"],
+  "os": ["linux"],
+  "bin": {
+    "pid": "./dist/pid-cli.js",
+    "ports": "./dist/ports-cli.js",
+    "procs": "./dist/procs-cli.js"
+  },
+  "files": ["dist", "src"],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/pid-cli.ts src/ports-cli.ts src/procs-cli.ts --target bun --outdir dist",
+    "pid": "$npm_execpath src/pid-cli.ts",
+    "ports": "$npm_execpath src/ports-cli.ts",
+    "procs": "$npm_execpath src/procs-cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
