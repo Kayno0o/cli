@@ -1,15 +1,15 @@
 import type { Container, Service } from './stack'
 import process from 'node:process'
-import { maskLine } from '@kaynooo/cli-env/mask'
+import { maskLine, PEM_BEGIN, PEM_END } from '@kaynooo/cli-env/mask'
 import { fail, jsonOption, paint, parse, printJson, stripAnsi } from '@kaynooo/cli-kit'
-import { allServices, containers, key, output, stateColor } from './stack'
+import { allServices, attempt, containers, key, stateColor } from './stack'
 
 const usage = `dlog [service...]
 
 One line per compose service with its state and health, then the last distinct error lines of the services that log some or are not healthy, repeats collapsed to one line with a count and secrets masked as redact does.
 With service names, only those are read. The stacks are the ones dx lists: this folder's, its child folders' and the ones only their containers tell of.
 
-Exits 0 when every service is up and quiet, 1 when one is down or unhealthy or logged an error, so it can gate a script, 1 too when there is no compose service here.`
+Exits 0 when every service is up and quiet, 1 when one is down, unhealthy or still starting, logged an error or has logs compose could not read, so it can gate a script, 1 too when there is no compose service here. A service that exited with code 0 (a migration, an init) is not down.`
 
 const options = {
   lines: { type: 'string', short: 'n', default: '5', description: 'error lines kept per service' },
@@ -70,9 +70,10 @@ export interface Health {
 }
 
 export function healthOf(state: string, container: Container | undefined): Health {
-  const health = container?.Health ?? STATUS_HEALTH.exec(container?.Status ?? '')?.[1]?.replace('health: ', '') ?? ''
+  const health = (container?.Health ?? '') || (STATUS_HEALTH.exec(container?.Status ?? '')?.[1]?.replace('health: ', '') ?? '')
+  const finished = state === 'exited' && container?.ExitCode === 0
 
-  return { health, fine: state === 'running' && (health === '' || health === 'healthy') }
+  return { health, fine: (state === 'running' || finished) && (health === '' || health === 'healthy') }
 }
 
 export interface Report {
@@ -82,20 +83,38 @@ export interface Report {
   status: string
   errors: ErrorLine[]
   tail: string[]
+  /** Why compose could not list the service or read its logs. */
+  unreadable: string | undefined
+  fine: boolean
 }
 
-async function read(service: Service, since: string): Promise<{ log: string, container: Container | undefined }> {
-  const [ps, log] = await Promise.all([
-    output(service.stack, ['ps', '--all', '--format', 'json', service.name]),
-    output(service.stack, ['logs', '--no-color', '--no-log-prefix', `--tail=${TAIL}`, `--since=${since}`, service.name]),
+async function read(service: Service, since: string): Promise<{ log: string, container: Container | undefined, unreadable: string | undefined }> {
+  const [ps, logs] = await Promise.all([
+    attempt(service.stack, ['ps', '--all', '--format', 'json', service.name]),
+    attempt(service.stack, ['logs', '--no-color', '--no-log-prefix', `--tail=${TAIL}`, `--since=${since}`, service.name]),
   ])
 
-  return { log, container: containers(ps)[0] }
+  return { log: logs.text, container: containers(ps.text)[0], unreadable: ps.error ?? logs.error }
+}
+
+/** The lines of a log without the body of a private key. */
+export function withoutKeys(lines: string[]): string[] {
+  let inKey = false
+
+  return lines.filter((text) => {
+    const opens = PEM_BEGIN.test(text)
+    const hidden = inKey || opens
+
+    inKey = (inKey || opens) && !PEM_END.test(text)
+
+    return !hidden
+  })
 }
 
 function line(report: Report): string {
   const colors = paint(process.stdout)
-  const detail = [report.health, report.status].filter(Boolean).join(' · ')
+  const status = report.status.replace(STATUS_HEALTH, '').trim()
+  const detail = [report.health, status].filter(Boolean).join(' · ')
 
   return `${report.key.padEnd(24)} ${colors[stateColor(report.state)](report.state.padEnd(9))} ${colors.dim(detail)}`.trimEnd()
 }
@@ -105,6 +124,9 @@ function show(reports: Report[]): void {
 
   for (const report of reports) {
     console.log(line(report))
+
+    if (report.unreadable !== undefined)
+      console.log(`  ${colors.red(`logs unavailable: ${report.unreadable}`)}`)
 
     for (const { line: text, count } of report.errors)
       console.log(`  ${colors.red(text)}${count > 1 ? colors.dim(` ×${count}`) : ''}`)
@@ -134,12 +156,13 @@ export async function dlog(args: string[]): Promise<number> {
 
   const chosen = wanted.length === 0 ? services : services.filter(service => wanted.includes(key(service)) || wanted.includes(service.name))
   const reports: Report[] = await Promise.all(chosen.map(async (service) => {
-    const { log, container } = await read(service, parsed.values.since)
-    const { health } = healthOf(service.state, container)
-    const errors = errorLines(log, limit)
-    const tail = parsed.values.all === true && errors.length === 0 ? log.split('\n').map(text => clip(maskLine(stripAnsi(text).trim()))).filter(Boolean).slice(-limit) : []
+    const { log, container, unreadable } = await read(service, parsed.values.since)
+    const { health, fine } = healthOf(service.state, container)
+    const lines = withoutKeys(log.split('\n'))
+    const errors = errorLines(lines.join('\n'), limit)
+    const tail = parsed.values.all === true && errors.length === 0 ? lines.map(text => clip(maskLine(stripAnsi(text).trim()))).filter(Boolean).slice(-limit) : []
 
-    return { key: key(service), state: service.state, health, status: service.status, errors, tail }
+    return { key: key(service), state: service.state, health, status: service.status, errors, tail, unreadable, fine }
   }))
 
   if (parsed.values.json === true)
@@ -147,7 +170,7 @@ export async function dlog(args: string[]): Promise<number> {
   else
     show(reports)
 
-  const down = reports.filter(report => report.state !== 'running' || report.health === 'unhealthy' || report.errors.length > 0)
+  const down = reports.filter(report => !report.fine || report.unreadable !== undefined || report.errors.length > 0)
 
   if (parsed.values.json !== true && down.length > 0)
     console.error(paint(process.stderr).dim(`${down.length} of ${reports.length} services need a look: ${down.map(report => report.key).join(', ')}`))

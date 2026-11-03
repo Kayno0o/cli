@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
@@ -32,5 +32,49 @@ describe('audit', () => {
 
   test('an unknown level is a usage error', () => {
     expect(audit('--level', 'severe', dir).code).toBe(2)
+  })
+})
+
+describe('audit with a bun that answers', () => {
+  const fake = mkdtempSync(join(tmpdir(), 'audit-fake-'))
+  const repo = join(fake, 'repo')
+  const advisory = '{"lodash":[{"id":1,"url":"https://x","title":"t","severity":"high","vulnerable_versions":"<4.17.21"}]}'
+
+  afterAll(() => rmSync(fake, { recursive: true, force: true }))
+
+  // A `bun` on the PATH that prints `all` for `audit --json` and `prod` for `audit --json --prod`.
+  function withBun(all: string, prod: string, ...args: string[]) {
+    mkdirSync(join(fake, 'bin'), { recursive: true })
+    writeFileSync(join(fake, 'bin', 'bun'), `#!/bin/sh\ncase "$*" in *--prod*) printf '%s' '${prod}' ;; *) printf '%s' '${all}' ;; esac\n`, { mode: 0o755 })
+    mkdirSync(repo, { recursive: true })
+    writeFileSync(join(repo, 'bun.lock'), '')
+    writeFileSync(join(repo, 'package.json'), JSON.stringify({ dependencies: { lodash: '4' } }))
+
+    const ran = Bun.spawnSync([process.execPath, AUDIT, ...args, repo], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, PATH: `${join(fake, 'bin')}:${process.env.PATH}` } })
+
+    return { code: ran.exitCode, out: ran.stdout.toString() }
+  }
+
+  test('lists a package with its scope, directness and fix, and exits 1', () => {
+    const ran = withBun(advisory, advisory)
+
+    expect(ran.code).toBe(1)
+    expect(ran.out).toMatch(/lodash\s+high\s+1\s+prod\s+direct\s+4\.17\.21/)
+  })
+
+  test('calls a package only the full audit lists dev, and --prod then finds nothing', () => {
+    expect(withBun(advisory, '{}').out).toMatch(/lodash\s+high\s+1\s+dev/)
+
+    const ran = withBun(advisory, '{}', '--prod')
+
+    expect(ran.code).toBe(0)
+    expect(ran.out).toContain('no advisory')
+  })
+
+  test('reports an audit that failed, the production one too, instead of calling its packages dev', () => {
+    const ran = withBun(advisory, 'error: registry down')
+
+    expect(ran.code).toBe(1)
+    expect(ran.out).toContain('audit failed')
   })
 })

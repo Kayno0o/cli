@@ -161,10 +161,21 @@ export async function recordedNearby(): Promise<Labels[]> {
   return (await labels()).filter(stack => dirs.has(stack.workdir))
 }
 
-export async function output(stack: Stack, args: string[]): Promise<string> {
+/** What compose printed, and its stderr when it exited non-zero. */
+export async function attempt(stack: Stack, args: string[]): Promise<{ text: string, error: string | undefined }> {
   const proc = Bun.spawn([...stack.list.argv, ...args], { cwd: stack.list.cwd, env: stack.list.env, stdout: 'pipe', stderr: 'pipe' })
+  const [text, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
 
-  return (await proc.exited) === 0 ? new Response(proc.stdout).text() : ''
+  if (code === 0)
+    return { text, error: undefined }
+
+  const last = stderr.trim().split('\n').at(-1) ?? ''
+
+  return { text: '', error: last === '' ? `exit ${code}` : last }
+}
+
+async function output(stack: Stack, args: string[]): Promise<string> {
+  return (await attempt(stack, args)).text
 }
 
 /** Compose prints one container per line, where older versions printed a JSON array. */

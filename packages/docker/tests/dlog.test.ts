@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { errorLines, healthOf } from '../src/dlog'
+import { errorLines, healthOf, withoutKeys } from '../src/dlog'
 
 describe('errorLines', () => {
   test('keeps the error lines only, a repeated message once with its count and its latest wording', () => {
@@ -44,5 +44,21 @@ describe('healthOf', () => {
     expect(healthOf('running', { Service: 'a', State: 'running', Status: 'Up 2 minutes (healthy)' })).toEqual({ health: 'healthy', fine: true })
     expect(healthOf('running', { Service: 'a', State: 'running', Status: 'Up' })).toEqual({ health: '', fine: true })
     expect(healthOf('exited', undefined).fine).toBe(false)
+  })
+})
+
+describe('withoutKeys', () => {
+  test('drops a private key block from its BEGIN line to its END line', () => {
+    const lines = ['error before', '-----BEGIN RSA PRIVATE KEY-----', 'MIIBOgIBAAJB', '-----END RSA PRIVATE KEY-----', 'error after']
+
+    expect(withoutKeys(lines)).toEqual(['error before', 'error after'])
+  })
+})
+
+describe('healthOf for a finished service', () => {
+  test('counts one that exited with code 0 as fine, and one that failed as not', () => {
+    expect(healthOf('exited', { Service: 'migrate', State: 'exited', Status: 'Exited (0)', ExitCode: 0 }).fine).toBe(true)
+    expect(healthOf('exited', { Service: 'migrate', State: 'exited', Status: 'Exited (1)', ExitCode: 1 }).fine).toBe(false)
+    expect(healthOf('running', { Service: 'a', State: 'running', Status: 'Up', Health: 'starting' }).fine).toBe(false)
   })
 })

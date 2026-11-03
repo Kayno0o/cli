@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
+import type { Ran } from '@kaynooo/cli-kit'
 import type { Finding, Severity } from './report'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
@@ -104,19 +105,24 @@ async function audited(path: string, shown: string, level: Severity): Promise<Re
     runCommand(['bun', 'audit', '--json'], { cwd: path, timeoutMs: AUDIT_MS }),
     runCommand(['bun', 'audit', '--json', '--prod'], { cwd: path, timeoutMs: AUDIT_MS }),
   ])
-  const stdout = (code: Awaited<ReturnType<typeof runCommand>>) => Buffer.concat(code.chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString()
-  const audit = parseAudit(stdout(all))
+  const audit = parseAudit(stdoutOf(all))
+  const reached = parseAudit(stdoutOf(production))
 
-  if (audit === undefined) {
-    const why = all.timedOut ? `timed out after ${AUDIT_MS / 1000}s` : all.text.trim().split('\n').at(-1) ?? `exit ${all.code}`
+  if (audit === undefined || reached === undefined)
+    return { repo: shown, path, findings: [], error: failure(audit === undefined ? all : production) }
 
-    return { repo: shown, path, findings: [], error: why }
-  }
-
-  const reaching = new Set(Object.keys(parseAudit(stdout(production)) ?? {}))
+  const reaching = new Set(Object.keys(reached))
   const direct = directDependencies(path, workspaceFolders(path, children(path)))
 
   return { repo: shown, path, findings: findingsOf(audit, reaching, direct, level), error: undefined }
+}
+
+function stdoutOf(ran: Ran): string {
+  return Buffer.concat(ran.chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString()
+}
+
+function failure(ran: Ran): string {
+  return ran.timedOut ? `timed out after ${AUDIT_MS / 1000}s` : ran.text.trim().split('\n').at(-1) ?? `exit ${ran.code}`
 }
 
 function tint(severity: Severity): (text: string) => string {
@@ -143,7 +149,7 @@ async function main(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['audit', 'audit ~/Workspace --level high --prod'] })
   const root = resolve(positionals[0] ?? '.')
 
-  if (!existsSync(root))
+  if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`no folder ${root}`)
 
   const level = oneOf(values.level, 'level', SEVERITIES)

@@ -13,6 +13,6 @@ bun add -g @kaynooo/cli-audit
 | `audit --prod` | only the packages a production dependency needs |
 | `audit --json` | the same data as JSON |
 
-It runs `bun audit --json` (and once more with `--prod`, which tells what reaches production) in each folder holding a `bun.lock`, so it reaches the registry. The walk goes three levels deep, stops at a `bun.lock` and skips `node_modules` and hidden folders. The worst rows and the production ones come first; a fix of `-` means an advisory names no fixed version.
+It runs `bun audit --json` (and once more with `--prod`, which tells what reaches production) in each folder holding a `bun.lock`, so it reaches the registry. The walk goes three levels deep, stops at a `bun.lock` and skips `node_modules` and hidden folders. The worst rows and the production ones come first; a fix of `-` means an advisory names no fixed version, and a package with ranges for several majors is given the highest fix, which may be a major jump. A repository's workspaces are read as folders or `dir/*`; other globs are not, and their dependencies then show as `via`.
 
 It exits 1 when a repository has an advisory at the level asked or its audit failed, so it can gate a script.
