@@ -219,7 +219,7 @@
     },
     "packages/proc": {
       "name": "@kaynooo/cli-proc",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "pid": "./dist/pid-cli.js",
         "ports": "./dist/ports-cli.js",
