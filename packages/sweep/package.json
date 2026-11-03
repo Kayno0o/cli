@@ -1,0 +1,41 @@
+{
+  "name": "@kaynooo/cli-sweep",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "sweep: reclaims disk from node_modules, build output and clean git worktrees across many repos, dry by default.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/sweep#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/sweep"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "disk",
+    "node_modules",
+    "git-worktree",
+    "cleanup"
+  ],
+  "bin": {
+    "sweep": "./dist/sweep.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/sweep.ts --target bun --outdir dist",
+    "sweep": "$npm_execpath src/sweep.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}

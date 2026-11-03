@@ -1,0 +1,243 @@
+import type { Dirent } from 'node:fs'
+import { existsSync } from 'node:fs'
+import { readdir, realpath } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
+import { runTool } from '@kaynooo/cli-kit'
+import { pooled, sizeOf } from './size'
+
+export const FOLDER_NAMES = new Set(['node_modules', '.nuxt', '.next', '.output', 'dist', 'build', '.turbo', '.svelte-kit', 'target'])
+export const MAX_DEPTH = 3
+
+export interface Entry {
+  path: string
+  kind: 'folder' | 'worktree'
+  bytes: number
+  // The repo's last commit in epoch milliseconds, undefined outside a repo or in an empty one.
+  committedAt: number | undefined
+  action: 'remove' | 'keep'
+  // Why a worktree is kept.
+  reason?: string
+  // The repo a worktree is removed from.
+  repo?: string
+}
+
+export interface Skipped {
+  path: string
+  reason: string
+}
+
+interface Candidate {
+  path: string
+  kind: 'folder' | 'worktree'
+}
+
+export interface Found {
+  candidates: Candidate[]
+  skipped: Skipped[]
+}
+
+async function listing(dir: string): Promise<Dirent[]> {
+  try {
+    return await readdir(dir, { withFileTypes: true })
+  }
+  catch {
+    return []
+  }
+}
+
+// Walks `root` MAX_DEPTH levels down without entering a candidate, `.git` or a symlink, and returns the folders and worktrees that look removable, a symlink bearing a candidate name being skipped instead.
+export async function findCandidates(root: string): Promise<Found> {
+  const found: Found = { candidates: [], skipped: [] }
+  const visit = async (dir: string, depth: number): Promise<void> => {
+    const entries = await listing(dir)
+
+    for (const entry of entries) {
+      const path = join(dir, entry.name)
+
+      if (entry.name === '.git')
+        continue
+
+      if (entry.name === '.worktrees') {
+        if (!entry.isDirectory()) {
+          found.skipped.push({ path, reason: 'symlink' })
+
+          continue
+        }
+
+        for (const worktree of await listing(path)) {
+          if (worktree.isDirectory())
+            found.candidates.push({ path: join(path, worktree.name), kind: 'worktree' })
+          else if (worktree.isSymbolicLink())
+            found.skipped.push({ path: join(path, worktree.name), reason: 'symlink' })
+        }
+
+        continue
+      }
+
+      if (FOLDER_NAMES.has(entry.name) && (entry.name !== 'target' || existsSync(join(dir, 'Cargo.toml')))) {
+        if (entry.isSymbolicLink())
+          found.skipped.push({ path, reason: 'symlink' })
+        else if (entry.isDirectory())
+          found.candidates.push({ path, kind: 'folder' })
+
+        continue
+      }
+
+      if (entry.isDirectory() && depth < MAX_DEPTH)
+        await visit(path, depth + 1)
+    }
+  }
+
+  await visit(root, 0)
+
+  return found
+}
+
+async function realOf(path: string): Promise<string | undefined> {
+  try {
+    return await realpath(path)
+  }
+  catch {
+    return undefined
+  }
+}
+
+const HEADS_PREFIX = /^refs\/heads\//
+
+async function gitIn(cwd: string, args: string[]): Promise<{ code: number, stdout: string }> {
+  try {
+    const { code, stdout } = await runTool(`git ${args.join(' ')}`, ['git', '-C', cwd, ...args], { timeoutMs: 30_000 })
+
+    return { code, stdout: stdout.trim() }
+  }
+  catch {
+    return { code: 1, stdout: '' }
+  }
+}
+
+// One lookup per key, the promise shared by every caller asking for it.
+function memo<T>(make: (key: string) => Promise<T>): (key: string) => Promise<T> {
+  const cache = new Map<string, Promise<T>>()
+
+  return async (key) => {
+    let value = cache.get(key)
+
+    if (value === undefined) {
+      value = make(key)
+      cache.set(key, value)
+    }
+
+    return value
+  }
+}
+
+const toplevelOf = memo(async (dir) => {
+  const { code, stdout } = await gitIn(dir, ['rev-parse', '--show-toplevel'])
+
+  return code === 0 && stdout !== '' ? stdout : undefined
+})
+
+const lastCommitOf = memo(async (top) => {
+  const { code, stdout } = await gitIn(top, ['log', '-1', '--format=%ct'])
+
+  return code === 0 && stdout !== '' ? Number(stdout) * 1000 : undefined
+})
+
+// The checked-out branch of every worktree git knows for a repo, by real path; a detached one maps to undefined.
+const worktreesOf = memo(async (repo) => {
+  const { code, stdout } = await gitIn(repo, ['worktree', 'list', '--porcelain'])
+  const branches = new Map<string, string | undefined>()
+
+  if (code !== 0)
+    return branches
+
+  for (const block of stdout.split('\n\n')) {
+    const lines = block.split('\n')
+    const path = lines.find(line => line.startsWith('worktree '))?.slice('worktree '.length)
+    const branch = lines.find(line => line.startsWith('branch '))?.slice('branch '.length)
+
+    if (path !== undefined)
+      branches.set(await realOf(path) ?? path, branch)
+  }
+
+  return branches
+})
+
+type Verdict = { skip: string } | { entry: Omit<Entry, 'bytes'> }
+
+async function judgeFolder(path: string): Promise<Verdict> {
+  const parent = dirname(path)
+  const name = basename(path)
+  const top = await toplevelOf(parent)
+
+  if (top === undefined)
+    return name === 'node_modules' ? { entry: { path, kind: 'folder', committedAt: undefined, action: 'remove' } } : { skip: 'not in a git repository' }
+
+  const tracked = await gitIn(parent, ['ls-files', '--', name])
+
+  if (tracked.code !== 0 || tracked.stdout !== '')
+    return { skip: 'tracked by git' }
+
+  if (name !== 'node_modules' && (await gitIn(parent, ['check-ignore', '-q', '--', name])).code !== 0)
+    return { skip: 'not ignored by git' }
+
+  return { entry: { path, kind: 'folder', committedAt: await lastCommitOf(top), action: 'remove' } }
+}
+
+// A worktree is removable only when it is clean and every commit of its branch is on another branch or a remote.
+async function judgeWorktree(path: string): Promise<Verdict> {
+  const repo = dirname(dirname(path))
+  const top = await toplevelOf(repo)
+
+  if (top === undefined)
+    return { skip: 'not in a git repository' }
+
+  const real = await realOf(path)
+  const branches = await worktreesOf(top)
+
+  if (real === undefined || !branches.has(real))
+    return { skip: 'not a worktree of this repo' }
+
+  const committedAt = await lastCommitOf(top)
+  const keep = (reason: string): Verdict => ({ entry: { path, kind: 'worktree', committedAt, action: 'keep', reason, repo: top } })
+  const branch = branches.get(real)
+
+  if (branch === undefined)
+    return keep('detached HEAD')
+
+  const status = await gitIn(path, ['status', '--porcelain'])
+
+  if (status.code !== 0)
+    return keep('status failed')
+
+  if (status.stdout !== '')
+    return keep('uncommitted changes')
+
+  // git strips the refs/heads/ prefix before matching an --exclude that applies to --branches.
+  const unique = await gitIn(path, ['log', '--format=%h', branch, '--not', '--remotes', `--exclude=${branch.replace(HEADS_PREFIX, '')}`, '--branches'])
+
+  if (unique.code !== 0)
+    return keep('log failed')
+
+  if (unique.stdout !== '')
+    return keep(`${unique.stdout.split('\n').length} commits on no other branch or remote`)
+
+  return { entry: { path, kind: 'worktree', committedAt, action: 'remove', repo: top } }
+}
+
+// Judges and sizes every candidate, the ones git forbids touching going to `skipped`.
+export async function inspect({ candidates, skipped }: Found): Promise<{ entries: Entry[], skipped: Skipped[] }> {
+  const entries: Entry[] = []
+  const rejected = [...skipped]
+
+  await pooled(candidates, 8, async (candidate) => {
+    const verdict = await (candidate.kind === 'folder' ? judgeFolder(candidate.path) : judgeWorktree(candidate.path))
+
+    if ('skip' in verdict)
+      rejected.push({ path: candidate.path, reason: verdict.skip })
+    else
+      entries.push({ ...verdict.entry, bytes: await sizeOf(candidate.path) })
+  })
+
+  return { entries, skipped: rejected }
+}
