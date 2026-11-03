@@ -45,14 +45,14 @@ async function run(args: string[], usage: string, options: typeof sampleOptions 
 
   const url = await connectionUrl(values)
   const dialect = dialectOf(new URL(url))
-  const limit = wholeNumber('limit' in values ? values.limit : undefined, 'limit', SAMPLE_LIMIT, 0)
+  const limit = wholeNumber((values as { limit?: string }).limit, 'limit', SAMPLE_LIMIT, 0)
   const sql = build(target, dialect, { limit, where: values.where })
   const verdict = inspect(sql, dialect)
 
   if (verdict.reasons.length > 0 || verdict.statements > 1)
     fail(`not a plain read: ${verdict.reasons.join('; ') || 'one statement at a time'}`)
 
-  console.log(render(shape(await readRows(url, sql, [], limit), limit, 'raw' in values && values.raw === true, false), values.json === true))
+  console.log(render(shape(await readRows(url, sql, [], limit), limit, (values as { raw?: boolean }).raw === true, false), values.json === true))
 
   return 0
 }
