@@ -35,8 +35,13 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-gitlab': ['gl'],
   '@kaynooo/cli-guard': ['guard'],
   '@kaynooo/cli-out': ['out'],
+  '@kaynooo/cli-dev': ['dev'],
+  '@kaynooo/cli-pick': ['pick'],
   '@kaynooo/cli-pkg': ['pkg'],
+  '@kaynooo/cli-probe': ['probe'],
+  '@kaynooo/cli-repos': ['repos'],
   '@kaynooo/cli-stack': ['stack'],
+  '@kaynooo/cli-sweep': ['sweep'],
   '@kaynooo/cli-view': ['view'],
   '@kaynooo/cli-wait': ['waitfor', 'slot'],
 }

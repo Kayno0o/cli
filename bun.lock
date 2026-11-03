@@ -67,6 +67,16 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/dev": {
+      "name": "@kaynooo/cli-dev",
+      "version": "0.0.0",
+      "bin": {
+        "dev": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/doctor": {
       "name": "@kaynooo/cli-doctor",
       "version": "0.3.0",
@@ -163,6 +173,16 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/pick": {
+      "name": "@kaynooo/cli-pick",
+      "version": "0.0.0",
+      "bin": {
+        "pick": "./dist/pick.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/pkg": {
       "name": "@kaynooo/cli-pkg",
       "version": "0.7.0",
@@ -173,11 +193,41 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/probe": {
+      "name": "@kaynooo/cli-probe",
+      "version": "0.0.0",
+      "bin": {
+        "probe": "./dist/probe.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
+    "packages/repos": {
+      "name": "@kaynooo/cli-repos",
+      "version": "0.0.0",
+      "bin": {
+        "repos": "./dist/repos.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/stack": {
       "name": "@kaynooo/cli-stack",
       "version": "0.4.0",
       "bin": {
         "stack": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
+    "packages/sweep": {
+      "name": "@kaynooo/cli-sweep",
+      "version": "0.0.0",
+      "bin": {
+        "sweep": "./dist/sweep.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -271,6 +321,8 @@
 
     "@kaynooo/cli-db": ["@kaynooo/cli-db@workspace:packages/db"],
 
+    "@kaynooo/cli-dev": ["@kaynooo/cli-dev@workspace:packages/dev"],
+
     "@kaynooo/cli-doctor": ["@kaynooo/cli-doctor@workspace:packages/doctor"],
 
     "@kaynooo/cli-edit": ["@kaynooo/cli-edit@workspace:packages/edit"],
@@ -289,9 +341,17 @@
 
     "@kaynooo/cli-out": ["@kaynooo/cli-out@workspace:packages/out"],
 
+    "@kaynooo/cli-pick": ["@kaynooo/cli-pick@workspace:packages/pick"],
+
     "@kaynooo/cli-pkg": ["@kaynooo/cli-pkg@workspace:packages/pkg"],
 
+    "@kaynooo/cli-probe": ["@kaynooo/cli-probe@workspace:packages/probe"],
+
+    "@kaynooo/cli-repos": ["@kaynooo/cli-repos@workspace:packages/repos"],
+
     "@kaynooo/cli-stack": ["@kaynooo/cli-stack@workspace:packages/stack"],
+
+    "@kaynooo/cli-sweep": ["@kaynooo/cli-sweep@workspace:packages/sweep"],
 
     "@kaynooo/cli-view": ["@kaynooo/cli-view@workspace:packages/view"],
 
