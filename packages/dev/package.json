@@ -1,0 +1,41 @@
+{
+  "name": "@kaynooo/cli-dev",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "dev: small developer utilities in one bin: random passwords and bcrypt hashes, JWT decoding, timestamps, UUIDs and ULIDs, base64, URL parts and file hashes.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/dev#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/dev"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "password",
+    "jwt",
+    "uuid",
+    "base64"
+  ],
+  "bin": {
+    "dev": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "dev": "$npm_execpath src/cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
