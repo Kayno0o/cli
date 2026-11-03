@@ -330,3 +330,13 @@ describe('parseErrors: go, cargo, ruff and pytest', () => {
     ])
   })
 })
+
+describe('parseErrors: pytest frames', () => {
+  test('--tb=short and a collection error report the frame with the E line, not the function name', async () => {
+    const short = parseErrors(await fixture('pytest-short.txt'))
+    const collection = parseErrors(await fixture('pytest-collection.txt'))
+
+    expect(short.errors).toEqual([{ tool: 'pytest', file: 'tests/test_calc.py', line: 4, column: 0, severity: 'error', message: 'assert 3 == 4' }])
+    expect(collection.errors).toEqual([{ tool: 'pytest', file: 'tests/test_calc.py', line: 1, column: 0, severity: 'error', message: 'ModuleNotFoundError: No module named \'calc\'' }])
+  })
+})

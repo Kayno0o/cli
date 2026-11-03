@@ -1,0 +1,14 @@
+============================= test session starts ==============================
+collected 1 item
+
+tests/test_calc.py F                                                     [100%]
+
+=================================== FAILURES ===================================
+__________________________________ test_add ____________________________________
+tests/test_calc.py:4: in test_add
+    assert add(1, 2) == 4
+E   assert 3 == 4
+E    +  where 3 = add(1, 2)
+=========================== short test summary info ============================
+FAILED tests/test_calc.py::test_add - assert 3 == 4
+============================== 1 failed in 0.02s ===============================

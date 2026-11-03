@@ -1,7 +1,7 @@
 import type { Ticked } from '../checklist'
 import type { Named } from '../git'
 import type { Issue, IssueComment } from '../issues'
-import { fail, formatAge, jsonOption, parse, printJson, readInput, runHint } from '@kaynooo/cli-kit'
+import { fail, formatAge, jsonOption, parse, printJson, readInput, runHint, warn } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
 import { appendBoxes, boxes, numberedBody, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { latestClaim } from '../claims'
@@ -112,16 +112,26 @@ export async function issue(args: string[]): Promise<number> {
 const ISSUE_REFERENCE = /^#?\d+$/
 
 // The issue a writer targets and the arguments after it: the first one when it is an issue number, else the single issue this session holds.
-async function targetIssue(positionals: string[], repo: string | undefined, usage: string): Promise<{ number: number, rest: string[] }> {
+export async function chooseTarget(positionals: string[], held: () => Promise<number[]>, usage: string): Promise<{ number: number, rest: string[], defaulted: boolean }> {
   if (positionals[0] !== undefined && ISSUE_REFERENCE.test(positionals[0]))
-    return { number: issueNumber(positionals[0], usage), rest: positionals.slice(1) }
+    return { number: issueNumber(positionals[0], usage), rest: positionals.slice(1), defaulted: false }
 
-  const [only, ...others] = await heldIssues(repo)
+  const [only, ...others] = await held()
 
   if (only === undefined || others.length > 0)
-    fail(`${only === undefined ? 'an issue number is needed, this session holds none' : 'an issue number is needed, this session holds several'}\n\n${usage}`)
+    fail(`an issue number is needed, this session holds ${only === undefined ? 'none' : 'several'}\n\n${usage}`)
 
-  return { number: only, rest: positionals }
+  return { number: only, rest: positionals, defaulted: true }
+}
+
+// The default says which issue it took, as a number-like first argument is always read as the issue.
+async function targetIssue(positionals: string[], repo: string | undefined, usage: string): Promise<{ number: number, rest: string[] }> {
+  const { number, rest, defaulted } = await chooseTarget(positionals, async () => heldIssues(repo), usage)
+
+  if (defaulted)
+    warn(`using #${number}, the issue this session holds`)
+
+  return { number, rest }
 }
 
 const noteOptions = {
@@ -275,7 +285,7 @@ const tickUsage = `ft tick [<n>] <box>...
 Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box, then posts the -m or -F comment.
 With --closed, ticks instead every box opening with \`#<issue>\` whose issue is closed, as a release plan lists them.
 
-Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several.
+Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several, saying which issue it used. A first argument that is a number is always the issue, so boxes named by number need it.
 
 Exits 0 when it ticked the boxes, 1 when Forgejo refuses, 2 on a usage error or a box matching none or several.`
 
@@ -341,7 +351,7 @@ export async function tick(args: string[]): Promise<number> {
 const commentUsage = `ft comment [<n>] [text]
 
 Posts a comment on issue <n>: the text given, -F <file>, or stdin when neither is, so a heredoc needs no escaping.
-Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several.
+Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several, saying which issue it used. A first argument that is a number is always the issue, so boxes named by number need it.
 
 Exits 0 when it posted the comment, 1 when Forgejo refuses, 2 on a usage error.`
 

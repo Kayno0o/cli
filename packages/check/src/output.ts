@@ -235,6 +235,8 @@ const PYTEST_E_LINE = /^E {3}(.*)$/
 const PYTEST_BANNER = /^={3,} (.*?) ={3,}$/
 const PYTEST_FAILURES = new Set(['FAILURES', 'ERRORS'])
 const PYTEST_SUMMARY_LINE = /^(?:FAILED|ERROR) \S/
+const PYTEST_FRAME = /^in \S/
+const PYTEST_SECTION = /^_{3,} .* _{3,}$/
 const PYTEST_EXCEPTION_END = /[\s:]/
 const PYTEST_NOISE = /^(?:platform |rootdir: |collected |plugins: |configfile: |cachedir: |\S+\.pyi? [.FEsxXR]+ +\[ *\d+%\]$|\S+\.py:\d+: $)/
 const NOISE = /^(?:bun test v|Errors {2}Files$|Ran \d+ tests?|note: |\s*\d+ expect\(\) calls|\s+\d+\s+\S+:\d+$|\s*\d+ errors? and \d+ warnings? potentially fixable)/
@@ -458,6 +460,7 @@ const collectPytest: Collector = (lines, used) => {
   const end = lines.findIndex((line, index) => index > start && title(line) !== undefined && !PYTEST_FAILURES.has(title(line) ?? ''))
   const stop = end === -1 ? lines.length : end
   let message: string[] = []
+  let frame: { file: string, line: number } | undefined
 
   for (let index = start; index < stop; index++) {
     const line = lines[index] ?? ''
@@ -467,9 +470,18 @@ const collectPytest: Collector = (lines, used) => {
       message.push((failure[1] ?? '').trim())
     }
     else {
+      // A frame (`file:line: in func`, from --tb=short or a collection error) takes the message of the `E` lines under it.
+      if (frame !== undefined && message.length > 0) {
+        errors.push({ tool: 'pytest', ...frame, column: 0, severity: 'error', message: message[0] ?? '' })
+        frame = undefined
+      }
+
       const location = PYTEST_LOCATION.exec(line)
 
-      if (location !== null) {
+      if (location !== null && PYTEST_FRAME.test(location[3] ?? '')) {
+        frame = { file: location[1] ?? '', line: Number(location[2]) }
+      }
+      else if (location !== null) {
         const [exception = ''] = (location[3] ?? '').split(PYTEST_EXCEPTION_END)
         const first = message[0] ?? ''
         const text = first === '' || first.startsWith(exception) ? first || (location[3] ?? '') : `${location[3] ?? ''}: ${first}`
@@ -477,12 +489,18 @@ const collectPytest: Collector = (lines, used) => {
         errors.push({ tool: 'pytest', file: location[1] ?? '', line: Number(location[2]), column: 0, severity: 'error', message: text })
       }
 
+      if (PYTEST_SECTION.test(line))
+        frame = undefined
+
       if (line.trim() !== '')
         message = []
     }
 
     used.add(index)
   }
+
+  if (frame !== undefined && message.length > 0)
+    errors.push({ tool: 'pytest', ...frame, column: 0, severity: 'error', message: message[0] ?? '' })
 
   for (let index = stop; index < lines.length; index++) {
     if (PYTEST_SUMMARY_LINE.test(lines[index] ?? ''))

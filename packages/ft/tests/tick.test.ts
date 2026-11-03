@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { commentOn, fixed, tick } from '../src/commands/issue'
+import { chooseTarget, commentOn, fixed, tick } from '../src/commands/issue'
 import { withFakeTea } from './fake-tea'
 
 describe('tick --closed', () => {
@@ -25,6 +25,26 @@ describe('tick', () => {
     })
 
     expect(state.issues[0]?.body).toBe('- [ ] one\n- [x] two `$HOME`')
+  })
+})
+
+describe('chooseTarget', () => {
+  const held = (...numbers: number[]) => async () => numbers
+
+  test('takes a leading number as the issue and keeps the rest', async () => {
+    expect(await chooseTarget(['12', 'apples'], held(7), 'usage')).toEqual({ number: 12, rest: ['apples'], defaulted: false })
+    expect(await chooseTarget(['#12'], held(), 'usage')).toEqual({ number: 12, rest: [], defaulted: false })
+  })
+
+  test('takes the one held issue otherwise, with every argument kept', async () => {
+    expect(await chooseTarget(['one', 'two'], held(7), 'usage')).toEqual({ number: 7, rest: ['one', 'two'], defaulted: true })
+    expect(await chooseTarget([], held(7), 'usage')).toEqual({ number: 7, rest: [], defaulted: true })
+  })
+
+  test('refuses when the session holds none or several', async () => {
+    const runs = await Promise.allSettled([chooseTarget(['one'], held(), 'usage'), chooseTarget(['one'], held(7, 8), 'usage')])
+
+    expect(runs.map(run => run.status === 'rejected' ? String(run.reason) : '')).toEqual(['holds none', 'holds several'].map(text => expect.stringContaining(text) as string))
   })
 })
 
