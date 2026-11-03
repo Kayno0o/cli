@@ -4,6 +4,7 @@ import process from 'node:process'
 import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, replacesRows, UsageError, usageLine, wantsHelpJson } from './args'
 import { paint, takesControlCodes } from './style'
 import { closest } from './text'
+import { noteUsageError, recordUsage, usageEntry } from './usage'
 
 // A command's one-line summary, or a function reading it (a lazily loaded module) that only a listing of the command awaits, never a run.
 export type Summary = string | (() => Promise<string>)
@@ -42,6 +43,8 @@ export interface Cli {
   runBare?: boolean
   // Rewrites an error's message and cause before they print, for a CLI whose errors may quote what a log must not keep.
   redact?: (text: string) => string
+  // Set to false for a bin run on every tool call, which would fill the usage log (`guard hook`).
+  usage?: false
   // Command lines shown under `Examples:` in `<cli> --help`; a command's own go to `parse`.
   examples?: Example[]
   // What the CLI is reached for instead of, shown as `Instead of:` in `<cli> --help`.
@@ -213,6 +216,9 @@ function reportThrown(prefix: string, error: unknown, redact: (text: string) => 
   const help = error instanceof UsageError ? `run ${prefix} --help for its options` : undefined
   const named = error instanceof Error && !(error instanceof Exit) && error.name !== 'Error' ? `${error.name}: ${error.message}` : undefined
   const cause = error instanceof Error && error.cause instanceof Error ? redact(error.cause.message) : undefined
+
+  if (error instanceof UsageError)
+    noteUsageError(error.message)
 
   const report = json ? printJsonError : (message: string, hint?: string, causeText?: string) => printError(prefix, message, hint, causeText)
 
@@ -427,7 +433,34 @@ export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<nu
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(scopeOf(cli.commands, cli.extraCommands, cli.aliases), cli.defaultCommand, argv.slice(1)))
 
-  return dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
+  const code = await dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
+
+  if (cli.usage !== false)
+    recordUsage(usageEntry(cli.name, commandPath(scopeOf(cli.commands, cli.extraCommands, cli.aliases), argv), argv, code))
+
+  return code
+}
+
+// The command words the arguments start with, a group's subcommand included; lazy commands are not loaded for it.
+function commandPath(scope: Pick<Level, 'commands' | 'aliases'>, argv: readonly string[]): string | undefined {
+  const path: string[] = []
+  let level = scope
+
+  for (const word of argv.filter(each => !each.startsWith('-'))) {
+    const command = level.commands[level.aliases?.[word] ?? word]
+
+    if (command === undefined)
+      break
+
+    path.push(word)
+
+    if (!('commands' in command))
+      break
+
+    level = scopeOf(command.commands, command.extraCommands, command.aliases)
+  }
+
+  return path.length === 0 ? undefined : path.join(' ')
 }
 
 export interface Main {
@@ -435,6 +468,7 @@ export interface Main {
   version: string
   run: (args: string[]) => Promise<number>
   redact?: (text: string) => string
+  usage?: false
 }
 
 // Parses a module's own arguments through runMain's handling, for a script running at its top level: the parsed values come back, and the process ends itself on --help, --version, `__complete` or an error, with the exit code runMain gives.
@@ -454,7 +488,7 @@ export async function mainArgs<T>(main: Omit<Main, 'run'>, parseArgv: (args: str
 }
 
 // Runs a CLI that is a single command: `--version` or `-v` alone prints the version, an `Exit` or any error prints as `error: <name>: <message>`. Returns the exit code.
-export async function runMain({ name, version, run, redact }: Main, argv = process.argv.slice(2)): Promise<number> {
+export async function runMain({ name, version, run, redact, usage }: Main, argv = process.argv.slice(2)): Promise<number> {
   if (argv[0] === COMPLETE)
     return printCandidates(leafCandidates(run, argv.slice(1)))
 
@@ -464,10 +498,17 @@ export async function runMain({ name, version, run, redact }: Main, argv = proce
     return 0
   }
 
+  let code: number
+
   try {
-    return await run(argv)
+    code = await run(argv)
   }
   catch (error) {
-    return reportThrown(name, error, redact, wantsJson(argv))
+    code = reportThrown(name, error, redact, wantsJson(argv))
   }
+
+  if (usage !== false)
+    recordUsage(usageEntry(name, undefined, argv, code))
+
+  return code
 }

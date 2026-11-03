@@ -186,6 +186,7 @@ async function hookCommand(args: string[]): Promise<number> {
 process.exitCode = await runCli({
   name: 'guard',
   version,
+  usage: false,
   about: 'the safety rules a Claude Code Bash call is held to, each refusal naming the route',
   replaces: 'a hook script per rule, each wording its own refusal',
   examples: [['guard check "git push --force"', 'the rules a command breaks, with their routes'], ['guard path .env', 'whether a file tool may open a path']],

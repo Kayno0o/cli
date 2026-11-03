@@ -3,7 +3,7 @@
 import type { Host } from './checks'
 import type { Listed } from './list'
 import process from 'node:process'
-import { badUsage, jsonOption, paint, parse, printJson, runCli } from '@kaynooo/cli-kit'
+import { badUsage, duration, jsonOption, paint, parse, printJson, readUsage, runCli, summarizeUsage, table, usagePath } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { completionDir, completionFile, installCompletions, installedBins } from './completions'
 import { hostHere } from './host'
@@ -71,6 +71,41 @@ export async function completions(args: string[], host: Host = hostHere()): Prom
   return 0
 }
 
+const STATS_USAGE = `cli stats [--since 7d] [--json]: how often each bin ran, and the usage errors by the option it did not know
+
+Every bin records each run in ~/.local/state/kaynooo-cli/usage.jsonl (or $XDG_STATE_HOME): the bin, its command, the names of the flags it saw (never a value or an argument), the exit code and, on a usage error, the unknown option. Set KAYNOOO_CLI_NO_USAGE=1 to stop recording; \`guard\` never records.
+Exits 0 when it printed the summary, 2 on a usage error.`
+
+const STATS_OPTIONS = {
+  since: { type: 'string', description: 'only the runs this recent (7d, 12h)' },
+  json: jsonOption('{runs, bins: [{bin, runs, failed, usageErrors}], usageErrors: [{bin, command?, unknown, count}]}'),
+} as const
+
+export async function stats(args: string[], path = usagePath()): Promise<number> {
+  const { values } = parse(args, STATS_USAGE, STATS_OPTIONS, { positionals: [], examples: ['cli stats', ['cli stats --since 7d', 'the last week']] })
+  const window = values.since === undefined ? undefined : duration(values.since, 'since', 0, 'h')
+  const summary = summarizeUsage(await readUsage(path, window === undefined ? 0 : Date.now() - window))
+
+  if (values.json === true) {
+    printJson(summary)
+
+    return 0
+  }
+
+  if (summary.runs === 0) {
+    console.log('no run recorded')
+
+    return 0
+  }
+
+  console.log(`${summary.runs} runs\n\n${table(summary.bins.map(each => [each.bin, String(each.runs), `${each.failed} failed`, `${each.usageErrors} usage errors`]))}`)
+
+  if (summary.usageErrors.length > 0)
+    console.log(`\nunknown options\n${table(summary.usageErrors.map(each => [`${each.bin}${each.command === undefined ? '' : ` ${each.command}`}`, each.unknown, `${each.count}x`]))}`)
+
+  return 0
+}
+
 if (import.meta.main) {
   process.exitCode = await runCli({
     name: 'cli',
@@ -80,6 +115,7 @@ if (import.meta.main) {
     examples: ['cli list', ['cli list --json', 'with each bin\'s synopsis and examples']],
     commands: {
       list: { summary: 'every bin in one line: what it does and what it is reached for instead of', run: async args => list(args) },
+      stats: { summary: 'how often each bin ran and the options usage errors did not know', run: async args => stats(args) },
       completions: { summary: 'fish completions for every installed bin, printed or written to the folder fish reads', run: async args => completions(args) },
     },
   })
