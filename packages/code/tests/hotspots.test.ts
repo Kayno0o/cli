@@ -84,6 +84,10 @@ describe('hotspots', () => {
     expect(hotspots(['src', '--json', '--since', '2026-01-01']).out).toContain('src/plain.ts')
   })
 
+  test('takes -n as --limit', () => {
+    expect(hotspots(['--since', '2026-01-01', '-n', '1']).out).toContain('more, rerun with --full')
+  })
+
   test('exits 1 with no commit in the window and 2 on a bad count', () => {
     expect(hotspots(['--since', '2030-01-01']).code).toBe(1)
     expect(hotspots(['--limit', 'x']).code).toBe(2)

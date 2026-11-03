@@ -3,7 +3,7 @@ import { badUsage, wholeNumber } from './args'
 // The `--limit` and `--full` flags every listing words alike, `fallback` being the rows shown without either.
 export function limitOptions(fallback: number) {
   return {
-    limit: { type: 'string', description: `show at most this many rows, the rest counted (${fallback})` },
+    limit: { type: 'string', short: 'n', description: `show at most this many rows, the rest counted (${fallback})` },
     full: { type: 'boolean', description: 'show every row' },
   } as const
 }

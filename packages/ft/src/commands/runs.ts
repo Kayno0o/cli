@@ -13,8 +13,7 @@ Exits 0 when it listed them, 1 when Forgejo or git cannot be read, 2 on a usage 
 const DEFAULT_LIMIT = 10
 
 const options = {
-  limit: { ...limitOptions(DEFAULT_LIMIT).limit, short: 'n' },
-  full: limitOptions(DEFAULT_LIMIT).full,
+  ...limitOptions(DEFAULT_LIMIT),
   sha: { type: 'string', short: 's', description: 'only the runs of this commit' },
   workflow: { type: 'string', short: 'w', description: 'only this workflow file, e.g. test.yml' },
   json: jsonOption(),

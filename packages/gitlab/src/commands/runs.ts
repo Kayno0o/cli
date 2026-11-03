@@ -13,8 +13,7 @@ Exits 0 when it listed them, 1 when GitLab or git cannot be read, 2 on a usage e
 const DEFAULT_LIMIT = 10
 
 const options = {
-  limit: { ...limitOptions(DEFAULT_LIMIT).limit, short: 'n' },
-  full: limitOptions(DEFAULT_LIMIT).full,
+  ...limitOptions(DEFAULT_LIMIT),
   sha: { type: 'string', short: 's', description: 'only the pipelines of this commit' },
   branch: { type: 'string', short: 'b', description: 'only the pipelines of this branch or tag' },
   json: jsonOption(),

@@ -31,4 +31,8 @@ describe('limitOptions', () => {
   test('words the flags with the default', () => {
     expect(limitOptions(30).limit.description).toBe('show at most this many rows, the rest counted (30)')
   })
+
+  test('takes -n as a short for --limit', () => {
+    expect(limitOptions(30).limit.short).toBe('n')
+  })
 })
