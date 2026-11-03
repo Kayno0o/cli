@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
@@ -203,8 +203,8 @@ describe('gc', () => {
     rmSync(join(dir, '.git'), { recursive: true, force: true })
     file('a.ts')
 
-    // no repository above the temp folder may answer for it, wherever the runner keeps one
-    const result = run([process.execPath, GC, 'fix: a', '--', 'a.ts'], { GIT_CEILING_DIRECTORIES: dirname(dir) })
+    // pointing git at a missing directory keeps any repository above the temp folder from answering, wherever the runner keeps one and however its path is spelled
+    const result = run([process.execPath, GC, 'fix: a', '--', 'a.ts'], { GIT_DIR: join(dir, '.git') })
 
     expect({ code: result.code, err: result.err }).toMatchObject({ code: 2 })
   })
