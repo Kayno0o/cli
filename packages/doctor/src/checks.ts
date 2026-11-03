@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { completionDir, missingCompletions } from './completions'
 
 export interface Result {
   check: string
@@ -163,6 +164,20 @@ export function checkBun(host: Host): Result {
   return { check: 'bun', ok: true, detail: floors.length === 0 ? host.bunVersion : `${host.bunVersion}, the tools ask for ${[...new Set(floors)].join(' and ')}` }
 }
 
+// Fish completes every installed bin, when fish is installed.
+export function checkCompletions(host: Host): Result {
+  if (host.which('fish') === null)
+    return { check: 'completions', ok: true, detail: 'fish is not installed' }
+
+  const dir = completionDir(host.home)
+  const missing = missingCompletions(host, dir)
+
+  if (missing.length > 0)
+    return { check: 'completions', ok: false, detail: `no fish completion in ${dir} for ${missing.join(', ')}`, fix: 'cli completions fish --install' }
+
+  return { check: 'completions', ok: true, detail: dir }
+}
+
 export async function runChecks(host: Host): Promise<Result[]> {
   const entries = Object.entries(TOOLS)
   const tools: Result[] = []
@@ -170,5 +185,5 @@ export async function runChecks(host: Host): Promise<Result[]> {
   for (let at = 0; at < entries.length; at += INFO_AT_ONCE)
     tools.push(...await Promise.all(entries.slice(at, at + INFO_AT_ONCE).map(async ([name, bins]) => checkTool(host, name, bins))))
 
-  return [...tools, await checkTea(host), checkHooks(host), checkBun(host)]
+  return [...tools, await checkTea(host), checkHooks(host), checkBun(host), checkCompletions(host)]
 }

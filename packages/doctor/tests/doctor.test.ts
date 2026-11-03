@@ -141,6 +141,6 @@ describe('doctor', () => {
 
     const json = JSON.parse((await capture(async () => main(['--json'], fakeHost()))).out) as { check: string }[]
 
-    expect(json.map(each => each.check).slice(-3)).toEqual(['tea', 'hooks', 'bun'])
+    expect(json.map(each => each.check).slice(-4)).toEqual(['tea', 'hooks', 'bun', 'completions'])
   })
 })
