@@ -162,6 +162,13 @@ export function splitCommand(command: string): Piece[] {
       continue
     }
 
+    // A backquoted body is read whole, as its own separators split nothing of the command around it.
+    if (char === '`') {
+      i = closingBackquote(command, i)
+
+      continue
+    }
+
     if (char === '#' && startsComment(command, i)) {
       const newline = command.indexOf('\n', i)
       const end = newline === -1 ? command.length : newline

@@ -1,5 +1,5 @@
 {
   "packages/git/src/status.ts": { "copy": "git-facts/hooks/status.ts", "sha256": "58fb2a929ee08622f65849dc3f1945535779bb8fe72778b0a6a0cbbb4de407cb" },
-  "packages/kit/src/shell.ts": { "copy": "guards/hooks/shell.ts", "sha256": "62736f2227632dc719d8a6ef848e763f2caa6f840289b55150b0cf3cd5f346d1" },
+  "packages/kit/src/shell.ts": { "copy": "guards/hooks/shell.ts", "sha256": "b39b666032009449c5c888f761dfafa8f89367fb98073848d281d95d21df3292" },
   "packages/guard/src/bins.ts": { "copy": "cli/hooks/bins.ts", "sha256": "e3523206f01a388a7fdfedced62b4978fe5b36baf6c3f0886a11d067d80be8fc" }
 }
