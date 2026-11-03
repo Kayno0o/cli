@@ -1,0 +1,40 @@
+{
+  "name": "@kaynooo/cli-repos",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "repos: every git repository of the workspace that needs attention, with its dirty files, unpushed and unreleased commits.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/repos#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/repos"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "git",
+    "workspace",
+    "monorepo"
+  ],
+  "bin": {
+    "repos": "./dist/repos.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/repos.ts --target bun --outdir dist",
+    "repos": "$npm_execpath src/repos.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
