@@ -109,6 +109,21 @@ export async function issue(args: string[]): Promise<number> {
   return 0
 }
 
+const ISSUE_REFERENCE = /^#?\d+$/
+
+// The issue a writer targets and the arguments after it: the first one when it is an issue number, else the single issue this session holds.
+async function targetIssue(positionals: string[], repo: string | undefined, usage: string): Promise<{ number: number, rest: string[] }> {
+  if (positionals[0] !== undefined && ISSUE_REFERENCE.test(positionals[0]))
+    return { number: issueNumber(positionals[0], usage), rest: positionals.slice(1) }
+
+  const [only, ...others] = await heldIssues(repo)
+
+  if (only === undefined || others.length > 0)
+    fail(`${only === undefined ? 'an issue number is needed, this session holds none' : 'an issue number is needed, this session holds several'}\n\n${usage}`)
+
+  return { number: only, rest: positionals }
+}
+
 const noteOptions = {
   message: { type: 'string', short: 'm', description: 'comment this text on the issue' },
   file: { type: 'string', short: 'F', description: 'comment the text of this file, - for stdin' },
@@ -255,10 +270,12 @@ export async function edit(args: string[]): Promise<number> {
   return 0
 }
 
-const tickUsage = `ft tick <n> <box>...
+const tickUsage = `ft tick [<n>] <box>...
 
 Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box, then posts the -m or -F comment.
 With --closed, ticks instead every box opening with \`#<issue>\` whose issue is closed, as a release plan lists them.
+
+Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several.
 
 Exits 0 when it ticked the boxes, 1 when Forgejo refuses, 2 on a usage error or a box matching none or several.`
 
@@ -282,8 +299,7 @@ export async function tick(args: string[]): Promise<number> {
   const parsed = parse(args, tickUsage, tickOptions)
 
   const { values, positionals } = parsed
-  const number = issueNumber(positionals[0], tickUsage)
-  const picks = positionals.slice(1)
+  const { number, rest: picks } = await targetIssue(positionals, values.repo, tickUsage)
 
   if (values.closed === true && (picks.length > 0 || values.undo === true))
     fail(`--closed takes no boxes and no --undo\n\n${tickUsage}`)
@@ -322,9 +338,10 @@ export async function tick(args: string[]): Promise<number> {
   return 0
 }
 
-const commentUsage = `ft comment <n> [text]
+const commentUsage = `ft comment [<n>] [text]
 
 Posts a comment on issue <n>: the text given, -F <file>, or stdin when neither is, so a heredoc needs no escaping.
+Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several.
 
 Exits 0 when it posted the comment, 1 when Forgejo refuses, 2 on a usage error.`
 
@@ -337,8 +354,8 @@ export async function commentOn(args: string[]): Promise<number> {
   const parsed = parse(args, commentUsage, commentOptions)
 
   const { values, positionals } = parsed
-  const number = issueNumber(positionals[0], commentUsage)
-  const given = positionals.slice(1).join(' ') || undefined
+  const { number, rest } = await targetIssue(positionals, values.repo, commentUsage)
+  const given = rest.join(' ') || undefined
   const text = await noteText({ message: given, file: values.file ?? (given === undefined ? '-' : undefined) })
 
   if (text === undefined)
@@ -350,11 +367,11 @@ export async function commentOn(args: string[]): Promise<number> {
   return 0
 }
 
-const fixedUsage = `ft fixed <n> [commit]...
+const fixedUsage = `ft fixed [<n>] [commit]...
 
 Comments "Fixed in <sha>: <message>" on issue <n> and closes it, naming each commit given as "Fixed in <a>, <b> and <c>".
 Without a commit it takes those on origin's default branch whose message names #<n>, and says which, or HEAD when none does.
-The message defaults to the subject of the first commit. Every open issue listing \`- [ ] #<n>\` in its checklist gets that line ticked. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.
+Without <n> it takes the one open issue this session holds (\`ft take\`). The message defaults to the subject of the first commit. Every open issue listing \`- [ ] #<n>\` in its checklist gets that line ticked. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.
 
 Exits 0 when it closed the issue, 1 when the issue is already closed, has boxes left or Forgejo refuses, 2 on a usage error.`
 
@@ -417,8 +434,8 @@ export async function fixed(args: string[]): Promise<number> {
   const parsed = parse(args, fixedUsage, fixedOptions)
 
   const { values, positionals } = parsed
-  const number = issueNumber(positionals[0], fixedUsage)
-  const commits = await fixingCommits(number, positionals.slice(1))
+  const { number, rest } = await targetIssue(positionals, values.repo, fixedUsage)
+  const commits = await fixingCommits(number, rest)
   const found = await getIssue(number, values.repo)
 
   if (found.state === 'closed')

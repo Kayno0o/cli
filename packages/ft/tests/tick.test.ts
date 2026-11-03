@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { tick } from '../src/commands/issue'
+import { commentOn, fixed, tick } from '../src/commands/issue'
 import { withFakeTea } from './fake-tea'
 
 describe('tick --closed', () => {
@@ -25,5 +25,18 @@ describe('tick', () => {
     })
 
     expect(state.issues[0]?.body).toBe('- [ ] one\n- [x] two `$HOME`')
+  })
+})
+
+describe('a writer without an issue number', () => {
+  test('exits 2 when the session holds no issue', async () => {
+    await withFakeTea({ issues: [{ number: 5, title: 'x', body: '- [ ] one', state: 'open' }] }, async () => {
+      const runs = await Promise.allSettled([tick(['one']), commentOn(['hello']), fixed([])])
+
+      for (const run of runs) {
+        expect(run.status).toBe('rejected')
+        expect(String((run as PromiseRejectedResult).reason)).toContain('this session holds none')
+      }
+    })
   })
 })
