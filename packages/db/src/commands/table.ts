@@ -30,13 +30,11 @@ export function countSql(target: string, dialect: Dialect, where: string | undef
   return `select count(*) as count from ${quotedTable(target, dialect)}${whereOf(where)}`
 }
 
-const options = {
-  ...connectionOptions,
-  ...outputOptions,
-  where: { type: 'string', short: 'w', description: 'only the rows matching this SQL condition' },
-} as const
+const where = { type: 'string', short: 'w', description: 'only the rows matching this SQL condition' } as const
+const sampleOptions = { ...connectionOptions, ...outputOptions, where } as const
+const countOptions = { ...connectionOptions, json: outputOptions.json, where } as const
 
-async function run(args: string[], usage: string, build: (target: string, dialect: Dialect, values: { limit: number, where: string | undefined }) => string): Promise<number> {
+async function run(args: string[], usage: string, options: typeof sampleOptions | typeof countOptions, build: (target: string, dialect: Dialect, values: { limit: number, where: string | undefined }) => string): Promise<number> {
   const parsed = parse(args, usage, options)
 
   const { values, positionals } = parsed
@@ -47,22 +45,22 @@ async function run(args: string[], usage: string, build: (target: string, dialec
 
   const url = await connectionUrl(values)
   const dialect = dialectOf(new URL(url))
-  const limit = wholeNumber(values.limit, 'limit', SAMPLE_LIMIT, 0)
+  const limit = wholeNumber('limit' in values ? values.limit : undefined, 'limit', SAMPLE_LIMIT, 0)
   const sql = build(target, dialect, { limit, where: values.where })
   const verdict = inspect(sql, dialect)
 
   if (verdict.reasons.length > 0 || verdict.statements > 1)
     fail(`not a plain read: ${verdict.reasons.join('; ') || 'one statement at a time'}`)
 
-  console.log(render(shape(await readRows(url, sql, [], limit), limit, values.raw === true, false), values.json === true))
+  console.log(render(shape(await readRows(url, sql, [], limit), limit, 'raw' in values && values.raw === true, false), values.json === true))
 
   return 0
 }
 
 export async function sample(args: string[]): Promise<number> {
-  return run(args, `db sample <table> [-n ${SAMPLE_LIMIT}] [--where <sql>]\n\nPrints a few rows of a table (\`schema.table\` to pick a schema), sensitive columns masked as in a query.\n\n${HOSTS_NOTE}\n\n${EXITS}`, (target, dialect, { limit, where }) => sampleSql(target, dialect, limit, where))
+  return run(args, `db sample <table> [-n ${SAMPLE_LIMIT}] [--where <sql>]\n\nPrints a few rows of a table (\`schema.table\` to pick a schema, the name is case sensitive on Postgres), sensitive columns masked as in a query.\n\n${HOSTS_NOTE}\n\n${EXITS}`, sampleOptions, (target, dialect, { limit, where }) => sampleSql(target, dialect, limit, where))
 }
 
 export async function count(args: string[]): Promise<number> {
-  return run(args, `db count <table> [--where <sql>]\n\nPrints the number of rows of a table, or of those matching a condition.\n\n${HOSTS_NOTE}\n\n${EXITS}`, (target, dialect, { where }) => countSql(target, dialect, where))
+  return run(args, `db count <table> [--where <sql>]\n\nPrints the number of rows of a table (the name is case sensitive on Postgres), or of those matching a condition.\n\n${HOSTS_NOTE}\n\n${EXITS}`, countOptions, (target, dialect, { where }) => countSql(target, dialect, where))
 }
