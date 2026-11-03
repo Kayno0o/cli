@@ -9,6 +9,8 @@ export interface Unit {
 const CONTAINER = /^(?:(?:export|default|declare|abstract|final|readonly|public|pub|private|protected|internal|sealed|data|open)\s+)*(?:class|impl|trait|interface|namespace|module|object|mod|struct|enum)\b/
 const CLOSER = /^[\s)\]};]*$|^\s*(?:\/\/|\/\*|\*|#)/
 const LONGEST_NAME = 60
+// The markup and style blocks of a single-file component, which hold no declaration.
+const MARKUP_BLOCK = /^<(template|style)\b[\s\S]*?^<\/\1>/gm
 
 function indentOf(line: string): number {
   return line.length - line.trimStart().length
@@ -50,7 +52,7 @@ function unitsAt(lines: readonly string[], from: number, to: number, indent: num
 
 // The most complex declaration of a file, found by indentation alone so every language reads the same way; undefined when nothing is indented like a declaration.
 export function worstUnit(text: string): Unit | undefined {
-  const lines = text.split('\n')
+  const lines = text.replace(MARKUP_BLOCK, block => '\n'.repeat(block.split('\n').length - 1)).split('\n')
   const top = unitsAt(lines, 0, lines.length, 0)
 
   return top.reduce<Unit | undefined>((worst, unit) => worst === undefined || unit.complexity > worst.complexity ? unit : worst, undefined)

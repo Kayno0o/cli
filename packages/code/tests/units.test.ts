@@ -26,6 +26,12 @@ describe('worstUnit', () => {
     expect(worstUnit('function parse(object: X) {\n  if (a) {\n    return 1\n  }\n  return 2\n}\n')).toMatchObject({ name: 'function parse(object: X) {', complexity: 2 })
   })
 
+  test('skips the template and style of a single-file component, keeping the line numbers', () => {
+    const vue = '<script setup lang="ts">\nfunction go(a) {\n  if (a) return 1\n}\n</script>\n\n<template>\n  <div v-if="a && b" />\n  <p v-if="a || b" />\n</template>\n'
+
+    expect(worstUnit(vue)).toMatchObject({ name: 'function go(a) {', line: 2, complexity: 2 })
+  })
+
   test('has nothing to name in an empty file', () => {
     expect(worstUnit('')).toBeUndefined()
   })
