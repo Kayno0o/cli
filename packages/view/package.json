@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-view",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "view: markdown files and git diffs shown in the colours of the other @kaynooo CLIs, paged when long.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
