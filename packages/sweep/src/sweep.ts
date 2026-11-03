@@ -12,19 +12,20 @@ import { applyAll } from './apply'
 import { findCandidates, inspect, MAX_DEPTH } from './scan'
 import { parseSize } from './size'
 
-const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .nuxt, .next, .output, dist, build, .turbo, .svelte-kit, target beside a Cargo.toml) and the .worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit
+const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .nuxt, .next, .output, dist, build, .turbo, .svelte-kit, target beside a Cargo.toml) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit
 
-Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. The Docker usage comes after the list when docker is installed, left to dclean.
+Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. With --docker the Docker usage comes after the list, left to dclean.
 
 Exits 0 when it listed, or removed every entry it was allowed to, 1 when a removal failed or the confirm was declined, 2 on a usage error, a missing root, or --apply off a terminal without --yes.`
 
 const OPTIONS = {
-  'apply': { type: 'boolean', description: 'delete what is listed as removable, after the confirm' },
-  'yes': { type: 'boolean', short: 'y', description: 'with --apply, skip the confirm' },
-  'older': { type: 'string', description: 'only the entries whose repo last committed longer ago than this (30d, 12h)' },
-  'min': { type: 'string', description: 'only the entries of at least this size (500K, 10M, 1G)' },
-  'no-docker': { type: 'boolean', description: 'leave the docker system df line out' },
-  'json': jsonOption('{root, entries: [{path, kind, bytes, committedAt, action, reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
+  apply: { type: 'boolean', description: 'delete what is listed as removable, after the confirm' },
+  yes: { type: 'boolean', short: 'y', description: 'with --apply, skip the confirm' },
+  older: { type: 'string', description: 'only the entries whose repo last committed longer ago than this (30d, 12h)' },
+  min: { type: 'string', description: 'only the entries of at least this size (500K, 10M, 1G)' },
+  only: { type: 'string', description: 'worktrees or folders: leave the other kind out' },
+  docker: { type: 'boolean', description: 'add the docker system df output, which alone takes about ten seconds' },
+  json: jsonOption('{root, entries: [{path, kind, bytes, committedAt, action, reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
 } as const
 
 async function dockerUsage(): Promise<string | undefined> {
@@ -42,7 +43,7 @@ async function dockerUsage(): Promise<string | undefined> {
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], replaces: 'find ~/Workspace -name node_modules, du -sh and rm -rf by hand', examples: ['sweep', 'sweep ~/Workspace --older 30d --min 100M --apply'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], replaces: 'find ~/Workspace -name node_modules, du -sh and rm -rf by hand', examples: ['sweep', 'sweep ~/Workspace --older 30d --min 100M --apply', 'sweep --only worktrees --apply'] })
 
   if (positionals.length > 1)
     badUsage('give one root')
@@ -52,16 +53,21 @@ async function main(args: string[]): Promise<number> {
   if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`${root} is not a folder`)
 
+  if (values.only !== undefined && values.only !== 'worktrees' && values.only !== 'folders')
+    badUsage(`--only takes worktrees or folders, not ${values.only}`)
+
   const olderMs = values.older === undefined ? undefined : duration(values.older, 'older', 0)
   const minBytes = values.min === undefined ? 0 : parseSize(values.min, 'min')
   const now = Date.now()
-  const { entries: all, skipped } = await inspect(await findCandidates(root))
+  const found = await findCandidates(root)
+  const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => (candidate.kind === 'worktree') === (values.only === 'worktrees'))
+  const { entries: all, skipped } = await inspect({ candidates: wanted, skipped: found.skipped })
   const entries = all
     .filter(entry => entry.bytes >= minBytes && (olderMs === undefined || (entry.committedAt !== undefined && now - entry.committedAt >= olderMs)))
     .sort((a, b) => b.bytes - a.bytes || a.path.localeCompare(b.path))
   const removable = entries.filter(entry => entry.action === 'remove')
   const reclaimable = removable.reduce((sum, entry) => sum + entry.bytes, 0)
-  const docker = values['no-docker'] === true ? undefined : await dockerUsage()
+  const docker = values.docker === true ? await dockerUsage() : undefined
   const json = values.json === true
 
   if (values.apply === true && removable.length > 0 && values.yes !== true) {

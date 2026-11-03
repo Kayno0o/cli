@@ -20,7 +20,7 @@ function git(cwd: string, args: string[], env: Record<string, string> = {}): str
 }
 
 function sweep(args: string[], env: Record<string, string> = {}) {
-  const result = Bun.spawnSync([process.execPath, CLI, '--no-docker', ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, NO_COLOR: '1', ...env } })
+  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, NO_COLOR: '1', ...env } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -164,6 +164,23 @@ describe('sweep', () => {
     expect(done.removed).toEqual([{ path: join(a, '.worktrees', 'clean'), removed: true }])
     expect(existsSync(join(a, '.worktrees', 'clean'))).toBe(false)
     expect(git(a, ['branch', '--list', 'clean'])).toContain('clean')
+  })
+
+  test('--only picks one kind, and a .claude/worktrees entry is a worktree with its node_modules inside it', () => {
+    const root = temp('sweep-')
+    const a = repo(root, 'a')
+
+    git(a, ['worktree', 'add', '-q', '.claude/worktrees/agent', '-b', 'agent'])
+    fill(join(a, '.claude', 'worktrees', 'agent', 'node_modules'), 10)
+    fill(join(a, 'node_modules'), 10)
+
+    expect(listing([root]).entries.map(entry => `${entry.kind} ${entry.path}`).toSorted()).toEqual([`folder ${join(a, 'node_modules')}`, `worktree ${join(a, '.claude', 'worktrees', 'agent')}`])
+    expect(listing([root, '--only', 'worktrees']).entries.map(entry => entry.kind)).toEqual(['worktree'])
+    expect(listing([root, '--only', 'folders']).entries.map(entry => entry.kind)).toEqual(['folder'])
+    expect(sweep([root, '--only', 'both']).code).toBe(2)
+    expect(sweep([root, '--only', 'worktrees', '--apply', '--yes']).code).toBe(0)
+    expect(existsSync(join(a, '.claude', 'worktrees', 'agent'))).toBe(false)
+    expect(existsSync(join(a, 'node_modules', 'file'))).toBe(true)
   })
 
   test('never lists a dirty worktree or one with unpushed commits as removable, and --apply leaves them', () => {

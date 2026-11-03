@@ -57,7 +57,7 @@ export async function findCandidates(root: string): Promise<Found> {
       if (entry.name === '.git')
         continue
 
-      if (entry.name === '.worktrees') {
+      if (entry.name === '.worktrees' || (entry.name === 'worktrees' && basename(dir) === '.claude')) {
         if (!entry.isDirectory()) {
           found.skipped.push({ path, reason: 'symlink' })
 
@@ -198,8 +198,7 @@ async function judgeFolder(path: string): Promise<Verdict> {
 
 // A worktree is removable only when it is clean and every commit of its branch is on another branch or a remote.
 async function judgeWorktree(path: string): Promise<Verdict> {
-  const repo = dirname(dirname(path))
-  const located = await toplevelOf(repo)
+  const located = await toplevelOf(dirname(path))
 
   if (located === 'failed')
     return { skip: 'git failed' }
