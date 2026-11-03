@@ -12,7 +12,8 @@ bun install -g @kaynooo/cli-docker
 | --- | --- |
 | `dc <compose args>` | `docker compose` on the nearest compose file (or `.env` setting `COMPOSE_FILE`) up to the repository root |
 | `dc <project> <compose args>` | the same on a stack that came up from other files (`-f docker-compose.prod.yaml --env-file .env.prod`), found through the labels compose put on its containers |
-| `dx` | lists the services here with their state, ports and image (`--json` for the full record) |
+| `dx` | picks a service with fzf: enter opens its shell (or brings it up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops, ctrl-b rebuilds; the ones acted on last come first. Without fzf or a terminal it lists them with their state, ports and image (`--json` for the full record) |
+| `dx -` | the last action again |
 | `dx <service> [action]` | `shell` (the default, `up` for a stopped service), `logs`, `restart`, `up`, `stop` or `build` |
 
 `dc` takes no option of its own, every word reaches compose as typed. With several stacks that only have containers here and no name, it asks with `pick` when that is installed and a terminal is attached, and otherwise lists the projects. When it picked the stack through its containers it prints the compose command it stands for on stderr.

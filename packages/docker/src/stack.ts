@@ -239,3 +239,27 @@ export async function commandFor(service: Service, action: Action): Promise<stri
 export function defaultAction(service: Service): Action {
   return service.state === 'running' ? 'shell' : 'up'
 }
+
+// Up in green, down in red, never created dimmed, anything on its way, restarting or paused, in yellow.
+export function stateColor(state: string): 'green' | 'red' | 'dim' | 'yellow' {
+  if (state === 'running')
+    return 'green'
+
+  if (state === 'exited' || state === 'dead')
+    return 'red'
+
+  return state === 'none' ? 'dim' : 'yellow'
+}
+
+// A service looked up again from the folder, project and name the picker's preview was given.
+export async function serviceNamed(dir: string, name: string, project: string): Promise<Service | undefined> {
+  const [recorded] = project === '' ? [] : await labels(project)
+  const stack = recorded === undefined ? stackAt(dir) : labelledStack(dir, recorded)
+
+  return (await services(stack)).find(candidate => candidate.name === name)
+}
+
+// Compose's own words for its output of one service, the last lines of its logs.
+export async function logsOf(stack: Stack, name: string): Promise<string> {
+  return output(stack, ['logs', '--tail=30', '--no-log-prefix', name])
+}
