@@ -119,3 +119,25 @@ describe('long lines and many errors', () => {
     expect(output).toContain('failure number xxxxx')
   })
 })
+
+describe('fold by bytes and width', () => {
+  test('folds output with few lines but many bytes', () => {
+    const text = Array.from({ length: 120 }, (_, i) => `row${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))} ${'word '.repeat(30)}`).join('\n')
+
+    expect(shouldFold(`${text}\n`, 150)).toBe(true)
+    expect(Buffer.byteLength(folded(`${text}\n`))).toBeLessThan(Buffer.byteLength(text) * 0.7)
+  })
+
+  test('clips lines wider than 300 characters', () => {
+    const out = folded(`${'x'.repeat(1000)}\n`.repeat(1) + Array.from({ length: 200 }, (_, i) => `line ${'abc'.repeat(i % 7)}${String.fromCharCode(97 + (i % 26))}${i}z`).join('\n'))
+
+    expect(out).toContain('... [+700 chars]')
+  })
+
+  test('keeps at most 40 important lines of the middle', () => {
+    const text = Array.from({ length: 400 }, (_, i) => `step${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))} error in module ${'q'.repeat(i % 9)}`).join('\n')
+    const out = folded(`${text}\n`)
+
+    expect(out.split('\n').length).toBeLessThan(150)
+  })
+})

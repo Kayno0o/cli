@@ -11,13 +11,13 @@ out --stats --since 7d
 
 ## Behaviour
 
-- Output of at most 150 lines (`-n <lines>` changes it) passes through byte for byte, stdout and stderr to their own streams.
+- Output of at most 150 lines (`-n <lines>` changes it) and about 8 KB (55 bytes per allowed line) passes through byte for byte, stdout and stderr to their own streams.
 - Longer output is captured (both streams, in arrival order) and printed folded, after a header with the line count, how many lines were left out and the path of the full log.
 - Lines alike in shape (ANSI codes stripped; numbers, hashes, durations, percentages, paths and file names normalized) fold into one line with a count and the last line: `[1/300] compiling a.ts (x300, last: [300/300] compiling z.ts)`.
 - A block of 2 to 20 lines repeated back to back is shown once, followed by `(block repeated N times)`.
 - A line or block seen earlier is replaced by `(same as line N)`, N being a line of the full log, and the header lists the most repeated messages with their counts.
 - Carriage-return progress (spinners, bars) keeps only the final state of each line.
-- The head and tail are kept, and lines with `error`, `fail`, `warn`, `panic`, `exception`, `fatal` or a stack frame stay even in the folded middle.
+- The head and tail are kept, and lines with `error`, `fail`, `warn`, `panic`, `exception`, `fatal` or a stack frame stay even in the folded middle, the first 40 of them. Lines wider than 300 characters are cut in the folded output (the full log keeps them), and a few-lines output that is still heavy keeps a shorter head and tail.
 - The exit code is always the wrapped command's. Piped into with no command, `out` folds what it reads and exits 0, the writer's code left to `set -o pipefail`; only stdout is piped, so `2>&1` brings stderr along. A terminal or `/dev/null` on stdin with no command is a usage error.
 - The output is streamed to a full log as it arrives once it outgrows the 4 MiB held in memory (the first and last 2 MiB), otherwise the log is written when folding. Logs go to `$XDG_RUNTIME_DIR/kaynooo-cli/out` (`~/.cache/kaynooo-cli/out` without it), a folder only the user can enter, files at mode 0600, and logs older than a day are removed on the next run.
 - SIGINT, SIGTERM and SIGHUP go to the command's whole process group, and `out` exits with its code. A watch command (`--watch`, `tsc -w`, `just dev`) is never wrapped by the hook, as its output would sit buffered.

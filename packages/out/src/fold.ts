@@ -12,6 +12,10 @@ const HEAD = 40
 const TAIL = 60
 const MAX_BLOCK = 20
 const MIN_REFERENCED = 20
+// Output over this many bytes per allowed line folds even when it has few lines.
+const BYTES_PER_LINE = 55
+const MAX_WIDTH = 300
+const MAX_KEPT_IMPORTANT = 40
 const TOP_REPEATED = 3
 const LINE_BREAK = /\r\n|\r|\n/
 const LINE_END = /(?:\r\n|\r|\n)$/
@@ -45,7 +49,11 @@ export function lineCount(text: string): number {
 }
 
 export function shouldFold(text: string, threshold: number): boolean {
-  return lineCount(text) > threshold
+  return lineCount(text) > threshold || Buffer.byteLength(text) > threshold * BYTES_PER_LINE
+}
+
+function cutWide(line: string): string {
+  return line.length > MAX_WIDTH ? `${line.slice(0, MAX_WIDTH)}... [+${line.length - MAX_WIDTH} chars]` : line
 }
 
 // A carriage return rewrites the line, so only what follows the last one is left.
@@ -177,12 +185,19 @@ function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repe
 export function fold(text: string, { threshold, logPath }: FoldOptions): string {
   const lines = splitLines(text)
   const { entries, references, repeated } = toEntries(toUnits(lines, lines.map(line => shape(line))))
-  const head = Math.min(HEAD, Math.floor(threshold / 3))
-  const tail = Math.min(TAIL, Math.floor(threshold / 2))
+
+  for (const entry of entries)
+    entry.text = cutWide(entry.text)
+
+  const heavy = entries.reduce((sum, { text }) => sum + text.length + 1, 0) > threshold * BYTES_PER_LINE
+  const shrink = heavy && entries.length <= threshold ? 2 : 1
+  const head = Math.floor(Math.min(HEAD, Math.floor(threshold / 3)) / shrink)
+  const tail = Math.floor(Math.min(TAIL, Math.floor(threshold / 2)) / shrink)
   const out: string[] = []
   let dropped = 0
+  let kept = 0
 
-  if (entries.length <= threshold) {
+  if (entries.length <= threshold && !heavy) {
     out.push(...entries.map(({ text }) => text))
   }
   else {
@@ -205,7 +220,8 @@ export function fold(text: string, { threshold, logPath }: FoldOptions): string 
         continue
       }
 
-      if (entry.important) {
+      if (entry.important && kept < MAX_KEPT_IMPORTANT) {
+        kept++
         closeGap()
         out.push(entry.text)
 
