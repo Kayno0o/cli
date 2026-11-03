@@ -26,8 +26,8 @@ describe('ft', () => {
   })
 
   test('runs show and view as issue, and names the command a typo meant', () => {
-    expect(ft('show', '--help').out).toStartWith('Usage: ft issue <n>')
-    expect(ft('view', '--help').out).toStartWith('Usage: ft issue <n>')
+    expect(ft('show', '--help').out).toStartWith('Usage: ft issue [<n>...]')
+    expect(ft('view', '--help').out).toStartWith('Usage: ft issue [<n>...]')
 
     const typo = ft('tik', '12', '1')
 

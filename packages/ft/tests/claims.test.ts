@@ -4,7 +4,7 @@ import process from 'node:process'
 import { currentSession } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../src/claims'
-import { renderBoard, standing } from '../src/commands/board'
+import { heldBy, renderBoard, standing } from '../src/commands/board'
 
 const session = (name: string, pid = 1): Session => ({ name, pid, status: 'busy', cwd: '/w' })
 const at = (minute: number) => `2026-10-22T21:${String(minute).padStart(2, '0')}:00+02:00`
@@ -64,6 +64,16 @@ describe('standing', () => {
     expect(standing(undefined, []).state).toBe('available')
     expect(standing(claim, [session('kayjs-12')]).state).toBe('taken')
     expect(standing(claim, [session('kayjs-60')]).state).toBe('away')
+  })
+})
+
+describe('heldBy', () => {
+  test('keeps the issues taken by this session or its lanes, not another live session\'s', () => {
+    const mine = session('cli-25', 7)
+    const sessions = [mine, session('cli-26', 8)]
+    const row = (number: number, holder?: string) => ({ issue: { number } as Issue, standing: standing(holder === undefined ? undefined : { holder, at: at(1) }, sessions), comments: [] })
+
+    expect(heldBy([row(1, 'cli-25'), row(2, 'cli-26'), row(3), row(4, 'lane-25-4'), row(5, 'cli-9')], mine)).toEqual([1, 4])
   })
 })
 

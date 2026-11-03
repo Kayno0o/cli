@@ -85,6 +85,19 @@ export async function boardRows(issues: Issue[], sessions: Session[], repo: stri
   })
 }
 
+// The open issues whose standing claim answers to this session, its lanes included.
+export function heldBy(rows: BoardRow[], session: Session): number[] {
+  return rows.flatMap(({ issue, standing: now }) => now.state === 'taken' && now.session.pid === session.pid ? [issue.number] : [])
+}
+
+// The issues this session holds, none when it is not run from a Claude Code session.
+export async function heldIssues(repo: string | undefined): Promise<number[]> {
+  const sessions = await liveSessions()
+  const session = await currentSession(sessions)
+
+  return session === undefined ? [] : heldBy(await boardRows(await openIssues(undefined, repo), sessions, repo), session)
+}
+
 export function boardJson(rows: BoardRow[]) {
   return rows.map(({ issue, standing: { state, ...rest }, comments: own }) => {
     const list = boxes(issue.body)

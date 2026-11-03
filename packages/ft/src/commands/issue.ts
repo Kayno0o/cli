@@ -8,12 +8,14 @@ import { latestClaim } from '../claims'
 import { commitsNaming, defaultBranch, git, resolveCommit } from '../git'
 import { close, comment, commentsOf, createIssue, editBody, editIssue, getIssue, openIssues, sessionAuthor } from '../issues'
 import { findMilestone } from '../milestones'
+import { heldIssues } from './board'
 import { checkLabels } from './triage'
 
-const issueUsage = `ft issue <n>...
+const issueUsage = `ft issue [<n>...]
 
 Prints each issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it.
 With --body, prints only the raw description, to edit and give back to \`ft edit -F\`.
+With no number, prints the open issues this session holds (\`ft take\`), and exits 2 when it holds none.
 
 Exits 0 when it printed them, 1 when an issue cannot be read, 2 on a usage error.`
 
@@ -77,7 +79,8 @@ export async function issue(args: string[]): Promise<number> {
   const parsed = parse(args, issueUsage, issueOptions)
 
   const { values, positionals } = parsed
-  const numbers = issueNumbers(positionals, issueUsage)
+  const held = positionals.length === 0 ? await heldIssues(values.repo) : []
+  const numbers = held.length === 0 ? issueNumbers(positionals, issueUsage) : held
 
   if (values.body === true) {
     const bodies = await Promise.all(numbers.map(async number => (await getIssue(number, values.repo)).body.replaceAll('\r\n', '\n')))
