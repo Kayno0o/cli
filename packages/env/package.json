@@ -15,14 +15,16 @@
   "keywords": ["env", "dotenv", "secrets", "redact", "mask"],
   "exports": {
     "./dotenv": "./src/dotenv.ts",
+    "./files": "./src/files.ts",
     "./guard": "./src/guard.ts",
-    "./mask": "./src/mask.ts"
+    "./mask": "./src/mask.ts",
+    "./redactor": "./src/redactor.ts"
   },
   "bin": {
     "ev": "./dist/ev.js",
     "redact": "./dist/redact.js"
   },
-  "files": ["dist", "src/dotenv.ts"],
+  "files": ["dist", "src"],
   "engines": {
     "bun": ">=1.4.3"
   },

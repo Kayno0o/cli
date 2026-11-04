@@ -1,6 +1,6 @@
 import type { Command, Entry } from '../src/sf'
 import { describe, expect, test } from 'bun:test'
-import { answered, argumentsOf, commandFor, key, marked, phpService, signature } from '../src/sf'
+import { answered, argumentsOf, commandFor, key, live, marked, phpService, signature } from '../src/sf'
 
 function command(name: string, args: Record<string, { is_required: boolean, is_array?: boolean }> | [] = []): Command {
   return {
@@ -17,6 +17,14 @@ function command(name: string, args: Record<string, { is_required: boolean, is_a
 }
 
 const entry = (found: Command, dir = '.'): Entry => ({ app: { dir, run: dir === '.' ? ['php', 'bin/console'] : ['env', '-C', dir, 'php', 'bin/console'], list: { argv: [], cwd: dir, env: {} } }, command: found })
+
+describe('live', () => {
+  test('falls back to an empty list when the output is not JSON, as a PHP deprecation leaves it', async () => {
+    const app = { dir: '/nonexistent-sf-test', run: [], list: { argv: ['sh', '-c', 'echo "Deprecated: x"; echo "$@" >/dev/null', 'sh'], cwd: '/', env: {} } }
+
+    expect(await live(app)).toEqual([])
+  })
+})
 
 describe('phpService', () => {
   test('prefers php itself, then any service naming php', () => {

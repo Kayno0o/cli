@@ -109,14 +109,21 @@ function fromCache(dir: string): Command[] | undefined {
   }
 }
 
-async function live(app: Console): Promise<Command[]> {
+export async function live(app: Console): Promise<Command[]> {
   const proc = Bun.spawn([...app.list.argv, 'list', '--format=json'], { cwd: app.list.cwd, env: app.list.env, stdout: 'pipe', stderr: 'pipe' })
   const text = await new Response(proc.stdout).text()
 
   if ((await proc.exited) !== 0)
     return fromCache(app.dir) ?? []
 
-  const commands = (JSON.parse(text) as { commands: Command[] }).commands.filter(command => !command.hidden)
+  let commands: Command[]
+
+  try {
+    commands = (JSON.parse(text) as { commands: Command[] }).commands.filter(command => !command.hidden)
+  }
+  catch {
+    return fromCache(app.dir) ?? []
+  }
 
   mkdirSync(dirname(cached(app.dir)), { recursive: true })
   writeFileSync(cached(app.dir), JSON.stringify(commands))

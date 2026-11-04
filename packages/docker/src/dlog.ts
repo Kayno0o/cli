@@ -1,7 +1,9 @@
+import type { KnownSecrets } from '@kaynooo/cli-env/mask'
 import type { Container, Service } from './stack'
 import process from 'node:process'
+import { loadKnown } from '@kaynooo/cli-env/files'
 import { maskLine, PEM_BEGIN, PEM_END } from '@kaynooo/cli-env/mask'
-import { fail, jsonOption, paint, parse, printJson, stripAnsi } from '@kaynooo/cli-kit'
+import { fail, jsonOption, paint, parse, printJson, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
 import { allServices, attempt, containers, key, stateColor } from './stack'
 
 const usage = `dlog [service...]
@@ -42,7 +44,7 @@ function clip(line: string): string {
 }
 
 /** The last `limit` distinct error lines of a log, oldest first, each as its latest occurrence with how often its message came up, secrets masked. */
-export function errorLines(log: string, limit: number): ErrorLine[] {
+export function errorLines(log: string, limit: number, known?: KnownSecrets): ErrorLine[] {
   const seen = new Map<string, ErrorLine>()
 
   for (const raw of log.split('\n')) {
@@ -56,7 +58,7 @@ export function errorLines(log: string, limit: number): ErrorLine[] {
 
     // Re-inserted so the Map's order is the order of the latest occurrences.
     seen.delete(shared)
-    seen.set(shared, { line: clip(maskLine(line)), count: (before?.count ?? 0) + 1 })
+    seen.set(shared, { line: clip(maskLine(line, known)), count: (before?.count ?? 0) + 1 })
   }
 
   return [...seen.values()].slice(-limit)
@@ -138,10 +140,8 @@ function show(reports: Report[]): void {
 
 export async function dlog(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options, { replaces: 'docker compose ps, logs --tail | grep -i error and docker inspect for health', examples: ['dlog', ['dlog php db', 'only those services'], ['dlog -n 10 --since 15m', 'ten error lines of the last quarter of an hour'], ['dlog --json', 'the report as JSON']] })
-  const limit = Number(parsed.values.lines)
-
-  if (!Number.isInteger(limit) || limit < 1)
-    fail('--lines takes a positive whole number')
+  const limit = wholeNumber(parsed.values.lines, 'lines', 5)
+  const known = await loadKnown()
 
   const services = await allServices()
 
@@ -159,8 +159,8 @@ export async function dlog(args: string[]): Promise<number> {
     const { log, container, unreadable } = await read(service, parsed.values.since)
     const { health, fine } = healthOf(service.state, container)
     const lines = withoutKeys(log.split('\n'))
-    const errors = errorLines(lines.join('\n'), limit)
-    const tail = parsed.values.all === true && errors.length === 0 ? lines.map(text => clip(maskLine(stripAnsi(text).trim()))).filter(Boolean).slice(-limit) : []
+    const errors = errorLines(lines.join('\n'), limit, known)
+    const tail = parsed.values.all === true && errors.length === 0 ? lines.map(text => clip(maskLine(stripAnsi(text).trim(), known))).filter(Boolean).slice(-limit) : []
 
     return { key: key(service), state: service.state, health, status: service.status, errors, tail, unreadable, fine }
   }))

@@ -1,5 +1,7 @@
 import type { Action, Service } from './stack'
 import process from 'node:process'
+import { loadKnown } from '@kaynooo/cli-env/files'
+import { Redactor } from '@kaynooo/cli-env/redactor'
 import { closest, fail, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
 import { byRecency, record, runs } from '@kaynooo/cli-kit/fzf'
 import { KEY_LABELS, KEYS, pickService } from './picker'
@@ -88,6 +90,24 @@ async function hidden(flag: string, rest: string[], services: Service[]): Promis
   return undefined
 }
 
+/** The logs command with its output piped through `redact` when that is installed, for the picker that runs the words itself. */
+export function maskedLogs(command: string[]): string[] {
+  return Bun.which('redact') === null ? command : ['sh', '-c', '"$@" | redact', 'sh', ...command]
+}
+
+async function followMasked(command: string[]): Promise<number> {
+  const redactor = new Redactor(await loadKnown())
+  const decoder = new TextDecoder()
+  const proc = Bun.spawn(command, { stdio: ['inherit', 'pipe', 'inherit'] })
+
+  for await (const chunk of proc.stdout)
+    process.stdout.write(redactor.push(decoder.decode(chunk, { stream: true })))
+
+  process.stdout.write(redactor.end())
+
+  return proc.exited
+}
+
 export async function dx(args: string[]): Promise<number> {
   const [flag = ''] = args
 
@@ -163,10 +183,10 @@ export async function dx(args: string[]): Promise<number> {
   record('dx', { id: key(service), args: [chosen] })
 
   if (emit) {
-    console.log(['run', action === undefined ? key(service) : `${key(service)} ${action}`, '', ...command.map(word => `=${word}`)].join('\n'))
+    console.log(['run', action === undefined ? key(service) : `${key(service)} ${action}`, '', ...(chosen === 'logs' ? maskedLogs(command) : command).map(word => `=${word}`)].join('\n'))
 
     return 0
   }
 
-  return Bun.spawn(command, { stdio: ['inherit', 'inherit', 'inherit'] }).exited
+  return chosen === 'logs' ? followMasked(command) : Bun.spawn(command, { stdio: ['inherit', 'inherit', 'inherit'] }).exited
 }

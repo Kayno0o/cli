@@ -1,5 +1,6 @@
+import { knownSecrets } from '@kaynooo/cli-env/mask'
 import { describe, expect, test } from 'bun:test'
-import { errorLines, healthOf, withoutKeys } from '../src/dlog'
+import { dlog, errorLines, healthOf, withoutKeys } from '../src/dlog'
 
 describe('errorLines', () => {
   test('keeps the error lines only, a repeated message once with its count and its latest wording', () => {
@@ -28,6 +29,17 @@ describe('errorLines', () => {
     const [found] = errorLines('error: login failed with password=hunter2secret', 5)
 
     expect(found?.line).not.toContain('hunter2secret')
+  })
+
+  test('masks a bare value of the folder\'s .env, which no pattern finds', () => {
+    const known = knownSecrets([['DB_PASSWORD', 'zq81vkw0pLm']])
+    const [found] = errorLines('error: auth failed for zq81vkw0pLm', 5, known)
+
+    expect(found?.line).not.toContain('zq81vkw0pLm')
+  })
+
+  test.each(['0x10', '1e1', '0'])('refuses --lines %s, which is not a plain whole number from 1', (lines) => {
+    expect(dlog(['--lines', lines])).rejects.toThrow('--lines takes a whole number from 1')
   })
 
   test('strips colour codes and cuts a very long line', () => {

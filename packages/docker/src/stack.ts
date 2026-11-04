@@ -1,5 +1,8 @@
+import type { KnownSecrets } from '@kaynooo/cli-env/mask'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
+import { loadKnown } from '@kaynooo/cli-env/files'
+import { Redactor } from '@kaynooo/cli-env/redactor'
 
 /** How to reach one compose project: the command a user runs, and the one this package lists it with. */
 export interface Stack {
@@ -273,7 +276,14 @@ export async function serviceNamed(dir: string, name: string, project: string): 
   return (await services(stack)).find(candidate => candidate.name === name)
 }
 
-// Compose's own words for its output of one service, the last lines of its logs.
+/** A whole log with its secrets masked as `redact` does. */
+export function maskLog(text: string, known?: KnownSecrets): string {
+  const redactor = new Redactor(known)
+
+  return redactor.push(text) + redactor.end()
+}
+
+// Compose's own words for its output of one service, the last lines of its logs, secrets masked.
 export async function logsOf(stack: Stack, name: string): Promise<string> {
-  return output(stack, ['logs', '--tail=30', '--no-log-prefix', name])
+  return maskLog(await output(stack, ['logs', '--tail=30', '--no-log-prefix', name]), await loadKnown())
 }

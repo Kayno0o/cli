@@ -2,12 +2,23 @@ import type { Service, Stack } from '../src/stack'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { knownSecrets } from '@kaynooo/cli-env/mask'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { target } from '../src/dc'
-import { commandFor, containers, holdsStack, key, labelled, labelledStack } from '../src/stack'
+import { commandFor, containers, holdsStack, key, labelled, labelledStack, maskLog } from '../src/stack'
 
 const stack = (dir: string): Stack => ({ dir, run: dir === '.' ? ['docker', 'compose'] : ['env', '-C', dir, 'docker', 'compose'], list: { argv: [], cwd: dir, env: {} } })
 const service = (name: string, dir = '.'): Service => ({ stack: stack(dir), project: 'app', name, state: 'running', status: '', ports: '', image: '' })
+
+describe('maskLog', () => {
+  test('masks the .env values and the patterns of a whole log', () => {
+    const text = maskLog('boot ok\nlogin zq81vkw0pLm failed\npassword=hunter2secret\n', knownSecrets([['DB_PASSWORD', 'zq81vkw0pLm']]))
+
+    expect(text).toContain('boot ok')
+    expect(text).not.toContain('zq81vkw0pLm')
+    expect(text).not.toContain('hunter2secret')
+  })
+})
 
 describe('containers', () => {
   test('reads one container per line, and the JSON array older versions printed', () => {
