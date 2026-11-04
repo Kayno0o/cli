@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { helpText, parse } from '../src/args'
+import { bar } from '../src/chart'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
 import { badge, header, link, marked, paint, role, statusOf } from '../src/style'
@@ -120,5 +121,43 @@ describe('table header rule', () => {
 
   it('draws nothing more off a terminal', () => {
     expect(table(rows, { header: true, stream: {} })).toBe('bin    runs\ncheck  12')
+  })
+})
+
+describe('a theme in force', () => {
+  it('redraws marks, badges, bars and roles from KIT_THEME', () => {
+    const before = process.env.KIT_THEME
+
+    process.env.KIT_THEME = 'ascii'
+
+    try {
+      expect(badge('success', TERMINAL, {})).toBe('\x1B[32m+ success\x1B[39m')
+      expect(marked('problem', 'broke', TERMINAL, undefined, {})).toBe('\x1B[1m\x1B[31mx\x1B[39m\x1B[22m broke')
+      expect(bar(0.5, { stream: {}, env: {}, width: 4 })).toBe('##--')
+    }
+    finally {
+      if (before === undefined)
+        delete process.env.KIT_THEME
+      else
+        process.env.KIT_THEME = before
+    }
+
+    expect(badge('success', TERMINAL, {})).toBe('\x1B[32m✓ success\x1B[39m')
+  })
+
+  it('draws a bin with the colour the theme gives it', () => {
+    const before = process.env.KIT_THEME
+
+    process.env.KIT_THEME = 'mono'
+
+    try {
+      expect(header('ft', undefined, TERMINAL, {})).toBe('\x1B[1m\x1B[1mft\x1B[22m\x1B[22m')
+    }
+    finally {
+      if (before === undefined)
+        delete process.env.KIT_THEME
+      else
+        process.env.KIT_THEME = before
+    }
   })
 })

@@ -1,17 +1,14 @@
+import type { Mark, Role, Status } from './theme'
 import process from 'node:process'
 import { createColors } from '@kaynooo/utils/tools/colors'
+import { activeTheme, tinted } from './theme'
 
 export type Colors = ReturnType<typeof createColors>
 
-export type Mark = 'ok' | 'warn' | 'problem' | 'note'
+export type { Mark, Role, Status }
 
-// The symbol each mark draws on a terminal, and the word it prints as anywhere else, so a log stays greppable.
-const MARKS: Record<Mark, { symbol: string, word: string, paint: (colors: Colors) => (text: string) => string }> = {
-  ok: { symbol: '✓', word: 'ok:', paint: colors => colors.green },
-  warn: { symbol: '▲', word: 'warning:', paint: colors => colors.yellow },
-  problem: { symbol: '✗', word: 'error:', paint: colors => colors.red },
-  note: { symbol: '›', word: 'note:', paint: colors => colors.dim },
-}
+// The word each mark prints as off a terminal, so a log stays greppable whatever the theme draws on one.
+const MARK_WORDS: Record<Mark, string> = { ok: 'ok:', warn: 'warning:', problem: 'error:', note: 'note:' }
 
 // A terminal that draws in place: not a log or a pipe, and not asked for plain output by `NO_COLOR` or a dumb `TERM`.
 export function takesControlCodes(stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): boolean {
@@ -26,8 +23,8 @@ export function paint(stream: { isTTY?: boolean }, env: Record<string, string | 
 // `✓ text` on a terminal, `ok: text` elsewhere; `detail` follows dimmed.
 export function marked(mark: Mark, text: string, stream: { isTTY?: boolean }, detail?: string, env: Record<string, string | undefined> = process.env): string {
   const colors = paint(stream, env)
-  const { symbol, word, paint: tint } = MARKS[mark]
-  const head = takesControlCodes(stream, env) ? tint(colors.bold)(symbol) : word
+  const { theme } = activeTheme()
+  const head = takesControlCodes(stream, env) ? tinted(colors.bold, theme.colors[mark])(theme.glyphs[mark]) : MARK_WORDS[mark]
 
   return `${head} ${text}${detail === undefined ? '' : ` ${colors.dim(detail)}`}`
 }
@@ -48,34 +45,21 @@ export function problem(text: string, detail?: string): void {
   console.error(marked('problem', text, process.stderr, detail))
 }
 
-export type Role = 'accent' | 'id' | 'path' | 'label' | 'value'
-
-// The tint each kind of data is drawn in, so every CLI colours the same things the same way.
-const ROLES: Record<Role, (colors: Colors) => (text: string) => string> = {
-  accent: colors => colors.cyan,
-  id: colors => colors.yellow,
-  path: colors => colors.blue,
-  label: colors => colors.dim,
-  value: colors => colors.bold,
-}
-
 // `role('id', process.stdout)('#49')`: plain text on a stream that takes no control codes.
 export function role(name: Role, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): (text: string) => string {
-  return ROLES[name](paint(stream, env))
+  return tinted(paint(stream, env), activeTheme().theme.colors[name])
 }
 
-export type Status = 'passed' | 'failed' | 'running' | 'queued' | 'skipped'
-
-// What each status draws, and the words CI services report it by.
-const STATUSES: Record<Status, { symbol: string, words: string[], paint: (colors: Colors) => (text: string) => string }> = {
-  passed: { symbol: '✓', words: ['passed', 'success', 'succeeded', 'ok'], paint: colors => colors.green },
-  failed: { symbol: '✗', words: ['failed', 'failure', 'error', 'errored'], paint: colors => colors.red },
-  running: { symbol: '●', words: ['running', 'in_progress', 'started'], paint: colors => colors.cyan },
-  queued: { symbol: '○', words: ['queued', 'waiting', 'pending', 'created', 'blocked', 'scheduled'], paint: colors => colors.yellow },
-  skipped: { symbol: '-', words: ['skipped', 'cancelled', 'canceled', 'manual'], paint: colors => colors.dim },
+// The words CI services report each status by.
+const STATUS_WORDS: Record<Status, string[]> = {
+  passed: ['passed', 'success', 'succeeded', 'ok'],
+  failed: ['failed', 'failure', 'error', 'errored'],
+  running: ['running', 'in_progress', 'started'],
+  queued: ['queued', 'waiting', 'pending', 'created', 'blocked', 'scheduled'],
+  skipped: ['skipped', 'cancelled', 'canceled', 'manual'],
 }
 
-const STATUS_OF = new Map(Object.entries(STATUSES).flatMap(([status, { words }]) => words.map(word => [word, status as Status])))
+const STATUS_OF = new Map(Object.entries(STATUS_WORDS).flatMap(([status, words]) => words.map(word => [word, status as Status])))
 
 // The status a word such as `success` or `in_progress` stands for, undefined for one it does not know.
 export function statusOf(word: string): Status | undefined {
@@ -89,29 +73,20 @@ export function badge(word: string, stream: { isTTY?: boolean }, env: Record<str
   if (status === undefined || !takesControlCodes(stream, env))
     return word
 
-  const { symbol, paint: tint } = STATUSES[status]
+  const { theme } = activeTheme()
 
-  return tint(paint(stream, env))(`${symbol} ${word}`)
+  return tinted(paint(stream, env), theme.colors[status])(`${theme.glyphs[status]} ${word}`)
 }
 
-// The accents a bin can take, picked by its name so each keeps one colour everywhere it appears.
-const BIN_ACCENTS: ((colors: Colors) => (text: string) => string)[] = [
-  colors => colors.cyan,
-  colors => colors.magenta,
-  colors => colors.green,
-  colors => colors.blue,
-  colors => colors.yellow,
-  colors => colors.redBright,
-]
-
-// `check › cli · 4 steps` with the bin in its own accent, bold, and the context dimmed; empty off a terminal, where a log has no use for it.
+// `check › cli · 4 steps` with the bin in its own accent, bold, and the context dimmed, the accent the theme gives the bin or one of its accents picked by the bin's name so each keeps one colour everywhere; empty off a terminal, where a log has no use for it.
 export function header(bin: string, context: string | undefined, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
   if (!takesControlCodes(stream, env))
     return ''
 
   const colors = paint(stream, env)
   const hash = [...bin].reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  const accent = BIN_ACCENTS[hash % BIN_ACCENTS.length]!(colors.bold)
+  const { theme } = activeTheme()
+  const accent = tinted(colors.bold, theme.bins[bin] ?? theme.accents[hash % theme.accents.length]!)
 
   return `${accent(bin)}${context === undefined ? '' : colors.dim(` › ${context}`)}`
 }

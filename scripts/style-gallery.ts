@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { badge, bar, barChart, header, keyValue, link, marked, role, sparkline, table, textWidth, tree } from '../packages/kit/src'
+import { activeTheme, badge, bar, barChart, header, keyValue, link, marked, role, sparkline, table, textWidth, tree } from '../packages/kit/src'
 import { task } from '../packages/kit/src/progress'
 
 // Every look the kit draws, on one screen, to compare before and after a style change.
@@ -95,6 +95,11 @@ function section(title: string, body: string): void {
   console.log(`\n${role('label', out)(`-- ${title}`)}\n${body}`)
 }
 
+section('theme', (() => {
+  const { preset, sources } = activeTheme()
+
+  return keyValue([['preset', preset], ['files', sources.length === 0 ? 'none' : sources.join(', ')]], { stream: out })
+})())
 section('header', [header('check', 'cli · 4 steps', out), header('ft', undefined, out), header('pick', 'kit', out), header('db', 'local', out)].join('\n'))
 section('marks', ['ok', 'warn', 'problem', 'note'].map(mark => marked(mark as 'ok', `a ${mark} line`, out, 'detail')).join('\n'))
 section('roles', (['accent', 'id', 'path', 'label', 'value'] as const).map(name => role(name, out)(name)).join('  '))
