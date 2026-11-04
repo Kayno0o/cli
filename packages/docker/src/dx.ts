@@ -90,12 +90,15 @@ async function hidden(flag: string, rest: string[], services: Service[]): Promis
   return undefined
 }
 
-/** The logs command with its output piped through `redact` when that is installed, for the picker that runs the words itself. */
-export function maskedLogs(command: string[]): string[] {
-  return Bun.which('redact') === null ? command : ['sh', '-c', '"$@" | redact', 'sh', ...command]
+/** The logs command with its output piped through `redact`, for the picker that runs the words itself; refused when `redact` is missing rather than leaking the logs. */
+export function maskedLogs(command: string[], redactPath: string | null = Bun.which('redact')): string[] {
+  if (redactPath === null)
+    fail('redact is not installed, so the logs would not be masked', 1)
+
+  return ['sh', '-c', '"$@" | redact', 'sh', ...command]
 }
 
-async function followMasked(command: string[]): Promise<number> {
+export async function followMasked(command: string[]): Promise<number> {
   const redactor = new Redactor(await loadKnown())
   const decoder = new TextDecoder()
   const proc = Bun.spawn(command, { stdio: ['inherit', 'pipe', 'inherit'] })
