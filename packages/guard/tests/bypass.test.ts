@@ -531,3 +531,17 @@ describe('the plugin hooks', () => {
     }
   })
 })
+
+describe('spellings that must be refused like their plain form', () => {
+  const pinned = { '/work/repo/bun.lock': '' }
+
+  cases('commit', ['git commit -m"fix x y"', 'git commit -qm"wip is here"', 'git commit -F /dev/stdin <<EOF\nwip\nEOF', 'git commit -F /dev/fd/0 <<EOF\nwip\nEOF'], ['git commit -F /dev/stdin <<EOF\nfeat: x\nEOF'])
+  cases('git', ['git commit -am"feat: x y"', 'git commit -a -m"feat: x"', 'git commit -am "feat: x"'], [])
+  cases('git', ['fish -c \'git push\'', 'csh -c "git push"', 'tcsh -c "git push"', 'nu -c "git push"', 'pwsh -c "git push"', 'pwsh -Command "git push"'], ['fish -c \'git status\''])
+  cases('git', ['echo $((1<<2))\ngit push', 'echo $((1<<2)) && git push'], [])
+  cases('git', ['f() { git stash; }; f', 'function f { git stash; }; f', 'function f\n{\n git stash\n}\nf', 'f () ( git stash )'], ['f() { git status; }; f'])
+  cases('git', ['watch git stash', 'watch -n 5 git stash', 'flock /tmp/l git stash', 'flock -w 5 /tmp/l git stash', 'parallel git stash', 'unbuffer git stash', 'systemd-run --user git stash', 'systemd-run -p Nice=5 git stash'], ['watch git status', 'flock /tmp/l git log'])
+  cases('remote', ['git clone user@host:repo', 'git clone git@example.com:a/b.git', 'git fetch user@host:repo', 'git ls-remote example.com:a/b'], ['git clone ./repo', 'git clone /srv/repo', 'git clone https://example.com/a/b.git'])
+  cases('package-manager', ['bash -c \'npm i x\'', 'echo $(npm i x)', 'echo x | xargs npm i', 'fish -c "npm i x"', 'if true; then npm i x; fi'], ['bash -c \'bun add x\''], pinned)
+  cases('env', ['cat .env{,}', 'cat .env{,.bak}', 'cat {.env,x}'], ['cat src{,.bak}'])
+})

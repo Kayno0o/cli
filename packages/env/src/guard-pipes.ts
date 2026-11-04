@@ -32,8 +32,8 @@ function parallelRunner(args: readonly string[]): string {
 export function runnerReadsListedEnv(pieces: readonly Piece[], index: number, variables: ReadonlyMap<string, string[]>): boolean {
   const command = pieces[index]?.command ?? ''
   const { program, args, isWrapped } = parseCommand(command)
-  // parseCommand sees through `xargs` to the command it runs, not through `parallel`
-  const isXargs = isWrapped && tokenize(command).includes('xargs')
+  // parseCommand sees through `xargs` and `parallel` to the command they run
+  const isXargs = isWrapped && tokenize(command).some(word => word === 'xargs' || word === 'parallel')
 
   if (program !== 'parallel' && !isXargs)
     return false

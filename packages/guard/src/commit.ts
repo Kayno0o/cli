@@ -1,5 +1,5 @@
 import { parseCommand, shellQuote, splitCommand } from '@kaynooo/cli-kit/shell'
-import { COMMIT_VALUE_LONGS, COMMIT_VALUE_SHORTS, SHORT_CLUSTER, subcommandOf } from './git'
+import { COMMIT_VALUE_LONGS, COMMIT_VALUE_SHORTS, SHORT_OPTIONS, subcommandOf } from './git'
 
 // What a commit's message is made of: the `-m` texts, a `-F` file (`-` reading the heredoc fed to it), or nothing to check when git reuses a message or opens an editor.
 export interface CommitSource { parts: string[], file: string | null, stdin: string | null, isReused: boolean, hasTrailerFlag: boolean }
@@ -32,6 +32,11 @@ export function heredocBody(text: string, opener: RegExp): { body: string, rest:
   const end = lines.findIndex(line => line.trim() === found[2] || line.trim() === `${found[2]})`)
 
   return end === -1 ? undefined : { body: lines.slice(0, end).join('\n'), rest: lines.slice(end + 1).join('\n') }
+}
+
+// Whether a `-F` file reads the command's standard input: `-` or a device naming it.
+export function isStdin(file: string): boolean {
+  return file === '-' || file === '/dev/stdin' || (/^\/dev\/fd\/\d+$/).test(file)
 }
 
 function sourceOf(args: readonly string[], text: string): CommitSource {
@@ -73,7 +78,7 @@ function sourceOf(args: readonly string[], text: string): CommitSource {
       continue
     }
 
-    if (!SHORT_CLUSTER.test(arg))
+    if (!SHORT_OPTIONS.test(arg))
       continue
 
     for (const [index, flag] of [...arg.slice(1)].entries()) {
@@ -90,7 +95,7 @@ function sourceOf(args: readonly string[], text: string): CommitSource {
     }
   }
 
-  if (source.file === '-')
+  if (source.file !== null && isStdin(source.file))
     source.stdin = heredocBody(text, HEREDOC_OPENER)?.body ?? null
 
   return source

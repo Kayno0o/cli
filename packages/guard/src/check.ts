@@ -6,7 +6,7 @@ import { commandsRun, parentDir, replacePieces } from '@kaynooo/cli-kit/shell'
 import { shouldWrap, wrap } from '@kaynooo/cli-out/src/wrap.ts'
 import { addedPackages } from '@kaynooo/cli-pkg/src/added.ts'
 import { installRequests, LOCKFILES, mismatchFor } from '@kaynooo/cli-pkg/src/pin.ts'
-import { commitSources, inlineMessage } from './commit'
+import { commitSources, inlineMessage, isStdin } from './commit'
 import { gitViolation } from './git'
 import { remoteViolation } from './remote'
 import { replaceViolation } from './replace'
@@ -56,16 +56,17 @@ function commitViolation(command: string, { cwd, read }: Context): string | null
     if (source.hasTrailerFlag)
       return TRAILERS
 
-    // a device such as /dev/stdin would block the read
-    if (source.isReused || source.file?.startsWith('/dev/') === true)
+    const { file } = source
+
+    // a device would block the read, so only the heredoc fed to it is checked
+    if (source.isReused || (file?.startsWith('/dev/') === true && (!isStdin(file) || source.stdin === null)))
       continue
 
-    const { file } = source
     let message = source.stdin
 
     if (file === null)
       message = inlineMessage(source.parts)
-    else if (file !== '-')
+    else if (!isStdin(file))
       message = read(absolute(file, cwd))
 
     if (message === null && (source.parts.length > 0 || file !== null))
@@ -99,6 +100,13 @@ function mismatches(command: string, { cwd, home, exists }: Context): Mismatch[]
 
     return mismatch === null ? [] : [mismatch]
   })
+}
+
+// The mismatches of the commands nested in the first of `run` (`bash -c`, `$(...)`), which are refused rather than rewritten as their pieces are not the command's own.
+function nestedMismatches(run: readonly string[], context: Context, own: readonly Mismatch[]): Mismatch[] {
+  const ownTexts = new Set(own.map(mismatch => mismatch.piece.command.trim()))
+
+  return run.slice(1).flatMap(each => mismatches(each, context)).filter(mismatch => !ownTexts.has(mismatch.piece.command.trim())).map(mismatch => ({ ...mismatch, rewrite: null }))
 }
 
 // Every rule the command breaks, each message naming the route, and the command as it should run when a rule rewrites it instead.
@@ -142,7 +150,7 @@ export async function checkCommand(command: string, context: Context): Promise<V
   add('edit', context.canSub ? await guarded('edit', () => first(run.map(replaceViolation))) : null)
 
   const found = mismatches(command, context)
-  const refused = found.find(mismatch => mismatch.rewrite === null || !context.canRewrite)
+  const refused = [...found, ...nestedMismatches(run, context, found)].find(mismatch => mismatch.rewrite === null || !context.canRewrite)
   const rewrite = refused?.rewrite ?? null
   const route = rewrite === null ? 'Run it with the pinned manager instead.' : `Run \`${rewrite.trim()}\` instead.`
 

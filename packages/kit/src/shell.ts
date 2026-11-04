@@ -31,8 +31,14 @@ const KEYWORDS = new Set(['then', 'do', 'else', 'if', 'elif', 'while', 'until', 
 const MAX_DEPTH = 8
 const MAX_BRACES = 256
 // Programs reading a command string with `-c`.
-const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh'])
-const COMMAND_STRING_PROGRAMS = new Set([...SHELLS, 'su', 'runuser'])
+const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'fish', 'csh', 'tcsh', 'nu', 'pwsh', 'powershell'])
+// Programs that take their command string past other operands, so every word is scanned for the option.
+const SCANNED_PROGRAMS = new Set(['su', 'runuser', 'flock'])
+const COMMAND_STRING_PROGRAMS = new Set([...SHELLS, ...SCANNED_PROGRAMS])
+// PowerShell's `-Command`, which it accepts abbreviated to any prefix.
+const POWERSHELL_COMMAND = /^-c(?:o(?:m(?:m(?:a(?:nd?)?)?)?)?)?$/i
+const POWERSHELL = new Set(['pwsh', 'powershell'])
+const FUNCTION_DEFINITION = /^[\w.:-]+\(\)$/
 const SHELL_VALUE_OPTIONS = new Set(['-o', '-O', '--rcfile', '--init-file'])
 const PRINTERS = new Set(['echo', 'printf'])
 const FIND_EXEC = new Set(['-exec', '-execdir', '-ok', '-okdir'])
@@ -60,6 +66,11 @@ const WRAPPERS = new Map<string, WrapperSpec>([
   ['ionice', wrapper('cnpPu', ['--class', '--classdata', '--pid', '--pgid', '--uid'])],
   ['stdbuf', wrapper('ioe', ['--input', '--output', '--error'])],
   ['chroot', wrapper('', ['--userspec', '--groups'], 1)],
+  ['watch', wrapper('n', ['--interval'])],
+  ['flock', wrapper('wE', ['--timeout', '--conflict-exit-code'], 1)],
+  ['parallel', wrapper('jnNSaIPlLdTsC', ['--jobs', '--max-args', '--max-replace-args', '--sshlogin', '--arg-file', '--delimiter', '--colsep'])],
+  ['unbuffer', wrapper()],
+  ['systemd-run', wrapper('puEMH', ['--property', '--unit', '--description', '--slice', '--setenv', '--machine', '--host', '--uid', '--gid', '--working-directory', '--nice', '--service-type'])],
   ['xargs', wrapper('IndsEaPL', ['--max-args', '--max-procs', '--max-chars', '--delimiter', '--arg-file', '--eof', '--max-lines', '--process-slot-var'])],
 ])
 
@@ -165,6 +176,13 @@ export function splitCommand(command: string): Piece[] {
     // A backquoted body is read whole, as its own separators split nothing of the command around it.
     if (char === '`') {
       i = closingBackquote(command, i)
+
+      continue
+    }
+
+    // Arithmetic is read whole: its `<<` shifts, it opens no heredoc.
+    if (command.startsWith('((', char === '$' ? i + 1 : i) && (char === '$' || startsComment(command, i))) {
+      i = closingParen(command, char === '$' ? i + 1 : i)
 
       continue
     }
@@ -551,7 +569,22 @@ export function parseCommand(text: string): Invocation {
     const first = tokens[0] ?? ''
     const spec = WRAPPERS.get(first.split('/').pop() ?? '')
 
-    if (OPENERS.test(first)) {
+    if (first === 'function' && tokens.length > 1) {
+      isWrapped = true
+      tokens.splice(0, 2)
+
+      if (tokens[0] === '()')
+        tokens.shift()
+    }
+    else if (FUNCTION_DEFINITION.test(first)) {
+      isWrapped = true
+      tokens.shift()
+    }
+    else if (tokens[1] === '()' && (/^[\w.:-]+$/).test(first)) {
+      isWrapped = true
+      tokens.splice(0, 2)
+    }
+    else if (OPENERS.test(first)) {
       isWrapped = true
       const rest = first.replace(OPENERS, '')
 
@@ -618,7 +651,8 @@ function commandStrings(tokens: readonly string[]): string[] {
     if (!COMMAND_STRING_PROGRAMS.has(name))
       continue
 
-    const isUser = name === 'su' || name === 'runuser'
+    const isScanned = SCANNED_PROGRAMS.has(name)
+    const isPowershell = POWERSHELL.has(name)
     let isValue = false
 
     for (let j = i + 1; j < tokens.length; j++) {
@@ -642,13 +676,15 @@ function commandStrings(tokens: readonly string[]): string[] {
         break
       }
 
-      if (option === '--command' || (!option.startsWith('--') && option.startsWith('-') && option.slice(1).includes('c'))) {
+      const isCommandOption = isPowershell ? POWERSHELL_COMMAND.test(option) : !option.startsWith('--') && option.startsWith('-') && option.slice(1).includes('c')
+
+      if (option === '--command' || isCommandOption) {
         found.push(tokens[j + 1] ?? '')
 
         break
       }
 
-      if (!option.startsWith('-') && !isUser)
+      if (!option.startsWith('-') && !isScanned)
         break
     }
   }

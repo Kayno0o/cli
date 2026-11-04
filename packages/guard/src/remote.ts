@@ -1,4 +1,5 @@
 import { parseCommand, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
+import { subcommandOf } from './git'
 
 const SHELL_PROGRAMS = new Set(['ssh', 'scp', 'sftp', 'mosh', 'mosh-client', 'autossh'])
 // Programs opening a socket to whatever host they are given.
@@ -8,6 +9,11 @@ const URL_PROGRAMS = new Set(['git', 'docker', 'docker-compose'])
 const DECLARERS = new Set(['export', 'declare', 'typeset'])
 // `host:path` as rsync spells a remote end, a Windows drive letter and a local path with a colon aside.
 const RSYNC_REMOTE = /^(?:[\w.-]+@)?[\w.-]{2,}:/
+// git's scp-style address: a colon before any slash, outside a URL.
+const SCP_ADDRESS = /^[^/:\s-][^/:\s]*:(?!\/\/)/
+// The same with a user or a dotted host, which tells it from a `branch:branch` refspec.
+const SCP_HOST_ADDRESS = /^(?:[\w.-]+@[\w.-]+|[\w-]+(?:\.[\w-]+)+):(?!\/\/)/
+const GIT_TRANSPORTS = new Set(['clone', 'fetch', 'pull', 'push', 'ls-remote'])
 const SSH_URL = /^ssh:\/\//
 const SSH_URL_WORD = /^(?:[\w-]+=)?ssh:\/\//
 const LOOPBACK = /(?:^|[:=@[])(?:localhost|127(?:\.\d+){3}|::1)(?:[:\]/]|$)/
@@ -56,6 +62,18 @@ function isSocketRemote(args: readonly string[]): boolean {
   return !args.some(arg => LISTENS.test(arg) || LOOPBACK.test(arg))
 }
 
+// Whether a git command names a repository in scp style (`user@host:path`), which git reaches over ssh.
+function isScpAddress(args: readonly string[]): boolean {
+  const { name, rest } = subcommandOf(args)
+
+  if (!GIT_TRANSPORTS.has(name))
+    return false
+
+  const address = name === 'clone' || name === 'ls-remote' ? SCP_ADDRESS : SCP_HOST_ADDRESS
+
+  return rest.some(arg => !arg.startsWith('-') && address.test(arg))
+}
+
 function isRemote(text: string): boolean {
   const { program, args, assignments } = parseCommand(text)
   const declared = DECLARERS.has(program) ? args : []
@@ -68,6 +86,9 @@ function isRemote(text: string): boolean {
 
   if (program === 'rsync')
     return args.some(arg => !arg.startsWith('-') && RSYNC_REMOTE.test(arg))
+
+  if (program === 'git' && isScpAddress(args))
+    return true
 
   if (program === 'kubectl')
     return args.some(arg => KUBECTL_SERVER.test(arg))

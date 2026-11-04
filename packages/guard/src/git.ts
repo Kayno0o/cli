@@ -10,6 +10,8 @@ const WHOLE_TREE = new Set(['-A', '--all', '-u', '--update', '--no-ignore-remova
 export const COMMIT_VALUE_SHORTS = new Set(['m', 'F', 'c', 'C', 't'])
 export const COMMIT_VALUE_LONGS = new Set(['--message', '--file', '--reuse-message', '--reedit-message', '--template', '--author', '--date', '--fixup', '--squash', '--cleanup', '--trailer', '--pathspec-from-file'])
 export const SHORT_CLUSTER = /^-[A-Z]+$/i
+// A short option cluster that may end in an attached value, `-m"fix: x"` reaching the parser as `-mfix: x`.
+export const SHORT_OPTIONS = /^-[A-Z]/i
 const STAGES_ALL = /[Au]/
 const ALL_TAGS = new Set(['--tags', '--follow-tags'])
 // A pathspec's leading magic naming the repository root.
@@ -99,7 +101,7 @@ function commitsAll(args: readonly string[]): boolean {
       continue
     }
 
-    if (!SHORT_CLUSTER.test(arg))
+    if (!SHORT_OPTIONS.test(arg))
       continue
 
     for (const [index, flag] of [...arg.slice(1)].entries()) {
