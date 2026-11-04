@@ -1,7 +1,7 @@
 import { chmod, chown, lstat, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isInlineSecret } from './audit'
-import { entries, parseDotenv, serializeDotenv, setLine } from './dotenv'
+import { entries, escapeDouble, LINE_BREAK, parseDotenv, serializeDotenv, setLine } from './dotenv'
 import { writeAtomic } from './files'
 
 export interface Left {
@@ -104,10 +104,13 @@ export function envLine(key: string, value: string): string | undefined {
   if (ENV_PLAIN.test(value))
     return `${key}=${value}`
 
-  if (value.includes('$'))
-    return value.includes('\n') ? undefined : `${key}="${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('$', '\\$')}"`
+  if (LINE_BREAK.test(value))
+    return undefined
 
-  return value.includes('\'') || value.includes('\n') ? undefined : `${key}='${value}'`
+  if (value.includes('$'))
+    return `${key}="${escapeDouble(value)}"`
+
+  return value.includes('\'') ? undefined : `${key}='${value}'`
 }
 
 // A link, dangling or not: writing through it would change a file elsewhere.

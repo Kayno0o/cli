@@ -14,7 +14,8 @@ const EXPORTED = /^\s*export\s/
 const INLINE_COMMENT = /\s+#.*$/
 const CARRIAGE_RETURN = /\r$/
 const ESCAPES: Record<string, string> = { 'n': '\n', 'r': '\r', 't': '\t', '"': '"', '\\': '\\', '$': '$' }
-const LINE_BREAK = /[\r\n]/
+
+export const LINE_BREAK = /[\r\n]/
 // Bun does not unescape these inside double quotes, so a value holding one is written in single quotes.
 const RAW_ONLY = /["\\]/
 const NEEDS_QUOTES = /[\s#"'\\$`]/
@@ -113,6 +114,11 @@ export function entries(file: Dotenv): Map<string, string> {
   return map
 }
 
+// A value written between double quotes, each `$` escaped because Bun expands it in every quoting.
+export function escapeDouble(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\r', '\\r').replaceAll('\n', '\\n').replaceAll('$', '\\$')
+}
+
 export function formatAssignment(key: string, value: string): string {
   if (value === '' || !NEEDS_QUOTES.test(value))
     return `${key}=${value}`
@@ -121,9 +127,7 @@ export function formatAssignment(key: string, value: string): string {
   if (RAW_ONLY.test(value) && !value.includes('\'') && !LINE_BREAK.test(value))
     return `${key}='${value.replaceAll('$', '\\$')}'`
 
-  const escaped = value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\r', '\\r').replaceAll('\n', '\\n').replaceAll('$', '\\$')
-
-  return `${key}="${escaped}"`
+  return `${key}="${escapeDouble(value)}"`
 }
 
 // Replaces the last assignment of a key keeping its `export`, or appends before the trailing newline. `raw` is the whole line to store when given.

@@ -16,6 +16,8 @@ const KNOWN_DEPTH = 3
 const SKIPPED = new Set(['node_modules', '.git', 'vendor'])
 const LOCK_WAIT_MS = 5000
 const LOCK_STALE_MS = 30_000
+// A reap takes a few milliseconds, so a guard older than this belongs to a reaper that died.
+const REAP_STALE_MS = 5000
 
 // A regular file, or a link to one (a dangling link or a link to a folder is not).
 export async function isFileEntry(entry: Dirent, path: string): Promise<boolean> {
@@ -129,6 +131,14 @@ async function reap(lock: string): Promise<void> {
     await writeFile(guard, String(process.pid), { flag: 'wx', mode: 0o600 })
   }
   catch {
+    try {
+      if (Date.now() - (await stat(guard)).mtimeMs > REAP_STALE_MS)
+        await rm(guard, { force: true })
+    }
+    catch {
+      // released between the two calls
+    }
+
     return
   }
 

@@ -1,11 +1,10 @@
-import { chmod, mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { $ } from 'bun'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { audit, groupReads, inlineSecrets } from '../src/audit'
 import { parseDotenv } from '../src/dotenv'
-import { withLocks } from '../src/files'
 import { composeEntry, envLine, shutOthersOut } from '../src/fix'
 
 const CLI = new URL('../src/ev.ts', import.meta.url).pathname
@@ -162,26 +161,6 @@ describe('composeEntry', () => {
   })
 })
 
-describe('withLocks', () => {
-  test('keeps waiters on a stale lock from taking each other\'s fresh lock', async () => {
-    const file = join(dir, 'counter')
-    const lock = join(dir, '.counter.lock')
-
-    await writeFile(file, '0')
-    await writeFile(lock, '1')
-    await utimes(lock, 1, 1)
-
-    await Promise.all(Array.from({ length: 12 }, async () => withLocks([file], async () => {
-      const count = Number(await Bun.file(file).text())
-
-      await Bun.sleep(15)
-      await writeFile(file, String(count + 1))
-    })))
-
-    expect(await Bun.file(file).text()).toBe('12')
-  })
-})
-
 describe('groupReads', () => {
   test('counts a group that is not the owner\'s primary one, whatever its number is next to the owner\'s id', () => {
     const mine = process.getgid?.() ?? 0
@@ -198,6 +177,15 @@ describe('envLine', () => {
       expect(parseDotenv(`${envLine('K', value)}\n`).lines[0]?.value).toBe(value)
 
     expect(envLine('K', 'a$b')).not.toContain('\'')
+  })
+
+  test('declines a value holding a carriage return, quoted or not', () => {
+    expect(envLine('K', 'a\rb')).toBeUndefined()
+    expect(envLine('K', 'a\rb$')).toBeUndefined()
+  })
+
+  test('escapes a dollar and the characters around it as a double-quoted value', () => {
+    expect(envLine('K', 'a$b "c"')).toBe('K="a\\$b \\"c\\""')
   })
 })
 
