@@ -1,6 +1,6 @@
 import { readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { badUsage, fail, formatAge, table } from '@kaynooo/cli-kit'
+import { badUsage, fail, formatAge, paint, role, table } from '@kaynooo/cli-kit'
 import { logDir } from './logs'
 
 export interface SavedLog {
@@ -54,7 +54,10 @@ export async function printList(): Promise<number> {
   if (logs.length === 0)
     fail('no saved log', 1)
 
-  console.log(table(logs.map(log => [log.path, `${Math.ceil(log.size / 1024)} KiB`, formatAge(log.mtimeMs)])))
+  const colors = paint(process.stdout)
+  const path = role('path', process.stdout)
+
+  console.log(table(logs.map(log => [path(log.path), `${Math.ceil(log.size / 1024)} KiB`, colors.dim(formatAge(log.mtimeMs))])))
 
   return 0
 }

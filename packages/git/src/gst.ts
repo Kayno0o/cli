@@ -2,7 +2,7 @@
 
 import type { Change } from './status'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, paint, parse, printJson, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { git } from './git'
 import { parseStatus, summary } from './status'
 
@@ -14,11 +14,19 @@ const OPTIONS = {
 } as const
 
 function group(title: string, lines: string[]): string[] {
-  return lines.length === 0 ? [] : [`${title}:`, ...lines.map(line => `  ${line}`)]
+  return lines.length === 0 ? [] : [paint(process.stdout).bold(`${title}:`), ...lines.map(line => `  ${line}`)]
+}
+
+// The status letter in the colour of what it did: added green, modified yellow, deleted or conflicting red, renamed cyan.
+function letter(status: string): string {
+  const colors = paint(process.stdout)
+  const tints: Record<string, (text: string) => string> = { A: colors.green, M: colors.yellow, D: colors.red, U: colors.red, R: colors.cyan, C: colors.cyan }
+
+  return (tints[status] ?? colors.dim)(status)
 }
 
 function staged({ index, from, path }: Change): string {
-  return `${index} ${from === undefined ? '' : `${from} -> `}${path}`
+  return `${letter(index)} ${from === undefined ? '' : `${from} -> `}${path}`
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -63,10 +71,10 @@ async function main(argv: string[]): Promise<number> {
   const lines = [
     summary(status, head.code === 0 ? head.stdout : ''),
     ...group('staged', status.changes.filter(change => change.index !== '.').map(staged)),
-    ...group('unstaged', status.changes.filter(change => change.worktree !== '.').map(change => `${change.worktree} ${change.path}`)),
-    ...group('untracked', status.untracked),
-    ...group('conflicted', status.conflicted),
-    ...group('commits', commits.map(parts => parts.join(' '))),
+    ...group('unstaged', status.changes.filter(change => change.worktree !== '.').map(change => `${letter(change.worktree)} ${change.path}`)),
+    ...group('untracked', status.untracked.map(file => paint(process.stdout).dim(file))),
+    ...group('conflicted', status.conflicted.map(file => paint(process.stdout).red(file))),
+    ...group('commits', commits.map(([commitSha = '', commitTitle = '']) => `${role('id', process.stdout)(commitSha)} ${commitTitle}`)),
   ]
 
   console.log(lines.join('\n'))

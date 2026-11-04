@@ -1,7 +1,7 @@
 import type { Hotspot } from './churn'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badUsage, capped, duration, fail, jsonOption, limitOf, limitOptions, parse, printJson, table } from '@kaynooo/cli-kit'
+import { badUsage, capped, duration, fail, jsonOption, limitOf, limitOptions, paint, parse, printJson, role, table } from '@kaynooo/cli-kit'
 import { churnSince, complexityOf, isCandidate, isGenerated } from './churn'
 import { listFiles, readText } from './files'
 import { worstUnit } from './units'
@@ -28,6 +28,9 @@ const OPTIONS = {
   'all': { type: 'boolean', short: 'a', description: 'keep test files and generated files' },
   'json': jsonOption('[{rank, path, score, churn, recent, complexity, worst, lines}], never cut unless --limit is given'),
 } as const
+
+const HOT = 0.66
+const WARM = 0.33
 
 export async function hotspots(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'hotspots src --since "3 months ago" --limit 10'] })
@@ -82,7 +85,18 @@ export async function hotspots(args: string[]): Promise<number> {
     return 0
   }
 
-  console.log(table([['rank', 'score', 'churn', 'recent', 'complexity', 'lines', 'file', 'most complex declaration'], ...shown.map(row => [row.rank, row.score, row.churn, row.recent, row.complexity, row.lines, row.path, row.worst === undefined ? '' : `${row.worst.name} (${row.worst.complexity}, line ${row.worst.line})`].map(String))], { header: true, align: ['right', 'right', 'right', 'right', 'right', 'right', 'left', 'left'] }))
+  const colors = paint(process.stdout)
+  const path = role('path', process.stdout)
+  const top = Math.max(0, ...shown.map(row => row.score))
+  // The score reddens with its share of the highest, so the files to split first stand out.
+  const heat = (score: number, text: string) => {
+    if (top > 0 && score >= top * HOT)
+      return colors.red(text)
+
+    return top > 0 && score >= top * WARM ? colors.yellow(text) : text
+  }
+
+  console.log(table([['rank', 'score', 'churn', 'recent', 'complexity', 'lines', 'file', 'most complex declaration'], ...shown.map(row => [colors.dim(String(row.rank)), heat(row.score, String(row.score)), ...[row.churn, row.recent, row.complexity, row.lines].map(String), path(row.path), row.worst === undefined ? '' : `${row.worst.name} (${row.worst.complexity}, line ${row.worst.line})`])], { header: true, align: ['right', 'right', 'right', 'right', 'right', 'right', 'left', 'left'] }))
 
   if (footer !== undefined)
     console.log(footer)

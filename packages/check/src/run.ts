@@ -2,7 +2,7 @@ import type { HeldSignals } from '@kaynooo/cli-kit'
 import { mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import process from 'node:process'
-import { formatDuration, privateLogDirectory, runCommand, stripAnsi, sweepLogs } from '@kaynooo/cli-kit'
+import { formatDuration, paint, privateLogDirectory, role, runCommand, stripAnsi, sweepLogs } from '@kaynooo/cli-kit'
 import { failureExcerpt } from './output'
 
 export interface Outcome { ok: boolean, ms: number, output: string, timedOut?: boolean }
@@ -109,18 +109,22 @@ export function outcomeJson(name: string, command: string, logFile: string, outc
 
 // One line for a passing step; for a failing one its command, then what failed, indented.
 export function printOutcome(name: string, width: number, command: string, logFile: string, outcome: Outcome): void {
+  const colors = paint(process.stdout)
+  const path = role('path', process.stdout)
+  const took = colors.dim(formatDuration(outcome.ms))
+
   if (outcome.ok) {
-    console.log(`ok    ${name.padEnd(width)}  ${formatDuration(outcome.ms)}  ${logFile}`)
+    console.log(`${colors.bold(colors.green('ok   '))} ${name.padEnd(width)}  ${took}  ${path(logFile)}`)
 
     return
   }
 
-  const label = outcome.timedOut === true ? 'TIME ' : 'FAIL '
+  const label = outcome.timedOut === true ? colors.bold(colors.yellow('TIME ')) : colors.bold(colors.red('FAIL '))
 
-  console.log(`${label} ${name.padEnd(width)}  ${formatDuration(outcome.ms)}  ${command}  ${logFile}`)
+  console.log(`${label} ${name.padEnd(width)}  ${took}  ${colors.dim(command)}  ${path(logFile)}`)
 
   if (outcome.timedOut === true)
-    console.log(`  timed out after ${formatDuration(outcome.ms)}, the step and what it started were ended`)
+    console.log(colors.yellow(`  timed out after ${formatDuration(outcome.ms)}, the step and what it started were ended`))
 
   console.log(failureExcerpt(outcome.output).split('\n').map(line => `  ${line}`.trimEnd()).join('\n'))
 }

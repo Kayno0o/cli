@@ -5,7 +5,7 @@ import { existsSync, statSync } from 'node:fs'
 import { rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import { duration, exitCodeOf, fail, holdSignals, parse, printJson, table } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, paint, parse, printJson, table } from '@kaynooo/cli-kit'
 import { changedFiles, dirtyFiles } from './changes'
 import { place, placeSettings, programOf, shellIn, Stack } from './compose'
 import { declarePhony } from './makefile'
@@ -201,7 +201,7 @@ export async function runFixers(values: FixValues, cwd: string): Promise<number>
 
       if (missing(fixer)) {
         if (!json)
-          console.log(`skip  ${fixer.name.padEnd(width)}  ${fixer.requires} is not installed`)
+          console.log(`${paint(process.stdout).yellow('skip ')} ${fixer.name.padEnd(width)}  ${fixer.requires} is not installed`)
 
         ran.push({ name: fixer.name, command: fixer.command, skipped: `${fixer.requires} is not installed` })
 

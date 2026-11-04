@@ -1,7 +1,7 @@
 import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
-import { capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, liveSessions, parse, printHint, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
+import { capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHint, printJson, role, runHint, table, truncate } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -30,6 +30,11 @@ type Claimed = Exclude<Standing, { state: 'available' }>
 
 export interface BoardRow { issue: Issue, standing: Standing, comments: IssueComment[] }
 
+// Dims text, and leaves an empty cell empty so the table can still trim the line.
+function dimmed(text: string): string {
+  return text === '' ? '' : paint(process.stdout).dim(text)
+}
+
 function boxesLeft(issue: Issue): string {
   const list = boxes(issue.body)
 
@@ -40,7 +45,7 @@ function claimRow(issue: Issue, row: Claimed, now: number): string[] {
   const holder = row.state === 'taken' && row.session.name !== row.claim.holder ? `${row.claim.holder} via ${row.session.name}` : row.claim.holder
   const status = row.state === 'taken' ? ` (${row.session.status})` : ''
 
-  return [`#${issue.number}`, `${holder}${status}`, formatAge(row.claim.at, now), boxesLeft(issue), truncate(issue.title, TITLE_WIDTH)]
+  return [role('id', process.stdout)(`#${issue.number}`), `${holder}${status}`, paint(process.stdout).dim(formatAge(row.claim.at, now)), boxesLeft(issue), truncate(issue.title, TITLE_WIDTH)]
 }
 
 // The first line of the latest comment that is not a claim, which tells whether a claim no live session holds landed in part.
@@ -65,12 +70,12 @@ export function renderBoard(rows: BoardRow[], now = Date.now(), limit = Number.P
   const taken = claimed('taken')
   const away = claimed('away')
   const sections = [
-    { heading: 'available', count: available.length, ...within(available, limit, ({ issue }) => [`#${issue.number}`, truncate(issue.title, TITLE_WIDTH), issue.labels.map(label => label.name).join(', ')]) },
+    { heading: 'available', count: available.length, ...within(available, limit, ({ issue }) => [role('id', process.stdout)(`#${issue.number}`), truncate(issue.title, TITLE_WIDTH), dimmed(issue.labels.map(label => label.name).join(', '))]) },
     { heading: 'taken', count: taken.length, ...within(taken, limit, ({ issue, row }) => claimRow(issue, row, now)) },
     { heading: 'claimed, no live session here', count: away.length, ...within(away, limit, ({ issue, row }) => claimRow(issue, row, now), (line, index) => [line, ...noteLine(away[index]?.comments ?? [], now)]) },
   ].filter(section => section.count > 0)
 
-  return sections.length === 0 ? 'no open issue' : sections.map(({ heading, count, lines }) => `${heading} (${count})\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
+  return sections.length === 0 ? 'no open issue' : sections.map(({ heading, count, lines }) => `${paint(process.stdout).bold(`${heading} (${count})`)}\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
 }
 
 // Each issue with the standing its latest claim gives it among the sessions running here.

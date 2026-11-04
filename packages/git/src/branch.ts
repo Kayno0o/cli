@@ -2,7 +2,7 @@ import type { Colors, ExitRow } from '@kaynooo/cli-kit'
 import type { Arg, Row } from '@kaynooo/cli-kit/picker'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { closest, fail, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
+import { closest, fail, jsonOption, paint, parse, printJson, takesControlCodes } from '@kaynooo/cli-kit'
 import { emit, list, pick, table } from '@kaynooo/cli-kit/picker'
 
 export interface Branch {
@@ -46,8 +46,8 @@ const TRACK_TINTS: Record<string, 'green' | 'red' | 'yellow'> = { ahead: 'green'
 const TRACK_WORD = /^\w+/
 const WHITESPACE = /\s+/
 
-// The picker draws on stderr and previews through a pipe, so its rows and preview are painted whatever stdout is.
-const colors = paint({ isTTY: true })
+// The picker draws on stderr and previews through a pipe, so its rows are painted when either stream is a terminal, unless `NO_COLOR` asks otherwise.
+const colors = paint({ isTTY: process.stdout.isTTY === true || process.stderr.isTTY === true })
 
 function read(args: string[]): string {
   const proc = Bun.spawnSync(['git', ...args], { stderr: 'pipe' })
@@ -334,7 +334,7 @@ export async function gb(args: string[]): Promise<number> {
         if (parsed.values.json === true)
           printJson(all)
         else
-          console.log(table(all.map(row)).map(line => (process.stdout.isTTY ? line : Bun.stripANSI(line))).join('\n'))
+          console.log(table(all.map(row)).map(line => (takesControlCodes(process.stdout) ? line : Bun.stripANSI(line))).join('\n'))
 
         return 0
       }

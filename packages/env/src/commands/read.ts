@@ -1,6 +1,6 @@
 import type { Dotenv } from '../dotenv'
 import type { KnownSecrets } from '../mask'
-import { fail, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, role, table } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { entries, parseDotenv } from '../dotenv'
 import { envFiles, loadKnown, readEnv } from '../files'
@@ -74,7 +74,7 @@ export async function list(args: string[]): Promise<number> {
 
   printRows(rows, parsed.values.json === true, () => {
     if (rows.length > 0)
-      console.log(table(rows.map(each => [each.file, each.key, each.value])))
+      console.log(table(rows.map(each => [role('path', process.stdout)(each.file), role('value', process.stdout)(each.key), each.value])))
   })
 
   return 0
@@ -103,7 +103,7 @@ export async function get(args: string[]): Promise<number> {
   if (rows.length === 0)
     fail(`${key} is not set in ${file ?? 'any .env* file'}`, 1)
 
-  printRows(rows, parsed.values.json === true, () => console.log(file === undefined ? table(rows.map(each => [each.file, each.value])) : rows[0]?.value))
+  printRows(rows, parsed.values.json === true, () => console.log(file === undefined ? table(rows.map(each => [role('path', process.stdout)(each.file), each.value])) : rows[0]?.value))
 
   return 0
 }
@@ -158,7 +158,7 @@ export async function grep(args: string[]): Promise<number> {
   if (rows.length === 0)
     fail(`no key matches ${source} in ${names.join(', ') || 'any .env* file'}`, 1)
 
-  printRows(rows, parsed.values.json === true, () => console.log(table(rows.map(each => [each.file, each.key, each.value]))))
+  printRows(rows, parsed.values.json === true, () => console.log(table(rows.map(each => [role('path', process.stdout)(each.file), role('value', process.stdout)(each.key), each.value]))))
 
   return 0
 }
