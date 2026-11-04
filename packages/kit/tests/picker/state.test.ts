@@ -1,12 +1,14 @@
 import type { Key, State } from '../../src/picker/state'
 import { describe, expect, test } from 'bun:test'
-import { chosen, createState, displayed, highlighted, parseKeys, press } from '../../src/picker/state'
+import { chosen, createState, displayed, highlighted, parseKeys, press, withRows } from '../../src/picker/state'
 
 function typed(state: State, ...keys: (Key | string)[]): State {
   return keys.reduce<State>((current, key) => typeof key === 'string' && key.length === 1 && key !== '\n' ? press(current, { text: key }) : press(current, key as Key), state)
 }
 
 const LINES = ['apple', 'banana', 'cherry', 'apricot']
+
+const lines = (state: State): string[] => chosen(state).map(row => row.cells[0]!)
 
 describe('parseKeys', () => {
   test('reads the keys the picker handles', () => {
@@ -81,7 +83,7 @@ describe('press', () => {
     const state = typed(createState(LINES), 'down', 'enter')
 
     expect(state.done).toBe('accept')
-    expect(chosen(state)).toEqual(['banana'])
+    expect(lines(state)).toEqual(['banana'])
   })
 
   test('esc and ctrl-c cancel, and a finished state ignores keys', () => {
@@ -98,7 +100,7 @@ describe('press', () => {
     expect(highlighted(state)).toBeUndefined()
     expect(press(state, 'enter')).toBe(state)
     expect(press(state, 'down')).toMatchObject({ cursor: 0 })
-    expect(chosen(state)).toEqual([])
+    expect(lines(state)).toEqual([])
     expect(press(state, 'tab')).toBe(state)
   })
 
@@ -121,7 +123,7 @@ describe('press', () => {
     state = typed(state, { text: 'zz' })
     expect(state.matches).toEqual([])
     expect(press(state, 'enter').done).toBe('accept')
-    expect(chosen(press(state, 'enter'))).toEqual(['apple', 'cherry'])
+    expect(lines(press(state, 'enter'))).toEqual(['apple', 'cherry'])
   })
 
   test('tab on a marked line unmarks it, and enter with no mark picks the highlighted line', () => {
@@ -129,7 +131,7 @@ describe('press', () => {
 
     state = typed(state, 'tab', 'up', 'tab')
     expect(state.marked.size).toBe(0)
-    expect(chosen(typed(state, 'enter'))).toEqual(['banana'])
+    expect(lines(typed(state, 'enter'))).toEqual(['banana'])
   })
 
   test('--query starts filtered', () => {
@@ -140,6 +142,67 @@ describe('press', () => {
     const state = typed(createState(['\x1B[31mred\x1B[0m']), 'enter')
 
     expect(state.items).toEqual(['red'])
-    expect(chosen(state)).toEqual(['\x1B[31mred\x1B[0m'])
+    expect(lines(state)).toEqual(['\x1B[31mred\x1B[0m'])
+  })
+})
+
+const ROWS = [
+  { hidden: ['id-1', 'x'], cells: ['install-hooks', 'adds the hooks'] },
+  { hidden: ['id-2', 'y'], cells: ['install', 'adds the packages'] },
+  { hidden: ['id-3', 'z'], cells: ['doctor', 'checks install'] },
+]
+
+describe('rows', () => {
+  test('lays the cells in columns and keeps the hidden fields out of them', () => {
+    const state = createState(ROWS)
+
+    expect(state.items).toEqual(['install-hooks  adds the hooks', 'install        adds the packages', 'doctor         checks install'])
+  })
+
+  test('only the first searched cells are matched, the shortest one winning a tie', () => {
+    const state = createState(ROWS, { searched: 1, query: 'install' })
+
+    expect(state.matches.map(match => ROWS[match.index]!.hidden[0])).toEqual(['id-2', 'id-1'])
+    expect(createState(ROWS, { query: 'install' }).matches).toHaveLength(3)
+  })
+
+  test('the hidden fields come back with the row', () => {
+    const state = typed(createState(ROWS, { searched: 1, query: 'doc' }), 'enter')
+
+    expect(chosen(state)).toEqual([ROWS[2]!])
+  })
+
+  test('keeps the colors of a cell apart from the text', () => {
+    const state = createState([{ hidden: [], cells: ['\x1B[31mred\x1B[0m', 'plain'] }])
+
+    expect(state.items).toEqual(['red  plain'])
+    expect(state.styles[0]).toEqual(['\x1B[31m', '\x1B[31m', '\x1B[31m', '', '', '', '', '', '', ''])
+    expect(createState(['plain']).styles).toEqual([undefined])
+  })
+})
+
+describe('expected keys', () => {
+  test('a control key named by the caller is reported as such, even over ctrl-n', () => {
+    expect(parseKeys('\x04\x0E\x12', { active: false }, ['ctrl-d', 'ctrl-n'])).toEqual([{ ctrl: 'ctrl-d' }, { ctrl: 'ctrl-n' }])
+    expect(parseKeys('\x0E', { active: false })).toEqual(['down'])
+  })
+
+  test('an expected key ends the pick with the key, a row or not', () => {
+    const state = createState(ROWS, { expect: ['ctrl-d'], query: 'zzz' })
+    const done = press(state, { ctrl: 'ctrl-d' })
+
+    expect(done).toMatchObject({ done: 'accept', key: 'ctrl-d', query: 'zzz' })
+    expect(chosen(done)).toEqual([])
+    expect(press(createState(ROWS), { ctrl: 'ctrl-d' }).done).toBeUndefined()
+  })
+})
+
+describe('withRows', () => {
+  test('swaps the rows and keeps the query', () => {
+    const state = withRows(createState(ROWS, { query: 'doc' }), [{ hidden: ['n'], cells: ['docker'] }, { hidden: ['m'], cells: ['other'] }], 'fresh')
+
+    expect(state.query).toBe('doc')
+    expect(state.header).toBe('fresh')
+    expect(state.matches.map(match => state.rows[match.index]!.hidden[0])).toEqual(['n'])
   })
 })

@@ -26,7 +26,7 @@ describe('layoutFor', () => {
   })
 
   test('splits for a preview only when the terminal is wide enough', () => {
-    expect(layoutFor({ columns: 100, rows: 30 }, { lines: 10 }, true)).toEqual({ height: 10, listWidth: 50, previewWidth: 47 })
+    expect(layoutFor({ columns: 100, rows: 30 }, { lines: 10 }, true)).toEqual({ height: 10, listHeight: 10, listWidth: 50, previewWidth: 47, previewHeight: 0 })
     expect(layoutFor({ columns: 79, rows: 30 }, { lines: 10 }, true).previewWidth).toBe(0)
     expect(layoutFor({ columns: 100, rows: 30 }, { lines: 10 }, false).previewWidth).toBe(0)
   })
@@ -94,5 +94,35 @@ describe('render', () => {
 
   test('the caret sits after the query', () => {
     expect(caretColumn(createState(['a'], { query: 'ab' }), layout)).toBe(5)
+  })
+})
+
+describe('render with a header, colors and a preview below', () => {
+  test('the header sits under the counts and takes room from the list', () => {
+    const layout = layoutFor({ columns: 40, rows: 20 }, { lines: 6 }, false)
+    const lines = render(createState(['one', 'two', 'three', 'four'], { header: 'first\nsecond' }), layout, plain)
+
+    expect(lines).toEqual(['> ', '  4/4', 'first', 'second', '❯ one', '  two'])
+  })
+
+  test('the colors of a cell survive, the matched characters being drawn by the theme', () => {
+    const layout = layoutFor({ columns: 40, rows: 20 }, { lines: 6 }, false)
+    const state = createState([{ hidden: [], cells: ['\x1B[31mred\x1B[0m', 'x'] }], { query: 'e' })
+    const line = render(state, layout, tagged)[2]!
+
+    expect(line).toBe('<❯> \x1B[31mr\x1B[0m<e>\x1B[31md\x1B[0m* ** **x*')
+  })
+
+  test('below, the preview takes 40% of the height under a rule, when the terminal is tall enough', () => {
+    const layout = layoutFor({ columns: 30, rows: 30 }, { lines: 20 }, true, 'down')
+
+    expect(layout).toMatchObject({ height: 20, listHeight: 12, previewHeight: 8, previewWidth: 0 })
+
+    const lines = render(createState(['one']), layout, plain, ['p1', 'p2'])
+
+    expect(lines).toHaveLength(20)
+    expect(lines[12]).toBe('─'.repeat(30))
+    expect(lines.slice(13, 15)).toEqual(['p1', 'p2'])
+    expect(layoutFor({ columns: 30, rows: 8 }, { lines: 8 }, true, 'down').previewHeight).toBe(0)
   })
 })

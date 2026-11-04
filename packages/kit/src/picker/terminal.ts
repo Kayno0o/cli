@@ -1,3 +1,4 @@
+import type { Row } from './state'
 import type { Height, Theme } from './view'
 import { openSync } from 'node:fs'
 import process from 'node:process'
@@ -14,6 +15,29 @@ export interface PickSettings {
   query: string
   height: Height
   preview: string | undefined
+  header?: string
+  /** Control keys that end the pick, named as `ctrl-d`. */
+  expect?: readonly string[]
+  /** How many leading cells are searched, all of them by default. */
+  searched?: number
+}
+
+export interface Selection {
+  rows: Row[]
+  /** The expected key that ended the pick, empty for enter. */
+  key: string
+  query: string
+}
+
+/** The keyboard and the screen the picker works on, which tests replace. */
+export interface Terminal {
+  columns: number
+  rows: number
+  theme: Theme
+  write: (text: string) => void
+  /** Starts reading raw input, calling back with each chunk of it and when the screen is resized. */
+  listen: (onChunk: (chunk: string) => void, onResize: () => void) => void
+  close: () => void
 }
 
 const PREVIEW_DELAY_MS = 120
@@ -24,19 +48,12 @@ const PASTE_OFF = '\x1B[?2004l'
 const CLEAR_BELOW = '\r\x1B[J'
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 
-function themeFor(stream: { isTTY?: boolean }): Theme {
-  return { accent: role('accent', stream), label: role('label', stream), value: role('value', stream), id: role('id', stream) }
-}
-
 function up(lines: number): string {
   return lines > 0 ? `\x1B[${lines}A` : ''
 }
 
-/**
- * Lets the user pick among `lines`: keys come from /dev/tty in raw mode and the picker is drawn in place on stderr, so stdout stays free for the choice.
- * Resolves to the chosen lines, or undefined when cancelled; the terminal is restored whichever way it ends.
- */
-export async function choose(lines: readonly string[], settings: PickSettings): Promise<string[] | undefined> {
+/** The keyboard from /dev/tty in raw mode and the screen on stderr, so stdout stays free for the choice. */
+export function openTerminal(): Terminal {
   let input: tty.ReadStream
 
   try {
@@ -47,8 +64,44 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
   }
 
   const out = process.stderr
-  const theme = themeFor(out)
-  let state = createState(lines, settings)
+  let resize: (() => void) | undefined
+
+  return {
+    get columns() {
+      return out.columns || 80
+    },
+    get rows() {
+      return out.rows || 24
+    },
+    theme: { accent: role('accent', out), label: role('label', out), value: role('value', out), id: role('id', out) },
+    write: text => void out.write(text),
+    listen(onChunk, onResize) {
+      resize = onResize
+      input.setRawMode(true)
+      out.on('resize', onResize)
+      input.on('data', chunk => onChunk(chunk.toString()))
+    },
+    close() {
+      if (resize !== undefined)
+        out.off('resize', resize)
+
+      try {
+        input.setRawMode(false)
+      }
+      finally {
+        input.destroy()
+      }
+    },
+  }
+}
+
+/**
+ * Lets the user pick among `rows`: the picker is drawn in place on the terminal's screen and its keys read from the terminal.
+ * Resolves to the chosen rows, the expected key that ended the pick and the query, or undefined when cancelled; the terminal is restored whichever way it ends.
+ */
+export async function select(rows: readonly Row[], settings: PickSettings, terminal: Terminal = openTerminal()): Promise<Selection | undefined> {
+  const { theme } = terminal
+  let state = createState(rows, settings)
   let preview: string[] = []
   let reserved = 0
   let previewTimer: ReturnType<typeof setTimeout> | undefined
@@ -58,7 +111,10 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
   let restored = false
 
   function draw(clear = false): void {
-    const layout = layoutFor({ columns: out.columns || 80, rows: out.rows || 24 }, settings.height, settings.preview !== undefined)
+    if (restored)
+      return
+
+    const layout = layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined)
     let frame = HIDE_CURSOR
 
     if (reserved !== layout.height || clear) {
@@ -67,7 +123,7 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
     }
 
     frame += `\r${render(state, layout, theme, preview).map(line => `\x1B[2K${line}`).join('\n')}${up(layout.height - 1)}\r\x1B[${caretColumn(state, layout)}G${SHOW_CURSOR}`
-    out.write(frame)
+    terminal.write(frame)
   }
 
   function refreshPreview(): void {
@@ -89,10 +145,10 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
 
     const { signal } = previewing
     const template = settings.preview
-    const line = state.lines[at]!
+    const row = state.rows[at]!
 
     async function show(): Promise<void> {
-      const shown = await runPreview(template, line, signal)
+      const shown = await runPreview(template, row.cells.join(' '), signal, row.hidden)
 
       if (!signal.aborted) {
         preview = shown
@@ -110,25 +166,14 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
     restored = true
     clearTimeout(previewTimer)
     previewing.abort()
-    out.write(`${CLEAR_BELOW}${PASTE_OFF}${SHOW_CURSOR}`)
-    out.off('resize', onResize)
-
-    try {
-      input.setRawMode(false)
-    }
-    finally {
-      input.destroy()
-    }
+    terminal.write(`${CLEAR_BELOW}${PASTE_OFF}${SHOW_CURSOR}`)
+    terminal.close()
   }
 
   const paste = { active: false }
 
-  function onResize(): void {
-    draw(true)
-  }
-
-  function onData(chunk: Buffer | string): void {
-    for (const key of parseKeys(chunk.toString(), paste)) {
+  function onChunk(chunk: string): void {
+    for (const key of parseKeys(chunk, paste, settings.expect)) {
       state = press(state, key)
 
       if (state.done !== undefined) {
@@ -157,10 +202,8 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
     process.once(signal, stop)
 
   try {
-    input.setRawMode(true)
-    out.write(PASTE_ON)
-    out.on('resize', onResize)
-    input.on('data', onData)
+    terminal.write(PASTE_ON)
+    terminal.listen(onChunk, () => draw(true))
     refreshPreview()
     draw(true)
     await ended
@@ -173,5 +216,12 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
     restore()
   }
 
-  return state.done === 'accept' ? chosen(state) : undefined
+  return state.done === 'accept' ? { rows: chosen(state), key: state.key, query: state.query } : undefined
+}
+
+/** `select` over plain lines, resolving to the chosen ones. */
+export async function choose(lines: readonly string[], settings: PickSettings): Promise<string[] | undefined> {
+  const picked = await select(lines.map(line => ({ hidden: [], cells: [line] })), settings)
+
+  return picked?.rows.map(row => row.cells[0]!)
 }

@@ -1,19 +1,39 @@
 import type { Ranked } from './score'
 import { rank } from './score'
 
-export type Key = 'up' | 'down' | 'enter' | 'cancel' | 'erase' | 'clear' | 'word' | 'tab' | { text: string }
+/** `ctrl` is a control key the caller asked for, named as `ctrl-d`. */
+export type Key = 'up' | 'down' | 'enter' | 'cancel' | 'erase' | 'clear' | 'word' | 'tab' | { text: string } | { ctrl: string }
+
+/** A choice: the cells are drawn in columns and the first `searched` of them searched; the hidden fields are neither, and come back with the choice. */
+export interface Row {
+  hidden: string[]
+  cells: string[]
+}
 
 export interface State {
-  /** The lines as read, which is what gets printed. */
-  lines: readonly string[]
-  /** The lines as searched and drawn: escapes and control characters out, so a position means the same in both. */
+  /** The rows as read, which is what gets printed. */
+  rows: readonly Row[]
+  /** The rows as drawn: the cells in columns, escapes and control characters out, so a position means the same here and in `styles`. */
   items: readonly string[]
+  /** For each item the escapes setting the style of each of its characters, or undefined when it has none. */
+  styles: readonly (readonly string[] | undefined)[]
+  /** The part of each item the query is matched against: its first `searched` cells. */
+  searchable: readonly string[]
+  searched: number
+  /** Lines shown under the prompt and the counts, escapes allowed. */
+  header: string
+  /** Control keys that end the pick, named as `ctrl-d`. */
+  expect: readonly string[]
+  /** The expected key that ended the pick, empty for enter. */
+  key: string
+  /** A note shown beside the counts, such as a reload in progress. */
+  status: string
   query: string
-  /** The lines the query matches, best first. */
+  /** The rows the query matches, best first. */
   matches: Ranked[]
   /** Where the highlighted match stands in `matches`. */
   cursor: number
-  /** The marked lines, by index in `lines`. */
+  /** The marked rows, by index in `rows`. */
   marked: ReadonlySet<number>
   multi: boolean
   prompt: string
@@ -26,7 +46,12 @@ const ANSI = /\x1B(?:\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]|\][^\x07\x1B]*(?:\x07
 const CONTROL = /[\x00-\x1F\x7F-\x9F]/g
 // eslint-disable-next-line no-control-regex -- control characters are what it tells apart
 const IS_CONTROL = /[\x00-\x1F\x7F-\x9F]/
+// eslint-disable-next-line no-control-regex -- a style escape is what it recognizes
+const SGR = /^\x1B\[[0-9;]*m$/
+// eslint-disable-next-line no-control-regex -- a style reset is what it recognizes
+const RESET = /^\x1B\[0?m$/
 
+const COLUMN_GAP = 2
 const PASTE_START = '\x1B[200~'
 const PASTE_END = '\x1B[201~'
 const LAST_WORD = /\S*\s*$/
@@ -51,15 +76,100 @@ const KEYS: Record<string, Key> = {
   '\t': 'tab',
 }
 
+/** The control keys a caller can ask for, `ctrl-a` to `ctrl-z` but those standing for tab, enter, backspace and cancel. */
+export const CTRL_KEY = /^ctrl-[abd-gkln-z]$/
+
+function repeat(value: string, count: number): string[] {
+  return Array.from<string>({ length: count }).fill(value)
+}
+
 /** What a line looks like drawn and searched: no escapes, one space per tab or other control character. */
 export function displayed(line: string): string {
   return line.replace(ANSI, '').replace(CONTROL, ' ')
 }
 
-/** The keys a chunk of terminal input holds, in order; keys nothing handles, such as Home or a function key, are dropped. A newline between the bracketed paste markers is text, not enter; `paste` carries an unfinished paste to the next chunk. */
-export function parseKeys(input: string, paste = { active: false }): Key[] {
+export interface Styled {
+  text: string
+  styles: string[] | undefined
+}
+
+/** A line as drawn with the style each of its characters had: only the color and weight escapes are kept, the others being dropped, and control characters flattened to a space. */
+export function styled(line: string): Styled {
+  let text = ''
+  const styles: string[] = []
+  let active = ''
+  let colored = false
+  let last = 0
+
+  function add(chunk: string): void {
+    const flat = chunk.replace(CONTROL, ' ')
+
+    text += flat
+    colored ||= active !== '' && flat !== ''
+    styles.push(...repeat(active, flat.length))
+  }
+
+  for (const found of line.matchAll(ANSI)) {
+    add(line.slice(last, found.index))
+    last = found.index + found[0].length
+
+    if (SGR.test(found[0]))
+      active = RESET.test(found[0]) ? '' : active + found[0]
+  }
+
+  add(line.slice(last))
+
+  return { text, styles: colored ? styles : undefined }
+}
+
+interface Laid {
+  text: string
+  styles: string[] | undefined
+  searchable: string
+}
+
+/** The rows with their cells in columns, and the part of each the query is matched against. A row of one cell is its line as it is. */
+function lay(rows: readonly Row[], searched: number): Laid[] {
+  const parsed = rows.map(row => row.cells.map(styled))
+  const widths = (parsed[0] ?? []).map((_, column) => Math.max(...parsed.map(cells => Bun.stringWidth(cells[column]?.text ?? ''))))
+
+  return parsed.map((cells) => {
+    let text = ''
+    const styles: string[] = []
+    let colored = false
+    let searchEnd = 0
+
+    for (const [column, cell] of cells.entries()) {
+      const last = column === cells.length - 1
+      const shown = cells.length > 1 && last ? cell.text.trimEnd() : cell.text
+
+      text += shown
+      colored ||= cell.styles !== undefined
+
+      styles.push(...cell.styles?.slice(0, shown.length) ?? repeat('', shown.length))
+
+      if (column < searched)
+        searchEnd = cells.length > 1 ? text.trimEnd().length : text.length
+
+      if (!last) {
+        const pad = widths[column]! - Bun.stringWidth(cell.text) + COLUMN_GAP
+
+        text += ' '.repeat(pad)
+        styles.push(...repeat('', pad))
+      }
+    }
+
+    return { text, styles: colored ? styles : undefined, searchable: text.slice(0, searchEnd) }
+  })
+}
+
+/** The keys a chunk of terminal input holds, in order; keys nothing handles, such as Home or a function key, are dropped. A newline between the bracketed paste markers is text, not enter; `paste` carries an unfinished paste to the next chunk. A control key named in `ctrls` (`ctrl-d`) comes back as `{ ctrl }` in place of what it does otherwise, ctrl-p and ctrl-n moving among the rows. */
+export function parseKeys(input: string, paste = { active: false }, ctrls: readonly string[] = []): Key[] {
+  const codes = new Map(ctrls.map(name => [String.fromCharCode(name.codePointAt(name.length - 1)! - 96), name]))
+
   return (input.match(KEY_SEQUENCES) ?? []).flatMap((sequence) => {
-    const key = KEYS[sequence]
+    const named = codes.get(sequence)
+    const key = named === undefined ? KEYS[sequence] : { ctrl: named }
 
     if (sequence === PASTE_START || sequence === PASTE_END) {
       paste.active = sequence === PASTE_START
@@ -81,34 +191,53 @@ export interface StateSettings {
   multi?: boolean
   prompt?: string
   query?: string
+  header?: string
+  expect?: readonly string[]
+  /** How many leading cells are searched, all of them by default. */
+  searched?: number
 }
 
-export function createState(lines: readonly string[], { multi = false, prompt = '> ', query = '' }: StateSettings = {}): State {
-  const items = lines.map(displayed)
+/** A line is a row of one cell with nothing hidden. */
+export function createState(rows: readonly (string | Row)[], { multi = false, prompt = '> ', query = '', header = '', expect = [], searched = Number.POSITIVE_INFINITY }: StateSettings = {}): State {
+  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, matches: [], cursor: 0, marked: new Set(), multi, prompt, done: undefined }
 
-  return { lines, items, query, matches: rank(query, items), cursor: 0, marked: new Set(), multi, prompt, done: undefined }
+  return withRows(state, rows)
+}
+
+/** The same state over other rows, the query kept and the marks dropped; the cursor stays on its position when the new list reaches it. */
+export function withRows(state: State, rows: readonly (string | Row)[], header = state.header): State {
+  const cells = rows.map(row => typeof row === 'string' ? { hidden: [], cells: [row] } : row)
+  const laid = lay(cells, state.searched)
+  const searchable = laid.map(row => row.searchable)
+  const matches = rank(state.query, searchable)
+
+  return { ...state, rows: cells, items: laid.map(row => row.text), styles: laid.map(row => row.styles), searchable, header, matches, cursor: Math.max(0, Math.min(matches.length - 1, state.cursor)), marked: new Set() }
 }
 
 function withQuery(state: State, query: string): State {
-  return { ...state, query, matches: rank(query, state.items), cursor: 0 }
+  return { ...state, query, matches: rank(query, state.searchable), cursor: 0 }
 }
 
 function move(state: State, by: number): State {
   return { ...state, cursor: Math.max(0, Math.min(state.matches.length - 1, state.cursor + by)) }
 }
 
-/** The index in `lines` of the highlighted match. */
+/** The index in `rows` of the highlighted match. */
 export function highlighted(state: State): number | undefined {
   return state.matches[state.cursor]?.index
 }
 
-/** The next state for a key; once `done` is set nothing changes. */
+/** The next state for a key; once `done` is set nothing changes. An expected key ends the pick whether a row is highlighted or not. */
 export function press(state: State, key: Key): State {
   if (state.done !== undefined)
     return state
 
-  if (typeof key === 'object')
-    return withQuery(state, state.query + key.text)
+  if (typeof key === 'object') {
+    if ('text' in key)
+      return withQuery(state, state.query + key.text)
+
+    return state.expect.includes(key.ctrl) ? { ...state, done: 'accept', key: key.ctrl } : state
+  }
 
   switch (key) {
     case 'up': return move(state, -1)
@@ -134,12 +263,12 @@ export function press(state: State, key: Key): State {
   }
 }
 
-/** The lines to print once accepted: the marked ones in input order, or the highlighted one when none is marked. */
-export function chosen(state: State): string[] {
+/** The rows to print once accepted: the marked ones in input order, or the highlighted one when none is marked. */
+export function chosen(state: State): Row[] {
   if (state.marked.size > 0)
-    return state.lines.filter((_, index) => state.marked.has(index))
+    return state.rows.filter((_, index) => state.marked.has(index))
 
   const at = highlighted(state)
 
-  return at === undefined ? [] : [state.lines[at]!]
+  return at === undefined ? [] : [state.rows[at]!]
 }

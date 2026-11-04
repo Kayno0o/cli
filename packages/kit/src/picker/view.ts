@@ -1,4 +1,5 @@
 import type { State } from './state'
+import { styled } from './state'
 
 /** How a part of the picker is drawn: the kit's roles, or plain text. */
 export interface Theme {
@@ -16,15 +17,25 @@ export interface Size {
 /** Lines, or a share of the terminal's rows. */
 export type Height = { lines: number } | { percent: number }
 
+/** Beside the list, or under it. */
+export type PreviewPosition = 'right' | 'down'
+
 export interface Layout {
   height: number
+  /** The rows of the list area, the preview below it taking the rest. */
+  listHeight: number
   listWidth: number
-  /** Zero when there is no room or no command for a preview pane. */
+  /** Zero when there is no room or no command for a preview pane on the right. */
   previewWidth: number
+  /** Zero when there is no room or no command for a preview pane below, else its rows with its separator. */
+  previewHeight: number
 }
 
 const MIN_HEIGHT = 4
 const PREVIEW_MIN_COLUMNS = 80
+const PREVIEW_MIN_ROWS = 10
+const PREVIEW_SHARE = 0.4
+const RESET = '\x1B[0m'
 const SEPARATOR = ' │ '
 const HEIGHT = /^(\d+)(%?)$/
 
@@ -40,13 +51,20 @@ export function parseHeight(text: string): Height | undefined {
 }
 
 /** The region the picker draws in: at least four lines unless the terminal has fewer, never more than the terminal. */
-export function layoutFor(size: Size, height: Height, previewing: boolean): Layout {
+export function layoutFor(size: Size, height: Height, previewing: boolean, position: PreviewPosition = 'right'): Layout {
   const wanted = 'lines' in height ? height.lines : Math.round(size.rows * height.percent / 100)
   const rows = Math.min(size.rows, Math.max(MIN_HEIGHT, wanted))
+
+  if (position === 'down') {
+    const previewHeight = previewing && rows >= PREVIEW_MIN_ROWS ? Math.round(rows * PREVIEW_SHARE) : 0
+
+    return { height: rows, listHeight: rows - previewHeight, listWidth: size.columns, previewWidth: 0, previewHeight }
+  }
+
   const split = previewing && size.columns >= PREVIEW_MIN_COLUMNS
   const listWidth = split ? Math.floor(size.columns / 2) : size.columns
 
-  return { height: rows, listWidth, previewWidth: split ? size.columns - listWidth - SEPARATOR.length : 0 }
+  return { height: rows, listHeight: rows, listWidth, previewWidth: split ? size.columns - listWidth - SEPARATOR.length : 0, previewHeight: 0 }
 }
 
 interface Fitted {
@@ -54,8 +72,8 @@ interface Fitted {
   width: number
 }
 
-/** Text cut to a width with a trailing ellipsis, each character at a position in `marked` drawn with `mark` and the others with `plain`. */
-function fit(text: string, width: number, plain: (text: string) => string, mark: (text: string) => string = plain, marked: ReadonlySet<number> = new Set()): Fitted {
+/** Text cut to a width with a trailing ellipsis, each character at a position in `marked` drawn with `mark`, the ones with a style in `styles` with it, and the others with `plain`. */
+function fit(text: string, width: number, plain: (text: string) => string, mark: (text: string) => string = plain, marked: ReadonlySet<number> = new Set(), styles?: readonly string[]): Fitted {
   const room = Bun.stringWidth(text) > width ? width - 1 : width
   let out = ''
   let used = 0
@@ -67,7 +85,9 @@ function fit(text: string, width: number, plain: (text: string) => string, mark:
     if (used + size > room)
       break
 
-    out += (marked.has(at) ? mark : plain)(char)
+    const style = marked.has(at) ? '' : styles?.[at] ?? ''
+
+    out += style === '' ? (marked.has(at) ? mark : plain)(char) : `${style}${char}${RESET}`
     used += size
     at += char.length
   }
@@ -82,20 +102,28 @@ function fit(text: string, width: number, plain: (text: string) => string, mark:
 
 const identity = (text: string): string => text
 
+/** A line that may carry style escapes, cut to a width. */
+function fitStyled(line: string, width: number, plain: (text: string) => string = identity): Fitted {
+  const { text, styles } = styled(line)
+
+  return fit(text, width, plain, plain, new Set(), styles)
+}
+
 /** The column the query's caret sits at, one-based, on the first line. */
 export function caretColumn(state: State, layout: Layout): number {
   return Math.min(layout.listWidth, Bun.stringWidth(state.prompt) + Bun.stringWidth(state.query) + 1)
 }
 
 function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {
-  const rows = layout.height - 2
+  const header = state.header === '' ? [] : state.header.split('\n').map(line => fitStyled(line, layout.listWidth, theme.label))
+  const rows = Math.max(1, layout.listHeight - 2 - header.length)
   const prefixWidth = state.multi ? 4 : 2
   const top = Math.max(0, Math.min(state.cursor - Math.floor(rows / 2), state.matches.length - rows))
-  const marks = state.marked.size > 0 ? ` (${state.marked.size} marked)` : ''
+  const marks = (state.marked.size > 0 ? ` (${state.marked.size} marked)` : '') + (state.status === '' ? '' : ` ${state.status}`)
   const promptWidth = Bun.stringWidth(state.prompt)
   const query = fit(state.query, Math.max(1, layout.listWidth - promptWidth), identity)
   const count = fit(`  ${state.matches.length}/${state.items.length}${marks}`, layout.listWidth, theme.label)
-  const lines: Fitted[] = [{ text: theme.accent(state.prompt) + query.text, width: promptWidth + query.width }, count]
+  const lines: Fitted[] = [{ text: theme.accent(state.prompt) + query.text, width: promptWidth + query.width }, count, ...header]
 
   if (state.matches.length === 0)
     lines.push(fit('  no match', layout.listWidth, theme.label))
@@ -104,7 +132,7 @@ function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {
     const current = top + offset === state.cursor
     const pointer = current ? theme.accent('❯') : ' '
     const mark = state.multi ? `${state.marked.has(match.index) ? theme.id('●') : ' '} ` : ''
-    const text = fit(state.items[match.index]!, layout.listWidth - prefixWidth, current ? theme.value : identity, theme.accent, new Set(match.positions))
+    const text = fit(state.items[match.index]!, layout.listWidth - prefixWidth, current ? theme.value : identity, theme.accent, new Set(match.positions), state.styles[match.index])
 
     lines.push({ text: `${pointer} ${mark}${text.text}`, width: prefixWidth + text.width })
   }
@@ -117,11 +145,14 @@ export function render(state: State, layout: Layout, theme: Theme, preview: read
   const left = listLines(state, layout, theme)
 
   return Array.from({ length: layout.height }, (_, row) => {
+    if (row >= layout.listHeight)
+      return row === layout.listHeight ? theme.label('─'.repeat(layout.listWidth)) : fitStyled(preview[row - layout.listHeight - 1] ?? '', layout.listWidth).text
+
     const list = left[row] ?? { text: '', width: 0 }
 
     if (layout.previewWidth === 0)
       return list.text
 
-    return `${list.text}${' '.repeat(Math.max(0, layout.listWidth - list.width))}${theme.label(SEPARATOR)}${fit(preview[row] ?? '', layout.previewWidth, identity).text}`
+    return `${list.text}${' '.repeat(Math.max(0, layout.listWidth - list.width))}${theme.label(SEPARATOR)}${fitStyled(preview[row] ?? '', layout.previewWidth).text}`
   })
 }

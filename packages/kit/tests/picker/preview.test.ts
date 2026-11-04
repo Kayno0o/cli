@@ -8,9 +8,16 @@ describe('previewCommand', () => {
   })
 })
 
+describe('previewCommand fields', () => {
+  test('{1} and the next stand for the hidden fields, quoted', () => {
+    expect(previewCommand('show {1} {2} {}', 'line one', ['a b', 'c'])).toBe('show \'a b\' c \'line one\'')
+    expect(previewCommand('show {3}', 'x', ['a'])).toBe('show \'\'')
+  })
+})
+
 describe('previewLines', () => {
-  test('drops escapes, the trailing newline and anything past 200 lines', () => {
-    expect(previewLines('\x1B[1mhi\x1B[0m\nthere\n')).toEqual(['hi', 'there'])
+  test('keeps the style escapes, drops the trailing newline and anything past 200 lines', () => {
+    expect(previewLines('\x1B[1mhi\x1B[0m\nthere\n')).toEqual(['\x1B[1mhi\x1B[0m', 'there'])
     expect(previewLines('x\n'.repeat(500))).toHaveLength(200)
   })
 })
