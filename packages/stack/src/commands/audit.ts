@@ -2,7 +2,7 @@ import type { AuditOptions } from '../audit/types'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import process from 'node:process'
-import { jsonOption, limitOf, limitOptions, parse, printJson } from '@kaynooo/cli-kit'
+import { fail, jsonOption, limitOf, limitOptions, parse, printJson } from '@kaynooo/cli-kit'
 import { dockerCompose } from '../audit/compose'
 import { errorsOf, render } from '../audit/render'
 import { CONFIG_FILE, hasConfig, loadConfig, audit as runAudit } from '../audit/run'
@@ -27,9 +27,7 @@ export async function audit(args: string[], overrides: Partial<AuditOptions> = {
   const root = resolve(parsed.positionals[0] ?? '.')
 
   if (!hasConfig(root)) {
-    console.error(`no ${CONFIG_FILE} in ${root}`)
-
-    return 2
+    fail(`no ${CONFIG_FILE} in ${root}`)
   }
 
   const result = await runAudit(await loadConfig(root), { root, loadCompose: dockerCompose, env: process.env, home: homedir(), ...overrides })

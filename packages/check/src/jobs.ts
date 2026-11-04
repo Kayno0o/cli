@@ -55,6 +55,7 @@ interface MiseTask {
 }
 
 type Table = Record<string, unknown>
+type Reader = (dir: string, here: boolean) => Entry[]
 
 const JUSTFILE = /^\.?justfile$/i
 const TASKFILES = ['Taskfile.yml', 'taskfile.yml', 'Taskfile.yaml', 'taskfile.yaml', 'Taskfile.dist.yml', 'taskfile.dist.yml', 'Taskfile.dist.yaml', 'taskfile.dist.yaml']
@@ -189,7 +190,7 @@ export function targets(source: string): { name: string, doc: string | null }[] 
     }
 
     const colon = rule.indexOf(':')
-    const assignment = rule[colon + 1] === '=' || rule.slice(colon + 1).startsWith(':=')
+    const assignment = rule[colon + 1] === '=' || rule.slice(colon + 1).startsWith(':=') || rule.slice(0, colon).includes('=')
 
     // Anything but a rule: a variable, a conditional, a directive.
     if (colon === -1 || assignment) {
@@ -225,7 +226,7 @@ export function show(source: string, target: string): string {
     const rule = hash === -1 ? line : line.slice(0, hash)
     const colon = rule.indexOf(':')
 
-    return colon !== -1 && rule[colon + 1] !== '=' && rule.slice(0, colon).trim().split(BLANKS).includes(target)
+    return colon !== -1 && rule[colon + 1] !== '=' && !rule.slice(0, colon).includes('=') && rule.slice(0, colon).trim().split(BLANKS).includes(target)
   })
 
   if (start === -1)
@@ -376,7 +377,7 @@ function pyproject(dir: string, here: boolean): Entry[] {
 // In the order a name several of them share offers them.
 const READERS = [just, make, packageScripts, composer, deno, taskfile, mise, pyproject]
 
-const READER_OF: Record<Kind, (dir: string, here: boolean) => Entry[]> = {
+const READER_OF: Record<Kind, Reader> = {
   just,
   make,
   package: packageScripts,
@@ -388,11 +389,21 @@ const READER_OF: Record<Kind, (dir: string, here: boolean) => Entry[]> = {
   uv: pyproject,
 }
 
+// The value of a file read and parsed, the fallback when it is missing or malformed.
+function readOr<T>(read: () => T, fallback: T): T {
+  try {
+    return read()
+  }
+  catch {
+    return fallback
+  }
+}
+
 // The package folders the workspace globs of a package.json or a pnpm-workspace.yaml name, which may sit deeper than the direct children.
 function workspaces(): string[] {
-  const manifest = existsSync('package.json') ? JSON.parse(readFileSync('package.json', 'utf-8')) as Table : {}
+  const manifest = readOr<Table>(() => JSON.parse(readFileSync('package.json', 'utf-8')) as Table, {})
   const declared = Array.isArray(manifest.workspaces) ? manifest.workspaces : table(manifest.workspaces).packages
-  const pnpm = existsSync('pnpm-workspace.yaml') ? table(Bun.YAML.parse(readFileSync('pnpm-workspace.yaml', 'utf-8'))).packages : undefined
+  const pnpm = readOr(() => table(Bun.YAML.parse(readFileSync('pnpm-workspace.yaml', 'utf-8'))).packages, undefined)
   const patterns = [declared, pnpm].flatMap(value => (Array.isArray(value) ? value.filter((pattern): pattern is string => typeof pattern === 'string') : []))
   const excluded = patterns.filter(pattern => pattern.startsWith('!')).map(pattern => new Bun.Glob(pattern.slice(1)))
 
@@ -408,9 +419,19 @@ export function folders(): string[] {
 }
 
 // What the folder `j` runs from offers, its parents included, then each child folder.
+// A manifest that does not parse drops its own entries, not the whole listing.
+function guarded(reader: Reader, dir: string, here: boolean): Entry[] {
+  try {
+    return reader(dir, here)
+  }
+  catch {
+    return []
+  }
+}
+
 export function everything(): Entry[] {
-  const here = READERS.flatMap(reader => reader('.', true))
-  const below = folders().flatMap(dir => READERS.flatMap(reader => reader(dir, false)))
+  const here = READERS.flatMap(reader => guarded(reader, '.', true))
+  const below = folders().flatMap(dir => READERS.flatMap(reader => guarded(reader, dir, false)))
   const seen = new Set<string>()
 
   return [...here, ...below].filter((entry) => {
@@ -425,7 +446,7 @@ export function everything(): Entry[] {
 
 // The entries of one kind in one folder, which is all the preview of a line needs to read again.
 export function readKind(kind: Kind, dir: string): Entry[] {
-  return READER_OF[kind](dir, dir === '.').filter(entry => entry.kind === kind)
+  return guarded(READER_OF[kind], dir, dir === '.').filter(entry => entry.kind === kind)
 }
 
 export function key(entry: Entry): string {

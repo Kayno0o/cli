@@ -153,7 +153,10 @@ export function imageFindings(config: ReleaseConfig, releases: Release[], model:
 }
 
 export function restartFindings(config: ReleaseConfig, releases: Release[], model: ComposeModel | undefined, base: string | undefined): Finding[] {
-  const known = new Set(Object.keys(model?.services ?? {}))
+  if (model === undefined)
+    return []
+
+  const known = new Set(Object.keys(model.services ?? {}))
   const findings: Finding[] = []
 
   for (const release of releases) {
@@ -176,7 +179,10 @@ export function restartFindings(config: ReleaseConfig, releases: Release[], mode
 }
 
 export function postDeployFindings(releases: Release[], model: ComposeModel | undefined, base: string | undefined): Finding[] {
-  const known = new Set(Object.keys(model?.services ?? {}))
+  if (model === undefined)
+    return []
+
+  const known = new Set(Object.keys(model.services ?? {}))
   const findings: Finding[] = []
 
   for (const release of releases) {

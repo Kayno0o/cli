@@ -220,7 +220,6 @@ describe('audit', () => {
 
     expect(messages(result)).toEqual([
       'error compose: docker compose config failed for compose.yaml: no such service',
-      'error restart: api: restartServices names "api", absent from compose.yaml',
       'warn gitignore: .release-logs/ is not in .gitignore',
       'warn gitignore: .release-worktrees/ is not in .gitignore',
     ])
@@ -245,10 +244,9 @@ describe('audit', () => {
 describe('stack audit', () => {
   test('exits 2 without a release.config.ts', async () => {
     const root = project({ 'compose.yaml': COMPOSE })
-    const { result, err } = await capture(async () => audit([root]))
 
-    expect(result).toBe(2)
-    expect(err).toBe(`no release.config.ts in ${root}\n`)
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(capture(async () => audit([root]))).rejects.toThrow(`no release.config.ts in ${root}`)
   })
 
   test('exits 1 on errors and prints them, 0 on warnings only', async () => {

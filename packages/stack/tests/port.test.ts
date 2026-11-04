@@ -70,6 +70,16 @@ describe('stack port', () => {
     }
   })
 
+  test('a --min at or above the default ceiling prints that port', async () => {
+    const { out } = await capture(async () => port(['--min', '32768', 'x']))
+
+    expect(out).toBe('32768\n')
+
+    const high = await capture(async () => port(['--min', '40000', 'x']))
+
+    expect(high.out).toBe('40000\n')
+  })
+
   test('needs a name and a sane range', async () => {
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
     await expect(capture(async () => port([]))).rejects.toThrow('a name is needed')

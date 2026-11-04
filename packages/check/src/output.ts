@@ -73,7 +73,7 @@ export const bunCheck: Parser = (lines) => {
 }
 
 function bunCheckFields(block: string): { file: string, line: string, column: string, code: string, message: string } {
-  const attributes = Object.fromEntries([...block.matchAll(BUN_CHECK_ATTRIBUTE)].map(match => [match[1] ?? '', match[2] ?? '']))
+  const attributes = Object.fromEntries([...block.slice(0, block.indexOf('\n')).matchAll(BUN_CHECK_ATTRIBUTE)].map(match => [match[1] ?? '', match[2] ?? '']))
 
   return {
     file: attributes.file ?? '',

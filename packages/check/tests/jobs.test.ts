@@ -129,4 +129,22 @@ describe('targets', () => {
       { name: 'clean', doc: 'Clean up' },
     ])
   })
+
+  test('leaves variable assignments out, whatever the colon in their value', () => {
+    expect(targets('IMAGE = registry:5000/x\nbuild:\n\tgo build\n')).toEqual([{ name: 'build', doc: null }])
+  })
+})
+
+describe('everything with a broken manifest', () => {
+  test('a malformed package.json in a child folder drops that folder only', () => {
+    mkdirSync(join(root, 'broken'), { recursive: true })
+    writeFileSync(join(root, 'broken/package.json'), '{ nope')
+
+    try {
+      expect(everything().some(entry => id(entry) === 'bun:check')).toBe(true)
+    }
+    finally {
+      rmSync(join(root, 'broken'), { recursive: true, force: true })
+    }
+  })
 })

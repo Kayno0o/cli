@@ -164,7 +164,7 @@ export async function fix(args: string[], cwd = process.cwd()): Promise<number> 
   if (found.length === 0)
     fail('nothing to fix here: no fix, lint:fix or format script, php-cs-fixer config, Makefile, Justfile, go.mod, Cargo.toml nor ruff config')
 
-  const picked = pick(found, parsed.values.only)
+  const picked = pick(found, parsed.values.only, 'fixer')
   const placements = new Map<Fixer, Placement | undefined>()
 
   for (const fixer of picked)

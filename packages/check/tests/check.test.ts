@@ -1,5 +1,6 @@
 import { statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { Exit } from '@kaynooo/cli-kit'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
@@ -140,6 +141,23 @@ describe('check', () => {
 
   test('--only with a step the repo lacks fails with the steps found', async () => {
     expect(await failure(check(['--only', 'test,nope'], repo('make')))).toContain('no nope step here, found test')
+  })
+
+  test('--timeout is validated before --list', async () => {
+    expect(await failure(check(['--list', '--timeout', 'bad'], repo('js')))).toContain('--timeout')
+  })
+
+  test('a malformed package.json fails with an Exit, not a stack', async () => {
+    const dir = temp('check-broken-')
+
+    writeFileSync(join(dir, 'package.json'), '{ nope')
+
+    try {
+      await check(['--list'], dir)
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(Exit)
+    }
   })
 
   test('--only with no step name left fails instead of passing silently', async () => {

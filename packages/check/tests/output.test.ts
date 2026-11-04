@@ -33,6 +33,13 @@ describe('failureExcerpt', () => {
     expect(text).not.toContain('^')
   })
 
+  test('bun check: a file="..." in the source frame does not override the real file', () => {
+    const text = failureExcerpt('<error file="real.tsx" line="2" column="3" code="TS1">\nBad.\n<source>\n2 |   <A file="fake.tsx" line="9" />\n</source>\n</error>\nFound 1 error in 1 file')
+
+    expect(text).toContain('real.tsx:2:3 TS1: Bad.')
+    expect(text).not.toContain('fake.tsx')
+  })
+
   test('tsc: plain errors with their continuation lines', async () => {
     const text = failureExcerpt(await fixture('tsc-plain.txt'))
 

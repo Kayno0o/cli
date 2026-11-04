@@ -22,7 +22,7 @@ export async function port(args: string[]): Promise<number> {
     fail('a name is needed')
 
   const min = wholeNumber(parsed.values.min, 'min', MIN_PORT, MIN_PORT)
-  const max = wholeNumber(parsed.values.max, 'max', DEFAULT_MAX_PORT, min)
+  const max = wholeNumber(parsed.values.max, 'max', Math.max(DEFAULT_MAX_PORT, min), min)
 
   if (max > MAX_PORT)
     fail(`--max goes up to ${MAX_PORT}, not ${max}`)

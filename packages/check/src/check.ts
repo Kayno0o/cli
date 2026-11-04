@@ -48,19 +48,19 @@ function slotted(command: string): string {
 const COMMA = /\s*,\s*/
 
 // The steps --only names, failing on one the repo lacks.
-export function pick<T extends { name: string }>(steps: T[], only: string | undefined): T[] {
+export function pick<T extends { name: string }>(steps: T[], only: string | undefined, noun = 'step'): T[] {
   if (only === undefined)
     return steps
 
   const names = only.split(COMMA).filter(name => name !== '')
 
   if (names.length === 0)
-    fail(`--only names no step, found ${steps.map(step => step.name).join(', ')}`)
+    fail(`--only names no ${noun}, found ${steps.map(step => step.name).join(', ')}`)
 
   const unknown = names.filter(name => !steps.some(step => step.name === name))
 
   if (unknown.length > 0)
-    fail(`no ${unknown.join(', ')} step here, found ${[...new Set(steps.map(step => step.name))].join(', ')}`)
+    fail(`no ${unknown.join(', ')} ${noun} here, found ${[...new Set(steps.map(step => step.name))].join(', ')}`)
 
   return steps.filter(step => names.includes(step.name))
 }
@@ -106,6 +106,11 @@ function launch(step: Planned): string {
 export async function check(args: string[], cwd = process.cwd()): Promise<number> {
   const parsed = parse(args, usage, options, { replaces: 'chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail', examples: ['check', ['check --only lint,test', 'two of the steps'], ['check --in app', 'every step inside the app service']] })
   const settings = placeSettings(parsed.values)
+  const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
+
+  if (parsed.values.slot === true && Bun.which('slot', { PATH: process.env.PATH ?? '' }) === null)
+    fail('--slot needs the slot bin: bun install -g @kaynooo/cli-wait')
+
   const projects = await discoverProjects(cwd)
   const found = projects.flatMap(project => project.steps.map(step => ({ ...step, project })))
 
@@ -125,10 +130,6 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
     return 0
   }
 
-  if (parsed.values.slot === true && Bun.which('slot', { PATH: process.env.PATH ?? '' }) === null)
-    fail('--slot needs the slot bin: bun install -g @kaynooo/cli-wait')
-
-  const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
   const directory = await logDirectory(cwd)
   const held = holdSignals()
   const stack = new Stack()

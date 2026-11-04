@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { runCommand } from '@kaynooo/cli-kit'
+import { fail, runCommand } from '@kaynooo/cli-kit'
 
 export interface Step {
   name: string
@@ -58,7 +58,7 @@ function scripts(file: string, text: string): Record<string, unknown> {
     return parsed.scripts ?? {}
   }
   catch {
-    throw new Error(`${file} is not valid JSON`)
+    fail(`${file} is not valid JSON`)
   }
 }
 

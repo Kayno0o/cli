@@ -170,6 +170,8 @@ describe('fix', () => {
 
   test('refuses to run under a fixer, which would recurse, and fails where nothing applies', async () => {
     expect(await failure(fix([], dir))).toContain('nothing to fix here')
+    scripts({ 'lint:fix': 'x' })
+    expect(await failure(fix(['--only', 'nope'], dir))).toContain('no nope fixer here')
 
     process.env.KAYNOOO_CLI_FIX = '1'
 
