@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { paint } from './style'
+import { paint, takesControlCodes } from './style'
 
 export { formatFileSize, formatUnit } from '@kaynooo/utils/format'
 
@@ -99,7 +99,9 @@ export function table(rows: string[][], { cellWidth, header = false, align = [],
     return index === row.length - 1 ? cell : `${cell}${gap}`
   }).join('  ').trimEnd())
 
-  return lines.map((line, index) => header && index === 0 ? colors.bold(line) : line).join('\n')
+  const rule = header && takesControlCodes(process.stdout) && lines.length > 1 ? [colors.dim('─'.repeat(Math.max(...lines.map(textWidth))))] : []
+
+  return lines.flatMap((line, index) => header && index === 0 ? [colors.bold(line), ...rule] : [line]).join('\n')
 }
 
 // The rows with the widest cuttable column cut so every line fits `limit`, `widths` shrinking with it.

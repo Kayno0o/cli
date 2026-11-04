@@ -11,10 +11,10 @@ describe('chart', () => {
   test('bar fills in proportion and clamps', () => {
     const plain = { stream: {}, env: {}, width: 10 }
 
-    expect(bar(0.5, plain)).toBe('█████░░░░░')
-    expect(bar(2, plain)).toBe('██████████')
-    expect(bar(-1, plain)).toBe('░░░░░░░░░░')
-    expect(bar(0.5, { stream: { isTTY: true }, env: {}, width: 2 })).toBe('\x1B[36m█\x1B[39m\x1B[2m░\x1B[22m')
+    expect(bar(0.5, plain)).toBe('━━━━━─────')
+    expect(bar(2, plain)).toBe('━━━━━━━━━━')
+    expect(bar(-1, plain)).toBe('──────────')
+    expect(bar(0.5, { stream: { isTTY: true }, env: {}, width: 2 })).toBe('\x1B[36m━\x1B[39m\x1B[2m━\x1B[22m')
   })
 
   test('keyValue pads labels to the longest', () => {
@@ -22,7 +22,7 @@ describe('chart', () => {
   })
 
   test('barChart scales to the largest value and right-aligns the numbers', () => {
-    expect(barChart([['ft', 40], ['db', 4]], { width: 10, stream: {}, env: {} })).toBe('ft  ██████████  40\ndb  █░░░░░░░░░   4')
+    expect(barChart([['ft', 40], ['db', 4]], { width: 10, stream: {}, env: {} })).toBe('ft  ━━━━━━━━━━  40\ndb  ━─────────   4')
   })
 })
 

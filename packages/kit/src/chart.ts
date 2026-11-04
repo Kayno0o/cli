@@ -1,10 +1,12 @@
 import process from 'node:process'
 import { textWidth } from './format'
-import { paint } from './style'
+import { paint, takesControlCodes } from './style'
 
 type Env = Record<string, string | undefined>
 
 const LEVELS = '▁▂▃▄▅▆▇█'
+const FILLED = '━'
+const EMPTY = '─'
 
 // One block per value, tall in proportion to where it sits between the smallest and the largest; a flat series draws mid-height.
 export function sparkline(values: number[]): string {
@@ -23,12 +25,14 @@ export interface BarSettings {
   env?: Env
 }
 
-// `████████░░░░░░░░░░░░` for a ratio between 0 and 1, filled in cyan and the rest dim on a terminal.
+// `━━━━━━━━━━━━━━━━━━━━` for a ratio between 0 and 1, the filled part cyan and the rest the same glyph dimmed on a terminal, so the two share one baseline; with no colour the rest is `─`.
 export function bar(ratio: number, { width = 20, stream = process.stdout, env = process.env }: BarSettings = {}): string {
   const colors = paint(stream, env)
   const filled = Math.round(Math.min(1, Math.max(0, ratio)) * width)
 
-  return `${colors.cyan('█'.repeat(filled))}${colors.dim('░'.repeat(width - filled))}`
+  const empty = takesControlCodes(stream, env) ? FILLED : EMPTY
+
+  return `${colors.cyan(FILLED.repeat(filled))}${colors.dim(empty.repeat(width - filled))}`
 }
 
 export interface KeyValueSettings {

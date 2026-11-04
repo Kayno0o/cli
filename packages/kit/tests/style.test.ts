@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { helpText, parse } from '../src/args'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
-import { badge, link, marked, paint, role, statusOf } from '../src/style'
+import { badge, header, link, marked, paint, role, statusOf } from '../src/style'
 import { capture } from '../src/test'
 import { stripAnsi } from '../src/text'
 
@@ -10,7 +10,7 @@ const TERMINAL = { isTTY: true }
 
 describe('marked', () => {
   it('draws a coloured symbol on a terminal, and a word anywhere else', () => {
-    expect(marked('ok', 'built', TERMINAL, '1.2s', {})).toBe('\x1B[32m✓\x1B[39m built \x1B[2m1.2s\x1B[22m')
+    expect(marked('ok', 'built', TERMINAL, '1.2s', {})).toBe('\x1B[1m\x1B[32m✓\x1B[39m\x1B[22m built \x1B[2m1.2s\x1B[22m')
     expect(marked('ok', 'built', {}, '1.2s', {})).toBe('ok: built 1.2s')
     expect(marked('warn', 'no alt', {}, undefined, {})).toBe('warning: no alt')
     expect(marked('problem', 'failed', {}, undefined, {})).toBe('error: failed')
@@ -87,5 +87,17 @@ describe('badge', () => {
 
   it('reads the words CI services use, in any case', () => {
     expect(['Success', 'failure', 'pending', 'canceled', 'running'].map(statusOf)).toEqual(['passed', 'failed', 'queued', 'skipped', 'running'])
+  })
+})
+
+describe('header', () => {
+  it('names the bin in its own accent on a terminal, and is empty elsewhere', () => {
+    expect(header('check', 'cli', TERMINAL, {})).toBe('\x1B[1m\x1B[36mcheck\x1B[39m\x1B[22m\x1B[2m › cli\x1B[22m')
+    expect(header('check', 'cli', {}, {})).toBe('')
+    expect(header('check', 'cli', TERMINAL, { NO_COLOR: '1' })).toBe('')
+  })
+
+  it('gives a bin the same accent every time', () => {
+    expect(header('ft', undefined, TERMINAL, {})).toBe(header('ft', undefined, TERMINAL, {}))
   })
 })

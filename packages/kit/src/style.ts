@@ -8,9 +8,9 @@ export type Mark = 'ok' | 'warn' | 'problem' | 'note'
 // The symbol each mark draws on a terminal, and the word it prints as anywhere else, so a log stays greppable.
 const MARKS: Record<Mark, { symbol: string, word: string, paint: (colors: Colors) => (text: string) => string }> = {
   ok: { symbol: '✓', word: 'ok:', paint: colors => colors.green },
-  warn: { symbol: '!', word: 'warning:', paint: colors => colors.yellow },
+  warn: { symbol: '▲', word: 'warning:', paint: colors => colors.yellow },
   problem: { symbol: '✗', word: 'error:', paint: colors => colors.red },
-  note: { symbol: '·', word: 'note:', paint: colors => colors.dim },
+  note: { symbol: '›', word: 'note:', paint: colors => colors.dim },
 }
 
 // A terminal that draws in place: not a log or a pipe, and not asked for plain output by `NO_COLOR` or a dumb `TERM`.
@@ -27,7 +27,7 @@ export function paint(stream: { isTTY?: boolean }, env: Record<string, string | 
 export function marked(mark: Mark, text: string, stream: { isTTY?: boolean }, detail?: string, env: Record<string, string | undefined> = process.env): string {
   const colors = paint(stream, env)
   const { symbol, word, paint: tint } = MARKS[mark]
-  const head = takesControlCodes(stream, env) ? tint(colors)(symbol) : word
+  const head = takesControlCodes(stream, env) ? tint(colors.bold)(symbol) : word
 
   return `${head} ${text}${detail === undefined ? '' : ` ${colors.dim(detail)}`}`
 }
@@ -92,6 +92,28 @@ export function badge(word: string, stream: { isTTY?: boolean }, env: Record<str
   const { symbol, paint: tint } = STATUSES[status]
 
   return tint(paint(stream, env))(`${symbol} ${word}`)
+}
+
+// The accents a bin can take, picked by its name so each keeps one colour everywhere it appears.
+const BIN_ACCENTS: ((colors: Colors) => (text: string) => string)[] = [
+  colors => colors.cyan,
+  colors => colors.magenta,
+  colors => colors.green,
+  colors => colors.blue,
+  colors => colors.yellow,
+  colors => colors.redBright,
+]
+
+// `check › cli · 4 steps` with the bin in its own accent, bold, and the context dimmed; empty off a terminal, where a log has no use for it.
+export function header(bin: string, context: string | undefined, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
+  if (!takesControlCodes(stream, env))
+    return ''
+
+  const colors = paint(stream, env)
+  const hash = [...bin].reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  const accent = BIN_ACCENTS[hash % BIN_ACCENTS.length]!(colors.bold)
+
+  return `${accent(bin)}${context === undefined ? '' : colors.dim(` › ${context}`)}`
 }
 
 // A clickable OSC 8 link on a terminal; elsewhere `text (url)`, or the text alone when it is the url.
