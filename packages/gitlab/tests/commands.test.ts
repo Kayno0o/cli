@@ -178,3 +178,52 @@ describe('gl ci', () => {
     expect(refused.message).toEndWith('is not on origin/main: push it first')
   })
 })
+
+interface Printed { failedJobs: { name: string, excerpt: string }[], jobs: unknown[] }
+
+describe('gl ci --json and gl logs --json', () => {
+  const printedBy = (lines: string[]) => JSON.parse(lines.join('\n')) as Printed
+  const failing = {
+    pipelines: [pipeline(9, '', 'failed')],
+    jobs: { 9: [job(90, 'phpunit', 'failed'), job(91, 'lint', 'failed', { allow_failure: true })] },
+    traces: { 90: FAILED_TRACE, 91: 'lint said no' },
+  }
+
+  test('ci prints the failed jobs on stdout, announcing on stderr', async () => {
+    process.chdir(clone)
+
+    let code = -1
+    const state = { ...failing, pipelines: [pipeline(9, shas[1] ?? '', 'failed')] }
+    const { out, err } = await withFakeGlab(state, async () => {
+      code = await ci(['--json'])
+    })
+    const printed = printedBy(out)
+
+    expect(code).toBe(1)
+    expect(printed).toMatchObject({ status: 'failed', url: 'https://gitlab/p/9', runs: [{ id: 9, status: 'failed', sha: shas[1] }] })
+    expect(printed.failedJobs.map(each => each.name)).toEqual(['phpunit'])
+    expect(printed.failedJobs[0]?.excerpt).toContain('There was 1 failure:')
+    expect(err).toEqual([`following pipeline 9 on ${shas[1]?.slice(0, 7)}: https://gitlab/p/9`])
+  })
+
+  test('ci passes with no failed job', async () => {
+    process.chdir(clone)
+
+    let code = -1
+    const { out } = await withFakeGlab({ pipelines: [pipeline(8, shas[1] ?? '', 'success')] }, async () => {
+      code = await ci(['--json'])
+    })
+
+    expect(code).toBe(0)
+    expect(JSON.parse(out.join('\n'))).toMatchObject({ status: 'success', failedJobs: [] })
+  })
+
+  test('logs prints the picked jobs, a failed one that may fail left out of failedJobs', async () => {
+    const both = await withFakeGlab(failing, async () => logs(['9', '--json', '-j', 'lint']))
+    const printed = printedBy(both.out)
+
+    expect(printed.jobs).toMatchObject([{ name: 'lint', status: 'failed', allowFailure: true, excerpt: 'lint said no' }])
+    expect(printed.failedJobs).toEqual([])
+    expect(printedBy((await withFakeGlab(failing, async () => logs(['9', '--json']))).out).failedJobs.map(each => each.name)).toEqual(['phpunit'])
+  })
+})

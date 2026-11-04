@@ -10,7 +10,7 @@ export interface FakeMilestone { id: number, title: string, state: string, descr
 export interface FakeFailure { match: string, message: string, times?: number, exit?: number }
 // Calls whose arguments contain `match` (and `method`) wait until `parties` of them arrived, so two sessions reach that step together.
 export interface FakeBarrier { match: string, method?: string, parties: number }
-export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], calls?: string[][], labels?: string[], clobber?: Record<number, string>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], clobber?: Record<number, string>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -142,7 +142,9 @@ if (command === 'api') {
   else if (run !== null)
     console.log(JSON.stringify(state.runs?.find(each => each.id === Number(run[1])) ?? { message: 'not found', url: '' }))
   else if (/^actions\\/runs\\/\\d+\\/jobs$/.test(path))
-    console.log('[]')
+    console.log(JSON.stringify(state.jobs?.[path.split('/')[2]] ?? []))
+  else if (/^actions\\/jobs\\/\\d+\\/logs$/.test(path) && state.logs?.[path.split('/')[2]] !== undefined)
+    console.log(state.logs?.[path.split('/')[2]] ?? '')
   else if (path.startsWith('actions/runs?')) {
     const matching = (state.runs ?? []).filter(each => (!query.has('head_sha') || each.commit_sha === query.get('head_sha')) && (!query.has('workflow_id') || each.workflow_id === query.get('workflow_id')))
 

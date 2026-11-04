@@ -62,6 +62,25 @@ describe('waitForCi', () => {
     expect(err).toContain('x ci: network down, polling again')
   })
 
+  test('quiet leaves the retry warnings out', async () => {
+    let calls = 0
+
+    const { result, err } = await capture(async () => waitForCi(wait({
+      quiet: true,
+      covering: async () => {
+        calls++
+
+        if (calls < 3)
+          throw new Error('network down')
+
+        return 'done'
+      },
+    })))
+
+    expect(result).toBe('done')
+    expect(err).toBe('')
+  })
+
   test('fails at once on a refusal, a 404 or a missing binary instead of polling to the timeout', async () => {
     for (const error of [new Exit('not on the branch', 2), new Error('tea api x: The target couldn\'t be found.'), new Error('glab api x: glab: 401 Unauthorized (HTTP 401)')]) {
       let calls = 0

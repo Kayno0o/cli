@@ -83,7 +83,7 @@ export async function rollBack(preBump: string, tagsBefore: Set<string>, dir?: s
 }
 
 // Lists the closed issues of the open milestone named like the released version (`1.2.0`, `v1.2.0` or the tag) and closes it; a failure only warns, as the release itself is done.
-export async function settleMilestone(version: string, tag: string): Promise<void> {
+export async function settleMilestone(version: string, tag: string, say: (line: string) => void = console.log): Promise<void> {
   try {
     const names = new Set([version, `v${version}`, tag])
     const found = (await listMilestones('open')).find(each => names.has(each.title))
@@ -93,13 +93,13 @@ export async function settleMilestone(version: string, tag: string): Promise<voi
 
     const [done, left] = await Promise.all([closedIssues(found.id), openIssues(undefined, undefined, found.id)])
 
-    console.log(`milestone ${found.title}: ${done.length} closed issue${done.length === 1 ? '' : 's'}${done.length === 0 ? '' : `\n${done.map(issue => `  #${issue.number} ${issue.title}`).join('\n')}`}`)
+    say(`milestone ${found.title}: ${done.length} closed issue${done.length === 1 ? '' : 's'}${done.length === 0 ? '' : `\n${done.map(issue => `  #${issue.number} ${issue.title}`).join('\n')}`}`)
 
     if (left.length > 0)
       warn(`${left.length} issue${left.length === 1 ? ' is' : 's are'} still open in it`, left.map(issue => `#${issue.number}`).join(' '))
 
     await closeMilestone(found.id)
-    console.log(`closed milestone ${found.title}`)
+    say(`closed milestone ${found.title}`)
   }
   catch (error) {
     warn(`released, but the milestone ${version} could not be settled`, error instanceof Error ? error.message : String(error))

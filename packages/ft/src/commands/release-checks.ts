@@ -24,7 +24,9 @@ async function alreadyPassed(sha: string): Promise<boolean> {
 
 // Pushes the commit a release sits on when origin lacks it and waits for its own runs, so a red run stops the release before a tag exists that would never publish.
 // Runs that already passed on a commit origin has are not waited for nor printed again.
-export async function testsPass(sha: string, branch: string, timeout: number): Promise<boolean> {
+export async function testsPass(sha: string, branch: string, timeout: number, json = false): Promise<boolean> {
+  const say = json ? console.error : console.log
+
   if (!await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`])) {
     const held = holdSignals()
     let push
@@ -42,14 +44,14 @@ export async function testsPass(sha: string, branch: string, timeout: number): P
     if (push.code !== 0)
       fail(`origin refused the push of ${sha.slice(0, 7)}, so nothing was bumped:\n${push.stderr.trim()}`, 1)
 
-    console.log(`pushed ${branch} at ${sha.slice(0, 7)}, waiting for its runs before the bump`)
+    say(`pushed ${branch} at ${sha.slice(0, 7)}, waiting for its runs before the bump`)
   }
   else if (await alreadyPassed(sha)) {
     return true
   }
   else {
-    console.log(`${branch} at ${sha.slice(0, 7)} is on origin, waiting for its runs before the bump`)
+    say(`${branch} at ${sha.slice(0, 7)} is on origin, waiting for its runs before the bump`)
   }
 
-  return await watchRuns(runs => newestPerWorkflow(runs.filter(run => run.commit_sha === sha)), timeout, undefined, NO_RUN) === 0
+  return await watchRuns(runs => newestPerWorkflow(runs.filter(run => run.commit_sha === sha)), timeout, undefined, NO_RUN, json ? process.stderr : process.stdout) === 0
 }

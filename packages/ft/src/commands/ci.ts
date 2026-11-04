@@ -1,13 +1,14 @@
-import type { Run } from '../runs'
+import type { FailedJob, Run } from '../runs'
 import process from 'node:process'
-import { badge, duration, fail, formatElapsed, paint, parse, runHint, waitForCi } from '@kaynooo/cli-kit'
+import { badge, duration, fail, formatElapsed, jsonOption, paint, parse, printJson, runHint, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
-import { failureReport, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
+import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
 
 const usage = `ft ci [ref]
 
 Waits for the push runs covering a commit on the branch, by default origin's tip, and prints what each failed job's log says.
 A push's run tests every commit since the previous push, so a commit whose own run was cancelled, or whose --job was skipped, is covered by the next commit's runs.
+--json prints {status, runs, failedJobs, url} on stdout, the progress going to stderr; --quiet prints only the announcement, the failures and the result.
 Exits 0 when they pass, 1 when one fails, 2 on a timeout, a stalled queue or a commit not on the branch.`
 
 const options = {
@@ -15,6 +16,8 @@ const options = {
   workflow: { type: 'string', short: 'w', description: 'only this workflow file, e.g. test.yml; by default every workflow a push starts' },
   job: { type: 'string', short: 'j', description: 'a job whose skipping means the run left its work to a newer push' },
   timeout: { type: 'string', short: 't', description: 'how long before giving up (30m), a bare number in minutes' },
+  json: jsonOption('status, runs, failedJobs with their log excerpts and url'),
+  quiet: { type: 'boolean', short: 'q', description: 'no live progress or retry warnings: the announcement, the failures and the result' },
 } as const
 
 // How long the wait goes on with no run covering the commit: a push touching only ignored paths starts none, and a cancelled run's successor may take a poll to appear.
@@ -106,6 +109,7 @@ export async function ci(args: string[]): Promise<number> {
     return undefined
   }
 
+  const json = values.json === true
   const { dim } = paint(process.stderr)
   const runs = await waitForCi<Run[]>({
     tool: 'ft ci',
@@ -113,13 +117,16 @@ export async function ci(args: string[]): Promise<number> {
     giveUpMs: giveUp,
     noneMs: NO_RUN,
     stalledMs: STALLED,
+    quiet: values.quiet === true,
     noneMessage: `no run covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`,
     covering,
     finished: found => found.every(run => FINISHED.has(run.status)),
     key: found => found.map(run => run.id).join(','),
     announce: (found) => {
+      const say = json ? console.error : console.log
+
       for (const run of found)
-        console.log(`following ${run.workflow_id} run ${run.id} on ${run.commit_sha.slice(0, 7)}${run.commit_sha === sha ? '' : `, which covers ${short}`}: ${run.html_url}`)
+        say(`following ${run.workflow_id} run ${run.id} on ${run.commit_sha.slice(0, 7)}${run.commit_sha === sha ? '' : `, which covers ${short}`}: ${run.html_url}`)
     },
     links: found => found.map(run => run.html_url).join(' '),
     settle: async found => settled(await refreshed(found)),
@@ -136,6 +143,20 @@ export async function ci(args: string[]): Promise<number> {
   })
 
   const status = overall(runs)
+  const failed: FailedJob[] = []
+
+  if (status === 'failure') {
+    for (const run of runs) {
+      if (run.status === 'failure')
+        failed.push(...await failedJobsOf(run))
+    }
+  }
+
+  if (json) {
+    printJson(ciJson(runs, failed))
+
+    return status === 'failure' ? 1 : 0
+  }
 
   if (status !== 'failure') {
     console.log(`CI ${status === 'success' ? 'passed' : 'skipped its tests, a release tag\'s workflow testing them'} on ${short}`)
@@ -145,7 +166,7 @@ export async function ci(args: string[]): Promise<number> {
 
   for (const run of runs) {
     if (run.status === 'failure')
-      console.error(`\n${await failureReport(run)}\n\nrun ${run.id} failed${run.commit_sha === sha ? '' : `, testing every commit from ${short} to ${run.commit_sha.slice(0, 7)}`}: ${run.html_url}`)
+      console.error(`\n${failureText(failed.filter(job => job.run === run.id))}\n\nrun ${run.id} failed${run.commit_sha === sha ? '' : `, testing every commit from ${short} to ${run.commit_sha.slice(0, 7)}`}: ${run.html_url}`)
   }
 
   return 1

@@ -1,17 +1,20 @@
-import type { Run } from '../runs'
-import { badge, duration, Exit, fail, formatDuration, formatSeconds, isPermanentFailure, parse, takesControlCodes, wholeNumber } from '@kaynooo/cli-kit'
+import type { FailedJob, Run } from '../runs'
+import { badge, duration, Exit, fail, formatDuration, formatSeconds, isPermanentFailure, jsonOption, parse, printJson, takesControlCodes, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { repoOption } from '../args'
-import { failureReport, FINISHED, overall, recentRuns, runById, runSeconds, stallReason, startedAt } from '../runs'
+import { ciJson, failedJobsOf, failureText, FINISHED, overall, recentRuns, runById, runSeconds, stallReason, startedAt } from '../runs'
 
 const usage = `ft watch [--after <id>]
 
 Waits for runs to finish: those newer than run <id>, or else the ones in progress now.
+Prints nothing but failures and each run's final status with --quiet, and a JSON result with --json.
 Exits 0 when every one passed or was skipped, 1 when one failed or was cancelled, 2 on a timeout or a stalled queue.`
 
 const options = {
   after: { type: 'string', short: 'a', description: 'watch the runs newer than this run id, as `ft runs --json` gives it' },
   timeout: { type: 'string', short: 't', description: 'how long before giving up (15m), a bare number in minutes' },
+  json: jsonOption('status, runs, failedJobs with their log excerpts and url; the progress goes to stderr'),
+  quiet: { type: 'boolean', short: 'q', description: 'print only the failures and each run\'s final status' },
   ...repoOption,
 } as const
 
@@ -22,19 +25,34 @@ const STALLED = 3 * 60_000
 
 type Output = NonNullable<Parameters<typeof liveRegion>[1]>
 
+export interface Followed { code: number, runs: Run[], failedJobs: FailedJob[] }
+
+interface Mode {
+  // Failures are collected into the result instead of printed.
+  json?: boolean
+  // Nothing prints while waiting; each run's last status prints once at the end.
+  quiet?: boolean
+}
+
 // Polls until the picked runs are all finished, a failure printing its jobs' log excerpts. A terminal shows one line per run redrawn in place, then each run's last status; anything else gets a line per status change.
 // With `idle`, picking no run for that many milliseconds counts as a pass: a push touching only ignored paths starts none.
 export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, repo?: string, idle?: number, out: Output = process.stdout): Promise<number> {
+  return (await followRuns(pick, timeout, repo, idle, out)).code
+}
+
+export async function followRuns(pick: (runs: Run[]) => Run[], timeout: number, repo?: string, idle?: number, out: Output = process.stdout, mode: Mode = {}): Promise<Followed> {
+  const { json = false, quiet = false } = mode
   const started = Date.now()
   // The last state of every run seen, in the order they appeared.
   const latest = new Map<number, Run>()
   // When each run was first seen, the wait counted from there until Forgejo says it started.
   const seen = new Map<number, number>()
   const line = (run: Run) => `${run.workflow_id} run ${run.id} on ${run.prettyref}: ${badge(run.status, out)}${elapsed(run, seen.get(run.id) ?? Date.now())}`
-  const region = takesControlCodes(out) ? liveRegion(() => [...latest.values()].map(line), out) : undefined
+  const region = takesControlCodes(out) && !quiet ? liveRegion(() => [...latest.values()].map(line), out) : undefined
   // Every run ever picked, read again by id once newer runs push it out of the page of the newest ones.
   const followed = new Set<number>()
   const failed = new Set<number>()
+  const failedJobs: FailedJob[] = []
   let moving = started
 
   // One look at the runs: the exit code once they are decided, or undefined to poll again.
@@ -50,7 +68,7 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
       if (!seen.has(run.id))
         seen.set(run.id, Date.now())
 
-      if (region === undefined && latest.get(run.id)?.status !== run.status)
+      if (region === undefined && !quiet && latest.get(run.id)?.status !== run.status)
         out.write(`${line(run)}\n`)
 
       latest.set(run.id, run)
@@ -60,7 +78,8 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
 
     if (runs.length === 0) {
       if (idle !== undefined && Date.now() - started > idle) {
-        console.log('no run started, so nothing was waited for')
+        if (!json)
+          console.log('no run started, so nothing was waited for')
 
         return 0
       }
@@ -71,7 +90,13 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
     // A failure is reported as soon as it happens, but the wait goes on until every run is over, as `ft ci` does.
     for (const run of runs) {
       if (run.status === 'failure' && !failed.has(run.id)) {
-        console.error(`\n${await failureReport(run, repo)}\n\n${run.html_url}`)
+        const jobs = await failedJobsOf(run, repo)
+
+        failedJobs.push(...jobs)
+
+        if (!json)
+          console.error(`\n${failureText(jobs)}\n\n${run.html_url}`)
+
         failed.add(run.id)
       }
     }
@@ -116,18 +141,19 @@ export async function watchRuns(pick: (runs: Run[]) => Run[], timeout: number, r
         if (isPermanentFailure(error))
           fail(message)
 
-        console.warn(`ft watch: ${message}, polling again`)
+        if (!quiet)
+          console.warn(`ft watch: ${message}, polling again`)
       }
     }
   }
 
   try {
-    return await settle()
+    return { code: await settle(), runs: [...latest.values()], failedJobs }
   }
   finally {
-    if (region !== undefined) {
-      region.stop()
+    region?.stop()
 
+    if (region !== undefined || quiet) {
       for (const run of latest.values())
         out.write(`${line(run)}\n`)
     }
@@ -149,20 +175,34 @@ export async function watch(args: string[]): Promise<number> {
 
   const { values } = parsed
   const timeout = duration(values.timeout, 'timeout', 15 * 60_000, 'm')
+  const json = values.json === true
+  const mode = { json, quiet: values.quiet === true }
+
+  async function follow(pick: (runs: Run[]) => Run[]): Promise<number> {
+    const followed = await followRuns(pick, timeout, values.repo, undefined, json ? process.stderr : process.stdout, mode)
+
+    if (json)
+      printJson(ciJson(followed.runs, followed.failedJobs))
+
+    return followed.code
+  }
 
   if (values.after !== undefined) {
     const after = wholeNumber(values.after, 'after', 0, 0)
 
-    return watchRuns(runs => runs.filter(run => run.id > after), timeout, values.repo)
+    return follow(runs => runs.filter(run => run.id > after))
   }
 
   const active = new Set((await recentRuns(LIMIT, values.repo)).filter(run => !FINISHED.has(run.status)).map(run => run.id))
 
   if (active.size === 0) {
-    console.log('no run in progress')
+    if (json)
+      printJson(ciJson([], []))
+    else
+      console.log('no run in progress')
 
     return 0
   }
 
-  return watchRuns(runs => runs.filter(run => active.has(run.id)), timeout, values.repo)
+  return follow(runs => runs.filter(run => active.has(run.id)))
 }

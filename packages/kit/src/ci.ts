@@ -21,6 +21,8 @@ export interface CiWait<T> {
   // How long queued work may sit while nothing moves.
   stalledMs: number
   pollMs?: number
+  // Leaves the live region and the retry warnings out, so only what the caller prints around the wait shows.
+  quiet?: boolean
   // The message the wait fails with once nothing covered the commit for `noneMs`.
   noneMessage: string
   // What covers the commit now, or undefined; a refusal such as a commit not on the branch is thrown as an Exit.
@@ -43,13 +45,17 @@ const POLL = 15_000
 
 // Waits until what covers a commit has finished, polling `covering`: a poll failing for a network reason is retried, one failing for good (a missing binary, a 401, 403 or 404) or a refusal ends the wait.
 export async function waitForCi<T>(wait: CiWait<T>): Promise<T> {
-  const { tool, short, giveUpMs, noneMs, stalledMs, pollMs = POLL } = wait
+  const { tool, short, giveUpMs, noneMs, stalledMs, pollMs = POLL, quiet = false } = wait
   const started = Date.now()
   let seen = started
   let moving = started
   let followed = ''
   let found: T | undefined
-  const region = wait.lines === undefined ? undefined : liveRegion(spinner => wait.lines?.(spinner, found, started) ?? [])
+  const region = wait.lines === undefined || quiet ? undefined : liveRegion(spinner => wait.lines?.(spinner, found, started) ?? [])
+  const retrying = (error: unknown) => {
+    if (!quiet)
+      console.warn(`${tool}: ${error instanceof Error ? error.message : String(error)}, polling again`)
+  }
   const suffix = () => found === undefined ? '' : `: ${wait.links(found)}`
 
   // A failure to read the stall is retried on the next poll, and leaves the stall unknown.
@@ -61,7 +67,7 @@ export async function waitForCi<T>(wait: CiWait<T>): Promise<T> {
       if (error instanceof Exit || isPermanentFailure(error))
         throw error
 
-      console.warn(`${tool}: ${error instanceof Error ? error.message : String(error)}, polling again`)
+      retrying(error)
 
       return 'unknown'
     }
@@ -86,7 +92,7 @@ export async function waitForCi<T>(wait: CiWait<T>): Promise<T> {
         if (isPermanentFailure(error))
           fail(error instanceof Error ? error.message : String(error))
 
-        console.warn(`${tool}: ${error instanceof Error ? error.message : String(error)}, polling again`)
+        retrying(error)
 
         const latest = found === undefined ? undefined : await wait.settle(found)
 

@@ -173,14 +173,35 @@ export async function stallReason(runs: Run[], repo?: string): Promise<Stall | u
   return online.some(runner => runner.status === 'active') ? undefined : { reason: 'no runner is working on anything: is it up?', certain: false }
 }
 
+export interface FailedJob { name: string, run: number, workflow: string, excerpt: string }
+
 // Each failed job of the run, with what its log says went wrong.
-export async function failureReport(run: Run, repo?: string): Promise<string> {
-  const parts: string[] = []
+export async function failedJobsOf(run: Run, repo?: string): Promise<FailedJob[]> {
+  const failed: FailedJob[] = []
 
   for (const job of await jobsOf(run.id, repo)) {
     if (job.status === 'failure')
-      parts.push(`job ${job.name} of ${run.workflow_id} failed:\n${excerpt(await jobLog(job.id, repo))}`)
+      failed.push({ name: job.name, run: run.id, workflow: run.workflow_id, excerpt: excerpt(await jobLog(job.id, repo)) })
   }
 
-  return parts.join('\n\n')
+  return failed
+}
+
+export function failureText(failed: FailedJob[]): string {
+  return failed.map(job => `job ${job.name} of ${job.workflow} failed:\n${job.excerpt}`).join('\n\n')
+}
+
+export async function failureReport(run: Run, repo?: string): Promise<string> {
+  return failureText(await failedJobsOf(run, repo))
+}
+
+export function runJson(run: Run) {
+  return { id: run.id, workflow: run.workflow_id, status: run.status, ref: run.prettyref, sha: run.commit_sha, url: run.html_url }
+}
+
+// What a --json wait or log prints: the worst status, the runs followed, the failed jobs with their excerpts, and the link to the failed run, else the first.
+export function ciJson(runs: Run[], failedJobs: FailedJob[]) {
+  const link = runs.find(run => run.status === 'failure') ?? runs[0]
+
+  return { status: runs.length === 0 ? 'none' : overall(runs), runs: runs.map(runJson), failedJobs, url: link?.html_url ?? null }
 }

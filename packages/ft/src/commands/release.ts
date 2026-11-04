@@ -1,15 +1,16 @@
 import type { Manifest } from './release-version'
 import { basename, join } from 'node:path'
-import { duration, exitCodeOf, fail, holdSignals, parse, runHint, runTool } from '@kaynooo/cli-kit'
+import process from 'node:process'
+import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, runTool } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { defaultBranch, fetchBranch, git, tagsAt } from '../git'
-import { recentRuns } from '../runs'
+import { ciJson, recentRuns } from '../runs'
 import { limits, NO_RUN, testsPass } from './release-checks'
 import { parseTargets, publishable } from './release-many'
 import { printPlan } from './release-plan'
 import { commitPackageBump, packageDir, rollBack, settleMilestone, waitForRegistry } from './release-steps'
 import { LEVELS, taggedVersion, VERSION } from './release-version'
-import { watchRuns } from './watch'
+import { followRuns } from './watch'
 
 const SEVERAL = /[,:]/
 
@@ -25,6 +26,7 @@ Cuts a release from the default branch: first the commit it sits on is pushed an
 A refused or interrupted push drops the bump commit and its tag, so a retry starts clean; with --tagged the commit and tag are yours and stay.
 Once released, an open milestone titled like the version (\`1.2.0\`, \`v1.2.0\` or the tag) has its closed issues listed and is closed; a failure there only warns.
 --dry-run checks the same and prints the plan: the version bump, the tag, the pushes and the runs and registry it would wait for, changing nothing.
+--json prints {released, tag, package, version, status, runs, failedJobs, url} on stdout and the progress on stderr, an array of them with several packages; it does not take --dry-run.
 Exits 0 once released or planned, 1 when a run fails, origin refuses a push or the registry never serves the version, 2 on a timeout, a stalled queue, a refusal before anything ran (another branch, uncommitted changes, origin ahead) or a usage error.`
 
 const options = {
@@ -34,12 +36,26 @@ const options = {
   'no-registry': { type: 'boolean', description: 'do not wait for the registry to serve the new version' },
   'dry-run': { type: 'boolean', description: 'print what the release would do, changing nothing' },
   'timeout': { type: 'string', short: 't', description: 'how long to wait for the runs (15m), a bare number in minutes' },
+  'json': jsonOption('what was released and how its runs ended'),
 } as const
 
+export type Released = ReturnType<typeof ciJson> & { released: boolean, tag: string, package: string | null, version: string }
+
 export async function release(args: string[]): Promise<number> {
+  return cut(args)
+}
+
+// With a `sink`, a release reports its result there instead of printing it, for the caller printing them all.
+async function cut(args: string[], sink?: Released[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
   const { values, positionals } = parsed
+  const json = values.json === true
+  const say = json ? console.error : console.log
+
+  if (json && values['dry-run'] === true)
+    fail('--json does not take --dry-run')
+
   const level = positionals[0]
   const tagged = values.tagged === true
 
@@ -57,20 +73,25 @@ export async function release(args: string[]): Promise<number> {
       fail('give --all or --package, not both')
 
     const targets = parseTargets(values.package ?? (await publishable()).join(','), level)
-    const flags = [...values['dry-run'] === true ? ['--dry-run'] : [], ...values['no-registry'] === true ? ['--no-registry'] : [], ...values.timeout === undefined ? [] : ['--timeout', values.timeout]]
+    const flags = [...json ? ['--json'] : [], ...values['dry-run'] === true ? ['--dry-run'] : [], ...values['no-registry'] === true ? ['--no-registry'] : [], ...values.timeout === undefined ? [] : ['--timeout', values.timeout]]
+
+    const results: Released[] = []
 
     for (const [index, target] of targets.entries()) {
-      console.log(`== ${target.level} ${target.folder} (${index + 1}/${targets.length})`)
+      say(`== ${target.level} ${target.folder} (${index + 1}/${targets.length})`)
 
       const stopped = (): void => console.error(`stopped at ${target.folder}, not released: ${targets.slice(index).map(each => each.folder).join(', ')}`)
 
       try {
-        const code = await release([target.level, '--package', target.folder, ...flags])
+        const code = await cut([target.level, '--package', target.folder, ...flags], results)
 
         if (code === 0)
           continue
 
         stopped()
+
+        if (json)
+          printJson(results)
 
         return code
       }
@@ -80,6 +101,9 @@ export async function release(args: string[]): Promise<number> {
         throw error
       }
     }
+
+    if (json)
+      printJson(results)
 
     return 0
   }
@@ -108,7 +132,7 @@ export async function release(args: string[]): Promise<number> {
   if (values['dry-run'] === true)
     return printPlan({ level, dir, prefix, branch, base, timeout, registry: values['no-registry'] !== true })
 
-  if (!await testsPass(base, branch, timeout))
+  if (!await testsPass(base, branch, timeout, json))
     fail(`the runs on ${base.slice(0, 7)} failed, so nothing was bumped or tagged`, 1, runHint(`ft runs --sha ${base.slice(0, 7)}`, 'list the runs, then ft logs <id> reads the failure'))
 
   // Read before the bump, so a failure here leaves nothing to undo.
@@ -180,20 +204,36 @@ export async function release(args: string[]): Promise<number> {
   if (late !== undefined)
     fail(`interrupted by ${late} after ${tag} was pushed: its runs are not waited for`, exitCodeOf(null, late))
 
-  console.log(`pushed ${branch} and ${tag}, waiting for their runs`)
-
-  const code = await watchRuns(runs => runs.filter(run => run.id > before && run.commit_sha === head), timeout, undefined, NO_RUN)
-
-  if (code !== 0)
-    return code
+  say(`pushed ${branch} and ${tag}, waiting for their runs`)
 
   const file = Bun.file(join(dir ?? '.', 'package.json'))
   const pkg = await file.exists() ? await file.json() as Manifest : undefined
   const version = tag.slice(prefix.length)
+  const followed = await followRuns(runs => runs.filter(run => run.id > before && run.commit_sha === head), timeout, undefined, NO_RUN, json ? process.stderr : process.stdout, { json })
+
+  // Without a sink the result is printed here, as the one release asked for.
+  const outcome = (released: boolean): void => {
+    if (!json)
+      return
+
+    const result: Released = { released, tag, package: pkg?.name ?? null, version, ...ciJson(followed.runs, followed.failedJobs) }
+
+    if (sink === undefined)
+      printJson(result)
+    else
+      sink.push(result)
+  }
+
+  if (followed.code !== 0) {
+    outcome(false)
+
+    return followed.code
+  }
 
   if (values['no-registry'] === true || pkg?.name === undefined || pkg.private === true) {
-    console.log(`released ${tag}`)
-    await settleMilestone(version, tag)
+    say(`released ${tag}`)
+    await settleMilestone(version, tag, say)
+    outcome(true)
 
     return 0
   }
@@ -201,8 +241,9 @@ export async function release(args: string[]): Promise<number> {
   if (!await waitForRegistry(pkg.name, version))
     fail(`the runs passed but the registry does not serve ${pkg.name}@${version}: read the publish job with \`ft logs\``, 1)
 
-  console.log(`released ${pkg.name}@${version}`)
-  await settleMilestone(version, tag)
+  say(`released ${pkg.name}@${version}`)
+  await settleMilestone(version, tag, say)
+  outcome(true)
 
   return 0
 }

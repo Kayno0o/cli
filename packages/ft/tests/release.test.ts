@@ -11,6 +11,13 @@ import { withFakeTea } from './fake-tea'
 
 const temp = tempDirs()
 
+describe('release --json', () => {
+  test('refuses --dry-run, which prints a plan and no result', async () => {
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(capture(async () => release(['patch', '--json', '--dry-run']))).rejects.toThrow('--json does not take --dry-run')
+  })
+})
+
 describe('testsPass on a commit origin has', () => {
   const run = (sha: string, status: string) => ({ id: 7, commit_sha: sha, event: 'push', status, workflow_id: 'test.yml', prettyref: 'main', html_url: 'https://forge/runs/7', title: 'feat', duration: 60e9 })
 

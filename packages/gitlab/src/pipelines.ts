@@ -107,12 +107,27 @@ export function waitingOnRunner(jobs: Job[]): Job[] {
   return jobs.some(job => job.status === 'running') ? [] : jobs.filter(job => job.status === 'pending')
 }
 
+export interface FailedJob { name: string, stage: string, reason: string | null, url: string, excerpt: string }
+
 // Each failed job of the pipeline, with what its trace says went wrong.
-export async function failureReport(pipeline: Pipeline, repo?: string): Promise<string> {
-  const parts: string[] = []
+export async function failedJobsOf(pipeline: Pipeline, repo?: string): Promise<FailedJob[]> {
+  const failed: FailedJob[] = []
 
   for (const job of failedJobs(await jobsOf(pipeline.id, repo)))
-    parts.push(`job ${job.name} (${job.stage}) failed${job.failure_reason === undefined || job.failure_reason === 'script_failure' ? '' : `, ${job.failure_reason}`}: ${job.web_url}\n${excerpt(await jobTrace(job.id, repo))}`)
+    failed.push({ name: job.name, stage: job.stage, reason: job.failure_reason ?? null, url: job.web_url, excerpt: excerpt(await jobTrace(job.id, repo)) })
 
-  return parts.join('\n\n')
+  return failed
+}
+
+export function failureText(failed: FailedJob[]): string {
+  return failed.map(job => `job ${job.name} (${job.stage}) failed${job.reason === null || job.reason === 'script_failure' ? '' : `, ${job.reason}`}: ${job.url}\n${job.excerpt}`).join('\n\n')
+}
+
+export function pipelineJson(pipeline: Pipeline) {
+  return { id: pipeline.id, number: pipeline.iid, status: pipeline.status, ref: pipeline.ref, sha: pipeline.sha, url: pipeline.web_url }
+}
+
+// What a --json wait or log prints, shaped like `ft ci --json`: the pipeline's status, the pipeline followed, the failed jobs with their excerpts and its link.
+export function ciJson(pipeline: Pipeline, failed: FailedJob[]) {
+  return { status: pipeline.status, runs: [pipelineJson(pipeline)], failedJobs: failed, url: pipeline.web_url }
 }

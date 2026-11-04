@@ -1,6 +1,7 @@
 import type { FakeState } from './fake-tea'
+import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { timing, watchRuns } from '../src/commands/watch'
+import { timing, watch, watchRuns } from '../src/commands/watch'
 import { jobLog, runsOn } from '../src/runs'
 import { refusal, withFakeTea } from './fake-tea'
 
@@ -152,5 +153,42 @@ describe('a job log', () => {
     await withFakeTea({ issues: [] }, async () => {
       expect(await refusal(jobLog(9))).toContain('not found')
     })
+  })
+})
+
+describe('ft watch --json and --quiet', () => {
+  const failing = { jobs: { 2: [{ id: 20, name: 'test', status: 'failure', runs_on: null }] }, logs: { 20: 'it broke' } }
+
+  test('prints status, runs, failed jobs with their excerpt and url on stdout, the failure text left out', async () => {
+    let code = -1
+    const { out, err } = await capture(async () => withFastPoll([run(2, 'failure'), run(1, 'success')], async () => {
+      code = await watch(['--after', '0', '--json'])
+    }, failing))
+
+    expect(code).toBe(1)
+    expect(JSON.parse(out)).toEqual({
+      status: 'failure',
+      runs: [{ id: 2, workflow: 'test.yml', status: 'failure', ref: 'main', sha: 'abc', url: 'https://forge/runs/2' }, { id: 1, workflow: 'test.yml', status: 'success', ref: 'main', sha: 'abc', url: 'https://forge/runs/1' }],
+      failedJobs: [{ name: 'test', run: 2, workflow: 'test.yml', excerpt: 'it broke' }],
+      url: 'https://forge/runs/2',
+    })
+    expect(err).not.toContain('it broke')
+  })
+
+  test('says none when nothing is in progress', async () => {
+    const { out } = await capture(async () => withFastPoll([run(1, 'success')], async () => {
+      await watch(['--json'])
+    }))
+
+    expect(JSON.parse(out)).toEqual({ status: 'none', runs: [], failedJobs: [], url: null })
+  })
+
+  test('--quiet prints the failure and each run\'s final status, no progress line', async () => {
+    const { out, err } = await capture(async () => withFastPoll([run(2, 'failure')], async () => {
+      await watch(['--after', '0', '--quiet'])
+    }, failing))
+
+    expect(err).toContain('job test of test.yml failed:\nit broke')
+    expect(out).toBe('test.yml run 2 on main: failure\n')
   })
 })

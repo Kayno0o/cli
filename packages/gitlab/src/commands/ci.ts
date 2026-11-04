@@ -1,18 +1,21 @@
 import type { Pipeline } from '../pipelines'
 import process from 'node:process'
-import { badge, duration, fail, formatElapsed, paint, parse, waitForCi } from '@kaynooo/cli-kit'
+import { badge, duration, fail, formatElapsed, jsonOption, paint, parse, printJson, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
-import { failureReport, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
+import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
 const usage = `gl ci [ref]
 
 Waits for the pipeline covering a commit on the branch, by default origin's tip, and prints what each failed job's trace says.
 GitLab runs a push's pipeline on its last commit only, and cancels a redundant one, so a commit without a pipeline of its own is covered by the next commit's.
+--json prints {status, runs, failedJobs, url} on stdout, the progress going to stderr; --quiet prints only the announcement, the failures and the result.
 Exits 0 when it passes, 1 when it fails, 2 on a timeout, jobs no runner picks up or a commit not on the branch.`
 
 const options = {
   branch: { type: 'string', short: 'b', description: 'branch the commit is on, by default the one origin/HEAD names' },
   timeout: { type: 'string', short: 't', description: 'how long before giving up (30m), a bare number in minutes' },
+  json: jsonOption('status, runs, failedJobs with their trace excerpts and url'),
+  quiet: { type: 'boolean', short: 'q', description: 'no live progress or retry warnings: the announcement, the failures and the result' },
 } as const
 
 // How long the wait goes on with no pipeline covering the commit: a push its workflow rules leave out starts none, and a cancelled one's successor may take a poll to appear.
@@ -68,6 +71,7 @@ export async function ci(args: string[]): Promise<number> {
     return undefined
   }
 
+  const json = values.json === true
   const { dim } = paint(process.stderr)
   const pipeline = await waitForCi<Pipeline>({
     tool: 'gl ci',
@@ -75,11 +79,12 @@ export async function ci(args: string[]): Promise<number> {
     giveUpMs: giveUp,
     noneMs: NO_PIPELINE,
     stalledMs: STALLED,
+    quiet: values.quiet === true,
     noneMessage: `no pipeline covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`,
     covering,
     finished: found => FINISHED.has(found.status),
     key: found => String(found.id),
-    announce: found => console.log(`following pipeline ${found.id} on ${found.sha.slice(0, 7)}${found.sha === sha ? '' : `, which covers ${short}`}: ${found.web_url}`),
+    announce: found => (json ? console.error : console.log)(`following pipeline ${found.id} on ${found.sha.slice(0, 7)}${found.sha === sha ? '' : `, which covers ${short}`}: ${found.web_url}`),
     links: found => found.web_url,
     settle: async (found) => {
       const latest = await refreshed(found.id)
@@ -104,13 +109,19 @@ export async function ci(args: string[]): Promise<number> {
   if (pipeline.status === 'canceled' || pipeline.status === 'skipped')
     fail(`pipeline ${pipeline.id} on ${short} was ${pipeline.status} while GitLab could not be read: ${pipeline.web_url}`)
 
+  if (json) {
+    printJson(ciJson(pipeline, pipeline.status === 'failed' ? await failedJobsOf(pipeline) : []))
+
+    return pipeline.status === 'failed' ? 1 : 0
+  }
+
   if (pipeline.status !== 'failed') {
     console.log(pipeline.status === 'manual' ? `CI passed on ${short} up to a manual job: ${pipeline.web_url}` : `CI passed on ${short}`)
 
     return 0
   }
 
-  console.error(`\n${await failureReport(pipeline)}\n\npipeline ${pipeline.id} failed${pipeline.sha === sha ? '' : `, testing every commit from ${short} to ${pipeline.sha.slice(0, 7)}`}: ${pipeline.web_url}`)
+  console.error(`\n${failureText(await failedJobsOf(pipeline))}\n\npipeline ${pipeline.id} failed${pipeline.sha === sha ? '' : `, testing every commit from ${short} to ${pipeline.sha.slice(0, 7)}`}: ${pipeline.web_url}`)
 
   return 1
 }
