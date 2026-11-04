@@ -4,8 +4,7 @@ import type { Host } from './checks'
 import type { Listed } from './list'
 import process from 'node:process'
 import { badUsage, duration, jsonOption, paint, parse, printJson, readUsage, runCli, summarizeUsage, table, usagePath } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
-import { completionDir, completionFile, installCompletions, installedBins } from './completions'
+import { bashScript, completionDir, completionFile, installCompletions, installedBins } from './completions'
 import { hostHere } from './host'
 import { listBins } from './list'
 
@@ -41,10 +40,12 @@ export async function list(args: string[], host: Host = hostHere()): Promise<num
   return 0
 }
 
-const COMPLETIONS_USAGE = `cli completions fish [--install] [--dir <folder>]: fish completions for every installed bin of the @kaynooo/cli-* packages
+const COMPLETIONS_USAGE = `cli completions <fish|bash> [--install] [--dir <folder>]: shell completions for every installed bin of the @kaynooo/cli-* packages
 
-Each bin completes itself through \`<bin> __complete\`; this writes the one line fish needs per bin. Without --install the files print on stdout, with it they go to ~/.cache/fish/kaynooo-cli (or $XDG_CACHE_HOME), one <bin>.fish each, the stale ones this command wrote taken out. That folder has to be in fish_complete_path, first so a completion fish ships for the same name does not win: \`set -p fish_complete_path ~/.cache/fish/kaynooo-cli\`.
-Exits 0 when it printed or wrote them, 2 on a usage error.`
+Each bin completes itself through \`<bin> __complete\`; this writes the glue a shell needs per bin.
+fish: without --install the files print on stdout, with it they go to ~/.cache/fish/kaynooo-cli (or $XDG_CACHE_HOME), one <bin>.fish each, the stale ones this command wrote taken out. That folder has to be in fish_complete_path, first so a completion fish ships for the same name does not win: \`set -p fish_complete_path ~/.cache/fish/kaynooo-cli\`.
+bash: one script on stdout, sourced from ~/.bashrc with \`source <(cli completions bash)\`; --install and --dir are fish's.
+zsh: has no script of its own, it reads the bash one through bashcompinit: \`autoload -U +X compinit && compinit\`, \`autoload -U +X bashcompinit && bashcompinit\`, then the bash line above in ~/.zshrc (untested, zsh is not installed on the machine this was written on).`
 
 const COMPLETIONS_OPTIONS = {
   install: { type: 'boolean', description: 'write the files to the folder instead of printing them' },
@@ -52,10 +53,22 @@ const COMPLETIONS_OPTIONS = {
 } as const
 
 export async function completions(args: string[], host: Host = hostHere()): Promise<number> {
-  const { values, positionals } = parse(args, COMPLETIONS_USAGE, COMPLETIONS_OPTIONS, { positionals: ['<shell>'], candidates: { '<shell>': () => ['fish'] }, examples: ['cli completions fish', ['cli completions fish --install', 'write one file per bin']] })
+  const { values, positionals } = parse(args, COMPLETIONS_USAGE, COMPLETIONS_OPTIONS, { positionals: ['<shell>'], exits: [[0, 'it printed or wrote them'], [2, 'a usage error or a shell without a script']], candidates: { '<shell>': () => ['fish', 'bash'] }, examples: ['cli completions fish', ['cli completions fish --install', 'write one file per bin'], ['source <(cli completions bash)', 'in ~/.bashrc']] })
 
-  if (positionals[0] !== 'fish')
-    badUsage('only fish is supported: cli completions fish')
+  if (positionals[0] === 'zsh')
+    badUsage('zsh has no script of its own: it reads the bash one through bashcompinit, see cli completions --help')
+
+  if (positionals[0] !== 'fish' && positionals[0] !== 'bash')
+    badUsage('completions exist for fish and bash: cli completions fish')
+
+  if (positionals[0] === 'bash') {
+    if (values.install === true || values.dir !== undefined)
+      badUsage('--install and --dir are for fish: source the bash script instead')
+
+    console.log(bashScript(installedBins(host)).trimEnd())
+
+    return 0
+  }
 
   if (values.install !== true) {
     console.log(installedBins(host).map(completionFile).join('\n'))
@@ -109,7 +122,6 @@ export async function stats(args: string[], path = usagePath()): Promise<number>
 if (import.meta.main) {
   process.exitCode = await runCli({
     name: 'cli',
-    version,
     about: 'the bins of the @kaynooo/cli-* packages, described by their own help',
     replaces: 'running each bin\'s --help to find the one that fits',
     examples: ['cli list', ['cli list --json', 'with each bin\'s synopsis and examples']],

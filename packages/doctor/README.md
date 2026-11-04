@@ -17,6 +17,15 @@ doctor --json    # [{check, ok, detail, fix?}]
 
 A registry that does not answer leaves a package passing, with a note. Exit codes: 0 every check passed, 1 one failed, 2 a usage error.
 
+## cli completions
+
+```sh
+cli completions fish --install            # one file per installed bin in ~/.cache/fish/kaynooo-cli
+source <(cli completions bash)            # in ~/.bashrc
+```
+
+Each bin completes itself through `<bin> __complete`. fish gets a file per bin (put the folder first in `fish_complete_path`), bash one script sourced from `~/.bashrc`. zsh has no script of its own: load `compinit` and `bashcompinit` in `~/.zshrc`, then the bash line above (not tested, zsh is not installed on the machine this was written on). The fish files are checked by `doctor`.
+
 ## cli stats
 
 ```sh
