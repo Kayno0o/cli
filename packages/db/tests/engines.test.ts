@@ -350,11 +350,17 @@ describe('a write on a client the abbreviations and test-looking words must not 
   test('refuses a write when only an unrelated variable before the client says test', async () => {
     expect(await refused('PGUSER=test_user psql -h prod -c "DELETE FROM users"')).not.toBeNull()
     expect(await refused('PGPASSWORD=test psql -h prod -c "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('USERNAME=test psql -h prod -c "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('HOSTNAME=test-box psql -h prod -c "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('docker exec -u test_user db psql -h prod -c "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('sudo -u test psql -h prod -c "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('sudo --user=test psql -h prod -c "DELETE FROM users"')).not.toBeNull()
   })
 
   test('still lets a test-scoped target through', async () => {
     expect(await refused('APP_ENV=test psql -c "DELETE FROM users"')).toBeNull()
     expect(await refused('PGDATABASE=app_test psql -c "DELETE FROM users"')).toBeNull()
+    expect(await refused('DB_NAME=app_test psql -c "DELETE FROM users"')).toBeNull()
     expect(await refused('psql -d app_test -c "DELETE FROM users"')).toBeNull()
   })
 })

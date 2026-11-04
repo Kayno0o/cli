@@ -18,6 +18,7 @@ const VALUE_LONGS = new Set(['--host', '--port', '--username', '--user', '--outp
 // Programs piping their arguments into a client, `echo "DELETE ..." | psql`.
 const PRINTERS = new Set(['echo', 'printf'])
 const FILE_LONGS = new Set(['--file'])
+const KNOWN_LONGS = [...STATEMENT_LONGS, ...FILE_LONGS, ...DATABASE_LONGS, ...VALUE_LONGS]
 const LIST_OPTIONS = new Set(['-l', '--list'])
 const REDIRECT_ONLY = /^\d*(?:>|>>|>&|&>|>\||<&|<>)$/
 const REDIRECT_START = /^\d*>|^&>/
@@ -28,8 +29,11 @@ const WRITING_CONSOLE = /^(?:doctrine:(?:migrations:(?:migrate|execute|rollup)|s
 const TEST_SCOPED = /(?:^|[^a-z])test/i
 const ASSIGNMENT = /^([A-Z_]\w*)=/i
 // The variables that pick an environment or a database; `PGUSER=test_user` or `PGPASSWORD=test` pick neither.
-const TARGET_VARIABLE = /(?:ENV|ENVIRONMENT|DATABASE|DB|DBNAME|NAME|URL|DSN)$/i
+const TARGET_VARIABLE = /(?:^|_|^PG)(?:ENV|ENVIRONMENT|DATABASE|DB|DBNAME|DSN|URL)$|^(?:DB|DATABASE)_NAME$/i
 // The disposable stack git-diff captures on, by its directory `.worktrees/<project>/shot` or its compose project `<project>--shot`.
+// The options naming the account a command runs as, whose value is no target.
+const USER_OPTION = /^(?:-[uU]|--user(?:name)?)$/
+const USER_ATTACHED = /^(?:--user(?:name)?=|-[uU].)/
 const SHOT_STACK = /\.worktrees\/[^/\s]+\/shot(?:\/|$)|--shot(?:-|$)/
 // Files a client cannot be read from without hanging or reading a device.
 const DEVICE_PATH = /^\/(?:dev|proc|sys)\//
@@ -68,12 +72,10 @@ function databaseOf(operand: string): string {
 
 // getopt_long and mysql's option parser take a long option cut short to what is unambiguous, `--comm` or `--exec`; it is read as the one option it prefixes.
 function fullOption(option: string): string {
-  const known = [...STATEMENT_LONGS, ...FILE_LONGS, ...DATABASE_LONGS, ...VALUE_LONGS]
-
-  if (known.includes(option) || option.length < 4)
+  if (KNOWN_LONGS.includes(option) || option.length < 4)
     return option
 
-  const candidates = known.filter(each => each.startsWith(option))
+  const candidates = KNOWN_LONGS.filter(each => each.startsWith(option))
 
   return candidates.length === 1 ? candidates[0]! : option
 }
@@ -176,11 +178,16 @@ function isTestWord(word: string): boolean {
   return TEST_SCOPED.test(word) || SHOT_STACK.test(word)
 }
 
+// The words that can name a target: the value of a user option is the account, not the environment.
+function targetWords(words: readonly string[]): string[] {
+  return words.filter((word, index) => !USER_OPTION.test(words[index - 1] ?? '') && !USER_ATTACHED.test(word))
+}
+
 function isTestScoped(words: readonly string[], client: number, input: ClientInput | null): boolean {
   if (client === -1)
-    return words.some(isTestWord)
+    return targetWords(words).some(isTestWord)
 
-  return words.slice(0, client).some(isTestWord) || (input?.databases ?? []).some(name => TEST_SCOPED.test(name))
+  return targetWords(words.slice(0, client)).some(isTestWord) || (input?.databases ?? []).some(name => TEST_SCOPED.test(name))
 }
 
 // Whether a piece runs a SQL client, anywhere in its words so `docker compose exec db psql` counts.
