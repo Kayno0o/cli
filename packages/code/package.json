@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-code",
   "type": "module",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "peek, todo-scan and hotspots: source read by spans, symbols and outlines in one call, the TODO and issue-reference comments of a repository with stale ones flagged, and the files ranked by complexity times git churn.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
