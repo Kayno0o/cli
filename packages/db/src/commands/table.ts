@@ -45,7 +45,7 @@ async function run(args: string[], usage: string, options: typeof sampleOptions 
 
   const url = await connectionUrl(values)
   const dialect = dialectOf(new URL(url))
-  const limit = wholeNumber((values as { limit?: string }).limit, 'limit', SAMPLE_LIMIT, 0)
+  const limit = wholeNumber((values as { rows?: string }).rows, 'rows', SAMPLE_LIMIT, 0)
   const sql = build(target, dialect, { limit, where: values.where })
   const verdict = inspect(sql, dialect)
 

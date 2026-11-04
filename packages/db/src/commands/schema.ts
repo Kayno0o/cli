@@ -68,7 +68,7 @@ async function show(args: string[], usage: string, work: (positionals: string[])
 
   const { values, positionals } = parsed
   const plans = work(positionals)
-  const limit = wholeNumber(values.limit, 'limit', DEFAULT_LIMIT, 0)
+  const limit = wholeNumber(values.rows, 'rows', DEFAULT_LIMIT, 0)
   const url = await connectionUrl(values)
   const { sql, params } = plans[dialectOf(new URL(url))]
   const rows = await readRows(url, sql, params, limit)

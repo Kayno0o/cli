@@ -1,4 +1,6 @@
+import { parse } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
+import { catalogOptions, outputOptions } from '../src/args'
 import { countSql, quotedTable, sampleSql } from '../src/commands/table'
 import { inspect } from '../src/guard'
 
@@ -26,5 +28,14 @@ describe('the statements', () => {
     expect(inspect(sampleSql('users', 'postgres', 5, 'id > 1'), 'postgres').reasons).toEqual([])
     expect(inspect(countSql('users', 'mysql', undefined), 'mysql').reasons).toEqual([])
     expect(inspect(countSql('users', 'postgres', '1=1; delete from users'), 'postgres').statements).toBeGreaterThan(1)
+  })
+})
+
+describe('the rows flag', () => {
+  test('-n and the old --limit both read as --rows', () => {
+    for (const args of [['-n', '5'], ['--rows', '5'], ['--limit', '5'], ['--limit=5']]) {
+      expect(parse(args, 'x', outputOptions).values.rows).toBe('5')
+      expect(parse(args, 'x', catalogOptions).values.rows).toBe('5')
+    }
   })
 })

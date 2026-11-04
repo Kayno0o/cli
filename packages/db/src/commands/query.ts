@@ -47,7 +47,7 @@ export async function query(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
   const { values, positionals } = parsed
-  const limit = wholeNumber(values.limit, 'limit', DEFAULT_LIMIT, 0)
+  const limit = wholeNumber(values.rows, 'rows', DEFAULT_LIMIT, 0)
   const sql = await readSql(positionals)
   let url: string
 

@@ -27,7 +27,7 @@ bun install -g @kaynooo/cli-db
 | `db describe <table>` | columns with type, nullability, default and primary key (`schema.table` to pick a schema, the database on MySQL) |
 | `db dbs` | databases the connection may open, with their size, the one read marked `current` |
 
-Options: `-n <rows>` caps the rows shown (100) and says when more were left out, `--raw` shows the columns masked by default, `--json` prints `{ columns, rows, truncated, masked }`, `-e <KEY>`, `-s <service>`, `-c <container>` and `-d <database>` pick the connection.
+Options: `-n <rows>` (`--rows`, once `--limit`) caps the rows shown (100) and says when more were left out, `--raw` shows the columns masked by default, `--json` prints `{ columns, rows, truncated, masked }`, `-e <KEY>`, `-s <service>`, `-c <container>` and `-d <database>` pick the connection.
 
 ## Safety
 

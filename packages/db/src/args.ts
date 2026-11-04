@@ -14,14 +14,17 @@ export const connectionOptions = {
   database: { type: 'string', short: 'd', description: 'database to read instead of the URL\'s or the service\'s' },
 } as const
 
+// The rows flag every listing words alike (-n), --limit being the name it had before.
+const rows = { type: 'string', short: 'n', aliases: ['limit'], description: `show at most this many rows, the rest counted (${DEFAULT_LIMIT}), 0 for none` } as const
+
 // The catalog commands list names, types and sizes: no column of theirs is masked, so there is no --raw.
 export const catalogOptions = {
-  limit: { type: 'string', short: 'n', description: `rows shown (${DEFAULT_LIMIT})` },
+  rows,
   json: jsonOption(),
 } as const
 
 export const outputOptions = {
-  limit: { type: 'string', short: 'n', description: `rows shown (${DEFAULT_LIMIT})` },
+  rows,
   raw: { type: 'boolean', description: 'show columns masked by default (emails, phones, tokens, password hashes, secret-named keys inside JSON values)' },
   json: jsonOption(),
 } as const
