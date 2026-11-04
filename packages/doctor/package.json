@@ -33,6 +33,7 @@
   },
   "scripts": {
     "build": "$npm_execpath build src/cli.ts src/cli-bin.ts --target bun --outdir dist",
+    "cli": "$npm_execpath src/cli-bin.ts",
     "doctor": "$npm_execpath src/cli.ts"
   },
   "devDependencies": {

@@ -27,7 +27,11 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts src/fix-cli.ts src/errs-cli.ts src/j-cli.ts --target bun --outdir dist"
+    "build": "$npm_execpath build src/cli.ts src/fix-cli.ts src/errs-cli.ts src/j-cli.ts --target bun --outdir dist",
+    "check": "$npm_execpath src/cli.ts",
+    "fix": "$npm_execpath src/fix-cli.ts",
+    "errs": "$npm_execpath src/errs-cli.ts",
+    "j": "$npm_execpath src/j-cli.ts"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"
