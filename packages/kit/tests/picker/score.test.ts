@@ -48,6 +48,12 @@ describe('rank', () => {
     expect(rank('', lines).map(match => match.index)).toEqual([0, 1, 2, 3])
   })
 
+  test('a command ties with a longer one it prefixes and comes first', () => {
+    const names = ['install-hooks', 'install', 'uninstall']
+
+    expect(rank('install', names).map(match => names[match.index])).toEqual(['install', 'install-hooks', 'uninstall'])
+  })
+
   test('drops what does not match and puts the best first, shorter lines winning a tie', () => {
     expect(rank('src', lines).map(match => lines[match.index])).toEqual(['src', 'src/index.ts', 'lib/src/index.ts'])
   })
