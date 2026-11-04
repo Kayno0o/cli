@@ -327,7 +327,25 @@ describe('sweep', () => {
 
       expect(result.entries.map(entry => [entry.path, entry.kind, entry.action])).toEqual([[join(home, '.npm', '_cacache'), 'cache', 'remove'], [join(home, '.cache', 'uv'), 'cache', 'remove']])
       expect(result.skipped).toEqual([])
-      expect(listing([root], { HOME: home }).entries.map(entry => entry.kind).sort()).toEqual(['cache', 'cache', 'folder'])
+      expect(listing([root], { HOME: home }).entries.map(entry => entry.kind)).toEqual(['folder'])
+    })
+
+    test('the global caches are listed with no root given or with --only caches, never when a root is', () => {
+      const home = homeDir()
+      const workspace = join(home, 'Workspace')
+      const a = repo(workspace, 'a')
+
+      fill(join(home, '.npm', '_cacache'), 400)
+      fill(join(a, 'dist'), 100)
+
+      expect(listing([], { HOME: home }).entries.map(entry => entry.kind)).toEqual(['cache', 'folder'])
+      expect(listing([workspace, '--only', 'caches'], { HOME: home }).entries.map(entry => entry.kind)).toEqual(['cache'])
+      expect(listing([workspace], { HOME: home }).entries.map(entry => entry.kind)).toEqual(['folder'])
+
+      const applied = listing([a, '--apply', '--yes'], { HOME: home })
+
+      expect(applied.entries.map(entry => entry.path)).toEqual([join(a, 'dist')])
+      expect(existsSync(join(home, '.npm', '_cacache'))).toBe(true)
     })
 
     test('a symlinked cache is skipped and survives --apply', () => {

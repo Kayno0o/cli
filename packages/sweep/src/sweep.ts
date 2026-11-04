@@ -11,7 +11,7 @@ import { version } from '../package.json'
 import { applyAll } from './apply'
 import { findCandidates, inspect, MAX_DEPTH } from './scan'
 
-const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
+const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
 
 Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. With --docker the Docker usage comes after the list, left to dclean.
 
@@ -24,9 +24,9 @@ const OPTIONS = {
   yes: { type: 'boolean', short: 'y', description: 'with --apply, skip the confirm' },
   older: { type: 'string', description: 'only the entries whose repo last committed longer ago than this (30d, 12h)' },
   min: { type: 'string', description: 'only the entries of at least this size (500K, 10M, 1G)' },
-  only: { type: 'string', description: 'worktrees, folders or caches: leave the other kinds out' },
+  only: { type: 'string', description: 'worktrees, folders or caches: leave the other kinds out (.nuxt, .next, .turbo and .svelte-kit are caches; the global caches are listed with no root or with caches)' },
   docker: { type: 'boolean', description: 'add the docker system df output, which alone takes about ten seconds' },
-  json: jsonOption('{root, entries: [{path, kind, bytes, committedAt, action, reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
+  json: jsonOption('{root, entries: [{path, kind (folder, worktree or cache), bytes, committedAt, action (remove or keep), reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
 } as const
 
 async function dockerUsage(): Promise<string | undefined> {
@@ -64,7 +64,7 @@ async function main(args: string[]): Promise<number> {
     badUsage(`--min takes a size such as 500K, 10M or 1G, not ${values.min}`)
 
   const now = Date.now()
-  const found = await findCandidates(root)
+  const found = await findCandidates(root, homedir(), positionals.length === 0 || values.only === 'caches')
   const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => candidate.kind === ONLY_KINDS[values.only as keyof typeof ONLY_KINDS])
   const { entries: all, skipped } = await inspect({ candidates: wanted, skipped: found.skipped })
   const entries = all

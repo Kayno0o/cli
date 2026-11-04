@@ -73,8 +73,8 @@ async function addGlobalCaches(found: Found, home: string): Promise<void> {
   }
 }
 
-// Walks `root` MAX_DEPTH levels down without entering a candidate, `.git` or a symlink, and returns the folders, caches and worktrees that look removable, a symlink bearing a candidate name being skipped instead; the global caches under `home` come along.
-export async function findCandidates(root: string, home = homedir()): Promise<Found> {
+// Walks `root` MAX_DEPTH levels down without entering a candidate, `.git` or a symlink, and returns the folders, caches and worktrees that look removable, a symlink bearing a candidate name being skipped instead; the global caches under `home` come along unless `withGlobal` is false.
+export async function findCandidates(root: string, home = homedir(), withGlobal = true): Promise<Found> {
   const found: Found = { candidates: [], skipped: [] }
   const visit = async (dir: string, depth: number): Promise<void> => {
     const entries = await listing(dir)
@@ -128,7 +128,9 @@ export async function findCandidates(root: string, home = homedir()): Promise<Fo
   }
 
   await visit(root, 0)
-  await addGlobalCaches(found, home)
+
+  if (withGlobal)
+    await addGlobalCaches(found, home)
 
   return found
 }
