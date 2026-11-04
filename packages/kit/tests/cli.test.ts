@@ -420,7 +420,7 @@ describe('the help screen', () => {
     process.env.KIT_HELP = 'json'
 
     try {
-      expect(JSON.parse((await capture(async () => runMain({ name: 'demo', version: '1', run: described }, ['--help']))).out)).toEqual({ synopsis: 'demo [file]', summary: 'prints a file', replaces: 'cat', examples: [{ line: 'demo a' }, { line: 'demo', note: 'stdin' }] })
+      expect(JSON.parse((await capture(async () => runMain({ name: 'demo', version: '1', run: described }, ['--help']))).out)).toEqual({ synopsis: 'demo [file]', summary: 'prints a file', replaces: 'cat', examples: [{ line: 'demo a' }, { line: 'demo', note: 'stdin' }], options: expect.arrayContaining([{ name: 'help', short: 'h', description: 'show this help' }]) })
       expect(JSON.parse((await capture(async () => runCli({ ...cli, examples: ['demo echo hi'] }, ['--help']))).out)).toEqual({ synopsis: 'demo <command> [options]', summary: 'a demo', examples: [{ line: 'demo echo hi' }] })
     }
     finally {

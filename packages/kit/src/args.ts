@@ -167,7 +167,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   applyOutput('color' in output ? values.color as string | undefined : undefined, 'plain' in output ? values.plain as boolean | undefined : undefined)
 
   if (values.help === true) {
-    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings)) : helpText(usage, listing, undefined, settings))
+    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings, listing)) : helpText(usage, listing, undefined, settings))
 
     throw new HelpShown()
   }

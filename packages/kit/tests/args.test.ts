@@ -299,6 +299,14 @@ describe('exits', () => {
     expect(out.indexOf('Options:')).toBeLessThan(out.indexOf('Exits:'))
   })
 
+  test('the description lists the options', () => {
+    const listed = description('x: does x', {}, { json: jsonOption(), times: { type: 'string', short: 'n', description: 'how many' } }).options
+
+    expect(listed).toContainEqual({ name: 'times', short: 'n', description: 'how many' })
+    expect(listed?.some(({ name }) => name === 'json')).toBe(true)
+    expect(description('x: does x').options).toBeUndefined()
+  })
+
   test('the description spells them out', () => {
     expect(description('x: does x', { exits }).exits).toEqual([{ code: 0, meaning: 'clean' }, { code: 1, meaning: 'a finding' }, { code: 12, meaning: 'a usage error' }])
   })

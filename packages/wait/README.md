@@ -1,11 +1,12 @@
 # waitfor and slot
 
-`slot` is documented after `waitfor`, below.
+Two unrelated bins in one package: [`waitfor`](#waitfor) waits for something to happen, [`slot`](#slot) queues heavy commands. Install both with `bun install -g @kaynooo/cli-wait`.
+
+# waitfor
 
 Waits for a background build or server for Claude Code, where a session would otherwise `sleep 30; tail -c 2000 build.log` or hand-write an `until` loop: `waitfor` returns as soon as the log line shows, the port listens or the URL answers, and stops early on an error line.
 
 ```sh
-bun install -g @kaynooo/cli-wait
 waitfor --file server.log --until 'Listening on' --fail 'Error|FATAL' --timeout 2m
 waitfor --port 5432
 waitfor --url http://localhost:8000/health

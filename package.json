@@ -12,6 +12,7 @@
     "lint:fix": "keslint --fix --cache",
     "test": "$npm_execpath test --parallel",
     "test:coverage": "$npm_execpath test --coverage",
+    "docs": "$npm_execpath scripts/bins-docs.ts",
     "ft": "$npm_execpath packages/ft/src/cli.ts"
   },
   "devDependencies": {

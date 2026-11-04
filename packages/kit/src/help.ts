@@ -41,6 +41,8 @@ export interface Description {
   replaces?: string
   examples: { line: string, note?: string }[]
   exits?: { code: number | string, meaning: string }[]
+  // The flags of a command with no subcommands, for a test comparing them with what a README documents.
+  options?: { name: string, short?: string, description?: string }[]
 }
 
 export function wantsHelpJson(env: Record<string, string | undefined> = process.env): boolean {
@@ -48,7 +50,7 @@ export function wantsHelpJson(env: Record<string, string | undefined> = process.
 }
 
 // The synopsis and the summary a usage's first line splits into at its first `: `, else the first line after the synopses as the summary, with the examples spelled out.
-export function description(usage: string, { examples = [], replaces, exits }: Described = {}): Description {
+export function description(usage: string, { examples = [], replaces, exits }: Described = {}, options?: Options): Description {
   const lines = usage.replace(USAGE_PREFIX, '').split('\n')
   const first = lines[0]!
   const colon = first.indexOf(': ')
@@ -61,6 +63,7 @@ export function description(usage: string, { examples = [], replaces, exits }: D
     ...replaces === undefined ? {} : { replaces },
     examples: examples.map(example => typeof example === 'string' ? { line: example } : { line: example[0], note: example[1] }),
     ...exits === undefined ? {} : { exits: exits.map(([code, meaning]) => ({ code, meaning })) },
+    ...options === undefined ? {} : { options: Object.entries(options).map(([name, { short, description }]) => ({ name, ...short === undefined ? {} : { short }, ...description === undefined ? {} : { description } })) },
   }
 }
 

@@ -18,6 +18,17 @@ describe('ft', () => {
     expect(ft('--version').out.trim()).toBe(version)
   })
 
+  test('groups its commands into sections', () => {
+    const lines = ft('--help').out.split('\n')
+    const heading = (name: string) => lines.findIndex(line => line === `${name}:`)
+    const row = (name: string) => lines.findIndex(line => line.trimStart().startsWith(`${name} `))
+
+    expect(heading('CI and release')).toBeLessThan(row('ci'))
+    expect(row('ci')).toBeLessThan(heading('Issues and claims'))
+    expect(row('board')).toBeLessThan(heading('Repo'))
+    expect(row('remote')).toBeGreaterThan(heading('Repo'))
+  })
+
   test('prints a command\'s help', () => {
     const help = ft('tick', '--help')
 
