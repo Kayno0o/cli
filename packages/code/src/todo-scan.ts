@@ -1,9 +1,7 @@
-#!/usr/bin/env -S bun --no-env-file
-
 import type { Mark } from './todo'
 import { join } from 'node:path'
 import process from 'node:process'
-import { capped, jsonOption, limitOf, limitOptions, parse, printJson, runMain, warn } from '@kaynooo/cli-kit'
+import { capped, jsonOption, limitOf, limitOptions, parse, printJson, warn } from '@kaynooo/cli-kit'
 import { listFiles, readText } from './files'
 import { lookUp, marksIn, refKey } from './todo'
 
@@ -30,7 +28,7 @@ function printLines(lines: string[], footer: string | undefined): void {
     console.log(all.join('\n'))
 }
 
-async function main(args: string[]): Promise<number> {
+export async function todoScan(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[path...]'], replaces: 'grep -rn TODO, then opening each issue it names', examples: ['todo-scan src', ['todo-scan --stale', 'only the comments naming a closed issue']] })
   const cwd = process.cwd()
   const limit = limitOf(values, LIST_LIMIT)
@@ -73,5 +71,3 @@ async function main(args: string[]): Promise<number> {
 
   return failed.size > 0 ? 2 : 0
 }
-
-process.exitCode = await runMain({ name: 'todo-scan', run: main })

@@ -1,10 +1,8 @@
-#!/usr/bin/env -S bun --no-env-file
-
 import type { Span } from './source'
 import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { badUsage, capped, fail, isStdinPiped, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, capped, fail, isStdinPiped, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, wholeNumber } from '@kaynooo/cli-kit'
 import { listFiles, readText } from './files'
 import { around, definitions, locations, outline, spansAround, usages } from './source'
 
@@ -199,7 +197,7 @@ async function definitionsOf(symbols: readonly string[], paths: readonly string[
   return [...found.values()].flat()
 }
 
-async function main(args: string[]): Promise<number> {
+export async function peek(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[target...]'], replaces: 'sed -n N,Mp, grep -n chains and whole-file reads', examples: [['peek src/a.ts:120-140 src/b.ts:1-40', 'two spans in one call'], ['peek --def parseArgs src', 'a whole declaration']] })
   const modes = [values.def?.length === 0 ? undefined : values.def, values.refs, values.outline, values.around].filter(mode => mode !== undefined && mode !== false)
   const json = values.json === true
@@ -307,5 +305,3 @@ async function main(args: string[]): Promise<number> {
 
   return 0
 }
-
-process.exitCode = await runMain({ name: 'peek', run: main })

@@ -6,7 +6,7 @@ import { definitions, locations, outline, spansAround } from '../src/source'
 
 const temp = tempDirs()
 
-const CLI = new URL('../src/peek.ts', import.meta.url).pathname
+const CLI = new URL('../src/peek-cli.ts', import.meta.url).pathname
 
 const SOURCE = `import { x } from './x'
 

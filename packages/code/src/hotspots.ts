@@ -1,9 +1,7 @@
-#!/usr/bin/env -S bun --no-env-file
-
 import type { Hotspot } from './churn'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badUsage, capped, duration, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, table } from '@kaynooo/cli-kit'
+import { badUsage, capped, duration, fail, jsonOption, limitOf, limitOptions, parse, printJson, table } from '@kaynooo/cli-kit'
 import { churnSince, complexityOf, isCandidate, isGenerated } from './churn'
 import { listFiles, readText } from './files'
 import { worstUnit } from './units'
@@ -31,7 +29,7 @@ const OPTIONS = {
   'json': jsonOption('[{rank, path, score, churn, recent, complexity, worst, lines}], never cut unless --limit is given'),
 } as const
 
-async function main(args: string[]): Promise<number> {
+export async function hotspots(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'hotspots src --since "3 months ago" --limit 10'] })
 
   if (positionals.length > 1)
@@ -91,5 +89,3 @@ async function main(args: string[]): Promise<number> {
 
   return 0
 }
-
-process.exitCode = await runMain({ name: 'hotspots', run: main })

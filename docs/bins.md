@@ -471,6 +471,19 @@ slot --lock booki-test-db -- vendor/bin/phpunit  # one phpunit at a time on the 
 slot ls
 ```
 
+## src
+
+reads and ranks the source of a folder: line spans, TODO comments and the files worth splitting. Package `code`.
+
+Instead of: sed -n N,Mp, grep -n chains and grep -rn TODO
+
+```sh
+src <command> [options]
+src peek src/cli.ts:10-40
+src todo-scan
+src hotspots -n 10  # the ten files both complex and often edited
+```
+
 ## stack
 
 a stable port per service name, and a compose release audit. Package `stack`.

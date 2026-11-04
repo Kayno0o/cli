@@ -6,7 +6,7 @@ import { marksIn } from '../src/todo'
 
 const temp = tempDirs()
 
-const CLI = new URL('../src/todo-scan.ts', import.meta.url).pathname
+const CLI = new URL('../src/todo-scan-cli.ts', import.meta.url).pathname
 
 let dir = ''
 

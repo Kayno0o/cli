@@ -6,7 +6,7 @@ import { complexityOf, isCandidate } from '../src/churn'
 
 const temp = tempDirs()
 
-const CLI = new URL('../src/hotspots.ts', import.meta.url).pathname
+const CLI = new URL('../src/hotspots-cli.ts', import.meta.url).pathname
 const BRANCHY = 'export function f(a: number) {\n  if (a > 1 && a < 5) {\n    for (const x of [a]) {\n      if (x) return 1\n    }\n  }\n  return a ? 2 : 3\n}\n'
 const PLAIN = 'export const a = 1\n'
 
