@@ -61,11 +61,14 @@ export async function runTool(label: string, argv: string[], { timeoutMs, cwd, o
   if (ran.timedOut)
     throw new Error(`${label}: no answer in ${formatDuration(timeoutMs ?? 0)}`)
 
-  const decoder = new TextDecoder()
+  const decoders = { stdout: new TextDecoder(), stderr: new TextDecoder() }
   const streams = { stdout: '', stderr: '' }
 
   for (const { stream, data } of ran.chunks)
-    streams[stream] += decoder.decode(data, { stream: true })
+    streams[stream] += decoders[stream].decode(data, { stream: true })
+
+  streams.stdout += decoders.stdout.decode()
+  streams.stderr += decoders.stderr.decode()
 
   return { code: ran.code, ...streams }
 }

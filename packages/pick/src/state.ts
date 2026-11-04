@@ -26,9 +26,12 @@ const ANSI = /\x1B(?:\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]|\][^\x07\x1B]*(?:\x07
 const CONTROL = /[\x00-\x1F\x7F-\x9F]/g
 // eslint-disable-next-line no-control-regex -- control characters are what it tells apart
 const IS_CONTROL = /[\x00-\x1F\x7F-\x9F]/
+// eslint-disable-next-line no-control-regex -- control characters are what it tells apart
+const PRINTABLE = /[^\x00-\x1F\x7F-\x9F]/
+const NEWLINE = /[\r\n]/
 const LAST_WORD = /\S*\s*$/
 // eslint-disable-next-line no-control-regex -- escape sequences are what it splits
-const KEY_SEQUENCES = /\x1B\[[0-9;]*[A-Z~]|\x1BO[A-Z]|[\s\S]/gu
+const KEY_SEQUENCES = /\x1B\[[0-9;]*[A-Z~]|\x1BO[A-Z]|\x1B[\s\S]|[\s\S]/gu
 
 const KEYS: Record<string, Key> = {
   '\x1B[A': 'up',
@@ -55,8 +58,14 @@ export function displayed(line: string): string {
 
 /** The keys a chunk of terminal input holds, in order; keys nothing handles, such as Home or a function key, are dropped. */
 export function parseKeys(input: string): Key[] {
+  // A newline typed alone is enter, one inside pasted text is not.
+  const pasted = PRINTABLE.test(input.replace(ANSI, '')) && NEWLINE.test(input)
+
   return (input.match(KEY_SEQUENCES) ?? []).flatMap((sequence) => {
     const key = KEYS[sequence]
+
+    if (pasted && (sequence === '\r' || sequence === '\n'))
+      return []
 
     if (key !== undefined)
       return [key]

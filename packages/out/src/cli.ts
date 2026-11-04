@@ -7,7 +7,7 @@ import { FOLD_LINES } from './fold'
 import { readPiped, run } from './run'
 import { readEntries, renderSummary, statsPath, summarize } from './stats'
 
-const USAGE = 'out [-n <lines>] -- <command> [args...]: runs the command and shortens its output when it is long, exiting with its code\n<command> | out [-n <lines>]: shortens the output piped in\nout --stats [--since 7d] [--json]: the runs recorded and about how many tokens they saved\n\nEach run is recorded in ~/.local/state/kaynooo-cli/out/stats.jsonl with the words naming the command, never its arguments; tokens are counted as bytes / 4.\nExits 0 when the command does, with its own code otherwise, 127 when it cannot be started, 2 on a usage error. Piped into, it exits 0.'
+const USAGE = 'out [-n <lines>] -- <command> [args...]: runs the command and shortens its output when it is long, exiting with its code\n<command> | out [-n <lines>]: shortens the output piped in\nout --stats [--since 7d] [--json]: the runs recorded and about how many tokens they saved\n\nEach run is recorded in ~/.local/state/kaynooo-cli/out/stats.jsonl with the words naming the command, never its arguments; tokens are counted as bytes / 4.\nExits 0 when the command does, with its own code otherwise, 126 when it cannot be run (not executable), 127 when it cannot be started, 2 on a usage error. Piped into, it exits 0.'
 
 const OPTIONS = {
   lines: { type: 'string', short: 'n', description: 'longest output left untouched (default 150)' },

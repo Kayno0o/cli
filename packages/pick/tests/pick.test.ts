@@ -47,6 +47,17 @@ describe('runPreview', () => {
     expect(lines).toHaveLength(200)
   })
 
+  test('an abort ends a grandchild still holding the output open', async () => {
+    const controller = new AbortController()
+    const started = Date.now()
+    const running = runPreview('sleep 20 & sleep 20', '', controller.signal)
+
+    await Bun.sleep(200)
+    controller.abort()
+    expect(await running).toEqual([])
+    expect(Date.now() - started).toBeLessThan(3000)
+  })
+
   test('an aborted preview shows nothing', async () => {
     const controller = new AbortController()
     const running = runPreview('sleep 5', '', controller.signal)

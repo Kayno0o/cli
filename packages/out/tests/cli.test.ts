@@ -5,6 +5,7 @@ import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 import { cleanLogs } from '../src/logs'
+import { Recorder } from '../src/run'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const LOG_PATH = /full log: ([^\s\]]+)/
@@ -79,6 +80,26 @@ describe('out', () => {
     expect(out('--', 'sh', '-c', 'seq 1 500; exit 3').code).toBe(3)
     expect(out('--', 'sh', '-c', 'kill -TERM $$').code).toBe(143)
     expect(out('--', 'definitely-not-a-command').code).toBe(127)
+  })
+
+  test('exits 126 for a command that exists but cannot be run', () => {
+    const file = join(temp('out-noexec-'), 'tool.sh')
+
+    writeFileSync(file, '#!/bin/sh\necho hi\n')
+    chmodSync(file, 0o644)
+    expect(out('--', file).code).toBe(126)
+  })
+
+  test('an unwritable log does not stop the command or change its output', () => {
+    const recorder = new Recorder(join(temp('out-nolog-'), 'missing', 'dir'))
+    const data = new Uint8Array(3 * 1024 * 1024)
+
+    expect(() => {
+      recorder.add({ stream: 'stdout', data })
+      recorder.add({ stream: 'stdout', data })
+      recorder.add({ stream: 'stdout', data })
+    }).not.toThrow()
+    expect(recorder.bytes).toBe(3 * data.length)
   })
 
   test('folds long output, saving the full log where the header says', () => {

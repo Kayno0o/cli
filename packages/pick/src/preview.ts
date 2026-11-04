@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { shellQuote } from '@kaynooo/cli-kit/shell'
 import { displayed } from './state'
 
@@ -22,8 +23,16 @@ export function previewLines(output: string): string[] {
 
 /** Runs the preview in a shell with its errors merged into its output, stopping at `PREVIEW_BYTES`, after a few seconds or when `signal` aborts. */
 export async function runPreview(template: string, line: string, signal: AbortSignal): Promise<string[]> {
-  const proc = Bun.spawn(['sh', '-c', `exec 2>&1\n${previewCommand(template, line)}`], { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' })
-  const stop = (): void => proc.kill()
+  const proc = Bun.spawn(['sh', '-c', `exec 2>&1\n${previewCommand(template, line)}`], { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore', detached: true })
+  // The shell leads its own process group, so the kill reaches what it started too, which would otherwise keep the output open.
+  const stop = (): void => {
+    try {
+      process.kill(-proc.pid, 'SIGKILL')
+    }
+    catch {
+      proc.kill()
+    }
+  }
   const timer = setTimeout(stop, PREVIEW_TIMEOUT_MS)
   const chunks: Uint8Array[] = []
   let size = 0

@@ -1,5 +1,5 @@
 import type { Held } from './flock'
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -13,7 +13,7 @@ The slots and locks are shared by every session, worktree and shell of this user
 A slot or lock is freed the moment its holder ends, SIGKILL included, since the kernel drops it with the process.
 A slotted command that runs slot again does not wait for a second slot, so wrapping both a script and the commands inside it cannot deadlock.
 A first word \`ls\` always means the listing, so run the ls command as \`slot -n 4 -- ls\` or by its path.
-Exits with the command's code, 2 on a timeout or a usage error.`
+Exits with the command's code, 2 on a timeout or a usage error, 127 when the command cannot be started.`
 
 const LS_USAGE = `slot ls [options]: lists the slots and locks held, with the session, the command and how long ago it started, then who waits for one
 
@@ -174,7 +174,7 @@ async function acquire(dir: string, resources: Resource[], holder: Holder, deadl
   }
   finally {
     if (waiter !== undefined) {
-      unlinkSync(waiter.path)
+      rmSync(waiter.path, { force: true })
       waiter.held.release()
     }
   }
@@ -250,7 +250,7 @@ function scan(dir: string, state: Entry['state'], kind: 'slots' | 'locks' | 'wai
 
     if (probe !== undefined) {
       if (kind === 'waiters')
-        unlinkSync(path)
+        rmSync(path, { force: true })
 
       probe.release()
 

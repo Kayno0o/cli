@@ -1,5 +1,5 @@
 import type { Subprocess } from 'bun'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -188,6 +188,23 @@ describe('slot', () => {
     waiter.kill('SIGKILL')
     await waiter.exited
     expect((await listed()).entries.map(entry => entry.state)).toEqual(['holding', 'holding'])
+  })
+
+  test('a waiter whose queue file was removed meanwhile still runs its command', async () => {
+    const holder = slot(['-n', '1', ...sleeper('a.pid')])
+
+    await until(async () => (await listed()).busy === 1)
+
+    const waiter = slot(['-n', '1', '--', 'echo', 'later'])
+
+    await until(async () => (await listed()).entries.some(entry => entry.state === 'waiting'))
+    rmSync(join(dir, 'state', 'waiters'), { recursive: true, force: true })
+    holder.kill('SIGKILL')
+
+    const done = await finished(waiter)
+
+    expect(done.out).toBe('later\n')
+    expect(done.code).toBe(0)
   })
 
   test('slot ls says nothing is busy on an empty queue', async () => {

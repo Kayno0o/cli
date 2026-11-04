@@ -41,7 +41,7 @@ export const MAX_HOPS = 10
 const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i
 const SEPARATOR = '\n---HEADERS---\n'
 const CERT_PREFIX = /^(?:DNS|IP Address|IP|email|URI):/
-const CACHE_NODE = /cache-/i
+const CACHE_NODE = /^cache-/i
 const ALT_VALUE = /=.*$/
 
 export function parseTarget(input: string): Target | undefined {
@@ -206,7 +206,7 @@ const KNOWN_SERVERS: [RegExp, string][] = [
   [/vercel/i, 'Vercel'],
   [/netlify/i, 'Netlify'],
   [/bunnycdn/i, 'BunnyCDN'],
-  [/gws|esf|google frontend|gse/i, 'Google'],
+  [/^(?:gws|esf|gse)$|google frontend/i, 'Google'],
 ]
 
 // A CDN or proxy guess from the headers that give one away, with the header that did.
@@ -352,10 +352,12 @@ export function warningsOf(input: WarningInput): string[] {
   const { cert, httpRedirect } = input
 
   if (cert !== undefined) {
-    if (cert.daysLeft < 0)
+    if (cert.daysLeft === -1)
+      warnings.push('certificate expired within the last day')
+    else if (cert.daysLeft < 0)
       warnings.push(`certificate expired ${-cert.daysLeft} days ago`)
     else if (cert.daysLeft < SOON_DAYS)
-      warnings.push(`certificate expires in ${cert.daysLeft} days`)
+      warnings.push(`certificate expires in ${cert.daysLeft} ${cert.daysLeft === 1 ? 'day' : 'days'}`)
   }
 
   if (input.authorizationError !== undefined)

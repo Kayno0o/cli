@@ -91,6 +91,12 @@ describe('headers', () => {
     expect(worthKnowing({ 'server': 'nginx', 'date': 'x', 'content-type': 'text/html', 'strict-transport-security': 'max-age=1' })).toEqual({ 'server': 'nginx', 'content-type': 'text/html', 'strict-transport-security': 'max-age=1' })
   })
 
+  test('matches a cdn name only as a whole, not inside another word', () => {
+    expect(cdnHint({ server: 'gws' })).toBe('Google (server)')
+    expect(cdnHint({ server: 'Apache (messfs)' })).toBeUndefined()
+    expect(cdnHint({ 'x-served-by': 'mycache-1' })).toBe('mycache-1 (x-served-by)')
+  })
+
   test('guesses a cdn from the telling header first', () => {
     expect(cdnHint({ 'cf-ray': 'abc', 'server': 'nginx' })).toBe('Cloudflare (cf-ray)')
     expect(cdnHint({ 'x-served-by': 'cache-cdg20720-CDG' })).toBe('Fastly (x-served-by)')
@@ -119,6 +125,11 @@ describe('warnings', () => {
     expect(warningsOf({ cert: cert(13), tooManyRedirects: false })).toEqual(['certificate expires in 13 days'])
     expect(warningsOf({ cert: cert(14), tooManyRedirects: false })).toEqual([])
     expect(warningsOf({ cert: cert(-2), tooManyRedirects: false })).toEqual(['certificate expired 2 days ago'])
+  })
+
+  test('says a certificate expired within the day, and a day in the singular', () => {
+    expect(warningsOf({ cert: cert(-1), tooManyRedirects: false })).toEqual(['certificate expired within the last day'])
+    expect(warningsOf({ cert: cert(1), tooManyRedirects: false })).toEqual(['certificate expires in 1 day'])
   })
 
   test('warns on an http twin that does not redirect to https', () => {

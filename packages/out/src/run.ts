@@ -13,13 +13,14 @@ const TAIL_BYTES = 2 * 1024 * 1024
 const FALLBACK_LINES = 100
 
 // Holds the first and last bytes of the output and streams all of it to a log file once it outgrows the memory it may take.
-class Recorder {
+export class Recorder {
   readonly head: Chunk[] = []
   readonly tail: Chunk[] = []
   private headBytes = 0
   private tailBytes = 0
   private dropped = 0
   private log: { path: string, fd: number } | undefined
+  private logFailed = false
 
   constructor(private readonly dir: string) {}
 
@@ -32,7 +33,7 @@ class Recorder {
     }
 
     // Past the head, anything may be shed later, so the log starts here and gets every chunk after.
-    writeSync(this.startLog().fd, chunk.data)
+    this.writeToLog(chunk.data)
     this.tail.push(chunk)
     this.tailBytes += chunk.data.length
 
@@ -41,6 +42,20 @@ class Recorder {
 
       this.tailBytes -= gone?.data.length ?? 0
       this.dropped += gone?.data.length ?? 0
+    }
+  }
+
+  // A log that cannot be written must not stop the wrapped command, so the output past the head is then only kept in memory.
+  private writeToLog(data: Uint8Array): void {
+    if (this.logFailed)
+      return
+
+    try {
+      writeSync(this.startLog().fd, data)
+    }
+    catch (error) {
+      this.logFailed = true
+      console.error(`out: cannot write the log, the output past ${HEAD_BYTES} bytes is kept in memory only: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -90,7 +105,7 @@ class Recorder {
     if (this.dropped === 0)
       return decode(this.chunks)
 
-    return `${decode(this.head)}\n[out: ${this.dropped} bytes left out of memory, all of it is in the log]\n${decode(this.tail)}`
+    return `${decode(this.head)}\n[out: ${this.dropped} bytes left out of memory${this.logFailed ? '' : ', all of it is in the log'}]\n${decode(this.tail)}`
   }
 }
 
@@ -142,7 +157,7 @@ export async function run(command: string[], threshold: number, was: readonly st
     if (!started) {
       console.error(`out: cannot run ${command[0]}: ${error instanceof Error ? error.message : String(error)}`)
 
-      return 127
+      return (error as { code?: unknown }).code === 'EACCES' ? 126 : 127
     }
 
     console.error(`out: ${error instanceof Error ? error.message : String(error)}`)

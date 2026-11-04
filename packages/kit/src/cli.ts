@@ -512,8 +512,12 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
     code = reportThrown(name, error, redact, wantsJson(argv))
   }
 
-  if (usage !== false)
-    recordUsage(usageEntry(name, undefined, argv, code))
+  if (usage !== false) {
+    try {
+      recordUsage(usageEntry(name, undefined, argv, code))
+    }
+    catch {}
+  }
 
   return code
 }

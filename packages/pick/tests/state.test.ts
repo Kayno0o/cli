@@ -18,6 +18,16 @@ describe('parseKeys', () => {
     expect(parseKeys('\x1B[1;5C')).toEqual([])
   })
 
+  test('an Alt+key (escape then a letter) is dropped instead of cancelling', () => {
+    expect(parseKeys('\x1Bb')).toEqual([])
+    expect(parseKeys('\x1Bba')).toEqual([{ text: 'a' }])
+  })
+
+  test('a newline inside pasted text is no enter', () => {
+    expect(parseKeys('foo\nbar\n')).toEqual([{ text: 'f' }, { text: 'o' }, { text: 'o' }, { text: 'b' }, { text: 'a' }, { text: 'r' }])
+    expect(parseKeys('\r')).toEqual(['enter'])
+  })
+
   test('keeps printable text, pasted or typed, and drops unknown control keys', () => {
     expect(parseKeys('ab é\x01')).toEqual([{ text: 'a' }, { text: 'b' }, { text: ' ' }, { text: 'é' }])
   })
