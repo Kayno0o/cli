@@ -1,16 +1,20 @@
 import type { Dirent } from 'node:fs'
 import { existsSync } from 'node:fs'
-import { readdir, realpath } from 'node:fs/promises'
+import { lstat, readdir, realpath } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { runTool } from '@kaynooo/cli-kit'
 import { pooled, sizeOf } from './size'
 
 export const FOLDER_NAMES = new Set(['node_modules', '.nuxt', '.next', '.output', 'dist', 'build', '.turbo', '.svelte-kit', 'target'])
 export const MAX_DEPTH = 3
+export const PROJECT_CACHE_NAMES = new Set(['.turbo', '.nuxt', '.next', '.svelte-kit'])
+// Exact paths under HOME, the only places outside the root that sweep reads or deletes.
+export const GLOBAL_CACHES = ['.bun/install/cache', '.npm/_cacache', '.cache/pip', '.cache/uv', '.cache/ms-playwright', '.cache/puppeteer', '.cache/go-build', '.cache/typescript', '.cargo/registry']
 
 export interface Entry {
   path: string
-  kind: 'folder' | 'worktree'
+  kind: 'folder' | 'worktree' | 'cache'
   bytes: number
   // The repo's last commit in epoch milliseconds, undefined outside a repo or in an empty one.
   committedAt: number | undefined
@@ -19,6 +23,8 @@ export interface Entry {
   reason?: string
   // The repo a worktree is removed from.
   repo?: string
+  // The node_modules a node_modules/.cache sits in, dropped when that node_modules is listed itself.
+  inside?: string | undefined
 }
 
 export interface Skipped {
@@ -28,7 +34,13 @@ export interface Skipped {
 
 interface Candidate {
   path: string
-  kind: 'folder' | 'worktree'
+  kind: Entry['kind']
+  inside?: string
+  global?: true
+}
+
+export function isCachePath(path: string, home = homedir()): boolean {
+  return GLOBAL_CACHES.some(cache => join(home, cache) === path) || (basename(path) === '.cache' && basename(dirname(path)) === 'node_modules')
 }
 
 export interface Found {
@@ -45,8 +57,24 @@ async function listing(dir: string): Promise<Dirent[]> {
   }
 }
 
-// Walks `root` MAX_DEPTH levels down without entering a candidate, `.git` or a symlink, and returns the folders and worktrees that look removable, a symlink bearing a candidate name being skipped instead.
-export async function findCandidates(root: string): Promise<Found> {
+async function addGlobalCaches(found: Found, home: string): Promise<void> {
+  for (const cache of GLOBAL_CACHES) {
+    const path = join(home, cache)
+
+    try {
+      const stat = await lstat(path)
+
+      if (stat.isSymbolicLink())
+        found.skipped.push({ path, reason: 'symlink' })
+      else if (stat.isDirectory())
+        found.candidates.push({ path, kind: 'cache', global: true })
+    }
+    catch {}
+  }
+}
+
+// Walks `root` MAX_DEPTH levels down without entering a candidate, `.git` or a symlink, and returns the folders, caches and worktrees that look removable, a symlink bearing a candidate name being skipped instead; the global caches under `home` come along.
+export async function findCandidates(root: string, home = homedir()): Promise<Found> {
   const found: Found = { candidates: [], skipped: [] }
   const visit = async (dir: string, depth: number): Promise<void> => {
     const entries = await listing(dir)
@@ -75,10 +103,21 @@ export async function findCandidates(root: string): Promise<Found> {
       }
 
       if (FOLDER_NAMES.has(entry.name) && (entry.name !== 'target' || existsSync(join(dir, 'Cargo.toml')))) {
-        if (entry.isSymbolicLink())
+        if (entry.isSymbolicLink()) {
           found.skipped.push({ path, reason: 'symlink' })
-        else if (entry.isDirectory())
-          found.candidates.push({ path, kind: 'folder' })
+        }
+        else if (entry.isDirectory()) {
+          found.candidates.push({ path, kind: PROJECT_CACHE_NAMES.has(entry.name) ? 'cache' : 'folder' })
+
+          if (entry.name === 'node_modules') {
+            const cache = (await listing(path)).find(inner => inner.name === '.cache')
+
+            if (cache?.isSymbolicLink())
+              found.skipped.push({ path: join(path, '.cache'), reason: 'symlink' })
+            else if (cache?.isDirectory())
+              found.candidates.push({ path: join(path, '.cache'), kind: 'cache', inside: path })
+          }
+        }
 
         continue
       }
@@ -89,6 +128,7 @@ export async function findCandidates(root: string): Promise<Found> {
   }
 
   await visit(root, 0)
+  await addGlobalCaches(found, home)
 
   return found
 }
@@ -172,7 +212,7 @@ const worktreesOf = memo(async (repo) => {
 
 type Verdict = { skip: string } | { entry: Omit<Entry, 'bytes'> }
 
-async function judgeFolder(path: string): Promise<Verdict> {
+async function judgeFolder(path: string, kind: Entry['kind'], inside?: string): Promise<Verdict> {
   const parent = dirname(path)
   const name = basename(path)
   const located = await toplevelOf(parent)
@@ -184,17 +224,17 @@ async function judgeFolder(path: string): Promise<Verdict> {
     return { skip: 'holds a git repository' }
 
   if (located === 'none')
-    return name === 'node_modules' ? { entry: { path, kind: 'folder', committedAt: undefined, action: 'remove' } } : { skip: 'not in a git repository' }
+    return name === 'node_modules' || inside !== undefined ? { entry: { path, kind, committedAt: undefined, action: 'remove', inside } } : { skip: 'not in a git repository' }
 
   const tracked = await gitIn(parent, ['ls-files', '--', name])
 
   if (tracked.code !== 0 || tracked.stdout !== '')
     return { skip: 'tracked by git' }
 
-  if (name !== 'node_modules' && (await gitIn(parent, ['check-ignore', '-q', '--', name])).code !== 0)
+  if (name !== 'node_modules' && inside === undefined && (await gitIn(parent, ['check-ignore', '-q', '--', name])).code !== 0)
     return { skip: 'not ignored by git' }
 
-  return { entry: { path, kind: 'folder', committedAt: await lastCommitOf(located.top), action: 'remove' } }
+  return { entry: { path, kind, committedAt: await lastCommitOf(located.top), action: 'remove', inside } }
 }
 
 // A worktree is removable only when it is clean and every commit of its branch is on another branch or a remote.
@@ -233,7 +273,7 @@ async function judgeWorktree(path: string): Promise<Verdict> {
     return keep('uncommitted changes')
 
   // git worktree remove deletes ignored files too (.env, local databases); only the regenerable build folders may go with it.
-  if (changes.some(line => !FOLDER_NAMES.has(basename(line.slice(3).replace(TRAILING_SLASH, '')))))
+  if (changes.some(line => !line.endsWith('/') || !FOLDER_NAMES.has(basename(line.slice(3).replace(TRAILING_SLASH, '')))))
     return keep('ignored files (.env, local data) that removing would delete')
 
   // git strips the refs/heads/ prefix before matching an --exclude that applies to --branches.
@@ -248,13 +288,21 @@ async function judgeWorktree(path: string): Promise<Verdict> {
   return { entry: { path, kind: 'worktree', committedAt, action: 'remove', repo: top } }
 }
 
+// A global cache is an exact allowlisted path found as a plain folder, so git has nothing to say about it.
+async function judge(candidate: Candidate): Promise<Verdict> {
+  if (candidate.global === true)
+    return { entry: { path: candidate.path, kind: candidate.kind, committedAt: undefined, action: 'remove' } }
+
+  return candidate.kind === 'worktree' ? judgeWorktree(candidate.path) : judgeFolder(candidate.path, candidate.kind, candidate.inside)
+}
+
 // Judges and sizes every candidate, the ones git forbids touching going to `skipped`.
 export async function inspect({ candidates, skipped }: Found): Promise<{ entries: Entry[], skipped: Skipped[] }> {
   const entries: Entry[] = []
   const rejected = [...skipped]
 
   await pooled(candidates, 8, async (candidate) => {
-    const verdict = await (candidate.kind === 'folder' ? judgeFolder(candidate.path) : judgeWorktree(candidate.path))
+    const verdict = await judge(candidate)
 
     if ('skip' in verdict)
       rejected.push({ path: candidate.path, reason: verdict.skip })
@@ -262,5 +310,7 @@ export async function inspect({ candidates, skipped }: Found): Promise<{ entries
       entries.push({ ...verdict.entry, bytes: await sizeOf(candidate.path) })
   })
 
-  return { entries, skipped: rejected }
+  const listed = new Set(entries.filter(entry => entry.action === 'remove').map(entry => entry.path))
+
+  return { entries: entries.filter(entry => entry.inside === undefined || !listed.has(entry.inside)), skipped: rejected }
 }

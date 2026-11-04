@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { lstat, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { runTool } from '@kaynooo/cli-kit'
-import { FOLDER_NAMES } from './scan'
+import { FOLDER_NAMES, isCachePath } from './scan'
 
 export interface Outcome {
   path: string
@@ -16,7 +16,7 @@ async function removeFolder(entry: Entry): Promise<Outcome> {
   try {
     const stat = await lstat(entry.path)
 
-    if (stat.isSymbolicLink() || !stat.isDirectory() || !FOLDER_NAMES.has(basename(entry.path)))
+    if (stat.isSymbolicLink() || !stat.isDirectory() || !(FOLDER_NAMES.has(basename(entry.path)) || (entry.kind === 'cache' && isCachePath(entry.path))))
       return { path: entry.path, removed: false, error: 'no longer a plain folder' }
 
     if (existsSync(join(entry.path, '.git')))
@@ -54,7 +54,7 @@ export async function applyAll(entries: Entry[], done: (outcome: Outcome) => voi
     if (entry.action !== 'remove')
       continue
 
-    const outcome = await (entry.kind === 'folder' ? removeFolder(entry) : removeWorktree(entry))
+    const outcome = await (entry.kind === 'worktree' ? removeWorktree(entry) : removeFolder(entry))
 
     outcomes.push(outcome)
     done(outcome)

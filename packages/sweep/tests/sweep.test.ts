@@ -5,6 +5,17 @@ import { describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/sweep.ts', import.meta.url).pathname
 const temp = tempDirs()
+
+// A bun run creates ~/.bun/install/cache; a file named .bun keeps that out of the fake HOME.
+function homeDir(): string {
+  const home = temp('sweep-home-')
+
+  writeFileSync(join(home, '.bun'), '')
+
+  return home
+}
+
+const fakeHome = homeDir()
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
 
 interface Entry { path: string, kind: string, bytes: number, action: string, reason: string | null }
@@ -20,7 +31,7 @@ function git(cwd: string, args: string[], env: Record<string, string> = {}): str
 }
 
 function sweep(args: string[], env: Record<string, string> = {}) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, NO_COLOR: '1', ...env } })
+  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, NO_COLOR: '1', HOME: fakeHome, ...env } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -287,5 +298,96 @@ describe('sweep', () => {
 
   test('says so when there is nothing to sweep', () => {
     expect(sweep([temp('sweep-')])).toMatchObject({ code: 0, out: 'nothing to sweep\n' })
+  })
+
+  test('keeps a worktree whose ignored build-named entry is a file', () => {
+    const root = temp('sweep-')
+    const a = repo(root, 'a')
+
+    git(a, ['worktree', 'add', '-q', '.worktrees/filed', '-b', 'filed'])
+    writeFileSync(join(a, '.worktrees', 'filed', 'build'), 'not a folder')
+
+    expect(listing([root]).entries).toMatchObject([{ path: join(a, '.worktrees', 'filed'), action: 'keep' }])
+  })
+
+  describe('caches', () => {
+    test('lists the global allowlist from HOME, skips a missing one, and --only caches leaves the rest out', () => {
+      const home = homeDir()
+      const root = temp('sweep-')
+      const a = repo(root, 'a')
+
+      fill(join(home, '.npm', '_cacache'), 400)
+      fill(join(home, '.cache', 'uv'), 200)
+      fill(join(home, '.cache', 'unlisted'), 900)
+      fill(join(a, 'dist'), 100)
+
+      const result = listing([root, '--only', 'caches'], { HOME: home })
+
+      expect(result.entries.map(entry => [entry.path, entry.kind, entry.action])).toEqual([[join(home, '.npm', '_cacache'), 'cache', 'remove'], [join(home, '.cache', 'uv'), 'cache', 'remove']])
+      expect(result.skipped).toEqual([])
+      expect(listing([root], { HOME: home }).entries.map(entry => entry.kind).sort()).toEqual(['cache', 'cache', 'folder'])
+    })
+
+    test('a symlinked cache is skipped and survives --apply', () => {
+      const home = homeDir()
+      const root = temp('sweep-')
+
+      fill(join(home, 'elsewhere'), 50)
+      mkdirSync(join(home, '.cache'), { recursive: true })
+      symlinkSync(join(home, 'elsewhere'), join(home, '.cache', 'pip'))
+
+      const done = listing([root, '--only', 'caches', '--apply', '--yes'], { HOME: home })
+
+      expect(done.entries).toEqual([])
+      expect(done.skipped).toEqual([{ path: join(home, '.cache', 'pip'), reason: 'symlink' }])
+      expect(existsSync(join(home, 'elsewhere', 'file'))).toBe(true)
+    })
+
+    test('--apply removes the listed caches and only those', () => {
+      const home = homeDir()
+      const root = temp('sweep-')
+
+      fill(join(home, '.cargo', 'registry'), 100)
+      fill(join(home, '.cargo', 'bin'), 100)
+      fill(join(home, '.cache', 'unlisted'), 100)
+
+      const done = listing([root, '--only', 'caches', '--apply', '--yes'], { HOME: home })
+
+      expect(done.removed).toEqual([{ path: join(home, '.cargo', 'registry'), removed: true }])
+      expect(existsSync(join(home, '.cargo', 'registry'))).toBe(false)
+      expect(existsSync(join(home, '.cargo', 'bin', 'file'))).toBe(true)
+      expect(existsSync(join(home, '.cache', 'unlisted', 'file'))).toBe(true)
+    })
+
+    test('project caches are kind cache, and node_modules/.cache is listed only when node_modules is not', () => {
+      const root = temp('sweep-')
+      const a = repo(root, 'a')
+
+      writeFileSync(join(a, '.gitignore'), 'node_modules\n.turbo\n.nuxt\n')
+      fill(join(a, '.turbo'), 10)
+      fill(join(a, '.nuxt'), 20)
+      fill(join(a, 'node_modules', '.cache'), 300)
+      fill(join(a, 'node_modules', 'pkg'), 40)
+
+      expect(listing([root]).entries.map(entry => [entry.path, entry.kind])).toEqual([[join(a, 'node_modules'), 'folder'], [join(a, '.nuxt'), 'cache'], [join(a, '.turbo'), 'cache']])
+      expect(listing([root, '--only', 'caches']).entries.map(entry => [entry.path, entry.kind])).toEqual([[join(a, 'node_modules', '.cache'), 'cache'], [join(a, '.nuxt'), 'cache'], [join(a, '.turbo'), 'cache']])
+      expect(listing([root, '--only', 'folders']).entries.map(entry => entry.path)).toEqual([join(a, 'node_modules')])
+    })
+
+    test('a project cache git does not ignore is skipped', () => {
+      const root = temp('sweep-')
+      const a = repo(root, 'a')
+
+      fill(join(a, '.next'), 10)
+
+      expect(listing([root, '--only', 'caches']).skipped).toEqual([{ path: join(a, '.next'), reason: 'not ignored by git' }])
+    })
+
+    test('an unknown --only value is a usage error listing the three', () => {
+      const result = sweep([temp('sweep-'), '--only', 'nope'])
+
+      expect(result.code).toBe(2)
+      expect(result.err).toContain('worktrees, folders or caches')
+    })
   })
 })

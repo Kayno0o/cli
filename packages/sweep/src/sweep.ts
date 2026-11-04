@@ -11,18 +11,20 @@ import { version } from '../package.json'
 import { applyAll } from './apply'
 import { findCandidates, inspect, MAX_DEPTH } from './scan'
 
-const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .nuxt, .next, .output, dist, build, .turbo, .svelte-kit, target beside a Cargo.toml) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit
+const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
 
 Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. With --docker the Docker usage comes after the list, left to dclean.
 
 Exits 0 when it listed, or removed every entry it was allowed to, 1 when a removal failed or the confirm was declined, 2 on a usage error, a missing root, or --apply off a terminal without --yes.`
+
+const ONLY_KINDS = { worktrees: 'worktree', folders: 'folder', caches: 'cache' } as const
 
 const OPTIONS = {
   apply: { type: 'boolean', description: 'delete what is listed as removable, after the confirm' },
   yes: { type: 'boolean', short: 'y', description: 'with --apply, skip the confirm' },
   older: { type: 'string', description: 'only the entries whose repo last committed longer ago than this (30d, 12h)' },
   min: { type: 'string', description: 'only the entries of at least this size (500K, 10M, 1G)' },
-  only: { type: 'string', description: 'worktrees or folders: leave the other kind out' },
+  only: { type: 'string', description: 'worktrees, folders or caches: leave the other kinds out' },
   docker: { type: 'boolean', description: 'add the docker system df output, which alone takes about ten seconds' },
   json: jsonOption('{root, entries: [{path, kind, bytes, committedAt, action, reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
 } as const
@@ -52,8 +54,8 @@ async function main(args: string[]): Promise<number> {
   if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`${root} is not a folder`)
 
-  if (values.only !== undefined && values.only !== 'worktrees' && values.only !== 'folders')
-    badUsage(`--only takes worktrees or folders, not ${values.only}`)
+  if (values.only !== undefined && !Object.hasOwn(ONLY_KINDS, values.only))
+    badUsage(`--only takes worktrees, folders or caches, not ${values.only}`)
 
   const olderMs = values.older === undefined ? undefined : duration(values.older, 'older', 0)
   const minBytes = values.min === undefined ? 0 : parseSize(values.min)
@@ -63,7 +65,7 @@ async function main(args: string[]): Promise<number> {
 
   const now = Date.now()
   const found = await findCandidates(root)
-  const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => (candidate.kind === 'worktree') === (values.only === 'worktrees'))
+  const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => candidate.kind === ONLY_KINDS[values.only as keyof typeof ONLY_KINDS])
   const { entries: all, skipped } = await inspect({ candidates: wanted, skipped: found.skipped })
   const entries = all
     .filter(entry => entry.bytes >= minBytes && (olderMs === undefined || (entry.committedAt !== undefined && now - entry.committedAt >= olderMs)))
