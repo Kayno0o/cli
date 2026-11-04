@@ -78,14 +78,10 @@ describe('summarizeUsage', () => {
     expect(summary.usageErrors).toEqual([{ bin: 'code', command: 'hotspots', unknown: '-n', count: 2 }])
   })
 
-  test('keeps the message of a usage error that named no option, with its quoted parts cut out', () => {
-    noteUsageError('origin \'git@gitlab.com:x/y.git\' is not on a Forgejo\nhint')
+  test('never keeps the message of a usage error, which carries the value it refused', () => {
+    noteUsageError('origin https://me:secret@gitlab.com/x/y.git is not on a Forgejo')
 
-    const entry = usageEntry('ft', 'board', [], 2)
-
-    expect(entry.error).toBe('origin … is not on a Forgejo')
-    expect(summarizeUsage([entry, entry]).errors).toEqual([{ bin: 'ft', command: 'board', error: 'origin … is not on a Forgejo', count: 2 }])
-    expect(usageEntry('ft', 'board', [], 0).error).toBeUndefined()
+    expect(JSON.stringify(usageEntry('ft', 'board', [], 2))).not.toContain('secret')
   })
 })
 

@@ -10,7 +10,7 @@ function repoFlag(repo: string | undefined): string[] {
 }
 
 async function request(path: string, repo: string | undefined): Promise<string> {
-  if (repo === undefined && path.includes('{owner}'))
+  if (repo === undefined)
     await requireForgeOrigin()
 
   const result = await runTool(`tea api ${path}`, ['tea', 'api', ...repoFlag(repo), path], { timeoutMs: TEA_MS })
@@ -94,6 +94,9 @@ export async function repoApiText(path: string, repo?: string): Promise<string> 
 
 // Runs a tea subcommand (`['issues', 'edit']`) with `--repo` straight after its name, before any positional or flag value that could be read as one.
 export async function tea(command: string[], args: string[], repo?: string): Promise<string> {
+  if (repo === undefined)
+    await requireForgeOrigin()
+
   const result = await runTool(`tea ${command.join(' ')}`, ['tea', ...command, ...repoFlag(repo), ...args], { timeoutMs: TEA_MS })
 
   if (result.code !== 0)

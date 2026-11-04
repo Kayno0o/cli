@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
-import { loginHosts, remoteHost } from '../src/forge'
+import { loginHosts, originHost } from '../src/forge'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const root = mkdtempSync(join(tmpdir(), 'ft-forge-'))
@@ -10,11 +10,18 @@ const root = mkdtempSync(join(tmpdir(), 'ft-forge-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 function ftIn(origin: string, ...args: string[]) {
-  const config = join(root, 'config')
+  return ftWith(origin, 'logins:\n    - name: git.kaynooo.fr\n      url: "https://git.kaynooo.fr"\n      ssh_host: git.kaynooo.fr\n', ...args)
+}
+
+function ftWith(origin: string, teaConfig: string | undefined, ...args: string[]) {
+  const config = mkdtempSync(join(root, 'config-'))
   const repo = mkdtempSync(join(root, 'repo-'))
 
   mkdirSync(join(config, 'tea'), { recursive: true })
-  writeFileSync(join(config, 'tea', 'config.yml'), 'logins:\n    - name: git.kaynooo.fr\n      url: https://git.kaynooo.fr\n      ssh_host: git.kaynooo.fr\n')
+
+  if (teaConfig !== undefined)
+    writeFileSync(join(config, 'tea', 'config.yml'), teaConfig)
+
   Bun.spawnSync(['git', 'init', '-q', repo])
   Bun.spawnSync(['git', '-C', repo, 'remote', 'add', 'origin', origin])
 
@@ -23,13 +30,13 @@ function ftIn(origin: string, ...args: string[]) {
   return { code: run.exitCode, err: run.stderr.toString() }
 }
 
-describe('remoteHost', () => {
+describe('originHost', () => {
   test('reads the host of an scp-style, ssh and https remote', () => {
-    expect(remoteHost('git@git.kaynooo.fr:kaynooo/cli.git')).toBe('git.kaynooo.fr')
-    expect(remoteHost('ssh://git@git.kaynooo.fr:22022/kaynooo/cli.git')).toBe('git.kaynooo.fr')
-    expect(remoteHost('https://GitLab.com/x/y.git\n')).toBe('gitlab.com')
-    expect(remoteHost('forgejo:kaynooo/cli.git')).toBe('forgejo')
-    expect(remoteHost('/srv/git/cli.git')).toBeUndefined()
+    expect(originHost('git@git.kaynooo.fr:kaynooo/cli.git')).toBe('git.kaynooo.fr')
+    expect(originHost('ssh://git@git.kaynooo.fr:22022/kaynooo/cli.git')).toBe('git.kaynooo.fr')
+    expect(originHost('https://GitLab.com/x/y.git\n')).toBe('gitlab.com')
+    expect(originHost('forgejo:kaynooo/cli.git')).toBe('forgejo')
+    expect(originHost('/srv/git/cli.git')).toBeUndefined()
   })
 })
 
@@ -47,6 +54,22 @@ describe('a call that leaves the repository to tea', () => {
 
     expect(result.code).toBe(2)
     expect(result.err).toContain('origin git@gitlab.com:x/y.git is not on a Forgejo tea is logged in to (git.kaynooo.fr)')
+  })
+
+  test('keeps a token in the origin out of the message', () => {
+    const result = ftIn('https://me:secret@gitlab.com/x/y.git', 'board')
+
+    expect(result.code).toBe(2)
+    expect(result.err).not.toContain('secret')
+  })
+
+  test('also guards the issue writes that go straight to tea, and a --repo skips it', () => {
+    expect(ftIn('git@gitlab.com:x/y.git', 'edit', '1', '-t', 'new').code).toBe(2)
+    expect(ftIn('git@gitlab.com:x/y.git', 'board', '-r', 'kaynooo/cli').err).not.toContain('is not on a Forgejo')
+  })
+
+  test('says nothing without a tea config', () => {
+    expect(ftWith('git@gitlab.com:x/y.git', undefined, 'board').err).not.toContain('is not on a Forgejo')
   })
 
   test('goes on to tea when the origin is on the Forgejo', () => {

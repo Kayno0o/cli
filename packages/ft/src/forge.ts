@@ -2,14 +2,15 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fail, runTool } from '@kaynooo/cli-kit'
+import { redactUrl } from './remote'
 
-const LOGIN_HOST = /^\s*(?:-\s*)?(?:url|ssh_host):\s*(\S+)/gm
+const LOGIN_HOST = /^\s*(?:-\s*)?(?:url|ssh_host):\s*["']?([^\s"']+)/gm
 const PORT = /:\d+$/
 const SCP_REMOTE = /^(?:[^@/\s]+@)?([^:/\s]+):(?!\/\/)/
 const URL_REMOTE = /^[a-z+]+:\/\/(?:[^@/\s]+@)?(\[[^\]]+\]|[^:/\s]+)/i
 
 // The host of a git remote, `git@host:owner/repo.git` or `https://host/owner/repo` alike.
-export function remoteHost(remote: string): string | undefined {
+export function originHost(remote: string): string | undefined {
   const text = remote.trim()
 
   return (URL_REMOTE.exec(text) ?? SCP_REMOTE.exec(text))?.[1]?.toLowerCase()
@@ -55,10 +56,10 @@ export async function requireForgeOrigin(): Promise<void> {
       return
 
     const origin = await runTool('git remote get-url origin', ['git', 'remote', 'get-url', 'origin'], { timeoutMs: 5000 })
-    const host = origin.code === 0 ? remoteHost(origin.stdout) : undefined
+    const host = origin.code === 0 ? originHost(origin.stdout) : undefined
 
     if (host !== undefined && !hosts.has(host))
-      fail(`origin ${origin.stdout.trim()} is not on a Forgejo tea is logged in to (${[...hosts].join(', ')})`, 2, 'name the repository with -r owner/name, or run ft in a repository hosted there (an ssh alias origin: ft remote --fix)')
+      fail(`origin ${redactUrl(origin.stdout.trim())} is not on a Forgejo tea is logged in to (${[...hosts].join(', ')})`, 2, 'name the repository with -r owner/name, or run ft in a repository hosted there (an ssh alias origin: ft remote --fix)')
   })()
 
   return checked

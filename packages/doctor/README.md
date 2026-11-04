@@ -38,10 +38,10 @@ Each bin completes itself through `<bin> __complete`. fish gets a file per bin (
 ## cli stats
 
 ```sh
-cli stats [--since 7d] [--json]   # runs per bin, failures, and the options usage errors did not know
+cli stats [--since 7d] [--json]   # runs per bin and per command, failures (exit 1) apart from usage errors (exit 2), and the options usage errors did not know
 ```
 
-Every bin records each run in `~/.local/state/kaynooo-cli/usage.jsonl`: the bin, its command, the flag names it saw (never values or arguments), the exit code and, on a usage error, the unknown option. `KAYNOOO_CLI_NO_USAGE=1` turns it off; `guard` never records.
+Every bin records each run in `~/.local/state/kaynooo-cli/usage.jsonl`: the bin, its command, the flag names it saw (never values or arguments), the exit code and, on a usage error, the unknown option (never its message). `KAYNOOO_CLI_NO_USAGE=1` turns it off; `guard` never records.
 
 ## cli list
 

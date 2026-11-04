@@ -86,12 +86,12 @@ export async function completions(args: string[], host: Host = hostHere()): Prom
 
 const STATS_USAGE = `cli stats [--since 7d] [--json]: how often each bin ran, and the usage errors by the option it did not know
 
-Every bin records each run in ~/.local/state/kaynooo-cli/usage.jsonl (or $XDG_STATE_HOME): the bin, its command, the names of the flags it saw (never a value or an argument), the exit code and, on a usage error (exit 2), the unknown option or else the first line of its message with every quoted part cut out. failed counts exits other than 0 and 2, usage errors are exit 2 (misuse, or a check that could not be made). Set KAYNOOO_CLI_NO_USAGE=1 to stop recording; \`guard\` never records.
+Every bin records each run in ~/.local/state/kaynooo-cli/usage.jsonl (or $XDG_STATE_HOME): the bin, its command, the names of the flags it saw (never a value or an argument), the exit code and and, on a usage error, the unknown option (never the message, which carries the values it refused). failed counts exits other than 0 and 2, usage errors are exit 2 (misuse, or a check that could not be made). Set KAYNOOO_CLI_NO_USAGE=1 to stop recording; \`guard\` never records.
 Exits 0 when it printed the summary, 2 on a usage error.`
 
 const STATS_OPTIONS = {
   since: { type: 'string', description: 'only the runs this recent (7d, 12h)' },
-  json: jsonOption('{runs, bins: [{bin, runs, failed, usageErrors}], commands: [{bin, command, runs, failed, usageErrors}], usageErrors: [{bin, command?, unknown, count}], errors: [{bin, command?, error, count}]}'),
+  json: jsonOption('{runs, bins: [{bin, runs, failed, usageErrors}], commands: [{bin, command, runs, failed, usageErrors}], usageErrors: [{bin, command?, unknown, count}]}'),
 } as const
 
 export async function stats(args: string[], path = usagePath()): Promise<number> {
@@ -113,16 +113,13 @@ export async function stats(args: string[], path = usagePath()): Promise<number>
 
   console.log(`${summary.runs} runs\n\n${table(summary.bins.map(each => [each.bin, String(each.runs), `${each.failed} failed`, `${each.usageErrors} usage errors`]))}`)
 
-  const busy = summary.commands.filter(each => each.failed + each.usageErrors > 0).slice(0, 15)
+  const busy = summary.commands.filter(each => each.failed + each.usageErrors > 0).toSorted((a, b) => b.failed + b.usageErrors - (a.failed + a.usageErrors)).slice(0, 15)
 
   if (busy.length > 0)
-    console.log(`\ncommands that failed\n${table(busy.map(each => [`${each.bin} ${each.command}`, String(each.runs), `${each.failed} failed`, `${each.usageErrors} usage errors`]))}`)
+    console.log(`\ncommands with failures or usage errors\n${table(busy.map(each => [`${each.bin} ${each.command}`, String(each.runs), `${each.failed} failed`, `${each.usageErrors} usage errors`]))}`)
 
   if (summary.usageErrors.length > 0)
     console.log(`\nunknown options\n${table(summary.usageErrors.map(each => [`${each.bin}${each.command === undefined ? '' : ` ${each.command}`}`, each.unknown, `${each.count}x`]))}`)
-
-  if (summary.errors.length > 0)
-    console.log(`\nusage errors\n${table(summary.errors.slice(0, 15).map(each => [`${each.bin}${each.command === undefined ? '' : ` ${each.command}`}`, each.error, `${each.count}x`]))}`)
 
   return 0
 }
