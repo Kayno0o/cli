@@ -68,6 +68,8 @@ export async function sendRelease(
   })
 
   console.log(out().green(`Released on ${res.html_url}`))
+
+  return res.html_url
 }
 
 export async function getRelease(options: ChangelogOptions, tag: string) {

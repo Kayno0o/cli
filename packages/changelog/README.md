@@ -157,6 +157,26 @@ export default defineConfig({
 bunx @kaynooo/cli-changelog --dry-run
 ```
 
+## JSON output
+
+`--json` prints the result as JSON on stdout and nothing else: the progress goes to stderr, and a failure is `{"error": "...", "hint"?: "..."}` on stderr with the usual exit code.
+
+`changelog --json` (also with `--dry-run` or `--output`):
+
+```json
+{ "command": "release", "status": "released", "from": "v1.4.2", "to": "main", "commits": 3, "notes": "...", "url": "https://git.kaynooo.fr/o/r/releases/tag/v1.4.3", "output": null, "assetsFailed": 0, "discord": null }
+```
+
+`status` is `released`, `dry-run` or `saved`; `url` is the release page once released, `output` the file written by `--output`, `discord` is `posted`, `failed` or `null` without a webhook. The exit code is 1 when an asset upload or the Discord post failed, with the report still printed.
+
+`changelog undo --json` asks no question, so removing something needs `--yes` (or `--dry-run`, exit 2 otherwise) and the release note goes only with `--note`:
+
+```json
+{ "command": "undo", "status": "undone", "tag": "v1.4.2", "releaseNote": false, "remoteTag": true, "localTag": true, "commitReset": { "hash": "...", "subject": "chore: release v1.4.2" } }
+```
+
+`status` is `undone`, `nothing`, `dry-run` or `declined`; each flag says whether that step was taken (or, on a dry run, would be), and `commitReset` is `null` when the commit is left alone.
+
 ## Undo a Release
 
 Rolled a bad release? `undo` deletes the remote tag, the local tag, and soft-resets the version-bump commit (changes are kept in your working tree). The commit is only reset when the tag points at `HEAD`.

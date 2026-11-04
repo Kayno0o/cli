@@ -1,5 +1,6 @@
 import type { Options, parse } from '@kaynooo/cli-kit'
 import type { ChangelogOptions } from './types'
+import { jsonOption } from '@kaynooo/cli-kit'
 
 export const shared = {
   'token': { type: 'string', description: 'Forgejo token, defaults to GITHUB_TOKEN' },
@@ -19,6 +20,7 @@ export const shared = {
   'discord-webhook': { type: 'string', description: 'Discord webhook to post the release to, defaults to DISCORD_WEBHOOK' },
   'dry-run': { type: 'boolean', description: 'Dry run (--dry is kept as an alias)' },
   'assets': { type: 'string', multiple: true, description: 'Files to upload as assets to the release, repeatable or comma separated; quote globs, e.g. --assets \'dist/*.js\'' },
+  'json': jsonOption('release: {command, status, from, to, commits, notes, url, output, assetsFailed, discord}; undo: {command, status, tag, releaseNote, remoteTag, localTag, commitReset}. Progress goes to stderr'),
   'debug': { type: 'boolean', description: 'Print the stack of an unexpected error' },
 } as const satisfies Options
 

@@ -3,14 +3,29 @@
 import type { ResolvedChangelogOptions } from './types'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Exit, fail, parse, role, runCli } from '@kaynooo/cli-kit'
+import { Exit, fail, parse, printJson, role, runCli } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { sendDiscordWebhook } from '@kaynooo/utils'
 import { version } from '../package.json'
 import { aliasFlags, shared, shouldAskNote, toOptions, undoFlags, withToken } from './flags'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
 import { deleteLocalTag, deleteRemoteGitTag, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
-import { err, out } from './ui'
+import { err, out, stdoutToStderr } from './ui'
+
+type Report = Record<string, unknown>
+
+// Runs a command under --json: its logging goes to stderr and the report it hands over is printed as the only thing on stdout.
+async function reporting(argv: string[], run: (argv: string[], report: (value: Report) => unknown) => Promise<number>): Promise<number> {
+  const end = argv.indexOf('--')
+  const json = (end === -1 ? argv : argv.slice(0, end)).includes('--json')
+  const reports: Report[] = []
+  const code = await stdoutToStderr(json, async () => run(argv, value => reports.push(value)))
+
+  if (json && reports[0] !== undefined)
+    printJson(reports[0])
+
+  return code
+}
 
 // An unexpected error ends as a shared `error: changelog <command>: message`, its stack shown only under --debug.
 function failed(e: unknown, debug: boolean | undefined): never {
@@ -39,10 +54,12 @@ async function printManualRelease(config: ResolvedChangelogOptions, md: string, 
   console.log()
 }
 
-async function release(argv: string[]) {
+async function release(argv: string[], report: (value: Report) => unknown) {
   const parsed = parse(argv, `usage: changelog release [options]
 
-Exits 0 once released, written to --output or shown by --dry-run, 1 when the release could not be made (no token, the tag not on Forgejo, a shallow clone, an API error), an asset upload or the Discord post failed, 2 on a usage error.`, shared, { allowNegative: true, positionals: [] })
+Exits 0 once released, written to --output or shown by --dry-run, 1 when the release could not be made (no token, the tag not on Forgejo, a shallow clone, an API error), an asset upload or the Discord post failed, 2 on a usage error.
+
+--json prints {command, status (released, dry-run or saved), from, to, commits, notes, url, output, assetsFailed, discord (posted, failed or null)} on stdout and the progress on stderr; a failure is {error} on stderr.`, shared, { allowNegative: true, positionals: [] })
 
   const options = withToken(toOptions(parsed.values))
   let generated: { config: ResolvedChangelogOptions, md: string } | undefined
@@ -53,6 +70,7 @@ Exits 0 once released, written to --output or shown by --dry-run, 1 when the rel
     console.log(out().dim(`changelog v${version}`))
 
     const { config, md, discord, commits } = await generate(options)
+    const result = { command: 'release', status: 'released', from: config.from, to: config.to, commits: commits.length, notes: md, url: null as string | null, output: null as string | null, assetsFailed: 0, discord: null as string | null }
 
     generated = { config, md }
 
@@ -66,6 +84,7 @@ Exits 0 once released, written to --output or shown by --dry-run, 1 when the rel
     if (config.dry) {
       console.log(out().yellow(config.discordWebhook ? 'Dry run. Release and Discord post skipped.' : 'Dry run. Release skipped.'))
       await printManualRelease(config, md, 'Create it manually at')
+      report({ ...result, status: 'dry-run' })
 
       return 0
     }
@@ -73,6 +92,7 @@ Exits 0 once released, written to --output or shown by --dry-run, 1 when the rel
     if (typeof config.output === 'string') {
       await Bun.write(config.output, md)
       console.log(out().yellow(`Saved to ${config.output}`))
+      report({ ...result, status: 'saved', output: config.output })
 
       return 0
     }
@@ -92,21 +112,29 @@ Exits 0 once released, written to --output or shown by --dry-run, 1 when the rel
       fail('the repo seems to be cloned shallowly, which makes changelog fail to generate, specify `fetch-depth: 0` in your CI config', 1)
     }
 
-    await sendRelease(config, md)
+    result.url = await sendRelease(config, md)
 
-    if (config.assets?.length && await uploadAssets(config, config.assets) > 0)
-      code = 1
+    if (config.assets?.length) {
+      result.assetsFailed = await uploadAssets(config, config.assets)
+
+      if (result.assetsFailed > 0)
+        code = 1
+    }
 
     if (config.discordWebhook) {
       try {
         await sendDiscordWebhook(config.discordWebhook, discord)
         console.log(out().green('Posted to Discord'))
+        result.discord = 'posted'
       }
       catch (e) {
         console.error(err().red(`Released, but the Discord post failed: ${String(e)}`))
+        result.discord = 'failed'
         code = 1
       }
     }
+
+    report(result)
 
     return code
   }
@@ -118,10 +146,13 @@ Exits 0 once released, written to --output or shown by --dry-run, 1 when the rel
   }
 }
 
-async function undo(argv: string[]) {
+async function undo(argv: string[], report: (value: Report) => unknown) {
   const { values: args, positionals } = parse(argv, `usage: changelog undo [tag] [options]
 
-Exits 0 once undone, with nothing to undo, on --dry-run or when the question is declined, 1 when a step fails, 2 on a usage error.`, undoFlags, { positionals: ['[tag]'] })
+Exits 0 once undone, with nothing to undo, on --dry-run or when the question is declined, 1 when a step fails, 2 on a usage error.
+
+--json prints {command, status (undone, nothing, dry-run or declined), tag, releaseNote, remoteTag, localTag, commitReset: {hash, subject} or null} on stdout and the progress on stderr, each flag true when that step is (or, on a dry run, would be) taken. It asks no question: the release note is deleted with --note only, and anything to remove needs --yes or --dry-run (exit 2 otherwise).`, undoFlags, { positionals: ['[tag]'] })
+  const json = args.json === true
   let tag = positionals[0]
   const options = withToken(toOptions(args))
 
@@ -134,6 +165,7 @@ Exits 0 once undone, with nothing to undo, on --dry-run or when the question is 
 
       if (tag === undefined) {
         console.log(out().yellow('No tags found, nothing to undo.'))
+        report({ command: 'undo', status: 'nothing', tag: null, releaseNote: false, remoteTag: false, localTag: false, commitReset: null })
 
         return 0
       }
@@ -169,7 +201,7 @@ Exits 0 once undone, with nothing to undo, on --dry-run or when the question is 
     }
 
     // Deleting the release note is opt-in: --note forces it, --yes and --dry-run skip the question, otherwise it defaults to "no".
-    const deleteNote = release !== null && (args.note === true || (shouldAskNote({ release, note: args.note, yes: args.yes, dry: args['dry-run'] }) && await ask(`Also delete the Forgejo release note "${release.name || tag}"?`)))
+    const deleteNote = release !== null && (args.note === true || (!json && shouldAskNote({ release, note: args.note, yes: args.yes, dry: args['dry-run'] }) && await ask(`Also delete the Forgejo release note "${release.name || tag}"?`)))
 
     const actions: string[] = []
 
@@ -187,11 +219,17 @@ Exits 0 once undone, with nothing to undo, on --dry-run or when the question is 
     else if (localTag)
       actions.push(out().dim(`commit        skipped (${tag} is not HEAD)`))
 
+    const result = { command: 'undo', status: 'undone', tag, releaseNote: deleteNote, remoteTag, localTag, commitReset: commitToReset === undefined ? null : { hash: commitToReset.hash, subject: commitToReset.subject } }
+
     if (!actions.length) {
       console.log(out().yellow(`Nothing to undo for "${tag}".`))
+      report({ ...result, status: 'nothing' })
 
       return 0
     }
+
+    if (json && args.yes !== true && args['dry-run'] !== true)
+      fail('--json asks no question, so removing needs --yes (or --dry-run to preview)')
 
     console.log()
     console.log(`About to remove on ${out().bold(String(config.releaseRepo))}:`)
@@ -201,12 +239,14 @@ Exits 0 once undone, with nothing to undo, on --dry-run or when the question is 
 
     if (args['dry-run']) {
       console.log(out().yellow('Dry run. Nothing removed.'))
+      report({ ...result, status: 'dry-run' })
 
       return 0
     }
 
     if (!args.yes && !await ask('Proceed?')) {
       console.log(out().yellow('Aborted.'))
+      report({ ...result, status: 'declined', releaseNote: false, remoteTag: false, localTag: false, commitReset: null })
 
       return 0
     }
@@ -235,6 +275,8 @@ Exits 0 once undone, with nothing to undo, on --dry-run or when the question is 
       console.log(out().green(`Reset commit ${commitToReset.hash.slice(0, 7)} (changes kept in working tree)`))
     }
 
+    report(result)
+
     return 0
   }
   catch (e) {
@@ -248,8 +290,8 @@ process.exitCode = await runCli({
   replaces: 'writing the release notes by hand and posting them through the Forgejo UI',
   examples: [['changelog --dry-run', 'the notes since the last tag, nothing published'], ['changelog undo v1.2.0 --dry-run', 'what undoing that release would remove']],
   commands: {
-    release: { summary: 'generate the release notes and publish them (the default)', run: async argv => release(aliasFlags(argv)) },
-    undo: { summary: 'undo a release: delete the remote/local tag and reset the bump commit', run: async argv => undo(aliasFlags(argv)) },
+    release: { summary: 'generate the release notes and publish them (the default)', run: async argv => reporting(aliasFlags(argv), release) },
+    undo: { summary: 'undo a release: delete the remote/local tag and reset the bump commit', run: async argv => reporting(aliasFlags(argv), undo) },
   },
   defaultCommand: 'release',
 })
