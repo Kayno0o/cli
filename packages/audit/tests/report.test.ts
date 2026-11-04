@@ -49,7 +49,8 @@ describe('findingsOf', () => {
     const found = findingsOf(audit, new Set(['lodash']), new Set(['esbuild', 'lodash']), 'low')
 
     expect(found.map(each => each.package)).toEqual(['lodash', 'esbuild', 'minimist'])
-    expect(found[0]).toMatchObject({ severity: 'high', advisories: 2, scope: 'prod', direct: true, fix: '4.17.21', titles: ['prototype pollution', 'redos'] })
+    expect(found[0]).toMatchObject({ severity: 'high', scope: 'prod', direct: true, fix: '4.17.21' })
+    expect(found[0]?.advisories.map(each => each.title)).toEqual(['prototype pollution', 'redos'])
     expect(found[1]).toMatchObject({ scope: 'dev', direct: true, fix: undefined })
     expect(found[2]).toMatchObject({ scope: 'dev', direct: false })
   })
@@ -57,7 +58,13 @@ describe('findingsOf', () => {
   test('leaves out the advisories under the level, and the packages left with none', () => {
     expect(findingsOf(audit, new Set(), new Set(), 'moderate').map(each => each.package)).toEqual(['lodash', 'esbuild'])
     expect(findingsOf(audit, new Set(), new Set(), 'high').map(each => each.package)).toEqual(['lodash'])
-    expect(findingsOf(audit, new Set(), new Set(), 'high')[0]?.advisories).toBe(1)
+    expect(findingsOf(audit, new Set(), new Set(), 'high')[0]?.advisories).toHaveLength(1)
+  })
+
+  test('skips an advisory ignored by GHSA or numeric id, and the package left with none', () => {
+    expect(findingsOf(audit, new Set(), new Set(), 'low', ['GHSA-x']).map(each => each.package)).toEqual([])
+    expect(findingsOf(audit, new Set(), new Set(), 'low', ['1']).map(each => each.package)).toEqual([])
+    expect(findingsOf(audit, new Set(), new Set(), 'low', ['GHSA-other']).map(each => each.package)).toHaveLength(3)
   })
 
   test('puts a production package before a development one of the same severity', () => {

@@ -1,6 +1,6 @@
-import type { Severity } from './config'
+import type { AdvisoryRow, Severity } from '@kaynooo/cli-kit'
 import type { Fetcher, Registry } from './registry'
-import { SEVERITIES } from './config'
+import { isIgnored, SEVERITIES, severityRank } from '@kaynooo/cli-kit'
 import { inRange } from './semver'
 
 // The npm bulk advisory endpoint, the one `bun audit` posts to: a JSON body of `{ name: [version, ...] }` answered with `{ name: [advisory, ...] }`, only the advisories whose range matches a version sent.
@@ -10,12 +10,7 @@ const REQUEST_TIMEOUT = 10_000
 const GHSA = /GHSA-[\w-]+$/
 const UPPER_BOUND = /(?:^|\s)<([\w.+-]+)/
 
-export interface Advisory {
-  id: number
-  ghsa?: string | undefined
-  url: string
-  title: string
-  severity: Severity
+export interface Advisory extends Omit<AdvisoryRow, 'fixed'> {
   vulnerable: string
 }
 
@@ -30,10 +25,6 @@ interface RawAdvisory {
   title: string
   severity: string
   vulnerable_versions: string
-}
-
-export function severityRank(severity: Severity): number {
-  return SEVERITIES.indexOf(severity)
 }
 
 // The version a vulnerable range stops at for the version asked, undefined for a `<=` or open range.
@@ -112,5 +103,5 @@ export function advisoriesFor(advisories: Advisory[] | undefined, version: strin
 
 // The advisories at or above the level, minus those ignored by GHSA or numeric id.
 export function filterAdvisories<T extends Advisory>(advisories: T[], level: Severity, ignore: string[] = []): T[] {
-  return advisories.filter(each => severityRank(each.severity) >= severityRank(level) && !ignore.includes(each.ghsa ?? '') && !ignore.includes(String(each.id)))
+  return advisories.filter(each => severityRank(each.severity) >= severityRank(level) && !isIgnored(each, ignore))
 }

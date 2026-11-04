@@ -62,6 +62,13 @@ describe('audit with a bun that answers', () => {
     expect(ran.out).toMatch(/lodash\s+high\s+1\s+prod\s+direct\s+4\.17\.21/)
   })
 
+  test('--ignore skips an advisory by numeric id, so a repository with only that one exits 0', () => {
+    const ran = withBun(advisory, advisory, '--ignore', '1')
+
+    expect(ran.code).toBe(0)
+    expect(ran.out).toContain('no advisory')
+  })
+
   test('calls a package only the full audit lists dev, and --prod then finds nothing', () => {
     expect(withBun(advisory, '{}').out).toMatch(/lodash\s+high\s+1\s+dev/)
 

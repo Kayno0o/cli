@@ -9,7 +9,7 @@ import { auditPackages, renderAudit } from '../src/commands/audit'
 import { checkPackage } from '../src/commands/check'
 import { loadSettings, parseSettings } from '../src/config'
 import { isLicenseAllowed } from '../src/licenses'
-import { parseBunLock } from '../src/lockfile'
+import { parseBunLock, productionPackages } from '../src/lockfile'
 
 const temp = tempDirs()
 
@@ -197,6 +197,26 @@ describe('parseBunLock', () => {
   })
 })
 
+describe('productionPackages', () => {
+  const lock = JSON.stringify({
+    workspaces: { '': { dependencies: { a: '1' }, devDependencies: { dev: '1' } }, 'packages/x': { dependencies: { '@s/b': '1' }, optionalDependencies: { opt: '1' } } },
+    packages: {
+      'a': ['a@1.0.0', '', { dependencies: { c: '^1', shared: '^1' } }, 'x'],
+      'a/shared': ['shared@2.0.0', '', {}, 'x'],
+      'shared': ['shared@1.0.0', '', {}, 'x'],
+      'c': ['c@1.0.0', '', { dependencies: { shared: '^1' } }, 'x'],
+      '@s/b': ['@s/b@1.0.0', '', {}, 'x'],
+      'opt': ['opt@1.0.0', '', {}, 'x'],
+      'dev': ['dev@1.0.0', '', { dependencies: { devonly: '1' } }, 'x'],
+      'devonly': ['devonly@1.0.0', '', {}, 'x'],
+    },
+  })
+
+  test('follows dependencies and optional ones from every workspace, taking the nested copy first and leaving development ones out', () => {
+    expect([...productionPackages(lock)].sort()).toEqual(['@s/b@1.0.0', 'a@1.0.0', 'c@1.0.0', 'opt@1.0.0', 'shared@1.0.0', 'shared@2.0.0'])
+  })
+})
+
 describe('auditPackages', () => {
   const base = (fetcher: Fetcher): AuditContext => ({ configs: [], settings: { licenses: ['MIT'] }, minAgeDays: 14, level: 'low', ignore: [], fetcher, now: NOW })
 
@@ -214,7 +234,7 @@ describe('auditPackages', () => {
     expect(renderAudit(findings, audited.length)).toContain('GHSA-aaaa-bbbb-cccc high: Prototype pollution (fixed in 1.2.0)')
   })
 
-  test('--audit-level and --ignore narrow the advisories, an unblocked package stays clean', async () => {
+  test('--level and --ignore narrow the advisories, an unblocked package stays clean', async () => {
     const { fetcher } = registry()
     const { audited } = await auditPackages(parseBunLock(LOCK), { ...base(fetcher), settings: {}, level: 'high', ignore: ['GHSA-aaaa-bbbb-cccc'] })
 

@@ -1,9 +1,10 @@
+import type { AdvisoryRow, Severity } from '@kaynooo/cli-kit'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { isIgnored, severityRank } from '@kaynooo/cli-kit'
 
-export const SEVERITIES = ['low', 'moderate', 'high', 'critical'] as const
-
-export type Severity = (typeof SEVERITIES)[number]
+export { SEVERITIES } from '@kaynooo/cli-kit'
+export type { Severity } from '@kaynooo/cli-kit'
 
 /** What `bun audit --json` lists per package. */
 export interface Advisory {
@@ -18,8 +19,7 @@ export interface Finding {
   package: string
   /** The worst of its advisories. */
   severity: Severity
-  advisories: number
-  titles: string[]
+  advisories: AdvisoryRow[]
   /** Whether the package is needed by a production dependency, else only by development ones. */
   scope: 'prod' | 'dev'
   /** Whether the repository's own package.json asks for the package, rather than a dependency of one. */
@@ -31,9 +31,7 @@ export interface Finding {
 const UPPER_BOUND = /<\s*(\d[\w.+-]*)/
 const DEPENDENCY_KINDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const
 
-export function severityRank(severity: Severity): number {
-  return SEVERITIES.indexOf(severity)
-}
+const GHSA = /GHSA-[\w-]+$/
 
 /** The output of `bun audit --json`: undefined when it is no object of advisories. */
 export function parseAudit(text: string): Record<string, Advisory[]> | undefined {
@@ -68,23 +66,24 @@ export function fixFor(advisories: Advisory[]): string | undefined {
 }
 
 /** The audit as one finding per package, the worst first; `reaching` holds the names the production audit lists and `direct` the ones package.json asks for. */
-export function findingsOf(audit: Record<string, Advisory[]>, reaching: ReadonlySet<string>, direct: ReadonlySet<string>, level: Severity): Finding[] {
+export function findingsOf(audit: Record<string, Advisory[]>, reaching: ReadonlySet<string>, direct: ReadonlySet<string>, level: Severity, ignore: readonly string[] = []): Finding[] {
   const found: Finding[] = []
 
   for (const [name, all] of Object.entries(audit)) {
-    const advisories = all.filter(advisory => severityRank(advisory.severity) >= severityRank(level))
+    const kept = all.filter(advisory => severityRank(advisory.severity) >= severityRank(level) && !isIgnored({ id: advisory.id, ghsa: GHSA.exec(advisory.url)?.[0] }, ignore))
 
-    if (advisories.length === 0)
+    if (kept.length === 0)
       continue
+
+    const advisories = kept.map((advisory): AdvisoryRow => ({ id: advisory.id, ghsa: GHSA.exec(advisory.url)?.[0], url: advisory.url, title: advisory.title, severity: advisory.severity, fixed: fixedAt(advisory.vulnerable_versions) }))
 
     found.push({
       package: name,
       severity: advisories.reduce((worst, advisory) => severityRank(advisory.severity) > severityRank(worst) ? advisory.severity : worst, advisories[0]!.severity),
-      advisories: advisories.length,
-      titles: [...new Set(advisories.map(advisory => advisory.title))],
+      advisories,
       scope: reaching.has(name) ? 'prod' : 'dev',
       direct: direct.has(name),
-      fix: fixFor(advisories),
+      fix: fixFor(kept),
     })
   }
 

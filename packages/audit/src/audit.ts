@@ -15,12 +15,15 @@ const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun repo
 Each package with an advisory is one row: its worst severity, how many advisories, whether a production dependency needs it (prod) or only a development one (dev), whether the repository asks for it itself (direct) or a dependency does (the row then says via), and the version that fixes every advisory at once, "-" when an advisory names none. The worst and the production ones come first.
 It runs \`bun audit --json\` in each repository holding a bun.lock, which reaches the registry; the walk goes three levels deep, stops at a bun.lock and skips node_modules and hidden folders.
 
-Exits 0 when no repository has an advisory at the level asked, 1 when one has or a repository's audit failed, 2 on a usage error or a root that is no folder.`
+Reach for it to sweep many repositories at once; \`pkg audit\` vets the one repository in a folder (package age, install scripts, licences) as well as its advisories, and shares --level, --prod and --ignore.
+
+Exits 0 when no repository has an advisory at the level asked, 1 when one has, a repository's audit failed or no bun.lock sits under root, 2 on a usage error or a root that is no folder.`
 
 const OPTIONS = {
   level: { type: 'string', choices: SEVERITIES, default: 'moderate', description: 'only the advisories at least this severe: low, moderate, high or critical' },
   prod: { type: 'boolean', description: 'only the packages a production dependency needs' },
-  json: jsonOption('[{repo, path, findings: [{package, severity, advisories, titles, scope, direct, fix}], error}]'),
+  ignore: { type: 'string', multiple: true, description: 'an advisory skipped by GHSA or numeric id, repeatable' },
+  json: jsonOption('[{repo, path, findings: [{package, severity, scope, direct, fix, advisories: [{id, ghsa, url, title, severity, fixed}]}], error}]'),
 } as const
 
 const MAX_DEPTH = 3
@@ -100,7 +103,7 @@ function children(root: string): (folder: string) => string[] {
   }
 }
 
-async function audited(path: string, shown: string, level: Severity): Promise<RepoAudit> {
+async function audited(path: string, shown: string, level: Severity, ignore: readonly string[]): Promise<RepoAudit> {
   const [all, production] = await Promise.all([
     runCommand(['bun', 'audit', '--json'], { cwd: path, timeoutMs: AUDIT_MS }),
     runCommand(['bun', 'audit', '--json', '--prod'], { cwd: path, timeoutMs: AUDIT_MS }),
@@ -114,7 +117,7 @@ async function audited(path: string, shown: string, level: Severity): Promise<Re
   const reaching = new Set(Object.keys(reached))
   const direct = directDependencies(path, workspaceFolders(path, children(path)))
 
-  return { repo: shown, path, findings: findingsOf(audit, reaching, direct, level), error: undefined }
+  return { repo: shown, path, findings: findingsOf(audit, reaching, direct, level, ignore), error: undefined }
 }
 
 function stdoutOf(ran: Ran): string {
@@ -138,7 +141,7 @@ function rows(findings: Finding[]): string[][] {
   return findings.map(found => [
     found.package,
     tint(found.severity)(found.severity),
-    String(found.advisories),
+    String(found.advisories.length),
     found.scope,
     found.direct ? 'direct' : 'via',
     found.fix ?? '-',
@@ -158,7 +161,7 @@ async function main(args: string[]): Promise<number> {
   if (paths.length === 0)
     fail(`no bun.lock under ${root}`, 1)
 
-  const audits = await pool(paths, CONCURRENCY, async path => audited(path, relative(root, path) || '.', level))
+  const audits = await pool(paths, CONCURRENCY, async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []))
   const kept = audits.map(each => ({ ...each, findings: values.prod === true ? each.findings.filter(found => found.scope === 'prod') : each.findings }))
 
   if (values.json === true)
@@ -184,7 +187,7 @@ function show(audits: RepoAudit[], total: number): void {
     console.log(`${path(each.repo)} ${label(each.error === undefined ? `${each.findings.length} ${each.findings.length === 1 ? 'package' : 'packages'}` : `audit failed: ${each.error}`)}`)
 
     if (each.findings.length > 0)
-      console.log(table([['package', 'severity', 'advisories', 'scope', 'reached', 'fix'], ...rows(each.findings)], { header: true, align: ['left', 'left', 'right', 'left', 'left', 'left'] }))
+      console.log(table([['package', 'severity', 'advisories', 'scope', 'origin', 'fix'], ...rows(each.findings)], { header: true, align: ['left', 'left', 'right', 'left', 'left', 'left'] }))
   }
 }
 

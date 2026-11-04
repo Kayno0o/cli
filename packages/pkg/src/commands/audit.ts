@@ -9,20 +9,22 @@ import { fail, jsonOption, parse, printJson, warn, wholeNumber } from '@kaynooo/
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, isSeverity, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
-import { parseBunLock } from '../lockfile'
+import { parseBunLock, productionPackages } from '../lockfile'
 import { fetchPackument } from '../registry'
 
 const usage = `pkg audit [dir]
 
 Reads the bun.lock in the folder (the current one by default) and runs on every registry package it pins the checks \`pkg check\` runs before an add: age, install scripts, a deprecated version, a near miss of a popular name, and the licence allowlist of the pkg config. It also lists the known advisories of each version, with the GHSA, the severity and the fixed version, from the registry's bulk advisory endpoint, the one \`bun audit\` reads.
 Findings are grouped per package, each registry package looked up once per run.
+Reach for it to vet one repository in depth; \`audit\` sweeps many repositories for advisories only, and shares --level, --prod and --ignore.
 
-Exits 0 when nothing blocks, 1 when a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --audit-level, 2 when the registry could not be reached or answered badly (a warning says which, and nothing is reported as clean), on a usage error or without a bun.lock.`
+Exits 0 when nothing blocks, 1 when a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --level, 2 when the registry could not be reached or answered badly (a warning says which, and nothing is reported as clean), on a usage error or without a bun.lock.`
 
 const options = {
   'json': jsonOption('[{name, version, license, blocked, warnings, advisories}] for the packages with a finding'),
   'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS})` },
-  'audit-level': { type: 'string', description: 'lowest advisory severity listed and failing: low, moderate, high, critical (low)' },
+  'level': { type: 'string', description: 'lowest advisory severity listed and failing: low, moderate, high, critical (moderate)' },
+  'prod': { type: 'boolean', description: 'only the packages a production dependency or an optional one of a workspace reaches' },
   'ignore': { type: 'string', multiple: true, description: 'an advisory skipped by GHSA or numeric id, repeatable' },
 } as const
 
@@ -125,10 +127,10 @@ export function renderAudit(findings: Audited[], total: number): string {
 
 export async function audit(args: string[]): Promise<number> {
   const { values, positionals: [asked] } = parse(args, usage, options, { positionals: ['[dir]'] })
-  const level = values['audit-level'] ?? 'low'
+  const level = values.level ?? 'moderate'
 
   if (!isSeverity(level))
-    fail(`--audit-level takes ${SEVERITIES.join(', ')}, not ${level}`)
+    fail(`--level takes ${SEVERITIES.join(', ')}, not ${level}`)
 
   const dir = resolve(asked ?? process.cwd())
   const lock = Bun.file(join(dir, 'bun.lock'))
@@ -136,7 +138,9 @@ export async function audit(args: string[]): Promise<number> {
   if (!await lock.exists())
     fail(`no bun.lock in ${dir}`)
 
-  const packages = parseBunLock(await lock.text())
+  const text = await lock.text()
+  const production = values.prod === true ? productionPackages(text) : undefined
+  const packages = parseBunLock(text).filter(({ name, version }) => production?.has(`${name}@${version}`) ?? true)
   const context: AuditContext = {
     configs: await loadConfigs(dir),
     settings: await loadSettings(dir),

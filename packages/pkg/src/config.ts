@@ -1,7 +1,9 @@
+import type { Severity } from '@kaynooo/cli-kit'
 import type { Registry } from './registry'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
+import { SEVERITIES } from '@kaynooo/cli-kit'
 import { PUBLIC_REGISTRY, unreachable } from './registry'
 
 // What one .npmrc or bunfig.toml says about registries: a default, one per scope, and tokens by registry address without its protocol.
@@ -176,9 +178,8 @@ export async function loadConfigs(cwd = process.cwd(), env: Record<string, strin
   return configs
 }
 
-export const SEVERITIES = ['low', 'moderate', 'high', 'critical'] as const
-
-export type Severity = typeof SEVERITIES[number]
+export { SEVERITIES }
+export type { Severity }
 
 // The level `pkg check` refuses at when no config sets blockSeverity.
 export const DEFAULT_BLOCK_SEVERITY: Severity = 'high'

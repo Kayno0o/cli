@@ -31,12 +31,14 @@ pkg left-pad@1.3.0 @types/node --json
 
 ```sh
 pkg audit
-pkg audit ~/Workspace/app --audit-level high --ignore GHSA-238p-pmpm-9mq7 --json
+pkg audit ~/Workspace/app --level high --prod --ignore GHSA-238p-pmpm-9mq7 --json
 ```
 
 `pkg audit [dir]` reads the `bun.lock` of the folder and runs the checks of `pkg check` on every registry package it pins (workspace, git and link sources left out): the age of the version, install scripts, a deprecated version, a near miss of a popular name and the licence allowlist. It also lists the known advisories of every pinned version, each with its GHSA, severity and the version that fixes it when the range ends at one. Findings come grouped per package, each package looked up on the registry once per run, and all advisories fetched in one request per registry.
 
-- `--audit-level <low|moderate|high|critical>` (`low`) keeps only the advisories at that severity or above, and `--ignore <GHSA or id>` (repeatable) skips an advisory; `blockSeverity` is for `pkg check` and does not apply here.
+- `--level <low|moderate|high|critical>` (`moderate`) keeps only the advisories at that severity or above, `--prod` audits only the packages a production or optional dependency of a workspace reaches, and `--ignore <GHSA or id>` (repeatable) skips an advisory; `blockSeverity` is for `pkg check` and does not apply here. The three flags are the ones of `audit`.
+- `--json` prints a flat array, one `{name, version, license, blocked, warnings, advisories}` per package with a finding, each advisory being `{id, ghsa, url, title, severity, vulnerable, fixed}`. `audit --json` nests the same advisory rows (without `vulnerable`) in `{repo, path, findings, error}` per repository.
+- Use `pkg audit` to vet one repository in depth (age, install scripts, licences and advisories, with the registry as the source); use `audit` to sweep many repositories for advisories only, through `bun audit`.
 - `--json` prints the packages with a finding as `[{name, version, license, blocked, warnings, advisories}]`; `--min-age <days>` changes the 14 days.
 - A pin under the minimum age fixing an advisory of the `safe` version at `blockSeverity` or above (not one `--ignore` skips) is let through as `pkg check` lets it, a warning naming the GHSAs.
 - It exits 1 when a package is missing, too fresh or outside the allowlist, or an advisory remains after the level and the ignores; install scripts and near misses alone exit 0. When the advisories of a registry could not be read it warns which, never prints a clean result for them, and exits 2 unless something already blocks.
