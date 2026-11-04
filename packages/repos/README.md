@@ -12,7 +12,11 @@ bun add -g @kaynooo/cli-repos
 | `repos --all` | the clean repositories too |
 | `repos --only dirty\|unpushed\|unreleased\|behind` | only the repositories with that reason |
 | `repos --fetch` | refreshes each upstream first; it reaches the remote, so it is never done without the flag |
+| `repos --pull` | fetches, then fast-forwards the repositories listed that are clean, on a branch and only behind their upstream; each is reported as `pulled` or `skipped` with the reason (dirty, diverged and ahead, no upstream, detached HEAD, fetch failed), and nothing but a fast-forward is ever attempted. A repository pulled is listed again as it now stands. Combine with `--only behind` to touch only those |
+| `repos --path` | only the paths of the repositories listed, one per line, for `xargs -d '\n'` (the pull report, if any, goes to stderr) |
 | `repos --json` | the same data as JSON |
+
+Exits 0 when it listed the repositories, 1 when a fast-forward `--pull` attempted failed, 2 on a usage error.
 
 A monorepo tagging its packages `<folder>-v<version>` counts the unreleased commits per package folder (`packages/<folder>` or `<folder>`), each since its own latest tag.
 

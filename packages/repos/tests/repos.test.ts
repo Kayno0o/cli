@@ -188,3 +188,69 @@ describe('repos', () => {
     expect(repos([], file).code).toBe(2)
   })
 })
+
+describe('repos --path', () => {
+  test('prints only the paths of the repositories listed, nothing else', () => {
+    expect(repos(['--path', '--only', 'dirty']).out).toBe(`${join(root, 'dirty')}\n`)
+    expect(repos(['--path', '--only', 'unreleased']).out.trimEnd().split('\n').toSorted()).toEqual([join(root, 'group', 'released'), join(root, 'mono')])
+    expect(repos(['--path', '--json']).code).toBe(2)
+  })
+})
+
+describe('repos --pull', () => {
+  // Three clones of one origin, a fourth pushing two commits to it: `clean` is only behind, `dirty` has an edit, `diverged` a local commit.
+  function behind() {
+    const pulling = temp('repos-pull-')
+    const bare = join(temp('repos-pull-origin-'), 'origin.git')
+
+    git(pulling, 'init', '-q', '--bare', bare)
+
+    const seed = join(temp('repos-pull-seed-'), 'seed')
+
+    git(pulling, 'clone', '-q', bare, seed)
+    commit(seed, 'seed.txt')
+    git(seed, 'push', '-q', '-u', 'origin', 'main')
+
+    for (const name of ['clean', 'dirty', 'diverged'])
+      git(pulling, 'clone', '-q', bare, join(pulling, name))
+
+    writeFileSync(join(pulling, 'dirty', 'seed.txt'), 'edited\n')
+    commit(join(pulling, 'diverged'), 'mine.txt')
+    commit(seed, 'one.txt')
+    commit(seed, 'two.txt')
+    git(seed, 'push', '-q')
+
+    return { pulling, bare, head: (name: string) => git(join(pulling, name), 'rev-parse', 'HEAD') }
+  }
+
+  test('fast-forwards a clean repository behind, and only that one', () => {
+    const { pulling, bare, head } = behind()
+    const before = { dirty: head('dirty'), diverged: head('diverged') }
+    const { code, out } = repos(['--pull'], pulling)
+    const tip = git(bare, 'rev-parse', 'main')
+
+    expect(code).toBe(0)
+    expect(head('clean')).toBe(tip)
+    expect(head('dirty')).toBe(before.dirty)
+    expect(head('diverged')).toBe(before.diverged)
+    expect(out).toContain('ok: clean pulled 2 commits')
+    expect(out).toContain('note: dirty skipped 1 dirty file')
+    expect(out).toContain('note: diverged skipped diverged, 1 ahead')
+    expect(git(join(pulling, 'dirty'), 'status', '--porcelain')).toBe('M seed.txt')
+  })
+
+  test('lists a repository pulled as it now stands, and with --path keeps stdout to paths', () => {
+    const { pulling } = behind()
+    const listing = repos(['--pull', '--path'], pulling)
+
+    expect(listing.out.trimEnd().split('\n').toSorted()).toEqual([join(pulling, 'dirty'), join(pulling, 'diverged')])
+    expect(listing.err).toContain('clean pulled')
+  })
+
+  test('changes nothing without --pull, behind or not', () => {
+    const { pulling, bare, head } = behind()
+
+    repos(['--fetch'], pulling)
+    expect(head('clean')).not.toBe(git(bare, 'rev-parse', 'main'))
+  })
+})

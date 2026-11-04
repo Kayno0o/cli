@@ -171,6 +171,47 @@ export async function inspect(path: string, fetch: boolean): Promise<RepoState> 
   return state
 }
 
+// Why a repository must not be pulled, undefined when a fast-forward onto its upstream is safe: clean, on a branch, with an upstream it is only behind.
+export function pullBlocker(repo: RepoState): string | undefined {
+  if (repo.unreadable)
+    return 'unreadable'
+
+  if (repo.fetchFailed)
+    return 'fetch failed'
+
+  if (repo.branch === '(detached)')
+    return 'detached HEAD'
+
+  if (repo.upstream === null)
+    return 'no upstream'
+
+  if (repo.dirty > 0)
+    return `${repo.dirty} dirty ${repo.dirty === 1 ? 'file' : 'files'}`
+
+  return (repo.ahead ?? 0) > 0 ? `diverged, ${repo.ahead} ahead` : undefined
+}
+
+function firstLine(text: string): string {
+  const end = text.indexOf('\n')
+
+  return end === -1 ? text : text.slice(0, end)
+}
+
+// Moves the current branch to its upstream as a fast-forward, which git refuses for anything else; answers git's complaint, undefined when it worked.
+export async function fastForward(path: string): Promise<string | undefined> {
+  try {
+    const ran = await runCommand(['git', '--no-optional-locks', 'merge', '--ff-only', '--quiet', '@{upstream}'], { cwd: path, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, timeoutMs: GIT_MS })
+
+    if (ran.timedOut)
+      return 'timed out'
+
+    return ran.code === 0 ? undefined : firstLine(ran.text.trim()) || `exit ${ran.code}`
+  }
+  catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
+
 // Runs `task` over `items` with at most `limit` in flight, answering in the order of `items`.
 export async function pool<T, R>(items: readonly T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length)
