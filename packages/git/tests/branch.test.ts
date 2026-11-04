@@ -153,7 +153,7 @@ describe('in a clone', () => {
   })
 
   test('gb --list gives the rows tmux_pick reads, each with its preview and its keys, and --emit with no terminal does not open the picker', () => {
-    const rows = JSON.parse(out('--list')) as { label: string, typed: string, preview?: string[], asks?: string, actions?: { key: string, reload?: string[] }[] }[]
+    const rows = JSON.parse(out('--list')) as { label: string, typed: string, preview?: string[], asks?: string, actions?: { label: string, key: string, typed?: string, reload?: string[] }[] }[]
     const work = rows.find(row => row.label === 'work')
 
     expect(work).toMatchObject({ typed: 'work', preview: ['--show', 'work'] })
