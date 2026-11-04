@@ -173,11 +173,14 @@ bunx @kaynooo/cli-changelog undo
 
 The Gitea release note is **not** removed by default - you're asked about it interactively. Pass `--note` to include it non-interactively.
 
-| Flag     | Description                                             |
-| -------- | ------------------------------------------------------- |
-| `--note` | Also delete the Gitea release note (skips the question) |
-| `--dry-run` | Preview what would be removed, without deleting         |
-| `--yes`  | Skip confirmation prompts (for CI/scripts)              |
+| Flag              | Description                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| `--note`          | Also delete the Gitea release note (skips the question)                             |
+| `--dry-run`       | Preview what would be removed, without deleting (`--dry` is kept as an alias)       |
+| `--yes`           | Skip confirmation prompts (for CI/scripts)                                          |
+| `-r`, `--repo`    | Repository to undo in, e.g. `kaynooo/cli` (`--gitea` is kept as an alias)           |
+
+The short `-t` for `--token` was removed, pass `--token` or set `GITHUB_TOKEN`. The Forgejo host defaults to `git.kaynooo.fr`.
 
 ## Why?
 
