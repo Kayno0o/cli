@@ -45,6 +45,12 @@ ft ci --workflow test.yml --job test   # kayjs: the test job is skipped when a n
 
 With an admin login, a queued run is checked against the runners: a job whose `runs-on` labels no online runner carries fails at once, and a queue no runner works on for 3 minutes fails with the reason.
 
+## JSON output
+
+`--json` on `ft ci`, `ft watch`, `ft logs` and `ft release` prints `{status, runs, failedJobs, url}`: `status` is the worst status among the runs (`success`, `failure`, `cancelled`, `skipped`, or the running one's) and `none` when no run was followed; a `runs` item is `{id, workflow, status, ref, sha, url}` and a `failedJobs` item `{name, run, workflow, excerpt}`.
+`ft logs --json` adds `jobs`, one `{name, id, status, excerpt}` per picked job, and `ft release --json` adds `released`, `tag`, `package` (null without a name) and `version`, an array of those with several packages.
+`gl` prints the same shape with its statuses renamed (`failed` is `failure`, `canceled` is `cancelled`) and its own item keys, listed in its README.
+
 ## Releases
 
 `ft release patch|minor|major` releases from the default branch. It first pushes any commits origin lacks and waits for their runs, so failing tests stop it before a tag exists that would never publish; a push starting no run within 3 minutes lets it go on. A refused push drops the bump commit and tag. A repo with its own bump script runs it, then `ft release --tagged`. In a monorepo, `ft release patch -p ft` bumps `packages/ft` alone, refreshes `bun.lock`, and commits and tags it `ft-v<version>`, so each package releases on its own. `--dry-run` makes the same checks, then prints the bump (`1.0.0 -> 1.1.0`), the tag, whether HEAD is pushed first, the pushes and the runs and registry it would wait for, and changes nothing. Once released, an open milestone titled like the version (`1.2.0`, `v1.2.0` or the tag) has its closed issues listed and is closed; a failure there only warns.

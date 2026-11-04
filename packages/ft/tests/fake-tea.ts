@@ -51,6 +51,8 @@ process.on('exit', () => {
 })
 
 const state = JSON.parse(readFileSync(file, 'utf8'))
+const RUN_JOBS = /^actions\\/runs\\/\\d+\\/jobs$/
+const JOB_LOGS = /^actions\\/jobs\\/\\d+\\/logs$/
 const VALUE_FLAGS = new Set(['-X', '-f', '-F', '-H', '--repo'])
 
 // Like tea, an api call reads flags only before its path: one after it is taken for another argument.
@@ -141,9 +143,9 @@ if (command === 'api') {
   }
   else if (run !== null)
     console.log(JSON.stringify(state.runs?.find(each => each.id === Number(run[1])) ?? { message: 'not found', url: '' }))
-  else if (/^actions\\/runs\\/\\d+\\/jobs$/.test(path))
+  else if (RUN_JOBS.test(path))
     console.log(JSON.stringify(state.jobs?.[path.split('/')[2]] ?? []))
-  else if (/^actions\\/jobs\\/\\d+\\/logs$/.test(path) && state.logs?.[path.split('/')[2]] !== undefined)
+  else if (JOB_LOGS.test(path) && state.logs?.[path.split('/')[2]] !== undefined)
     console.log(state.logs?.[path.split('/')[2]] ?? '')
   else if (path.startsWith('actions/runs?')) {
     const matching = (state.runs ?? []).filter(each => (!query.has('head_sha') || each.commit_sha === query.get('head_sha')) && (!query.has('workflow_id') || each.workflow_id === query.get('workflow_id')))

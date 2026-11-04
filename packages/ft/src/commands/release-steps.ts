@@ -6,8 +6,8 @@ import { git, tagsAt } from '../git'
 import { closedIssues, openIssues } from '../issues'
 import { closeMilestone, listMilestones } from '../milestones'
 
-const REGISTRY_TRIES = 12
-const REGISTRY_POLL = 5000
+// Mutable so a test can give up sooner.
+export const registryWait = { tries: 12, poll: 5000 }
 // How long one `bun info` may take before the registry counts as not serving the version yet.
 const REGISTRY_INFO_MS = 30_000
 
@@ -37,7 +37,7 @@ export async function commitPackageBump(dir: string, prefix: string): Promise<vo
 
 // The registry serves a version a short while after the publish job ends; --no-cache skips a manifest bun cached before it.
 export async function waitForRegistry(name: string, version: string): Promise<boolean> {
-  for (let attempt = 0; attempt < REGISTRY_TRIES; attempt++) {
+  for (let attempt = 0; attempt < registryWait.tries; attempt++) {
     let served: string | undefined
 
     try {
@@ -51,7 +51,7 @@ export async function waitForRegistry(name: string, version: string): Promise<bo
     if (served === version)
       return true
 
-    await Bun.sleep(REGISTRY_POLL)
+    await Bun.sleep(registryWait.poll)
   }
 
   return false

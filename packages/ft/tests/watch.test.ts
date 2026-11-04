@@ -21,6 +21,16 @@ async function withFastPoll(runs: Record<string, unknown>[], body: () => Promise
 }
 
 describe('watchRuns', () => {
+  test('says on the given stream, not stdout, that no run started', async () => {
+    await withFastPoll([], async () => {
+      const { result, out, err } = await capture(async () => watchRuns(runs => runs, 1000, undefined, 5, process.stderr))
+
+      expect(result).toBe(0)
+      expect(out).toBe('')
+      expect(err).toBe('no run started, so nothing was waited for\n')
+    })
+  })
+
   test('keeps waiting for the other runs after one failed, as ft ci does', async () => {
     await withFastPoll([run(2, 'failure'), run(1, 'running')], async () => {
       expect(await refusal(watchRuns(runs => runs, 100))).toContain('did not finish')

@@ -79,7 +79,7 @@ export async function followRuns(pick: (runs: Run[]) => Run[], timeout: number, 
     if (runs.length === 0) {
       if (idle !== undefined && Date.now() - started > idle) {
         if (!json)
-          console.log('no run started, so nothing was waited for')
+          out.write('no run started, so nothing was waited for\n')
 
         return 0
       }

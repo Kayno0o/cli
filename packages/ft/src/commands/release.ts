@@ -1,4 +1,5 @@
 import type { Manifest } from './release-version'
+import type { Followed } from './watch'
 import { basename, join } from 'node:path'
 import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, runTool } from '@kaynooo/cli-kit'
@@ -26,7 +27,7 @@ Cuts a release from the default branch: first the commit it sits on is pushed an
 A refused or interrupted push drops the bump commit and its tag, so a retry starts clean; with --tagged the commit and tag are yours and stay.
 Once released, an open milestone titled like the version (\`1.2.0\`, \`v1.2.0\` or the tag) has its closed issues listed and is closed; a failure there only warns.
 --dry-run checks the same and prints the plan: the version bump, the tag, the pushes and the runs and registry it would wait for, changing nothing.
---json prints {released, tag, package, version, status, runs, failedJobs, url} on stdout and the progress on stderr, an array of them with several packages; it does not take --dry-run.
+--json prints {released, tag, package, version, status, runs, failedJobs, url} on stdout and the progress on stderr, an array of them with --package a,b or --all; it does not take --dry-run.
 Exits 0 once released or planned, 1 when a run fails, origin refuses a push or the registry never serves the version, 2 on a timeout, a stalled queue, a refusal before anything ran (another branch, uncommitted changes, origin ahead) or a usage error.`
 
 const options = {
@@ -97,6 +98,9 @@ async function cut(args: string[], sink?: Released[]): Promise<number> {
       }
       catch (error) {
         stopped()
+
+        if (json)
+          printJson(results)
 
         throw error
       }
@@ -199,17 +203,10 @@ async function cut(args: string[], sink?: Released[]): Promise<number> {
       await rollBack(preBump, tagsBefore, dir)
   }
 
-  const late = signalOf()
-
-  if (late !== undefined)
-    fail(`interrupted by ${late} after ${tag} was pushed: its runs are not waited for`, exitCodeOf(null, late))
-
-  say(`pushed ${branch} and ${tag}, waiting for their runs`)
-
   const file = Bun.file(join(dir ?? '.', 'package.json'))
   const pkg = await file.exists() ? await file.json() as Manifest : undefined
   const version = tag.slice(prefix.length)
-  const followed = await followRuns(runs => runs.filter(run => run.id > before && run.commit_sha === head), timeout, undefined, NO_RUN, json ? process.stderr : process.stdout, { json })
+  let followed: Followed = { code: 0, runs: [], failedJobs: [] }
 
   // Without a sink the result is printed here, as the one release asked for.
   const outcome = (released: boolean): void => {
@@ -224,28 +221,44 @@ async function cut(args: string[], sink?: Released[]): Promise<number> {
       sink.push(result)
   }
 
-  if (followed.code !== 0) {
-    outcome(false)
+  // From here the tag is out, so a failure still reports the release as not done.
+  try {
+    const late = signalOf()
 
-    return followed.code
-  }
+    if (late !== undefined)
+      fail(`interrupted by ${late} after ${tag} was pushed: its runs are not waited for`, exitCodeOf(null, late))
 
-  if (values['no-registry'] === true || pkg?.name === undefined || pkg.private === true) {
-    say(`released ${tag}`)
+    say(`pushed ${branch} and ${tag}, waiting for their runs`)
+    followed = await followRuns(runs => runs.filter(run => run.id > before && run.commit_sha === head), timeout, undefined, NO_RUN, json ? process.stderr : process.stdout, { json })
+
+    if (followed.code !== 0) {
+      outcome(false)
+
+      return followed.code
+    }
+
+    if (values['no-registry'] === true || pkg?.name === undefined || pkg.private === true) {
+      say(`released ${tag}`)
+      await settleMilestone(version, tag, say)
+      outcome(true)
+
+      return 0
+    }
+
+    if (!await waitForRegistry(pkg.name, version))
+      fail(`the runs passed but the registry does not serve ${pkg.name}@${version}: read the publish job with \`ft logs\``, 1)
+
+    say(`released ${pkg.name}@${version}`)
     await settleMilestone(version, tag, say)
     outcome(true)
 
     return 0
   }
+  catch (error) {
+    outcome(false)
 
-  if (!await waitForRegistry(pkg.name, version))
-    fail(`the runs passed but the registry does not serve ${pkg.name}@${version}: read the publish job with \`ft logs\``, 1)
-
-  say(`released ${pkg.name}@${version}`)
-  await settleMilestone(version, tag, say)
-  outcome(true)
-
-  return 0
+    throw error
+  }
 }
 
 export { limits, testsPass } from './release-checks'
