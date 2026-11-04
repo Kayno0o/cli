@@ -68,8 +68,15 @@ describe('terminate', () => {
   })
 
   test('reports a process that survives SIGKILL and one that refuses the signal', async () => {
-    const { signaller } = fake([1], [], [1])
+    const { signaller } = fake([1, 9], [], [1])
+    const denying: Signaller = { ...signaller, send: (pid, signal) => pid !== 9 && signaller.send(pid, signal) }
 
-    expect(await terminate([1, 9], { escalate: true, graceMs: 200, signaller })).toEqual({ terminated: [], killed: [], survived: [9, 1] })
+    expect(await terminate([1, 9], { escalate: true, graceMs: 200, signaller: denying })).toEqual({ terminated: [], killed: [], survived: [9, 1] })
+  })
+
+  test('counts a process that is gone before the signal as terminated, not as surviving', async () => {
+    const { signaller } = fake([1])
+
+    expect(await terminate([1, 9], { escalate: false, graceMs: 200, signaller })).toEqual({ terminated: [1, 9], killed: [], survived: [] })
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { cgroupContainer, cgroupUnit, parseAddress, parseCgroup, parseCmdline, parseDockerPs, parseEnviron, parseLimits, parseNetTable, parseSize, parseStat, parseStatus, socketInode, statusBytes, statusUid, userNameOf } from '../src/parse'
+import { cgroupContainer, cgroupUnit, parseAddress, parseCgroup, parseCmdline, parseDockerPs, parseEnviron, parseLimits, parseNetTable, parseStat, parseStatus, socketInode, statusBytes, statusUid, userNameOf } from '../src/parse'
 
 const TCP = `  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
    0: 0100007F:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 12345 1 0000000000000000 100 0 0 10 0
@@ -119,14 +119,6 @@ describe('cgroup', () => {
     expect(cgroupContainer(docker)).toBe('a'.repeat(64))
     expect(cgroupContainer(user)).toBeUndefined()
   })
-})
-
-test('parseSize reads units, decimals and a bare number as megabytes', () => {
-  expect(parseSize('500M')).toBe(500 * 1024 ** 2)
-  expect(parseSize('1.5g')).toBe(1.5 * 1024 ** 3)
-  expect(parseSize('800kb')).toBe(800 * 1024)
-  expect(parseSize('2')).toBe(2 * 1024 ** 2)
-  expect(parseSize('lots')).toBeUndefined()
 })
 
 test('userNameOf finds a uid in passwd text', () => {

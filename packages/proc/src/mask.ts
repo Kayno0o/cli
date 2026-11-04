@@ -1,3 +1,4 @@
+import { basename } from 'node:path'
 import { isSecretName } from '@kaynooo/cli-kit'
 
 export const MASK = '***'
@@ -27,17 +28,30 @@ export function maskEnviron(entries: [name: string, value: string][]): [name: st
 
 const FLAG = /^-{1,2}([\w.-]+)(=|$)/
 const ASSIGNMENT_NAME = /^[\w.-]+$/
+// Commands whose short -p flag carries a password; for the others (ssh, docker, psql) it is a port.
+const PASSWORD_SPLIT = new Set(['sshpass'])
+const PASSWORD_JOINED = new Set(['mysql', 'mysqldump', 'mysqladmin', 'mariadb', 'mariadb-dump'])
 
 // A command line with secrets masked: `--password=x`, `--token x` and `API_KEY=x` words, and secret shapes in any other.
 export function maskArgs(args: string[]): string[] {
+  const command = basename(args[0] ?? '')
   let hidden = false
 
-  return args.map((arg) => {
+  return args.map((arg, index) => {
     if (hidden) {
       hidden = false
 
       return arg.startsWith('-') ? maskText(arg) : MASK
     }
+
+    if (index > 0 && arg === '-p' && PASSWORD_SPLIT.has(command)) {
+      hidden = true
+
+      return arg
+    }
+
+    if (index > 0 && arg.length > 2 && arg.startsWith('-p') && PASSWORD_JOINED.has(command))
+      return `-p${MASK}`
 
     const flag = FLAG.exec(arg)
 

@@ -31,6 +31,8 @@ export interface RepoState {
   packages: PackageRelease[]
   // The fetch was asked for and git failed or timed out, so the counts are older than asked.
   fetchFailed: boolean
+  // `git status` failed or timed out, so the branch and the counts are unknown rather than clean.
+  unreadable: boolean
 }
 
 export const REASONS = ['dirty', 'unpushed', 'unreleased', 'behind'] as const
@@ -139,7 +141,7 @@ export async function inspect(path: string, fetch: boolean): Promise<RepoState> 
     read(path, ['worktree', 'list', '--porcelain']),
     packageReleases(path),
   ])
-  const state: RepoState = { name: basename(path), path, branch: '?', upstream: null, dirty: 0, ahead: null, behind: null, worktrees: 0, tag: null, unreleased: null, packages, fetchFailed: fetched === undefined }
+  const state: RepoState = { name: basename(path), path, branch: '?', upstream: null, dirty: 0, ahead: null, behind: null, worktrees: 0, tag: null, unreleased: null, packages, fetchFailed: fetched === undefined, unreadable: status === undefined }
 
   for (const line of (status ?? '').split('\n')) {
     if (line.startsWith('# branch.head '))

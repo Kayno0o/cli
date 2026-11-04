@@ -168,4 +168,23 @@ describe('repos', () => {
   test('a missing root is a usage error', () => {
     expect(repos([], join(root, 'nowhere')).code).toBe(2)
   })
+
+  test('flags a repository git cannot read instead of showing it clean', () => {
+    const broken = temp('repos-broken-')
+
+    mkdirSync(join(broken, 'bad', '.git'), { recursive: true })
+
+    const [state] = JSON.parse(repos(['--json'], broken).out) as RepoState[]
+
+    expect(state).toMatchObject({ name: 'bad', unreadable: true })
+    expect(repos([], broken).out).toContain('unreadable')
+    expect(listed().every(entry => entry.unreadable === false)).toBe(true)
+  })
+
+  test('a file as root is a usage error', () => {
+    const file = join(temp('repos-file-'), 'file.txt')
+
+    writeFileSync(file, 'x\n')
+    expect(repos([], file).code).toBe(2)
+  })
 })

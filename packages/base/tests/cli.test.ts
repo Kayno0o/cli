@@ -162,6 +162,7 @@ describe('base', () => {
   test('refuses an unknown ref, a missing or outside --keep, and no command', () => {
     expect(base(['--ref', 'nope', '--', 'true']).err).toContain('no commit nope in this repository')
     expect(base(['--keep', 'missing.txt', '--', 'true']).err).toContain('--keep missing.txt: no such file')
+    expect(base(['--keep', 'nowhere/missing.txt', '--', 'true']).err).toContain('--keep nowhere/missing.txt: no such file')
     expect(base(['--keep', '..', '--', 'true']).err).toContain('--keep .. is outside the repository')
     expect(base(['--ref', 'HEAD']).code).toBe(2)
     expect(worktrees()).toBe(1)

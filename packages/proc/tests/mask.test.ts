@@ -19,6 +19,16 @@ test('maskEnviron keeps names and plain values', () => {
   expect(maskEnviron([['HOME', '/home/kay'], ['API_KEY', 'abc']])).toEqual([['HOME', '/home/kay'], ['API_KEY', '***']])
 })
 
+test('maskArgs masks the password of sshpass and a mysql style -psecret, but not a port flag', () => {
+  expect(maskArgs(['sshpass', '-p', 'hunter2', 'ssh', 'host'])).toEqual(['sshpass', '-p', '***', 'ssh', 'host'])
+  expect(maskArgs(['/usr/bin/mysql', '-uroot', '-phunter2', 'db'])).toEqual(['/usr/bin/mysql', '-uroot', '-p***', 'db'])
+  expect(maskArgs(['ssh', '-p', '22', 'host'])).toEqual(['ssh', '-p', '22', 'host'])
+})
+
+test('maskText masks a lowercase hex token, OPAQUE being case insensitive', () => {
+  expect(maskText('key=0123456789abcdef0123456789abcdef')).toBe('key=***')
+})
+
 test('maskArgs masks a flag value, joined or in the next word', () => {
   expect(maskArgs(['app', '--password=abc', '--port=80', '--token', 'xyz', '--verbose', 'API_KEY=1', 'TZ=UTC'])).toEqual(['app', '--password=***', '--port=80', '--token', '***', '--verbose', 'API_KEY=***', 'TZ=UTC'])
 })

@@ -59,6 +59,10 @@ export function keptPaths(root: string, cwd: string, paths: string[]): string[] 
 
   return paths.map((path) => {
     const absolute = resolve(cwd, path)
+
+    if (!existsSync(dirname(absolute)))
+      fail(`--keep ${path}: no such file`)
+
     const inRepo = relative(realRoot, join(realpathSync(dirname(absolute)), basename(absolute)))
 
     if (inRepo === '' || inRepo === '..' || inRepo.startsWith(PARENT) || isAbsolute(inRepo))

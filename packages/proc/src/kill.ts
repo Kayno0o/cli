@@ -90,10 +90,12 @@ async function filterAlive(pids: number[], signaller: Signaller): Promise<number
 
 // SIGTERM to each pid, then with `escalate` SIGKILL to those still there after `graceMs`.
 export async function terminate(pids: number[], { escalate, graceMs, signaller = realSignaller }: { escalate: boolean, graceMs: number, signaller?: Signaller }): Promise<Outcome> {
-  const refused = pids.filter(pid => !signaller.send(pid, 'SIGTERM'))
-  const sent = pids.filter(pid => !refused.includes(pid))
+  const failed = pids.filter(pid => !signaller.send(pid, 'SIGTERM'))
+  // A pid that no longer exists (ESRCH) is gone, not a survivor; only one that exists yet refused the signal is.
+  const refused = await filterAlive(failed, signaller)
+  const sent = pids.filter(pid => !failed.includes(pid))
   const remaining = await waitGone(sent, graceMs, signaller)
-  const terminated = sent.filter(pid => !remaining.includes(pid))
+  const terminated = pids.filter(pid => (failed.includes(pid) ? !refused.includes(pid) : !remaining.includes(pid)))
 
   if (!escalate || remaining.length === 0)
     return { terminated, killed: [], survived: [...refused, ...remaining] }

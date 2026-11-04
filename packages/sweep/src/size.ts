@@ -1,20 +1,5 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { badUsage } from '@kaynooo/cli-kit'
-
-const SIZE = /^(\d+(?:\.\d+)?)\s*([kmgt])?b?$/i
-const POWERS = { k: 1, m: 2, g: 3, t: 4 } as const
-
-// A size such as `500K`, `10M` or `1.5G` in bytes, counting in powers of 1024; a bare number is bytes.
-export function parseSize(value: string, name: string): number {
-  const match = SIZE.exec(value.trim())
-
-  if (match === null)
-    badUsage(`--${name} takes a size such as 500K, 10M or 1G, not ${value}`)
-
-  return Math.floor(Number(match[1]) * 1024 ** (match[2] === undefined ? 0 : POWERS[match[2].toLowerCase() as keyof typeof POWERS]))
-}
-
 // Runs `work` over `items` with at most `limit` in flight, keeping the order of the results.
 export async function pooled<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = Array.from({ length: items.length })

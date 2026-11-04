@@ -219,16 +219,6 @@ export function cgroupContainer(entries: CgroupEntry[]): string | undefined {
   return undefined
 }
 
-const SIZE = /^(\d+(?:\.\d+)?)\s*([kmgt]?)i?b?$/i
-const SIZE_UNITS: Record<string, number> = { '': 1024 ** 2, 'k': 1024, 'm': 1024 ** 2, 'g': 1024 ** 3, 't': 1024 ** 4 }
-
-// A size such as `500M`, `1.5G` or `800k` in bytes, a bare number counting megabytes; undefined when it is none.
-export function parseSize(text: string): number | undefined {
-  const match = SIZE.exec(text.trim())
-
-  return match === null ? undefined : Math.round(Number(match[1]) * SIZE_UNITS[match[2]!.toLowerCase()]!)
-}
-
 // The name behind a uid in /etc/passwd text.
 export function userNameOf(passwd: string, uid: number): string | undefined {
   for (const line of passwd.split('\n')) {

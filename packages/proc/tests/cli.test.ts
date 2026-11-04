@@ -99,6 +99,11 @@ describe('ports', () => {
     expect(result.err).toContain(`nothing listens on port ${port}`)
   })
 
+  test('rejects a port that is not a plain decimal number', () => {
+    for (const given of ['0x50', '1e3', ' 80', '+80', '0', '65536'])
+      expect(run('ports', [given]).code).toBe(2)
+  })
+
   test('refuses to kill ourselves or without a port', () => {
     const server = listen()
 

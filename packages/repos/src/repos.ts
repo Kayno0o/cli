@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import type { RepoState } from './scan'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
@@ -21,7 +21,7 @@ const OPTIONS = {
   all: { type: 'boolean', short: 'a', description: 'list the repositories with nothing to report too' },
   only: { type: 'string', choices: REASONS, description: 'only the repositories with this reason: dirty, unpushed, unreleased or behind' },
   fetch: { type: 'boolean', description: 'refresh the upstreams first (reaches the remote)' },
-  json: jsonOption('[{name, path, branch, upstream, dirty, ahead, behind, worktrees, tag, unreleased, packages, reasons, fetchFailed}]'),
+  json: jsonOption('[{name, path, branch, upstream, dirty, ahead, behind, worktrees, tag, unreleased, packages, reasons, fetchFailed, unreadable}]'),
 } as const
 
 async function skipped(): Promise<Set<string>> {
@@ -53,14 +53,14 @@ function row(repo: RepoState, shown: string): string[] {
   const behind = repo.behind ?? 0
   const sync = repo.upstream === null ? 'no upstream' : [ahead > 0 ? `+${ahead}` : '', behind > 0 ? `-${behind}` : ''].filter(Boolean).join(' ') || '-'
 
-  return [tint(shown), repo.branch, repo.dirty === 0 ? '-' : String(repo.dirty), sync, repo.worktrees === 0 ? '-' : String(repo.worktrees), releasedCell(repo)]
+  return [tint(shown), repo.unreadable ? '? (unreadable)' : repo.branch, repo.dirty === 0 ? '-' : String(repo.dirty), sync, repo.worktrees === 0 ? '-' : String(repo.worktrees), releasedCell(repo)]
 }
 
 async function main(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], replaces: 'a cd, git status, git log and git tag loop over each repository of the workspace', examples: ['repos', 'repos ~/Workspace --only unreleased --fetch'] })
   const root = resolve(positionals[0] ?? join(homedir(), 'Workspace'))
 
-  if (!existsSync(root))
+  if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`no folder ${root}`)
 
   const only = values.only === undefined ? undefined : oneOf(values.only, 'only', REASONS)
@@ -69,7 +69,7 @@ async function main(args: string[]): Promise<number> {
   const kept = states.filter((repo) => {
     const reasons = reasonsOf(repo)
 
-    return only === undefined ? values.all === true || reasons.length > 0 : reasons.includes(only)
+    return only === undefined ? values.all === true || reasons.length > 0 || repo.unreadable : reasons.includes(only)
   })
 
   if (values.json === true) {

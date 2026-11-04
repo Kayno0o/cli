@@ -207,6 +207,24 @@ describe('sweep', () => {
     expect(existsSync(join(a, '.worktrees', 'ahead', 'work.txt'))).toBe(true)
   })
 
+  test('keeps a worktree holding ignored files that removing would delete, but not one with only build folders', () => {
+    const root = temp('sweep-')
+    const a = repo(root, 'a')
+
+    writeFileSync(join(a, '.gitignore'), 'node_modules\ndist\nbuild\ntarget\n.worktrees\n.env\n')
+    git(a, ['commit', '-q', '-am', 'ignore env'])
+    git(a, ['worktree', 'add', '-q', '.worktrees/secret', '-b', 'secret'])
+    writeFileSync(join(a, '.worktrees', 'secret', '.env'), 'TOKEN=1')
+    git(a, ['worktree', 'add', '-q', '.worktrees/built', '-b', 'built'])
+    fill(join(a, '.worktrees', 'built', 'node_modules'), 10)
+
+    const entries = listing([root]).entries.filter(entry => entry.kind === 'worktree')
+
+    expect(entries.map(entry => [entry.path, entry.action]).sort()).toEqual([[join(a, '.worktrees', 'built'), 'remove'], [join(a, '.worktrees', 'secret'), 'keep']])
+    expect(listing([root, '--apply', '--yes']).removed).toEqual([{ path: join(a, '.worktrees', 'built'), removed: true }])
+    expect(existsSync(join(a, '.worktrees', 'secret', '.env'))).toBe(true)
+  })
+
   test('a worktree whose commits were merged into another branch is removable', () => {
     const root = temp('sweep-')
     const a = repo(root, 'a')

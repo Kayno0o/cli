@@ -103,6 +103,7 @@ async function realOf(path: string): Promise<string | undefined> {
 }
 
 const HEADS_PREFIX = /^refs\/heads\//
+const TRAILING_SLASH = /\/$/
 
 async function gitIn(cwd: string, args: string[]): Promise<{ code: number, stdout: string, stderr: string }> {
   try {
@@ -221,13 +222,19 @@ async function judgeWorktree(path: string): Promise<Verdict> {
   if (branch === undefined)
     return keep('detached HEAD')
 
-  const status = await gitIn(path, ['status', '--porcelain'])
+  const status = await gitIn(path, ['status', '--porcelain', '-z', '--ignored=matching'])
 
   if (status.code !== 0)
     return keep('status failed')
 
-  if (status.stdout !== '')
+  const changes = status.stdout.split('\0').filter(line => line !== '')
+
+  if (changes.some(line => !line.startsWith('!! ')))
     return keep('uncommitted changes')
+
+  // git worktree remove deletes ignored files too (.env, local databases); only the regenerable build folders may go with it.
+  if (changes.some(line => !FOLDER_NAMES.has(basename(line.slice(3).replace(TRAILING_SLASH, '')))))
+    return keep('ignored files (.env, local data) that removing would delete')
 
   // git strips the refs/heads/ prefix before matching an --exclude that applies to --branches.
   const unique = await gitIn(path, ['log', '--format=%h', branch, '--not', '--remotes', `--exclude=${branch.replace(HEADS_PREFIX, '')}`, '--branches'])

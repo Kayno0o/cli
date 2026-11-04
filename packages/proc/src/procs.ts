@@ -2,10 +2,9 @@ import type { Group } from './select'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import process from 'node:process'
-import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, printJson, table, truncate } from '@kaynooo/cli-kit'
+import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printJson, table, truncate } from '@kaynooo/cli-kit'
 import { terminate } from './kill'
 import { maskArgs } from './mask'
-import { parseSize } from './parse'
 import { ancestry, snapshot } from './read'
 import { selectGroups } from './select'
 
@@ -69,7 +68,7 @@ export async function procs(args: string[]): Promise<number> {
       'procs --kill --yes',
     ],
   })
-  const minMem = values['min-mem'] === undefined ? undefined : parseSize(values['min-mem'])
+  const minMem = values['min-mem'] === undefined ? undefined : parseSize(values['min-mem'], 1024 ** 2)
 
   if (values['min-mem'] !== undefined && minMem === undefined)
     fail(`--min-mem takes a size such as 500M or 1.5G, not ${values['min-mem']}`, 2)

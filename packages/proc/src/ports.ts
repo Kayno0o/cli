@@ -2,7 +2,7 @@ import type { Container, Protocol, Socket } from './parse'
 import type { ProcInfo } from './read'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { badUsage, duration, fail, jsonOption, paint, parse, printJson, table, truncate } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, paint, parse, printJson, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { dockerContainers } from './docker'
 import { protectionOf, terminate } from './kill'
@@ -151,10 +151,10 @@ export async function ports(args: string[]): Promise<number> {
     ],
   })
   const [given] = positionals
-  const port = given === undefined ? undefined : Number(given)
+  const port = given === undefined ? undefined : wholeNumber(given, '<port>', 0)
 
-  if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65_535))
-    badUsage(`the port takes a number from 1 to 65535, not ${given}`)
+  if (port !== undefined && port > 65_535)
+    badUsage(`<port> takes a whole number from 1 to 65535, not ${given}`)
 
   if (values.kill === true && port === undefined)
     badUsage('--kill takes the port to free: ports <port> --kill')

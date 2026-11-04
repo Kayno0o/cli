@@ -5,12 +5,11 @@ import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, parse, printJson, problem, runMain, runTool, table } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, parse, parseSize, printJson, problem, runMain, runTool, table } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { version } from '../package.json'
 import { applyAll } from './apply'
 import { findCandidates, inspect, MAX_DEPTH } from './scan'
-import { parseSize } from './size'
 
 const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .nuxt, .next, .output, dist, build, .turbo, .svelte-kit, target beside a Cargo.toml) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit
 
@@ -57,7 +56,11 @@ async function main(args: string[]): Promise<number> {
     badUsage(`--only takes worktrees or folders, not ${values.only}`)
 
   const olderMs = values.older === undefined ? undefined : duration(values.older, 'older', 0)
-  const minBytes = values.min === undefined ? 0 : parseSize(values.min, 'min')
+  const minBytes = values.min === undefined ? 0 : parseSize(values.min)
+
+  if (minBytes === undefined)
+    badUsage(`--min takes a size such as 500K, 10M or 1G, not ${values.min}`)
+
   const now = Date.now()
   const found = await findCandidates(root)
   const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => (candidate.kind === 'worktree') === (values.only === 'worktrees'))
