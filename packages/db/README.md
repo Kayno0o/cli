@@ -24,10 +24,12 @@ bun install -g @kaynooo/cli-db
 | `db "<sql>"` / `db query` | runs one read-only statement, as an argument or on stdin |
 | `db tables` | tables and views with an estimated row count (Postgres: outside the system schemas, MySQL: the connected database) |
 | `db sample <table>` | a few rows of a table (`-n`, `--where`), sensitive columns masked; `db count <table>` the number of rows |
-| `db describe <table>` | columns with type, nullability, default and primary key (`schema.table` to pick a schema, the database on MySQL) |
+| `db describe <table>` | columns with type, nullability, default and primary key, then the indexes and foreign keys (`schema.table` to pick a schema, the database on MySQL); `--json` adds `indexes` and `foreignKeys` |
+| `db search <text>` | tables and columns whose name contains the text, case insensitive, to find where a field lives |
+| `db explain "<sql>"` | the plan of one read without running it: `EXPLAIN` alone through the read-only guard, never `ANALYZE` (a statement not starting with SELECT, WITH, VALUES or TABLE, and a hand-written EXPLAIN or ANALYZE, are refused) |
 | `db dbs` | databases the connection may open, with their size, the one read marked `current` |
 
-Options: `-n <rows>` (`--rows`, once `--limit`) caps the rows shown (100) and says when more were left out, `--raw` shows the columns masked by default, `--json` prints `{ columns, rows, truncated, masked }`, `-e <KEY>`, `-s <service>`, `-c <container>` and `-d <database>` pick the connection.
+Options: `-n <rows>` (`--rows`, once `--limit`) caps the rows shown (20) and says when more were left out, `--all` shows up to 100 (the old default, so `-n` for more), `--raw` shows the columns masked by default, `--json` prints `{ columns, rows, truncated, masked }`, `-e <KEY>`, `-s <service>`, `-c <container>` and `-d <database>` pick the connection.
 
 ## Safety
 

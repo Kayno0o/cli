@@ -1,7 +1,12 @@
-import { jsonOption } from '@kaynooo/cli-kit'
+import type { ExitRow } from '@kaynooo/cli-kit'
+import { jsonOption, wholeNumber } from '@kaynooo/cli-kit'
 
 export const DEFAULT_ENV = 'DATABASE_URL'
-export const DEFAULT_LIMIT = 100
+export const DEFAULT_LIMIT = 20
+// What --all shows: the cap before the default was lowered.
+export const ALL_LIMIT = 100
+
+export const EXITS: ExitRow[] = [[0, 'it ran'], [1, 'the database refused it, was unreachable, or the statement would write and was not run'], [2, 'a usage error or a host that is not allowed']]
 
 export const HOSTS_NOTE = 'db connects to a local host (localhost, 127.0.0.1, ::1) or a compose service only: any other host is refused (exit 2) unless it is listed under "allowedHosts" in ~/.config/db/config.json.'
 
@@ -16,15 +21,23 @@ export const connectionOptions = {
 
 // The rows flag every listing words alike (-n), --limit being the name it had before.
 const rows = { type: 'string', short: 'n', aliases: ['limit'], description: `show at most this many rows, the rest counted (${DEFAULT_LIMIT}), 0 for none` } as const
+const all = { type: 'boolean', description: `show up to ${ALL_LIMIT} rows, the cap before the default was lowered to ${DEFAULT_LIMIT} (-n goes higher)`, conflicts: ['rows'] } as const
+
+// The cap a listing shows: --all, else -n, else the fallback.
+export function rowLimit(values: { rows?: string | undefined, all?: boolean | undefined }, fallback = DEFAULT_LIMIT): number {
+  return values.all === true ? ALL_LIMIT : wholeNumber(values.rows, 'rows', fallback, 0)
+}
 
 // The catalog commands list names, types and sizes: no column of theirs is masked, so there is no --raw.
 export const catalogOptions = {
   rows,
+  all,
   json: jsonOption(),
 } as const
 
 export const outputOptions = {
   rows,
+  all,
   raw: { type: 'boolean', description: 'show columns masked by default (emails, phones, tokens, password hashes, secret-named keys inside JSON values)' },
   json: jsonOption(),
 } as const

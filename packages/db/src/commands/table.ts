@@ -1,14 +1,12 @@
 import type { Dialect } from '../guard'
-import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
-import { connectionOptions, HOSTS_NOTE, outputOptions } from '../args'
+import { fail, parse } from '@kaynooo/cli-kit'
+import { connectionOptions, EXITS, HOSTS_NOTE, outputOptions, rowLimit } from '../args'
 import { inspect } from '../guard'
 import { render, shape } from '../output'
 import { connectionUrl, dialectOf, readRows } from '../run'
 
 const SAMPLE_LIMIT = 5
 const NAME = /^[A-Z_][\w$]*(?:\.[A-Z_][\w$]*)?$/i
-
-const EXITS = 'Exits 0 when it ran, 1 when the database refused or was unreachable, 2 on a usage error or a host that is not allowed.'
 
 // A table name is a plain identifier, or `schema.table`, quoted for the engine; anything else is refused rather than escaped.
 export function quotedTable(target: string, dialect: Dialect): string {
@@ -35,7 +33,7 @@ const sampleOptions = { ...connectionOptions, ...outputOptions, where } as const
 const countOptions = { ...connectionOptions, json: outputOptions.json, where } as const
 
 async function run(args: string[], usage: string, options: typeof sampleOptions | typeof countOptions, build: (target: string, dialect: Dialect, values: { limit: number, where: string | undefined }) => string): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { exits: EXITS })
 
   const { values, positionals } = parsed
   const [target, ...extra] = positionals
@@ -45,7 +43,7 @@ async function run(args: string[], usage: string, options: typeof sampleOptions 
 
   const url = await connectionUrl(values)
   const dialect = dialectOf(new URL(url))
-  const limit = wholeNumber((values as { rows?: string }).rows, 'rows', SAMPLE_LIMIT, 0)
+  const limit = rowLimit(values as { rows?: string, all?: boolean }, SAMPLE_LIMIT)
   const sql = build(target, dialect, { limit, where: values.where })
   const verdict = inspect(sql, dialect)
 
@@ -58,9 +56,9 @@ async function run(args: string[], usage: string, options: typeof sampleOptions 
 }
 
 export async function sample(args: string[]): Promise<number> {
-  return run(args, `db sample <table> [-n ${SAMPLE_LIMIT}] [--where <sql>]\n\nPrints a few rows of a table (\`schema.table\` to pick a schema, the name is case sensitive on Postgres), sensitive columns masked as in a query.\n\n${HOSTS_NOTE}\n\n${EXITS}`, sampleOptions, (target, dialect, { limit, where }) => sampleSql(target, dialect, limit, where))
+  return run(args, `db sample <table> [-n ${SAMPLE_LIMIT}|--all] [--where <sql>]\n\nPrints a few rows of a table (\`schema.table\` to pick a schema, the name is case sensitive on Postgres), sensitive columns masked as in a query.\n\n${HOSTS_NOTE}`, sampleOptions, (target, dialect, { limit, where }) => sampleSql(target, dialect, limit, where))
 }
 
 export async function count(args: string[]): Promise<number> {
-  return run(args, `db count <table> [--where <sql>]\n\nPrints the number of rows of a table (the name is case sensitive on Postgres), or of those matching a condition.\n\n${HOSTS_NOTE}\n\n${EXITS}`, countOptions, (target, dialect, { where }) => countSql(target, dialect, where))
+  return run(args, `db count <table> [--where <sql>]\n\nPrints the number of rows of a table (the name is case sensitive on Postgres), or of those matching a condition.\n\n${HOSTS_NOTE}`, countOptions, (target, dialect, { where }) => countSql(target, dialect, where))
 }

@@ -1,5 +1,5 @@
-import { Exit, fail, parse, readInput, wholeNumber } from '@kaynooo/cli-kit'
-import { connectionOptions, DEFAULT_LIMIT, HOSTS_NOTE, outputOptions, WRITE_NOTE } from '../args'
+import { Exit, fail, parse, readInput } from '@kaynooo/cli-kit'
+import { connectionOptions, DEFAULT_LIMIT, EXITS, HOSTS_NOTE, outputOptions, rowLimit, WRITE_NOTE } from '../args'
 import { inspect } from '../guard'
 import { jsonValue, render, shape } from '../output'
 import { connectionUrl, databaseOfUrl, dialectOf, readRows, TEST_SUFFIX, writeRows } from '../run'
@@ -9,13 +9,11 @@ const usage = `db query "<sql>"
 Runs one read-only statement (the SQL as an argument, or on stdin) in a READ ONLY transaction that is rolled back, on Postgres, MySQL or MariaDB. A statement that would write is printed for you to run instead, and exits 1 without running.
 
 The SQL is tokenized the way its engine reads it and refused unless it starts with SELECT, WITH, VALUES, TABLE, SHOW, EXPLAIN, DESCRIBE or DESC and uses no INSERT, UPDATE, DELETE, MERGE, INTO, SET or FOR UPDATE anywhere (a write hidden in a CTE is caught), nor a function with side effects (nextval, setval, set_config, pg_terminate_backend, pg_sleep, dblink, sleep, load_file...). Several statements are refused (exit 2) even when each reads.
-Statements time out after 30 seconds and show at most -n rows (100), a Postgres select being read through a cursor that stops one row past it. Columns named like emails, phones, tokens, secrets, passwords or hashes show *** unless --raw, and every message is scrubbed of the URL and password.
+Statements time out after 30 seconds and show at most -n rows (${DEFAULT_LIMIT}, --all for 100), a Postgres select being read through a cursor that stops one row past it. Columns named like emails, phones, tokens, secrets, passwords or hashes show *** unless --raw, and every message is scrubbed of the URL and password.
 
 ${WRITE_NOTE}
 
-${HOSTS_NOTE}
-
-Exits 0 when the statement ran, 1 when the database refused it, was unreachable or the statement would write and was not run, 2 on a usage error or a host that is not allowed.`
+${HOSTS_NOTE}`
 
 const options = { ...connectionOptions, ...outputOptions } as const
 
@@ -44,10 +42,10 @@ function isWrite(sql: string): boolean {
 }
 
 export async function query(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { exits: EXITS })
 
   const { values, positionals } = parsed
-  const limit = wholeNumber(values.rows, 'rows', DEFAULT_LIMIT, 0)
+  const limit = rowLimit(values)
   const sql = await readSql(positionals)
   let url: string
 
