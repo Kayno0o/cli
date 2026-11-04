@@ -1,3 +1,6 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import process from 'node:process'
 import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
 
 // A redirect, `2>` once `2>&1` is split at its `&`, `>log`, or a bare `>` whose target is the next word.
@@ -32,9 +35,52 @@ const PUBLISH = /\b(?:ft|cli\.ts)\s+release\b|\b(?:bun|npm|pnpm|yarn)\s+publish\
 // `name@1.2.3`, the shape of the version a publish just made.
 const EXACT_SPEC = /^(?:@[^/]+\/)?[^@]+@\d+\.\d+\.\d+(?:[-+][\w.+-]+)?$/
 
-// The registry packages a command adds, as `name` or `name@version`, for `pkg` to check first; after a publish in the same command, an install of an exact version is of what it published, which pkg cannot see yet, so only those are left out.
+// The name of a manifest, undefined when it is missing or broken.
+function manifestName(folder: string): string | undefined {
+  try {
+    const { name } = JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8')) as { name?: unknown }
+
+    return typeof name === 'string' ? name : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+// The packages a publish run from here can release: the manifests from here up to the repository root, and the workspace members below that root.
+function ownPackages(): Set<string> {
+  const names = new Set<string>()
+  let folder = process.cwd()
+
+  while (true) {
+    const name = manifestName(folder)
+
+    if (name !== undefined)
+      names.add(name)
+
+    for (const member of existsSync(join(folder, 'packages')) ? readdirSync(join(folder, 'packages')) : []) {
+      const memberName = manifestName(join(folder, 'packages', member))
+
+      if (memberName !== undefined)
+        names.add(memberName)
+    }
+
+    if (existsSync(join(folder, '.git')) || dirname(folder) === folder)
+      return names
+
+    folder = dirname(folder)
+  }
+}
+
+// `name` of `name@1.2.3`, scope included.
+function specName(spec: string): string {
+  return spec.slice(0, spec.lastIndexOf('@'))
+}
+
+// The registry packages a command adds, as `name` or `name@version`, for `pkg` to check first; after a publish in the same command, an exact version of a package the repository publishes is what it just released, which pkg cannot see yet, so only those are left out.
 export function addedPackages(command: string): string[] {
   let published = false
+  let own: Set<string> | undefined
 
   return splitCommand(command).flatMap((piece) => {
     published ||= PUBLISH.test(piece.command)
@@ -43,7 +89,12 @@ export function addedPackages(command: string): string[] {
 
     const names = piecePackages(program, sub, args, rest)
 
-    return published ? names.filter(name => !EXACT_SPEC.test(name)) : names
+    if (!published)
+      return names
+
+    own ??= ownPackages()
+
+    return names.filter(name => !EXACT_SPEC.test(name) || !own!.has(specName(name)))
   })
 }
 
