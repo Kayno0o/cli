@@ -24,6 +24,28 @@ describe('waitfor --file', () => {
     expect((await waitfor(['--file', path, '--until', 'listening'])).out).toBe(`${path}:2: Server listening\n`)
   })
 
+  test('--json prints met, ms and the matched line, the progress going to stderr', async () => {
+    const path = log('a\nServer listening\n')
+    const result = await waitfor(['--file', path, '--until', 'listening', '--json'])
+
+    expect(result.code).toBe(0)
+    expect(JSON.parse(result.out)).toEqual({ met: true, ms: expect.any(Number), line: { number: 2, text: 'Server listening' } })
+    expect(result.err).toBe(`${path}:2: Server listening\n`)
+  })
+
+  test('--quiet takes the same wait without the live progress line', async () => {
+    const path = log('a\nServer listening\n')
+
+    expect(await waitfor(['--file', path, '--until', 'listening', '--quiet'])).toEqual({ code: 0, out: `${path}:2: Server listening\n`, err: '' })
+  })
+
+  test('--json on a --fail line prints met false and that line, exiting 1', async () => {
+    const result = await waitfor(['-f', log('boot\nFATAL: no db\n'), '-u', 'ready', '-e', 'FATAL', '--json'])
+
+    expect(result.code).toBe(1)
+    expect(JSON.parse(result.out)).toEqual({ met: false, ms: expect.any(Number), line: { number: 2, text: 'FATAL: no db' } })
+  })
+
   test('ends with 1 on a --fail line, printing the lines around it', async () => {
     const path = log(`${Array.from({ length: 8 }, (_, i) => `line ${i + 1}`).join('\n')}\nFATAL: no database\n  at connect\n  at boot\n`)
     const result = await waitfor(['-f', path, '-u', 'ready', '-e', 'FATAL', '-t', '5s'])

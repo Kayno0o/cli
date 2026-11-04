@@ -13,7 +13,8 @@ const USAGE = `waitfor [options]: waits until a file shows a line, a port listen
 waitfor task <task id | file>: waits for a Claude Code background task to end (waitfor task --help)
 
 Every condition given must be met. A --fail line in --file ends the wait at once.
-Exits 0 once met, 1 on a --fail line, 2 on a timeout or a usage error, each with an excerpt of what it saw last.`
+Exits 0 once met, 1 on a --fail line, 2 on a timeout or a usage error, each with an excerpt of what it saw last.
+--json prints {met, ms, line} once met or on a --fail line, line being the last --until line or the --fail one as {number, text} (null when none), and the progress lines go to stderr.`
 
 const TASK_USAGE = `waitfor task [options] <task id | file>: waits for a Claude Code background task to end, then prints its exit code, its last lines and the (fail) and error: lines above them
 
@@ -27,6 +28,7 @@ const TASK_OPTIONS = {
   lines: { type: 'string', short: 'n', description: 'how many of its last lines to print (20)' },
   timeout: TIMEOUT,
   json: jsonOption(),
+  quiet: { type: 'boolean', short: 'q', description: 'no live progress line' },
 } as const
 
 const OPTIONS = {
@@ -38,6 +40,8 @@ const OPTIONS = {
   url: { type: 'string', description: 'a URL that must answer 2xx' },
   pid: { type: 'string', description: 'a process id that must exit' },
   timeout: TIMEOUT,
+  json: jsonOption('{met, ms, line}'),
+  quiet: { type: 'boolean', short: 'q', description: 'no live progress line: only what was met and the failure' },
 } as const
 
 const POLL = 250
@@ -79,7 +83,7 @@ async function waitTask(args: string[]): Promise<number> {
   const timeout = duration(values.timeout, 'timeout', 5 * 60_000)
   const started = Date.now()
   const { dim } = paint(process.stderr)
-  const region = liveRegion(spinner => [`${spinner} task ${task}: still running ${dim(formatElapsed(Date.now() - started))}`])
+  const region = values.quiet === true ? undefined : liveRegion(spinner => [`${spinner} task ${task}: still running ${dim(formatElapsed(Date.now() - started))}`])
   let code: number | undefined
 
   try {
@@ -93,7 +97,7 @@ async function waitTask(args: string[]): Promise<number> {
     }
   }
   finally {
-    region.stop()
+    region?.stop()
   }
 
   const { failures, tail } = await taskEnd(path, lines)
@@ -148,34 +152,43 @@ async function main(args: string[]): Promise<number> {
   const timeout = duration(values.timeout, 'timeout', 5 * 60_000)
   const watch = values.file === undefined ? undefined : new FileWatch(values.file, regex(values.until, 'until'), regex(values.fail, 'fail'))
   const started = Date.now()
+  const json = values.json === true
+  const say = json ? console.error : console.log
+  let matched: { number: number, text: string } | undefined
   let portLeft = port === undefined ? undefined : 'not checked yet'
   let urlLeft = values.url === undefined ? undefined : 'not checked yet'
   let isPidLeft = pid !== undefined
   const { dim } = paint(process.stderr)
   // What is still awaited, on a terminal: a line per condition with what it last saw.
-  const region = liveRegion((spinner) => {
-    const waited = dim(formatElapsed(Date.now() - started))
-    const left = [
-      watch === undefined || watch.done ? undefined : `${watch.path}: ${watch.exists ? 'no --until line yet' : 'does not exist yet'}`,
-      portLeft === undefined ? undefined : `${host}:${port}: ${portLeft}`,
-      urlLeft === undefined ? undefined : `${values.url}: ${urlLeft}`,
-      isPidLeft ? `pid ${pid}: still running` : undefined,
-    ]
+  const region = values.quiet === true
+    ? undefined
+    : liveRegion((spinner) => {
+      const waited = dim(formatElapsed(Date.now() - started))
+      const left = [
+        watch === undefined || watch.done ? undefined : `${watch.path}: ${watch.exists ? 'no --until line yet' : 'does not exist yet'}`,
+        portLeft === undefined ? undefined : `${host}:${port}: ${portLeft}`,
+        urlLeft === undefined ? undefined : `${values.url}: ${urlLeft}`,
+        isPidLeft ? `pid ${pid}: still running` : undefined,
+      ]
 
-    return left.filter(line => line !== undefined).map(line => `${spinner} ${line} ${waited}`)
-  })
+      return left.filter(line => line !== undefined).map(line => `${spinner} ${line} ${waited}`)
+    })
 
   try {
     for (;;) {
       if (watch !== undefined) {
         for (const event of await watch.poll()) {
           if (event.kind === 'until') {
-            console.log(`${watch.path}:${event.line.number}: ${truncate(event.line.text, WIDTH)}`)
+            say(`${watch.path}:${event.line.number}: ${truncate(event.line.text, WIDTH)}`)
+            matched = { number: event.line.number, text: event.line.text }
 
             continue
           }
 
           console.error(`waitfor: ${watch.path}:${event.line.number} matched --fail after ${formatDuration(Date.now() - started)}\n${numbered(event.excerpt, event.line)}`)
+
+          if (json)
+            printJson({ met: false, ms: Date.now() - started, line: { number: event.line.number, text: event.line.text } })
 
           return 1
         }
@@ -185,7 +198,7 @@ async function main(args: string[]): Promise<number> {
         portLeft = await portProblem(host, port)
 
         if (portLeft === undefined)
-          console.log(`${host}:${port} listening after ${formatDuration(Date.now() - started)}`)
+          say(`${host}:${port} listening after ${formatDuration(Date.now() - started)}`)
       }
 
       if (values.url !== undefined && urlLeft !== undefined) {
@@ -198,18 +211,22 @@ async function main(args: string[]): Promise<number> {
           urlLeft = 'problem' in check ? check.problem : undefined
 
         if ('status' in check)
-          console.log(`${values.url} answered ${check.status} after ${formatDuration(Date.now() - started)}`)
+          say(`${values.url} answered ${check.status} after ${formatDuration(Date.now() - started)}`)
       }
 
       if (pid !== undefined && isPidLeft) {
         isPidLeft = pidAlive(pid)
 
         if (!isPidLeft)
-          console.log(`pid ${pid} exited after ${formatDuration(Date.now() - started)}`)
+          say(`pid ${pid} exited after ${formatDuration(Date.now() - started)}`)
       }
 
-      if ((watch?.done ?? true) && portLeft === undefined && urlLeft === undefined && !isPidLeft)
+      if ((watch?.done ?? true) && portLeft === undefined && urlLeft === undefined && !isPidLeft) {
+        if (json)
+          printJson({ met: true, ms: Date.now() - started, line: matched ?? null })
+
         return 0
+      }
 
       if (Date.now() - started >= timeout && !(watch?.failing ?? false))
         break
@@ -218,7 +235,7 @@ async function main(args: string[]): Promise<number> {
     }
   }
   finally {
-    region.stop()
+    region?.stop()
   }
 
   const missing: string[] = []
