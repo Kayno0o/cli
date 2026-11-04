@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, parse, runHint, runMain } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, runMain } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { git } from './git'
 import { commitMessageViolation, RULE, TICKET } from './message'
@@ -11,6 +11,7 @@ const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: comm
 const OPTIONS = {
   message: { type: 'string', short: 'm', multiple: true, description: 'a line on what changed, at most two' },
   ticket: { type: 'string', multiple: true, description: 'a ticket line, `#<n> - <title>` (`owner/repo#<n> - <title>` across repositories) copied verbatim from the ticket' },
+  json: jsonOption('{sha, subject, files: [{status, path, from?}]} of the commit'),
 } as const
 
 const RENAME = /^[RC]\d*$/
@@ -111,7 +112,13 @@ async function main(argv: string[]): Promise<number> {
 
     if (commit.code !== 0) {
       await unstage(paths)
-      console.error(`gc: git commit failed, the paths were unstaged:\n${(commit.stderr + commit.stdout).trim()}`)
+
+      const refusal = `git commit failed, the paths were unstaged:\n${(commit.stderr + commit.stdout).trim()}`
+
+      if (values.json === true)
+        fail(refusal, 1)
+
+      console.error(`gc: ${refusal}`)
 
       return 1
     }
@@ -119,7 +126,18 @@ async function main(argv: string[]): Promise<number> {
     const files = await checked(['show', '--format=%h %s', '--name-status', '-M', 'HEAD'])
     const [head = '', ...lines] = files.trimEnd().split('\n')
 
-    console.log([head, ...lines.filter(Boolean).map(fileLine)].join('\n'))
+    if (values.json === true) {
+      const changes = lines.filter(Boolean).map((line) => {
+        const [letter = '', from = '', to] = line.split('\t')
+
+        return RENAME.test(letter) ? { status: letter[0] ?? letter, path: to ?? from, from } : { status: letter, path: from }
+      })
+
+      printJson({ sha: (await checked(['rev-parse', 'HEAD'])).trim(), subject: head.slice(head.indexOf(' ') + 1), files: changes })
+    }
+    else {
+      console.log([head, ...lines.filter(Boolean).map(fileLine)].join('\n'))
+    }
 
     return signals.signal === undefined ? 0 : exitCodeOf(null, signals.signal)
   }

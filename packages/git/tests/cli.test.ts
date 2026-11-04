@@ -112,6 +112,16 @@ describe('gc', () => {
     expect(git('status', '--porcelain')).toBe('?? b.ts')
   })
 
+  test('--json prints the sha, subject and files of the commit, a rename with its old path', () => {
+    file('a.ts')
+    git('mv', 'base.ts', 'moved.ts')
+
+    const result = gc('feat(x): add a', '--json', '--', 'a.ts', 'base.ts', 'moved.ts')
+
+    expect(result.code).toBe(0)
+    expect(JSON.parse(result.out)).toEqual({ sha: git('rev-parse', 'HEAD'), subject: 'feat(x): add a', files: [{ status: 'A', path: 'a.ts' }, { status: 'R', path: 'moved.ts', from: 'base.ts' }] })
+  })
+
   test('commits a deletion and a path in a subdirectory', () => {
     mkdirSync(join(dir, 'sub'))
     file('sub/x.ts')

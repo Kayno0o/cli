@@ -14,7 +14,7 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 
 ## gc
 
-`gc <title> [-m <line>]... [--ticket <line>]... -- <path>...` commits exactly the paths given and prints `<sha7> <title>` then each file committed with its letter.
+`gc <title> [-m <line>]... [--ticket <line>]... -- <path>...` commits exactly the paths given and prints `<sha7> <title>` then each file committed with its letter; `--json` prints `{sha, subject, files: [{status, path, from?}]}`.
 
 - The message is the title, then the `-m` lines, then the `--ticket` lines, each block after a blank line; ticket lines are copied verbatim and read `#<n> - <title>`.
 - Before anything is staged it refuses, exit 1, saying which rule broke: a title that is no Conventional Commit, a title over one line, more than two description lines, a bullet list, a hard-wrapped sentence, any trailer (`Co-Authored-By`, `Signed-off-by`, "Generated with"). A breaking change (`feat!:` or a `BREAKING CHANGE:` line) may give full details.
