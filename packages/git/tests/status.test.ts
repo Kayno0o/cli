@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { letter, parseStatus, summary, unquote } from '../src/status'
+import { letter } from '../src/colour'
+import { parseStatus, summary, unquote } from '../src/status'
 
 const STATUS = `# branch.oid 6e26055a392d9734b51f4b866fe130a901b26b31
 # branch.head main

@@ -3,8 +3,9 @@
 import type { Change } from './status'
 import process from 'node:process'
 import { fail, jsonOption, paint, parse, printJson, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { letter } from './colour'
 import { git } from './git'
-import { letter, parseStatus, summary } from './status'
+import { parseStatus, summary } from './status'
 
 const USAGE = 'gst [--log N]: the repository\'s branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked\n\nExits 0 when it printed the status, 2 outside a git repository or on a usage error.'
 
