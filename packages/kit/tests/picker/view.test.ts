@@ -1,7 +1,7 @@
-import type { Theme } from '../src/view'
+import type { Theme } from '../../src/picker/view'
 import { describe, expect, test } from 'bun:test'
-import { createState, press } from '../src/state'
-import { caretColumn, layoutFor, parseHeight, render } from '../src/view'
+import { createState, press } from '../../src/picker/state'
+import { caretColumn, layoutFor, parseHeight, render } from '../../src/picker/view'
 
 const plain: Theme = { accent: text => text, label: text => text, value: text => text, id: text => text }
 const tagged: Theme = { accent: text => `<${text}>`, label: text => `~${text}~`, value: text => `*${text}*`, id: text => `#${text}#` }

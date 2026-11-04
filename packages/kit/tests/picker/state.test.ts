@@ -1,6 +1,6 @@
-import type { Key, State } from '../src/state'
+import type { Key, State } from '../../src/picker/state'
 import { describe, expect, test } from 'bun:test'
-import { chosen, createState, displayed, highlighted, parseKeys, press } from '../src/state'
+import { chosen, createState, displayed, highlighted, parseKeys, press } from '../../src/picker/state'
 
 function typed(state: State, ...keys: (Key | string)[]): State {
   return keys.reduce<State>((current, key) => typeof key === 'string' && key.length === 1 && key !== '\n' ? press(current, { text: key }) : press(current, key as Key), state)

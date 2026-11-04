@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { fuzzy, rank } from '../src/score'
+import { fuzzy, rank } from '../../src/picker/score'
 
 const scoreOf = (query: string, text: string): number => fuzzy(query, text)?.score ?? Number.NEGATIVE_INFINITY
 

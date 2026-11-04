@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { shellQuote } from '@kaynooo/cli-kit/shell'
+import { shellQuote } from '../shell'
 import { displayed } from './state'
 
 export const PREVIEW_BYTES = 64 * 1024

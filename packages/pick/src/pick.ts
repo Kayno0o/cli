@@ -2,8 +2,7 @@
 
 import process from 'node:process'
 import { badUsage, fail, parse, runMain } from '@kaynooo/cli-kit'
-import { choose } from './terminal'
-import { DEFAULT_HEIGHT, parseHeight } from './view'
+import { choose, DEFAULT_HEIGHT, parseHeight } from '@kaynooo/cli-kit/picker'
 
 const USAGE = `pick [options]: a fuzzy selector, the lines on stdin in, the chosen one on stdout out
 
