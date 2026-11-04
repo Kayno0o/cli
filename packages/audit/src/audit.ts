@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --no-env-file
 
 import type { ExitRow, Ran } from '@kaynooo/cli-kit'
 import type { Finding, Severity } from './report'

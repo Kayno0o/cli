@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --no-env-file
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'

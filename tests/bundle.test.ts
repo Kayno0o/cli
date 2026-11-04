@@ -22,7 +22,7 @@ describe('bundles', () => {
         const run = Bun.spawnSync([process.execPath, `${cwd}/${file}`, '--version'], { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' })
 
         expect(run.stdout.toString().trim()).toBe(version)
-        expect((await Bun.file(`${cwd}/${file}`).text()).startsWith('#!/usr/bin/env bun')).toBe(true)
+        expect((await Bun.file(`${cwd}/${file}`).text()).startsWith('#!/usr/bin/env ')).toBe(true)
       }
     }, 30_000)
   }

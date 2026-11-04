@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --no-env-file
 
 import type { Change } from './status'
 import process from 'node:process'

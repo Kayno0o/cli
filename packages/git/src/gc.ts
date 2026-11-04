@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --no-env-file
 
 import process from 'node:process'
 import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, runMain } from '@kaynooo/cli-kit'

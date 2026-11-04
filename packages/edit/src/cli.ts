@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --no-env-file
 
 import type { Diff } from './diff'
 import type { Pair } from './replace'
