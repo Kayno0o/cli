@@ -1,10 +1,10 @@
-import type { RepoState } from '../src/scan'
+import type { RepoState } from '../src/repos-scan'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeAll, describe, expect, test } from 'bun:test'
 
-const CLI = new URL('../src/repos.ts', import.meta.url).pathname
+const CLI = new URL('../src/repos-cli.ts', import.meta.url).pathname
 const temp = tempDirs()
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
 

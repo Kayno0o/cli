@@ -22,7 +22,6 @@ export interface Host {
 
 // Every @kaynooo/cli-* package and the bins it installs; the repo's tests check it against packages/*.
 export const TOOLS: Record<string, string[]> = {
-  '@kaynooo/cli-audit': ['audit'],
   '@kaynooo/cli-base': ['base', 'proof'],
   '@kaynooo/cli-changelog': ['changelog'],
   '@kaynooo/cli-check': ['check', 'fix', 'errs', 'j'],
@@ -42,11 +41,11 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-pkg': ['pkg'],
   '@kaynooo/cli-probe': ['probe'],
   '@kaynooo/cli-proc': ['proc', 'pid', 'ports', 'procs'],
-  '@kaynooo/cli-repos': ['repos'],
+
   '@kaynooo/cli-stack': ['stack'],
-  '@kaynooo/cli-sweep': ['sweep'],
   '@kaynooo/cli-view': ['view'],
   '@kaynooo/cli-wait': ['waitfor', 'slot'],
+  '@kaynooo/cli-workspace': ['ws', 'repos', 'sweep', 'audit'],
 }
 
 export const FORGE = 'git.kaynooo.fr'

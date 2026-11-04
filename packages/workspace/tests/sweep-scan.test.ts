@@ -2,7 +2,7 @@ import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { findCandidates, isCachePath } from '../src/scan'
+import { findCandidates, isCachePath } from '../src/sweep-scan'
 
 const temp = tempDirs()
 

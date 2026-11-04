@@ -1,4 +1,4 @@
-import type { Entry } from '../src/scan'
+import type { Entry } from '../src/sweep-scan'
 import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'

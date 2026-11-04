@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 
-const CLI = new URL('../src/sweep.ts', import.meta.url).pathname
+const CLI = new URL('../src/sweep-cli.ts', import.meta.url).pathname
 const temp = tempDirs()
 
 // A bun run creates ~/.bun/install/cache; a file named .bun keeps that out of the fake HOME.

@@ -1,12 +1,10 @@
-#!/usr/bin/env -S bun --no-env-file
-
 import type { ExitRow, Ran } from '@kaynooo/cli-kit'
 import type { Finding, Severity } from './report'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, oneOf, paint, parse, printJson, role, runCommand, runMain, table } from '@kaynooo/cli-kit'
+import { fail, jsonOption, oneOf, paint, parse, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
 import { directDependencies, findingsOf, parseAudit, SEVERITIES, workspaceFolders } from './report'
 
 const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun repositories under root (the current folder by default), one table per repository
@@ -147,7 +145,7 @@ function rows(findings: Finding[]): string[][] {
   ])
 }
 
-async function main(args: string[]): Promise<number> {
+export async function audit(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['audit', 'audit ~/Workspace --level high --prod'] })
   const root = resolve(positionals[0] ?? '.')
 
@@ -192,5 +190,3 @@ function show(audits: RepoAudit[], total: number): void {
       console.log(table([['package', 'severity', 'advisories', 'scope', 'origin', 'fix'], ...rows(each.findings)], { header: true, align: ['left', 'left', 'right', 'left', 'left', 'left'] }))
   }
 }
-
-process.exitCode = await runMain({ name: 'audit', run: main })

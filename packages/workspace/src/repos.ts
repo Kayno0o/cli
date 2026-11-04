@@ -1,13 +1,11 @@
-#!/usr/bin/env -S bun --no-env-file
-
 import type { ExitRow } from '@kaynooo/cli-kit'
-import type { RepoState } from './scan'
+import type { RepoState } from './repos-scan'
 import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, marked, oneOf, parse, printJson, role, runMain, table, userConfigReadPath } from '@kaynooo/cli-kit'
-import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pool, pullBlocker, REASONS, reasonsOf } from './scan'
+import { fail, jsonOption, marked, oneOf, parse, printJson, role, table, userConfigReadPath } from '@kaynooo/cli-kit'
+import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pool, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
 const USAGE = `repos [options] [root]: the git repositories under root (~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
 
@@ -60,7 +58,7 @@ function row(repo: RepoState, shown: string): string[] {
   return [tint(shown), repo.unreadable ? '? (unreadable)' : repo.branch, repo.dirty === 0 ? '-' : String(repo.dirty), sync, repo.worktrees === 0 ? '-' : String(repo.worktrees), releasedCell(repo)]
 }
 
-async function main(args: string[]): Promise<number> {
+export async function repos(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a cd, git status, git log and git tag loop over each repository of the workspace', examples: ['repos', 'repos ~/Workspace --only unreleased --fetch', ['repos --only behind --pull', 'fast-forward what is behind and clean'], ['repos --only dirty --path', 'the paths, for xargs']] })
   const root = resolve(positionals[0] ?? join(homedir(), 'Workspace'))
 
@@ -136,5 +134,3 @@ async function main(args: string[]): Promise<number> {
 
   return failedPulls > 0 ? 1 : 0
 }
-
-process.exitCode = await runMain({ name: 'repos', run: main })

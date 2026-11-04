@@ -1,9 +1,9 @@
-import type { Entry } from './scan'
+import type { Entry } from './sweep-scan'
 import { existsSync } from 'node:fs'
 import { lstat, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { runTool } from '@kaynooo/cli-kit'
-import { FOLDER_NAMES, isCachePath } from './scan'
+import { FOLDER_NAMES, isCachePath } from './sweep-scan'
 
 export interface Outcome {
   path: string

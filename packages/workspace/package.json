@@ -1,0 +1,39 @@
+{
+  "name": "@kaynooo/cli-workspace",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "ws, repos, sweep, audit: the repositories of the workspace that need attention, the folders worth reclaiming and their known vulnerabilities.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/workspace#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/workspace"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": ["cli", "git", "workspace", "monorepo", "audit", "disk"],
+  "bin": {
+    "ws": "./dist/cli.js",
+    "repos": "./dist/repos-cli.js",
+    "sweep": "./dist/sweep-cli.js",
+    "audit": "./dist/audit-cli.js"
+  },
+  "files": ["dist"],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts src/repos-cli.ts src/sweep-cli.ts src/audit-cli.ts --target bun --outdir dist",
+    "ws": "$npm_execpath src/cli.ts",
+    "repos": "$npm_execpath src/repos-cli.ts",
+    "sweep": "$npm_execpath src/sweep-cli.ts",
+    "audit": "$npm_execpath src/audit-cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
-const AUDIT = new URL('../src/audit.ts', import.meta.url).pathname
+const AUDIT = new URL('../src/audit-cli.ts', import.meta.url).pathname
 const dir = mkdtempSync(join(tmpdir(), 'audit-cli-'))
 
 function audit(...args: string[]) {

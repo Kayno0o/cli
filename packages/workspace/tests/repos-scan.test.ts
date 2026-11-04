@@ -1,9 +1,9 @@
-import type { RepoState } from '../src/scan'
+import type { RepoState } from '../src/repos-scan'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { findRepos, pool, reasonsOf } from '../src/scan'
+import { findRepos, pool, reasonsOf } from '../src/repos-scan'
 
 const temp = tempDirs()
 

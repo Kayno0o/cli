@@ -1,14 +1,11 @@
-#!/usr/bin/env -S bun --no-env-file
-
 import type { Outcome } from './apply'
 import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
-import process from 'node:process'
-import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, parse, parseSize, printJson, problem, runMain, runTool, table } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, parse, parseSize, printJson, problem, runTool, table } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { applyAll } from './apply'
-import { findCandidates, inspect, MAX_DEPTH } from './scan'
+import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
 
 const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
 
@@ -42,7 +39,7 @@ async function dockerUsage(): Promise<string | undefined> {
   }
 }
 
-async function main(args: string[]): Promise<number> {
+export async function sweep(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], replaces: 'find ~/Workspace -name node_modules, du -sh and rm -rf by hand', examples: ['sweep', 'sweep ~/Workspace --older 30d --min 100M --apply', 'sweep --only worktrees --apply'] })
 
   if (positionals.length > 1)
@@ -137,5 +134,3 @@ function print(root: string, entries: Awaited<ReturnType<typeof inspect>>['entri
   console.log(table([['size', 'age', 'what', 'path', 'note'], ...entries.map(entry => [formatFileSize(entry.bytes), entry.committedAt === undefined ? '-' : formatAge(entry.committedAt, now), entry.kind, relative(root, entry.path), entry.action === 'keep' ? `kept: ${entry.reason}` : ''])], { header: true, align: ['right', 'right', 'left', 'left', 'left'] }))
   console.log(`\n${formatFileSize(reclaimable)} reclaimable${skipped === 0 ? '' : `, ${skipped} skipped (symlinks, tracked or not ignored by git)`}`)
 }
-
-process.exitCode = await runMain({ name: 'sweep', run: main })

@@ -9,22 +9,12 @@
         "@types/bun": "^1.4.4",
       },
     },
-    "packages/audit": {
-      "name": "@kaynooo/cli-audit",
-      "version": "0.1.1",
-      "bin": {
-        "audit": "./dist/audit.js",
-      },
-      "devDependencies": {
-        "@kaynooo/cli-kit": "workspace:*",
-      },
-    },
     "packages/base": {
       "name": "@kaynooo/cli-base",
       "version": "0.5.1",
       "bin": {
         "base": "./dist/cli.js",
-        "proof": "./dist/proof.js",
+        "proof": "./dist/proof-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -60,9 +50,10 @@
       "name": "@kaynooo/cli-code",
       "version": "0.8.1",
       "bin": {
-        "peek": "./dist/peek.js",
-        "todo-scan": "./dist/todo-scan.js",
-        "hotspots": "./dist/hotspots.js",
+        "src": "./dist/cli.js",
+        "peek": "./dist/peek-cli.js",
+        "todo-scan": "./dist/todo-scan-cli.js",
+        "hotspots": "./dist/hotspots-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -233,19 +224,10 @@
       "name": "@kaynooo/cli-proc",
       "version": "0.2.1",
       "bin": {
+        "proc": "./dist/proc-cli.js",
         "pid": "./dist/pid-cli.js",
         "ports": "./dist/ports-cli.js",
         "procs": "./dist/procs-cli.js",
-      },
-      "devDependencies": {
-        "@kaynooo/cli-kit": "workspace:*",
-      },
-    },
-    "packages/repos": {
-      "name": "@kaynooo/cli-repos",
-      "version": "0.2.1",
-      "bin": {
-        "repos": "./dist/repos.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -256,16 +238,6 @@
       "version": "0.5.1",
       "bin": {
         "stack": "./dist/cli.js",
-      },
-      "devDependencies": {
-        "@kaynooo/cli-kit": "workspace:*",
-      },
-    },
-    "packages/sweep": {
-      "name": "@kaynooo/cli-sweep",
-      "version": "0.3.1",
-      "bin": {
-        "sweep": "./dist/sweep.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -287,6 +259,19 @@
       "bin": {
         "waitfor": "./dist/cli.js",
         "slot": "./dist/slot-cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
+    "packages/workspace": {
+      "name": "@kaynooo/cli-workspace",
+      "version": "0.1.0",
+      "bin": {
+        "ws": "./dist/cli.js",
+        "repos": "./dist/repos-cli.js",
+        "sweep": "./dist/sweep-cli.js",
+        "audit": "./dist/audit-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -349,8 +334,6 @@
 
     "@joplin/turndown-plugin-gfm": ["@joplin/turndown-plugin-gfm@1.0.68", "", {}, "sha512-m8DfAQNC/V7g0j5H6Jv60WhekBBjodD+zTPGrU+g2m+ux/z8ZX07KQIl6kaAmbKwfvsQhC04op52g63I78sVgg=="],
 
-    "@kaynooo/cli-audit": ["@kaynooo/cli-audit@workspace:packages/audit"],
-
     "@kaynooo/cli-base": ["@kaynooo/cli-base@workspace:packages/base"],
 
     "@kaynooo/cli-changelog": ["@kaynooo/cli-changelog@workspace:packages/changelog"],
@@ -391,15 +374,13 @@
 
     "@kaynooo/cli-proc": ["@kaynooo/cli-proc@workspace:packages/proc"],
 
-    "@kaynooo/cli-repos": ["@kaynooo/cli-repos@workspace:packages/repos"],
-
     "@kaynooo/cli-stack": ["@kaynooo/cli-stack@workspace:packages/stack"],
-
-    "@kaynooo/cli-sweep": ["@kaynooo/cli-sweep@workspace:packages/sweep"],
 
     "@kaynooo/cli-view": ["@kaynooo/cli-view@workspace:packages/view"],
 
     "@kaynooo/cli-wait": ["@kaynooo/cli-wait@workspace:packages/wait"],
+
+    "@kaynooo/cli-workspace": ["@kaynooo/cli-workspace@workspace:packages/workspace"],
 
     "@kaynooo/eslint": ["@kaynooo/eslint@7.1.5", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/7.1.5/eslint-7.1.5.tgz", { "dependencies": { "@e18e/eslint-plugin": "^0.8.0", "@eslint-community/eslint-plugin-eslint-comments": "^4.7.2", "@eslint/markdown": "^8.0.3", "@stylistic/eslint-plugin": "^5.10.0", "@typescript-eslint/eslint-plugin": "^8.67.0", "@typescript-eslint/parser": "^8.67.0", "eslint-config-flat-gitignore": "^2.3.0", "eslint-flat-config-utils": "^3.2.0", "eslint-merge-processors": "^2.0.0", "eslint-plugin-antfu": "^3.2.3", "eslint-plugin-better-tailwindcss": "^4.7.0", "eslint-plugin-format": "^2.0.1", "eslint-plugin-import-lite": "^0.6.0", "eslint-plugin-jsonc": "^3.4.1", "eslint-plugin-no-only-tests": "^3.4.0", "eslint-plugin-perfectionist": "^5.10.1", "eslint-plugin-regexp": "^3.2.0", "eslint-plugin-toml": "^1.5.0", "eslint-plugin-unicorn": "^73.0.0", "eslint-plugin-unused-imports": "^4.4.1", "eslint-plugin-yml": "^3.8.1", "globals": "^17.11.0", "toml-eslint-parser": "^1.0.3", "yaml-eslint-parser": "^2.1.0" }, "peerDependencies": { "eslint": "^10.7.0" }, "bin": { "keslint": "dist/bin.js" } }, "sha512-EqaF2c5tuy5K3y1gDHOby9C9PKYMYs39oynCCEFfQwLsy+97jS2mJ5xIGUlAwKHi5VOalTtHYcXn9ETfA4aqWA=="],
 
