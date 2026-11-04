@@ -1,27 +1,37 @@
 #!/usr/bin/env bun
 
 import type { ExitRow } from '@kaynooo/cli-kit'
-import type { CertInfo, Headers, Hop, HttpRedirect, Offers, Timings } from './analyze'
-import type { Addresses, TlsInfo } from './net'
+import type { CertInfo, Headers, Hop, HttpRedirect, Offers, Target, Timings } from './analyze'
+import type { Addresses, TlsInfo, Wire } from './net'
+import { isIP } from 'node:net'
 import process from 'node:process'
-import { badUsage, fail, jsonOption, marked, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { cdnHint, daysLeftLabel, httpRedirectOf, isRedirect, MAX_HOPS, nextUrl, offersOf, parseTarget, versionLabel, wantsHttpCheck, warningsOf, worthKnowing } from './analyze'
-import { addressesOf, curlHasHttp3, curlHop, tlsInfo } from './net'
+import { addressesOf, curlHasHttp3, curlHop, portOf, tlsInfo } from './net'
 
 const LABEL_WIDTH = 13
 
-const USAGE = `probe [options] <url|domain>: reports a site's negotiated HTTP version, redirect chain, timings, addresses, TLS and certificate, the headers worth knowing and what warrants a warning
+const USAGE = `probe [options] <url|domain>...: reports each site's negotiated HTTP version, redirect chain, timings, addresses, TLS and certificate, the headers worth knowing and what warrants a warning
 
+By default one line per target: the HTTP version, status, final URL, total time, redirects, certificate expiry, first address and the warnings. --verbose prints the whole table.
 A bare domain is tried over https first and over http when that fails. Redirects are followed hop by hop (at most ${MAX_HOPS}), each hop's status and HTTP version listed. HTTP/3 is spoken only when the installed curl lists it, otherwise it is reported from alt-svc. The certificate is read even when it is not trusted, and --insecure also lets curl go on with it.
+-H adds a header to every request, --resolve host:ip reaches a host at that address instead of the DNS answer (the certificate and the Host header stay the host's), both repeatable.
 
 Warns on a certificate with fewer than 14 days left or not trusted, and on an http:// twin that does not redirect to https (checked for a bare domain or an https URL on the default port).`
 
-const EXITS: ExitRow[] = [[0, 'the site answered, warnings or not'], [1, 'the site could not be reached'], [2, 'a usage error']]
+const EXITS: ExitRow[] = [[0, 'every site answered, warnings or not'], [1, 'a site could not be reached'], [2, 'a usage error']]
 
 const OPTIONS = {
   insecure: { type: 'boolean', short: 'k', description: 'let curl go on with a certificate it does not trust' },
-  json: jsonOption('{target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, warnings}'),
+  header: { type: 'string', short: 'H', multiple: true, description: 'a `Name: value` header sent with every request, repeatable' },
+  resolve: { type: 'string', multiple: true, description: 'host:ip, reach the host at that address instead of the DNS answer, repeatable' },
+  timeout: { type: 'string', short: 't', description: 'longest one request may take (20s): 5s, 1m, a bare number in seconds' },
+  verbose: { type: 'boolean', description: 'the whole table for each target instead of one line' },
+  json: jsonOption('one object per target {target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, warnings}, an array of them for several targets (an unreachable one is {target, error})'),
 } as const
+
+const BRACKETS = /^\[|\]$/g
+const HEADER_LINE = /^[\w!#$%&'*+.^`|~-]+:/
 
 interface Report {
   target: string
@@ -46,12 +56,17 @@ interface Followed {
   tooMany: boolean
 }
 
-async function follow(start: string, insecure: boolean, http3: boolean): Promise<Followed> {
+interface Settings {
+  insecure: boolean
+  wire: Wire
+}
+
+async function follow(start: string, { insecure, wire }: Settings, http3: boolean): Promise<Followed> {
   const chain: Hop[] = []
   let url = start
 
   while (chain.length < MAX_HOPS) {
-    const { hop, errormsg } = await curlHop(url, { http3: http3 && url.startsWith('https:'), insecure, get: false })
+    const { hop, errormsg } = await curlHop(url, { ...wire, http3: http3 && url.startsWith('https:'), insecure, get: false })
 
     if (hop === undefined)
       return { chain, error: errormsg ?? 'no response', tooMany: false }
@@ -69,28 +84,17 @@ async function follow(start: string, insecure: boolean, http3: boolean): Promise
   return { chain, tooMany: true }
 }
 
-function portOf(url: URL): number {
-  if (url.port !== '')
-    return Number(url.port)
-
-  return url.protocol === 'https:' ? 443 : 80
-}
-
-async function probe(input: string, insecure: boolean): Promise<Report | { error: string }> {
-  const target = parseTarget(input)
-
-  if (target === undefined)
-    badUsage(`not a URL or domain: ${input}`)
-
+async function probe(target: Target, input: string, settings: Settings): Promise<Report | { target: string, error: string }> {
+  const { wire } = settings
   const http3 = await curlHasHttp3()
-  let followed = await follow(target.url.href, insecure, http3)
+  let followed = await follow(target.url.href, settings, http3)
 
   if (followed.chain.length === 0 && target.bare) {
     const plain = new URL(target.url.href)
 
     plain.protocol = 'http:'
 
-    const second = await follow(plain.href, insecure, http3)
+    const second = await follow(plain.href, settings, http3)
 
     if (second.chain.length > 0)
       followed = second
@@ -99,14 +103,14 @@ async function probe(input: string, insecure: boolean): Promise<Report | { error
   const final = followed.chain.at(-1)
 
   if (final === undefined)
-    return { error: `could not reach ${target.url.host}: ${followed.error ?? 'no response'}` }
+    return { target: input, error: `could not reach ${target.url.host}: ${followed.error ?? 'no response'}` }
 
   const finalUrl = new URL(final.url)
   const secure = finalUrl.protocol === 'https:'
   const [addresses, tls, twin] = await Promise.all([
-    addressesOf(target.url.hostname),
-    secure ? tlsInfo(finalUrl.hostname, portOf(finalUrl)) : Promise.resolve(undefined as TlsInfo | undefined),
-    wantsHttpCheck(target) && secure ? twinOf(target.url, insecure) : Promise.resolve(undefined),
+    addressesOf(target.url.hostname, wire.resolve),
+    secure ? tlsInfo(finalUrl.hostname, portOf(finalUrl), { address: wire.resolve?.get(finalUrl.hostname), ...wire.timeoutS === undefined ? {} : { timeoutS: wire.timeoutS } }) : Promise.resolve(undefined as TlsInfo | undefined),
+    wantsHttpCheck(target) && secure ? twinOf(target.url, settings) : Promise.resolve(undefined),
   ])
   const httpRedirect = httpRedirectOf(twin)
   const offers = offersOf({ alpn: tls?.alpn, version: final.version, altSvc: final.headers['alt-svc'] })
@@ -133,16 +137,54 @@ async function probe(input: string, insecure: boolean): Promise<Report | { error
   }
 }
 
-async function twinOf(url: URL, insecure: boolean): Promise<Hop | undefined> {
+async function twinOf(url: URL, { insecure, wire }: Settings): Promise<Hop | undefined> {
   const plain = new URL(url.href)
 
   plain.protocol = 'http:'
 
-  return (await curlHop(plain.href, { http3: false, insecure, get: false })).hop
+  return (await curlHop(plain.href, { ...wire, http3: false, insecure, get: false })).hop
+}
+
+// `host:ip` pairs as a map from the lowercase host; the first colon splits them, an IPv6 address keeping its own.
+function resolvesOf(entries: readonly string[]): Map<string, string> {
+  const resolve = new Map<string, string>()
+
+  for (const entry of entries) {
+    const at = entry.indexOf(':')
+    const address = entry.slice(at + 1).replace(BRACKETS, '')
+
+    if (at < 1 || isIP(address) === 0)
+      badUsage(`--resolve takes host:ip, not ${entry}`)
+
+    resolve.set(entry.slice(0, at).toLowerCase(), address)
+  }
+
+  return resolve
 }
 
 function ms(value: number): string {
   return `${value}ms`
+}
+
+// The report on one line.
+function compact(report: Report): string {
+  const { dim } = paint(process.stdout)
+  const redirects = report.chain.length - 1
+  const parts = [`${role('accent', process.stdout)(versionLabel(report.version))} ${role('value', process.stdout)(String(report.status))} ${role('path', process.stdout)(report.url)}`, ms(report.timings.total)]
+  const address = report.addresses.a[0] ?? report.addresses.aaaa[0]
+
+  if (redirects > 0)
+    parts.push(`${redirects} ${redirects === 1 ? 'redirect' : 'redirects'}`)
+
+  if (report.certificate !== null)
+    parts.push(`cert ${daysLeftLabel(report.certificate.daysLeft)}`)
+
+  if (address !== undefined)
+    parts.push(address)
+
+  const line = parts.join(dim('  '))
+
+  return report.warnings.length === 0 ? line : `${line}  ${marked('warn', report.warnings.join('; '), process.stdout)}`
 }
 
 function print(report: Report): void {
@@ -191,18 +233,59 @@ function print(report: Report): void {
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['<url|domain>'], exits: EXITS, replaces: 'the httpversion fish function, curl -sI chains and openssl s_client one-liners', examples: ['probe example.com', 'probe https://example.com/path --json'] })
-  const report = await probe(positionals[0], values.insecure === true)
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['<url|domain>...'], exits: EXITS, replaces: 'the httpversion fish function, curl -sI chains and openssl s_client one-liners', examples: ['probe example.com', 'probe https://example.com/path --json', ['probe a.test b.test', 'one line each'], ['probe https://example.com --resolve example.com:203.0.113.7 -H "Host: example.com" --verbose', 'a server before its DNS points at it']] })
+  const headers = values.header ?? []
 
-  if ('error' in report)
-    fail(report.error, 1)
+  for (const header of headers) {
+    if (!HEADER_LINE.test(header))
+      badUsage(`-H takes "Name: value", not ${header}`)
+  }
 
-  if (values.json === true)
-    printJson(report)
-  else
-    print(report)
+  const timeoutMs = values.timeout === undefined ? undefined : duration(values.timeout, 'timeout', 0, 's')
+  const wire: Wire = { headers, resolve: resolvesOf(values.resolve ?? []), ...timeoutMs === undefined ? {} : { timeoutS: timeoutMs / 1000 } }
+  const targets = positionals.map((input) => {
+    const target = parseTarget(input)
 
-  return 0
+    if (target === undefined)
+      badUsage(`not a URL or domain: ${input}`)
+
+    return { input, target }
+  })
+  const reports = await Promise.all(targets.map(async ({ input, target }) => probe(target, input, { insecure: values.insecure === true, wire })))
+  const [only] = reports
+
+  if (reports.length === 1 && only !== undefined && 'error' in only)
+    fail(only.error, 1)
+
+  if (values.json === true) {
+    printJson(reports.length === 1 ? only : reports)
+
+    return reports.some(report => 'error' in report) ? 1 : 0
+  }
+
+  let first = true
+
+  for (const report of reports) {
+    if ('error' in report) {
+      console.error(marked('problem', report.error, process.stderr))
+    }
+    else if (values.verbose === true) {
+      if (!first)
+        console.log('')
+
+      if (reports.length > 1)
+        console.log(role('label', process.stdout)(report.target))
+
+      print(report)
+    }
+    else {
+      console.log(compact(report))
+    }
+
+    first = false
+  }
+
+  return reports.some(report => 'error' in report) ? 1 : 0
 }
 
 process.exitCode = await runMain({ name: 'probe', run: main })

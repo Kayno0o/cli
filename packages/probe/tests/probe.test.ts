@@ -30,7 +30,7 @@ function parsed(out: string): Json {
 const server = Bun.serve({
   port: 0,
   hostname: '127.0.0.1',
-  fetch(request) {
+  async fetch(request) {
     const { pathname } = new URL(request.url)
 
     if (pathname === '/old')
@@ -41,6 +41,15 @@ const server = Bun.serve({
 
     if (pathname === '/loop')
       return new Response(null, { status: 302, headers: { location: '/loop' } })
+
+    if (pathname === '/seen')
+      return new Response('x', { headers: { server: `${request.headers.get('x-probe') ?? 'none'} at ${request.headers.get('host')}` } })
+
+    if (pathname === '/slow') {
+      await Bun.sleep(1500)
+
+      return new Response('late')
+    }
 
     if (pathname === '/nohead' && request.method === 'HEAD')
       return new Response(null, { status: 405 })
@@ -66,7 +75,7 @@ describe('probe against a local http server', () => {
   })
 
   test('prints the chain, timings and a warning in text', async () => {
-    const { code, out, err } = await probe([`${base}/old`])
+    const { code, out, err } = await probe([`${base}/old`, '--verbose'])
 
     expect(code).toBe(0)
     expect(out).toStartWith(`HTTP/1.1 200 ${base}/final`)
@@ -75,6 +84,58 @@ describe('probe against a local http server', () => {
     expect(out).toContain('offers        h2 no, h3 yes (alt-svc h3)')
     expect(out).toContain('warning: the site is not served over https')
     expect(err).toBe('')
+  })
+
+  test('prints one line by default', async () => {
+    const { code, out } = await probe([`${base}/old`])
+
+    expect(code).toBe(0)
+    expect(out.trimEnd().split('\n')).toHaveLength(1)
+    expect(out).toMatch(new RegExp(`^HTTP/1\\.1 200 ${base}/final\\s+\\d+ms\\s+2 redirects\\s+127\\.0\\.0\\.1\\s+warning: the site is not served over https\\n$`))
+  })
+
+  test('probes several targets, one line each, exiting 1 when one cannot be reached', async () => {
+    const both = await probe([`${base}/final`, `${base}/old`])
+
+    expect(both.code).toBe(0)
+    expect(both.out.trimEnd().split('\n')).toHaveLength(2)
+
+    const mixed = await probe([`${base}/final`, 'http://127.0.0.1:1/'])
+
+    expect(mixed.code).toBe(1)
+    expect(mixed.out.trimEnd().split('\n')).toHaveLength(1)
+    expect(mixed.err).toContain('could not reach 127.0.0.1:1')
+  })
+
+  test('--json is the same object for one target and an array for several, an unreachable one being {target, error}', async () => {
+    const one = parsed((await probe([`${base}/final`, '--json'])).out)
+    const several = JSON.parse((await probe([`${base}/final`, 'http://127.0.0.1:1/', '--json'])).out) as [Json, { target: string, error: string }]
+
+    expect(one.status).toBe(200)
+    expect(several[0].status).toBe(200)
+    expect(several[1]).toMatchObject({ target: 'http://127.0.0.1:1/', error: expect.stringContaining('could not reach') })
+  })
+
+  test('-H sends a header with every request', async () => {
+    const report = parsed((await probe([`${base}/seen`, '-H', 'X-Probe: yes', '--json'])).out)
+
+    expect(report.headers.server).toStartWith('yes at')
+    expect((await probe([`${base}/seen`, '-H', 'no colon'])).code).toBe(2)
+  })
+
+  test('--resolve reaches a host at the address given, keeping the Host header', async () => {
+    const target = `http://my.test:${server.port}/seen`
+    const report = parsed((await probe([target, '--resolve', 'my.test:127.0.0.1', '--json'])).out)
+
+    expect(report.headers.server).toBe(`none at my.test:${server.port}`)
+    expect(report.addresses).toEqual({ a: ['127.0.0.1'], aaaa: [] })
+    expect((await probe([target, '--resolve', 'my.test'])).code).toBe(2)
+    expect((await probe([target, '--resolve', 'my.test:nope'])).code).toBe(2)
+  })
+
+  test('--timeout gives up on a slow answer', async () => {
+    expect((await probe([`${base}/slow`, '-t', '300ms'])).code).toBe(1)
+    expect((await probe([`${base}/slow`, '-t', '10s'])).code).toBe(0)
   })
 
   test('retries with GET when HEAD is refused', async () => {

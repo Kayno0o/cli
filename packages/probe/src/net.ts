@@ -29,14 +29,44 @@ export async function curlHasHttp3(): Promise<boolean> {
   return http3
 }
 
-export interface HopOptions {
+export interface Wire {
+  // `Name: value` lines sent with every request.
+  headers?: string[]
+  // Host (lowercase) to the address that answers for it, instead of DNS.
+  resolve?: ReadonlyMap<string, string>
+  // The longest one request may take, in seconds.
+  timeoutS?: number
+}
+
+export interface HopOptions extends Wire {
   http3: boolean
   insecure: boolean
   get: boolean
 }
 
-async function runCurl(url: string, { http3: wantsH3, insecure, get }: HopOptions): Promise<CurlResult> {
-  const args = ['-sS', '-o', '/dev/null', '--connect-timeout', String(CONNECT_TIMEOUT), '--max-time', String(MAX_TIME), '--write-out', WRITE_OUT]
+// The port a URL is reached on, which curl's --resolve needs spelled out.
+export function portOf(url: URL): number {
+  if (url.port !== '')
+    return Number(url.port)
+
+  return url.protocol === 'https:' ? 443 : 80
+}
+
+function curlResolve(url: string, resolve: ReadonlyMap<string, string> | undefined): string[] {
+  const parsed = URL.canParse(url) ? new URL(url) : undefined
+  const address = parsed === undefined ? undefined : resolve?.get(parsed.hostname)
+
+  if (parsed === undefined || address === undefined)
+    return []
+
+  return ['--resolve', `${parsed.hostname}:${portOf(parsed)}:${isIP(address) === 6 ? `[${address}]` : address}`]
+}
+
+async function runCurl(url: string, { http3: wantsH3, insecure, get, headers = [], resolve, timeoutS = MAX_TIME }: HopOptions): Promise<CurlResult> {
+  const args = ['-sS', '-o', '/dev/null', '--connect-timeout', String(Math.min(CONNECT_TIMEOUT, timeoutS)), '--max-time', String(timeoutS), '--write-out', WRITE_OUT, ...curlResolve(url, resolve)]
+
+  for (const header of headers)
+    args.push('-H', header)
 
   if (!get)
     args.push('-I')
@@ -76,8 +106,8 @@ export interface Addresses {
   aaaa: string[]
 }
 
-export async function addressesOf(host: string): Promise<Addresses> {
-  const bare = host.replace(BRACKETS, '')
+export async function addressesOf(host: string, resolve?: ReadonlyMap<string, string>): Promise<Addresses> {
+  const bare = resolve?.get(host) ?? host.replace(BRACKETS, '')
   const family = isIP(bare)
 
   if (family !== 0)
@@ -101,12 +131,12 @@ export interface TlsInfo {
   cert: CertInfo | undefined
 }
 
-// A handshake offering h2 and http/1.1 to read the certificate and what was negotiated; an untrusted certificate is reported, not rejected.
-export async function tlsInfo(host: string, port: number): Promise<TlsInfo | undefined> {
+// A handshake offering h2 and http/1.1 to read the certificate and what was negotiated; an untrusted certificate is reported, not rejected. `address` connects there instead of to the host, which still names the certificate asked for.
+export async function tlsInfo(host: string, port: number, { address, timeoutS = CONNECT_TIMEOUT }: { address?: string | undefined, timeoutS?: number } = {}): Promise<TlsInfo | undefined> {
   const bare = host.replace(BRACKETS, '')
 
   return new Promise((resolve) => {
-    const socket = connect({ host: bare, port, servername: isIP(bare) === 0 ? bare : '', ALPNProtocols: ['h2', 'http/1.1'], rejectUnauthorized: false, timeout: CONNECT_TIMEOUT * 1000 })
+    const socket = connect({ host: address ?? bare, port, servername: isIP(bare) === 0 ? bare : '', ALPNProtocols: ['h2', 'http/1.1'], rejectUnauthorized: false, timeout: Math.min(CONNECT_TIMEOUT, timeoutS) * 1000 })
 
     socket.on('secureConnect', () => {
       const error: unknown = socket.authorizationError
