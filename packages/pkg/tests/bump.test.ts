@@ -227,6 +227,12 @@ describe('servedVersion failures', () => {
     expect(calls).toBe(3)
   })
 
+  test('says latest, not undefined, when no version was asked for', async () => {
+    const result = await failure(undefined, async () => new Response('bad gateway', { status: 502 }), { timeout: 50 })
+
+    expect(result).toContain(`does not serve ${NAME}@latest after`)
+  })
+
   test('a registry that never answers ends on exit 2 with the last error', async () => {
     const result = await failure('0.8.0', async () => new Response('bad gateway', { status: 502 }), { timeout: 50 })
 

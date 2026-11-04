@@ -74,7 +74,7 @@ export async function servedVersion(name: string, version: string | undefined, s
   const registry = registryFor(name, settings.configs)
   const host = new URL(registry.url).host
   const started = Date.now()
-  const region = liveRegion(spinner => [`${spinner} waiting for ${host} to serve ${name}@${version} ${formatElapsed(Date.now() - started)}`])
+  const region = liveRegion(spinner => [`${spinner} waiting for ${host} to serve ${name}@${version ?? 'latest'} ${formatElapsed(Date.now() - started)}`])
 
   let lastError = ''
 
@@ -102,7 +102,7 @@ export async function servedVersion(name: string, version: string | undefined, s
       }
 
       if (Date.now() - started >= settings.timeout)
-        fail(`${host} does not serve ${name}@${version} after ${formatDuration(settings.timeout)}${lastError === '' ? '' : `, last error: ${lastError}`}`)
+        fail(`${host} does not serve ${name}@${version ?? 'latest'} after ${formatDuration(settings.timeout)}${lastError === '' ? '' : `, last error: ${lastError}`}`)
 
       region.redraw()
       await Bun.sleep(settings.poll ?? POLL)

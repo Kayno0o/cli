@@ -116,7 +116,9 @@ export function installRequests(command: string, cwd: string, home: string): Ins
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i] ?? ''
-      const [flag = '', value] = arg.split('=', 2)
+      const equals = arg.indexOf('=')
+      const flag = equals === -1 ? arg : arg.slice(0, equals)
+      const value = equals === -1 ? undefined : arg.slice(equals + 1)
 
       if (DIR_FLAGS.has(flag) && value !== undefined && value !== '') {
         dir = resolvePath(cwd, value, home)

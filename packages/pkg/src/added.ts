@@ -21,7 +21,7 @@ const RUNNERS = new Set(['bunx', 'npx'])
 // Flags whose value is a package to run.
 const PACKAGE_FLAGS = new Set(['-p', '--package'])
 // Flags whose value is the next word, not a package.
-const VALUE_FLAGS = new Set(['--cwd', '--filter', '-F', '--workspace', '--registry', '--prefix', '-C', '--dir', '--config', '--cache-dir', '--loglevel', '--tag', '--save-prefix', '--userconfig', '--omit', '--include', '--fetch-timeout', '--fetch-retries', '--install-strategy', '--cache', ...PACKAGE_FLAGS])
+const VALUE_FLAGS = new Set(['--cwd', '--filter', '-F', '-c', '--call', '--workspace', '--registry', '--prefix', '-C', '--dir', '--config', '--cache-dir', '--loglevel', '--tag', '--save-prefix', '--userconfig', '--omit', '--include', '--fetch-timeout', '--fetch-retries', '--install-strategy', '--cache', ...PACKAGE_FLAGS])
 // A specifier no registry serves: a path, a tarball, a workspace or a git repository, `owner/repo` included.
 const NOT_REGISTRY = /^(?:[./~]|file:|link:|portal:|workspace:|git[+:]|github:|gitlab:|bitbucket:|https?:)|\.tgz$|^[\w.-]+\/[\w.-]+(?:#.*)?$/
 // `alias@npm:real@1.0.0` installs the real one.
@@ -29,7 +29,10 @@ const NPM_ALIAS = /^(?:@[^/]+\/)?[^@]+@npm:(.+)$/
 // A step publishing a package: `ft release` (or its source run as `cli.ts release`), `bun publish`, `npm publish`, a lib's `just patch|minor|major`.
 const PUBLISH = /\b(?:ft|cli\.ts)\s+release\b|\b(?:bun|npm|pnpm|yarn)\s+publish\b|\bjust\s+(?:patch|minor|major)\b/
 
-// The registry packages a command adds, as `name` or `name@version`, for `pkg` to check first; an install after a publish in the same command is of what it published, which pkg cannot see yet.
+// `name@1.2.3`, the shape of the version a publish just made.
+const EXACT_SPEC = /^(?:@[^/]+\/)?[^@]+@\d+\.\d+\.\d+(?:[-+][\w.+-]+)?$/
+
+// The registry packages a command adds, as `name` or `name@version`, for `pkg` to check first; after a publish in the same command, an install of an exact version is of what it published, which pkg cannot see yet, so only those are left out.
 export function addedPackages(command: string): string[] {
   let published = false
 
@@ -38,20 +41,23 @@ export function addedPackages(command: string): string[] {
     const { program, args } = parseCommand(piece.command)
     const [sub = '', ...rest] = args
 
-    if (published)
-      return []
+    const names = piecePackages(program, sub, args, rest)
 
-    if (RUNNERS.has(program))
-      return runnerPackages(args)
-
-    if (RUNS[program]?.has(sub))
-      return runnerPackages(rest)
-
-    if (!ADDS[program]?.has(sub))
-      return []
-
-    return rest.flatMap((word, index) => isSkipped(word, rest[index - 1] ?? '') ? [] : registryName(word))
+    return published ? names.filter(name => !EXACT_SPEC.test(name)) : names
   })
+}
+
+function piecePackages(program: string, sub: string, args: string[], rest: string[]): string[] {
+  if (RUNNERS.has(program))
+    return runnerPackages(args)
+
+  if (RUNS[program]?.has(sub))
+    return runnerPackages(rest)
+
+  if (!ADDS[program]?.has(sub))
+    return []
+
+  return rest.flatMap((word, index) => isSkipped(word, rest[index - 1] ?? '') ? [] : registryName(word))
 }
 
 function isSkipped(word: string, previous: string): boolean {
