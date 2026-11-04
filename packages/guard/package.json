@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-guard",
   "type": "module",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "guard: the safety rules a Claude Code Bash call is held to (git, remote machines, SQL writes, env files, package managers, commit messages), each refusal naming the route.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
