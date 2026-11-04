@@ -52,9 +52,12 @@ Two ways wire the bins into Claude Code, never both on one host:
 ### A host without the dotfiles
 
 ```sh
-bun install -g @kaynooo/cli-forgejo @kaynooo/cli-env @kaynooo/cli-db @kaynooo/cli-check @kaynooo/cli-pkg @kaynooo/cli-stack @kaynooo/cli-out @kaynooo/cli-edit @kaynooo/cli-base @kaynooo/cli-git @kaynooo/cli-wait @kaynooo/cli-gitlab @kaynooo/cli-guard @kaynooo/cli-code @kaynooo/cli-view @kaynooo/cli-dev @kaynooo/cli-pick @kaynooo/cli-probe @kaynooo/cli-workspace @kaynooo/cli-doctor
+bun install -g @kaynooo/cli-doctor
+doctor --fix
 claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/cli.git
 ```
+
+`doctor --fix` installs every other package, the completions and the hooks plugin; `doctor` alone lists what is missing or out of date.
 
 The packages come from npmjs with no registry setup. Each is also published to the Forgejo registry, which answers without a token; to install from it instead, map the scope first: `printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml`. The plugin comes from the Forgejo marketplace either way.
 
