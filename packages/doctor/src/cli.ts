@@ -3,7 +3,6 @@
 import type { Host, Result } from './checks'
 import process from 'node:process'
 import { jsonOption, paint, parse, printJson, runMain } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { runChecks } from './checks'
 import { hostHere } from './host'
 
@@ -44,4 +43,4 @@ export async function main(args: string[], host: Host = hostHere()): Promise<num
 }
 
 if (import.meta.main)
-  process.exitCode = await runMain({ name: 'doctor', version, run: async args => main(args) })
+  process.exitCode = await runMain({ name: 'doctor', run: async args => main(args) })

@@ -1,26 +1,27 @@
 #!/usr/bin/env bun
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Line } from './conditions'
 import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
-import { version } from '../package.json'
 import { FileWatch, portProblem, urlCheck } from './conditions'
 import { exitCode, isTranscript, pidAlive, taskEnd, taskFile } from './task'
 
 const USAGE = `waitfor [options]: waits until a file shows a line, a port listens, a URL answers 2xx or a process exits
 waitfor task <task id | file>: waits for a Claude Code background task to end (waitfor task --help)
 
-Every condition given must be met. A --fail line in --file ends the wait at once.
-Exits 0 once met, 1 on a --fail line, 2 on a timeout or a usage error, each with an excerpt of what it saw last.
+Every condition given must be met. A --fail line in --file ends the wait at once. A timeout or a --fail line comes with an excerpt of what it saw last.
 --json prints {met, ms, line} once met or on a --fail line, line being the last --until line or the --fail one as {number, text} (null when none), and the progress lines go to stderr.`
 
 const TASK_USAGE = `waitfor task [options] <task id | file>: waits for a Claude Code background task to end, then prints its exit code, its last lines and the (fail) and error: lines above them
 
 The task is the id a background Bash call returned, or the path of its .output file.
-Exits 0 when the task exited 0, 1 when it exited with another code, 2 on a timeout or a usage error.
 --json prints {task, path, code, ms, failures, tail}, each line as {number, text}.`
+
+const EXITS: ExitRow[] = [[0, 'every condition was met'], [1, 'a --fail line showed up'], [2, 'it timed out or a usage error']]
+const TASK_EXITS: ExitRow[] = [[0, 'the task exited 0'], [1, 'it exited with another code'], [2, 'it timed out or a usage error']]
 
 const TIMEOUT = { type: 'string', short: 't', description: 'how long before giving up (5m): 30s, 5m, 1h, a bare number in seconds' } as const
 
@@ -67,7 +68,7 @@ function numbered(lines: Line[], marked?: Line): string {
 }
 
 async function waitTask(args: string[]): Promise<number> {
-  const { values, positionals: [task] } = parse(args, TASK_USAGE, TASK_OPTIONS, { positionals: ['<task>'] })
+  const { values, positionals: [task] } = parse(args, TASK_USAGE, TASK_OPTIONS, { positionals: ['<task>'], exits: TASK_EXITS })
   const path = taskFile(task)
 
   if (path === undefined)
@@ -123,7 +124,7 @@ async function main(args: string[]): Promise<number> {
   if (args[0] === 'task')
     return waitTask(args.slice(1))
 
-  const parsed = parse(args, USAGE, OPTIONS, { replaces: 'sleep loops, tail -f and until ! pgrep -f', examples: [['waitfor --file dev.log --until "ready in" --fail error', 'a dev server up, or its first error'], ['waitfor --port 5432 -t 2m', 'Postgres accepting connections']] })
+  const parsed = parse(args, USAGE, OPTIONS, { exits: EXITS, replaces: 'sleep loops, tail -f and until ! pgrep -f', examples: [['waitfor --file dev.log --until "ready in" --fail error', 'a dev server up, or its first error'], ['waitfor --port 5432 -t 2m', 'Postgres accepting connections']] })
 
   const { values, positionals } = parsed
 
@@ -257,4 +258,4 @@ async function main(args: string[]): Promise<number> {
   fail(`gave up after ${formatDuration(timeout)}: ${missing.join(', ')}${lines.length === 0 ? '' : `\nlast lines of ${watch?.path}:\n${numbered(lines)}`}`)
 }
 
-process.exitCode = await runMain({ name: 'waitfor', version, run: main })
+process.exitCode = await runMain({ name: 'waitfor', run: main })

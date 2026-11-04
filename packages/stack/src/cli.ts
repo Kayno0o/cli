@@ -2,13 +2,11 @@
 
 import process from 'node:process'
 import { runCli } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { audit } from './commands/audit'
 import { port } from './commands/port'
 
 process.exitCode = await runCli({
   name: 'stack',
-  version,
   about: 'a stable port per service name, and a compose release audit',
   replaces: 'picking a free host port by hand, and reading compose files against release.config.ts',
   examples: ['stack port api', ['stack audit', 'this folder\'s release setup']],

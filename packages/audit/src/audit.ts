@@ -1,13 +1,12 @@
 #!/usr/bin/env bun
 
-import type { Ran } from '@kaynooo/cli-kit'
+import type { ExitRow, Ran } from '@kaynooo/cli-kit'
 import type { Finding, Severity } from './report'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, oneOf, paint, parse, printJson, role, runCommand, runMain, table } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { directDependencies, findingsOf, parseAudit, SEVERITIES, workspaceFolders } from './report'
 
 const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun repositories under root (the current folder by default), one table per repository
@@ -15,9 +14,9 @@ const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun repo
 Each package with an advisory is one row: its worst severity, how many advisories, whether a production dependency needs it (prod) or only a development one (dev), whether the repository asks for it itself (direct) or a dependency does (the row then says via), and the version that fixes every advisory at once, "-" when an advisory names none. The worst and the production ones come first.
 It runs \`bun audit --json\` in each repository holding a bun.lock, which reaches the registry; the walk goes three levels deep, stops at a bun.lock and skips node_modules and hidden folders.
 
-Reach for it to sweep many repositories at once; \`pkg audit\` vets the one repository in a folder (package age, install scripts, licences) as well as its advisories, and shares --level, --prod and --ignore.
+Reach for it to sweep many repositories at once; \`pkg audit\` vets the one repository in a folder (package age, install scripts, licences) as well as its advisories, and shares --level, --prod and --ignore.`
 
-Exits 0 when no repository has an advisory at the level asked, 1 when one has, a repository's audit failed or no bun.lock sits under root, 2 on a usage error or a root that is no folder.`
+const EXITS: ExitRow[] = [[0, 'no repository has an advisory at the level asked'], [1, 'one has'], [2, 'a repository\'s audit failed, no bun.lock sits under root, a usage error or a root that is no folder']]
 
 const OPTIONS = {
   level: { type: 'string', choices: SEVERITIES, default: 'moderate', description: 'only the advisories at least this severe: low, moderate, high or critical' },
@@ -149,7 +148,7 @@ function rows(findings: Finding[]): string[][] {
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['audit', 'audit ~/Workspace --level high --prod'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['audit', 'audit ~/Workspace --level high --prod'] })
   const root = resolve(positionals[0] ?? '.')
 
   if (!existsSync(root) || !statSync(root).isDirectory())
@@ -159,7 +158,7 @@ async function main(args: string[]): Promise<number> {
   const paths = await findRepos(root)
 
   if (paths.length === 0)
-    fail(`no bun.lock under ${root}`, 1)
+    fail(`no bun.lock under ${root}`)
 
   const audits = await pool(paths, CONCURRENCY, async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []))
   const kept = audits.map(each => ({ ...each, findings: values.prod === true ? each.findings.filter(found => found.scope === 'prod') : each.findings }))
@@ -169,7 +168,10 @@ async function main(args: string[]): Promise<number> {
   else
     show(kept, audits.length)
 
-  return kept.some(each => each.error !== undefined || each.findings.length > 0) ? 1 : 0
+  if (kept.some(each => each.error !== undefined))
+    return 2
+
+  return kept.some(each => each.findings.length > 0) ? 1 : 0
 }
 
 function show(audits: RepoAudit[], total: number): void {
@@ -191,4 +193,4 @@ function show(audits: RepoAudit[], total: number): void {
   }
 }
 
-process.exitCode = await runMain({ name: 'audit', version, run: main })
+process.exitCode = await runMain({ name: 'audit', run: main })

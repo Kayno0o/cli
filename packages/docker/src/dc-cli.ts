@@ -2,7 +2,6 @@
 
 import process from 'node:process'
 import { completion, parse, runMain } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { dc } from './dc'
 
 const usage = `dc [project] <compose args>
@@ -24,4 +23,4 @@ async function main(args: string[]): Promise<number> {
   return dc(args)
 }
 
-process.exitCode = await runMain({ name: 'dc', version, run: main })
+process.exitCode = await runMain({ name: 'dc', run: main })

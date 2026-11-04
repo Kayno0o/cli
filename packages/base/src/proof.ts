@@ -3,7 +3,6 @@
 import type { Run } from './worktree'
 import process from 'node:process'
 import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runMain } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { checkout, folded, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
 const USAGE = 'proof [--ref <rev>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nExits 0 when the command fails before and passes now, 1 when it passes before too, fails now too, or passes before and fails now, 2 on a usage error, an unknown ref, a command that cannot start or ends with exit 126, 127 or a signal, or 128 plus the signal when interrupted.'
@@ -107,4 +106,4 @@ async function main(argv: string[]): Promise<number> {
   return proved ? 0 : 1
 }
 
-process.exitCode = await runMain({ name: 'proof', version, run: main })
+process.exitCode = await runMain({ name: 'proof', run: main })

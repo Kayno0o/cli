@@ -2,7 +2,6 @@
 
 import process from 'node:process'
 import { parse, readInput, runMain } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { loadKnown } from './files'
 import { check, Redactor } from './redactor'
 
@@ -41,4 +40,4 @@ async function run(args: string[]): Promise<number> {
   return 0
 }
 
-process.exitCode = await runMain({ name: 'redact', version, run })
+process.exitCode = await runMain({ name: 'redact', run })

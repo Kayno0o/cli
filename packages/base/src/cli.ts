@@ -2,7 +2,6 @@
 
 import process from 'node:process'
 import { fail, parse, runMain } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { checkout, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
 const USAGE = 'base [--ref <rev>] [--keep <path>...] [--no-link] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, the working tree untouched, exiting with its code\n\nExits with the code of the command, 127 when it cannot be started, 2 on a usage error, an unknown ref or a refused command.'
@@ -43,4 +42,4 @@ async function main(argv: string[]): Promise<number> {
   return ran.code
 }
 
-process.exitCode = await runMain({ name: 'base', version, run: main })
+process.exitCode = await runMain({ name: 'base', run: main })

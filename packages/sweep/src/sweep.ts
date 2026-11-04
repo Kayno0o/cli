@@ -7,7 +7,6 @@ import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, parse, parseSize, printJson, problem, runMain, runTool, table } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
-import { version } from '../package.json'
 import { applyAll } from './apply'
 import { findCandidates, inspect, MAX_DEPTH } from './scan'
 
@@ -139,4 +138,4 @@ function print(root: string, entries: Awaited<ReturnType<typeof inspect>>['entri
   console.log(`\n${formatFileSize(reclaimable)} reclaimable${skipped === 0 ? '' : `, ${skipped} skipped (symlinks, tracked or not ignored by git)`}`)
 }
 
-process.exitCode = await runMain({ name: 'sweep', version, run: main })
+process.exitCode = await runMain({ name: 'sweep', run: main })

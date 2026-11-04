@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { CertInfo, Headers, Hop, HttpRedirect, Offers, Timings } from './analyze'
 import type { Addresses, TlsInfo } from './net'
 import process from 'node:process'
 import { badUsage, fail, jsonOption, marked, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { cdnHint, daysLeftLabel, httpRedirectOf, isRedirect, MAX_HOPS, nextUrl, offersOf, parseTarget, versionLabel, wantsHttpCheck, warningsOf, worthKnowing } from './analyze'
 import { addressesOf, curlHasHttp3, curlHop, tlsInfo } from './net'
 
@@ -14,9 +14,9 @@ const USAGE = `probe [options] <url|domain>: reports a site's negotiated HTTP ve
 
 A bare domain is tried over https first and over http when that fails. Redirects are followed hop by hop (at most ${MAX_HOPS}), each hop's status and HTTP version listed. HTTP/3 is spoken only when the installed curl lists it, otherwise it is reported from alt-svc. The certificate is read even when it is not trusted, and --insecure also lets curl go on with it.
 
-Warns on a certificate with fewer than 14 days left or not trusted, and on an http:// twin that does not redirect to https (checked for a bare domain or an https URL on the default port).
+Warns on a certificate with fewer than 14 days left or not trusted, and on an http:// twin that does not redirect to https (checked for a bare domain or an https URL on the default port).`
 
-Exits 0 when the site answered, 1 when it could not be reached, 2 on a usage error.`
+const EXITS: ExitRow[] = [[0, 'the site answered, warnings or not'], [1, 'the site could not be reached'], [2, 'a usage error']]
 
 const OPTIONS = {
   insecure: { type: 'boolean', short: 'k', description: 'let curl go on with a certificate it does not trust' },
@@ -191,7 +191,7 @@ function print(report: Report): void {
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['<url|domain>'], replaces: 'the httpversion fish function, curl -sI chains and openssl s_client one-liners', examples: ['probe example.com', 'probe https://example.com/path --json'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['<url|domain>'], exits: EXITS, replaces: 'the httpversion fish function, curl -sI chains and openssl s_client one-liners', examples: ['probe example.com', 'probe https://example.com/path --json'] })
   const report = await probe(positionals[0], values.insecure === true)
 
   if ('error' in report)
@@ -205,4 +205,4 @@ async function main(args: string[]): Promise<number> {
   return 0
 }
 
-process.exitCode = await runMain({ name: 'probe', version, run: main })
+process.exitCode = await runMain({ name: 'probe', run: main })

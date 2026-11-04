@@ -4,7 +4,6 @@ import type { Mark } from './todo'
 import { join } from 'node:path'
 import process from 'node:process'
 import { capped, jsonOption, limitOf, limitOptions, parse, printJson, runMain, warn } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { listFiles, readText } from './files'
 import { lookUp, marksIn, refKey } from './todo'
 
@@ -75,4 +74,4 @@ async function main(args: string[]): Promise<number> {
   return failed.size > 0 ? 2 : 0
 }
 
-process.exitCode = await runMain({ name: 'todo-scan', version, run: main })
+process.exitCode = await runMain({ name: 'todo-scan', run: main })

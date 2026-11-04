@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Held } from './flock'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
@@ -12,8 +13,9 @@ slot ls [--json]: lists who holds a slot or a lock and who waits for one (slot l
 The slots and locks are shared by every session, worktree and shell of this user, so heavy jobs (phpunit, playwright, vue-tsc, eslint) queue instead of overloading the machine.
 A slot or lock is freed the moment its holder ends, SIGKILL included, since the kernel drops it with the process.
 A slotted command that runs slot again does not wait for a second slot, so wrapping both a script and the commands inside it cannot deadlock.
-A first word \`ls\` always means the listing, so run the ls command as \`slot -n 4 -- ls\` or by its path.
-Exits with the command's code, 2 on a timeout or a usage error, 127 when the command cannot be started.`
+A first word \`ls\` always means the listing, so run the ls command as \`slot -n 4 -- ls\` or by its path.`
+
+const RUN_EXITS: ExitRow[] = [[0, 'the command did'], ['its own', 'the code of a command that failed'], [2, 'it timed out waiting for the slot or a usage error'], [127, 'the command cannot be started']]
 
 const LS_USAGE = `slot ls [options]: lists the slots and locks held, with the session, the command and how long ago it started, then who waits for one
 
@@ -183,7 +185,7 @@ async function acquire(dir: string, resources: Resource[], holder: Holder, deadl
 export async function runSlotted(args: string[]): Promise<number> {
   // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
   const bare = args[0] !== undefined && !args[0].startsWith('-')
-  const parsed = parse(bare ? [] : args, RUN_USAGE, RUN_OPTIONS, { rest: true, replaces: 'flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database', examples: [['slot -- bunx vue-tsc', 'wait for a free slot, then type-check'], ['slot --lock booki-test-db -- vendor/bin/phpunit', 'one phpunit at a time on the shared test database'], 'slot ls'] })
+  const parsed = parse(bare ? [] : args, RUN_USAGE, RUN_OPTIONS, { rest: true, exits: RUN_EXITS, replaces: 'flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database', examples: [['slot -- bunx vue-tsc', 'wait for a free slot, then type-check'], ['slot --lock booki-test-db -- vendor/bin/phpunit', 'one phpunit at a time on the shared test database'], 'slot ls'] })
   const { values } = parsed
   const rest = bare ? args : parsed.rest
 
@@ -267,7 +269,7 @@ function scan(dir: string, state: Entry['state'], kind: 'slots' | 'locks' | 'wai
 }
 
 export async function listSlots(args: string[]): Promise<number> {
-  const { values } = parse(args, LS_USAGE, LS_OPTIONS, { examples: ['slot ls', 'slot ls --json'] })
+  const { values } = parse(args, LS_USAGE, LS_OPTIONS, { exits: [[0, 'it listed them'], [2, 'a usage error']], examples: ['slot ls', 'slot ls --json'] })
   const count = wholeNumber(values.slots, 'slots', defaultSlots())
   const dir = await stateDir()
   const holding = [...scan(dir, 'holding', 'slots'), ...scan(dir, 'holding', 'locks')].sort((a, b) => a.since - b.since)

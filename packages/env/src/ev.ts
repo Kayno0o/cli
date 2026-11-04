@@ -2,7 +2,6 @@
 
 import process from 'node:process'
 import { runCli } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { audit } from './commands/audit'
 import { diff, missing } from './commands/compare'
 import { cp, mv, set, unset } from './commands/edit'
@@ -11,7 +10,6 @@ import { get, grep, list, show } from './commands/read'
 
 process.exitCode = await runCli({
   name: 'ev',
-  version,
   about: '.env files listed and edited with secrets masked',
   replaces: 'cat .env, grep on env files and editing them by hand',
   examples: ['ev list', ['ev get DATABASE_URL', 'one key, its value masked']],

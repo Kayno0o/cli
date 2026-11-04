@@ -6,7 +6,6 @@ import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSyn
 import { normalize, resolve } from 'node:path'
 import process from 'node:process'
 import { Exit, fail, jsonOption, parse, printJson, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
 import { applyPairs, compile, listLines } from './replace'
@@ -327,4 +326,4 @@ async function main(argv: string[]): Promise<number> {
   return 0
 }
 
-process.exitCode = await runMain({ name: 'sub', version, run: main })
+process.exitCode = await runMain({ name: 'sub', run: main })

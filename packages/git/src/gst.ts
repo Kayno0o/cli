@@ -3,7 +3,6 @@
 import type { Change } from './status'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { git } from './git'
 import { parseStatus, summary } from './status'
 
@@ -75,4 +74,4 @@ async function main(argv: string[]): Promise<number> {
   return 0
 }
 
-process.exitCode = await runMain({ name: 'gst', version, run: main })
+process.exitCode = await runMain({ name: 'gst', run: main })

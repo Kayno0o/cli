@@ -244,7 +244,6 @@ Exits 0 once undone, with nothing to undo, on --dry-run or when the question is 
 
 process.exitCode = await runCli({
   name: 'changelog',
-  version,
   about: 'generate the release notes and publish them',
   replaces: 'writing the release notes by hand and posting them through the Forgejo UI',
   examples: [['changelog --dry-run', 'the notes since the last tag, nothing published'], ['changelog undo v1.2.0 --dry-run', 'what undoing that release would remove']],

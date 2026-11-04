@@ -1,13 +1,15 @@
 #!/usr/bin/env bun
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { badUsage, duration, fail, isStdinPiped, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { FOLD_LINES } from './fold'
 import { readPiped, run } from './run'
 import { readEntries, renderSummary, statsPath, summarize } from './stats'
 
-const USAGE = 'out [-n <lines>] -- <command> [args...]: runs the command and shortens its output when it is long, exiting with its code\n<command> | out [-n <lines>]: shortens the output piped in\nout --stats [--since 7d] [--json]: the runs recorded and about how many tokens they saved\n\nEach run is recorded in ~/.local/state/kaynooo-cli/out/stats.jsonl with the words naming the command, never its arguments; tokens are counted as bytes / 4.\nExits 0 when the command does, with its own code otherwise, 126 when it cannot be run (not executable), 127 when it cannot be started, 2 on a usage error. Piped into, it exits 0.'
+const USAGE = 'out [-n <lines>] -- <command> [args...]: runs the command and shortens its output when it is long, exiting with its code\n<command> | out [-n <lines>]: shortens the output piped in\nout --stats [--since 7d] [--json]: the runs recorded and about how many tokens they saved\n\nEach run is recorded in ~/.local/state/kaynooo-cli/out/stats.jsonl with the words naming the command, never its arguments; tokens are counted as bytes / 4.'
+
+const EXITS: ExitRow[] = [[0, 'the command did, or the output piped in was shortened'], ['its own', 'the code of a command that failed'], [126, 'the command cannot be run (not executable)'], [127, 'the command cannot be started'], [2, 'a usage error']]
 
 const OPTIONS = {
   lines: { type: 'string', short: 'n', description: 'longest output left untouched (default 150)' },
@@ -32,7 +34,7 @@ async function stats(since: string | undefined, json: boolean): Promise<number> 
 async function main(argv: string[]): Promise<number> {
   // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
-  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, replaces: 'piping a noisy command through tail or head', examples: ['out -- bun install', ['out -n 300 -- bun run build', 'up to 300 lines left untouched'], ['bun run build 2>&1 | out', 'what is piped in'], ['out --stats --since 7d', 'the tokens saved this week']] })
+  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, exits: EXITS, replaces: 'piping a noisy command through tail or head', examples: ['out -- bun install', ['out -n 300 -- bun run build', 'up to 300 lines left untouched'], ['bun run build 2>&1 | out', 'what is piped in'], ['out --stats --since 7d', 'the tokens saved this week']] })
   const { values } = parsed
 
   if (values.stats === true) {
@@ -58,4 +60,4 @@ async function main(argv: string[]): Promise<number> {
   return run(command, lines, was)
 }
 
-process.exitCode = await runMain({ name: 'out', version, run: main })
+process.exitCode = await runMain({ name: 'out', run: main })

@@ -7,7 +7,6 @@ import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, parse, readInput, runCli, runCommand, stateHome } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { checkCommand, checkPath } from './check'
 import { EVENTS, hook } from './hook'
 import { RULES } from './rules'
@@ -185,7 +184,6 @@ async function hookCommand(args: string[]): Promise<number> {
 
 process.exitCode = await runCli({
   name: 'guard',
-  version,
   usage: false,
   about: 'the safety rules a Claude Code Bash call is held to, each refusal naming the route',
   replaces: 'a hook script per rule, each wording its own refusal',

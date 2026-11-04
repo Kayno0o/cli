@@ -2,7 +2,6 @@
 
 import process from 'node:process'
 import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, runMain } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { git } from './git'
 import { commitMessageViolation, RULE, TICKET } from './message'
 
@@ -146,4 +145,4 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-process.exitCode = await runMain({ name: 'gc', version, run: main })
+process.exitCode = await runMain({ name: 'gc', run: main })

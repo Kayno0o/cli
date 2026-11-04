@@ -1,4 +1,4 @@
-import type { Colors } from '@kaynooo/cli-kit'
+import type { Colors, ExitRow } from '@kaynooo/cli-kit'
 import type { Arg, Row } from '@kaynooo/cli-kit/fzf'
 import { basename } from 'node:path'
 import process from 'node:process'
@@ -29,9 +29,9 @@ gb -d <branch>
 
 Without a branch, picks one with fzf when it is installed and a terminal is attached: the branches last checked out first, as the reflog has them, then the other local ones, then the remote ones with no local branch yet. The header says where HEAD stands, each row how its branch stands against its upstream and whether it is merged into the base. enter switches to it (a remote one gets its local tracking branch), ctrl-n creates a branch named after the query, ctrl-d deletes the highlighted local branch with \`git branch -d\`, which refuses one not merged yet, and ctrl-r fetches, prunes and lists again. Without fzf or a terminal it lists the branches instead.
 \`gb <branch>\` switches without the picker, a bare name finding the remote branch it would create. \`gb -\` goes back to the previous branch, \`gb -c <name>\` creates one and switches to it, \`gb -d <branch>\` deletes a local one.
-A branch checked out in another worktree cannot be switched to: gb prints that worktree's path on stdout and a hint on stderr, since a command cannot change its parent shell's folder.
+A branch checked out in another worktree cannot be switched to: gb prints that worktree's path on stdout and a hint on stderr, since a command cannot change its parent shell's folder.`
 
-Exits with the code of the git command it ran, 1 when there is no branch by that name or nothing was picked, 2 outside a git repository.`
+const EXITS: ExitRow[] = [[0, 'it switched, created, deleted or listed'], ['git', 'the code of the git command it ran, when that failed'], [1, 'there is no branch by that name or nothing was picked'], [2, 'outside a git repository or a usage error']]
 
 const options = {
   create: { type: 'boolean', short: 'c', description: 'create the branch named by the rest of the line and switch to it' },
@@ -299,7 +299,7 @@ export async function gb(args: string[]): Promise<number> {
 
   // The protocol the tmux picker and the fish wrapper read instead of the command being run: its mode, the words typed back, and the command's words.
   const emitting = flag === '--emit'
-  const parsed = parse(emitting ? args.slice(1) : args, usage, options, { replaces: 'git switch, git branch -d and git checkout typed per branch', examples: ['gb', ['gb feature', 'switch to feature, or create it from origin/feature'], ['gb -', 'back to the previous branch'], ['gb -c fix/login', 'create a branch and switch to it'], ['gb -d old', 'delete a merged local branch']] })
+  const parsed = parse(emitting ? args.slice(1) : args, usage, options, { exits: EXITS, replaces: 'git switch, git branch -d and git checkout typed per branch', examples: ['gb', ['gb feature', 'switch to feature, or create it from origin/feature'], ['gb -', 'back to the previous branch'], ['gb -c fix/login', 'create a branch and switch to it'], ['gb -d old', 'delete a merged local branch']] })
   const [named] = parsed.positionals
 
   if (read(['rev-parse', '--git-dir']) === '')

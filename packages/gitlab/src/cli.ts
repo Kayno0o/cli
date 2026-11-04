@@ -2,14 +2,12 @@
 
 import process from 'node:process'
 import { runCli } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { ci } from './commands/ci'
 import { logs } from './commands/logs'
 import { runs } from './commands/runs'
 
 process.exitCode = await runCli({
   name: 'gl',
-  version,
   about: 'GitLab pipelines over glab, run from a repository whose remote is on GitLab',
   replaces: 'glab ci and glab api .../pipelines/<id>/jobs polled in a sleep loop',
   examples: [['gl ci', 'wait for the pipeline of origin\'s tip, failed tests printed'], ['gl logs 1234 -j test', 'one job\'s failed tests']],

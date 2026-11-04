@@ -4,7 +4,6 @@ import type { Algorithm } from './hash'
 import type { Format } from './password'
 import process from 'node:process'
 import { badUsage, fail, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { b64Decode, b64Encode } from './encode'
 import { ALGORITHMS, hashHex } from './hash'
 import { ulid, uuidV4, uuidV7 } from './ids'
@@ -349,7 +348,6 @@ export async function hash(args: string[]): Promise<number> {
 if (import.meta.main) {
   process.exitCode = await runCli({
     name: 'dev',
-    version,
     about: 'small developer utilities: passwords and bcrypt hashes, JWTs, timestamps, UUIDs, base64, URLs and file hashes',
     replaces: 'openssl rand, htpasswd, jwt.io, date -d, uuidgen, base64, sha256sum and one-off scripts for each',
     examples: ['dev password', ['dev jwt <token>', 'header, payload and expiry'], ['dev ts 1700000000', 'an epoch as dates']],

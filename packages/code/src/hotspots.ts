@@ -4,7 +4,6 @@ import type { Hotspot } from './churn'
 import { join } from 'node:path'
 import process from 'node:process'
 import { badUsage, capped, duration, fail, jsonOption, limitOf, limitOptions, parse, printJson, runMain, table } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { churnSince, complexityOf, isCandidate, isGenerated } from './churn'
 import { listFiles, readText } from './files'
 import { worstUnit } from './units'
@@ -93,4 +92,4 @@ async function main(args: string[]): Promise<number> {
   return 0
 }
 
-process.exitCode = await runMain({ name: 'hotspots', version, run: main })
+process.exitCode = await runMain({ name: 'hotspots', run: main })

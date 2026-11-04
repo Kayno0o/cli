@@ -6,7 +6,6 @@ import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, oneOf, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { CONCURRENCY, findRepos, inspect, MAX_DEPTH, pool, REASONS, reasonsOf } from './scan'
 
 const USAGE = `repos [options] [root]: the git repositories under root (~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
@@ -99,4 +98,4 @@ async function main(args: string[]): Promise<number> {
   return 0
 }
 
-process.exitCode = await runMain({ name: 'repos', version, run: main })
+process.exitCode = await runMain({ name: 'repos', run: main })

@@ -2,7 +2,6 @@
 
 import process from 'node:process'
 import { badUsage, fail, parse, runMain } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { choose } from './terminal'
 import { DEFAULT_HEIGHT, parseHeight } from './view'
 
@@ -54,4 +53,4 @@ async function main(args: string[]): Promise<number> {
   return 0
 }
 
-process.exitCode = await runMain({ name: 'pick', version, run: main })
+process.exitCode = await runMain({ name: 'pick', run: main })

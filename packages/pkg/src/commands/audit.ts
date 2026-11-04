@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Advisory, VersionAdvisory } from '../advisories'
 import type { AnalyzeInput } from '../analyze'
 import type { PkgSettings, RegistryConfig, Severity } from '../config'
@@ -16,9 +17,9 @@ const usage = `pkg audit [dir]
 
 Reads the bun.lock in the folder (the current one by default) and runs on every registry package it pins the checks \`pkg check\` runs before an add: age, install scripts, a deprecated version, a near miss of a popular name, and the licence allowlist of the pkg config. It also lists the known advisories of each version, with the GHSA, the severity and the fixed version, from the registry's bulk advisory endpoint, the one \`bun audit\` reads.
 Findings are grouped per package, each registry package looked up once per run.
-Reach for it to vet one repository in depth; \`audit\` sweeps many repositories for advisories only, and shares --level, --prod and --ignore.
+Reach for it to vet one repository in depth; \`audit\` sweeps many repositories for advisories only, and shares --level, --prod and --ignore.`
 
-Exits 0 when nothing blocks, 1 when a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --level, 2 when the registry could not be reached or answered badly (a warning says which, and nothing is reported as clean), on a usage error or without a bun.lock.`
+const EXITS: ExitRow[] = [[0, 'nothing blocks'], [1, 'a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --level'], [2, 'the registry could not be reached or answered badly (a warning says which, and nothing is reported as clean), a usage error or no bun.lock']]
 
 const options = {
   'json': jsonOption('[{name, version, license, blocked, warnings, advisories}] for the packages with a finding'),
@@ -126,7 +127,7 @@ export function renderAudit(findings: Audited[], total: number): string {
 }
 
 export async function audit(args: string[]): Promise<number> {
-  const { values, positionals: [asked] } = parse(args, usage, options, { positionals: ['[dir]'] })
+  const { values, positionals: [asked] } = parse(args, usage, options, { positionals: ['[dir]'], exits: EXITS })
   const level = values.level ?? 'moderate'
 
   if (!isSeverity(level))

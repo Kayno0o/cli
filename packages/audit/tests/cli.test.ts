@@ -21,12 +21,12 @@ describe('audit', () => {
     expect(audit('--help').out).toContain('audit [options] [root]')
   })
 
-  test('a root that is no folder is a usage error, and a folder with no bun.lock exits 1 saying so', () => {
+  test('a root that is no folder is a usage error, and a folder with no bun.lock exits 2 saying so', () => {
     expect(audit(join(dir, 'nowhere')).code).toBe(2)
 
     const empty = audit(dir)
 
-    expect(empty.code).toBe(1)
+    expect(empty.code).toBe(2)
     expect(empty.err).toContain('no bun.lock')
   })
 
@@ -81,7 +81,7 @@ describe('audit with a bun that answers', () => {
   test('reports an audit that failed, the production one too, instead of calling its packages dev', () => {
     const ran = withBun(advisory, 'error: registry down')
 
-    expect(ran.code).toBe(1)
+    expect(ran.code).toBe(2)
     expect(ran.out).toContain('audit failed')
   })
 })

@@ -2,7 +2,6 @@
 
 import process from 'node:process'
 import { badUsage, fail, parse, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
-import { version } from '../package.json'
 import { languageOf, renderCode } from './code'
 import { looksLikeDiff, renderDiff } from './diff'
 import { renderMarkdown } from './markdown'
@@ -90,4 +89,4 @@ async function main(args: string[]): Promise<number> {
   return 0
 }
 
-process.exitCode = await runMain({ name: 'view', version, run: main })
+process.exitCode = await runMain({ name: 'view', run: main })
