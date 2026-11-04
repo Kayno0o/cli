@@ -6,6 +6,10 @@
 bun install -g @kaynooo/cli-doctor
 doctor           # one line per check
 doctor --json    # [{check, ok, detail, fix?}]
+doctor -q        # only the failing checks, nothing when all pass
+doctor --only tea --only bun    # just these checks (a package such as cli-forgejo, tea, hooks, bun, completions)
+doctor --fix --dry-run          # what --fix would run
+doctor --fix     # run the fixes, then check again
 ```
 
 | Check | Passes when | Fix |
@@ -16,6 +20,11 @@ doctor --json    # [{check, ok, detail, fix?}]
 | `bun` | Bun satisfies the `engines.bun` range of every installed package | `bun upgrade` |
 
 A registry that does not answer leaves a package passing, with a note. Exit codes: 0 every check passed, 1 one failed, 2 a usage error.
+
+## --fix
+
+`--fix` runs the `fix:` lines it may: the `bun install -g` ones (joined into one call), `cli completions fish --install`, and `claude plugin install` or `disable`. It then checks again, prints the checks as they stand and exits on those. Nothing that installs a system package is run, and a line that only describes a step (`tea` from its releases page, adding a folder to the PATH, `bun upgrade`, which replaces Bun itself) is printed as `not run`. `--dry-run` prints each line as `would` and runs nothing (alone it implies `--fix`).
+`--json` keeps its shape and prints the checks after the fixes, the fixes going to stderr; `--quiet` filters it to the failing ones.
 
 ## cli completions
 

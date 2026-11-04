@@ -186,12 +186,26 @@ export function checkCompletions(host: Host): Result {
   return { check: 'completions', ok: true, detail: dir }
 }
 
-export async function runChecks(host: Host): Promise<Result[]> {
-  const entries = Object.entries(TOOLS)
+const toolCheck = (name: string) => name.slice(name.indexOf('/') + 1)
+const OTHER_CHECKS = ['tea', 'hooks', 'bun', 'completions']
+
+// Every name `runChecks` can be limited to.
+export const CHECK_NAMES = [...Object.keys(TOOLS).map(toolCheck), ...OTHER_CHECKS]
+
+// The checks named in `only`, all of them when it is empty.
+export async function runChecks(host: Host, only: readonly string[] = []): Promise<Result[]> {
+  const wanted = (check: string) => only.length === 0 || only.includes(check)
+  const entries = Object.entries(TOOLS).filter(([name]) => wanted(toolCheck(name)))
   const tools: Result[] = []
 
   for (let at = 0; at < entries.length; at += INFO_AT_ONCE)
     tools.push(...await Promise.all(entries.slice(at, at + INFO_AT_ONCE).map(async ([name, bins]) => checkTool(host, name, bins))))
 
-  return [...tools, await checkTea(host), checkHooks(host), checkBun(host), checkCompletions(host)]
+  return [
+    ...tools,
+    ...wanted('tea') ? [await checkTea(host)] : [],
+    ...wanted('hooks') ? [checkHooks(host)] : [],
+    ...wanted('bun') ? [checkBun(host)] : [],
+    ...wanted('completions') ? [checkCompletions(host)] : [],
+  ]
 }
