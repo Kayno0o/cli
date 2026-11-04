@@ -6,6 +6,7 @@ const FETCHERS = new Set(['curl', 'wget', 'fetch'])
 const EVALUATORS = new Set(['eval', 'source', '.'])
 const FETCH_SUBSTITUTION = /(?:\$\(|<\(|`)\s*(?:curl|wget|fetch)\b/
 const SHORT_CLUSTER = /^-[A-Z]+$/i
+const RECURSIVE_LETTER = /r/i
 // parseCommand trims a closing brace off the last word, so `${HOME}` may arrive as `${HOME`.
 const HOME_PREFIX = /^(?:~|\$HOME|\$\{HOME\}?)(?=\/|$)/
 const SAFE_REBASE = new Set(['--abort', '--continue', '--quit', '--show-current-patch'])
@@ -65,7 +66,7 @@ function removesBroadly(args: readonly string[]): boolean {
     return true
 
   const options = args.slice(0, args.includes('--') ? args.indexOf('--') : args.length)
-  const isRecursive = options.some(arg => arg === '--recursive' || (SHORT_CLUSTER.test(arg) && (/r/i).test(arg)))
+  const isRecursive = options.some(arg => arg === '--recursive' || (SHORT_CLUSTER.test(arg) && RECURSIVE_LETTER.test(arg)))
 
   if (!isRecursive)
     return false

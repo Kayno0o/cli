@@ -34,9 +34,11 @@ export function heredocBody(text: string, opener: RegExp): { body: string, rest:
   return end === -1 ? undefined : { body: lines.slice(0, end).join('\n'), rest: lines.slice(end + 1).join('\n') }
 }
 
+const FD_PATH = /^\/dev\/fd\/\d+$/
+
 // Whether a `-F` file reads the command's standard input: `-` or a device naming it.
 export function isStdin(file: string): boolean {
-  return file === '-' || file === '/dev/stdin' || (/^\/dev\/fd\/\d+$/).test(file)
+  return file === '-' || file === '/dev/stdin' || FD_PATH.test(file)
 }
 
 function sourceOf(args: readonly string[], text: string): CommitSource {

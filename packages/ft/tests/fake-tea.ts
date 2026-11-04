@@ -250,7 +250,7 @@ function restore(name: string, value: string | undefined): void {
 }
 
 // Runs the callback with the fake `tea` first on the PATH, then returns the state it left.
-export async function withFakeTea(initial: FakeState, run: () => Promise<void>): Promise<FakeState> {
+export async function withFakeTea(initial: FakeState, run: () => Promise<unknown>): Promise<FakeState> {
   const dir = await mkdtemp(join(tmpdir(), 'ft-fake-tea-'))
   const state = join(dir, 'state.json')
   const bin = join(dir, 'tea')

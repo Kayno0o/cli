@@ -40,6 +40,7 @@ const COMMAND_STRING_PROGRAMS = new Set([...SHELLS, ...SCANNED_PROGRAMS])
 const POWERSHELL_COMMAND = /^-c(?:o(?:m(?:m(?:a(?:nd?)?)?)?)?)?$/i
 const POWERSHELL = new Set(['pwsh', 'powershell'])
 const FUNCTION_DEFINITION = /^[\w.:-]+\(\)$/
+const FUNCTION_NAME = /^[\w.:-]+$/
 const SHELL_VALUE_OPTIONS = new Set(['-o', '-O', '--rcfile', '--init-file'])
 const PRINTERS = new Set(['echo', 'printf'])
 const FIND_EXEC = new Set(['-exec', '-execdir', '-ok', '-okdir'])
@@ -581,7 +582,7 @@ export function parseCommand(text: string): Invocation {
       isWrapped = true
       tokens.shift()
     }
-    else if (tokens[1] === '()' && (/^[\w.:-]+$/).test(first)) {
+    else if (tokens[1] === '()' && FUNCTION_NAME.test(first)) {
       isWrapped = true
       tokens.splice(0, 2)
     }

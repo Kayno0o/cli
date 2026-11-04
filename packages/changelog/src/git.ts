@@ -25,7 +25,7 @@ export async function getGiteaRepo() {
 export async function getCurrentGitBranch() {
   const [tag] = (await execCommand('git', ['tag', '--points-at', 'HEAD', '--sort=-v:refname'])).split('\n')
 
-  return tag !== undefined && tag !== '' ? tag : await execCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'])
+  return tag !== undefined && tag !== '' ? tag : execCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'])
 }
 
 export async function isRepoShallow() {
