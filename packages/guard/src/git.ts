@@ -64,7 +64,7 @@ function overridesConfig(args: readonly string[]): boolean {
 }
 
 // A pathspec naming the whole tree, however it is spelled: `.`, `src/..`, `:/`, `:/.`, `*`.
-function isWholeTree(arg: string): boolean {
+export function isWholeTree(arg: string): boolean {
   if (WHOLE_TREE.has(arg))
     return true
 

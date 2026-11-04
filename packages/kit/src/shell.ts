@@ -30,8 +30,9 @@ const OCTAL = /^[0-7]{1,3}/
 const KEYWORDS = new Set(['then', 'do', 'else', 'if', 'elif', 'while', 'until', '!', '{', '}'])
 const MAX_DEPTH = 8
 const MAX_BRACES = 256
+
 // Programs reading a command string with `-c`.
-const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'fish', 'csh', 'tcsh', 'nu', 'pwsh', 'powershell'])
+export const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'fish', 'csh', 'tcsh', 'nu', 'pwsh', 'powershell'])
 // Programs that take their command string past other operands, so every word is scanned for the option.
 const SCANNED_PROGRAMS = new Set(['su', 'runuser', 'flock'])
 const COMMAND_STRING_PROGRAMS = new Set([...SHELLS, ...SCANNED_PROGRAMS])

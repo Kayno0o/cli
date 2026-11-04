@@ -12,6 +12,7 @@ export interface Rule {
 const LISTED: (Omit<Rule, 'runs'> & { runs?: Rule['runs'] })[] = [
   { name: 'remote', refuses: 'ssh, scp, rsync and deploys to a remote machine', route: 'hand the command to the user' },
   { name: 'git', refuses: 'stash, whole-tree add and commit, push without being asked, tags', route: 'stage by path with `gc`, push only when asked' },
+  { name: 'destructive', refuses: 'reset --hard, discarding the tree, clean -f, force push, branch -D, rebase, filter-branch, rm -r on a broad path, curl piped to a shell', route: 'commit with `gc` first, `base`, `git worktree add`, `--force-with-lease` only when asked' },
   { name: 'commit', refuses: 'a commit message breaking the format, an unreadable one, trailers', route: '`gc <title> -m <line> -- <path>...`' },
   { name: 'sql', refuses: 'SQL writes and DDL, a file the client cannot read', route: '`db "<sql>"`, writes on a `*_test` database or handed over' },
   { name: 'env', refuses: 'reading or printing an env file, a diff of a tracked one', route: '`ev`, and `rg` for a tree-wide search' },

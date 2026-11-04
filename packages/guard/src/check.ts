@@ -7,6 +7,7 @@ import { shouldWrap, wrap } from '@kaynooo/cli-out/src/wrap.ts'
 import { addedPackages } from '@kaynooo/cli-pkg/src/added.ts'
 import { installRequests, LOCKFILES, mismatchFor } from '@kaynooo/cli-pkg/src/pin.ts'
 import { commitSources, inlineMessage, isStdin } from './commit'
+import { destructiveViolation } from './destructive'
 import { gitViolation } from './git'
 import { remoteViolation } from './remote'
 import { replaceViolation } from './replace'
@@ -135,6 +136,8 @@ export async function checkCommand(command: string, context: Context): Promise<V
 
   add('remote', await guarded('remote', () => first(run.map(remoteViolation))))
   add('git', await guarded('git', () => first(run.map(each => gitViolation(each, context.isPushAsked)))))
+  add('destructive', await guarded('destructive', () => first(run.map(destructiveViolation))))
+
   const commit = await guarded('commit', () => first(run.map(each => commitViolation(each, context))))
 
   add('commit', commit === null ? null : `${commit} ${USE_GC}`)
