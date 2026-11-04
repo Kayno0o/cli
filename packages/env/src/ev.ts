@@ -7,6 +7,7 @@ import { diff, missing } from './commands/compare'
 import { cp, mv, set, unset } from './commands/edit'
 import { pins } from './commands/pins'
 import { get, grep, list, show } from './commands/read'
+import { redact } from './commands/redact'
 
 process.exitCode = await runCli({
   name: 'ev',
@@ -25,6 +26,7 @@ process.exitCode = await runCli({
     diff: { run: diff, summary: 'keys set in one file and not the other' },
     missing: { run: missing, summary: 'keys of .env.example that .env lacks' },
     pins: { run: pins, summary: 'the env vars reaching outside that an app\'s tests leave to a developer\'s env' },
+    redact: { run: redact, summary: 'stdin copied to stdout with secrets masked, or --check to list where they are' },
     audit: { run: audit, summary: '.env files others can read or git tracks, compose files writing secrets out' },
   },
   aliases: { ls: 'list' },

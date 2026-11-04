@@ -1,9 +1,7 @@
-#!/usr/bin/env -S bun --no-env-file
-
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Run } from './worktree'
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
 import { checkout, defaultProofRef, folded, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
 const USAGE = 'proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with origin/main when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass.'
@@ -51,7 +49,7 @@ function describe(outcome: Outcome, at: string, now: readonly number[]): { messa
   }
 }
 
-async function main(argv: string[]): Promise<number> {
+export async function proof(argv: string[]): Promise<number> {
   // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
   const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, exits: EXITS, replaces: 'running a test, stashing the change and running it again', examples: [['proof --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the new test fails at HEAD and passes now'], ['proof --ref v1.2.0 --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the same against a release']] })
@@ -121,5 +119,3 @@ async function main(argv: string[]): Promise<number> {
 
   return proved ? 0 : 1
 }
-
-process.exitCode = await runMain({ name: 'proof', run: main })

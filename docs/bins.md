@@ -16,14 +16,14 @@ audit ~/Workspace --level high --prod
 
 ## base
 
-runs the command at HEAD or another ref in a temporary worktree, the working tree untouched, exiting with its code. Package `base`.
+runs a command at HEAD or another ref in a temporary worktree, the working tree untouched. Package `base`.
 
 Instead of: git stash, a test run, then git stash pop
 
 ```sh
-base [--ref <rev>] [--keep <path>...] [--no-link] -- <command> [args...]
+base <command> [options]
 base -- bun test tests/api.test.ts  # the test at HEAD, the working tree changes left out
-base --ref main~3 --keep tests/new.test.ts -- bun test tests/new.test.ts  # a new test against an older commit
+base proof -- bun test tests/new.test.ts  # it fails at HEAD and passes in the working tree
 ```
 
 ## changelog

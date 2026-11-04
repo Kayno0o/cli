@@ -53,7 +53,7 @@ beforeEach(() => {
 describe('base', () => {
   test('prints its version and its help', () => {
     expect(base(['--version']).out.trim()).toBe(version)
-    expect(base(['--help']).out).toContain('base [--ref <rev>]')
+    expect(base(['--help']).out).toContain('base [<command>]')
   })
 
   test('runs at HEAD, leaving the working tree and no worktree behind', () => {

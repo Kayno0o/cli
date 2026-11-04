@@ -1,45 +1,18 @@
 #!/usr/bin/env -S bun --no-env-file
 
 import process from 'node:process'
-import { fail, parse, runMain } from '@kaynooo/cli-kit'
-import { checkout, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
+import { runCli } from '@kaynooo/cli-kit'
+import { base } from './base'
+import { proof } from './proof'
 
-const USAGE = 'base [--ref <rev>] [--keep <path>...] [--no-link] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, the working tree untouched, exiting with its code\n\nExits with the code of the command, 127 when it cannot be started, 2 on a usage error, an unknown ref or a refused command.'
-
-const OPTIONS = {
-  'ref': { type: 'string', short: 'r', description: 'the commit to run at (default HEAD)' },
-  'keep': { type: 'string', short: 'k', multiple: true, description: 'a working-tree file or folder copied over, such as the new test, repeatable' },
-  'no-link': { type: 'boolean', description: 'do not link the ignored env files, node_modules, vendor and .venv of the checkout' },
-} as const
-
-async function main(argv: string[]): Promise<number> {
-  // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
-  const bare = argv[0] !== undefined && !argv[0].startsWith('-')
-  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, replaces: 'git stash, a test run, then git stash pop', examples: [['base -- bun test tests/api.test.ts', 'the test at HEAD, the working tree changes left out'], ['base --ref main~3 --keep tests/new.test.ts -- bun test tests/new.test.ts', 'a new test against an older commit']] })
-
-  const given = bare ? argv : parsed.rest ?? []
-
-  if (given.length === 0 || parsed.positionals.length > 0)
-    fail(`give the command after --\n\n${USAGE}`)
-
-  if (runsInContainer(given))
-    fail('a container of the compose project mounts the main checkout, not the temporary worktree, so the command would not run at the ref: run the tool on the host, or check the ref out by hand')
-
-  const command = shellCommand(given)
-  const cwd = process.cwd()
-  const { root, prefix } = await checkout(cwd)
-  const ref = parsed.values.ref ?? 'HEAD'
-  const sha = await resolveRef(root, ref)
-  const kept = keptPaths(root, cwd, parsed.values.keep ?? [])
-
-  const ran = await inWorktree({ root, prefix, sha, ref, kept, link: parsed.values['no-link'] !== true }, async (runDir, signals) => runIn(runDir, command, signals))
-
-  if (!ran.started)
-    console.error(`base: ${ran.output}`)
-
-  console.error(`base: ran at ${ref} (${sha.slice(0, 7)}), exit ${ran.code}`)
-
-  return ran.code
-}
-
-process.exitCode = await runMain({ name: 'base', run: main })
+process.exitCode = await runCli({
+  name: 'base',
+  about: 'runs a command at HEAD or another ref in a temporary worktree, the working tree untouched',
+  replaces: 'git stash, a test run, then git stash pop',
+  examples: [['base -- bun test tests/api.test.ts', 'the test at HEAD, the working tree changes left out'], ['base proof -- bun test tests/new.test.ts', 'it fails at HEAD and passes in the working tree']],
+  commands: {
+    run: { summary: 'the command at HEAD or --ref, exiting with its code (the command when none is named)', run: base },
+    proof: { summary: 'the command at HEAD or --ref, then in the working tree: proves a test fails before a change and passes after it', run: proof },
+  },
+  defaultCommand: 'run',
+})

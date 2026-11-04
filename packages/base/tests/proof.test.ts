@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 
 const temp = tempDirs()
 
-const CLI = new URL('../src/proof.ts', import.meta.url).pathname
+const CLI = new URL('../src/proof-cli.ts', import.meta.url).pathname
 
 let repo = ''
 
