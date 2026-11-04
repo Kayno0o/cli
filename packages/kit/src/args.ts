@@ -1,4 +1,5 @@
 import type { ParseArgsOptionDescriptor } from 'node:util'
+import type { ExitRow } from './help'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
 import { upTo } from './format'
@@ -19,6 +20,8 @@ interface OptionExtras {
   conflicts?: readonly string[]
   // With `allowNegative`, a boolean option's `--no-<name>` as the help and `__complete` list it, with this description; the positive flag is then left out of both unless it has a `description` of its own, for a flag that defaults on.
   negative?: string
+  // Other long names the option answers to, kept for the spelling it had before a rename; the help and `__complete` list only its own name.
+  aliases?: readonly string[]
 }
 
 export type Options = Record<string, ParseArgsOptionDescriptor & OptionExtras>
@@ -99,12 +102,14 @@ export interface ParseSettings<Names extends readonly string[] = string[]> {
   examples?: Example[]
   // What the command is reached for instead of, shown as `Instead of:` in the help and listed by `cli list`: 'sed -n N,Mp, grep -n chains and whole-file reads'.
   replaces?: string
+  // What each exit code means, shown as an `Exits:` block in the help and listed by `cli list`: `[[0, 'clean'], [1, 'a finding'], [2, 'a usage error']]`.
+  exits?: ExitRow[]
 }
 
 export type Example = string | [line: string, note: string]
 
 // The parts of the settings the help and the description show.
-export interface Described { examples?: Example[] | undefined, replaces?: string | undefined }
+export interface Described { examples?: Example[] | undefined, replaces?: string | undefined, exits?: ExitRow[] | undefined }
 
 // The output flags every command takes, before its own help.
 export const OUTPUT_OPTIONS = {
@@ -149,7 +154,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   let parsed
 
   try {
-    parsed = parseArgs({ args: joinDashValues(withBare(own, all), all), options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
+    parsed = parseArgs({ args: joinDashValues(withBare(withAliases(own, all), all), all), options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
   }
   catch (error) {
     const message = parseError(error)
@@ -224,6 +229,24 @@ function listed(options: Options, allowNegative: boolean): Options {
 
     return [...option.description === undefined ? [] : [[name, option] as [string, Options[string]]], [`no-${name}`, { type: 'boolean', description: option.negative }]]
   }))
+}
+
+// The arguments with an option typed under one of its `aliases` renamed to its own name, up to a `--`: `--limit 5` becomes `--rows 5`.
+function withAliases(args: string[], options: Options): string[] {
+  const named = new Map<string, string>(Object.entries(options).flatMap(([name, { aliases = [] }]) => aliases.map((alias): [string, string] => [`--${alias}`, `--${name}`])))
+
+  if (named.size === 0)
+    return args
+
+  const separator = args.indexOf('--')
+  const own = separator === -1 ? args : args.slice(0, separator)
+
+  return [...own.map((arg) => {
+    const at = arg.indexOf('=')
+    const current = named.get(at === -1 ? arg : arg.slice(0, at))
+
+    return current === undefined ? arg : `${current}${at === -1 ? '' : arg.slice(at)}`
+  }), ...separator === -1 ? [] : args.slice(separator)]
 }
 
 // The arguments with an optional-value option typed bare given its fallback, ahead of the next argument: `--out` becomes `--out 1` unless a value follows it.

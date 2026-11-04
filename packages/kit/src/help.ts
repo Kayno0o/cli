@@ -12,8 +12,21 @@ export function usageLine(usage: string, colors = paint(process.stdout)): string
   return `${colors.bold('Usage:')} ${usage.replace(USAGE_PREFIX, '').replaceAll(OPTIONAL, part => colors.dim(part))}`
 }
 
-export function helpText(usage: string, options: Options, colors = paint(process.stdout), { examples = [], replaces }: Described = {}): string {
-  return [usageLine(usage, colors), ...replacesRows(replaces, colors), '', colors.bold('Options:'), ...optionRows(options, colors), ...exampleRows(examples, colors)].join('\n')
+export function helpText(usage: string, options: Options, colors = paint(process.stdout), { examples = [], replaces, exits = [] }: Described = {}): string {
+  return [usageLine(usage, colors), ...replacesRows(replaces, colors), '', colors.bold('Options:'), ...optionRows(options, colors), ...exitRows(exits, colors), ...exampleRows(examples, colors)].join('\n')
+}
+
+// An exit code and what it means.
+export type ExitRow = [code: number | string, meaning: string]
+
+// An `Exits:` block, after a blank line, a line per code with the codes aligned; nothing without one.
+export function exitRows(exits: ExitRow[], colors = paint(process.stdout)): string[] {
+  if (exits.length === 0)
+    return []
+
+  const width = Math.max(...exits.map(([code]) => String(code).length))
+
+  return ['', colors.bold('Exits:'), ...exits.map(([code, meaning]) => `  ${colors.cyan(String(code).padEnd(width))}  ${meaning}`)]
 }
 
 // An `Instead of:` line, after a blank line; nothing without one.
@@ -27,6 +40,7 @@ export interface Description {
   summary: string
   replaces?: string
   examples: { line: string, note?: string }[]
+  exits?: { code: number | string, meaning: string }[]
 }
 
 export function wantsHelpJson(env: Record<string, string | undefined> = process.env): boolean {
@@ -34,7 +48,7 @@ export function wantsHelpJson(env: Record<string, string | undefined> = process.
 }
 
 // The synopsis and the summary a usage's first line splits into at its first `: `, else the first line after the synopses as the summary, with the examples spelled out.
-export function description(usage: string, { examples = [], replaces }: Described = {}): Description {
+export function description(usage: string, { examples = [], replaces, exits }: Described = {}): Description {
   const lines = usage.replace(USAGE_PREFIX, '').split('\n')
   const first = lines[0]!
   const colon = first.indexOf(': ')
@@ -46,6 +60,7 @@ export function description(usage: string, { examples = [], replaces }: Describe
     summary: colon === -1 ? fallback : first.slice(colon + 2),
     ...replaces === undefined ? {} : { replaces },
     examples: examples.map(example => typeof example === 'string' ? { line: example } : { line: example[0], note: example[1] }),
+    ...exits === undefined ? {} : { exits: exits.map(([code, meaning]) => ({ code, meaning })) },
   }
 }
 

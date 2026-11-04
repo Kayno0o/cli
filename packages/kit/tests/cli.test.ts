@@ -1,8 +1,10 @@
 import type { Example } from '../src'
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
 import { describe, expect, spyOn, test } from 'bun:test'
-import { applyOutput, badUsage, description, fail, mainArgs, parse, printHint, runCli, runHint, runMain } from '../src'
-import { capture } from '../src/test'
+import { applyOutput, badUsage, description, fail, mainArgs, packageVersion, parse, printHint, runCli, runHint, runMain } from '../src'
+import { capture, tempDirs } from '../src/test'
 
 const cli = {
   name: 'demo',
@@ -544,5 +546,37 @@ describe('lazy commands', () => {
     expect(help).toContain('demo team  lazy group')
     expect(help).toContain('  hello  says hello\n')
     expect((await capture(async () => runCli(grouped, ['__complete', 'team', '']))).out).toBe('list\tprints its arguments\nhello\tsays hello\n')
+  })
+})
+
+describe('packageVersion', () => {
+  const temp = tempDirs()
+
+  test('is the version of the nearest package.json above the entry file, through a link', () => {
+    const dir = temp('version-')
+
+    mkdirSync(join(dir, 'dist'))
+    writeFileSync(join(dir, 'package.json'), '{"name":"x","version":"9.8.7"}')
+    writeFileSync(join(dir, 'dist', 'cli.js'), '')
+    symlinkSync(join(dir, 'dist', 'cli.js'), join(dir, 'link.js'))
+
+    expect(packageVersion(join(dir, 'dist', 'cli.js'))).toBe('9.8.7')
+    expect(packageVersion(join(dir, 'link.js'))).toBe('9.8.7')
+  })
+
+  test('skips a package.json without a version', () => {
+    const dir = temp('version-')
+
+    mkdirSync(join(dir, 'src'))
+    writeFileSync(join(dir, 'package.json'), '{"version":"1.2.3"}')
+    writeFileSync(join(dir, 'src', 'package.json'), '{"type":"module"}')
+    writeFileSync(join(dir, 'src', 'cli.ts'), '')
+
+    expect(packageVersion(join(dir, 'src', 'cli.ts'))).toBe('1.2.3')
+  })
+
+  test('runMain and runCli print it when no version is given', async () => {
+    expect((await capture(async () => runMain({ name: 'demo', run: async () => 0 }, ['--version']))).out).toBe(`${packageVersion()}\n`)
+    expect((await capture(async () => runCli({ name: 'demo', about: 'x', commands: {} }, ['--version']))).out).toBe(`${packageVersion()}\n`)
   })
 })

@@ -1,5 +1,7 @@
 import type { Candidate, Example, Options } from './args'
 import type { Colors } from './style'
+import { readFileSync, realpathSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, replacesRows, UsageError, usageLine, wantsHelpJson } from './args'
 import { paint, takesControlCodes } from './style'
@@ -28,7 +30,8 @@ export type Command = {
 
 export interface Cli {
   name: string
-  version: string
+  // The package's own by default, read from the nearest package.json above the entry file.
+  version?: string
   // One line after `<name> <version>: ` in the help.
   about: string
   // The commands, or a function giving them all lazily.
@@ -428,12 +431,30 @@ async function printCandidates(found: Promise<string[]>): Promise<number> {
   return 0
 }
 
+// The version of the nearest package.json above the entry file (symlinks resolved) that holds one, `0.0.0` when none does.
+export function packageVersion(entry = Bun.main): string {
+  for (let dir = dirname(realpathSync(entry)); ; dir = dirname(dir)) {
+    try {
+      const { version } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { version?: unknown }
+
+      if (typeof version === 'string')
+        return version
+    }
+    catch {}
+
+    if (dirname(dir) === dir)
+      return '0.0.0'
+  }
+}
+
 // Runs the command argv names and returns the exit code: 0 for help and version, 2 for an unknown command.
 export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<number> {
+  const version = cli.version ?? packageVersion()
+
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(scopeOf(cli.commands, cli.extraCommands, cli.aliases), cli.defaultCommand, argv.slice(1)))
 
-  const code = await dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(cli.version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version: cli.version, redact: cli.redact })
+  const code = await dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version, redact: cli.redact })
 
   if (cli.usage !== false) {
     try {
@@ -470,7 +491,8 @@ function commandPath(scope: Pick<Level, 'commands' | 'aliases'>, argv: readonly 
 
 export interface Main {
   name: string
-  version: string
+  // The package's own by default, read from the nearest package.json above the entry file.
+  version?: string
   run: (args: string[]) => Promise<number>
   redact?: (text: string) => string
   usage?: false
@@ -498,7 +520,7 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
     return printCandidates(leafCandidates(run, argv.slice(1)))
 
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
-    console.log(version)
+    console.log(version ?? packageVersion())
 
     return 0
   }

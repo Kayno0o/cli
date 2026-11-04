@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { duration, Exit, HelpShown, jsonOption, oneOf, optionRows, paint, parse, readInput, UsageError, wholeNumber } from '../src'
+import { description, duration, Exit, HelpShown, jsonOption, oneOf, optionRows, paint, parse, readInput, UsageError, wholeNumber } from '../src'
 import { capture, tempDirs } from '../src/test'
 
 const temp = tempDirs()
@@ -262,5 +262,44 @@ describe('jsonOption', () => {
     expect(jsonOption()).toEqual({ type: 'boolean', description: 'print JSON' })
     expect(jsonOption('{ findings }')).toEqual({ type: 'boolean', description: 'print JSON: { findings }' })
     expect(parse(['--json'], 'u', { json: jsonOption() }).values.json).toBe(true)
+  })
+})
+
+describe('aliases', () => {
+  const OPTIONS = { rows: { type: 'string', short: 'n', aliases: ['limit'], description: 'rows shown' }, json: jsonOption() } as const
+
+  test('an old spelling reads as the option, bare or with =', () => {
+    expect(parse(['--limit', '5'], 'x', OPTIONS).values.rows).toBe('5')
+    expect(parse(['--limit=7'], 'x', OPTIONS).values.rows).toBe('7')
+    expect(parse(['--rows', '9'], 'x', OPTIONS).values.rows).toBe('9')
+  })
+
+  test('is left alone after --, and listed neither in the help nor in the options', async () => {
+    expect(parse(['--rows', '1', '--', '--limit'], 'x', OPTIONS, { rest: true }).rest).toEqual(['--limit'])
+
+    const help = (await capture(async () => {
+      expect(() => parse(['--help'], 'x', OPTIONS)).toThrow(HelpShown)
+    })).out
+
+    expect(help).toContain('--rows')
+    expect(help).not.toContain('--limit')
+  })
+})
+
+describe('exits', () => {
+  const OPTIONS = { json: jsonOption() } as const
+  const exits: [number, string][] = [[0, 'clean'], [1, 'a finding'], [12, 'a usage error']]
+
+  test('the help lists each code under Exits:', async () => {
+    const { out } = await capture(async () => {
+      expect(() => parse(['--help'], 'x', OPTIONS, { exits })).toThrow(HelpShown)
+    })
+
+    expect(out).toContain('Exits:\n  0   clean\n  1   a finding\n  12  a usage error')
+    expect(out.indexOf('Options:')).toBeLessThan(out.indexOf('Exits:'))
+  })
+
+  test('the description spells them out', () => {
+    expect(description('x: does x', { exits }).exits).toEqual([{ code: 0, meaning: 'clean' }, { code: 1, meaning: 'a finding' }, { code: 12, meaning: 'a usage error' }])
   })
 })

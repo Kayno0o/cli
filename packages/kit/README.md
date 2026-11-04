@@ -24,7 +24,30 @@ process.exitCode = await runCli({
 
 ## Exit codes
 
-0 for success, help and version; 2 for a usage error (an unknown command, a bad option, a missing argument, what `parse` and `fail` throw by default); 1 for a command that ran and failed (`fail(message, 1)`, or any other error a command throws).
+Every bin answers by one table, stated in each command's `--help` under `Exits:` (the `exits` setting of `parse`, a list of `[code, meaning]`).
+
+| Code | Meaning |
+| --- | --- |
+| 0 | clean: it did what was asked, found nothing wrong; also `--help` and `--version` |
+| 1 | a finding (`audit`, `doctor`, `guard`), nothing found (`peek`, `hotspots`, `todo-scan`, `ports`, `pick`, `view`), or an operation that ran and failed (Forgejo, GitLab or the database refused, a step failed: `fail(message, 1)` and any other error a command throws) |
+| 2 | a usage error (an unknown command or option, a bad value, a missing argument: what `parse` and `fail` throw by default), or could not check (a timeout, an unreachable registry, no lockfile): never reported as clean |
+
+Exceptions, each stated in the command's own `Exits:`:
+
+- A bin running another command (`base`, `proof`, `out`, `slot`, `dc`, `dx`, `sf`, `gb`, `gc` on a signal) exits with that command's code: 126 when it cannot be run, 127 when it cannot be started, 128 plus the signal when interrupted.
+- `probe` exits 1 when the site could not be reached, that being its finding, and 0 when it answered, whatever it warns about.
+- `guard hook` never exits 2, which would block the tool call it vets.
+- `waitfor` and `ft watch`/`ft ci` exit 2 on a timeout, 1 on the failure they waited for.
+
+`tests/exits.test.ts` holds every bin to this: each command states its codes, only from the table, and answers `--help` with 0 and an unknown option with 2.
+
+## Flags that mean the same everywhere
+
+- `-n` is always a count: `--limit` (rows of a listing, with `--full` for all of them, from `limitOptions`), `--rows` (`db`, once `--limit`), `--lines` (`dlog`, `out` and `waitfor task`: lines of output kept), `--count` (`sub`, `dev uuid`) and `--slots` (`slot`). A listing cuts to its default and says `N more, rerun with --full`; `--json` is never cut on its own, only by an explicit `-n`.
+- `-t`/`--timeout` is how long to wait before giving up, a duration (`30s`, `5m`, `1h`). A bare number counts in the unit the help names: minutes for `ft ci`, `ft watch`, `ft release` and `gl ci`, seconds for `waitfor`, `slot` and `pkg bump`.
+- `-r`/`--repo` is the forge repository (`ft`, `gl`, `changelog`). Bins with no repository keep `-r` for their own noun: `--ref` (`base`, `proof`), `--regex` (`sub`), `--refs` (`peek`).
+- `--dry-run` shows what would change without changing it (`sub`, `ft release`, `pkg bump`, `changelog`; `changelog` keeps `--dry`).
+- A renamed flag keeps its old spelling through `aliases` on the option (`rows` answers `--limit`, `changelog` answers `--gitea` and `--dry`), left out of the help and of `__complete`.
 
 ## Look
 
@@ -32,6 +55,7 @@ On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, comma
 
 ## API
 
+- `version` is optional on `runCli`, `runMain` and `mainArgs`: it defaults to `packageVersion()`, the version of the nearest `package.json` above the entry file (links resolved, so `src/cli.ts` and the built `dist/cli.js` both find the package's own), which saves each bin its `import { version } from '../package.json'`.
 - `runCli({ name, version, about, commands, aliases })` dispatches `<cli> <command> [args]`: `--help` lists the commands, `--version` prints the version, a typo names the command it likely meant, and an `Exit` thrown by a command prints `error: <cli> <command>: <message>`, its hint under it, and exits with its code. Any other error exits 1, named by its class unless a plain `Error` (`error: tool sync: MigrationError: ...`), its cause's message on a `cause:` line under it when the cause is an `Error`; `redact(text)` rewrites both before they print, for errors that may quote what a log must not keep.
 - `runTool(label, argv, { timeoutMs, cwd, onStart })` runs a command through `runCommand` with the current environment and returns `{ code, stdout, stderr }`; it throws, naming `label`, when the command cannot start (noting a removed working directory) or outlives `timeoutMs`. `isPermanentFailure(error)` is true for what a retry cannot mend: a missing binary, or an answer of 401, 403 or 404. `cwdGone()` tells that the working directory was deleted.
 - `git(args, timeoutMs?)`, `gitOk`, `resolveCommit`, `fetchBranch`, `defaultBranch` and `leaveWorktree` are the git helpers the forge CLIs share, over `runTool`.
@@ -43,6 +67,7 @@ On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, comma
 - `runCli` also takes `defaultCommand`, the command that gets the arguments when the first one names no command (`db "select 1"` runs `db query "select 1"`, and an error there reads `error: db query: ...`), its options listed in `<cli> --help` under the commands, and `runBare: true` to have a bare `<cli>` run it instead of printing the help, and a command may be a group, `{ summary, commands, aliases? }`, dispatched with its own help and typo hints (`ft plan add`). A command taking `hidden: true` runs as usual but is left out of `--help`, `KIT_HELP=json`, `__complete` and the typo hints, for one only a script or a shell binding calls.
 - Commands known only once something is read (a project's config adding some) are lazy: `extraCommands: async (words) => ({ ... })` on the CLI or on a group adds them to its `commands` (which win a shared name), and `commands` itself may be such a function when every command is lazy. The function gets the words typed so far from the CLI's name on (`['team', 'hello', 'b']`) and is called only when the first word names no command the level already has, or for `--help`, `help` and `__complete`, never for a plain run of one it has, so existing `Cli` literals are unchanged. A `summary` may be an async function too, awaited only where a help, the `KIT_HELP=json` description or `__complete` lists it, never for a run. An error the function throws is not caught: handle it inside.
 - `runCli` and `runMain` record each run in `$XDG_STATE_HOME/kaynooo-cli/usage.jsonl` (`~/.local/state/...`, 0600): the bin, its command, the flag names it saw (never a value or an argument), the exit code and the unknown option of a usage error. `KAYNOOO_CLI_NO_USAGE=1` stops it, `NODE_ENV=test` too, and `usage: false` on the `Cli` or `Main` opts a bin out (`guard`, run on every tool call). `readUsage` and `summarizeUsage` read it, `cli stats` shows it.
+- Shell completion: `cli completions fish --install` writes one file per bin, `source <(cli completions bash)` in `~/.bashrc` loads one function for all of them, and zsh reads that same script through `bashcompinit`. Each bin answers `<bin> __complete <words>... <word>`, below.
 - `<bin> __complete <words>... <word>` is answered by `runCli` and `runMain` for shell completion: the subcommands with their summaries, a leaf command's options (read by running it until its `parse` call throws them, so every command parses its arguments first), or `__files__` where a path fits. `parse`'s `candidates: { '<project>': async () => ['alpha', ['beta', 'its description']] }` (by the positional's name as `positionals` writes it) gives the values of a positional, and `candidates: () => [...]` on a string option those of its value, besides `choices`; the function runs only while completing, and a command that gives none still answers `__files__`.
 - `parse` options also take `optional: { bare: '1', accepts: /^\d+$/ }` on a string option (`--out [n]`: bare it reads `bare`, a next word is its value unless it starts with a dash or fails `accepts`, and then stays a positional), `conflicts: ['pdf']` (both given is a usage error naming them) and, with `allowNegative`, `negative: 'keep the cached copy'` on a boolean option, which the help and `__complete` then list as `--no-<name>` with that description, the positive flag only when it has a `description` of its own.
 - `parse(args, usage, options, { positionals, trailing: true })` hands everything after the last declared positional back as `rest`, dashes included and without a `--` (`acme compose <project> exec -T php bash`); options typed before it parse as usual.
@@ -55,6 +80,9 @@ On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, comma
 - `openUrl(target, env?)` opens a URL, or a file path made absolute, with the command `BROWSER` names or the platform's opener (`xdg-open`, `open`, `start`), without waiting; it returns `false` when that command cannot start.
 - Every command's `parse`, and `runCli` before the command name (`ft --plain runs`), takes `--color auto|always|never` and `--plain` (`--color never`), unless the command has its own option of that name. `always` sets `FORCE_COLOR=1` and `never` sets `NO_COLOR=1`, each dropping the other, so the kit's colours, marks and redrawn lines follow, and so do the processes the command starts; `always` colours a pipe but never redraws in one. `applyOutput(color, plain, env?)` is what they run.
 - `--help` lists the commands under `Commands:`, then a heading per `group` a command names (`{ summary, group: 'Admin', run }`), then the level's `Options:` and the `Examples:` the CLI or a group's `examples` give (`['ft ci', ['ft ci HEAD~1', 'the commit before']]`, a note shown dimmed after `#`); a command's own examples go to `parse(args, usage, options, { examples })`, shown under its options.
+- `exits: [[0, 'clean'], [1, 'a finding'], [2, 'a usage error']]` in `parse`'s settings prints an `Exits:` block after the options (a code may be a word, `['its own', 'the code of the command']`), and `KIT_HELP=json` carries it as `exits: [{code, meaning}]`.
+- `aliases: ['limit']` on an option keeps an old long name working: it is read as the option, bare or with `=`, up to a `--`, and shown in neither the help nor `__complete`.
+- `compose(args, { flags, cwd, env })` runs `docker compose <flags> <args>` and returns `{ code, stdout, stderr }` whatever the exit code (it throws only when docker cannot start), `captureOutput(argv, { cwd, env })` is the same for any command, `composeError(output)` words a failure as the last line of stderr or `exit <code>`, and `jsonLines<T>(text)` reads `compose ps --format json`, one object per line or the older array.
 - `replaces` on the CLI or in `parse`'s settings (`'sed -n N,Mp, grep -n chains'`) adds an `Instead of:` line under the usage. With `KIT_HELP=json` in the environment, `--help` prints `{synopsis, summary, replaces?, examples}` instead, the usage's first line split at its first `: `, which is how `cli list` reads every bin.
 - `runHint(command, effect?)` words the hint of a refusal that a command resolves, ``run `ft take 12 --take-stale` to take it over``, so every CLI writes it alike: `fail(message, 1, runHint('ft take 12 --take-stale', 'take it over'))`. `printHint(hint)` prints the `hint:` line under a refusal a command prints itself (one issue of several refused).
 - `limitOptions(fallback)` is the `--limit <n>` (`-n`) and `--full` flags of a listing, `limitOf(values, fallback)` the row count they ask for (Infinity with `--full`; with `json: true` in the values, Infinity unless `--limit` is given, so JSON is never cut on its own), and `capped(rows, limit)` the first rows plus the footer `N more, rerun with --full` when some are left out.
