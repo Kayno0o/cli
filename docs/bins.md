@@ -139,7 +139,7 @@ doctor --install all --dry-run  # what installing everything would run
 
 ## dx
 
-without a terminal or without fzf (a script, a pipe, an agent) `dx` lists the services with their state, ports and image: that listing is the form to use there, `--json` giving the full record. On a terminal with fzf it picks one instead: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder. Package `docker`.
+without a terminal (a script, a pipe, an agent) `dx` lists the services with their state, ports and image: that listing is the form to use there, `--json` giving the full record. On a terminal it picks one instead: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder. Package `docker`.
 
 Instead of: docker compose exec <service> bash, logs -f and restart typed per service
 
@@ -203,7 +203,7 @@ ft issue 12 -c  # an issue with its boxes numbered and its comments
 
 ## gb
 
-without a branch, picks one with fzf when it is installed and a terminal is attached: the branches last checked out first, as the reflog has them, then the other local ones, then the remote ones with no local branch yet. The header says where HEAD stands, each row how its branch stands against its upstream and whether it is merged into the base. enter switches to it (a remote one gets its local tracking branch), ctrl-n creates a branch named after the query, ctrl-d deletes the highlighted local branch with `git branch -d`, which refuses one not merged yet, and ctrl-r fetches, prunes and lists again. Without fzf or a terminal it lists the branches instead. Package `git`.
+without a branch, picks one when a terminal is attached: the branches last checked out first, as the reflog has them, then the other local ones, then the remote ones with no local branch yet. The header says where HEAD stands, each row how its branch stands against its upstream and whether it is merged into the base. enter switches to it (a remote one gets its local tracking branch), ctrl-n creates a branch named after the query, ctrl-d deletes the highlighted local branch with `git branch -d`, which refuses one not merged yet, and ctrl-r fetches, prunes and lists again. Without a terminal it lists the branches instead. Package `git`.
 
 Instead of: git switch, git branch -d and git checkout typed per branch
 
@@ -278,7 +278,7 @@ hotspots src --since "3 months ago" --limit 10
 
 ## j
 
-without a name, picks a recipe, target, script or task of this folder, its parents and its child folders with fzf when it is installed and a terminal is attached, and runs it. The ones run last come first, per folder. Without fzf or a terminal it lists them instead. Package `check`.
+without a name, picks a recipe, target, script or task of this folder, its parents and its child folders when a terminal is attached, and runs it. The ones run last come first, per folder. Without a terminal it lists them instead. Package `check`.
 
 Instead of: reading the Justfile, Makefile, package.json scripts or composer scripts to find what to run, then retyping it
 
@@ -449,7 +449,7 @@ repos --only dirty --path  # the paths, for xargs
 
 ## sf
 
-without a terminal or without fzf (a script, a pipe, an agent) `sf` lists the commands, one per line with its description: that listing is the form to use there, and `sf --list --json` gives each with its arguments and options. On a terminal with fzf it picks a Symfony console command instead and runs it, asking for each required argument it needs. The commands last run come first, per folder, and the picker opens on the list cached from the last run while the console answers. Package `docker`.
+without a terminal (a script, a pipe, an agent) `sf` lists the commands, one per line with its description: that listing is the form to use there, and `sf --list --json` gives each with its arguments and options. On a terminal it picks a Symfony console command instead and runs it, asking for each required argument it needs. The commands last run come first, per folder, and the picker opens on the list cached from the last run while the console answers. Package `docker`.
 
 Instead of: bin/console typed in the php container, with the command names and arguments looked up by hand
 

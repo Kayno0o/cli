@@ -32,13 +32,13 @@ export interface PickSettings {
   height: Height
   /** A shell command, where `{1}`, `{2}`... stand for the hidden fields and `{}` for the row, or a function. */
   preview: string | PreviewFn | undefined
-  previewPosition?: PreviewPosition
-  reload?: Reload
-  header?: string
+  previewPosition?: PreviewPosition | undefined
+  reload?: Reload | undefined
+  header?: string | undefined
   /** Control keys that end the pick, named as `ctrl-d`. */
-  expect?: readonly string[]
+  expect?: readonly string[] | undefined
   /** How many leading cells are searched, all of them by default. */
-  searched?: number
+  searched?: number | undefined
 }
 
 export interface Selection {

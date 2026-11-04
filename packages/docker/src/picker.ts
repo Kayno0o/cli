@@ -1,8 +1,8 @@
-import type { Row } from '@kaynooo/cli-kit/fzf'
+import type { Row } from '@kaynooo/cli-kit/picker'
 import type { Action, Service } from './stack'
 import process from 'node:process'
 import { paint } from '@kaynooo/cli-kit'
-import { fzf, heightFor } from '@kaynooo/cli-kit/fzf'
+import { heightFor, pick } from '@kaynooo/cli-kit/picker'
 import { key, stateColor } from './stack'
 
 export const KEYS: Record<string, Action> = { 'ctrl-l': 'logs', 'ctrl-r': 'restart', 'ctrl-x': 'stop', 'ctrl-b': 'build' }
@@ -21,9 +21,9 @@ function row(service: Service): Row {
   }
 }
 
-// The service picked with fzf and the key that picked it, enter's being empty; undefined on escape.
-export function pickService(services: Service[]): { service: Service, key: string } | undefined {
-  const picked = fzf(services.map(row), {
+// The service picked and the key that picked it, enter's being empty; undefined on escape.
+export async function pickService(services: Service[]): Promise<{ service: Service, key: string } | undefined> {
+  const picked = await pick(services.map(row), {
     prompt: 'dx> ',
     header: 'enter shell or up, ctrl-l logs, ctrl-r restart, ctrl-x stop, ctrl-b rebuild',
     expect: Object.keys(KEYS),

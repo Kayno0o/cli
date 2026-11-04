@@ -1,11 +1,11 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
-import type { Arg, Row } from '@kaynooo/cli-kit/fzf'
+import type { Arg, Row } from '@kaynooo/cli-kit/picker'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, paint, parse, printJson } from '@kaynooo/cli-kit'
-import { byRecency, emit, fzf, list, record, runs, table } from '@kaynooo/cli-kit/fzf'
+import { byRecency, emit, list, pick, record, runs, table } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { children, from, nearestStack, services, up } from './stack'
 
@@ -48,7 +48,7 @@ export interface Entry {
 const usage = `sf [command] [args...]
 sf -
 
-Without a terminal or without fzf (a script, a pipe, an agent) \`sf\` lists the commands, one per line with its description: that listing is the form to use there, and \`sf --list --json\` gives each with its arguments and options. On a terminal with fzf it picks a Symfony console command instead and runs it, asking for each required argument it needs. The commands last run come first, per folder, and the picker opens on the list cached from the last run while the console answers.
+Without a terminal (a script, a pipe, an agent) \`sf\` lists the commands, one per line with its description: that listing is the form to use there, and \`sf --list --json\` gives each with its arguments and options. On a terminal it picks a Symfony console command instead and runs it, asking for each required argument it needs. The commands last run come first, per folder, and the picker opens on the list cached from the last run while the console answers.
 The console is the nearest bin/console up to the repository root, then those of the child folders (keyed \`api/cache:clear\`). It runs in the php service of the nearest compose stack when there is one, else with the local php; the container's working directory is taken to be the app.
 \`sf -\` runs the last command again with the arguments it ran with, \`sf <command> [args...]\` runs without the picker: a name the list does not hold goes to the console as is, which resolves \`c:c\` to \`cache:clear\` itself.
 \`sf --list --json\` (or \`sf --json\`) prints every command as JSON, each with its console folder, description, signature, arguments and options.
@@ -281,7 +281,7 @@ async function hidden(flag: string, rest: string[]): Promise<number | undefined>
     return 0
   }
 
-  // Called back by fzf once the picker is open on the cached list.
+  // Brings the cache of the consoles up to date, which `--list` starts in the background for the next time.
   if (flag === '--rows') {
     console.log(table(rows(await entries(true))).join('\n'))
 
@@ -301,7 +301,7 @@ async function hidden(flag: string, rest: string[]): Promise<number | undefined>
     return 0
   }
 
-  // From the cache, which a list run in the background brings up to date for the next time, as fzf's reload does.
+  // From the cache, which a list run in the background brings up to date for the next time, as the picker's reload does.
   if (refreshed)
     Bun.spawn([process.execPath, process.argv[1]!, '--rows'], { stdio: ['ignore', 'ignore', 'ignore'] }).unref()
 
@@ -375,27 +375,23 @@ export async function sf(args: string[]): Promise<number> {
   if (found.length === 0)
     fail('no bin/console here, or it listed no command', 1)
 
-  if (!interactive() || Bun.which('fzf') === null) {
+  if (!interactive()) {
     if (emitting)
-      fail('the picker needs a terminal and fzf', 1)
-
-    if (interactive())
-      console.error('fzf is not installed, listing the commands instead')
+      fail('the picker needs a terminal', 1)
 
     console.log(listing(found))
 
     return 0
   }
 
-  const self = `${process.execPath} ${process.argv[1]}`
-  const picked = fzf(rows(found), {
+  const picked = await pick(rows(found), {
     prompt: 'sf> ',
     searched: 1,
-    preview: `${self} --show {1} {2}`,
-    // Once the cached list is in, and only once, the reload firing load again.
-    bind: refreshed ? [`load:unbind(load)+reload-sync(${self} --rows)`] : [],
+    preview: `${process.execPath} ${process.argv[1]} --show {1} {2}`,
+    // Opens on the cached list, which the consoles' own answer replaces once it is in.
+    reload: refreshed ? { onOpen: true, run: async () => ({ rows: rows(await entries(true)) }) } : undefined,
   })
-  // Read again, the reload having maybe brought a command the cached list did not hold.
+  // Read again, the reload having maybe brought a command the first list did not hold.
   const entry = picked && (await entries(false)).find(candidate => candidate.app.dir === picked.hidden[0] && candidate.command.name === picked.hidden[1])
 
   return entry === undefined ? 1 : execute(emitting, key(entry), key(entry), commandFor(entry, []))

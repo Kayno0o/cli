@@ -1,9 +1,9 @@
 import type { Colors, ExitRow } from '@kaynooo/cli-kit'
-import type { Arg, Row } from '@kaynooo/cli-kit/fzf'
+import type { Arg, Row } from '@kaynooo/cli-kit/picker'
 import { basename } from 'node:path'
 import process from 'node:process'
 import { closest, fail, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
-import { emit, fzf, list, table } from '@kaynooo/cli-kit/fzf'
+import { emit, list, pick, table } from '@kaynooo/cli-kit/picker'
 
 export interface Branch {
   // What git calls it, `feature` or `origin/feature`.
@@ -27,7 +27,7 @@ gb -
 gb -c <name>
 gb -d <branch>
 
-Without a branch, picks one with fzf when it is installed and a terminal is attached: the branches last checked out first, as the reflog has them, then the other local ones, then the remote ones with no local branch yet. The header says where HEAD stands, each row how its branch stands against its upstream and whether it is merged into the base. enter switches to it (a remote one gets its local tracking branch), ctrl-n creates a branch named after the query, ctrl-d deletes the highlighted local branch with \`git branch -d\`, which refuses one not merged yet, and ctrl-r fetches, prunes and lists again. Without fzf or a terminal it lists the branches instead.
+Without a branch, picks one when a terminal is attached: the branches last checked out first, as the reflog has them, then the other local ones, then the remote ones with no local branch yet. The header says where HEAD stands, each row how its branch stands against its upstream and whether it is merged into the base. enter switches to it (a remote one gets its local tracking branch), ctrl-n creates a branch named after the query, ctrl-d deletes the highlighted local branch with \`git branch -d\`, which refuses one not merged yet, and ctrl-r fetches, prunes and lists again. Without a terminal it lists the branches instead.
 \`gb <branch>\` switches without the picker, a bare name finding the remote branch it would create. \`gb -\` goes back to the previous branch, \`gb -c <name>\` creates one and switches to it, \`gb -d <branch>\` deletes a local one.
 A branch checked out in another worktree cannot be switched to: gb prints that worktree's path on stdout and a hint on stderr, since a command cannot change its parent shell's folder.`
 
@@ -46,7 +46,7 @@ const TRACK_TINTS: Record<string, 'green' | 'red' | 'yellow'> = { ahead: 'green'
 const TRACK_WORD = /^\w+/
 const WHITESPACE = /\s+/
 
-// What fzf receives is a pipe, so its rows and preview are painted whatever stdout is.
+// The picker draws on stderr and previews through a pipe, so its rows and preview are painted whatever stdout is.
 const colors = paint({ isTTY: true })
 
 function read(args: string[]): string {
@@ -224,6 +224,14 @@ function header(found: Branch[], current: string, failure = ''): string {
   return `${line}${failure ? colors.dim(' | ') + colors.red(failure) : ''}\n${KEYS}`
 }
 
+// Fetches and prunes every remote, then the header with where HEAD stands, saying when the fetch failed.
+async function fetched(): Promise<string> {
+  const proc = Bun.spawn(['git', 'fetch', '--all', '--prune', '--quiet'], { stdout: 'ignore', stderr: 'ignore' })
+  const success = await proc.exited === 0
+
+  return header(branches(base()), read(['branch', '--show-current']), success ? '' : 'fetch failed')
+}
+
 function listed(all: Branch[]): void {
   list([
     ...all.map(branch => ({
@@ -240,8 +248,8 @@ function listed(all: Branch[]): void {
   ])
 }
 
-// The hidden flags term, fzf and the shell completions call, each printing and nothing more.
-function hidden(flag: string, rest: string[]): number | undefined {
+// The hidden flags term, tmux and the shell completions call, each printing and nothing more.
+async function hidden(flag: string, rest: string[]): Promise<number | undefined> {
   if (flag === '--show') {
     console.log(preview(rest[0] ?? ''))
 
@@ -251,23 +259,15 @@ function hidden(flag: string, rest: string[]): number | undefined {
   if (read(['rev-parse', '--git-dir']) === '')
     fail('not a git repository', 2)
 
-  // ctrl-r: the header once fetched, which fzf shows while the list reloads from --rows.
+  // ctrl-r: the header once fetched.
   if (flag === '--fetch') {
-    const fetched = Bun.spawnSync(['git', 'fetch', '--all', '--prune', '--quiet'], { stdout: 'ignore', stderr: 'ignore' }).success
-
-    console.log(header(branches(base()), read(['branch', '--show-current']), fetched ? '' : 'fetch failed'))
+    console.log(await fetched())
 
     return 0
   }
 
   if (flag === '--list') {
     listed(load().all)
-
-    return 0
-  }
-
-  if (flag === '--rows') {
-    console.log(table(load().all.map(row)).join('\n'))
 
     return 0
   }
@@ -294,8 +294,8 @@ function create(name: string): string[] {
 export async function gb(args: string[]): Promise<number> {
   const [flag = ''] = args
 
-  if (['--show', '--fetch', '--list', '--rows', '--names'].includes(flag))
-    return hidden(flag, args.slice(1)) ?? 0
+  if (['--show', '--fetch', '--list', '--names'].includes(flag))
+    return await hidden(flag, args.slice(1)) ?? 0
 
   // The protocol the tmux picker and the fish wrapper read instead of the command being run: its mode, the words typed back, and the command's words.
   const emitting = flag === '--emit'
@@ -327,12 +327,9 @@ export async function gb(args: string[]): Promise<number> {
     if (named === undefined) {
       const interactive = process.stdin.isTTY && process.stderr.isTTY && parsed.values.json !== true
 
-      if (!interactive || Bun.which('fzf') === null) {
+      if (!interactive) {
         if (emitting)
-          fail('the picker needs a terminal and fzf', 1)
-
-        if (interactive)
-          console.error('fzf is not installed, listing the branches instead')
+          fail('the picker needs a terminal', 1)
 
         if (parsed.values.json === true)
           printJson(all)
@@ -342,16 +339,13 @@ export async function gb(args: string[]): Promise<number> {
         return 0
       }
 
-      const self = `${process.execPath} ${process.argv[1]}`
-      const picked = fzf(all.map(row), {
+      const picked = await pick(all.map(row), {
         prompt: 'gb> ',
         header: header(found, current),
         expect: ['ctrl-d', 'ctrl-n'],
         searched: 1,
-        preview: `${self} --show {1}`,
-        bind: [`ctrl-r:transform-header(${self} --fetch)+reload(${self} --rows)`],
-        query: true,
-        hidden: 1,
+        preview: fields => preview(fields[0]!),
+        reload: { key: 'ctrl-r', run: async () => ({ header: await fetched(), rows: load().all.map(row) }) },
       })
 
       if (picked?.key === 'ctrl-n') {

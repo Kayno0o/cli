@@ -191,10 +191,10 @@ export interface StateSettings {
   multi?: boolean
   prompt?: string
   query?: string
-  header?: string
-  expect?: readonly string[]
+  header?: string | undefined
+  expect?: readonly string[] | undefined
   /** How many leading cells are searched, all of them by default. */
-  searched?: number
+  searched?: number | undefined
 }
 
 /** A line is a row of one cell with nothing hidden. */

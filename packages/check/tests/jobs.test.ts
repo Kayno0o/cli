@@ -2,7 +2,7 @@ import type { Entry } from '../src/jobs'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { byRecency } from '@kaynooo/cli-kit/fzf'
+import { byRecency } from '@kaynooo/cli-kit/picker'
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import { everything, id, resolve, shortest, targets } from '../src/jobs'
 

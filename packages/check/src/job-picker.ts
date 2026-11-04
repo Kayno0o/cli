@@ -1,8 +1,8 @@
-import type { Row } from '@kaynooo/cli-kit/fzf'
+import type { Row } from '@kaynooo/cli-kit/picker'
 import type { Entry, Kind } from './jobs'
 import process from 'node:process'
 import { paint } from '@kaynooo/cli-kit'
-import { fzf, heightFor } from '@kaynooo/cli-kit/fzf'
+import { heightFor, pick } from '@kaynooo/cli-kit/picker'
 import { id, signature } from './jobs'
 
 type Tint = 'yellow' | 'blue' | 'magenta' | 'cyan' | 'green' | 'red'
@@ -27,10 +27,10 @@ function row(entry: Entry, labels: boolean, signed: boolean): Row {
 }
 
 // Whole height for the full list; a name several entries share gets the list of its candidates only. Undefined on escape.
-export function pickJob(entries: Entry[], narrowed = false): Entry | undefined {
+export async function pickJob(entries: Entry[], narrowed = false): Promise<Entry | undefined> {
   const labels = labelled(entries)
   const signed = entries.some(entry => signature(entry) !== '')
-  const picked = fzf(entries.map(entry => row(entry, labels, signed)), {
+  const picked = await pick(entries.map(entry => row(entry, labels, signed)), {
     prompt: `${[...new Set(entries.map(entry => entry.tag))].join('/')}> `,
     searched: labels ? 2 : 1,
     ...narrowed ? { height: heightFor(entries.length) } : {},

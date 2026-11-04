@@ -1,8 +1,8 @@
-import type { Arg } from '@kaynooo/cli-kit/fzf'
+import type { Arg } from '@kaynooo/cli-kit/picker'
 import type { Entry, Kind } from './jobs'
 import process from 'node:process'
 import { closest, fail, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
-import { byRecency, emit, list, record, runs } from '@kaynooo/cli-kit/fzf'
+import { byRecency, emit, list, record, runs } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { labelled, pickJob } from './job-picker'
 import { everything, id, justFlags, key, readKind, resolve, shortest, signature } from './jobs'
@@ -10,7 +10,7 @@ import { everything, id, justFlags, key, readKind, resolve, shortest, signature 
 const usage = `j [name] [args...]
 j -
 
-Without a name, picks a recipe, target, script or task of this folder, its parents and its child folders with fzf when it is installed and a terminal is attached, and runs it. The ones run last come first, per folder. Without fzf or a terminal it lists them instead.
+Without a name, picks a recipe, target, script or task of this folder, its parents and its child folders when a terminal is attached, and runs it. The ones run last come first, per folder. Without a terminal it lists them instead.
 \`j -\` runs the last one again with the same arguments, \`j <name> [args...]\` runs without the picker, the words after the name filling the parameters in order and the required ones left being asked for.
 The sources are a Justfile, a Makefile, the scripts of a package.json (through its package manager), composer.json scripts, deno tasks, a Taskfile, mise tasks and a pyproject (poe tasks and entry points).
 A name is the key behind the folder it runs from, \`api/test\`, bare for this folder. A name several entries share offers them, unless it comes qualified by its runner: \`just:check\`, \`bun:api/test\`.
@@ -151,12 +151,9 @@ export async function j(argv: string[]): Promise<number> {
     words = [...earlier!.args, ...given]
   }
   else if (named === undefined) {
-    if (!interactive || Bun.which('fzf') === null) {
+    if (!interactive) {
       if (emitting)
-        fail('the picker needs a terminal and fzf', 1)
-
-      if (interactive)
-        console.error('fzf is not installed, listing what can run instead')
+        fail('the picker needs a terminal', 1)
 
       if (parsed.values.json === true)
         printJson(found.map(each => ({ id: id(each), key: key(each), runner: each.tag, dir: each.dir, name: each.name, doc: each.doc, parameters: each.parameters })))
@@ -166,7 +163,7 @@ export async function j(argv: string[]): Promise<number> {
       return 0
     }
 
-    entry = pickJob(byRecency(found, previous, id))
+    entry = await pickJob(byRecency(found, previous, id))
   }
   else {
     // A job on the command line runs as named, the picker only opens for a name several entries share.
@@ -178,10 +175,10 @@ export async function j(argv: string[]): Promise<number> {
       fail(`nothing named ${named}${nearest === undefined ? '' : `, did you mean ${nearest}?`}`, 1)
     }
 
-    if (matching.length > 1 && (!interactive || Bun.which('fzf') === null))
+    if (matching.length > 1 && !interactive)
       fail(`${named} is several: ${matching.map(id).join(', ')}`, 1, 'qualify it with its runner')
 
-    entry = matching.length === 1 ? matching[0] : pickJob(matching, true)
+    entry = matching.length === 1 ? matching[0] : await pickJob(matching, true)
   }
 
   if (entry === undefined)

@@ -24,7 +24,6 @@
     "./prompt": "./src/prompt.ts",
     "./shell": "./src/shell.ts",
     "./test": "./src/test.ts",
-    "./fzf": "./src/fzf.ts",
     "./picker": "./src/picker.ts"
   },
   "files": ["src"],

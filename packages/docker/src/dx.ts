@@ -4,14 +4,14 @@ import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
 import { closest, fail, jsonOption, paint, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
-import { byRecency, record, runs } from '@kaynooo/cli-kit/fzf'
+import { byRecency, record, runs } from '@kaynooo/cli-kit/picker'
 import { KEY_LABELS, KEYS, pickService } from './picker'
 import { ACTIONS, allServices, commandFor, defaultAction, key, LOGS_TAIL, logsOf, serviceNamed, stateColor } from './stack'
 
 const usage = `dx [service] [action]
 dx -
 
-Without a terminal or without fzf (a script, a pipe, an agent) \`dx\` lists the services with their state, ports and image: that listing is the form to use there, \`--json\` giving the full record. On a terminal with fzf it picks one instead: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder.
+Without a terminal (a script, a pipe, an agent) \`dx\` lists the services with their state, ports and image: that listing is the form to use there, \`--json\` giving the full record. On a terminal it picks one instead: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder.
 \`dx -\` does the last action again, \`dx <service> [action]\` acts without the picker: \`shell\` (bash when the container has it), \`logs\` (follows the last ${LOGS_TAIL} lines; \`--tail N\` changes the count and \`--no-follow\` prints them once and exits, for a script), \`restart\`, \`up\`, \`stop\` or \`build\` (up with a rebuild).
 The services are the stack of this folder or its nearest parent, the ones of the child folders (keyed \`api/php\`), and stacks found only through their containers (keyed \`<project>:php\`).`
 
@@ -141,12 +141,9 @@ export async function dx(args: string[]): Promise<number> {
   if (named === undefined) {
     const interactive = process.stdin.isTTY && process.stderr.isTTY && parsed.values.json !== true
 
-    if (!interactive || Bun.which('fzf') === null) {
+    if (!interactive) {
       if (emit)
-        fail('the picker needs a terminal and fzf', 1)
-
-      if (interactive)
-        console.error('fzf is not installed, listing the services instead')
+        fail('the picker needs a terminal', 1)
 
       if (parsed.values.json === true)
         printJson(services.map(each => ({ key: key(each), project: each.project, name: each.name, state: each.state, status: each.status, ports: each.ports, image: each.image })))
@@ -156,7 +153,7 @@ export async function dx(args: string[]): Promise<number> {
       return 0
     }
 
-    const picked = pickService(byRecency(services, runs('dx'), key))
+    const picked = await pickService(byRecency(services, runs('dx'), key))
 
     if (picked === undefined)
       return 1
