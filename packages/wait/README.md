@@ -10,6 +10,8 @@ waitfor --file server.log --until 'Listening on' --fail 'Error|FATAL' --timeout 
 waitfor --port 5432
 waitfor --url http://localhost:8000/health
 waitfor --pid 4242
+waitfor --cmd 'curl -fs localhost:8000/health'
+waitfor --any --port 5432 --cmd 'test -f ready' -t 1m
 waitfor task b92stimuo
 ```
 
@@ -20,6 +22,8 @@ waitfor task b92stimuo
 - `--fail <regex>` ends the wait on the first matching line of `--file`, printing the five lines on each side of it on stderr, as long as some condition is still unmet: a `--until` line before it in the same read wins.
 - `--port <n>` waits for a TCP connection to `--host` (127.0.0.1) to be accepted, `--url <url>` for a 2xx answer, redirects followed. Each prints how long it took.
 - `--pid <n>` waits for the process to exit, checked with signal 0, so it never matches its own shell the way a `while pgrep -f` loop does. A zombie counts as exited. A `--port` connection attempt is given up after 3 seconds and retried, so dropped packets do not hold a poll for minutes.
+- `--cmd <command>` runs the command through `sh -c` and waits for it to exit 0, re-running it every `--interval` (1s, `-t` bounds each run to the time left, 30s at most); a timeout names its last exit code and last output line.
+- `--any` is met by the first condition that is, not all of them: it takes two or more of `--until`, `--port`, `--url`, `--pid` and `--cmd`, prints the one that was met, and a timeout says none was and lists them all. A `--fail` line still ends the wait with 1.
 - `waitfor task <id | file>` waits for a Claude Code background Bash task to end, its id found under `$CLAUDE_CODE_TMPDIR` (or `$TMPDIR`, `/tmp`) in `claude-<uid>/*/*/tasks/<id>.output`, then prints its exit code, its last 20 lines (`-n`) and the `(fail)` and `error:` lines above them, the last 30. It exits 0 when the task exited 0, 1 on another code, 2 on a timeout with the last lines; a path that does not exist fails at once with 2, and a subagent's id is refused, its notification reporting its end. `--json` prints `{task, path, code, ms, failures, tail}`, each line as `{number, text}`.
 - `--json` prints `{met, ms, line}` once met, or on a `--fail` line with `met` false, `line` being the last `--until` line or the `--fail` one as `{number, text}`; the progress lines go to stderr. `--quiet` drops the live progress line, on `waitfor task` too.
 - Every condition given must be met: `--port 8000 --file server.log --fail Error` waits for the port and gives up early when the log shows an error.

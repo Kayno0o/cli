@@ -11,7 +11,7 @@ describe('waitfor usage', () => {
   })
 
   test('refuses what cannot be waited for', async () => {
-    expect((await waitfor([])).err).toContain('give --until with --file, --port, --url or --pid')
+    expect((await waitfor([])).err).toContain('give --until with --file, --port, --url, --pid or --cmd')
     expect((await waitfor(['-u', 'x'])).err).toContain('--file needs one of them')
     expect((await waitfor(['-f', 'a.log', '-p', '80'])).err).toContain('--file needs one of them')
     expect((await waitfor(['-f', 'a.log', '-u', '('])).err).toContain('--until is no valid regular expression')

@@ -4,15 +4,15 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Line } from './conditions'
 import { existsSync } from 'node:fs'
 import process from 'node:process'
-import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, runCommand, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { FileWatch, portProblem, urlCheck } from './conditions'
 import { exitCode, isTranscript, pidAlive, taskEnd, taskFile } from './task'
 
-const USAGE = `waitfor [options]: waits until a file shows a line, a port listens, a URL answers 2xx or a process exits
+const USAGE = `waitfor [options]: waits until a file shows a line, a port listens, a URL answers 2xx, a process exits or a command exits 0
 waitfor task <task id | file>: waits for a Claude Code background task to end (waitfor task --help)
 
-Every condition given must be met. A --fail line in --file ends the wait at once. A timeout or a --fail line comes with an excerpt of what it saw last.
+Every condition given must be met, or with --any the first of them to be. A --fail line in --file ends the wait at once. A timeout or a --fail line comes with an excerpt of what it saw last.
 --json prints {met, ms, line} once met or on a --fail line, line being the last --until line or the --fail one as {number, text} (null when none), and the progress lines go to stderr.`
 
 const TASK_USAGE = `waitfor task [options] <task id | file>: waits for a Claude Code background task to end, then prints its exit code, its last lines and the (fail) and error: lines above them
@@ -40,6 +40,9 @@ const OPTIONS = {
   host: { type: 'string', short: 'H', description: 'the host of --port (127.0.0.1)' },
   url: { type: 'string', description: 'a URL that must answer 2xx' },
   pid: { type: 'string', description: 'a process id that must exit' },
+  cmd: { type: 'string', short: 'c', description: 'a shell command that must exit 0, re-run every --interval' },
+  interval: { type: 'string', description: 'how long between two runs of --cmd (1s)' },
+  any: { type: 'boolean', description: 'met by the first condition that is, not all of them (needs two)' },
   timeout: TIMEOUT,
   json: jsonOption('{met, ms, line}'),
   quiet: { type: 'boolean', short: 'q', description: 'no live progress line: only what was met and the failure' },
@@ -48,6 +51,8 @@ const OPTIONS = {
 const POLL = 250
 const URL_TIMEOUT = 5000
 const WIDTH = 400
+const CMD_RUN_LIMIT = 30_000
+const LAST_LINE = /[^\n]+(?=\n*$)/
 
 function regex(source: string | undefined, name: string): RegExp | undefined {
   if (source === undefined)
@@ -65,6 +70,23 @@ function numbered(lines: Line[], marked?: Line): string {
   const width = String(lines.at(-1)?.number ?? 0).length
 
   return lines.map(line => `${line === marked ? '>' : ' '} ${String(line.number).padStart(width)}  ${truncate(line.text, WIDTH)}`).join('\n')
+}
+
+// What a run of the command left unmet: its exit code and last line, or why it could not run; undefined when it exited 0.
+async function cmdProblem(command: string, timeoutMs: number): Promise<string | undefined> {
+  try {
+    const ran = await runCommand(['sh', '-c', command], { timeoutMs })
+
+    if (ran.code === 0 && !ran.timedOut)
+      return undefined
+
+    const last = LAST_LINE.exec(ran.text)?.[0]
+
+    return `${ran.timedOut ? 'timed out' : `exited ${ran.code}`}${last === undefined ? '' : ` (${truncate(last, WIDTH)})`}`
+  }
+  catch (error) {
+    return `could not run: ${error instanceof Error ? error.message : String(error)}`
+  }
 }
 
 async function waitTask(args: string[]): Promise<number> {
@@ -131,14 +153,22 @@ async function main(args: string[]): Promise<number> {
   if (positionals.length > 0)
     fail(`unexpected argument ${positionals[0]}\n\n${USAGE}`)
 
-  if (values.until === undefined && values.port === undefined && values.url === undefined && values.pid === undefined)
-    fail(`give --until with --file, --port, --url or --pid\n\n${USAGE}`)
+  if (values.until === undefined && values.port === undefined && values.url === undefined && values.pid === undefined && values.cmd === undefined)
+    fail(`give --until with --file, --port, --url, --pid or --cmd\n\n${USAGE}`)
 
   if ((values.until !== undefined || values.fail !== undefined) !== (values.file !== undefined))
     fail('--until and --fail read the --file lines, and --file needs one of them')
 
   if (values.host !== undefined && values.port === undefined)
     fail('--host goes with --port')
+
+  const conditions = [values.until, values.port, values.url, values.pid, values.cmd].filter(condition => condition !== undefined).length
+
+  if (values.any === true && conditions < 2)
+    fail('--any needs two or more of --until, --port, --url, --pid and --cmd')
+
+  if (values.interval !== undefined && values.cmd === undefined)
+    fail('--interval goes with --cmd')
 
   const port = values.port === undefined ? undefined : wholeNumber(values.port, 'port', 0)
 
@@ -150,6 +180,8 @@ async function main(args: string[]): Promise<number> {
 
   const pid = values.pid === undefined ? undefined : wholeNumber(values.pid, 'pid', 0)
   const host = values.host ?? '127.0.0.1'
+  const interval = duration(values.interval, 'interval', 1000)
+  const isAny = values.any === true
   const timeout = duration(values.timeout, 'timeout', 5 * 60_000)
   const watch = values.file === undefined ? undefined : new FileWatch(values.file, regex(values.until, 'until'), regex(values.fail, 'fail'))
   const started = Date.now()
@@ -159,6 +191,8 @@ async function main(args: string[]): Promise<number> {
   let portLeft = port === undefined ? undefined : 'not checked yet'
   let urlLeft = values.url === undefined ? undefined : 'not checked yet'
   let isPidLeft = pid !== undefined
+  let cmdLeft = values.cmd === undefined ? undefined : 'not run yet'
+  let cmdRanAt = 0
   const { dim } = paint(process.stderr)
   // What is still awaited, on a terminal: a line per condition with what it last saw.
   const region = values.quiet === true
@@ -170,6 +204,7 @@ async function main(args: string[]): Promise<number> {
         portLeft === undefined ? undefined : `${host}:${port}: ${portLeft}`,
         urlLeft === undefined ? undefined : `${values.url}: ${urlLeft}`,
         isPidLeft ? `pid ${pid}: still running` : undefined,
+        cmdLeft === undefined ? undefined : `\`${values.cmd}\`: ${cmdLeft}`,
       ]
 
       return left.filter(line => line !== undefined).map(line => `${spinner} ${line} ${waited}`)
@@ -222,7 +257,30 @@ async function main(args: string[]): Promise<number> {
           say(`pid ${pid} exited after ${formatDuration(Date.now() - started)}`)
       }
 
-      if ((watch?.done ?? true) && portLeft === undefined && urlLeft === undefined && !isPidLeft) {
+      if (values.cmd !== undefined && cmdLeft !== undefined && Date.now() - cmdRanAt >= interval) {
+        const budget = Math.max(1, Math.min(CMD_RUN_LIMIT, started + timeout - Date.now()))
+
+        const problem = await cmdProblem(values.cmd, budget)
+
+        // a run the deadline cut short says less than the answer before it
+        if (!(problem?.startsWith('timed out') === true && budget < CMD_RUN_LIMIT && cmdLeft !== 'not run yet'))
+          cmdLeft = problem
+
+        cmdRanAt = Date.now()
+
+        if (cmdLeft === undefined)
+          say(`\`${values.cmd}\` exited 0 after ${formatDuration(Date.now() - started)}`)
+      }
+
+      const isMet = [
+        values.until !== undefined && (watch?.done ?? false),
+        port !== undefined && portLeft === undefined,
+        values.url !== undefined && urlLeft === undefined,
+        pid !== undefined && !isPidLeft,
+        values.cmd !== undefined && cmdLeft === undefined,
+      ]
+
+      if (isAny ? isMet.includes(true) : (watch?.done ?? true) && portLeft === undefined && urlLeft === undefined && !isPidLeft && cmdLeft === undefined) {
         if (json)
           printJson({ met: true, ms: Date.now() - started, line: matched ?? null })
 
@@ -253,9 +311,12 @@ async function main(args: string[]): Promise<number> {
   if (isPidLeft)
     missing.push(`pid ${pid} is still running`)
 
+  if (cmdLeft !== undefined)
+    missing.push(`\`${values.cmd}\` ${cmdLeft}`)
+
   const lines = watch?.excerpt() ?? []
 
-  fail(`gave up after ${formatDuration(timeout)}: ${missing.join(', ')}${lines.length === 0 ? '' : `\nlast lines of ${watch?.path}:\n${numbered(lines)}`}`)
+  fail(`gave up after ${formatDuration(timeout)}${isAny ? ', none met' : ''}: ${missing.join(', ')}${lines.length === 0 ? '' : `\nlast lines of ${watch?.path}:\n${numbered(lines)}`}`)
 }
 
 process.exitCode = await runMain({ name: 'waitfor', run: main })
