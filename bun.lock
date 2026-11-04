@@ -191,7 +191,7 @@
     },
     "packages/out": {
       "name": "@kaynooo/cli-out",
-      "version": "0.7.1",
+      "version": "0.8.0",
       "bin": {
         "out": "./dist/cli.js",
       },
