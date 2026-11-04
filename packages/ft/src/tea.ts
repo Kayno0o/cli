@@ -1,4 +1,5 @@
 import { runTool, upTo } from '@kaynooo/cli-kit'
+import { requireForgeOrigin } from './forge'
 
 // How long one tea call may take before it is given up; the wait loops poll again.
 const TEA_MS = 60_000
@@ -9,6 +10,9 @@ function repoFlag(repo: string | undefined): string[] {
 }
 
 async function request(path: string, repo: string | undefined): Promise<string> {
+  if (repo === undefined && path.includes('{owner}'))
+    await requireForgeOrigin()
+
   const result = await runTool(`tea api ${path}`, ['tea', 'api', ...repoFlag(repo), path], { timeoutMs: TEA_MS })
 
   if (result.code !== 0)
@@ -55,6 +59,10 @@ export async function repoApi<T>(path: string, repo?: string): Promise<T> {
 export async function repoWrite<T>(method: 'POST' | 'PATCH', path: string, fields: Record<string, string>, repo?: string): Promise<T> {
   const full = `repos/{owner}/{repo}/${path}`
   const flags = Object.entries(fields).flatMap(([name, value]) => ['-f', `${name}=${value}`])
+
+  if (repo === undefined)
+    await requireForgeOrigin()
+
   const result = await runTool(`tea api ${full}`, ['tea', 'api', ...repoFlag(repo), '-X', method, ...flags, full], { timeoutMs: TEA_MS })
 
   if (result.code !== 0)
