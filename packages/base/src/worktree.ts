@@ -53,6 +53,19 @@ export async function resolveRef(root: string, ref: string): Promise<string> {
   return stdoutOf(ran)
 }
 
+// The ref `proof` runs before at when none is given: the merge base with origin/main when HEAD is on a branch other than main that is ahead of it, else HEAD.
+export async function defaultProofRef(root: string): Promise<string> {
+  const branch = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], root)
+
+  if (branch.code !== 0 || stdoutOf(branch) === 'main')
+    return 'HEAD'
+
+  const base = await git(['merge-base', 'HEAD', 'origin/main'], root)
+  const head = await git(['rev-parse', 'HEAD'], root)
+
+  return base.code === 0 && stdoutOf(base) !== stdoutOf(head) ? stdoutOf(base) : 'HEAD'
+}
+
 // Repository paths of the --keep files, refused before anything is created when one is missing or outside the repository.
 export function keptPaths(root: string, cwd: string, paths: string[]): string[] {
   const realRoot = realpathSync(root)

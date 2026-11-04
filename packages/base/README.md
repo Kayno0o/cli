@@ -26,7 +26,9 @@ base --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php
 proof --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php
 ```
 
-- `--ref`, `--keep`, `--no-link` and the single spaced argument through `sh -c` behave as in `base`.
+- `--ref` defaults to the merge base with `origin/main` when HEAD is on a branch other than `main` that is ahead of it, else HEAD; `--ref HEAD` forces the old default. The `--json` `ref` and the line name the commit it resolved to.
+- `--runs <n>` (`-n`) runs the command n times in the working tree, for a flaky test: every run must pass, the outcome is `flaky` (exit 1) when it failed before and only some runs fail now, and a line lists each run (`now: run 1 passed, run 2 failed (exit 1), run 3 passed`). The ref side runs once. `--json` adds `runs: [{code}]`.
+- `--keep`, `--no-link` and the single spaced argument through `sh -c` behave as in `base`.
 - Four outcomes, each printed as one line followed by the output of the side that explains it: `fails at 1a2b3c4, passes now` (the proof, exit 0, the output before), `passes at 1a2b3c4 too: it does not fail without the change`, `fails at 1a2b3c4 and fails now too` (the output now) and `passes at 1a2b3c4, fails now` (the output now), all three exit 1.
-- `--json` prints `{outcome, proved, ref, sha, before: {code, output}, now: {code, output}}`, `outcome` being `proved`, `passes-before`, `fails-both` or `regressed`.
+- `--json` prints `{outcome, proved, ref, sha, before: {code, output}, now: {code, output}}`, `outcome` being `proved`, `passes-before`, `fails-both` `regressed` or `flaky`.
 - Exit codes: 0 fails before and passes now, 1 any other outcome, 2 a usage error, an unknown ref, a refused command, one that cannot start or one that ends with exit 126, 127 or a signal (or 128 plus the signal when interrupted).

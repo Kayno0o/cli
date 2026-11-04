@@ -95,6 +95,7 @@ describe('proof', () => {
       sha: git('rev-parse', 'HEAD'),
       before: { code: 1, output: 'missing fixed\n' },
       now: { code: 0, output: '' },
+      runs: [{ code: 0 }],
     })
   })
 
@@ -133,5 +134,50 @@ describe('proof', () => {
     expect(proof(['--ref', 'nope', '--', 'true']).code).toBe(2)
     expect(proof(['--', 'no-such-binary-here']).code).toBe(2)
     expect(git('worktree', 'list').split('\n')).toHaveLength(1)
+  })
+})
+
+describe('proof --runs', () => {
+  // Fails at HEAD, then passes on the first and third run now and fails on the second.
+  const flaky = ['--', 'grep -q fixed a.txt && echo x >> count && test "$(wc -l < count)" -ne 2']
+
+  test('fails when any of the runs now fails, reporting each run', () => {
+    file('a.txt', 'fixed\n')
+    const result = proof(['--runs', '3', ...flaky])
+
+    expect(result.code).toBe(1)
+    expect(result.out).toStartWith(`fails at ${git('rev-parse', '--short=7', 'HEAD')}, but 1 of 3 runs fail now\nnow: run 1 passed, run 2 failed (exit 1), run 3 passed\n`)
+  })
+
+  test('passes when every run passes, and one run is the default', () => {
+    file('a.txt', 'fixed\n')
+
+    expect(proof(['--runs', '3', ...check('fixed')])).toMatchObject({ code: 0, out: expect.stringContaining('passes now in 3 of 3 runs') })
+    expect(proof(check('fixed')).out).not.toContain('run 1')
+    expect(proof(['--runs', '0', ...check('fixed')]).code).toBe(2)
+  })
+
+  test('--json carries every run', () => {
+    file('a.txt', 'fixed\n')
+    const json = JSON.parse(proof(['--runs', '3', '--json', ...flaky]).out) as { outcome: string, runs: { code: number }[] }
+
+    expect(json.outcome).toBe('flaky')
+    expect(json.runs.map(run => run.code)).toEqual([0, 1, 0])
+  })
+})
+
+describe('proof default ref', () => {
+  test('on a branch ahead of origin/main the ref is the merge base, else HEAD', () => {
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    expect(proof(check('second')).out).toContain('passes at')
+    git('checkout', '-q', '-b', 'feat')
+    file('a.txt', 'fixed\n')
+    git('commit', '-q', '-am', 'fix')
+
+    const result = proof(check('fixed'))
+
+    expect(result.code).toBe(0)
+    expect(result.out).toStartWith(`fails at ${git('rev-parse', '--short=7', 'origin/main')}, passes now`)
+    expect(proof(['--ref', 'HEAD', ...check('fixed')]).code).toBe(1)
   })
 })
