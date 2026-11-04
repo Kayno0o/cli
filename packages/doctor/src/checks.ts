@@ -103,19 +103,19 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
     return { check, ok: false, detail: 'not installed', fix: `bun install -g ${name}` }
 
   const off = bins.filter(bin => host.which(bin) === null)
-
-  if (off.length > 0)
-    return { check, ok: false, detail: `${version}, ${off.join(', ')} not on the PATH`, fix: `add ${join(host.globalModules, '..', '..', '..', 'bin')} to the PATH` }
-
   const info = await host.run(['bun', 'info', name, 'version', '--no-cache'])
   const answered = info.code === 0 ? firstLine(info.stdout.trim().split('\n').at(-1) ?? '') : ''
   const latest = VERSION.test(answered) ? answered : ''
 
+  // A release newer than the install comes first: an old version often lacks the very bin that is missing.
+  if (latest !== '' && Bun.semver.order(version, latest) < 0)
+    return { check, ok: false, detail: `${version}, ${latest} released${off.length > 0 ? `, ${off.join(', ')} not on the PATH` : ''}`, fix: `bun install -g ${name}@${latest}` }
+
+  if (off.length > 0)
+    return { check, ok: false, detail: `${version}, ${off.join(', ')} not on the PATH`, fix: `add ${join(host.globalModules, '..', '..', '..', 'bin')} to the PATH` }
+
   if (latest === '')
     return { check, ok: true, detail: `${version}, the registry did not answer: ${firstLine(info.stderr) || answered || 'no version'}` }
-
-  if (Bun.semver.order(version, latest) < 0)
-    return { check, ok: false, detail: `${version}, ${latest} released`, fix: `bun install -g ${name}@${latest}` }
 
   return { check, ok: true, detail: version }
 }
