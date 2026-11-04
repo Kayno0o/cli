@@ -10,7 +10,7 @@ bun install -g @kaynooo/cli-env
 
 | Command | What it does |
 | --- | --- |
-| `ev list [file]` | every key of the folder's `.env*` files (or one file), secrets masked |
+| `ev list [file]` | every key of the folder's `.env*` files (or one file), secrets masked; `--json` prints `[{file, key, value, secret}]` (as for `get`, `grep` and `show`) |
 | `ev get KEY [file]` | one key's masked value, from every file that sets it or from one |
 | `ev grep [-i] <regex> [file...]` | the keys matching the regex (matched against the key, never the value), values masked |
 | `ev show <rev>:<file>` | an env file as a git revision holds it, values masked |
@@ -18,8 +18,8 @@ bun install -g @kaynooo/cli-env
 | `ev unset KEY [file]` | removes a key |
 | `ev cp KEY --from <file> --to <file>` | copies a key's value to another file without printing it, replacing the key there or appending it, `--as NEWKEY` to rename |
 | `ev mv KEY --from <file> --to <file>` | moves a key's line as written, `--force` to replace one the target has |
-| `ev diff <a> <b>` | names the keys set in one file and not the other, exit 1 when they differ |
-| `ev missing [file]` | names the keys of `.env.example` (`--against`) that the file lacks, exit 1 when some are |
+| `ev diff <a> <b>` | names the keys set in one file and not the other, exit 1 when they differ; `--json` prints `{a, b, onlyA, onlyB}` |
+| `ev missing [file]` | names the keys of `.env.example` (`--against`) that the file lacks, exit 1 when some are; `--json` prints `{a, b, onlyA, onlyB}` with the reference as `a` |
 | `ev pins [dir]` | checks an app's tests pin the env that reaches outside (see below), exit 1 when something is unpinned |
 | `ev audit [dir...]` | lists the `.env` files any account can read or git tracks, and the compose files any account can read that write a secret or URL password out, with the fix for each, exit 1 when it finds one |
 | `ev audit --fix [dir...]` | moves each secret a listed compose file writes out into the `.env` beside it as `${KEY}` (a key the `.env` sets to another value stays put), puts it back when `docker compose config` resolves differently, and shuts other accounts out of both files and of every listed `.env`; exit 1 when something is left |

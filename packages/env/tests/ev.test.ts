@@ -255,6 +255,35 @@ describe('ev', () => {
     expect(ev(['diff', '.env', '.env.example']).code).toBe(0)
   })
 
+  test('--json lists keys with masked values and a secret flag', async () => {
+    await write('.env', ENV)
+    await write('.env.local', 'PORT=4000\n')
+
+    const listed = JSON.parse(ev(['list', '--json']).out) as { file: string, key: string, value: string, secret: boolean }[]
+
+    expect(listed).toContainEqual({ file: '.env', key: 'API_TOKEN', value: 'tok***(20)', secret: true })
+    expect(listed).toContainEqual({ file: '.env', key: 'PORT', value: '3000', secret: false })
+    expect(listed).toContainEqual({ file: '.env', key: 'DATABASE_URL', value: 'postgres://app:***@db:5432/app', secret: true })
+    expect(JSON.parse(ev(['get', 'PORT', '--json']).out)).toEqual([{ file: '.env', key: 'PORT', value: '3000', secret: false }, { file: '.env.local', key: 'PORT', value: '4000', secret: false }])
+    expect(JSON.parse(ev(['grep', '^API_', '--json']).out)).toEqual([{ file: '.env', key: 'API_TOKEN', value: 'tok***(20)', secret: true }])
+    expect(JSON.parse(ev(['list', '--json', 'nope']).err)).toMatchObject({ error: expect.any(String) })
+  })
+
+  test('--json names the keys only one side sets for diff and missing, exiting 1 as without it', async () => {
+    await write('.env', 'A=1\nB=secretb\n')
+    await write('.env.example', 'A=\nC=\n')
+
+    const diff = ev(['diff', '.env', '.env.example', '--json'])
+
+    expect(diff.code).toBe(1)
+    expect(JSON.parse(diff.out)).toEqual({ a: '.env', b: '.env.example', onlyA: ['B'], onlyB: ['C'] })
+    expect(diff.out).not.toContain('secretb')
+    expect(JSON.parse(ev(['missing', '--json']).out)).toEqual({ a: '.env.example', b: '.env', onlyA: ['C'], onlyB: ['B'] })
+
+    await write('.env', 'A=1\nC=3\n')
+    expect(ev(['missing', '--json'])).toMatchObject({ code: 0, out: expect.stringContaining('"onlyA": []') })
+  })
+
   test('grep matches keys only and masks their values', async () => {
     await write('.env', ENV)
     await write('.env.local', 'DB_PASSWORD=supersecret\n')

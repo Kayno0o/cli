@@ -1,4 +1,4 @@
-import { fail, parse } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
 import { entries } from '../dotenv'
 import { readEnv } from '../files'
 
@@ -6,20 +6,26 @@ const diffUsage = `ev diff <a> <b>
 
 Names the keys set in one file and not the other, never their values.
 
+--json prints {a, b, onlyA, onlyB}.
+
 Exits 0 when both set the same keys, 1 when they differ, 2 on a usage error.`
 
 const missingUsage = `ev missing [file]
 
 Names the keys the reference file sets that the file (.env by default) does not.
 
+--json prints {a, b, onlyA, onlyB} with the reference as a, so onlyA is what is missing.
+
 Exits 0 when none is missing, 1 when some are, 2 on a usage error.`
+
+const jsonFlag = { json: jsonOption() } as const
 
 async function keys(path: string): Promise<Set<string>> {
   return new Set(entries(await readEnv(path)).keys())
 }
 
 export async function diff(args: string[]): Promise<number> {
-  const parsed = parse(args, diffUsage, {})
+  const parsed = parse(args, diffUsage, jsonFlag)
 
   const [a, b] = parsed.positionals
 
@@ -28,10 +34,16 @@ export async function diff(args: string[]): Promise<number> {
 
   const left = await keys(a)
   const right = await keys(b)
-  const lines = [
-    ...[...left].filter(key => !right.has(key)).map(key => `only in ${a}: ${key}`),
-    ...[...right].filter(key => !left.has(key)).map(key => `only in ${b}: ${key}`),
-  ]
+  const onlyA = [...left].filter(key => !right.has(key))
+  const onlyB = [...right].filter(key => !left.has(key))
+
+  if (parsed.values.json === true) {
+    printJson({ a, b, onlyA, onlyB })
+
+    return onlyA.length + onlyB.length === 0 ? 0 : 1
+  }
+
+  const lines = [...onlyA.map(key => `only in ${a}: ${key}`), ...onlyB.map(key => `only in ${b}: ${key}`)]
 
   if (lines.length === 0)
     return 0
@@ -42,12 +54,19 @@ export async function diff(args: string[]): Promise<number> {
 }
 
 export async function missing(args: string[]): Promise<number> {
-  const parsed = parse(args, missingUsage, { against: { type: 'string', description: 'the reference file (.env.example by default)' } })
+  const parsed = parse(args, missingUsage, { against: { type: 'string', description: 'the reference file (.env.example by default)' }, ...jsonFlag })
 
   const [file = '.env'] = parsed.positionals
   const against = parsed.values.against ?? '.env.example'
   const have = await keys(file)
-  const absent = [...await keys(against)].filter(key => !have.has(key))
+  const reference = await keys(against)
+  const absent = [...reference].filter(key => !have.has(key))
+
+  if (parsed.values.json === true) {
+    printJson({ a: against, b: file, onlyA: absent, onlyB: [...have].filter(key => !reference.has(key)) })
+
+    return absent.length === 0 ? 0 : 1
+  }
 
   if (absent.length === 0)
     return 0
