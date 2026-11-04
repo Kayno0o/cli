@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, paint, parse } from '@kaynooo/cli-kit'
+import { fail, paint, parse, printJson } from '@kaynooo/cli-kit'
 import { byRecency, emit, fzf, list, record, runs, table } from '@kaynooo/cli-kit/fzf'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { children, from, nearestStack, services, up } from './stack'
@@ -50,6 +50,7 @@ sf -
 Picks a Symfony console command with fzf and runs it, asking for each required argument it needs. The commands last run come first, per folder, and the picker opens on the list cached from the last run while the console answers.
 The console is the nearest bin/console up to the repository root, then those of the child folders (keyed \`api/cache:clear\`). It runs in the php service of the nearest compose stack when there is one, else with the local php; the container's working directory is taken to be the app.
 \`sf -\` runs the last command again with the arguments it ran with, \`sf <command> [args...]\` runs without the picker: a name the list does not hold goes to the console as is, which resolves \`c:c\` to \`cache:clear\` itself. Without fzf or a terminal it lists the commands instead.
+\`sf --list --json\` (or \`sf --json\`) prints every command as JSON, each with its console folder, description, signature, arguments and options.
 The hidden flags --list, --names, --rows, --show, --record and --emit are for term, tmux and the shell completions.
 
 Exits with the code of the console, 1 when there is no bin/console here.`
@@ -155,6 +156,21 @@ export function signature(command: Command): string {
   return argumentsOf(command)
     .map(argument => `${argument.is_required ? '<' : '['}${argument.name}${argument.is_array ? '...' : ''}${argument.is_required ? '>' : ']'}`)
     .join(' ')
+}
+
+/** A command as `sf --json` prints it, the arguments and options of the console's own definition. */
+export function entryJson(entry: Entry) {
+  const { command } = entry
+
+  return {
+    name: key(entry),
+    command: command.name,
+    dir: entry.app.dir,
+    description: command.description,
+    signature: signature(command),
+    arguments: argumentsOf(command).map(argument => ({ name: argument.name, required: argument.is_required, array: argument.is_array, description: argument.description })),
+    options: optionsOf(command).map(option => ({ name: option.name, shortcut: option.shortcut, acceptsValue: option.accept_value, description: option.description })),
+  }
 }
 
 function rows(found: Entry[]): Row[] {
@@ -300,6 +316,15 @@ async function hidden(flag: string, rest: string[]): Promise<number | undefined>
 
 export async function sf(args: string[]): Promise<number> {
   const [flag = ''] = args
+
+  if (args.length <= 2 && args.includes('--json') && (flag === '--json' || flag === '--list')) {
+    const found = await entries(false)
+
+    printJson(byRecency(found, runs('sf'), key).map(entryJson))
+
+    return 0
+  }
+
   const flagged = await hidden(flag, args.slice(1))
 
   if (flagged !== undefined)

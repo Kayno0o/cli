@@ -1,6 +1,6 @@
 import type { Command, Entry } from '../src/sf'
 import { describe, expect, test } from 'bun:test'
-import { answered, argumentsOf, commandFor, key, live, marked, phpService, signature } from '../src/sf'
+import { answered, argumentsOf, commandFor, entryJson, key, live, marked, phpService, signature } from '../src/sf'
 
 function command(name: string, args: Record<string, { is_required: boolean, is_array?: boolean }> | [] = []): Command {
   return {
@@ -42,6 +42,22 @@ describe('signature', () => {
   test('reads an empty array as no arguments', () => {
     expect(argumentsOf(command('x', []))).toEqual([])
     expect(signature(command('x', []))).toBe('')
+  })
+})
+
+describe('entryJson', () => {
+  test('names the command with its folder, signature and arguments', () => {
+    const found = { ...command('cache:clear', { env: { is_required: true }, paths: { is_required: false, is_array: true } }), description: 'Clears the cache' }
+
+    expect(entryJson(entry(found, 'api'))).toEqual({
+      name: 'api/cache:clear',
+      command: 'cache:clear',
+      dir: 'api',
+      description: 'Clears the cache',
+      signature: '<env> [paths...]',
+      arguments: [{ name: 'env', required: true, array: false, description: '' }, { name: 'paths', required: false, array: true, description: '' }],
+      options: [],
+    })
   })
 })
 
