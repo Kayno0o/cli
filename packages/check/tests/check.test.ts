@@ -4,6 +4,7 @@ import { Exit } from '@kaynooo/cli-kit'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
+import { fix } from '../src/fix'
 import { discover } from '../src/steps'
 
 const temp = tempDirs()
@@ -189,5 +190,51 @@ describe('check', () => {
 
   test('a folder without steps fails', async () => {
     expect(await failure(check([], new URL('fixtures', import.meta.url).pathname))).toContain('no check, typecheck, lint, test step')
+  })
+})
+
+describe('check --fix', () => {
+  test('runs what fix runs, with the same output', async () => {
+    const dir = temp('check-fix-')
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { 'lint:fix': 'true' } }))
+
+    const viaFix = await capture(async () => fix(['--list'], dir))
+    const viaCheck = await capture(async () => check(['--fix', '--list'], dir))
+
+    expect(viaCheck.result).toBe(0)
+    expect(viaCheck.out).toBe(viaFix.out)
+    expect(viaCheck.out).toContain('lint:fix')
+  })
+
+  test('--only names fixers, and the step-only options are refused', async () => {
+    const dir = temp('check-fix-only-')
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { 'lint:fix': 'true' } }))
+    expect(await failure(check(['--fix', '--only', 'lint'], dir))).toContain('no lint fixer here, found lint:fix')
+    expect(await failure(check(['--fix', '--changed'], dir))).toContain('--changed')
+    expect(await failure(check(['--fix', '--failed'], dir))).toContain('--failed')
+  })
+})
+
+describe('check --failed', () => {
+  test('re-runs only the steps that failed in the last run', async () => {
+    await capture(async () => check([], repo('js')))
+
+    const { result, out } = await capture(async () => check(['--failed'], repo('js')))
+
+    expect(result).toBe(1)
+    expect(out).toContain('FAIL  lint')
+    expect(out).not.toContain('ok    check')
+    expect(out).not.toContain('ok    test')
+  })
+
+  test('fails with usage when no run failed', async () => {
+    const dir = temp('check-failed-')
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { lint: 'true' } }))
+    expect(await failure(check(['--failed'], dir))).toContain('no failed step in the last run')
+    await capture(async () => check([], dir))
+    expect(await failure(check(['--failed'], dir))).toContain('no failed step in the last run')
   })
 })

@@ -1,5 +1,5 @@
 import type { HeldSignals } from '@kaynooo/cli-kit'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import process from 'node:process'
 import { formatDuration, privateLogDirectory, runCommand, stripAnsi, sweepLogs } from '@kaynooo/cli-kit'
@@ -17,17 +17,53 @@ export interface StepSettings {
 
 const LOG_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000
 
+// Written in a run folder when the run ends: the name and result of each step that ran, for --failed.
+export const RESULTS_FILE = 'results.json'
+
+const runPrefix = (cwd: string) => `${basename(cwd)}-${Bun.hash(cwd).toString(36)}-`
+
 // Where the steps' full outputs go: a folder of the user's own per run, the ones older than three days removed.
 export async function logDirectory(cwd: string): Promise<string> {
   const root = await privateLogDirectory('check')
 
   await sweepLogs(root, LOG_MAX_AGE_MS)
 
-  const path = join(root, `${basename(cwd)}-${Bun.hash(cwd).toString(36)}-${Date.now().toString(36)}-${process.pid}`)
+  const path = join(root, `${runPrefix(cwd)}${Date.now().toString(36)}-${process.pid}`)
 
   await mkdir(path, { mode: 0o700 })
 
   return path
+}
+
+// The names of the steps that failed in the folder's latest finished run, undefined when it has none.
+export async function lastFailed(cwd: string): Promise<string[] | undefined> {
+  const root = await privateLogDirectory('check')
+  const prefix = runPrefix(cwd)
+  let latest: { time: number, file: string } | undefined
+
+  for (const name of await readdir(root)) {
+    if (!name.startsWith(prefix))
+      continue
+
+    const file = join(root, name, RESULTS_FILE)
+
+    try {
+      const { mtimeMs } = await stat(file)
+
+      if (latest === undefined || mtimeMs > latest.time)
+        latest = { time: mtimeMs, file }
+    }
+    catch {
+      // A run still going, or one that was interrupted, has no results yet.
+    }
+  }
+
+  if (latest === undefined)
+    return undefined
+
+  const results = JSON.parse(await Bun.file(latest.file).text()) as { name: string, ok: boolean }[]
+
+  return results.filter(result => !result.ok).map(result => result.name)
 }
 
 // Saves a command's output in a log of the user's own, returning its path.

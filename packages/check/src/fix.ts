@@ -5,17 +5,17 @@ import { existsSync, statSync } from 'node:fs'
 import { rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
-import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, table } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, parse, printJson, table } from '@kaynooo/cli-kit'
 import { changedFiles, dirtyFiles } from './changes'
-import { pick } from './check'
-import { place, placeOptions, placeSettings, programOf, shellIn, Stack } from './compose'
+import { place, placeSettings, programOf, shellIn, Stack } from './compose'
 import { declarePhony } from './makefile'
+import { fixOptions, pick } from './options'
 import { logDirectory, outcomeJson, printOutcome, refusedStep, runStep } from './run'
 import { candidates, CS_FIXER_CONFIGS, firstFile, MAKEFILES, read } from './steps'
 
-const usage = `fix [--only <fixers>] [--timeout <duration>] [--in <service> | --host] [--list]
+export const fixUsage = `fix [--only <fixers>] [--timeout <duration>] [--in <service> | --host] [--list]
 
-Runs the folder's fixers: the project's own \`fix\` script, else its \`lint:fix\` and \`format\` ones (package.json through bun run, composer.json, a Justfile or a Makefile), then the formatters its files call for: php-cs-fixer where configured and composer.json has no fixer, just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY.
+Alias of \`check --fix\`. Runs the folder's fixers: the project's own \`fix\` script, else its \`lint:fix\` and \`format\` ones (package.json through bun run, composer.json, a Justfile or a Makefile), then the formatters its files call for: php-cs-fixer where configured and composer.json has no fixer, just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY.
 It looks at the folder itself only, so each package of a monorepo gets its own run.
 A script or php-cs-fixer runs inside the docker compose service that bind-mounts the folder (found in compose.yml, compose.yaml or docker-compose.yml, up to the repository root), at the matching path; a service that is down is never started, the fixer fails naming it. The formatters run on the host. --in picks the service, --host forces the host.
 Prints one line per fixer, what a failing one said, then the files the run changed. Each fixer's full output is saved to the file whose path ends its line.
@@ -23,13 +23,7 @@ A fixer still running after --timeout is ended with everything it started, but n
 Exits 0 when every fixer ran or was skipped for a missing binary, 1 when one failed, 2 on bad usage, when nothing applies or when a fixer timed out.
 --json prints {fixers: [{name, command, in?, ok, ms, log, failed?} or {name, command, skipped}], changed} once every fixer ran, changed null outside a git repository.`
 
-const options = {
-  list: { type: 'boolean', short: 'l', description: 'print the fixers that apply, the commands that run them and where (host or service), without running them' },
-  only: { type: 'string', short: 'o', description: 'comma separated fixers to run, by the names --list prints' },
-  timeout: { type: 'string', short: 't', description: 'longest a fixer may run before it is ended (30s, 5m, 1h), none by default' },
-  ...placeOptions,
-  json: jsonOption(),
-} as const
+export interface FixValues { list?: boolean | undefined, only?: string | undefined, timeout?: string | undefined, in?: string | undefined, host?: boolean | undefined, json?: boolean | undefined }
 
 export interface Fixer extends Step {
   // The binary it runs, skipped with a note when missing.
@@ -151,10 +145,16 @@ function printChanged(changed: string[]): void {
     console.log(`  and ${changed.length - MAX_CHANGED} more`)
 }
 
-// Runs the folder's fixers in order, one line each with what failed under a failing one, then lists the files they changed; returns 0 only when every fixer ran or was skipped for a missing binary.
 export async function fix(args: string[], cwd = process.cwd()): Promise<number> {
-  const parsed = parse(args, usage, options, { replaces: 'running each fixer and formatter by hand, or docker compose exec <service> bun run lint:fix', examples: ['fix', ['fix --list', 'the fixers it would run']] })
-  const settings = placeSettings(parsed.values)
+  const parsed = parse(args, fixUsage, fixOptions, { replaces: 'running each fixer and formatter by hand, or docker compose exec <service> bun run lint:fix', examples: ['fix', ['fix --list', 'the fixers it would run']] })
+
+  return runFixers(parsed.values, cwd)
+}
+
+// Runs the folder's fixers in order, one line each with what failed under a failing one, then lists the files they changed; returns 0 only when every fixer ran or was skipped for a missing binary.
+export async function runFixers(values: FixValues, cwd: string): Promise<number> {
+  const parsed = { values }
+  const settings = placeSettings(values)
 
   if (process.env[RUNNING] !== undefined)
     fail('a fixer called fix again, which would recurse: give its script another command')

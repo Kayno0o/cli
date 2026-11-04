@@ -1,6 +1,6 @@
 # check and fix
 
-`check` runs a repo's validation and `fix` its fixers, both showing only what failed, so a Claude Code session spends no tokens on passing output.
+`check` runs a repo's validation and `check --fix` its fixers, both showing only what failed, so a Claude Code session spends no tokens on passing output. `fix` stays installed as the alias of `check --fix`: same options, output and exit codes.
 
 ```sh
 bun install -g @kaynooo/cli-check
@@ -10,6 +10,8 @@ check --only lint,test
 check --timeout 5m   # end a step still running after 5 minutes, exit 2
 check --slot     # queue each step behind the machine-wide slots of `slot` (@kaynooo/cli-wait)
 check --in app   # run every step in this compose service, whatever is detected
+check --failed   # run again only the steps that failed in this folder's last run
+check --fix      # run the fixers instead, what `fix` does
 check --host     # run on the host even when a compose service mounts the folder
 check --json     # [{name, command, in?, ok, ms, log, failed?}] once every step ran
 ```
@@ -55,7 +57,11 @@ SIGINT, SIGTERM and SIGHUP go to the running step's whole process group and `che
 
 Exit code 0 when every step passed, 1 when one failed, 2 on bad usage, when no step is found or when a step timed out.
 
+`--failed` reads the last finished run's folder of logs, where each run leaves a `results.json` of its steps' names and results, and runs the steps that failed there again. When that run had none, or there was no run, it says so and exits 2. The re-run leaves its own `results.json`.
+
 ## fix
+
+`fix` is `check --fix`: `check --fix --only lint:fix` is the same call. `--only` then names fixers, and `--changed`, `--failed` and `--slot` are refused.
 
 ```sh
 fix              # run every fixer that applies to this folder
