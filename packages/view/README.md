@@ -1,6 +1,6 @@
 # @kaynooo/cli-view
 
-`view` shows a markdown file or a git diff in the colours of the other @kaynooo CLIs: the kit roles, wrapped to the terminal, paged through `less -FRX` when it is long.
+`view` shows a markdown file or a git diff in the colours of the other @kaynooo CLIs: the kit roles, wrapped to the terminal, paged through `less -FRX` when it is long. It is for a person reading in a terminal, not for a Claude Code session, which reads files with its own tools.
 
 ```sh
 bun add -g @kaynooo/cli-view

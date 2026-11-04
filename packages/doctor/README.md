@@ -1,6 +1,6 @@
 # doctor
 
-`doctor` checks a host's @kaynooo/cli-* install in one call: one line per check, the command that fixes a failing one beside it.
+`doctor` checks a host's @kaynooo/cli-* install in one call: one line per check, the command that fixes a failing one beside it. The package also ships a second bin, `cli` (`cli stats`, `cli list`, below), which is not `doctor`.
 
 ```sh
 bun install -g @kaynooo/cli-doctor

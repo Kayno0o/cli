@@ -1,5 +1,5 @@
 import type { Job } from '../pipelines'
-import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, parse, runHint, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { failedJobs, jobsOf, jobTrace, pipelineById } from '../pipelines'
 import { excerpt, traceLines } from '../trace'
@@ -32,7 +32,7 @@ export async function logs(args: string[]): Promise<number> {
   const { values, positionals } = parsed
 
   if (positionals[0] === undefined)
-    fail(`a pipeline id is needed, as \`gl runs\` lists them\n\n${usage}`)
+    fail('a pipeline id is needed', 2, runHint('gl runs', 'list them'))
 
   const pipeline = await pipelineById(wholeNumber(positionals[0], '<pipeline id>', 0), values.repo)
   const jobs = await jobsOf(pipeline.id, values.repo)

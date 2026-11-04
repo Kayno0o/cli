@@ -4,7 +4,7 @@ import { repoOption } from '../args'
 import { resolveCommit, subjects } from '../git'
 import { FINISHED, pipelinesOn, recentPipelines } from '../pipelines'
 
-const usage = `gl runs [--sha <ref>]
+const usage = `gl runs [--sha <ref>] [--branch <name>] [-n <rows> | --full] [--json]
 
 Lists recent pipelines with their ref, source, commit, duration and age, the commit's subject when the clone has it, ten by default with the count of the rest (--full for all of them).
 
