@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Arg, Row } from '@kaynooo/cli-kit/fzf'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -47,13 +48,13 @@ export interface Entry {
 const usage = `sf [command] [args...]
 sf -
 
-Picks a Symfony console command with fzf and runs it, asking for each required argument it needs. The commands last run come first, per folder, and the picker opens on the list cached from the last run while the console answers.
+Without a terminal or without fzf (a script, a pipe, an agent) \`sf\` lists the commands, one per line with its description: that listing is the form to use there, and \`sf --list --json\` gives each with its arguments and options. On a terminal with fzf it picks a Symfony console command instead and runs it, asking for each required argument it needs. The commands last run come first, per folder, and the picker opens on the list cached from the last run while the console answers.
 The console is the nearest bin/console up to the repository root, then those of the child folders (keyed \`api/cache:clear\`). It runs in the php service of the nearest compose stack when there is one, else with the local php; the container's working directory is taken to be the app.
-\`sf -\` runs the last command again with the arguments it ran with, \`sf <command> [args...]\` runs without the picker: a name the list does not hold goes to the console as is, which resolves \`c:c\` to \`cache:clear\` itself. Without fzf or a terminal it lists the commands instead.
+\`sf -\` runs the last command again with the arguments it ran with, \`sf <command> [args...]\` runs without the picker: a name the list does not hold goes to the console as is, which resolves \`c:c\` to \`cache:clear\` itself.
 \`sf --list --json\` (or \`sf --json\`) prints every command as JSON, each with its console folder, description, signature, arguments and options.
-The hidden flags --list, --names, --rows, --show, --record and --emit are for term, tmux and the shell completions.
+The hidden flags --list, --names, --rows, --show, --record and --emit are for term, tmux and the shell completions.`
 
-Exits with the code of the console, 1 when there is no bin/console here.`
+const EXITS: ExitRow[] = [['the code of the console', 'a command it ran'], [0, 'it listed the commands'], [1, 'no bin/console here, or it listed no command'], [2, 'a usage error']]
 
 /** Fzf paints its rows and previews itself, so these keep their colors whatever stream they are written to. */
 const colors = paint({ isTTY: true })
@@ -337,6 +338,7 @@ export async function sf(args: string[]): Promise<number> {
   const parsed = parse(last ? [] : words, usage, {}, {
     positionals: ['[command]'],
     trailing: true,
+    exits: EXITS,
     replaces: 'bin/console typed in the php container, with the command names and arguments looked up by hand',
     examples: ['sf', ['sf cache:clear', 'run it without the picker'], ['sf c:c --env=prod', 'the console resolves abbreviations itself'], ['sf -', 'the last command again, with its arguments']],
   })

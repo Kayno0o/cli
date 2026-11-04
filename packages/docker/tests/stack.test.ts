@@ -76,6 +76,13 @@ describe('labelled', () => {
   })
 })
 
+describe('commandFor logs', () => {
+  test('--tail changes the count and --no-follow drops -f', async () => {
+    expect(await commandFor(service('worker'), 'logs', { tail: 50, follow: false })).toEqual(['docker', 'compose', 'logs', '--tail=50', 'worker'])
+    expect(await commandFor(service('worker'), 'logs', { tail: 5 })).toEqual(['docker', 'compose', 'logs', '-f', '--tail=5', 'worker'])
+  })
+})
+
 describe('commandFor', () => {
   test('runs from the folder of a child stack', async () => {
     expect(key(service('worker', 'api'))).toBe('api/worker')

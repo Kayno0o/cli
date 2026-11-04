@@ -1,6 +1,9 @@
+import type { Report } from '../src/dlog'
 import { knownSecrets } from '@kaynooo/cli-env/mask'
 import { describe, expect, test } from 'bun:test'
-import { dlog, errorLines, healthOf, withoutKeys } from '../src/dlog'
+import { dlog, errorLines, healthOf, isUp, needsLook, withoutKeys } from '../src/dlog'
+
+const report = (over: Partial<Report>): Report => ({ key: 'php', state: 'running', health: '', status: 'Up', errors: [], tail: [], unreadable: undefined, fine: true, down: false, unhealthy: false, ...over })
 
 describe('errorLines', () => {
   test('keeps the error lines only, a repeated message once with its count and its latest wording', () => {
@@ -47,6 +50,51 @@ describe('errorLines', () => {
 
     expect(found?.line.startsWith('error:')).toBe(true)
     expect(found?.line.length).toBeLessThanOrEqual(220)
+  })
+})
+
+describe('errorLines with another filter', () => {
+  const log = 'WARN cache is cold\nERROR boom\nINFO fine\nGET /x 503'
+
+  test('--level warn adds the warnings', () => {
+    expect(errorLines(log, 5, undefined, /\b(?:error|warn)\b/i).map(each => each.line)).toEqual(['WARN cache is cold', 'ERROR boom'])
+  })
+
+  test('a regex replaces the error words', () => {
+    expect(errorLines(log, 5, undefined, /\b5\d\d\b/).map(each => each.line)).toEqual(['GET /x 503'])
+  })
+
+  test('refuses a --grep that is not a regex', () => {
+    expect(dlog(['--grep', '('])).rejects.toThrow('--grep')
+  })
+})
+
+describe('needsLook', () => {
+  const old = report({ errors: [{ line: 'error old', count: 1 }] })
+  const sick = report({ health: 'unhealthy', fine: false, unhealthy: true })
+  const gone = report({ state: 'exited', fine: false, down: true })
+
+  test('every cause fails by default, so an old error keeps a gate red', () => {
+    const all = new Set(['down', 'unhealthy', 'errors'] as const)
+
+    expect([old, sick, gone, report({})].map(each => needsLook(each, all))).toEqual([true, true, true, false])
+  })
+
+  test('--fail-on down ignores errors and health', () => {
+    const failOn = new Set(['down'] as const)
+
+    expect([old, sick, gone].map(each => needsLook(each, failOn))).toEqual([false, false, true])
+  })
+
+  test('--fail-on unhealthy and errors each name their own cause, unreadable logs counting as down and errors', () => {
+    expect([old, sick, gone].map(each => needsLook(each, new Set(['unhealthy'] as const)))).toEqual([false, true, false])
+    expect([old, sick, gone].map(each => needsLook(each, new Set(['errors'] as const)))).toEqual([true, false, false])
+    expect(needsLook(report({ unreadable: 'no such service' }), new Set(['down'] as const))).toBe(true)
+  })
+
+  test('a service that ended with code 0 is up', () => {
+    expect(isUp('exited', { Service: 'migrate', State: 'exited', Status: 'Exited (0)', ExitCode: 0 })).toBe(true)
+    expect(isUp('exited', undefined)).toBe(false)
   })
 })
 

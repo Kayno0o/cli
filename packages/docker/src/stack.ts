@@ -228,14 +228,21 @@ async function shellOf(service: Service): Promise<string> {
   return (await output(service.stack, ['exec', '-T', service.name, 'sh', '-c', 'command -v bash'])) ? 'bash' : 'sh'
 }
 
-export async function commandFor(service: Service, action: Action): Promise<string[]> {
+export const LOGS_TAIL = 200
+
+export interface LogsOptions {
+  tail?: number | undefined
+  follow?: boolean | undefined
+}
+
+export async function commandFor(service: Service, action: Action, logs: LogsOptions = {}): Promise<string[]> {
   const run = service.stack.run
 
   switch (action) {
     case 'shell':
       return [...run, 'exec', service.name, await shellOf(service)]
     case 'logs':
-      return [...run, 'logs', '-f', '--tail=200', service.name]
+      return [...run, 'logs', ...logs.follow === false ? [] : ['-f'], `--tail=${logs.tail ?? LOGS_TAIL}`, service.name]
     case 'restart':
       return [...run, 'restart', service.name]
     case 'up':

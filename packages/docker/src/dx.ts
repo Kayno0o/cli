@@ -1,23 +1,26 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Action, Service } from './stack'
 import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
-import { closest, fail, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
+import { closest, fail, jsonOption, paint, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
 import { byRecency, record, runs } from '@kaynooo/cli-kit/fzf'
 import { KEY_LABELS, KEYS, pickService } from './picker'
-import { ACTIONS, allServices, commandFor, defaultAction, key, logsOf, serviceNamed, stateColor } from './stack'
+import { ACTIONS, allServices, commandFor, defaultAction, key, LOGS_TAIL, logsOf, serviceNamed, stateColor } from './stack'
 
 const usage = `dx [service] [action]
 dx -
 
-Without a service, picks one with fzf when it is installed and a terminal is attached: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder. Without fzf or a terminal it lists them instead.
-\`dx -\` does the last action again, \`dx <service> [action]\` acts without the picker: \`shell\` (bash when the container has it), \`logs\` (follows the last 200 lines), \`restart\`, \`up\`, \`stop\` or \`build\` (up with a rebuild).
-The services are the stack of this folder or its nearest parent, the ones of the child folders (keyed \`api/php\`), and stacks found only through their containers (keyed \`<project>:php\`).
+Without a terminal or without fzf (a script, a pipe, an agent) \`dx\` lists the services with their state, ports and image: that listing is the form to use there, \`--json\` giving the full record. On a terminal with fzf it picks one instead: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder.
+\`dx -\` does the last action again, \`dx <service> [action]\` acts without the picker: \`shell\` (bash when the container has it), \`logs\` (follows the last ${LOGS_TAIL} lines; \`--tail N\` changes the count and \`--no-follow\` prints them once and exits, for a script), \`restart\`, \`up\`, \`stop\` or \`build\` (up with a rebuild).
+The services are the stack of this folder or its nearest parent, the ones of the child folders (keyed \`api/php\`), and stacks found only through their containers (keyed \`<project>:php\`).`
 
-Exits with the code of the command it ran, 1 when there is no compose service here or none by that name.`
+const EXITS: ExitRow[] = [['the code of the command it ran', 'a listing, a shell, logs, restart, up, stop or build'], [0, 'it listed the services'], [1, 'no compose service here or none by that name'], [2, 'a usage error']]
 
 const options = {
   json: jsonOption('[{ key, project, name, state, status, ports, image }]'),
+  tail: { type: 'string', description: `log lines shown by the logs action (${LOGS_TAIL})` },
+  follow: { type: 'boolean', negative: 'print the logs once and exit instead of following them' },
 } as const
 
 function table(services: Service[]): string {
@@ -125,7 +128,7 @@ export async function dx(args: string[]): Promise<number> {
 
   // The protocol the tmux picker reads instead of running the command: its mode, the words typed back, and the command's words.
   const emit = flag === '--emit'
-  const parsed = parse(emit ? args.slice(1) : args, usage, options, { replaces: 'docker compose exec <service> bash, logs -f and restart typed per service', examples: ['dx', ['dx php', 'a shell in php, or php brought up when stopped'], ['dx php logs', 'follow its logs'], ['dx -', 'the last action again']] })
+  const parsed = parse(emit ? args.slice(1) : args, usage, options, { allowNegative: true, exits: EXITS, replaces: 'docker compose exec <service> bash, logs -f and restart typed per service', examples: ['dx', ['dx php', 'a shell in php, or php brought up when stopped'], ['dx php logs', 'follow its logs'], ['dx php logs --tail 50 --no-follow', 'the last 50 lines, then exit'], ['dx -', 'the last action again']] })
   const [named, asked] = parsed.positionals
   const services = await allServices()
 
@@ -181,7 +184,12 @@ export async function dx(args: string[]): Promise<number> {
   }
 
   const chosen = action ?? defaultAction(service)
-  const command = await commandFor(service, chosen)
+  const { tail, follow } = parsed.values
+
+  if ((tail !== undefined || follow !== undefined) && chosen !== 'logs')
+    fail('--tail and --no-follow apply to the logs action: dx <service> logs')
+
+  const command = await commandFor(service, chosen, { tail: tail === undefined ? undefined : wholeNumber(tail, 'tail', LOGS_TAIL, 0), follow })
 
   record('dx', { id: key(service), args: [chosen] })
 
