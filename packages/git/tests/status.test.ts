@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { parseStatus, summary, unquote } from '../src/status'
+import { letter, parseStatus, summary, unquote } from '../src/status'
 
 const STATUS = `# branch.oid 6e26055a392d9734b51f4b866fe130a901b26b31
 # branch.head main
@@ -61,5 +61,19 @@ describe('unquote', () => {
     expect(unquote('"a\\"b\\\\c\\td.ts"')).toBe('a"b\\c\td.ts')
     expect(unquote('"caf\\303\\251.ts"')).toBe('café.ts')
     expect(unquote('"a\\tb 😀.ts"')).toBe('a\tb 😀.ts')
+  })
+})
+
+describe('letter', () => {
+  test('tints a status letter by what it did on a terminal', () => {
+    expect(letter('A', { isTTY: true })).toBe('\x1B[32mA\x1B[39m')
+    expect(letter('M', { isTTY: true })).toBe('\x1B[33mM\x1B[39m')
+    expect(letter('D', { isTTY: true })).toBe('\x1B[31mD\x1B[39m')
+    expect(letter('R', { isTTY: true })).toBe('\x1B[36mR\x1B[39m')
+    expect(letter('?', { isTTY: true })).toBe('\x1B[2m?\x1B[22m')
+  })
+
+  test('stays plain off a terminal', () => {
+    expect(letter('M', {})).toBe('M')
   })
 })

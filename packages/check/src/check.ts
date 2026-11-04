@@ -78,9 +78,8 @@ function launch(step: Planned): string {
   return step.placement === undefined ? step.command : shellIn(step.placement, step.command)
 }
 
-// Runs the repo's steps in order and prints one line each, with what failed under a failing one; returns 0 only when every step passed.
-// The dim line closing a run on a terminal: what passed, what failed and the time the steps took together.
-function summaryLine(outcomes: ReturnType<typeof outcomeJson>[]): string {
+// The line closing a run on a terminal: what passed, what failed and the time the steps took together.
+export function summaryLine(outcomes: ReturnType<typeof outcomeJson>[]): string {
   const colors = paint(process.stdout)
   const failed = outcomes.filter(outcome => !outcome.ok).length
   const passed = outcomes.length - failed
@@ -89,6 +88,7 @@ function summaryLine(outcomes: ReturnType<typeof outcomeJson>[]): string {
   return parts.join(colors.dim(' · '))
 }
 
+// Runs the repo's steps in order and prints one line each, with what failed under a failing one; returns 0 only when every step passed.
 export async function check(args: string[], cwd = process.cwd()): Promise<number> {
   const parsed = parse(args, usage, options, { replaces: 'chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail', examples: ['check', ['check --only lint,test', 'two of the steps'], ['check --in app', 'every step inside the app service']] })
   const settings = placeSettings(parsed.values)
@@ -145,7 +145,7 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   const stack = new Stack()
   const width = Math.max(...steps.map(step => step.label.length))
   const outcomes: ReturnType<typeof outcomeJson>[] = []
-  const heading = json ? '' : header('check', `${basename(cwd)} › ${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`, process.stdout)
+  const heading = json ? '' : header('check', `${basename(cwd)} · ${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`, process.stdout)
 
   if (heading !== '')
     console.log(heading)

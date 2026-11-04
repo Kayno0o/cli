@@ -46,8 +46,8 @@ const TRACK_TINTS: Record<string, 'green' | 'red' | 'yellow'> = { ahead: 'green'
 const TRACK_WORD = /^\w+/
 const WHITESPACE = /\s+/
 
-// The picker draws on stderr and previews through a pipe, so its rows are painted when either stream is a terminal, unless `NO_COLOR` asks otherwise.
-const colors = paint({ isTTY: process.stdout.isTTY === true || process.stderr.isTTY === true })
+// The picker draws on stderr and previews through a pipe, so its rows and preview are painted whatever stdout is; `paint` still honours `NO_COLOR`.
+const colors = paint({ isTTY: true })
 
 function read(args: string[]): string {
   const proc = Bun.spawnSync(['git', ...args], { stderr: 'pipe' })

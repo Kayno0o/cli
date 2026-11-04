@@ -266,7 +266,7 @@ describe('syncCell', () => {
   })
 
   test('stays plain off a terminal', () => {
-    expect(syncCell(repo(2, 1), {})).toBe('+2 -1 diverged')
+    expect(syncCell(repo(2, 1), {})).toBe('+2 -1')
     expect(syncCell(repo(0, 0), {})).toBe('-')
     expect(syncCell(repo(0, 0, null), {})).toBe('no upstream')
   })

@@ -71,6 +71,8 @@ export interface TableSettings {
   align?: Align[]
   // Narrows the widest column until a row fits this many characters, `process.stdout.columns` for the terminal's own width. Cells holding colours are never cut.
   fit?: number
+  // The stream the header's bold and rule are drawn for, `process.stdout` by default.
+  stream?: { isTTY?: boolean }
 }
 
 // Columns in the visible width of a cell, escapes and wide characters accounted for.
@@ -78,7 +80,7 @@ export function textWidth(text: string): number {
   return Bun.stringWidth(text)
 }
 
-export function table(rows: string[][], { cellWidth, header = false, align = [], fit }: TableSettings = {}): string {
+export function table(rows: string[][], { cellWidth, header = false, align = [], fit, stream = process.stdout }: TableSettings = {}): string {
   const cells = cellWidth === undefined ? rows : rows.map(row => row.map(cell => truncate(cell.replaceAll(LINE_BREAKS, ' '), cellWidth)))
   const widths: number[] = []
 
@@ -88,7 +90,7 @@ export function table(rows: string[][], { cellWidth, header = false, align = [],
   }
 
   const shown = fit === undefined ? cells : narrow(cells, widths, fit)
-  const colors = paint(process.stdout)
+  const colors = paint(stream)
   const lines = shown.map(row => row.map((cell, index) => {
     const width = widths[index] ?? 0
     const gap = ' '.repeat(Math.max(0, width - textWidth(cell)))
@@ -99,7 +101,7 @@ export function table(rows: string[][], { cellWidth, header = false, align = [],
     return index === row.length - 1 ? cell : `${cell}${gap}`
   }).join('  ').trimEnd())
 
-  const rule = header && takesControlCodes(process.stdout) && lines.length > 1 ? [colors.dim('─'.repeat(Math.max(...lines.map(textWidth))))] : []
+  const rule = header && takesControlCodes(stream) && lines.length > 1 ? [colors.dim('─'.repeat(Math.max(...lines.map(textWidth))))] : []
 
   return lines.flatMap((line, index) => header && index === 0 ? [colors.bold(line), ...rule] : [line]).join('\n')
 }

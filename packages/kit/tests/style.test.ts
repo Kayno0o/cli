@@ -101,3 +101,24 @@ describe('header', () => {
     expect(header('ft', undefined, TERMINAL, {})).toBe(header('ft', undefined, TERMINAL, {}))
   })
 })
+
+describe('header accents', () => {
+  it('gives different bins different accents, each stable', () => {
+    const accents = ['check', 'ft', 'pick', 'db', 'doctor', 'wait'].map(bin => header(bin, undefined, TERMINAL, {}))
+
+    expect(new Set(accents).size).toBeGreaterThan(2)
+    expect(header('ft', undefined, TERMINAL, {})).toBe(accents[1]!)
+  })
+})
+
+describe('table header rule', () => {
+  const rows = [['bin', 'runs'], ['check', '12']]
+
+  it('draws a dim rule under a bold header on a terminal', () => {
+    expect(table(rows, { header: true, stream: TERMINAL })).toBe('\x1B[1mbin    runs\x1B[22m\n\x1B[2m───────────\x1B[22m\ncheck  12')
+  })
+
+  it('draws nothing more off a terminal', () => {
+    expect(table(rows, { header: true, stream: {} })).toBe('bin    runs\ncheck  12')
+  })
+})

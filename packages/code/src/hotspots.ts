@@ -87,7 +87,7 @@ export async function hotspots(args: string[]): Promise<number> {
 
   const colors = paint(process.stdout)
   const path = role('path', process.stdout)
-  const top = Math.max(0, ...shown.map(row => row.score))
+  const top = shown.reduce((highest, row) => Math.max(highest, row.score), 0)
   // The score reddens with its share of the highest, so the files to split first stand out.
   const heat = (score: number, text: string) => {
     if (top > 0 && score >= top * HOT)

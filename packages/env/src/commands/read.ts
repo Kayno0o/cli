@@ -30,6 +30,20 @@ const jsonFlag = { json: jsonOption() } as const
 
 interface Row { file: string, key: string, value: string, secret: boolean }
 
+// A row per key with its file name in the path colour and the key bold on a terminal.
+function keyTable(rows: Row[]): string {
+  const path = role('path', process.stdout)
+  const key = role('value', process.stdout)
+
+  return table(rows.map(each => [path(each.file), key(each.key), each.value]))
+}
+
+function fileTable(rows: Row[]): string {
+  const path = role('path', process.stdout)
+
+  return table(rows.map(each => [path(each.file), each.value]))
+}
+
 // A value is secret when it is masked, or when its key is named like a secret even with nothing to mask.
 function row(file: string, key: string, value: string, known: KnownSecrets): Row {
   const shown = display(key, value, known)
@@ -74,7 +88,7 @@ export async function list(args: string[]): Promise<number> {
 
   printRows(rows, parsed.values.json === true, () => {
     if (rows.length > 0)
-      console.log(table(rows.map(each => [role('path', process.stdout)(each.file), role('value', process.stdout)(each.key), each.value])))
+      console.log(keyTable(rows))
   })
 
   return 0
@@ -103,7 +117,7 @@ export async function get(args: string[]): Promise<number> {
   if (rows.length === 0)
     fail(`${key} is not set in ${file ?? 'any .env* file'}`, 1)
 
-  printRows(rows, parsed.values.json === true, () => console.log(file === undefined ? table(rows.map(each => [role('path', process.stdout)(each.file), each.value])) : rows[0]?.value))
+  printRows(rows, parsed.values.json === true, () => console.log(file === undefined ? fileTable(rows) : rows[0]?.value))
 
   return 0
 }
@@ -158,7 +172,7 @@ export async function grep(args: string[]): Promise<number> {
   if (rows.length === 0)
     fail(`no key matches ${source} in ${names.join(', ') || 'any .env* file'}`, 1)
 
-  printRows(rows, parsed.values.json === true, () => console.log(table(rows.map(each => [role('path', process.stdout)(each.file), role('value', process.stdout)(each.key), each.value]))))
+  printRows(rows, parsed.values.json === true, () => console.log(keyTable(rows)))
 
   return 0
 }

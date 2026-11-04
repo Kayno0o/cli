@@ -56,8 +56,8 @@ The hidden flags --list, --names, --rows, --show, --record and --emit are for te
 
 const EXITS: ExitRow[] = [['the code of the console', 'a command it ran'], [0, 'it listed the commands'], [1, 'no bin/console here, or it listed no command'], [2, 'a usage error']]
 
-/** The picker draws on stderr and previews through a pipe, so the rows are painted when either stream is a terminal, unless `NO_COLOR` asks otherwise. */
-const colors = paint({ isTTY: process.stdout.isTTY === true || process.stderr.isTTY === true })
+/** Fzf paints its rows and previews itself, so these keep their colors whatever stream they are written to; `paint` still honours `NO_COLOR`. */
+const colors = paint({ isTTY: true })
 const MARKUP = /<(info|comment|question|error)>(.*?)<\/\1>/gs
 const TAGS = { info: 'green', comment: 'yellow', question: 'cyan', error: 'red' } as const
 const LINKS = /<\/?href[^>]*>/g

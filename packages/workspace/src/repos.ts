@@ -4,7 +4,7 @@ import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, marked, oneOf, paint, parse, printJson, role, table, userConfigReadPath } from '@kaynooo/cli-kit'
+import { fail, jsonOption, marked, oneOf, paint, parse, printJson, role, table, takesControlCodes, userConfigReadPath } from '@kaynooo/cli-kit'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pool, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
 const USAGE = `repos [options] [root]: the git repositories under root (~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
@@ -49,7 +49,7 @@ function releasedCell(repo: RepoState): string {
   return repo.tag === null || repo.unreleased === 0 ? '-' : `${repo.unreleased} since ${repo.tag}`
 }
 
-// Ahead in green, behind in red, both marked as diverged, and no upstream dimmed.
+// Ahead in green, behind in red, both marked as diverged on a terminal, and no upstream dimmed.
 export function syncCell(repo: RepoState, stream: { isTTY?: boolean } = process.stdout): string {
   const colors = paint(stream)
   const ahead = repo.ahead ?? 0
@@ -60,7 +60,9 @@ export function syncCell(repo: RepoState, stream: { isTTY?: boolean } = process.
 
   const parts = [ahead > 0 ? colors.green(`+${ahead}`) : '', behind > 0 ? colors.red(`-${behind}`) : ''].filter(Boolean)
 
-  return parts.length === 0 ? colors.dim('-') : `${parts.join(' ')}${ahead > 0 && behind > 0 ? colors.yellow(' diverged') : ''}`
+  const diverged = takesControlCodes(stream) && ahead > 0 && behind > 0
+
+  return parts.length === 0 ? colors.dim('-') : `${parts.join(' ')}${diverged ? colors.yellow(' diverged') : ''}`
 }
 
 function branchCell(repo: RepoState): string {

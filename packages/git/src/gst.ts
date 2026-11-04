@@ -4,7 +4,7 @@ import type { Change } from './status'
 import process from 'node:process'
 import { fail, jsonOption, paint, parse, printJson, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { git } from './git'
-import { parseStatus, summary } from './status'
+import { letter, parseStatus, summary } from './status'
 
 const USAGE = 'gst [--log N]: the repository\'s branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked\n\nExits 0 when it printed the status, 2 outside a git repository or on a usage error.'
 
@@ -15,14 +15,6 @@ const OPTIONS = {
 
 function group(title: string, lines: string[]): string[] {
   return lines.length === 0 ? [] : [paint(process.stdout).bold(`${title}:`), ...lines.map(line => `  ${line}`)]
-}
-
-// The status letter in the colour of what it did: added green, modified yellow, deleted or conflicting red, renamed cyan.
-function letter(status: string): string {
-  const colors = paint(process.stdout)
-  const tints: Record<string, (text: string) => string> = { A: colors.green, M: colors.yellow, D: colors.red, U: colors.red, R: colors.cyan, C: colors.cyan }
-
-  return (tints[status] ?? colors.dim)(status)
 }
 
 function staged({ index, from, path }: Change): string {
