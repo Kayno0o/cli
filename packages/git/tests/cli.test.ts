@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
@@ -85,7 +85,7 @@ describe('gst', () => {
 
   test('outside a repository it says so', () => {
     rmSync(join(dir, '.git'), { recursive: true })
-    const result = run([process.execPath, GST], { GIT_DIR: join(dir, '.git') })
+    const result = run([process.execPath, GST], { GIT_CEILING_DIRECTORIES: dirname(realpathSync(dir)) })
 
     expect(result.code).toBe(2)
     expect(result.err).toContain('not a git repository')
@@ -213,8 +213,8 @@ describe('gc', () => {
     rmSync(join(dir, '.git'), { recursive: true, force: true })
     file('a.ts')
 
-    // pointing git at a missing directory keeps any repository above the temp folder from answering, wherever the runner keeps one and however its path is spelled
-    const result = run([process.execPath, GC, 'fix: a', '--', 'a.ts'], { GIT_DIR: join(dir, '.git') })
+    // a ceiling at the temp folder's parent keeps any repository above it from answering, wherever the runner keeps one
+    const result = run([process.execPath, GC, 'fix: a', '--', 'a.ts'], { GIT_CEILING_DIRECTORIES: dirname(realpathSync(dir)) })
 
     expect({ code: result.code, err: result.err }).toMatchObject({ code: 2 })
   })
