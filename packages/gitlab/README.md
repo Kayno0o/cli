@@ -14,8 +14,8 @@ Needs [glab](https://gitlab.com/gitlab-org/cli) logged in (`glab auth login`). E
 | Command | What it does |
 | --- | --- |
 | `gl runs` | recent pipelines with ref, source, commit, duration, age and the commit's subject when the clone has it (`-n`, `--full`, `--sha`, `-b <ref>`, `--json`) |
-| `gl ci [ref]` | waits for the pipeline covering a commit on the default branch and prints each failed job's excerpt |
-| `gl logs <pipeline>` | what the failed jobs of a pipeline say went wrong; `-j <name or id>` picks a job, `--full` prints whole traces |
+| `gl ci [ref]` | waits for the pipeline covering a commit on the default branch and prints each failed job's excerpt; `--json` prints `{status, runs, failedJobs, url}`, `--quiet` only the announcement, the failures and the result |
+| `gl logs <pipeline>` | what the failed jobs of a pipeline say went wrong; `-j <name or id>` picks a job, `--full` prints whole traces, `--json` the pipeline, its picked jobs and the failed ones with their excerpts |
 
 ## Behaviour
 
