@@ -73,8 +73,19 @@ describe('summarizeUsage', () => {
     ])
 
     expect(summary.runs).toBe(4)
-    expect(summary.bins).toEqual([{ bin: 'code', runs: 3, failed: 2, usageErrors: 2 }, { bin: 'ft', runs: 1, failed: 1, usageErrors: 0 }])
+    expect(summary.bins).toEqual([{ bin: 'code', runs: 3, failed: 0, usageErrors: 2 }, { bin: 'ft', runs: 1, failed: 1, usageErrors: 0 }])
+    expect(summary.commands).toEqual([{ bin: 'code', command: 'hotspots', runs: 2, failed: 0, usageErrors: 2 }])
     expect(summary.usageErrors).toEqual([{ bin: 'code', command: 'hotspots', unknown: '-n', count: 2 }])
+  })
+
+  test('keeps the message of a usage error that named no option, with its quoted parts cut out', () => {
+    noteUsageError('origin \'git@gitlab.com:x/y.git\' is not on a Forgejo\nhint')
+
+    const entry = usageEntry('ft', 'board', [], 2)
+
+    expect(entry.error).toBe('origin … is not on a Forgejo')
+    expect(summarizeUsage([entry, entry]).errors).toEqual([{ bin: 'ft', command: 'board', error: 'origin … is not on a Forgejo', count: 2 }])
+    expect(usageEntry('ft', 'board', [], 0).error).toBeUndefined()
   })
 })
 

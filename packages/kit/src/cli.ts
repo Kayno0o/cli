@@ -220,7 +220,7 @@ function reportThrown(prefix: string, error: unknown, redact: (text: string) => 
   const named = error instanceof Error && !(error instanceof Exit) && error.name !== 'Error' ? `${error.name}: ${error.message}` : undefined
   const cause = error instanceof Error && error.cause instanceof Error ? redact(error.cause.message) : undefined
 
-  if (error instanceof UsageError)
+  if (error instanceof Exit && error.code === 2)
     noteUsageError(error.message)
 
   const report = json ? printJsonError : (message: string, hint?: string, causeText?: string) => printError(prefix, message, hint, causeText)

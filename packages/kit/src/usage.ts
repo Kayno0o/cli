@@ -12,12 +12,16 @@ export interface UsageEntry {
   flags: string[]
   code: number
   unknown?: string
+  // The first line of a usage error that named no unknown option, with every quoted part cut out so no value reaches the log.
+  error?: string
 }
 
 const UNKNOWN_OPTION = /unknown option '(--[a-z][a-z0-9-]*)[=']/
 // A long name, or a single letter: anything else is an argument that happens to start with a dash, such as `-secret`.
 const FLAG_NAME = /^(?:--[a-z][a-z0-9-]*|-[a-zA-Z])$/
 const LONGEST_NAME = 40
+const QUOTED = /(['"`]).*?\1/g
+const LONGEST_ERROR = 100
 
 // Set when a run reported a usage error, so the entry of that run can name the option.
 let usageError: string | undefined
@@ -52,13 +56,19 @@ export function flagNames(argv: readonly string[]): string[] {
   return [...new Set(names)].filter(name => name.length <= LONGEST_NAME && FLAG_NAME.test(name))
 }
 
-// The entry for a run that exited with `code`, with the unknown option a usage error named.
+export function scrubError(message: string): string {
+  return (message.split('\n').at(0) ?? '').replace(QUOTED, '…').slice(0, LONGEST_ERROR).trim()
+}
+
+// The entry for a run that exited with `code`, with the unknown option a usage error named, or else its message with the quoted parts cut out.
 export function usageEntry(bin: string, command: string | undefined, argv: readonly string[], code: number, now = new Date()): UsageEntry {
-  const unknown = code === 2 && usageError !== undefined ? UNKNOWN_OPTION.exec(usageError)?.[1] : undefined
+  const message = code === 2 ? usageError : undefined
+  const unknown = message === undefined ? undefined : UNKNOWN_OPTION.exec(message)?.[1]
+  const error = message === undefined || unknown !== undefined ? '' : scrubError(message)
 
   usageError = undefined
 
-  return { at: now.toISOString(), bin, ...(command === undefined ? {} : { command }), flags: flagNames(argv), code, ...(unknown === undefined ? {} : { unknown }) }
+  return { at: now.toISOString(), bin, ...(command === undefined ? {} : { command }), flags: flagNames(argv), code, ...(unknown === undefined ? {} : { unknown }), ...(error === '' ? {} : { error }) }
 }
 
 // Appends the run to the usage log, best effort: a log that cannot be written never changes what a bin prints or exits with.
@@ -93,37 +103,67 @@ export async function readUsage(path = usagePath(), since = 0): Promise<UsageEnt
   })
 }
 
+// `failed` counts exit codes other than 0 and 2 (the run happened and did not succeed), `usageErrors` exit 2 (the run could not check or was misused).
+export interface UsageCounts { runs: number, failed: number, usageErrors: number }
+
 export interface UsageSummary {
   runs: number
-  bins: { bin: string, runs: number, failed: number, usageErrors: number }[]
+  bins: ({ bin: string } & UsageCounts)[]
+  commands: ({ bin: string, command: string } & UsageCounts)[]
   usageErrors: { bin: string, command?: string, unknown: string, count: number }[]
+  errors: { bin: string, command?: string, error: string, count: number }[]
 }
 
-// Runs per bin, and the usage errors by the option that was not known, most common first.
+function tally(counts: UsageCounts, code: number): void {
+  counts.runs++
+  counts.failed += code === 0 || code === 2 ? 0 : 1
+  counts.usageErrors += code === 2 ? 1 : 0
+}
+
+// Runs per bin and per command, the usage errors by the option that was not known and by their message, most common first.
 export function summarizeUsage(entries: readonly UsageEntry[]): UsageSummary {
-  const bins = new Map<string, { runs: number, failed: number, usageErrors: number }>()
-  const errors = new Map<string, { bin: string, command?: string, unknown: string, count: number }>()
+  const bins = new Map<string, UsageCounts>()
+  const commands = new Map<string, { bin: string, command: string } & UsageCounts>()
+  const unknowns = new Map<string, { bin: string, command?: string, unknown: string, count: number }>()
+  const messages = new Map<string, { bin: string, command?: string, error: string, count: number }>()
 
   for (const entry of entries) {
     const bin = bins.get(entry.bin) ?? { runs: 0, failed: 0, usageErrors: 0 }
 
-    bin.runs++
-    bin.failed += entry.code === 0 ? 0 : 1
-    bin.usageErrors += entry.code === 2 ? 1 : 0
+    tally(bin, entry.code)
     bins.set(entry.bin, bin)
 
-    if (entry.code === 2 && entry.unknown !== undefined) {
-      const key = `${entry.bin} ${entry.command ?? ''} ${entry.unknown}`
-      const error = errors.get(key) ?? { bin: entry.bin, ...(entry.command === undefined ? {} : { command: entry.command }), unknown: entry.unknown, count: 0 }
+    if (entry.command !== undefined) {
+      const command = commands.get(`${entry.bin} ${entry.command}`) ?? { bin: entry.bin, command: entry.command, runs: 0, failed: 0, usageErrors: 0 }
 
-      error.count++
-      errors.set(key, error)
+      tally(command, entry.code)
+      commands.set(`${entry.bin} ${entry.command}`, command)
+    }
+
+    if (entry.code !== 2)
+      continue
+
+    const named = entry.command === undefined ? {} : { command: entry.command }
+
+    if (entry.unknown !== undefined) {
+      const unknown = unknowns.get(`${entry.bin} ${entry.command ?? ''} ${entry.unknown}`) ?? { bin: entry.bin, ...named, unknown: entry.unknown, count: 0 }
+
+      unknown.count++
+      unknowns.set(`${entry.bin} ${entry.command ?? ''} ${entry.unknown}`, unknown)
+    }
+    else if (entry.error !== undefined) {
+      const message = messages.get(`${entry.bin} ${entry.command ?? ''} ${entry.error}`) ?? { bin: entry.bin, ...named, error: entry.error, count: 0 }
+
+      message.count++
+      messages.set(`${entry.bin} ${entry.command ?? ''} ${entry.error}`, message)
     }
   }
 
   return {
     runs: entries.length,
     bins: [...bins].map(([bin, counts]) => ({ bin, ...counts })).toSorted((a, b) => b.runs - a.runs),
-    usageErrors: [...errors.values()].toSorted((a, b) => b.count - a.count),
+    commands: [...commands.values()].toSorted((a, b) => b.runs - a.runs),
+    usageErrors: [...unknowns.values()].toSorted((a, b) => b.count - a.count),
+    errors: [...messages.values()].toSorted((a, b) => b.count - a.count),
   }
 }
