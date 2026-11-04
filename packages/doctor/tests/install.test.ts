@@ -72,13 +72,12 @@ describe('doctor --install', () => {
     expect(result).toBe(0)
   })
 
-  test('leaves out a package whose required tool is missing, unless --force, and only warns for an optional one', async () => {
-    const blocked = recording(['glab', 'fzf'])
+  test('leaves out a package whose tool is missing, unless --force', async () => {
+    const blocked = recording(['glab'])
     const refused = await capture(async () => main(['--install', 'gitlab', 'git'], blocked.host))
 
     expect(refused.result).toBe(1)
     expect(refused.out).toContain('blocked  gitlab needs glab (gl goes through it)')
-    expect(refused.out).toContain('warn     git: fzf is missing')
     expect(blocked.ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-git'])
 
     const forced = recording(['glab'])

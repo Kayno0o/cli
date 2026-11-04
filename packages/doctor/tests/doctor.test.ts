@@ -133,13 +133,13 @@ describe('checkHooks', () => {
 })
 
 describe('checkNeeds', () => {
-  test('fails a required tool of an installed package, only notes an optional one', () => {
+  test('fails a tool of an installed package that is missing', () => {
     expect(checkNeeds(fakeHost())).toMatchObject({ ok: true, detail: expect.stringContaining('every tool') })
 
     install('@kaynooo/cli-gitlab', '0.1.0')
     install('@kaynooo/cli-git', '0.1.0')
     expect(checkNeeds(fakeHost())).toMatchObject({ ok: false, detail: 'missing glab (gl goes through it)', fix: expect.stringContaining('glab: https://gitlab.com') })
-    expect(checkNeeds(fakeHost({}, ['glab']))).toMatchObject({ ok: true, detail: 'optional, missing fzf (gb picks a branch with it)' })
+    expect(checkNeeds(fakeHost({}, ['glab']))).toMatchObject({ ok: true, detail: expect.stringContaining('every tool') })
   })
 })
 

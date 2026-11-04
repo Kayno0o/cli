@@ -200,17 +200,12 @@ export function checkCompletions(host: Host): Result {
   return { check: 'completions', ok: true, detail: dir }
 }
 
-// The system tools the installed packages need, besides tea: a missing required one fails, an optional one is noted.
+// The system tools the installed packages need, besides tea: a missing one fails.
 export function checkNeeds(host: Host): Result {
-  const missing = Object.entries(NEEDS).flatMap(([name, needs]) => isInstalled(host, name) ? needs.filter(need => need.bin !== 'tea' && host.which(need.bin) === null).map(need => ({ ...need, name })) : [])
-  const required = missing.filter(need => need.optional !== true)
-  const describe = (need: (typeof missing)[number]) => `${need.bin} (${need.why})`
-
-  if (required.length > 0)
-    return { check: 'needs', ok: false, detail: `missing ${required.map(describe).join(', ')}`, fix: `install ${required.map(need => `${need.bin}: ${need.how}`).join('; ')}` }
+  const missing = Object.entries(NEEDS).flatMap(([name, needs]) => isInstalled(host, name) ? needs.filter(need => need.bin !== 'tea' && host.which(need.bin) === null) : [])
 
   if (missing.length > 0)
-    return { check: 'needs', ok: true, detail: `optional, missing ${missing.map(describe).join(', ')}` }
+    return { check: 'needs', ok: false, detail: `missing ${missing.map(need => `${need.bin} (${need.why})`).join(', ')}`, fix: `install ${missing.map(need => `${need.bin}: ${need.how}`).join('; ')}` }
 
   return { check: 'needs', ok: true, detail: 'every tool the installed packages need is on the PATH' }
 }

@@ -4,8 +4,6 @@ export interface Need {
   why: string
   // Where to get it: doctor never installs a system package.
   how: string
-  // A missing optional one only warns.
-  optional?: boolean
 }
 
 // The package whose bins the Claude Code hooks call.
@@ -42,10 +40,5 @@ export const ABOUT: Record<string, string> = {
 export const NEEDS: Record<string, Need[]> = {
   '@kaynooo/cli-forgejo': [{ bin: 'tea', why: 'ft goes through it', how: 'https://gitea.com/gitea/tea/releases' }],
   '@kaynooo/cli-gitlab': [{ bin: 'glab', why: 'gl goes through it', how: 'https://gitlab.com/gitlab-org/cli' }],
-  '@kaynooo/cli-docker': [
-    { bin: 'docker', why: 'dc, dlog, dx and sf run docker compose', how: 'https://docs.docker.com/engine/install/' },
-    { bin: 'fzf', why: 'dx and sf pick with it', how: 'your package manager, e.g. pacman -S fzf', optional: true },
-  ],
-  '@kaynooo/cli-git': [{ bin: 'fzf', why: 'gb picks a branch with it', how: 'your package manager, e.g. pacman -S fzf', optional: true }],
-  '@kaynooo/cli-check': [{ bin: 'fzf', why: 'j picks a recipe with it', how: 'your package manager, e.g. pacman -S fzf', optional: true }],
+  '@kaynooo/cli-docker': [{ bin: 'docker', why: 'dc, dlog, dx and sf run docker compose', how: 'https://docs.docker.com/engine/install/' }],
 }

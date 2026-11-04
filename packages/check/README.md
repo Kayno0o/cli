@@ -116,7 +116,7 @@ Exit code 0 when no error was found and the command, if any, passed, 1 when erro
 
 ## j
 
-`j` picks a recipe, script or task of the repo with fzf and runs it.
+`j` picks a recipe, script or task of the repo and runs it.
 
 ```sh
 j                  # pick one; the ones run last come first, per folder
@@ -129,6 +129,6 @@ j --json           # list what can run: [{id, key, runner, dir, name, doc, param
 
 It reads a `justfile`, a `Makefile` (a `## doc` comment above a target or after it documents it), the scripts of a `package.json` (run through the package manager its `packageManager` field or lockfile names), `composer.json` scripts, `deno.json` tasks, a `Taskfile`, mise tasks and a `pyproject.toml` (poe tasks and `[project.scripts]`). The folder's own manifests are looked up the parents as far as the repository root; child folders and workspace packages only count the files they hold, their entries being named `api/test` and run with `env -C api`.
 
-A name several entries share opens the picker on those alone, unless it comes qualified by its runner (`just:check`, `bun:api/test`). A required parameter of a recipe not given after the name is asked for. Without fzf or a terminal, `j` lists what can run instead, a note on stderr telling why.
+A name several entries share opens the picker on those alone, unless it comes qualified by its runner (`just:check`, `bun:api/test`). A required parameter of a recipe not given after the name is asked for. Without a terminal, `j` lists what can run instead.
 
 Hidden flags for the shell and the tmux integration: `--list` prints the rows term shows as JSON (`label`, `hint`, `typed`, `preview`, `editsTyped`), `--names` the names with a description for the completions (`name<TAB>description`, a qualified form on its own line for a name several runners share), `--show <kind> <dir> <name>` the preview of one, `--record <id> [args...]` notes a run, and `--emit [name] [args...]` prints what tmux_pick reads: `run`, the words typed back, the id to record, then one line per word of the command, `=fixed`, `+given` or `?name` for a parameter to ask.

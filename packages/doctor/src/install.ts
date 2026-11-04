@@ -31,7 +31,7 @@ const shortName = (name: string) => name.slice(name.indexOf('/') + 1).replace(CL
 
 function candidates(host: Host): Candidate[] {
   const packages = Object.entries(TOOLS).filter(([name]) => !isInstalled(host, name)).map(([name, bins]): Candidate => {
-    const needs = (NEEDS[name] ?? []).map(need => `${need.bin}${need.optional === true ? ' (optional)' : ''}`)
+    const needs = (NEEDS[name] ?? []).map(need => need.bin)
 
     return { id: name, names: [shortName(name), name, `cli-${shortName(name)}`, ...bins], label: shortName(name), hint: `${bins.join(' ')}: ${ABOUT[name] ?? ''}${needs.length === 0 ? '' : `, needs ${needs.join(', ')}`}`, packages: [name] }
   })
@@ -78,19 +78,15 @@ export function plan(host: Host, picked: readonly Candidate[], force: boolean): 
 
   for (const name of new Set(picked.flatMap(each => each.packages))) {
     const lacking = (NEEDS[name] ?? []).filter(need => host.which(need.bin) === null)
-    const required = lacking.filter(need => need.optional !== true)
 
-    for (const need of lacking.filter(each => each.optional === true))
-      warnings.push({ package: shortName(name), need: need.bin, why: need.why })
-
-    if (required.length > 0 && !force) {
-      for (const need of required)
+    if (lacking.length > 0 && !force) {
+      for (const need of lacking)
         blocked.push({ package: shortName(name), need: need.bin, why: need.why, how: need.how })
 
       continue
     }
 
-    for (const need of required)
+    for (const need of lacking)
       warnings.push({ package: shortName(name), need: need.bin, why: need.why })
 
     packages.push(name)

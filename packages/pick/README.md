@@ -18,4 +18,4 @@ Keys: type to filter, up and down or ctrl-p and ctrl-n to move, enter to pick, e
 
 The query matches as a subsequence, best first: a word start, a run of consecutive characters or a prefix scores higher, a lowercase query ignores case and an uppercase letter makes it exact. Keys come from `/dev/tty` and the selector is drawn on stderr, so a pipe or a command substitution takes only the choice. Without a terminal on stderr it exits 2.
 
-Not a replacement for fzf where its other features are used (`--expect`, `--print-query`, `--bind` reloads, `--with-nth`): see [#127](https://git.kaynooo.fr/kaynooo/cli/issues/127).
+The same picker is what `gb`, `dx`, `sf` and `j` use, with `--expect` keys, the query back, hidden fields and reloads: its engine is `@kaynooo/cli-kit/picker`, so none of them needs fzf.
