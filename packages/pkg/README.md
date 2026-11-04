@@ -6,6 +6,9 @@ Checks an npm package before it is added: a guessed or typosquatted name, a vers
 bun install -g @kaynooo/cli-pkg
 pkg esbuild
 pkg left-pad@1.3.0 @types/node --json
+pkg check --from package.json
+echo "zod esbuild" | pkg check -
+pkg outdated
 ```
 
 ## What it prints
@@ -55,6 +58,8 @@ pkg bump @kaynooo/cli-kit 0.8.0 --dry-run
 - `pkg bump <name> [version]` waits until the package's registry serves the version (every 5 s, `-t 10m`; the latest when none is given, an exact version otherwise, never a range or a tag), then vets it with the checks of `pkg check` (advisories, licence allowlist) before any folder is touched, and runs `bun add --exact --no-cache <name>@<version>` in each of those folders, one after another, as the same kind of dependency (`--dev`, `--optional`), a line per folder. A version the vetting blocks is refused with its reasons and exit 1; `--force` bumps it anyway. A bump adopts a release on purpose, often one just made, so it checks no minimum age unless `--min-age <days>` asks for one. A dependency that is not a registry version (`workspace:`, `link:`, `file:`, `git`, a URL, an `npm:` alias, `catalog:`), a `peerDependencies` range, a folder already on the version and one whose lockfile pins another manager are left alone and said so; `--dry-run` prints what would run. A transient registry error is retried until the timeout. It exits 1 when the vetting refuses the version, an install fails or the registry has no such package (at once, without waiting), 2 when the version never shows within the timeout.
 - `pkg bump <name> [version] --all-consumers` leaves alone a folder whose `package.json` or lockfile already has uncommitted changes, so that `gc` never commits them as the bump, and goes on in each folder whose install went through: it runs the folder's own `check` and, only when that passes, commits with `gc 'chore(deps): bump <name> to <version>' -- package.json <lockfile>` (the `bun.lock` or `bun.lockb` nearest the folder, a monorepo's at its root). A folder whose check fails stays uncommitted. It ends on a summary line of the folders bumped and committed, bumped and failing, and skipped, exits 1 when an install, a check or a commit failed, and never pushes. With `--dry-run` it lists the `bun add`, `check` and `gc` each folder would run.
 - `pkg <name>` alone still runs `pkg check`.
+- `pkg check --from <package.json>` checks every registry dependency of a manifest (`dependencies`, `devDependencies` and `optionalDependencies`, each as `name@range` so it resolves what an install would; peer ranges and `workspace:`, `link:`, `file:`, git, URL and `npm:` sources left out). Names also come from stdin, separated by spaces or lines, with `-` as the argument or when nothing else names a package and stdin is piped; the three sources add up.
+- `pkg outdated [dir]` lists the dependencies of the folder's `package.json` with a newer version safe to take: the `safe` of `pkg check` (the highest stable version at least `--min-age` days old, 14 by default), with the change (`major`, `minor`, `patch`), its age and, while the newest version is still too fresh, that `latest`. The version in use is the highest one the folder's `bun.lock` pins that the range allows, else the exact version written, else the first version of the range. It reads the registry's metadata only (no advisories), changes nothing, exits 0 whether or not something is outdated and 2 when the registry could not be read. 50 rows at most (`--limit`, `--full`), `--json` for the rows.
 
 ## Registries
 

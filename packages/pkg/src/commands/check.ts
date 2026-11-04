@@ -1,24 +1,31 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { AnalyzeInput, Report } from '../analyze'
 import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher } from '../registry'
-import { fail, formatAge, jsonOption, parse, printJson, table, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, formatAge, isStdinPiped, jsonOption, parse, printJson, readInput, table, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor } from '../config'
+import { registryDependencies } from '../consumers'
 import { fetchDownloads, fetchPackument, isPublic, unreachable } from '../registry'
 
-const usage = `pkg [check] <name>[@version]...
+const usage = `pkg [check] <name>[@version]... | --from <package.json> | -
 
 Checks npm packages before they are added: whether the name exists, the latest and the newest version at least two weeks old, weekly downloads, licence, repository, install scripts and a near miss of a popular name.
 
-A \`.pkgrc.json\` (or ~/.config/pkg/config.json) with \`licenses\` (SPDX ids) refuses a licence outside the list or a missing one, and \`blockSeverity\` (low, moderate, high, critical; high when unset) refuses a version with an advisory at that level or above.
+Names come from the arguments, from the dependencies of a package.json with --from (each checked as \`name@range\`, so it resolves what an install would; dev and optional ones included, peer ranges and local or remote sources left out), or from stdin, separated by spaces or lines, when \`-\` is given or nothing else is and stdin is piped.
 
-Exits 0 when every package passes, 1 when one is blocked (missing, the version asked for is under the minimum age or has no date, its licence is outside the allowlist or an advisory reaches the threshold), 2 when it could not check (the registry unreachable, slow or answering badly, a broken .pkgrc.json, bunfig.toml or .npmrc) or on a usage error.`
+A \`.pkgrc.json\` (or ~/.config/pkg/config.json) with \`licenses\` (SPDX ids) refuses a licence outside the list or a missing one, and \`blockSeverity\` (low, moderate, high, critical; high when unset) refuses a version with an advisory at that level or above.`
+
+const EXITS: ExitRow[] = [[0, 'every package passes'], [1, 'one is blocked: missing, the version asked for is under the minimum age or has no date, its licence is outside the allowlist or an advisory reaches the threshold'], [2, 'it could not check (the registry unreachable, slow or answering badly, a broken .pkgrc.json, bunfig.toml or .npmrc) or a usage error']]
 
 const options = {
   'json': jsonOption(),
   'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS})` },
+  'from': { type: 'string', description: 'check the dependencies of this package.json' },
 } as const
+
+const WORDS = /\s+/
 
 interface Context {
   configs: RegistryConfig[]
@@ -83,13 +90,23 @@ export function render(report: Report, now = Date.now()): string {
   ].join('\n')
 }
 
-export async function check(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+// The packages to check: the arguments, the dependencies of --from, and stdin's words when asked for with `-` or when nothing else names a package.
+export async function wanted(positionals: string[], from: string | undefined): Promise<string[]> {
+  const names = positionals.filter(each => each !== '-')
+  const fromFile = from === undefined ? [] : registryDependencies(await readInput(from)).map(({ name, spec }) => `${name}@${spec}`)
+  const fromStdin = positionals.includes('-') || (names.length === 0 && fromFile.length === 0 && isStdinPiped()) ? (await readInput('-')).split(WORDS).filter(each => each !== '') : []
 
-  const { values, positionals } = parsed
+  return [...new Set([...names, ...fromFile, ...fromStdin])]
+}
+
+export async function check(args: string[]): Promise<number> {
+  const parsed = parse(args, usage, options, { exits: EXITS })
+
+  const { values } = parsed
+  const positionals = await wanted(parsed.positionals, values.from)
 
   if (positionals.length === 0)
-    fail(`a package name is needed\n\n${usage}`)
+    fail(values.from === undefined ? `a package name is needed\n\n${usage}` : `${values.from} has no registry dependency to check`)
 
   const context: Context = { configs: await loadConfigs(), settings: await loadSettings(), minAgeDays: wholeNumber(values['min-age'], 'min-age', DEFAULT_MIN_AGE_DAYS, 0) }
   const reports = await Promise.all(positionals.map(async text => checkPackage(text, context)))

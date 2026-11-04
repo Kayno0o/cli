@@ -1,6 +1,7 @@
 import type { Manager } from './pin'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
+import { fail } from '@kaynooo/cli-kit'
 import { LOCKFILES } from './pin'
 
 export const KINDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const
@@ -89,4 +90,26 @@ const KIND_FLAGS: Record<Kind, string[]> = { dependencies: [], devDependencies: 
 // The `bun add` putting the version in the consumer, under the same kind of dependency.
 export function addCommand(consumer: Consumer, name: string, version: string): string[] {
   return ['bun', 'add', ...KIND_FLAGS[consumer.kind], '--exact', '--no-cache', `${name}@${version}`]
+}
+
+export interface Declared {
+  name: string
+  kind: Kind
+  spec: string
+}
+
+const REGISTRY_KINDS = KINDS.filter(kind => kind !== 'peerDependencies')
+
+// The dependencies of a package.json that come from a registry, peer ranges and local or remote sources left out.
+export function registryDependencies(text: string): Declared[] {
+  let manifest: Partial<Record<Kind, Record<string, unknown>>>
+
+  try {
+    manifest = JSON.parse(text) as typeof manifest
+  }
+  catch {
+    return fail('the package.json is not valid JSON')
+  }
+
+  return REGISTRY_KINDS.flatMap(kind => Object.entries(manifest?.[kind] ?? {}).flatMap(([name, spec]) => typeof spec === 'string' && !LOCAL_SPEC.test(spec) ? [{ name, kind, spec }] : []))
 }
