@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
@@ -214,7 +214,38 @@ describe('out --stats --json errors', () => {
 
     expect([extra.code, since.code]).toEqual([2, 2])
     expect(extra.out).toBe('')
-    expect(JSON.parse(extra.err)).toMatchObject({ error: '--stats runs no command' })
+    expect(JSON.parse(extra.err)).toMatchObject({ error: '--last, --list, --grep and --stats run no command' })
     expect(JSON.parse(since.err)).toMatchObject({ error: expect.stringContaining('--since') })
+  })
+})
+
+describe('out logs', () => {
+  const runtime = temp('out-logs-')
+  const logs = join(runtime, 'kaynooo-cli/out')
+  const env = { ...ENV, XDG_RUNTIME_DIR: runtime }
+  const spawn = (...args: string[]) => {
+    const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env })
+
+    return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
+  }
+
+  test('--last, --list and --grep read the saved logs, the newest by default', () => {
+    expect(spawn('--last')).toMatchObject({ code: 2, out: '' })
+    expect(spawn('--grep', 'x').code).toBe(2)
+
+    mkdirSync(logs, { recursive: true })
+    writeFileSync(join(logs, 'old.log'), 'alpha\nerror: old\n')
+    writeFileSync(join(logs, 'new.log'), 'alpha\nbeta\nerror: new one\nerror: new two\n')
+    utimesSync(join(logs, 'old.log'), new Date(Date.now() - 60_000), new Date(Date.now() - 60_000))
+
+    expect(spawn('--last')).toEqual({ code: 0, out: `${join(logs, 'new.log')}\n`, err: '' })
+    expect(spawn('--grep', 'error').out).toBe('3: error: new one\n4: error: new two\n')
+    expect(spawn('--grep', 'error', '--log', 'old.log').out).toBe('2: error: old\n')
+    expect(spawn('--grep', 'nothing').code).toBe(1)
+    expect(spawn('--grep', '(').code).toBe(2)
+    expect(spawn('--grep', 'x', '--log', 'missing.log').code).toBe(2)
+    expect(spawn('--list').out.split('\n').filter(Boolean).map(line => line.split(/\s+/)[0])).toEqual([join(logs, 'new.log'), join(logs, 'old.log')])
+    expect(spawn('--last', '--grep', 'x').code).toBe(2)
+    expect(spawn('--log', 'old.log').code).toBe(2)
   })
 })

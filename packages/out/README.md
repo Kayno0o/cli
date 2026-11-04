@@ -7,6 +7,7 @@ bun install -g @kaynooo/cli-out
 out -- bun install
 bun run build 2>&1 | out
 out --stats --since 7d
+out --grep 'error TS'
 ```
 
 ## Behaviour
@@ -21,6 +22,11 @@ out --stats --since 7d
 - The exit code is always the wrapped command's. Piped into with no command, `out` folds what it reads and exits 0, the writer's code left to `set -o pipefail`; only stdout is piped, so `2>&1` brings stderr along. A terminal or `/dev/null` on stdin with no command is a usage error.
 - The output is streamed to a full log as it arrives once it outgrows the 4 MiB held in memory (the first and last 2 MiB), otherwise the log is written when folding. Logs go to `$XDG_RUNTIME_DIR/kaynooo-cli/out` (`~/.cache/kaynooo-cli/out` without it), a folder only the user can enter, files at mode 0600, and logs older than a day are removed on the next run.
 - SIGINT, SIGTERM and SIGHUP go to the command's whole process group, and `out` exits with its code. A watch command (`--watch`, `tsc -w`, `just dev`) is never wrapped by `guard`, as its output would sit buffered.
+
+## Saved logs
+
+- `out --last` prints the path of the most recent full log, `out --list` lists them (path, size, age, newest first) and `out --grep <regex>` prints the matching lines of the last log, or of the one `--log <name|path>` names, each as `N: line` with N the line number the folded output's `(same as line N)` refers to.
+- Exit 0 when found, 1 when `--grep` matches nothing or `--list` finds no log, 2 when there is no saved log to read or the regex is invalid. A run saves a log only when its output was folded, and logs older than a day are removed.
 
 ## Stats
 
