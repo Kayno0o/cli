@@ -47,6 +47,33 @@ describe('sub', () => {
     expect(result.out).toBe('a.ts: 1 replacement on line 2, +1 -1\n')
   })
 
+  test('--json prints each file\'s replacements, lines and diff stat, with the diff under --diff', () => {
+    file('a.ts', 'const x = 1\n')
+    file('b.ts', 'x\nx\n')
+
+    const result = sub(['--json', '--all', '--from', 'x', '--to', 'y', 'b.ts', 'a.ts'])
+
+    expect(result.code).toBe(0)
+    expect(JSON.parse(result.out)).toEqual({ dryRun: false, files: [{ path: 'b.ts', replacements: 2, lines: [1, 2], added: 2, removed: 2 }, { path: 'a.ts', replacements: 1, lines: [1], added: 1, removed: 1 }] })
+    expect(read('b.ts')).toBe('y\ny\n')
+
+    const diff = JSON.parse(sub(['--json', '--diff', '--dry-run', '--from', 'y', '--to', 'z', '--all', 'b.ts']).out) as { dryRun: boolean, files: { diff: string }[] }
+
+    expect(diff.dryRun).toBe(true)
+    expect(diff.files[0]?.diff).toContain('+z')
+    expect(read('b.ts')).toBe('y\ny\n')
+  })
+
+  test('--json names the failures on stderr and writes nothing', () => {
+    file('a.ts', 'function a() {\n    return 1\n}\n')
+
+    const result = sub(['--json', '--from', 'nope', '--to', 'x', 'a.ts', 'missing.ts'])
+
+    expect(result.code).toBe(1)
+    expect(result.out).toBe('')
+    expect(JSON.parse(result.err)).toEqual({ error: 'nothing written', failures: [{ path: 'a.ts', problem: 'matched 0 times, expected 1' }, { path: 'missing.ts', problem: 'no such file' }] })
+  })
+
   test('takes a --from and --to starting with a dash, a Markdown list item', () => {
     file('a.md', '- one\n- two\n')
 

@@ -5,7 +5,7 @@ import type { Pair } from './replace'
 import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { normalize, resolve } from 'node:path'
 import process from 'node:process'
-import { Exit, fail, parse, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { Exit, fail, jsonOption, parse, printJson, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
 import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
@@ -36,6 +36,7 @@ const OPTIONS = {
   'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?} applied in order: inline when it starts with [, else a file or - for stdin' },
   'diff': { type: 'boolean', short: 'd', description: 'print each file\'s unified diff' },
   'dry-run': { type: 'boolean', description: 'show what would change without writing' },
+  'json': jsonOption('{dryRun, files: [{path, replacements, lines, added, removed, diff?}]}, or {error, failures: [{path, problem}]} on stderr when nothing is written'),
 } as const
 
 interface Defaults {
@@ -249,11 +250,11 @@ async function main(argv: string[]): Promise<number> {
   const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true, regex: values.regex === true }
   const edits = await plan(values, files, defaults)
   const changes: { path: string, before: string, after: string, lines: number[], diff?: Diff }[] = []
-  const problems: string[] = []
+  const problems: { path: string, problem: string }[] = []
 
   for (const [path, pairs] of edits) {
     if (!existsSync(path)) {
-      problems.push(`${path}: no such file`)
+      problems.push({ path, problem: 'no such file' })
 
       continue
     }
@@ -261,23 +262,28 @@ async function main(argv: string[]): Promise<number> {
     const before = readUtf8(path)
 
     if (before === undefined) {
-      problems.push(`${path}: not valid UTF-8, left alone`)
+      problems.push({ path, problem: 'not valid UTF-8, left alone' })
 
       continue
     }
 
     const applied = applyPairs(before, pairs)
 
-    problems.push(...applied.problems.map(problem => `${path}: ${problem}`))
+    problems.push(...applied.problems.map(problem => ({ path, problem })))
 
     if (applied.problems.length === 0 && values['dry-run'] !== true && !writable(path))
-      problems.push(`${path}: not writable`)
+      problems.push({ path, problem: 'not writable' })
 
     changes.push({ path, before, after: applied.text, lines: applied.lines })
   }
 
+  const json = values.json === true
+
   if (problems.length > 0) {
-    console.error(`sub: nothing written\n${problems.join('\n')}`)
+    if (json)
+      console.error(JSON.stringify({ error: 'nothing written', failures: problems }))
+    else
+      console.error(`sub: nothing written\n${problems.map(({ path, problem }) => `${path}: ${problem}`).join('\n')}`)
 
     return 1
   }
@@ -292,6 +298,8 @@ async function main(argv: string[]): Promise<number> {
     return 1
   }
 
+  const done: { path: string, replacements: number, lines: number[], added: number, removed: number, diff?: string }[] = []
+
   for (const { path, before, after, lines, diff } of changes) {
     if (diff === undefined)
       continue
@@ -299,13 +307,21 @@ async function main(argv: string[]): Promise<number> {
     if (values['dry-run'] !== true && after !== before)
       writeAtomic(path, after)
 
+    if (json) {
+      done.push({ path, replacements: lines.length, lines, added: diff.added, removed: diff.removed, ...values.diff === true ? { diff: diff.unified } : {} })
+
+      continue
+    }
+
     console.log(`${path}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, +${diff.added} -${diff.removed}`)
 
     if (values.diff === true && diff.unified !== '')
       process.stdout.write(diff.unified)
   }
 
-  if (values['dry-run'] === true)
+  if (json)
+    printJson({ dryRun: values['dry-run'] === true, files: done })
+  else if (values['dry-run'] === true)
     console.log('dry run: nothing written')
 
   return 0
