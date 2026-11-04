@@ -35,6 +35,7 @@ const OPTIONS = {
   'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?} applied in order: inline when it starts with [, else a file or - for stdin' },
   'diff': { type: 'boolean', short: 'd', description: 'print each file\'s unified diff' },
   'dry-run': { type: 'boolean', description: 'show what would change without writing' },
+  'quiet': { type: 'boolean', short: 'q', description: 'print nothing on success, the diff aside' },
   'json': jsonOption('{dryRun, files: [{path, replacements, lines, added, removed, diff?}]}, or {error, failures: [{path, problem}]} on stderr when nothing is written'),
 } as const
 
@@ -312,7 +313,8 @@ async function main(argv: string[]): Promise<number> {
       continue
     }
 
-    console.log(`${path}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, +${diff.added} -${diff.removed}`)
+    if (values.quiet !== true)
+      console.log(`${path}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, +${diff.added} -${diff.removed}`)
 
     if (values.diff === true && diff.unified !== '')
       process.stdout.write(diff.unified)
@@ -320,7 +322,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (json)
     printJson({ dryRun: values['dry-run'] === true, files: done })
-  else if (values['dry-run'] === true)
+  else if (values['dry-run'] === true && values.quiet !== true)
     console.log('dry run: nothing written')
 
   return 0

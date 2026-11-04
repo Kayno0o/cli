@@ -32,6 +32,6 @@ EOF
 - When the text holds a marker line itself (a Markdown `=======` underline), open with more characters, `<<<<<<<<<< SEARCH`, and divide and close with as many `=` and `>`.
 - `--pairs <json|file>` (or `-` for stdin) applies a JSON array of `{ "from", "to", "count"?, "all"?, "regex"? }` in order, each on the previous one's result, all or nothing; a value starting with `[` is the JSON itself, any other key in a pair is refused. `--count`, `--all` and `--regex` are the defaults of pairs that do not set them.
 - A file with CRLF endings matches a literal `--from` typed with plain newlines, and the replacement keeps CRLF.
-- Each written file prints `<path>: N replacements on lines L, +added -removed`; `--diff` adds its unified diff (through the system's `diff`), `--dry-run` shows the same without writing.
+- `--quiet` prints nothing on success. Each written file prints `<path>: N replacements on lines L, +added -removed`; `--diff` adds its unified diff (through the system's `diff`), `--dry-run` shows the same without writing.
 - The file is rewritten in place, so its mode, owner and missing trailing newline stay.
 - Exit codes: 0 written, 1 a replacement did not match as expected, 2 a usage error.

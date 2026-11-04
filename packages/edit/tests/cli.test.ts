@@ -176,6 +176,16 @@ describe('sub', () => {
     expect(read('a.ts')).toBe('x\r\ny\r\nc\r\n')
   })
 
+  test('--quiet prints nothing on success but still writes and still shows a requested diff', () => {
+    file('a.ts', 'a\nb\n')
+
+    const quiet = sub(['-f', 'b', '-t', 'c', '--quiet', 'a.ts'])
+
+    expect(quiet).toMatchObject({ code: 0, out: '', err: '' })
+    expect(read('a.ts')).toBe('a\nc\n')
+    expect(sub(['-f', 'c', '-t', 'd', '-q', '--diff', 'a.ts']).out).toStartWith('--- a/a.ts')
+  })
+
   test('--dry-run and --diff show the change without writing it', () => {
     file('a.ts', 'a\nb\n')
     const result = sub(['-f', 'b', '-t', 'c', '--dry-run', '--diff', 'a.ts'])
