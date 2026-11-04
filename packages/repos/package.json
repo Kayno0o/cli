@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-repos",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "repos: every git repository of the workspace that needs attention, with its dirty files, unpushed and unreleased commits.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
