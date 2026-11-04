@@ -23,9 +23,21 @@ describe('parseKeys', () => {
     expect(parseKeys('\x1Bba')).toEqual([{ text: 'a' }])
   })
 
-  test('a newline inside pasted text is no enter', () => {
-    expect(parseKeys('foo\nbar\n')).toEqual([{ text: 'f' }, { text: 'o' }, { text: 'o' }, { text: 'b' }, { text: 'a' }, { text: 'r' }])
+  test('a newline inside bracketed pasted text is no enter', () => {
+    expect(parseKeys('\x1B[200~foo\nbar\n\x1B[201~')).toEqual([{ text: 'f' }, { text: 'o' }, { text: 'o' }, { text: 'b' }, { text: 'a' }, { text: 'r' }])
+    expect(parseKeys('\x1B[200~a\n\x1B[201~\r')).toEqual([{ text: 'a' }, 'enter'])
     expect(parseKeys('\r')).toEqual(['enter'])
+  })
+
+  test('a paste split across chunks stays a paste', () => {
+    const paste = { active: false }
+
+    expect(parseKeys('\x1B[200~a\n', paste)).toEqual([{ text: 'a' }])
+    expect(parseKeys('b\n\x1B[201~\r', paste)).toEqual([{ text: 'b' }, 'enter'])
+  })
+
+  test('keeps the enter after text typed or piped in the same chunk', () => {
+    expect(parseKeys('abc\r')).toEqual([{ text: 'a' }, { text: 'b' }, { text: 'c' }, 'enter'])
   })
 
   test('keeps printable text, pasted or typed, and drops unknown control keys', () => {

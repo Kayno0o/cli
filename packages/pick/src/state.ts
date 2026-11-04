@@ -26,9 +26,9 @@ const ANSI = /\x1B(?:\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]|\][^\x07\x1B]*(?:\x07
 const CONTROL = /[\x00-\x1F\x7F-\x9F]/g
 // eslint-disable-next-line no-control-regex -- control characters are what it tells apart
 const IS_CONTROL = /[\x00-\x1F\x7F-\x9F]/
-// eslint-disable-next-line no-control-regex -- control characters are what it tells apart
-const PRINTABLE = /[^\x00-\x1F\x7F-\x9F]/
-const NEWLINE = /[\r\n]/
+
+const PASTE_START = '\x1B[200~'
+const PASTE_END = '\x1B[201~'
 const LAST_WORD = /\S*\s*$/
 // eslint-disable-next-line no-control-regex -- escape sequences are what it splits
 const KEY_SEQUENCES = /\x1B\[[0-9;]*[A-Z~]|\x1BO[A-Z]|\x1B[\s\S]|[\s\S]/gu
@@ -56,15 +56,18 @@ export function displayed(line: string): string {
   return line.replace(ANSI, '').replace(CONTROL, ' ')
 }
 
-/** The keys a chunk of terminal input holds, in order; keys nothing handles, such as Home or a function key, are dropped. */
-export function parseKeys(input: string): Key[] {
-  // A newline typed alone is enter, one inside pasted text is not.
-  const pasted = PRINTABLE.test(input.replace(ANSI, '')) && NEWLINE.test(input)
-
+/** The keys a chunk of terminal input holds, in order; keys nothing handles, such as Home or a function key, are dropped. A newline between the bracketed paste markers is text, not enter; `paste` carries an unfinished paste to the next chunk. */
+export function parseKeys(input: string, paste = { active: false }): Key[] {
   return (input.match(KEY_SEQUENCES) ?? []).flatMap((sequence) => {
     const key = KEYS[sequence]
 
-    if (pasted && (sequence === '\r' || sequence === '\n'))
+    if (sequence === PASTE_START || sequence === PASTE_END) {
+      paste.active = sequence === PASTE_START
+
+      return []
+    }
+
+    if (paste.active && (sequence === '\r' || sequence === '\n'))
       return []
 
     if (key !== undefined)

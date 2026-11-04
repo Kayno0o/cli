@@ -18,6 +18,8 @@ export interface PickSettings {
 const PREVIEW_DELAY_MS = 120
 const HIDE_CURSOR = '\x1B[?25l'
 const SHOW_CURSOR = '\x1B[?25h'
+const PASTE_ON = '\x1B[?2004h'
+const PASTE_OFF = '\x1B[?2004l'
 const CLEAR_BELOW = '\r\x1B[J'
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 
@@ -107,7 +109,7 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
     restored = true
     clearTimeout(previewTimer)
     previewing.abort()
-    out.write(`${CLEAR_BELOW}${SHOW_CURSOR}`)
+    out.write(`${CLEAR_BELOW}${PASTE_OFF}${SHOW_CURSOR}`)
     out.off('resize', onResize)
 
     try {
@@ -118,12 +120,14 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
     }
   }
 
+  const paste = { active: false }
+
   function onResize(): void {
     draw(true)
   }
 
   function onData(chunk: Buffer | string): void {
-    for (const key of parseKeys(chunk.toString())) {
+    for (const key of parseKeys(chunk.toString(), paste)) {
       state = press(state, key)
 
       if (state.done !== undefined) {
@@ -153,6 +157,7 @@ export async function choose(lines: readonly string[], settings: PickSettings): 
 
   try {
     input.setRawMode(true)
+    out.write(PASTE_ON)
     out.on('resize', onResize)
     input.on('data', onData)
     refreshPreview()
