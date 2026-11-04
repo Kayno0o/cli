@@ -1,6 +1,8 @@
 import type { AuthorInfo, ChangelogOptions, Commit } from './types'
 import path from 'node:path'
-import { colors } from '@kaynooo/utils'
+import { err, out } from './ui'
+
+const REQUEST_MS = 60_000
 
 interface GiteaRelease {
   id: number
@@ -13,13 +15,17 @@ interface GiteaCommit {
   author: { login: string, avatar_url: string }
 }
 
-async function api<T = unknown>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init)
+async function request(url: string, init?: RequestInit) {
+  const res = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_MS) })
 
   if (!res.ok)
     throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
 
-  return res.json() as Promise<T>
+  return res
+}
+
+async function api<T = unknown>(url: string, init?: RequestInit): Promise<T> {
+  return await (await request(url, init)).json() as T
 }
 
 export async function sendRelease(
@@ -31,7 +37,7 @@ export async function sendRelease(
   let method = 'POST'
 
   try {
-    const exists = await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
+    const exists = await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${encodeURIComponent(options.to ?? '')}`, {
       headers,
     })
 
@@ -51,7 +57,7 @@ export async function sendRelease(
     tag_name: options.to,
   }
 
-  console.log(colors.cyan(method === 'POST'
+  console.log(out().cyan(method === 'POST'
     ? 'Creating release notes...'
     : 'Updating release notes...'),
   )
@@ -61,12 +67,12 @@ export async function sendRelease(
     headers: { ...headers, 'content-type': 'application/json' },
   })
 
-  console.log(colors.green(`Released on ${res.html_url}`))
+  console.log(out().green(`Released on ${res.html_url}`))
 }
 
 export async function getRelease(options: ChangelogOptions, tag: string) {
   try {
-    return await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${tag}`, {
+    return await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${encodeURIComponent(tag)}`, {
       headers: getHeaders(options),
     })
   }
@@ -76,18 +82,15 @@ export async function getRelease(options: ChangelogOptions, tag: string) {
 }
 
 export async function deleteRelease(options: ChangelogOptions, releaseId: number) {
-  const res = await fetch(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${releaseId}`, {
+  await request(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${releaseId}`, {
     method: 'DELETE',
     headers: getHeaders(options),
   })
-
-  if (!res.ok)
-    throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
 }
 
 export async function hasRemoteTag(options: ChangelogOptions, tag: string) {
   try {
-    await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/tags/${tag}`, {
+    await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/tags/${encodeURIComponent(tag)}`, {
       headers: getHeaders(options),
     })
 
@@ -99,13 +102,10 @@ export async function hasRemoteTag(options: ChangelogOptions, tag: string) {
 }
 
 export async function deleteRemoteTag(options: ChangelogOptions, tag: string) {
-  const res = await fetch(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/tags/${tag}`, {
+  await request(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/tags/${encodeURIComponent(tag)}`, {
     method: 'DELETE',
     headers: getHeaders(options),
   })
-
-  if (!res.ok)
-    throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
 }
 
 function getHeaders(options: ChangelogOptions) {
@@ -210,8 +210,8 @@ export async function resolveAuthors(commits: Commit[], options: ChangelogOption
 
 export async function hasTagOnGitea(tag: string, options: ChangelogOptions) {
   try {
-    console.log(`checking if tag exists on https://${options.baseUrlApi}/repos/${options.repo}/tags/${tag}`)
-    await api(`https://${options.baseUrlApi}/repos/${options.repo}/tags/${tag}`, {
+    console.log(`checking if tag exists on https://${options.baseUrlApi}/repos/${options.repo}/tags/${encodeURIComponent(tag)}`)
+    await api(`https://${options.baseUrlApi}/repos/${options.repo}/tags/${encodeURIComponent(tag)}`, {
       headers: getHeaders(options),
     })
 
@@ -222,7 +222,8 @@ export async function hasTagOnGitea(tag: string, options: ChangelogOptions) {
   }
 }
 
-export async function uploadAssets(options: ChangelogOptions, assets: string | string[]) {
+// Returns how many assets could not be uploaded.
+export async function uploadAssets(options: ChangelogOptions, assets: string | string[]): Promise<number> {
   const headers = getHeaders(options)
   let assetList: string[] = []
 
@@ -253,23 +254,25 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
       }
     }
     catch (error) {
-      console.error(colors.red(`Failed to process glob pattern "${pattern}": ${String(error)}`))
+      console.error(err().red(`Failed to process glob pattern "${pattern}": ${String(error)}`))
       // Keep the original pattern as fallback
       expandedAssets.push(pattern)
     }
   }
 
   // Get the release by tag to obtain its id
-  const release = await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${options.to}`, {
+  const release = await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${encodeURIComponent(options.to ?? '')}`, {
     headers,
   })
+  let failed = 0
 
   for (const asset of expandedAssets) {
     const filePath = path.resolve(asset)
     const file = Bun.file(filePath)
 
     if (!await file.exists()) {
-      console.error(colors.red(`Failed to read file ${filePath}: file does not exist`))
+      console.error(err().red(`Failed to read file ${filePath}: file does not exist`))
+      failed++
 
       continue
     }
@@ -283,23 +286,17 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
 
     const uploadUrl = `https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`
 
-    console.log(colors.cyan(`Uploading ${fileName}...`))
+    console.log(out().cyan(`Uploading ${fileName}...`))
 
     try {
-      const res = await fetch(uploadUrl, {
-        method: 'POST',
-        headers,
-        body: form,
-      })
-
-      if (!res.ok) {
-        throw new Error(`${res.status} ${res.statusText}: ${await res.text()}`)
-      }
-
-      console.log(colors.green(`Uploaded ${fileName} successfully.`))
+      await request(uploadUrl, { method: 'POST', headers, body: form })
+      console.log(out().green(`Uploaded ${fileName} successfully.`))
     }
     catch (error) {
-      console.error(colors.red(`Failed to upload ${fileName}: ${String(error)}`))
+      console.error(err().red(`Failed to upload ${fileName}: ${String(error)}`))
+      failed++
     }
   }
+
+  return failed
 }

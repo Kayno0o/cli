@@ -60,31 +60,30 @@ export interface GitCommit extends RawGitCommit {
   isBreaking: boolean
 }
 
-const ConventionalCommitRegex = /(?::.+:|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDE4F\uDE80-\uDEFF]|[\u2600-\u2B55])? *(?<type>[a-z]+)(?:\((?<scope>.+)\))?(?<breaking>!)?: (?<description>.+)/i
+const ConventionalCommitRegex = /^(?::.+:|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDE4F\uDE80-\uDEFF]|[\u2600-\u2B55])? *(?<type>[a-z]+)(?:\((?<scope>[^()\n]+)\))?(?<breaking>!)?: (?<description>.+)/i
 const CoAuthoredByRegex = /co-authored-by:\s*(?<name>\S[^<]*)<(?<email>[^>]+)>/gi
 const PullRequestRE = /\([ a-z]*(#\d+)\s*\)/g
 const IssueRE = /(#\d+)/g
-const BreakingBodyRE = /breaking change:/i
+const BreakingBodyRE = /^BREAKING[ -]CHANGE:/im
 const TicketLineRE = /^(#\d+) - (.+)$/gm
 
 export async function getGitDiff(from: string | undefined, to = 'HEAD', firstParent = false): Promise<RawGitCommit[]> {
-  const range = `${from !== undefined && from !== '' ? `${from}...` : ''}${to}`
-  const pretty = '----%n%s|%h|%an|%ae%n%b'
+  const range = `${from !== undefined && from !== '' ? `${from}..` : ''}${to}`
+  const pretty = '%x1e%s%x00%h%x00%an%x00%ae%x00%b'
   const flags = firstParent ? ['--first-parent'] : []
-  const output = (await $`git --no-pager log ${range} ${flags} --pretty=${pretty} --name-status`.quiet().text()).trim()
+  const output = await $`git --no-pager log ${range} ${flags} --pretty=${pretty}`.quiet().text()
 
   return output
-    .split('----\n')
-    .splice(1)
-    .map((line) => {
-      const [firstLine = '', ...body] = line.split('\n')
-      const [message = '', shortHash = '', authorName = '', authorEmail = ''] = firstLine.split('|')
+    .split('\x1E')
+    .slice(1)
+    .map((record) => {
+      const [message = '', shortHash = '', authorName = '', authorEmail = '', body = ''] = record.split('\0')
 
       return {
         message,
         shortHash,
         author: { name: authorName, email: authorEmail },
-        body: body.join('\n'),
+        body: body.trim(),
       }
     })
 }

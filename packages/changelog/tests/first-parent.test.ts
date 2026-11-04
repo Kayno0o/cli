@@ -89,6 +89,6 @@ it('starts from a single root when no tag exists and the history was merged', as
     const { config } = await generate({ ...options, firstParent: true })
 
     expect(config.from).toMatch(/^[0-9a-f]{40}$/)
-    expect(await getFirstGitCommit()).toContain('\n')
+    expect(await getFirstGitCommit()).toMatch(/^[0-9a-f]{40}$/)
   })
 })

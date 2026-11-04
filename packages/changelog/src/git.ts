@@ -3,7 +3,8 @@ import { parseSemver, validateSemver } from '@kaynooo/utils'
 import { $ } from 'bun'
 
 const gitSuffixRE = /\.git$/
-const sshRegex = /(?:ssh:\/\/[^/]+\/|git@[^:]+:)(\w[\w.-]+)\/(\w[\w.-]+)$/i
+const sshRegex = /(?:ssh:\/\/[^/]+\/|^(?:[^@/\s]+@)?[^:/\s]+:)(\w[\w.-]+)\/(\w[\w.-]+)$/i
+const regexSpecialRE = /[.*+?^${}()|[\]\\]/g
 const httpsRegex = /https?:\/\/[^/]+\/(\w[\w.-]+)\/(\w[\w.-]+)$/i
 const releaseVersionRE = /^[^.]*(?:\.[\d.]*|\d)$/
 
@@ -22,7 +23,9 @@ export async function getGiteaRepo() {
 }
 
 export async function getCurrentGitBranch() {
-  return await execCommand('git', ['tag', '--points-at', 'HEAD']) || await execCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'])
+  const [tag] = (await execCommand('git', ['tag', '--points-at', 'HEAD', '--sort=-v:refname'])).split('\n')
+
+  return tag !== undefined && tag !== '' ? tag : await execCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'])
 }
 
 export async function isRepoShallow() {
@@ -34,7 +37,7 @@ export function getSafeTagTemplate(template: string) {
 }
 
 export function getVersionString(template: string, tag: string): string {
-  const pattern = template.replace(/%s/g, '(.+)')
+  const pattern = template.split('%s').map(part => part.replace(regexSpecialRE, '\\$&')).join('(.+)')
   const regex = new RegExp(`^${pattern}$`)
   const match = regex.exec(tag)
 
@@ -127,7 +130,7 @@ export async function isRefGitTag(to: string) {
 }
 
 export async function getFirstGitCommit(firstParent = false) {
-  return execCommand('git', ['rev-list', '--max-parents=0', ...firstParent ? ['--first-parent'] : [], 'HEAD'])
+  return (await execCommand('git', ['rev-list', '--max-parents=0', ...firstParent ? ['--first-parent'] : [], 'HEAD'])).split('\n').at(-1) ?? ''
 }
 
 export async function deleteLocalTag(tag: string) {

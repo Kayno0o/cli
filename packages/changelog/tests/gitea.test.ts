@@ -1,6 +1,10 @@
 import type { AuthorInfo, ChangelogOptions } from '../src/types'
-import { afterEach, expect, it, spyOn } from 'bun:test'
-import { resolveAuthorInfo } from '../src/gitea'
+import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
+import { afterEach, expect, it, mock, spyOn } from 'bun:test'
+import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, hasTagOnGitea, resolveAuthorInfo, uploadAssets } from '../src/gitea'
+
+const tempDir = tempDirs()
 
 const options = { baseUrlApi: 'forge.example/api/v1', repo: 'owner/repo', token: 'secret' } as ChangelogOptions
 
@@ -24,7 +28,7 @@ function author(commits: string[]): AuthorInfo {
 }
 
 afterEach(() => {
-  ;(globalThis.fetch as unknown as { mockRestore: () => void }).mockRestore()
+  mock.restore()
 })
 
 it('takes the login from the author\'s first commit, without searching', async () => {
@@ -45,4 +49,45 @@ it('leaves the login unset when no account shows that email', async () => {
   answer({ '/users/search': { ok: true, data: [] } })
 
   expect((await resolveAuthorInfo(options, author([]))).login).toBeUndefined()
+})
+
+it('encodes the tag in the release and tag urls and bounds every request in time', async () => {
+  const seen: { url: string, signal: AbortSignal | null | undefined }[] = []
+
+  spyOn(globalThis, 'fetch').mockImplementation((async (input: string | URL | Request, init?: RequestInit) => {
+    seen.push({ url: String(input), signal: init?.signal })
+
+    return Response.json({ id: 1, name: 'x', url: '', html_url: '' })
+  }) as typeof fetch)
+
+  const withRelease = { ...options, releaseRepo: 'owner/release' }
+
+  await getRelease(withRelease, 'v1/a#b')
+  await hasRemoteTag(withRelease, 'v1/a#b')
+  await hasTagOnGitea('v1/a#b', options)
+  await deleteRelease(withRelease, 1)
+  await deleteRemoteTag(withRelease, 'v1/a#b')
+
+  expect(seen.map(s => s.url)).toEqual([
+    'https://forge.example/api/v1/repos/owner/release/releases/tags/v1%2Fa%23b',
+    'https://forge.example/api/v1/repos/owner/release/tags/v1%2Fa%23b',
+    'https://forge.example/api/v1/repos/owner/repo/tags/v1%2Fa%23b',
+    'https://forge.example/api/v1/repos/owner/release/releases/1',
+    'https://forge.example/api/v1/repos/owner/release/tags/v1%2Fa%23b',
+  ])
+  expect(seen.every(s => s.signal instanceof AbortSignal)).toBe(true)
+})
+
+it('counts the assets it could not upload', async () => {
+  const dir = tempDir('changelog-assets-')
+  const file = join(dir, 'a.txt')
+  const withRelease = { ...options, releaseRepo: 'owner/repo', to: 'v1' }
+
+  await Bun.write(file, 'a')
+  answer({ '/releases/tags/v1': { id: 7 }, '/assets': { ok: true } })
+  spyOn(console, 'log').mockImplementation(() => undefined)
+  spyOn(console, 'error').mockImplementation(() => undefined)
+
+  expect(await uploadAssets(withRelease, [file])).toBe(0)
+  expect(await uploadAssets(withRelease, [file, join(dir, 'missing.txt')])).toBe(1)
 })

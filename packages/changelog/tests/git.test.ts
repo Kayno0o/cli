@@ -1,8 +1,9 @@
 import type { ChangelogOptions } from '../src'
 import type { ReleasedRepo } from './fixture'
 import { tempDirs } from '@kaynooo/cli-kit/test'
+import { $ } from 'bun'
 import { beforeAll, expect, it } from 'bun:test'
-import { generate, getGiteaRepo, getLastMatchingTag } from '../src'
+import { generate, getCurrentGitBranch, getFirstGitCommit, getGiteaRepo, getLastMatchingTag, getVersionString, resolveConfig } from '../src'
 import { inside, releasedRepo } from './fixture'
 
 const regexToFindAllUrls = /https:\/\/\S*/g
@@ -141,4 +142,56 @@ it('does not roll up a patch release', async () => {
 it('rolls a major release back to the previous major line', async () => {
   // No `x.0.0` tag in the repo, so it falls back to the newest matching tag.
   expect(await inside(repo.dir, async () => getLastMatchingTag('v2.0.0', all, 'v%s', { major: true }))).toBe('v1.4.2')
+})
+
+async function bareRepo() {
+  const dir = tempDir('changelog-git-')
+  const git = async (...args: string[]) => (await $`git -c commit.gpgsign=false -c user.name=Ada -c user.email=ada@example.com ${args}`.cwd(dir).quiet().text()).trim()
+
+  await git('init', '-b', 'main')
+  await git('commit', '--allow-empty', '-m', 'chore: base')
+
+  return { dir, git }
+}
+
+it('reads the repo from an ssh alias remote', async () => {
+  const { dir, git } = await bareRepo()
+
+  await git('remote', 'add', 'origin', 'forgejo:owner/repo.git')
+
+  expect(await inside(dir, getGiteaRepo)).toBe('owner/repo')
+})
+
+it('names one tag when several point at HEAD', async () => {
+  const { dir, git } = await bareRepo()
+
+  await git('tag', 'v1.0.0')
+  await git('tag', 'v1.0.1')
+
+  expect(await inside(dir, getCurrentGitBranch)).toBe('v1.0.1')
+})
+
+it('names one root commit when the history has several', async () => {
+  const { dir, git } = await bareRepo()
+
+  await git('checkout', '--orphan', 'other')
+  await git('commit', '--allow-empty', '-m', 'chore: second root')
+  await git('checkout', 'main')
+  await git('merge', '--allow-unrelated-histories', '-m', 'chore: merge', 'other')
+
+  expect(await inside(dir, async () => getFirstGitCommit())).toMatch(/^[0-9a-f]{40}$/)
+})
+
+it('treats the tag template literally when reading a version', () => {
+  expect(getVersionString('v+%s', 'v+1.0.0')).toBe('1.0.0')
+  expect(getVersionString('v(%s', 'v(1.0.0')).toBe('1.0.0')
+  expect(getVersionString('r.%s', 'rx1.0.0')).toBe('rx1.0.0')
+})
+
+it('defaults to the public Forgejo host', async () => {
+  const { dir, git } = await bareRepo()
+
+  await git('remote', 'add', 'origin', 'git@git.kaynooo.fr:owner/repo.git')
+
+  expect(await inside(dir, async () => resolveConfig({}))).toMatchObject({ baseUrl: 'git.kaynooo.fr', baseUrlApi: 'git.kaynooo.fr/api/v1' })
 })

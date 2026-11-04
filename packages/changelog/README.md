@@ -154,7 +154,7 @@ export default defineConfig({
 ## Preview Locally
 
 ```bash
-bunx @kaynooo/cli-changelog --dry
+bunx @kaynooo/cli-changelog --dry-run
 ```
 
 ## Undo a Release
@@ -176,7 +176,7 @@ The Gitea release note is **not** removed by default - you're asked about it int
 | Flag     | Description                                             |
 | -------- | ------------------------------------------------------- |
 | `--note` | Also delete the Gitea release note (skips the question) |
-| `--dry`  | Preview what would be removed, without deleting         |
+| `--dry-run` | Preview what would be removed, without deleting         |
 | `--yes`  | Skip confirmation prompts (for CI/scripts)              |
 
 ## Why?

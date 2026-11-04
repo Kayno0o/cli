@@ -61,4 +61,41 @@ describe('cli', () => {
 
     expect((await run(['undo'], dir)).code).toBe(1)
   })
+
+  it('reports an expected failure in the shared error format, with a stack only under --debug', async () => {
+    const dir = tempDir('changelog-cli-')
+    const plain = await run(['undo'], dir)
+    const debug = await run(['undo', '--debug'], dir)
+
+    expect(plain.err).toMatch(/^error: changelog undo: /)
+    expect(plain.err).not.toContain('    at ')
+    expect(debug.err).toContain('    at ')
+  })
+
+  it('names the shared flags and keeps the old names working', async () => {
+    const { out } = await run(['release', '--help'])
+
+    expect(out).toContain('--dry-run')
+    expect(out).toContain('-r, --repo')
+    expect(out).toContain('--release-repo')
+    expect(out).not.toMatch(/-t, --token/)
+    expect((await run(['release', '--dry', '--help'])).code).toBe(0)
+    expect((await run(['release', '--gitea', 'a/b', '--help'])).code).toBe(0)
+  })
+
+  it('exits 2 when -t is used', async () => {
+    expect((await run(['release', '-t', 'x'])).code).toBe(2)
+  })
+
+  it('runs a dry run with the old and the new flag', async () => {
+    const dir = tempDir('changelog-cli-')
+
+    await Bun.$`git init -b main && git -c user.name=a -c user.email=a@b.c commit --allow-empty -m "feat: x" && git remote add origin git@host:owner/repo.git`.cwd(dir).quiet()
+    for (const flag of ['--dry-run', '--dry']) {
+      const { code, out } = await run(['release', flag, '--to', 'HEAD'], dir)
+
+      expect(code).toBe(0)
+      expect(out).toContain('Dry run')
+    }
+  })
 })
