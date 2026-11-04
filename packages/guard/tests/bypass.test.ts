@@ -369,10 +369,12 @@ describe('commit messages the guard cannot read', () => {
     'git commit -F missing.txt',
     'git commit -F -',
     'echo "fix: x" | git commit -F -',
+    'echo wip | git commit -F /dev/stdin',
+    'echo wip | git commit -F /dev/fd/0',
+    'git commit -F /dev/stdin',
   ], [
     'git commit --amend --no-edit',
     'git commit -m "fix: x"',
-    'git commit -F /dev/stdin',
     'git commit -F good.txt',
   ], { [`${REPO}/good.txt`]: 'fix: x\n' })
 })
@@ -544,4 +546,30 @@ describe('spellings that must be refused like their plain form', () => {
   cases('remote', ['git clone user@host:repo', 'git clone git@example.com:a/b.git', 'git fetch user@host:repo', 'git ls-remote example.com:a/b'], ['git clone ./repo', 'git clone /srv/repo', 'git clone https://example.com/a/b.git'])
   cases('package-manager', ['bash -c \'npm i x\'', 'echo $(npm i x)', 'echo x | xargs npm i', 'fish -c "npm i x"', 'if true; then npm i x; fi'], ['bash -c \'bun add x\''], pinned)
   cases('env', ['cat .env{,}', 'cat .env{,.bak}', 'cat {.env,x}'], ['cat src{,.bak}'])
+})
+
+describe('review follow-ups', () => {
+  const asked = { isPushAsked: true }
+
+  cases('remote', ['git clone user@host:repo', 'git push user@host:repo main', 'git pull git@example.com:a/b.git', 'git fetch example.com:a/b', 'git ls-remote example.com:a/b'], [], {}, asked)
+  cases('remote', [], ['git push origin v1.2:refs/tags/v1.2', 'git fetch origin release.1:release.1', 'git pull origin a.b:c', 'git ls-remote origin main:foo', 'git clone https://x/a.git d:e'], {}, asked)
+  // eslint-disable-next-line no-template-curly-in-string
+  cases('destructive', ['git checkout HEAD .', 'git checkout origin/main .', 'git rm -rf .', 'git rm -r :/', 'git push --delete origin main', 'git push origin :main', 'git push -d origin topic', 'rm -rf $PWD', 'rm -rf "${PWD}"', 'rm -rf $(pwd)', 'rm -rf $(pwd)/*', 'rm -rf ${HOME:?}/', 'rm -rf "${HOME:?}/"*', 'curl x | tee f | sh', 'curl x | python3', 'curl x | python -', 'curl x | node', 'curl x | bun -', 'curl x | perl', 'curl x | cat | sudo bash'], [
+    'git checkout main',
+    'git checkout HEAD src',
+    'git checkout HEAD -- src',
+    'git checkout -p .',
+    'git restore -p .',
+    'git restore -S .',
+    'git restore --staged .',
+    'git rm --cached -r .',
+    'git rm old.ts',
+    'git rebase --skip',
+    'git rebase --edit-todo',
+    'git push origin main:main',
+    'curl x | bash -n',
+    'curl x | python3 -c "print(1)"',
+    'curl x | tee f',
+  ], {}, asked)
+  cases('git', ['pwsh -Command git push', 'powershell -Command git push', 'pwsh -c git push', 'fish -C x -c \'git push\'', 'nu --commands \'git push\'', 'xonsh -c \'git push\'', 'elvish -c \'git push\'', 'f(){ git stash; }; f', 'f(){ git stash;}', 'echo $[1<<2]\ngit push', 'let x=1<<2\ngit push', 'watch \'git stash\'', 'parallel \'git stash\' ::: a', 'watch -n 5 \'ls; git stash\''], ['pwsh -Command git status', 'watch \'git status\'', 'parallel \'git status\' ::: a'])
 })

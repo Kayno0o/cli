@@ -59,8 +59,8 @@ function commitViolation(command: string, { cwd, read }: Context): string | null
 
     const { file } = source
 
-    // a device would block the read, so only the heredoc fed to it is checked
-    if (source.isReused || (file?.startsWith('/dev/') === true && (!isStdin(file) || source.stdin === null)))
+    // a device other than stdin would block the read, and stdin is checked from its heredoc or refused as unreadable
+    if (source.isReused || (file?.startsWith('/dev/') === true && !isStdin(file)))
       continue
 
     let message = source.stdin

@@ -20,7 +20,7 @@ describe('splitCommand', () => {
 
 describe('parseCommand', () => {
   test('finds the program past wrappers, assignments and subshells', () => {
-    expect(parseCommand('(FOO=1 sudo -E /usr/bin/git stash)')).toEqual({ program: 'git', args: ['stash'], assignments: ['FOO=1'], isWrapped: true })
+    expect(parseCommand('(FOO=1 sudo -E /usr/bin/git stash)')).toEqual({ program: 'git', args: ['stash'], assignments: ['FOO=1'], isWrapped: true, strings: [] })
   })
 
   test('keeps the closers and backslashes a quoted last word holds', () => {
@@ -165,5 +165,28 @@ describe('braceExpand', () => {
 describe('shellQuote', () => {
   test('leaves a safe word bare and single-quotes the rest', () => {
     expect(['src/a.ts', 'KEY=1', 'a@b:c,d', 'my file.ts', 'it\'s', '$HOME', '*.ts', '=ls', ''].map(shellQuote)).toEqual(['src/a.ts', 'KEY=1', 'a@b:c,d', '\'my file.ts\'', '\'it\'\\\'\'s\'', '\'$HOME\'', '\'*.ts\'', '\'=ls\'', '\'\''])
+  })
+})
+
+describe('review follow-ups', () => {
+  test('a legacy arithmetic or a let shift opens no heredoc', () => {
+    for (const text of ['echo $[1<<2]\ngit push', 'let x=1<<2\ngit push'])
+      expect(splitCommand(text).at(-1)?.command.trim()).toBe('git push')
+  })
+
+  test('compact function definitions are skipped', () => {
+    for (const text of ['f(){ git stash', 'f(){ git stash;'])
+      expect(parseCommand(text)).toMatchObject({ program: 'git', isWrapped: true })
+  })
+
+  test('a quoted wrapper string is a command line', () => {
+    expect(parseCommand('watch -n 5 \'ls; git stash\'').strings).toEqual(['ls; git stash'])
+    expect(commandsRun('parallel \'git stash\' ::: a')).toContain('git stash')
+  })
+
+  test('PowerShell joins the words after its command option', () => {
+    expect(commandsRun('pwsh -Command git push')).toContain('git push')
+    expect(commandsRun('fish -C x -c \'git push\'')).toContain('git push')
+    expect(commandsRun('nu --commands \'git push\'')).toContain('git push')
   })
 })

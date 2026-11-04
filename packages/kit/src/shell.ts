@@ -1,6 +1,6 @@
 // `text` is the piece as written, `command` the same less its heredoc bodies and comments, which are data and never commands; `separator` is what ends it (`|`, `&&`, `;`, a newline...), empty for the last; `expanded` holds the bodies of its unquoted heredocs, where the shell still runs `$(...)`, and `heredocs` those of all its heredocs.
 export interface Piece { text: string, start: number, end: number, command: string, separator: string, expanded: string, heredocs: string[] }
-export interface Invocation { program: string, args: string[], assignments: string[], isWrapped: boolean }
+export interface Invocation { program: string, args: string[], assignments: string[], isWrapped: boolean, strings: string[] }
 
 const SEPARATORS = new Set(['\n', ';', '|'])
 const PLAIN_BREAKERS = new Set(['<', '>', '(', ')', '&', '|'])
@@ -32,24 +32,28 @@ const MAX_DEPTH = 8
 const MAX_BRACES = 256
 
 // Programs reading a command string with `-c`.
-export const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'fish', 'csh', 'tcsh', 'nu', 'pwsh', 'powershell'])
+export const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ash', 'ksh', 'fish', 'csh', 'tcsh', 'nu', 'xonsh', 'elvish', 'pwsh', 'powershell'])
 // Programs that take their command string past other operands, so every word is scanned for the option.
 const SCANNED_PROGRAMS = new Set(['su', 'runuser', 'flock'])
 const COMMAND_STRING_PROGRAMS = new Set([...SHELLS, ...SCANNED_PROGRAMS])
 // PowerShell's `-Command`, which it accepts abbreviated to any prefix.
 const POWERSHELL_COMMAND = /^-c(?:o(?:m(?:m(?:a(?:nd?)?)?)?)?)?$/i
 const POWERSHELL = new Set(['pwsh', 'powershell'])
-const FUNCTION_DEFINITION = /^[\w.:-]+\(\)$/
+const FUNCTION_DEFINITION = /^[\w.:-]+\(\)\{?$/
 const FUNCTION_NAME = /^[\w.:-]+$/
 const SHELL_VALUE_OPTIONS = new Set(['-o', '-O', '--rcfile', '--init-file'])
+const FISH_VALUE_OPTIONS = new Set(['-C', '--init-command'])
+// A `let` builtin, whose `<<` is a shift.
+const LET_PIECE = /^\s*let\s/
 const PRINTERS = new Set(['echo', 'printf'])
 const FIND_EXEC = new Set(['-exec', '-execdir', '-ok', '-okdir'])
 
 // Programs that run the command following them, which is the one that counts, with the options taking a value and the operands before that command.
-interface WrapperSpec { short: string, long: readonly string[], operands: number }
+interface WrapperSpec { short: string, long: readonly string[], operands: number, runsString: boolean }
 
-function wrapper(short = '', long: readonly string[] = [], operands = 0): WrapperSpec {
-  return { short, long, operands }
+// `runsString` for a wrapper that hands its command to a shell, so a quoted `'git stash'` is a command line.
+function wrapper(short = '', long: readonly string[] = [], operands = 0, runsString = false): WrapperSpec {
+  return { short, long, operands, runsString }
 }
 
 const WRAPPERS = new Map<string, WrapperSpec>([
@@ -68,9 +72,9 @@ const WRAPPERS = new Map<string, WrapperSpec>([
   ['ionice', wrapper('cnpPu', ['--class', '--classdata', '--pid', '--pgid', '--uid'])],
   ['stdbuf', wrapper('ioe', ['--input', '--output', '--error'])],
   ['chroot', wrapper('', ['--userspec', '--groups'], 1)],
-  ['watch', wrapper('n', ['--interval'])],
+  ['watch', wrapper('n', ['--interval'], 0, true)],
   ['flock', wrapper('wE', ['--timeout', '--conflict-exit-code'], 1)],
-  ['parallel', wrapper('jnNSaIPlLdTsC', ['--jobs', '--max-args', '--max-replace-args', '--sshlogin', '--arg-file', '--delimiter', '--colsep'])],
+  ['parallel', wrapper('jnNSaIPlLdTsC', ['--jobs', '--max-args', '--max-replace-args', '--sshlogin', '--arg-file', '--delimiter', '--colsep'], 0, true)],
   ['unbuffer', wrapper()],
   ['systemd-run', wrapper('puEMH', ['--property', '--unit', '--description', '--slice', '--setenv', '--machine', '--host', '--uid', '--gid', '--working-directory', '--nice', '--service-type'])],
   ['xargs', wrapper('IndsEaPL', ['--max-args', '--max-procs', '--max-chars', '--delimiter', '--arg-file', '--eof', '--max-lines', '--process-slot-var'])],
@@ -175,6 +179,15 @@ export function splitCommand(command: string): Piece[] {
       continue
     }
 
+    // The legacy arithmetic `$[...]` is read whole, like `$((...))`.
+    if (char === '$' && command[i + 1] === '[') {
+      const close = command.indexOf(']', i)
+
+      i = close === -1 ? command.length : close
+
+      continue
+    }
+
     // A backquoted body is read whole, as its own separators split nothing of the command around it.
     if (char === '`') {
       i = closingBackquote(command, i)
@@ -199,7 +212,7 @@ export function splitCommand(command: string): Piece[] {
       continue
     }
 
-    const heredoc = char === '<' && command[i + 1] === '<' && command[i + 2] !== '<' ? HEREDOC.exec(command.slice(i)) : null
+    const heredoc = char === '<' && command[i + 1] === '<' && command[i + 2] !== '<' && !LET_PIECE.test(command.slice(start, i)) ? HEREDOC.exec(command.slice(i)) : null
 
     if (heredoc) {
       heredocs.push({ word: heredoc[2] ?? heredoc[3] ?? heredoc[4] ?? '', stripsTabs: heredoc[1] === '-', isQuoted: heredoc[4] === undefined })
@@ -565,6 +578,7 @@ function skipOptions(tokens: string[], spec: WrapperSpec): void {
 export function parseCommand(text: string): Invocation {
   const tokens = tokenize(text)
   const assignments: string[] = []
+  const strings: string[] = []
   let isWrapped = false
 
   for (;;) {
@@ -615,6 +629,9 @@ export function parseCommand(text: string): Invocation {
       isWrapped = true
       tokens.shift()
       skipOptions(tokens, spec)
+
+      if (spec.runsString && WHITESPACE.test(tokens[0] ?? ''))
+        strings.push(tokens[0] ?? '')
     }
     else {
       break
@@ -631,7 +648,7 @@ export function parseCommand(text: string): Invocation {
 
   const [program = '', ...args] = tokens
 
-  return { program: program.split('/').pop() ?? '', args, assignments, isWrapped }
+  return { program: program.split('/').pop() ?? '', args, assignments, isWrapped, strings }
 }
 
 // A word as a POSIX shell or zsh reads it back unchanged: left bare when it holds nothing the shell would act on (zsh expands a leading `=`), else single-quoted.
@@ -666,22 +683,22 @@ function commandStrings(tokens: readonly string[]): string[] {
         continue
       }
 
-      if (SHELL_VALUE_OPTIONS.has(option)) {
+      if (SHELL_VALUE_OPTIONS.has(option) || (name === 'fish' && FISH_VALUE_OPTIONS.has(option))) {
         isValue = true
 
         continue
       }
 
-      if (option.startsWith('--command=')) {
-        found.push(option.slice('--command='.length))
+      if (option.startsWith('--command=') || option.startsWith('--commands=')) {
+        found.push(option.slice(option.indexOf('=') + 1))
 
         break
       }
 
       const isCommandOption = isPowershell ? POWERSHELL_COMMAND.test(option) : !option.startsWith('--') && option.startsWith('-') && option.slice(1).includes('c')
 
-      if (option === '--command' || isCommandOption) {
-        found.push(tokens[j + 1] ?? '')
+      if (option === '--command' || option === '--commands' || isCommandOption) {
+        found.push(isPowershell ? tokens.slice(j + 1).join(' ') : (tokens[j + 1] ?? ''))
 
         break
       }
@@ -733,8 +750,8 @@ function findExecs(args: readonly string[]): string[] {
 // The commands a piece makes a shell run besides its own: `sh -c` strings, `eval`, `find -exec`, and what is fed to a shell reading its input, heredocs, here-strings and an `echo` piped in.
 function nestedCommands(piece: Piece, previous: Piece | undefined): string[] {
   const tokens = tokenize(piece.command)
-  const { program, args } = parseCommand(piece.command)
-  const found = commandStrings(tokens)
+  const { program, args, strings } = parseCommand(piece.command)
+  const found = [...commandStrings(tokens), ...strings]
 
   if (program === 'eval')
     found.push(args.join(' '))

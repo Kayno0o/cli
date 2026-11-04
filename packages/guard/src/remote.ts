@@ -14,6 +14,8 @@ const SCP_ADDRESS = /^[^/:\s-][^/:\s]*:(?!\/\/)/
 // The same with a user or a dotted host, which tells it from a `branch:branch` refspec.
 const SCP_HOST_ADDRESS = /^(?:[\w.-]+@[\w.-]+|[\w-]+(?:\.[\w-]+)+):(?!\/\/)/
 const GIT_TRANSPORTS = new Set(['clone', 'fetch', 'pull', 'push', 'ls-remote'])
+// The transport commands' own options taking the next word as their value.
+const TRANSPORT_VALUE_OPTIONS = new Set(['--depth', '-b', '--branch', '-o', '--origin', '--push-option', '-c', '--config', '--reference', '--separate-git-dir', '--template', '-j', '--jobs', '--filter', '--shallow-since', '--shallow-exclude', '-u', '--upload-pack', '--receive-pack', '--exec', '--server-option', '--repo', '--deepen'])
 const SSH_URL = /^ssh:\/\//
 const SSH_URL_WORD = /^(?:[\w-]+=)?ssh:\/\//
 const LOOPBACK = /(?:^|[:=@[])(?:localhost|127(?:\.\d+){3}|::1)(?:[:\]/]|$)/
@@ -62,6 +64,20 @@ function isSocketRemote(args: readonly string[]): boolean {
   return !args.some(arg => LISTENS.test(arg) || LOOPBACK.test(arg))
 }
 
+// The first word that is no option nor an option's value, the repository of a transport command.
+function firstOperand(args: readonly string[]): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? ''
+
+    if (TRANSPORT_VALUE_OPTIONS.has(arg))
+      i++
+    else if (!arg.startsWith('-'))
+      return arg
+  }
+
+  return undefined
+}
+
 // Whether a git command names a repository in scp style (`user@host:path`), which git reaches over ssh.
 function isScpAddress(args: readonly string[]): boolean {
   const { name, rest } = subcommandOf(args)
@@ -70,8 +86,9 @@ function isScpAddress(args: readonly string[]): boolean {
     return false
 
   const address = name === 'clone' || name === 'ls-remote' ? SCP_ADDRESS : SCP_HOST_ADDRESS
+  const repository = firstOperand(rest)
 
-  return rest.some(arg => !arg.startsWith('-') && address.test(arg))
+  return repository !== undefined && address.test(repository)
 }
 
 function isRemote(text: string): boolean {
