@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-audit",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "audit: the known vulnerabilities of every Bun repository of a workspace in one table, each with its severity, whether it reaches production, whether the repository asks for the package itself, and the version that fixes it.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
