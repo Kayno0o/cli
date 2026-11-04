@@ -85,7 +85,7 @@ describe('gst', () => {
 
   test('outside a repository it says so', () => {
     rmSync(join(dir, '.git'), { recursive: true })
-    const result = gst()
+    const result = run([process.execPath, GST], { GIT_DIR: join(dir, '.git') })
 
     expect(result.code).toBe(2)
     expect(result.err).toContain('not a git repository')
