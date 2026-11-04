@@ -33,7 +33,7 @@ export async function runs(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
   const { values } = parsed
-  const limit = limitOf({ limit: values.limit, full: values.full }, DEFAULT_LIMIT)
+  const limit = limitOf(values, DEFAULT_LIMIT)
   const { pipelines: list, more, exact } = values.sha === undefined
     ? await recentPipelines(limit, values.repo, values.branch)
     : await onCommit(await resolveCommit(values.sha), limit, values.repo, values.branch)

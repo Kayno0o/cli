@@ -163,7 +163,7 @@ export async function board(args: string[]): Promise<number> {
   const rows = (await boardRows(issues, sessions, values.repo)).filter(row => state === undefined || row.standing.state === state)
 
   if (values.json === true) {
-    printJson(boardJson(rows))
+    printJson(boardJson(rows.slice(0, limit)))
 
     return 0
   }

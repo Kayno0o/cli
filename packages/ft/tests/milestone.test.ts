@@ -56,6 +56,25 @@ describe('ft milestones', () => {
   })
 })
 
+describe('--json with --limit', () => {
+  const many = [v1, { ...v1, id: 4, title: '1.1.0' }, { ...v1, id: 5, title: '1.2.0' }]
+  const open = [issue(1, 'a', 'open'), issue(2, 'b', 'open'), issue(3, 'c', 'open')]
+
+  test('ft milestones --json is cut only by an explicit --limit', async () => {
+    await withFakeTea({ issues: [], milestones: many }, async () => {
+      expect(JSON.parse((await capture(async () => milestones(['--json']))).out)).toHaveLength(3)
+      expect(JSON.parse((await capture(async () => milestones(['--json', '--limit', '2']))).out)).toHaveLength(2)
+    })
+  })
+
+  test('ft board --json is cut only by an explicit --limit', async () => {
+    await withFakeTea({ issues: open, milestones: [] }, async () => {
+      expect(JSON.parse((await capture(async () => board(['--json']))).out)).toHaveLength(3)
+      expect(JSON.parse((await capture(async () => board(['--json', '--limit', '2']))).out)).toHaveLength(2)
+    })
+  })
+})
+
 describe('ft milestone new', () => {
   test('creates one with no due_on unless --due is given', async () => {
     const state = await withFakeTea({ issues: [] }, async () => {

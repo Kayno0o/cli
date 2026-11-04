@@ -74,6 +74,20 @@ describe('gl runs', () => {
   })
 })
 
+describe('gl runs --json', () => {
+  const many = Array.from({ length: 12 }, (_, index) => pipeline(index + 1, 'f'.repeat(40), 'success'))
+
+  test('is never cut on its own, only by --limit', async () => {
+    process.chdir(clone)
+
+    const all = await withFakeGlab({ pipelines: many }, async () => runs(['--json']))
+    const some = await withFakeGlab({ pipelines: many }, async () => runs(['--json', '--limit', '3']))
+
+    expect((JSON.parse(all.out.join('\n')) as unknown[]).length).toBe(12)
+    expect((JSON.parse(some.out.join('\n')) as unknown[]).length).toBe(3)
+  })
+})
+
 describe('gl logs', () => {
   const state = {
     pipelines: [pipeline(7, 'abc1234def', 'failed')],

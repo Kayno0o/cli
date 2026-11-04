@@ -38,7 +38,7 @@ export async function milestones(args: string[]): Promise<number> {
   const found = await listMilestones(state, values.repo)
 
   if (values.json === true) {
-    printJson(found.map(each => ({ id: each.id, title: each.title, state: each.state, description: each.description, open: each.open_issues, closed: each.closed_issues, due: dueDate(each) || null })))
+    printJson(found.slice(0, limit).map(each => ({ id: each.id, title: each.title, state: each.state, description: each.description, open: each.open_issues, closed: each.closed_issues, due: dueDate(each) || null })))
 
     return 0
   }
