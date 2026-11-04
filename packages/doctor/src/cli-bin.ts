@@ -5,6 +5,7 @@ import type { Listed } from './list'
 import process from 'node:process'
 import { badUsage, duration, jsonOption, paint, parse, printJson, readUsage, runCli, summarizeUsage, table, usagePath } from '@kaynooo/cli-kit'
 import { bashScript, completionDir, completionFile, installCompletions, installedBins } from './completions'
+import { main as doctor } from './doctor'
 import { hostHere } from './host'
 import { listBins } from './list'
 
@@ -131,6 +132,7 @@ if (import.meta.main) {
     replaces: 'running each bin\'s --help to find the one that fits',
     examples: ['cli list', ['cli list --json', 'with each bin\'s synopsis and examples']],
     commands: {
+      doctor: { summary: 'checks this host\'s install of the bins, one line per check, the command that fixes a failing one beside it', run: async args => doctor(args) },
       list: { summary: 'every bin in one line: what it does and what it is reached for instead of', run: async args => list(args) },
       stats: { summary: 'how often each bin ran and the options usage errors did not know', run: async args => stats(args) },
       completions: { summary: 'fish completions for every installed bin, printed or written to the folder fish reads', run: async args => completions(args) },

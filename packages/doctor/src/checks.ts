@@ -41,7 +41,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-pick': ['pick'],
   '@kaynooo/cli-pkg': ['pkg'],
   '@kaynooo/cli-probe': ['probe'],
-  '@kaynooo/cli-proc': ['pid', 'ports', 'procs'],
+  '@kaynooo/cli-proc': ['proc', 'pid', 'ports', 'procs'],
   '@kaynooo/cli-repos': ['repos'],
   '@kaynooo/cli-stack': ['stack'],
   '@kaynooo/cli-sweep': ['sweep'],

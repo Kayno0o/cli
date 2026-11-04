@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
-const BINS = ['pid', 'ports', 'procs'] as const
+const BINS = ['proc', 'pid', 'ports', 'procs'] as const
 
 function listen() {
   return Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: () => undefined } })

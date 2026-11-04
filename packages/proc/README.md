@@ -1,6 +1,6 @@
 # proc
 
-Three process and port helpers for Linux, reading `/proc` directly instead of shelling out to `ps`, `ss` or `lsof`: `pid` inspects one process, `ports` tells who listens on what, `procs` finds leftover or heavy dev processes.
+Three process and port helpers for Linux (also reachable as `proc pid|ports|procs`), reading `/proc` directly instead of shelling out to `ps`, `ss` or `lsof`: `pid` inspects one process, `ports` tells who listens on what, `procs` finds leftover or heavy dev processes.
 
 ```sh
 bun install -g @kaynooo/cli-proc

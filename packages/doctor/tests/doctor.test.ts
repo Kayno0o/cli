@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { checkBun, checkHooks, checkTea, checkTool, runChecks, TOOLS } from '../src/checks'
-import { main } from '../src/cli'
+import { main } from '../src/doctor'
 
 const temp = tempDirs()
 

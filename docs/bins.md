@@ -379,6 +379,19 @@ probe a.test b.test  # one line each
 probe https://example.com --resolve example.com:203.0.113.7 -H "Host: example.com" --verbose  # a server before its DNS points at it
 ```
 
+## proc
+
+what a process is, who listens on a port and which dev processes are worth cleaning, read from /proc. Package `proc`.
+
+Instead of: cat /proc/<pid>/..., ss -ltnp, lsof -i and pgrep -f one-liners
+
+```sh
+proc <command> [options]
+proc pid 1234
+proc ports
+proc procs  # the leftover or heavy processes, dry-run first
+```
+
 ## procs
 
 lists the leftover or heavy processes of the calling user that are worth cleaning, grouped by origin: the project folder their working directory is in, a browser profile for a chromium and its helpers, else their command. Each group shows its process count, total resident memory and oldest age. Package `proc`.
