@@ -5,7 +5,7 @@ import process from 'node:process'
 import { Exit } from '@kaynooo/cli-kit'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { describeNamedContainer, describeServices, parsePs, pickService, serviceUrl } from '../src/compose'
+import { describeNamedContainer, describeServices, pickService, serviceUrl } from '../src/compose'
 
 const temp = tempDirs()
 
@@ -37,14 +37,6 @@ function failure(run: () => unknown): string {
 
   return ''
 }
-
-describe('parsePs', () => {
-  test('reads one object per line and the older single array alike', () => {
-    expect(parsePs('{"ID":"a"}\n{"ID":"b"}\n').map(row => row.ID)).toEqual(['a', 'b'])
-    expect(parsePs('[{"ID":"a"}]').map(row => row.ID)).toEqual(['a'])
-    expect(parsePs('\n')).toEqual([])
-  })
-})
 
 describe('describeServices', () => {
   test('tells the engines apart by image and environment', () => {

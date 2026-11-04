@@ -1,4 +1,4 @@
-import { fail, runCommand } from '@kaynooo/cli-kit'
+import { compose, fail, jsonLines, runCommand } from '@kaynooo/cli-kit'
 
 export type Engine = 'postgres' | 'mysql' | 'other'
 
@@ -31,16 +31,6 @@ const POSTGRES_IMAGE = /(?:^|\/)(?:postgres|postgis|timescaledb)[\w.-]*(?::|$)/
 const MYSQL_IMAGE = /(?:^|\/)(?:mysql|mariadb|percona)[\w.-]*(?::|$)/
 const LOOPBACK = new Set(['', '0.0.0.0', '::', '127.0.0.1', '::1'])
 const LEADING_SLASH = /^\//
-
-// `docker compose ps --format json` prints one object per line since Compose 2.21, a single array before.
-export function parsePs(text: string): PsRow[] {
-  const trimmed = text.trim()
-
-  if (trimmed === '')
-    return []
-
-  return trimmed.startsWith('[') ? JSON.parse(trimmed) as PsRow[] : trimmed.split('\n').map(line => JSON.parse(line) as PsRow)
-}
 
 function envOf(lines: string[]): Record<string, string> {
   return Object.fromEntries(lines.map((line) => {
@@ -157,14 +147,14 @@ export async function composeServices(): Promise<Service[]> {
   let ps
 
   try {
-    ps = await runCommand(['docker', 'compose', 'ps', '--format', 'json'])
+    ps = await compose(['ps', '--format', 'json'])
   }
   catch {
     return []
   }
 
   try {
-    const rows = ps.code === 0 ? parsePs(stdoutOf(ps.chunks)).filter(row => row.State === 'running' && row.ID !== undefined) : []
+    const rows = ps.code === 0 ? jsonLines<PsRow>(ps.stdout).filter(row => row.State === 'running' && row.ID !== undefined) : []
 
     if (rows.length === 0)
       return []

@@ -1,5 +1,6 @@
 import { chmod, chown, lstat, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { compose } from '@kaynooo/cli-kit'
 import { isInlineSecret } from './audit'
 import { entries, escapeDouble, LINE_BREAK, parseDotenv, serializeDotenv, setLine } from './dotenv'
 import { writeAtomic } from './files'
@@ -128,10 +129,9 @@ async function isLink(path: string): Promise<boolean> {
 
 // What `docker compose config` resolves the file to, never printed; undefined when it fails.
 async function resolved(path: string): Promise<string | undefined> {
-  const run = Bun.spawn(['docker', 'compose', '-f', path, 'config', '--format', 'json'], { cwd: dirname(path), stdout: 'pipe', stderr: 'ignore', stdin: 'ignore' })
-  const [out, code] = await Promise.all([new Response(run.stdout).text(), run.exited])
+  const { code, stdout } = await compose(['config', '--format', 'json'], { flags: ['-f', path], cwd: dirname(path) })
 
-  return code === 0 ? out : undefined
+  return code === 0 ? stdout : undefined
 }
 
 interface Resolved {

@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
+import { captureOutput, composeError } from '@kaynooo/cli-kit'
 
 /** How to reach one compose project: the command a user runs, and the one this package lists it with. */
 export interface Stack {
@@ -166,15 +167,9 @@ export async function recordedNearby(): Promise<Labels[]> {
 
 /** What compose printed, and its stderr when it exited non-zero. */
 export async function attempt(stack: Stack, args: string[]): Promise<{ text: string, error: string | undefined }> {
-  const proc = Bun.spawn([...stack.list.argv, ...args], { cwd: stack.list.cwd, env: stack.list.env, stdout: 'pipe', stderr: 'pipe' })
-  const [text, stderr, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+  const result = await captureOutput([...stack.list.argv, ...args], { cwd: stack.list.cwd, env: stack.list.env })
 
-  if (code === 0)
-    return { text, error: undefined }
-
-  const last = stderr.trim().split('\n').at(-1) ?? ''
-
-  return { text: '', error: last === '' ? `exit ${code}` : last }
+  return result.code === 0 ? { text: result.stdout, error: undefined } : { text: '', error: composeError(result) }
 }
 
 async function output(stack: Stack, args: string[]): Promise<string> {
