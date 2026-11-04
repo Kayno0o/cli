@@ -1,20 +1,39 @@
-import type { Row } from './state'
-import type { Height, Theme } from './view'
+import type { Key, Row } from './state'
+import type { Height, PreviewPosition, Theme } from './view'
 import { openSync } from 'node:fs'
 import process from 'node:process'
 import tty from 'node:tty'
 import { fail } from '../args'
 import { role } from '../style'
-import { runPreview } from './preview'
-import { chosen, createState, highlighted, parseKeys, press } from './state'
+import { previewLines, runPreview } from './preview'
+import { chosen, createState, highlighted, parseKeys, press, withRows } from './state'
 import { caretColumn, layoutFor, render } from './view'
+
+/** What the preview shows for the highlighted row, from its hidden fields; `signal` aborts when another row is highlighted. */
+export type PreviewFn = (hidden: string[], signal: AbortSignal) => string | Promise<string>
+
+export interface Reloaded {
+  /** Replaces the header, which stays when left out. */
+  header?: string
+  rows: Row[]
+}
+
+/** Replaces the rows, and the header if given, in place and with the query kept: when `key` is pressed, and once the picker is open if `onOpen`. */
+export interface Reload {
+  key?: string
+  onOpen?: boolean
+  run: () => Reloaded | Promise<Reloaded>
+}
 
 export interface PickSettings {
   multi: boolean
   prompt: string
   query: string
   height: Height
-  preview: string | undefined
+  /** A shell command, where `{1}`, `{2}`... stand for the hidden fields and `{}` for the row, or a function. */
+  preview: string | PreviewFn | undefined
+  previewPosition?: PreviewPosition
+  reload?: Reload
   header?: string
   /** Control keys that end the pick, named as `ctrl-d`. */
   expect?: readonly string[]
@@ -41,6 +60,8 @@ export interface Terminal {
 }
 
 const PREVIEW_DELAY_MS = 120
+// What a reload on open is queued as, having no key of its own.
+const OPEN: Key = { ctrl: 'open' }
 const HIDE_CURSOR = '\x1B[?25l'
 const SHOW_CURSOR = '\x1B[?25h'
 const PASTE_ON = '\x1B[?2004h'
@@ -114,7 +135,7 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     if (restored)
       return
 
-    const layout = layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined)
+    const layout = layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined, settings.previewPosition)
     let frame = HIDE_CURSOR
 
     if (reserved !== layout.height || clear) {
@@ -148,7 +169,7 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     const row = state.rows[at]!
 
     async function show(): Promise<void> {
-      const shown = await runPreview(template, row.cells.join(' '), signal, row.hidden)
+      const shown = typeof template === 'string' ? await runPreview(template, row.cells.join(' '), signal, row.hidden) : await previewOf(template, row.hidden, signal)
 
       if (!signal.aborted) {
         preview = shown
@@ -170,26 +191,79 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     terminal.close()
   }
 
+  const stop = (): void => {
+    state = { ...state, done: 'cancel' }
+    finish?.()
+  }
+
   const paste = { active: false }
+  const { reload } = settings
+  const pending: Key[] = []
+  let busy = false
+  let draining = false
 
-  function onChunk(chunk: string): void {
-    for (const key of parseKeys(chunk, paste, settings.expect)) {
-      state = press(state, key)
+  async function reloadRows(): Promise<void> {
+    if (reload === undefined)
+      return
 
-      if (state.done !== undefined) {
-        finish?.()
+    busy = true
+    state = { ...state, status: 'reloading' }
+    draw()
 
-        return
+    try {
+      const next = await reload.run()
+
+      state = { ...withRows(state, next.rows, next.header), status: '' }
+      shownLine = undefined
+    }
+    catch (error) {
+      state = { ...state, status: `reload failed: ${error instanceof Error ? error.message : String(error)}` }
+    }
+    finally {
+      busy = false
+    }
+  }
+
+  // Keys are taken one at a time, those typed during a reload waiting for it.
+  async function drain(): Promise<void> {
+    if (draining)
+      return
+
+    draining = true
+
+    try {
+      for (let key = pending.shift(); key !== undefined && state.done === undefined; key = pending.shift()) {
+        if (key === OPEN || (typeof key === 'object' && 'ctrl' in key && key.ctrl === reload?.key))
+          await reloadRows()
+        else
+          state = press(state, key)
       }
+    }
+    finally {
+      draining = false
+    }
+
+    if (state.done !== undefined) {
+      finish?.()
+
+      return
     }
 
     refreshPreview()
     draw()
   }
 
-  const stop = (): void => {
-    state = { ...state, done: 'cancel' }
-    finish?.()
+  function onChunk(chunk: string): void {
+    const keys = parseKeys(chunk, paste, [...settings.expect ?? [], ...reload?.key === undefined ? [] : [reload.key]])
+
+    if (busy && keys.includes('cancel')) {
+      stop()
+
+      return
+    }
+
+    pending.push(...keys)
+    void drain()
   }
 
   const ended = new Promise<void>((resolve) => {
@@ -206,6 +280,12 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     terminal.listen(onChunk, () => draw(true))
     refreshPreview()
     draw(true)
+
+    if (reload?.onOpen === true) {
+      pending.push(OPEN)
+      void drain()
+    }
+
     await ended
   }
   finally {
@@ -217,6 +297,15 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
   }
 
   return state.done === 'accept' ? { rows: chosen(state), key: state.key, query: state.query } : undefined
+}
+
+async function previewOf(preview: PreviewFn, hidden: string[], signal: AbortSignal): Promise<string[]> {
+  try {
+    return previewLines(await preview(hidden, signal))
+  }
+  catch (error) {
+    return [error instanceof Error ? error.message : String(error)]
+  }
 }
 
 /** `select` over plain lines, resolving to the chosen ones. */

@@ -1,5 +1,6 @@
 export type { Row } from './picker/state'
 export { choose, select } from './picker/terminal'
-export type { PickSettings, Selection, Terminal } from './picker/terminal'
+export type { PickSettings, PreviewFn, Reload, Reloaded, Selection, Terminal } from './picker/terminal'
+export type { PreviewPosition } from './picker/view'
 export { DEFAULT_HEIGHT, parseHeight } from './picker/view'
 export type { Height } from './picker/view'
