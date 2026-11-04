@@ -7,10 +7,32 @@ on:
   push:
     branches: [main]
     paths-ignore: ['**.md']
+  pull_request:
+    paths-ignore: ['**.md']
   # Reruns the suite by hand, as from the repo's Actions page, after the runner image changes.
   workflow_dispatch:
 
 jobs:
+  check:
+    runs-on: alpine
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: https://git.kaynooo.fr/kaynooo/actions/setup-bun@v1
+
+      - run: bun run check
+
+  lint:
+    runs-on: alpine
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: https://git.kaynooo.fr/kaynooo/actions/setup-bun@v1
+
+      - run: bun run lint
+
   test:
     runs-on: alpine
     timeout-minutes: 10
@@ -28,5 +50,4 @@ jobs:
           password-auth: true
           env-name: DB_TOOLS_TEST_SERVER
 
-      - name: Check, lint and test
-        run: bun run check && bun run lint && bun run test
+      - run: bun run test
