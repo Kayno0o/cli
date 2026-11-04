@@ -122,16 +122,19 @@ dlog --json  # the report as JSON
 
 ## doctor
 
-checks this host's @kaynooo/cli-* install, one line per check, the command that fixes a failing one beside it. Package `doctor`.
+checks this host's @kaynooo/cli-* install, one line per check, the command that fixes a failing one beside it, and installs the packages it picks. Package `doctor`.
 
 Instead of: checking each bin's version, tea's login and the hooks by hand
 
 ```sh
-doctor [--only <check>] [--quiet] [--fix [--dry-run]] [--json]
+doctor [--only <check>] [--quiet] [--fix | --install [<name>...|all]] [--list] [--dry-run] [--force] [--json]
 doctor
 doctor --json  # the checks for a script
 doctor -q  # silent unless something fails
 doctor --fix --dry-run  # what --fix would run
+doctor --install  # pick the packages to add
+doctor --install forgejo check hooks  # three named ones
+doctor --install all --dry-run  # what installing everything would run
 ```
 
 ## dx

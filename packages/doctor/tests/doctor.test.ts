@@ -3,8 +3,10 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { checkBun, checkHooks, checkTea, checkTool, runChecks, TOOLS } from '../src/checks'
+import { checkBun, checkHooks, checkNeeds, checkTea, checkTool, runChecks, TOOLS } from '../src/checks'
 import { main } from '../src/doctor'
+
+const GUARD = '@kaynooo/cli-guard'
 
 const temp = tempDirs()
 
@@ -108,6 +110,7 @@ describe('checkTea', () => {
 
 describe('checkHooks', () => {
   test('passes the plugin or the mod, one of them only', () => {
+    install(GUARD, '0.1.0')
     write(join(home, '.claude', 'settings.json'), { enabledPlugins: { 'cli-hooks@kaynooo-cli': true } })
     expect(checkHooks(fakeHost())).toMatchObject({ ok: true, detail: 'the cli-hooks@kaynooo-cli plugin' })
 
@@ -122,6 +125,22 @@ describe('checkHooks', () => {
   test('fails with neither, settings missing included', () => {
     expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/cli.git' })
   })
+
+  test('fails when wired without the guard they call', () => {
+    write(join(home, '.claude', 'settings.json'), { enabledPlugins: { 'cli-hooks@kaynooo-cli': true } })
+    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: `bun install -g ${GUARD}` })
+  })
+})
+
+describe('checkNeeds', () => {
+  test('fails a required tool of an installed package, only notes an optional one', () => {
+    expect(checkNeeds(fakeHost())).toMatchObject({ ok: true, detail: expect.stringContaining('every tool') })
+
+    install('@kaynooo/cli-gitlab', '0.1.0')
+    install('@kaynooo/cli-git', '0.1.0')
+    expect(checkNeeds(fakeHost())).toMatchObject({ ok: false, detail: 'missing glab (gl goes through it)', fix: expect.stringContaining('glab: https://gitlab.com') })
+    expect(checkNeeds(fakeHost({}, ['glab']))).toMatchObject({ ok: true, detail: 'optional, missing fzf (gb picks a branch with it)' })
+  })
 })
 
 describe('checkBun', () => {
@@ -134,16 +153,28 @@ describe('checkBun', () => {
 })
 
 describe('doctor', () => {
-  test('prints one line per check and exits 1 on a failure, or JSON', async () => {
-    const { result, out } = await capture(async () => main([], fakeHost()))
+  test('checks only what is installed, exits 1 on a failure, and counts the rest', async () => {
+    install('@kaynooo/cli-forgejo', '0.1.0')
+    install('@kaynooo/cli-git', '0.1.0')
+
+    const host = fakeHost({ ...LATEST, 'bun info @kaynooo/cli-git version --no-cache': { stdout: '0.2.0\n' } })
+    const { result, out } = await capture(async () => main([], host))
 
     expect(result).toBe(1)
-    expect(out.split('\n').filter(line => line.startsWith('FAIL')).length).toBeGreaterThan(Object.keys(TOOLS).length)
-    expect(out).toContain(`fix them all: bun install -g ${Object.keys(TOOLS).join(' ')}`)
+    expect(out.split('\n').filter(line => line.startsWith('FAIL')).map(line => line.split(/\s+/)[1])).toEqual(['cli-forgejo', 'cli-git', 'tea'])
+    expect(out).toContain('fix them all: bun install -g @kaynooo/cli-forgejo@0.5.1 @kaynooo/cli-git@0.2.0')
+    expect(out).toContain(`${Object.keys(TOOLS).length - 2} packages not installed: doctor --install`)
 
-    const json = JSON.parse((await capture(async () => main(['--json'], fakeHost()))).out) as { check: string }[]
+    const json = JSON.parse((await capture(async () => main(['--json'], host))).out) as { check: string }[]
 
-    expect(json.map(each => each.check).slice(-4)).toEqual(['tea', 'hooks', 'bun', 'completions'])
+    expect(json.map(each => each.check)).toEqual(['cli-forgejo', 'cli-git', 'tea', 'needs', 'bun', 'completions'])
+  })
+
+  test('has nothing to fail on a host with no package installed', async () => {
+    const { result, out } = await capture(async () => main([], fakeHost()))
+
+    expect(result).toBe(0)
+    expect(out).not.toContain('FAIL')
   })
 })
 
@@ -175,6 +206,7 @@ describe('doctor --only and --quiet', () => {
   test('--quiet prints only the failing checks, nothing when all pass', async () => {
     write(join(home, '.claude', 'settings.json'), { enabledPlugins: { 'cli-hooks@kaynooo-cli': true } })
     install('@kaynooo/cli-doctor', '0.1.0')
+    install(GUARD, '0.1.0')
 
     const passing = await capture(async () => main(['-q', '--only', 'hooks', '--only', 'bun'], fakeHost()))
     const failing = await capture(async () => main(['-q', '--only', 'hooks', '--only', 'cli-forgejo'], fakeHost()))

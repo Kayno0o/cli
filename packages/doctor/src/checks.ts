@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { HOOKS_REQUIRES, NEEDS } from './catalog'
 import { completionDir, missingCompletions } from './completions'
 
 export interface Result {
@@ -85,6 +86,10 @@ function installed(host: Host, name: string): Manifest | undefined {
   return readJson<Manifest>(join(host.globalModules, name, 'package.json'))
 }
 
+export function isInstalled(host: Host, name: string): boolean {
+  return installed(host, name)?.version !== undefined
+}
+
 // The file the installed package declares for the bin, undefined when it declares none, so the one under test is run and not the first of that name on the PATH.
 export function ownBin(host: Host, name: string, bin: string): string | undefined {
   const declared = installed(host, name)?.bin
@@ -142,11 +147,21 @@ export async function checkTea(host: Host): Promise<Result> {
   return { check: 'tea', ok: true, detail: `logged in to ${forge} as ${login.name}, Forgejo ${served}` }
 }
 
-// The hooks wired one way exactly: the cli-hooks plugin or the dotfiles' cli mod, never both.
-export function checkHooks(host: Host): Result {
+// How the hooks are wired: the cli-hooks plugin, the dotfiles' cli mod (the folder holding it), both or neither.
+export function hooksWiring(host: Host): { plugin: boolean, mod: string | undefined } {
   const settings = readJson<{ enabledPlugins?: Record<string, boolean>, env?: Record<string, string> }>(join(host.home, '.claude', 'settings.json')) ?? {}
   const plugin = settings.enabledPlugins?.[PLUGIN] === true
   const mod = (settings.env?.CLAUDE_CODE_PLUGIN_DIRS ?? '').split(':').map(dir => dir.replace(LEADING_TILDE, host.home)).find(dir => basename(dir) === 'cli' && existsSync(join(dir, 'hooks', 'hooks.json')))
+
+  return { plugin, mod }
+}
+
+// The hooks wired one way exactly: the cli-hooks plugin or the dotfiles' cli mod, never both, and the guard they call installed.
+export function checkHooks(host: Host): Result {
+  const { plugin, mod } = hooksWiring(host)
+
+  if ((plugin || mod !== undefined) && !isInstalled(host, HOOKS_REQUIRES))
+    return { check: 'hooks', ok: false, detail: `wired, but ${HOOKS_REQUIRES} is not installed, so every hook finds no guard`, fix: `bun install -g ${HOOKS_REQUIRES}` }
 
   if (plugin && mod !== undefined)
     return { check: 'hooks', ok: false, detail: `both the ${PLUGIN} plugin and the mod in ${mod} run guard, so every call is checked twice`, fix: `claude plugin disable ${PLUGIN}` }
@@ -185,16 +200,34 @@ export function checkCompletions(host: Host): Result {
   return { check: 'completions', ok: true, detail: dir }
 }
 
+// The system tools the installed packages need, besides tea: a missing required one fails, an optional one is noted.
+export function checkNeeds(host: Host): Result {
+  const missing = Object.entries(NEEDS).flatMap(([name, needs]) => isInstalled(host, name) ? needs.filter(need => need.bin !== 'tea' && host.which(need.bin) === null).map(need => ({ ...need, name })) : [])
+  const required = missing.filter(need => need.optional !== true)
+  const describe = (need: (typeof missing)[number]) => `${need.bin} (${need.why})`
+
+  if (required.length > 0)
+    return { check: 'needs', ok: false, detail: `missing ${required.map(describe).join(', ')}`, fix: `install ${required.map(need => `${need.bin}: ${need.how}`).join('; ')}` }
+
+  if (missing.length > 0)
+    return { check: 'needs', ok: true, detail: `optional, missing ${missing.map(describe).join(', ')}` }
+
+  return { check: 'needs', ok: true, detail: 'every tool the installed packages need is on the PATH' }
+}
+
 const toolCheck = (name: string) => name.slice(name.indexOf('/') + 1)
-const OTHER_CHECKS = ['tea', 'hooks', 'bun', 'completions']
+const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions']
+const FORGEJO = '@kaynooo/cli-forgejo'
 
 // Every name `runChecks` can be limited to.
 export const CHECK_NAMES = [...Object.keys(TOOLS).map(toolCheck), ...OTHER_CHECKS]
 
-// The checks named in `only`, all of them when it is empty.
+// The checks named in `only`; with it empty, those of what is installed: a package left out is no failure.
 export async function runChecks(host: Host, only: readonly string[] = []): Promise<Result[]> {
   const wanted = (check: string) => only.length === 0 || only.includes(check)
-  const entries = Object.entries(TOOLS).filter(([name]) => wanted(toolCheck(name)))
+  const entries = Object.entries(TOOLS).filter(([name]) => only.length === 0 ? isInstalled(host, name) : wanted(toolCheck(name)))
+  const { plugin, mod } = hooksWiring(host)
+  const hooks = only.length > 0 || plugin || mod !== undefined || isInstalled(host, HOOKS_REQUIRES)
   const tools: Result[] = []
 
   for (let at = 0; at < entries.length; at += INFO_AT_ONCE)
@@ -202,8 +235,9 @@ export async function runChecks(host: Host, only: readonly string[] = []): Promi
 
   return [
     ...tools,
-    ...wanted('tea') ? [await checkTea(host)] : [],
-    ...wanted('hooks') ? [checkHooks(host)] : [],
+    ...wanted('tea') && (only.length > 0 || isInstalled(host, FORGEJO)) ? [await checkTea(host)] : [],
+    ...wanted('hooks') && hooks ? [checkHooks(host)] : [],
+    ...wanted('needs') ? [checkNeeds(host)] : [],
     ...wanted('bun') ? [checkBun(host)] : [],
     ...wanted('completions') ? [checkCompletions(host)] : [],
   ]

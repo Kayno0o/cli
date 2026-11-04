@@ -10,16 +10,23 @@ doctor -q        # only the failing checks, nothing when all pass
 doctor --only tea --only bun    # just these checks (a package such as cli-forgejo, tea, hooks, bun, completions)
 doctor --fix --dry-run          # what --fix would run
 doctor --fix     # run the fixes, then check again
+doctor --install # pick the packages to add from a checklist
+doctor --install forgejo check hooks   # or name them: a package, one of its bins, hooks, all
 ```
 
 | Check | Passes when | Fix |
 | --- | --- | --- |
 | each `@kaynooo/cli-*` package | it is installed globally, its bins are on the PATH and it is no older than the version `bun info` serves | `bun install -g <package>@<latest>`, and one line installing every outdated package at once |
-| `tea` | tea is installed, logged in to git.kaynooo.fr and `tea api version` answers, since `ft` goes through it | `tea login add --url https://git.kaynooo.fr --oauth` |
+| `needs` | the system tools the installed packages need are on the PATH: glab for `gl`, docker for `dc`, `dlog`, `dx` and `sf`; fzf only warns | install them by hand, doctor never installs a system package |
+| `tea` | `ft` is installed, tea is installed, logged in to git.kaynooo.fr and `tea api version` answers, since `ft` goes through it | `tea login add --url https://git.kaynooo.fr --oauth` |
 | `hooks` | `~/.claude/settings.json` wires the hooks one way: the `cli-hooks@kaynooo-cli` plugin enabled, or the `cli` mod listed in `CLAUDE_CODE_PLUGIN_DIRS`; both at once fails, every call being checked twice | `claude plugin install cli-hooks --marketplace ...`, or `claude plugin disable` for the doubled one |
 | `bun` | Bun satisfies the `engines.bun` range of every installed package | `bun upgrade` |
 
-A registry that does not answer leaves a package passing, with a note. Exit codes: 0 every check passed, 1 one failed, 2 a usage error.
+Only the packages that are installed are checked: a package left out is no failure, and the last line counts them. A registry that does not answer leaves a package passing, with a note. Exit codes: 0 every check passed, 1 one failed, 2 a usage error.
+
+## --install
+
+`--install` adds packages: the names given (a package such as `forgejo`, one of its bins such as `ft`, `hooks` for the Claude Code plugin, or `all`), else a checklist on a terminal that shows each package's bins, what it does and what it needs. Off a terminal, names are required. Before installing, each package is checked against its needs: a missing required tool (tea for `ft`, glab for `gl`, docker for `dc`) leaves the package out unless `--force`, a missing optional one (fzf) only warns, and `hooks` installs `guard` first. The installs run in one `bun install -g`, then the plugin, then the checks and fixes of what was installed. `--list` prints the choices and `--dry-run` what would run. Exits 1 when a package was left out.
 
 ## --fix
 
