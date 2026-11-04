@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-sweep",
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "sweep: reclaims disk from node_modules, build output and clean git worktrees across many repos, dry by default.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
