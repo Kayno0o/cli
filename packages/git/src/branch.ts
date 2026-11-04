@@ -210,6 +210,11 @@ function load(): { found: Branch[], current: string, all: Branch[] } {
   return { found, current, all: ordered(found, visited(read(['reflog', '-n', '2000', '--format=%gs']).split('\n')), current) }
 }
 
+// The current branch or the remote one it is the local twin of, which `all` leaves out.
+function isCurrent(named: string, current: string, found: Branch[]): boolean {
+  return current !== '' && (named === current || found.some(branch => branch.remote && branch.name === named && localName(branch.name) === current))
+}
+
 // A branch with no commit yet, in a new repository, is not among the refs but is still the one HEAD is on.
 function header(found: Branch[], current: string, failure = ''): string {
   const changed = read(['status', '--porcelain', '--untracked-files=no']).split('\n').filter(Boolean).length
@@ -309,7 +314,7 @@ export async function gb(args: string[]): Promise<number> {
     command = create(name)
     typed = `-c ${name}`
   }
-  else if (named === '-') {
+  else if (named === '-' && parsed.values.delete !== true) {
     command = ['git', 'switch', '-']
     typed = '-'
   }
@@ -362,6 +367,14 @@ export async function gb(args: string[]): Promise<number> {
         return 1
 
       key = picked!.key
+    }
+    else if (deleting && named === '-') {
+      return fail('-d takes a branch name, not -', 1)
+    }
+    else if (!deleting && isCurrent(named, current, found)) {
+      console.error(`already on ${current}`)
+
+      return 0
     }
     else {
       // A bare name finds the remote branch it would create, `gb feature` for origin/feature.

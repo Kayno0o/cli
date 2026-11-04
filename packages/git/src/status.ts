@@ -29,7 +29,7 @@ export function unquote(path: string): string {
     return path
 
   const bytes: number[] = []
-  const text = path.slice(1, -1)
+  const text = [...path.slice(1, -1)]
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i] ?? ''
@@ -39,7 +39,7 @@ export function unquote(path: string): string {
       bytes.push(...ENCODER.encode(char))
     }
     else if (OCTAL.test(next)) {
-      bytes.push(Number.parseInt(text.slice(i + 1, i + 4), 8))
+      bytes.push(Number.parseInt(text.slice(i + 1, i + 4).join(''), 8))
       i += 3
     }
     else {

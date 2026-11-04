@@ -158,6 +158,21 @@ describe('in a clone', () => {
     expect(gb('--emit', '-d', 'origin/work').exitCode).toBe(1)
   })
 
+  test('gb -d - refuses instead of switching back', () => {
+    expect(gb('-d', '-').exitCode).toBe(1)
+    expect(gb('--emit', '-d', '-').exitCode).toBe(1)
+  })
+
+  test('gb on the current branch or its remote twin says so and exits 0', () => {
+    for (const named of ['main', 'origin/main']) {
+      const proc = gb(named)
+
+      expect(proc.exitCode).toBe(0)
+      expect(proc.stderr.toString()).toContain('already on main')
+      expect(proc.stdout.toString()).toBe('')
+    }
+  })
+
   test('gb lists the branches for completions and for term, and --emit fails to pick without a terminal', () => {
     expect(out('--names')).toContain('work\t')
 

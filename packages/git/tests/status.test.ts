@@ -60,5 +60,6 @@ describe('unquote', () => {
     expect(unquote('plain.ts')).toBe('plain.ts')
     expect(unquote('"a\\"b\\\\c\\td.ts"')).toBe('a"b\\c\td.ts')
     expect(unquote('"caf\\303\\251.ts"')).toBe('café.ts')
+    expect(unquote('"a\\tb 😀.ts"')).toBe('a\tb 😀.ts')
   })
 })
