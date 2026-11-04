@@ -21,7 +21,7 @@ pkg outdated
 
 ## Config: licence allowlist and advisory threshold
 
-`pkg` reads its own settings from a `.pkgrc.json` in the current folder or any folder above it, then from `~/.config/pkg/config.json`; each key comes from the nearest file that sets it, and comments are allowed.
+`pkg` reads its own settings from a `.pkgrc.json` in the current folder or any folder above it, then from `~/.config/kaynooo-cli/pkg.json` (the older `~/.config/pkg/config.json` is read while the new file is missing); each key comes from the nearest file that sets it, and comments are allowed.
 
 ```json
 { "licenses": ["MIT", "ISC", "Apache-2.0", "BSD-3-Clause"], "blockSeverity": "high" }

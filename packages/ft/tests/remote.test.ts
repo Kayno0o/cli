@@ -73,14 +73,14 @@ describe('the remote host setting', () => {
     const home = temp('ft-home-')
 
     if (text !== undefined) {
-      mkdirSync(join(home, '.config', 'ft'), { recursive: true })
+      mkdirSync(join(home, '.config', 'kaynooo-cli'), { recursive: true })
       writeFileSync(settingsPath(home), text)
     }
 
     return home
   }
 
-  test('comes from ~/.config/ft/config.json, and from nowhere else', async () => {
+  test('comes from ~/.config/kaynooo-cli/ft.json, and from nowhere else', async () => {
     expect(await loadSettings(homeWith('{"remoteHost":"git.example.com"}'))).toEqual({ remoteHost: 'git.example.com' })
     expect(await loadSettings(homeWith())).toEqual({})
     expect(await loadSettings(homeWith('not json'))).toEqual({})

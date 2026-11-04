@@ -15,7 +15,7 @@ Checks npm packages before they are added: whether the name exists, the latest a
 
 Names come from the arguments, from the dependencies of a package.json with --from (each checked as \`name@range\`, so it resolves what an install would; dev and optional ones included, peer ranges and local or remote sources left out), or from stdin, separated by spaces or lines, when \`-\` is given or nothing else is and stdin is piped.
 
-A \`.pkgrc.json\` (or ~/.config/pkg/config.json) with \`licenses\` (SPDX ids) refuses a licence outside the list or a missing one, and \`blockSeverity\` (low, moderate, high, critical; high when unset) refuses a version with an advisory at that level or above.`
+A \`.pkgrc.json\` (or ~/.config/kaynooo-cli/pkg.json) with \`licenses\` (SPDX ids) refuses a licence outside the list or a missing one, and \`blockSeverity\` (low, moderate, high, critical; high when unset) refuses a version with an advisory at that level or above.`
 
 const EXITS: ExitRow[] = [[0, 'every package passes'], [1, 'one is blocked: missing, the version asked for is under the minimum age or has no date, its licence is outside the allowlist or an advisory reaches the threshold'], [2, 'it could not check (the registry unreachable, slow or answering badly, a broken .pkgrc.json, bunfig.toml or .npmrc) or a usage error']]
 

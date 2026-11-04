@@ -14,7 +14,7 @@ function homeWith(config: string | undefined): string {
   const home = mkdtempSync(join(root, 'home-'))
 
   if (config !== undefined) {
-    mkdirSync(join(home, '.config', 'db'), { recursive: true })
+    mkdirSync(join(home, '.config', 'kaynooo-cli'), { recursive: true })
     writeFileSync(settingsPath(home), config)
   }
 
@@ -98,5 +98,16 @@ describe('loadSettings', () => {
     finally {
       warning.mockRestore()
     }
+  })
+})
+
+describe('the legacy settings path', () => {
+  test('is read while ~/.config/kaynooo-cli/db.json is missing', async () => {
+    const home = mkdtempSync(join(root, 'home-'))
+
+    mkdirSync(join(home, '.config', 'db'), { recursive: true })
+    writeFileSync(join(home, '.config', 'db', 'config.json'), '{"allowedHosts":["old.example.com"]}')
+
+    expect(await loadSettings(home)).toEqual({ allowedHosts: ['old.example.com'] })
   })
 })

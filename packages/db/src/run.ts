@@ -1,7 +1,6 @@
 import type { Service } from './compose'
 import type { Dialect } from './guard'
 import { isIP } from 'node:net'
-import { homedir } from 'node:os'
 import process from 'node:process'
 import { fail } from '@kaynooo/cli-kit'
 import { SQL } from 'bun'
@@ -109,8 +108,8 @@ function serviceNamed(services: Service[], host: string, dialect: Dialect): Serv
   return aliased[0]
 }
 
-// A URL naming a compose service as its host, `postgresql://app:pw@database:5432/app` in a Symfony .env, rewritten to where this machine reaches that service. Any other host that is not local must be in the allowlist of ~/.config/db/config.json.
-export async function reachable(value: string, home = homedir()): Promise<URL> {
+// A URL naming a compose service as its host, `postgresql://app:pw@database:5432/app` in a Symfony .env, rewritten to where this machine reaches that service. Any other host that is not local must be in the allowlist of ~/.config/kaynooo-cli/db.json.
+export async function reachable(value: string, home?: string): Promise<URL> {
   let url: URL
 
   try {
@@ -142,7 +141,7 @@ export async function reachable(value: string, home = homedir()): Promise<URL> {
 }
 
 // The URL to read: a container or compose service when one is named, else the environment key (which Bun fills from .env files), else the project's only running database service.
-export async function connectionUrl({ env, service, container, database }: Target, home = homedir()): Promise<string> {
+export async function connectionUrl({ env, service, container, database }: Target, home?: string): Promise<string> {
   if (service !== undefined && container !== undefined)
     fail('--service and --container name two databases: pick one')
 

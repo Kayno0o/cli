@@ -88,7 +88,7 @@ afterAll(() => {
 }, 30_000)
 
 const cwd = temp('cli-db-')
-// A home without a ~/.config/db/config.json, so the allowlist is empty unless a test writes one.
+// A home without a ~/.config/kaynooo-cli/db.json, so the allowlist is empty unless a test writes one.
 const home = temp('cli-db-home-')
 
 async function db(args: string[], env: Record<string, string> = { DATABASE_URL: url }, stdin?: string) {
@@ -284,7 +284,7 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
 
     expect(result.code).toBe(2)
     expect(result.err).toContain('db.example.com')
-    expect(result.err).toContain(join(home, '.config', 'db', 'config.json'))
+    expect(result.err).toContain(join(home, '.config', 'kaynooo-cli', 'db.json'))
     expect(result.out + result.err).not.toContain(PASSWORD)
   })
 

@@ -8,7 +8,7 @@ export const ALL_LIMIT = 100
 
 export const EXITS: ExitRow[] = [[0, 'it ran'], [1, 'the database refused it, was unreachable, or the statement would write and was not run'], [2, 'a usage error or a host that is not allowed']]
 
-export const HOSTS_NOTE = 'db connects to a local host (localhost, 127.0.0.1, ::1) or a compose service only: any other host is refused (exit 2) unless it is listed under "allowedHosts" in ~/.config/db/config.json.'
+export const HOSTS_NOTE = 'db connects to a local host (localhost, 127.0.0.1, ::1) or a compose service only: any other host is refused (exit 2) unless it is listed under "allowedHosts" in ~/.config/kaynooo-cli/db.json.'
 
 export const WRITE_NOTE = 'A write runs only when the database actually connected to has a name ending in _test (checked on the server, and a statement that names another database, or uses USE, SET, files or server objects, is not run); any other write is printed for you to run.'
 

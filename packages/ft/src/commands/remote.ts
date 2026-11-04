@@ -1,5 +1,4 @@
 import { lookup } from 'node:dns/promises'
-import { homedir } from 'node:os'
 import { fail, note, parse, runTool } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { loadSettings, settingsPath } from '../config'
@@ -10,12 +9,12 @@ const usage = `ft remote [--fix]
 
 Checks that origin's URLs name the Forgejo host itself: tea only finds the repository when origin's host is the login's ssh_host, never through an ssh alias such as \`forgejo\` or \`gitea\`.
 --fix switches every alias URL to \`git@<host>:<owner>/<repo>.git\` and proves it with \`git ls-remote\`.
-The host comes from --host, else \`remoteHost\` in ~/.config/ft/config.json; with neither, it checks nothing.
+The host comes from --host, else \`remoteHost\` in ~/.config/kaynooo-cli/ft.json; with neither, it checks nothing.
 
 Exits 0 when origin names the Forgejo host (or was switched) or no host is set, 1 when it does not or a switch is still to run, 2 on a usage error.`
 
 const options = {
-  host: { type: 'string', description: 'the Forgejo ssh host, instead of remoteHost in ~/.config/ft/config.json' },
+  host: { type: 'string', description: 'the Forgejo ssh host, instead of remoteHost in ~/.config/kaynooo-cli/ft.json' },
   fix: { type: 'boolean', description: 'rewrite the alias URLs' },
 } as const
 
@@ -59,7 +58,7 @@ function originHost(url: string): string | undefined {
   return parseSshRemote(url)?.host ?? (URL.canParse(url) ? new URL(url).hostname : undefined)
 }
 
-export async function remote(args: string[], home = homedir()): Promise<number> {
+export async function remote(args: string[], home?: string): Promise<number> {
   const { values } = parse(args, usage, options)
   const host = values.host ?? (await loadSettings(home)).remoteHost
 

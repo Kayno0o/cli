@@ -3,7 +3,7 @@ import type { Registry } from './registry'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { SEVERITIES } from '@kaynooo/cli-kit'
+import { SEVERITIES, userConfigReadPath } from '@kaynooo/cli-kit'
 import { PUBLIC_REGISTRY, unreachable } from './registry'
 
 // What one .npmrc or bunfig.toml says about registries: a default, one per scope, and tokens by registry address without its protocol.
@@ -210,14 +210,14 @@ export function parseSettings(text: string): PkgSettings {
   return settings
 }
 
-// The `.pkgrc.json` files from the directory up to the root, then ~/.config/pkg/config.json, each key taken from the nearest file that sets it.
-export async function loadSettings(cwd = process.cwd(), home = homedir()): Promise<PkgSettings> {
+// The `.pkgrc.json` files from the directory up to the root, then ~/.config/kaynooo-cli/pkg.json (or the older ~/.config/pkg/config.json), each key taken from the nearest file that sets it.
+export async function loadSettings(cwd = process.cwd(), home?: string): Promise<PkgSettings> {
   const files: string[] = []
 
   for (let dir = cwd; !files.includes(join(dir, SETTINGS_FILE)); dir = dirname(dir))
     files.push(join(dir, SETTINGS_FILE))
 
-  files.push(join(home, '.config', 'pkg', 'config.json'))
+  files.push(userConfigReadPath('pkg', [['pkg', 'config.json']], { home }))
 
   const settings: PkgSettings = {}
 

@@ -20,7 +20,7 @@ Exits 0 when it listed the repositories, 1 when a fast-forward `--pull` attempte
 
 A monorepo tagging its packages `<folder>-v<version>` counts the unreleased commits per package folder (`packages/<folder>` or `<folder>`), each since its own latest tag.
 
-Without `--fetch` the ahead and behind counts are those of the last fetch. The walk goes three levels under the root and stops at a `.git`; `node_modules` and hidden folders are skipped. Repositories are skipped by folder name with `~/.config/kaynooo-cli/repos.json`:
+Without `--fetch` the ahead and behind counts are those of the last fetch. The walk goes three levels under the root and stops at a `.git`; `node_modules` and hidden folders are skipped. Repositories are skipped by folder name with `~/.config/kaynooo-cli/repos.json` (`$XDG_CONFIG_HOME/kaynooo-cli/` when set; every bin keeps its settings in that folder as `<bin>.json`):
 
 ```json
 { "skip": ["archived-thing", "vendored-clone"] }

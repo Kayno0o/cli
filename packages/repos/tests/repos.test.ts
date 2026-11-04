@@ -36,7 +36,7 @@ function repo(path: string): string {
 }
 
 function repos(args: string[] = [], at = root) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args, at], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, HOME: home, NO_COLOR: '1' } })
+  const result = Bun.spawnSync([process.execPath, CLI, ...args, at], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, HOME: home, XDG_CONFIG_HOME: join(home, '.config'), NO_COLOR: '1' } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }

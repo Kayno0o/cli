@@ -6,7 +6,7 @@ import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, marked, oneOf, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
+import { fail, jsonOption, marked, oneOf, parse, printJson, role, runMain, table, userConfigReadPath } from '@kaynooo/cli-kit'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pool, pullBlocker, REASONS, reasonsOf } from './scan'
 
 const USAGE = `repos [options] [root]: the git repositories under root (~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
@@ -29,7 +29,7 @@ const OPTIONS = {
 } as const
 
 async function skipped(): Promise<Set<string>> {
-  const file = join(homedir(), '.config', 'kaynooo-cli', 'repos.json')
+  const file = userConfigReadPath('repos')
 
   if (!existsSync(file))
     return new Set()

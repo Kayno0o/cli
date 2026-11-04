@@ -1,19 +1,17 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { warn } from '@kaynooo/cli-kit'
+import { userConfigReadPath, warn } from '@kaynooo/cli-kit'
 
-// What ~/.config/ft/config.json may set; every key is optional and nothing is assumed without it.
+// What ~/.config/kaynooo-cli/ft.json (or the older ~/.config/ft/config.json) may set; every key is optional and nothing is assumed without it.
 export interface FtSettings {
   // The Forgejo ssh host `ft remote` switches alias origins to: `git.example.com`.
   remoteHost?: string
 }
 
-export function settingsPath(home = homedir()): string {
-  return join(home, '.config', 'ft', 'config.json')
+export function settingsPath(home?: string): string {
+  return userConfigReadPath('ft', [['ft', 'config.json']], { home })
 }
 
 // The global settings, empty when the file is missing; a file that is not a JSON object, or a host that is no string, is ignored with a warning.
-export async function loadSettings(home = homedir()): Promise<FtSettings> {
+export async function loadSettings(home?: string): Promise<FtSettings> {
   const path = settingsPath(home)
   const file = Bun.file(path)
 
