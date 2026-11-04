@@ -189,6 +189,8 @@ describe('sweep', () => {
     expect(listing([root, '--only', 'worktrees']).entries.map(entry => entry.kind)).toEqual(['worktree'])
     expect(listing([root, '--only', 'folders']).entries.map(entry => entry.kind)).toEqual(['folder'])
     expect(sweep([root, '--only', 'both']).code).toBe(2)
+    expect(JSON.parse(sweep([root, '--only', 'both', '--json']).err)).toMatchObject({ error: expect.stringContaining('--only takes') })
+    expect(JSON.parse(sweep([join(root, 'missing'), '--json']).err)).toMatchObject({ error: expect.stringContaining('is not a folder') })
     expect(sweep([root, '--only', 'worktrees', '--apply', '--yes']).code).toBe(0)
     expect(existsSync(join(a, '.claude', 'worktrees', 'agent'))).toBe(false)
     expect(existsSync(join(a, 'node_modules', 'file'))).toBe(true)

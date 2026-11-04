@@ -82,6 +82,9 @@ async function main(args: string[]): Promise<number> {
     const agreed = await confirm(`Delete ${removable.length} ${removable.length === 1 ? 'entry' : 'entries'} (${formatFileSize(reclaimable)})?`, { default: false, hint: 'pass --yes to skip the confirm' })
 
     if (agreed !== true) {
+      if (json)
+        fail('nothing deleted: the confirm was declined', 1, 'pass --yes to skip the confirm')
+
       note('nothing deleted')
 
       return 1
