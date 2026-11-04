@@ -38,8 +38,8 @@ pkg audit ~/Workspace/app --level high --prod --ignore GHSA-238p-pmpm-9mq7 --jso
 
 - `--level <low|moderate|high|critical>` (`moderate`) keeps only the advisories at that severity or above, `--prod` audits only the packages a production or optional dependency of a workspace reaches, and `--ignore <GHSA or id>` (repeatable) skips an advisory; `blockSeverity` is for `pkg check` and does not apply here. The three flags are the ones of `audit`.
 - `--json` prints a flat array, one `{name, version, license, blocked, warnings, advisories}` per package with a finding, each advisory being `{id, ghsa, url, title, severity, vulnerable, fixed}`. `audit --json` nests the same advisory rows (without `vulnerable`) in `{repo, path, findings, error}` per repository.
+- `--min-age <days>` changes the 14 days.
 - Use `pkg audit` to vet one repository in depth (age, install scripts, licences and advisories, with the registry as the source); use `audit` to sweep many repositories for advisories only, through `bun audit`.
-- `--json` prints the packages with a finding as `[{name, version, license, blocked, warnings, advisories}]`; `--min-age <days>` changes the 14 days.
 - A pin under the minimum age fixing an advisory of the `safe` version at `blockSeverity` or above (not one `--ignore` skips) is let through as `pkg check` lets it, a warning naming the GHSAs.
 - It exits 1 when a package is missing, too fresh or outside the allowlist, or an advisory remains after the level and the ignores; install scripts and near misses alone exit 0. When the advisories of a registry could not be read it warns which, never prints a clean result for them, and exits 2 unless something already blocks.
 - An `npm:` alias (`"lodash": "npm:other@1.0.0"`) is audited as the package it names.
