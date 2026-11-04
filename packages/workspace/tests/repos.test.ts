@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { syncCell } from '../src/repos'
 
 const CLI = new URL('../src/repos-cli.ts', import.meta.url).pathname
 const temp = tempDirs()
@@ -252,5 +253,21 @@ describe('repos --pull', () => {
 
     repos(['--fetch'], pulling)
     expect(head('clean')).not.toBe(git(bare, 'rev-parse', 'main'))
+  })
+})
+
+describe('syncCell', () => {
+  const repo = (ahead: number, behind: number, upstream: string | null = 'origin/main') => ({ ahead, behind, upstream }) as RepoState
+
+  test('paints ahead green, behind red and both as diverged on a terminal', () => {
+    expect(syncCell(repo(2, 0), { isTTY: true })).toBe('\x1B[32m+2\x1B[39m')
+    expect(syncCell(repo(0, 1), { isTTY: true })).toBe('\x1B[31m-1\x1B[39m')
+    expect(syncCell(repo(2, 1), { isTTY: true })).toBe('\x1B[32m+2\x1B[39m \x1B[31m-1\x1B[39m\x1B[33m diverged\x1B[39m')
+  })
+
+  test('stays plain off a terminal', () => {
+    expect(syncCell(repo(2, 1), {})).toBe('+2 -1 diverged')
+    expect(syncCell(repo(0, 0), {})).toBe('-')
+    expect(syncCell(repo(0, 0, null), {})).toBe('no upstream')
   })
 })

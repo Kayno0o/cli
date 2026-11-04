@@ -2,10 +2,13 @@ import type { Outcome } from './apply'
 import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
-import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, parse, parseSize, printJson, problem, runTool, table } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, paint, parse, parseSize, printJson, problem, role, runTool, table } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { applyAll } from './apply'
 import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
+
+const LARGE = 100 * 1024 ** 2
+const BIG = 1024 ** 3
 
 const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
 
@@ -131,6 +134,16 @@ function print(root: string, entries: Awaited<ReturnType<typeof inspect>>['entri
     return
   }
 
-  console.log(table([['size', 'age', 'what', 'path', 'note'], ...entries.map(entry => [formatFileSize(entry.bytes), entry.committedAt === undefined ? '-' : formatAge(entry.committedAt, now), entry.kind, relative(root, entry.path), entry.action === 'keep' ? `kept: ${entry.reason}` : ''])], { header: true, align: ['right', 'right', 'left', 'left', 'left'] }))
+  const colors = paint(process.stdout)
+  const path = role('path', process.stdout)
+  // Gigabytes in red, hundreds of megabytes in yellow, so the folders worth removing stand out.
+  const sized = (bytes: number) => {
+    if (bytes >= BIG)
+      return colors.red(formatFileSize(bytes))
+
+    return bytes >= LARGE ? colors.yellow(formatFileSize(bytes)) : formatFileSize(bytes)
+  }
+
+  console.log(table([['size', 'age', 'what', 'path', 'note'], ...entries.map(entry => [sized(entry.bytes), entry.committedAt === undefined ? colors.dim('-') : colors.dim(formatAge(entry.committedAt, now)), entry.kind, path(relative(root, entry.path)), entry.action === 'keep' ? colors.dim(`kept: ${entry.reason}`) : ''])], { header: true, align: ['right', 'right', 'left', 'left', 'left'] }))
   console.log(`\n${formatFileSize(reclaimable)} reclaimable${skipped === 0 ? '' : `, ${skipped} skipped (symlinks, tracked or not ignored by git)`}`)
 }
