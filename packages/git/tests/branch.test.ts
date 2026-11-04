@@ -152,6 +152,18 @@ describe('in a clone', () => {
     expect(out('--emit', '-d', 'work')).toBe('run\n-d work\n\n=git\n=branch\n=-d\n=work\n')
   })
 
+  test('gb --list gives the rows tmux_pick reads, each with its preview and its keys, and --emit with no terminal does not open the picker', () => {
+    const rows = JSON.parse(out('--list')) as { label: string, typed: string, preview?: string[], asks?: string, actions?: { key: string, reload?: string[] }[] }[]
+    const work = rows.find(row => row.label === 'work')
+
+    expect(work).toMatchObject({ typed: 'work', preview: ['--show', 'work'] })
+    expect(work?.actions).toEqual([{ label: 'Delete', key: 'ctrl-d', typed: '-d work' }, { label: 'Fetch', key: 'ctrl-r', reload: ['--fetch'] }])
+    expect(rows.at(-1)).toMatchObject({ label: 'New branch', typed: '-c', asks: '' })
+    expect(out('--show', 'work')).toContain('1 ahead, 0 behind origin/main')
+    expect(gb('--emit')).toMatchObject({ exitCode: 1 })
+    expect(gb('--emit').stderr.toString()).toContain('the picker needs a terminal')
+  })
+
   test('gb refuses an unknown branch, an invalid new name and a remote branch to delete', () => {
     expect(gb('nope').exitCode).toBe(1)
     expect(gb('--emit', '-c', 'bad name').exitCode).toBe(1)
