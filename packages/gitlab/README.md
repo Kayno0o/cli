@@ -17,6 +17,11 @@ Needs [glab](https://gitlab.com/gitlab-org/cli) logged in (`glab auth login`). E
 | `gl ci [ref]` | waits for the pipeline covering a commit on the default branch and prints each failed job's excerpt; `--json` prints `{status, runs, failedJobs, url}`, `--quiet` only the announcement, the failures and the result |
 | `gl logs <pipeline>` | what the failed jobs of a pipeline say went wrong; `-j <name or id>` picks a job, `--full` prints whole traces, `--json` the pipeline, its picked jobs and the failed ones with their excerpts |
 
+## JSON output
+
+`--json` prints the shape `ft` prints: `{status, runs, failedJobs, url}`, `status` being the pipeline's with GitLab's `failed` renamed `failure` and `canceled` renamed `cancelled` (the others, such as `running`, `pending` and `manual`, are kept).
+A `runs` item is `{id, number, status, ref, sha, url}` and a `failedJobs` item `{name, stage, reason, url, excerpt}`; `gl logs --json` adds `jobs`, one `{name, id, stage, status, allowFailure, url, excerpt}` per picked job.
+
 ## Behaviour
 
 - `gl ci` follows the commit's newest pipeline on the branch (`-b`, by default the one `origin/HEAD` names). GitLab runs a push's pipeline on its last commit only and cancels a redundant one, so a commit without a pipeline of its own, or whose own was cancelled or skipped, is covered by the next first-parent commit's.

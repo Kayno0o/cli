@@ -30,6 +30,7 @@ export interface Job {
 // A manual pipeline waits on a job nobody has played, its earlier stages done.
 export const FINISHED = new Set(['success', 'failed', 'canceled', 'skipped', 'manual'])
 const PAGE = 100
+const JSON_STATUS: Record<string, string> = { failed: 'failure', canceled: 'cancelled' }
 
 // A list read page by page, GitLab capping a page at 100, until a short page ends it or `enough` items were read (an infinite one reads them all); `exhausted` is false when it stopped with more possibly left.
 async function pagedList<T>(path: string, repo: string | undefined, enough = Number.POSITIVE_INFINITY): Promise<{ items: T[], exhausted: boolean }> {
@@ -123,11 +124,16 @@ export function failureText(failed: FailedJob[]): string {
   return failed.map(job => `job ${job.name} (${job.stage}) failed${job.reason === null || job.reason === 'script_failure' ? '' : `, ${job.reason}`}: ${job.url}\n${job.excerpt}`).join('\n\n')
 }
 
+// GitLab's statuses under the names `ft` prints, so a script reads both alike; the others (running, pending, manual...) are kept.
+export function jsonStatus(status: string): string {
+  return JSON_STATUS[status] ?? status
+}
+
 export function pipelineJson(pipeline: Pipeline) {
-  return { id: pipeline.id, number: pipeline.iid, status: pipeline.status, ref: pipeline.ref, sha: pipeline.sha, url: pipeline.web_url }
+  return { id: pipeline.id, number: pipeline.iid, status: jsonStatus(pipeline.status), ref: pipeline.ref, sha: pipeline.sha, url: pipeline.web_url }
 }
 
 // What a --json wait or log prints, shaped like `ft ci --json`: the pipeline's status, the pipeline followed, the failed jobs with their excerpts and its link.
 export function ciJson(pipeline: Pipeline, failed: FailedJob[]) {
-  return { status: pipeline.status, runs: [pipelineJson(pipeline)], failedJobs: failed, url: pipeline.web_url }
+  return { status: jsonStatus(pipeline.status), runs: [pipelineJson(pipeline)], failedJobs: failed, url: pipeline.web_url }
 }

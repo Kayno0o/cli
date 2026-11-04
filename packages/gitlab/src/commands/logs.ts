@@ -1,7 +1,7 @@
 import type { Job } from '../pipelines'
 import { fail, jsonOption, parse, printJson, runHint, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
-import { ciJson, failedJobs, jobsOf, jobTrace, pipelineById } from '../pipelines'
+import { ciJson, failedJobs, jobsOf, jobTrace, jsonStatus, pipelineById } from '../pipelines'
 import { excerpt, traceLines } from '../trace'
 
 const usage = `gl logs <pipeline id>
@@ -52,9 +52,9 @@ export async function logs(args: string[]): Promise<number> {
     const shown: { name: string, id: number, stage: string, status: string, allowFailure: boolean, url: string, excerpt: string }[] = []
 
     for (const job of picked)
-      shown.push({ name: job.name, id: job.id, stage: job.stage, status: job.status, allowFailure: job.allow_failure, url: job.web_url, excerpt: await text(job) })
+      shown.push({ name: job.name, id: job.id, stage: job.stage, status: jsonStatus(job.status), allowFailure: job.allow_failure, url: job.web_url, excerpt: await text(job) })
 
-    const failed = shown.filter(job => job.status === 'failed' && !job.allowFailure).map(job => ({ name: job.name, stage: job.stage, reason: null, url: job.url, excerpt: job.excerpt }))
+    const failed = shown.filter(job => job.status === 'failure' && !job.allowFailure).map(job => ({ name: job.name, stage: job.stage, reason: null, url: job.url, excerpt: job.excerpt }))
 
     printJson({ ...ciJson(pipeline, failed), jobs: shown })
 

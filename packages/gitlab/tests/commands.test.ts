@@ -200,7 +200,7 @@ describe('gl ci --json and gl logs --json', () => {
     const printed = printedBy(out)
 
     expect(code).toBe(1)
-    expect(printed).toMatchObject({ status: 'failed', url: 'https://gitlab/p/9', runs: [{ id: 9, status: 'failed', sha: shas[1] }] })
+    expect(printed).toMatchObject({ status: 'failure', url: 'https://gitlab/p/9', runs: [{ id: 9, status: 'failure', sha: shas[1] }] })
     expect(printed.failedJobs.map(each => each.name)).toEqual(['phpunit'])
     expect(printed.failedJobs[0]?.excerpt).toContain('There was 1 failure:')
     expect(err).toEqual([`following pipeline 9 on ${shas[1]?.slice(0, 7)}: https://gitlab/p/9`])
@@ -222,7 +222,7 @@ describe('gl ci --json and gl logs --json', () => {
     const both = await withFakeGlab(failing, async () => logs(['9', '--json', '-j', 'lint']))
     const printed = printedBy(both.out)
 
-    expect(printed.jobs).toMatchObject([{ name: 'lint', status: 'failed', allowFailure: true, excerpt: 'lint said no' }])
+    expect(printed.jobs).toMatchObject([{ name: 'lint', status: 'failure', allowFailure: true, excerpt: 'lint said no' }])
     expect(printed.failedJobs).toEqual([])
     expect(printedBy((await withFakeGlab(failing, async () => logs(['9', '--json']))).out).failedJobs.map(each => each.name)).toEqual(['phpunit'])
   })
