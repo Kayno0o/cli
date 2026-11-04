@@ -1,9 +1,9 @@
 import type { Placement } from './compose'
 import type { Project, Step } from './steps'
 import { writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import process from 'node:process'
-import { duration, exitCodeOf, fail, holdSignals, parse, printJson, table } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, formatDuration, header, holdSignals, paint, parse, printJson, table } from '@kaynooo/cli-kit'
 import { shellQuote } from '@kaynooo/cli-kit/shell'
 import { place, placeSettings, programOf, shellIn, Stack } from './compose'
 import { runFixers } from './fix'
@@ -79,6 +79,16 @@ function launch(step: Planned): string {
 }
 
 // Runs the repo's steps in order and prints one line each, with what failed under a failing one; returns 0 only when every step passed.
+// The dim line closing a run on a terminal: what passed, what failed and the time the steps took together.
+function summaryLine(outcomes: ReturnType<typeof outcomeJson>[]): string {
+  const colors = paint(process.stdout)
+  const failed = outcomes.filter(outcome => !outcome.ok).length
+  const passed = outcomes.length - failed
+  const parts = [colors.green(`${passed} passed`), ...failed === 0 ? [] : [colors.red(`${failed} failed`)], colors.dim(formatDuration(outcomes.reduce((sum, outcome) => sum + outcome.ms, 0)))]
+
+  return parts.join(colors.dim(' · '))
+}
+
 export async function check(args: string[], cwd = process.cwd()): Promise<number> {
   const parsed = parse(args, usage, options, { replaces: 'chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail', examples: ['check', ['check --only lint,test', 'two of the steps'], ['check --in app', 'every step inside the app service']] })
   const settings = placeSettings(parsed.values)
@@ -135,6 +145,10 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   const stack = new Stack()
   const width = Math.max(...steps.map(step => step.label.length))
   const outcomes: ReturnType<typeof outcomeJson>[] = []
+  const heading = json ? '' : header('check', `${basename(cwd)} › ${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`, process.stdout)
+
+  if (heading !== '')
+    console.log(heading)
 
   try {
     for (const step of steps) {
@@ -160,6 +174,8 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
 
   if (json)
     printJson(outcomes)
+  else if (heading !== '')
+    console.log(summaryLine(outcomes))
 
   if (held.signal !== undefined)
     return exitCodeOf(null, held.signal)
