@@ -102,6 +102,17 @@ describe('out', () => {
     expect(recorder.bytes).toBe(3 * data.length)
   })
 
+  test('exits with the wrapped command\'s code when the log cannot be written', () => {
+    const blocked = join(temp('out-blocked-'), 'file')
+
+    writeFileSync(blocked, '')
+
+    const run = (...command: string[]) => Bun.spawnSync([process.execPath, CLI, '--', ...command], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...ENV, XDG_RUNTIME_DIR: blocked, XDG_STATE_HOME: blocked } })
+
+    expect(run('sh', '-c', 'echo hi; exit 7').exitCode).toBe(7)
+    expect(run('sh', '-c', 'seq 1 500; exit 3').exitCode).toBe(3)
+  })
+
   test('folds long output, saving the full log where the header says', () => {
     const result = out('--', 'sh', '-c', 'i=0; while [ $i -lt 400 ]; do echo "row $i of the table is fine"; i=$((i+1)); done; echo "FAILED: boom" >&2')
     const path = LOG_PATH.exec(result.out)?.[1]
@@ -193,5 +204,17 @@ describe('cleanLogs', () => {
 
   test('ignores a folder that does not exist', async () => {
     await cleanLogs(join(tmpdir(), 'out-missing-folder'))
+  })
+})
+
+describe('out --stats --json errors', () => {
+  test('prints a usage error and a bad --since as the {error} envelope on stderr', () => {
+    const extra = out('--stats', '--json', '--', 'ls')
+    const since = out('--stats', '--json', '--since', 'soon')
+
+    expect([extra.code, since.code]).toEqual([2, 2])
+    expect(extra.out).toBe('')
+    expect(JSON.parse(extra.err)).toMatchObject({ error: '--stats runs no command' })
+    expect(JSON.parse(since.err)).toMatchObject({ error: expect.stringContaining('--since') })
   })
 })
