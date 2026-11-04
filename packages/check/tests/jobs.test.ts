@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { byRecency } from '@kaynooo/cli-kit/fzf'
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import { everything, id, resolve, shortest, targets } from '../src/jobs'
 
 const FILES: Record<string, string> = {
@@ -140,10 +140,14 @@ describe('everything with a broken manifest', () => {
     mkdirSync(join(root, 'broken'), { recursive: true })
     writeFileSync(join(root, 'broken/package.json'), '{ nope')
 
+    const warned = spyOn(console, 'error').mockImplementation(() => undefined)
+
     try {
       expect(everything().some(entry => id(entry) === 'bun:check')).toBe(true)
+      expect(warned.mock.calls.map(call => String(call[0])).some(line => line.includes('broken/package.json'))).toBe(true)
     }
     finally {
+      warned.mockRestore()
       rmSync(join(root, 'broken'), { recursive: true, force: true })
     }
   })

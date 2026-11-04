@@ -389,6 +389,9 @@ const READER_OF: Record<Kind, Reader> = {
   uv: pyproject,
 }
 
+// The file each reader parses, named when it is skipped.
+const MANIFEST_OF = new Map<Reader, string>([[just, 'justfile'], [make, 'Makefile'], [packageScripts, 'package.json'], [composer, 'composer.json'], [deno, 'deno.json'], [taskfile, 'Taskfile.yml'], [mise, 'mise.toml'], [pyproject, 'pyproject.toml']])
+
 // The value of a file read and parsed, the fallback when it is missing or malformed.
 function readOr<T>(read: () => T, fallback: T): T {
   try {
@@ -420,18 +423,21 @@ export function folders(): string[] {
 
 // What the folder `j` runs from offers, its parents included, then each child folder.
 // A manifest that does not parse drops its own entries, not the whole listing.
-function guarded(reader: Reader, dir: string, here: boolean): Entry[] {
+function guarded(reader: Reader, dir: string, here: boolean, isWarned = false): Entry[] {
   try {
     return reader(dir, here)
   }
-  catch {
+  catch (error) {
+    if (isWarned)
+      console.error(`j: skipped ${join(dir, MANIFEST_OF.get(reader) ?? 'a manifest')}, it does not parse (${error instanceof Error ? error.message : String(error)})`)
+
     return []
   }
 }
 
 export function everything(): Entry[] {
-  const here = READERS.flatMap(reader => guarded(reader, '.', true))
-  const below = folders().flatMap(dir => READERS.flatMap(reader => guarded(reader, dir, false)))
+  const here = READERS.flatMap(reader => guarded(reader, '.', true, true))
+  const below = folders().flatMap(dir => READERS.flatMap(reader => guarded(reader, dir, false, true)))
   const seen = new Set<string>()
 
   return [...here, ...below].filter((entry) => {
