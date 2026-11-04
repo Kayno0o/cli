@@ -88,10 +88,14 @@ export function setBoxes(body: string, picks: string[], done: boolean): Ticked {
       throw new Error('an empty box pick matches every box')
 
     const guarded = NUMBERED_PICK.exec(pick)
-    const needle = (guarded?.[2] ?? pick).trim().toLowerCase()
-    const matches = guarded === null && !WHOLE_PICK.test(pick)
-      ? all.filter(box => box.text.toLowerCase().includes(needle))
-      : all.filter(box => box.number === Number(guarded?.[1] ?? pick) && (guarded === null || box.text.toLowerCase().startsWith(needle)))
+    const byText = (text: string) => all.filter(box => box.text.toLowerCase().includes(text.trim().toLowerCase()))
+    let matches = guarded === null && !WHOLE_PICK.test(pick)
+      ? byText(pick)
+      : all.filter(box => box.number === Number(guarded?.[1] ?? pick) && (guarded === null || box.text.toLowerCase().startsWith((guarded[2] ?? '').trim().toLowerCase())))
+
+    // Text that merely starts with digits and a colon, like `3:30 deploy`, is read whole when no box N starts with what follows the colon.
+    if (guarded !== null && matches.length === 0)
+      matches = byText(pick)
 
     if (matches.length === 0)
       throw new Error(`no box matches ${pick}`)

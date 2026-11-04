@@ -69,6 +69,12 @@ describe('setBoxes', () => {
     expect(() => setBoxes(body, ['1:`ft board`'], true)).toThrow('no box matches 1:`ft board`')
   })
 
+  test('reads N:text as text when box N does not start with it', () => {
+    const times = '- [ ] a\n- [ ] b\n- [ ] 3:30 deploy'
+
+    expect(setBoxes(times, ['3:30 deploy'], true).changed.map(box => box.number)).toEqual([3])
+  })
+
   test('refuses an empty pick instead of matching every box', () => {
     expect(() => setBoxes('- [ ] only', [''], true)).toThrow('empty box pick')
     expect(() => setBoxes('- [ ] only', ['  '], true)).toThrow('empty box pick')

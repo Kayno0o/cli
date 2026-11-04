@@ -69,6 +69,55 @@ describe('release rollback', () => {
     })
   })
 
+  test('a failed package bump commit restores package.json and bun.lock, so a retry is not blocked', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
+    const work = join(root, 'work')
+    const home = process.cwd()
+    const poll = timing.poll
+
+    try {
+      await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${work}`.quiet()
+      process.chdir(work)
+      await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'r', private: true, workspaces: ['packages/*'] }))
+      await Bun.write(join(work, 'packages', 'a', 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
+      await $`bun install && git config user.name t && git config user.email t@t && git add package.json packages bun.lock && git commit -q -m init && git push -q origin main`.quiet()
+
+      const sha = (await $`git rev-parse HEAD`.text()).trim()
+      const lock = await Bun.file('bun.lock').text()
+
+      await Bun.write(join(work, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\necho nope >&2\nexit 1\n')
+      await chmod(join(work, '.git', 'hooks', 'pre-commit'), 0o755)
+      timing.poll = 1
+
+      await withFakeTea({ issues: [], runs: passing(sha) }, async () => {
+        // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+        await expect(capture(async () => release(['patch', '-p', 'a']))).rejects.toThrow()
+      })
+
+      expect((await $`git status --porcelain`.text()).trim()).toBe('')
+      expect(await Bun.file('bun.lock').text()).toBe(lock)
+      expect(((await Bun.file('packages/a/package.json').json()) as { version: string }).version).toBe('1.0.0')
+    }
+    finally {
+      timing.poll = poll
+      process.chdir(home)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test('the tag is pushed as a tag even when a branch has the same name', async () => {
+    await refusingTags(async (sha) => {
+      await $`git branch v1.0.1 && git push -q origin v1.0.1`.quiet()
+
+      try {
+        await withFakeTea({ issues: [], runs: passing(sha) }, async () => capture(async () => release(['patch', '-t', '1s'])))
+      }
+      catch {}
+
+      expect((await $`git ls-remote --tags origin`.text())).toContain('refs/tags/v1.0.1')
+    }, 'true')
+  })
+
   test('a push that times out keeps the bump, as it may have landed', async () => {
     const pushMs = limits.pushMs
 

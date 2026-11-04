@@ -1,8 +1,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import process from 'node:process'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
+import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
-import { remote } from '../src/commands/remote'
+import { limits, proveOrigin, remote } from '../src/commands/remote'
 import { loadSettings, settingsPath } from '../src/config'
 import { canonicalRemote, parseSshRemote, reachesHost, redactUrl } from '../src/remote'
 
@@ -100,5 +102,37 @@ describe('the remote host setting', () => {
 
     expect(result).toBe(0)
     expect(out).toBe(`note: no Forgejo host to check origin against: pass --host, or set "remoteHost" in ${settingsPath(home)}\n`)
+  })
+})
+
+describe('proveOrigin', () => {
+  test('gives up on an origin that never answers', async () => {
+    const root = temp('ft-remote-')
+    const home = process.cwd()
+    const before = limits.lsRemoteMs
+    const env = { GIT_CONFIG_COUNT: process.env.GIT_CONFIG_COUNT, GIT_CONFIG_KEY_0: process.env.GIT_CONFIG_KEY_0, GIT_CONFIG_VALUE_0: process.env.GIT_CONFIG_VALUE_0 }
+
+    try {
+      await $`git init -q ${root} && git remote add origin ${'ext::sleep 30'}`.cwd(root).quiet()
+      process.chdir(root)
+      limits.lsRemoteMs = 300
+      process.env.GIT_CONFIG_COUNT = '1'
+      process.env.GIT_CONFIG_KEY_0 = 'protocol.ext.allow'
+      process.env.GIT_CONFIG_VALUE_0 = 'always'
+
+      // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+      await expect(proveOrigin()).rejects.toThrow('no answer')
+    }
+    finally {
+      limits.lsRemoteMs = before
+      process.chdir(home)
+
+      for (const [key, value] of Object.entries(env)) {
+        if (value === undefined)
+          delete process.env[key]
+        else
+          process.env[key] = value
+      }
+    }
   })
 })

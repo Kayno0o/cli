@@ -55,6 +55,16 @@ describe('fixed', () => {
     })
   })
 
+  test('skips commits that name the issue only as owner/repo#N', async () => {
+    await withClone(['fix(x): the fix\n\n#7 - seven', 'chore: elsewhere\n\nSee other/repo#7 for this'], async (shas) => {
+      const state = await withFakeTea({ issues }, async () => {
+        expect(await fixed(['7', '--tick'])).toBe(0)
+      })
+
+      expect(state.comments?.[7]).toEqual([`Fixed in ${shas[0]?.slice(0, 7)}: fix(x): the fix`])
+    })
+  })
+
   test('ticks the line listing the issue in every open issue\'s checklist', async () => {
     const plan = '- [ ] #7 seven\n- [ ] #70 seventy\n- [ ] #8 eight\n- [ ] see #7 later'
 

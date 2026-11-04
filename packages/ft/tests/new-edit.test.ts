@@ -60,6 +60,16 @@ describe('ft edit', () => {
 
     expect(await refusal(edit(['6']))).toContain('nothing to change: give -t, -F, --add-box or -m')
   })
+
+  test('-F with --add-box and no --append writes the text, then adds the boxes', async () => {
+    await withFile('# New body', async (path) => {
+      const state = await withFakeTea({ issues: [{ number: 6, title: 't', body: 'old', state: 'open' }] }, async () => {
+        expect(await edit(['6', '-F', path, '--add-box', 'x'])).toBe(0)
+      })
+
+      expect(state.issues[0]?.body).toBe('# New body\n\n- [ ] x')
+    })
+  })
 })
 
 describe('ft issue --body', () => {

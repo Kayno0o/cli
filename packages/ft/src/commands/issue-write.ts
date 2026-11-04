@@ -91,7 +91,7 @@ export async function edit(args: string[]): Promise<number> {
 
   const grows = (text !== undefined && values.append === true) || added.length > 0
 
-  if (text !== undefined && !grows)
+  if (text !== undefined && values.append !== true)
     change.body = text
 
   if (Object.keys(change).length > 0)

@@ -10,7 +10,7 @@ export interface Named { sha: string, subject: string }
 
 // The commits of a ref whose message names the issue, oldest first.
 export async function commitsNaming(issue: number, ref: string): Promise<Named[]> {
-  const out = await git(['log', ref, '--reverse', '--extended-regexp', `--grep=#${issue}([^0-9]|$)`, '--format=%H %s'])
+  const out = await git(['log', ref, '--reverse', '--extended-regexp', `--grep=(^|[^[:alnum:]_./-])#${issue}([^0-9]|$)`, '--format=%H %s'])
 
   return out.split('\n').filter(Boolean).map((line) => {
     const space = line.indexOf(' ')

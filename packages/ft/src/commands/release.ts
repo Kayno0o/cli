@@ -153,7 +153,7 @@ export async function release(args: string[]): Promise<number> {
     let push
 
     try {
-      push = await runTool('git push', ['git', 'push', '--atomic', 'origin', `HEAD:refs/heads/${branch}`, tag], { timeoutMs: limits.pushMs, onStart: child => held.forward(child) })
+      push = await runTool('git push', ['git', 'push', '--atomic', 'origin', `HEAD:refs/heads/${branch}`, `refs/tags/${tag}`], { timeoutMs: limits.pushMs, onStart: child => held.forward(child) })
     }
     catch (error) {
       isPushUnknown = true
@@ -172,7 +172,7 @@ export async function release(args: string[]): Promise<number> {
     held.release()
 
     if (!pushed && !isPushUnknown && level !== undefined)
-      await rollBack(preBump, tagsBefore)
+      await rollBack(preBump, tagsBefore, dir)
   }
 
   const late = signalOf()

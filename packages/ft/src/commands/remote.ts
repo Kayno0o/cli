@@ -1,6 +1,6 @@
 import { lookup } from 'node:dns/promises'
 import { homedir } from 'node:os'
-import { fail, note, parse } from '@kaynooo/cli-kit'
+import { fail, note, parse, runTool } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { loadSettings, settingsPath } from '../config'
 import { git } from '../git'
@@ -20,6 +20,16 @@ const options = {
 } as const
 
 const HOSTNAME = /^hostname (.+)$/m
+
+export const limits = { lsRemoteMs: 30_000 }
+
+// An ssh prompt or a dead host would hang a bare ls-remote, so it is cut off after limits.lsRemoteMs.
+export async function proveOrigin(): Promise<void> {
+  const { code, stderr } = await runTool('git ls-remote', ['git', 'ls-remote', 'origin', 'HEAD'], { timeoutMs: limits.lsRemoteMs })
+
+  if (code !== 0)
+    throw new Error(stderr.trim())
+}
 
 async function sshHostname(alias: string): Promise<string | undefined> {
   return HOSTNAME.exec(await $`ssh -G -- ${alias}`.quiet().nothrow().text())?.[1]
@@ -117,7 +127,7 @@ export async function remote(args: string[], home = homedir()): Promise<number> 
   }
 
   try {
-    await git(['ls-remote', 'origin', 'HEAD'])
+    await proveOrigin()
   }
   catch (error) {
     await restoreOrigin(fetchUrl, pushUrls, changes)

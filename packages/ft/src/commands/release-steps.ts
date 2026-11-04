@@ -1,5 +1,5 @@
 import type { Manifest } from './release-version'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { fail, isPermanentFailure, runTool, warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { git, tagsAt } from '../git'
@@ -58,7 +58,7 @@ export async function waitForRegistry(name: string, version: string): Promise<bo
 }
 
 // Drops the bump commit and the tags it made, back to the commit the release started on; a failure only warns, as the release already failed.
-export async function rollBack(preBump: string, tagsBefore: Set<string>): Promise<void> {
+export async function rollBack(preBump: string, tagsBefore: Set<string>, dir?: string): Promise<void> {
   try {
     for (const name of await tagsAt('HEAD')) {
       if (!tagsBefore.has(name))
@@ -66,6 +66,16 @@ export async function rollBack(preBump: string, tagsBefore: Set<string>): Promis
     }
 
     await git(['reset', '--keep', preBump])
+
+    // A failure before the bump commit leaves the edited manifest and lockfile on an unchanged HEAD, which the reset keeps.
+    if (dir !== undefined) {
+      const root = await git(['rev-parse', '--show-toplevel'])
+      const paths = [join(dir, 'package.json'), join(root, 'bun.lock')].map(path => relative(root, path))
+      const tracked = (await git(['ls-tree', '-r', '--full-tree', '--name-only', preBump, '--', ...paths])).split('\n').filter(path => path !== '')
+
+      if (tracked.length > 0)
+        await git(['restore', `--source=${preBump}`, '--staged', '--worktree', '--', ...tracked.map(path => join(root, path))])
+    }
   }
   catch (error) {
     warn(`could not undo the bump, back to ${preBump.slice(0, 7)} by hand`, error instanceof Error ? error.message : String(error))
