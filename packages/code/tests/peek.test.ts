@@ -130,6 +130,29 @@ describe('peek', () => {
     expect(peek('--outline', 'README.md').out).toBe('README.md\n1  # Title\n5    ## Usage\n')
   })
 
+  test('prints several definitions in one call', () => {
+    expect(peek('--def', 'value', '--def', 'LIMIT').out).toBe('src/a.ts:26-28\n26    get value(): number {\n27      return this.count\n28    }\n\nsrc/a.ts:10-10\n10  export const LIMIT = 5\n')
+    expect(peek('--def', 'value', '--def', 'nothing')).toMatchObject({ code: 1, err: expect.stringContaining('nothing') })
+  })
+
+  test('--refs --defs-first prints the declarations before the lines naming the symbol', () => {
+    expect(peek('--refs', 'addOne', '--defs-first', 'src').out).toStartWith('src/a.ts:3-8\n')
+    expect(peek('--refs', 'addOne', '--defs-first', 'src').out).toContain('\n\nsrc/a.ts\n 4  export function addOne')
+    expect(peek('--def', 'a', '--defs-first').code).toBe(2)
+    const json = JSON.parse(peek('--refs', 'addOne', '--defs-first', '--json').out) as { definitions: unknown[], references: unknown[] }
+
+    expect(json.definitions[0]).toMatchObject({ path: 'src/a.ts', from: 3 })
+    expect(json.references[0]).toEqual({ path: 'src/a.ts', line: 4, text: 'export function addOne(value: number): number {' })
+  })
+
+  test('--around cuts to --limit spans and counts the rest', () => {
+    const out = peek('--around', 'count', '-C', '0', '--limit', '2', 'src/a.ts').out
+
+    expect(out).toEndWith('\n1 more, rerun with --full\n')
+    expect(out.match(/^src\/a\.ts:/gm)).toHaveLength(2)
+    expect(peek('--around', 'count', '-C', '0', '--full', 'src/a.ts').out).not.toContain('more')
+  })
+
   test('prints the lines around a pattern, merging close matches', () => {
     expect(peek('--around', 'count', '-C', '1', 'src/a.ts').out).toBe('src/a.ts:17-19\n17  export class Counter {\n18    private count = 0\n19  \n\nsrc/a.ts:21-23\n21      if (by > 0) {\n22        this.count += addOne(by) - 1\n23      }\n\nsrc/a.ts:26-28\n26    get value(): number {\n27      return this.count\n28    }\n')
     expect(peek('--around', 'count', '-C', '2', 'src/a.ts').out).toStartWith('src/a.ts:16-29\n')
