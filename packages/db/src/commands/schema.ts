@@ -1,10 +1,10 @@
 import type { Dialect } from '../guard'
 import { fail, parse, wholeNumber } from '@kaynooo/cli-kit'
-import { connectionOptions, DEFAULT_LIMIT, HOSTS_NOTE, outputOptions } from '../args'
+import { catalogOptions, connectionOptions, DEFAULT_LIMIT, HOSTS_NOTE } from '../args'
 import { render, shape } from '../output'
 import { connectionUrl, dialectOf, readRows } from '../run'
 
-const options = { ...connectionOptions, ...outputOptions } as const
+const options = { ...connectionOptions, ...catalogOptions } as const
 
 const EXITS = 'Exits 0 when it listed them, 1 when the database refused or was unreachable, 2 on a usage error or a host that is not allowed.'
 

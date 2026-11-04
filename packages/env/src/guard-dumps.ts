@@ -13,6 +13,8 @@ export const GIT_EXCLUDE = /^:(?:!|\^|\(exclude\))/
 const ENV_PRINTERS = new Set(['env', 'printenv'])
 const DOCKER = new Set(['docker', 'docker-compose'])
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'ash'])
+// `-c`, and `-lc`, `-ic` or `-ec` where the short flags are combined.
+const SHELL_COMMAND_FLAG = /^-[a-z]*c$/
 // Options taking a value, before a docker or compose subcommand, and before exec's container.
 const DOCKER_VALUE_OPTIONS = new Set(['-f', '--file', '-p', '--project-name', '--profile', '--env-file', '--project-directory', '--ansi', '--progress', '--parallel', '-H', '--host', '-c', '--context', '--config', '-l', '--log-level'])
 const EXEC_VALUE_OPTIONS = new Set(['-e', '--env', '--env-file', '-u', '--user', '-w', '--workdir', '--index', '--detach-keys'])
@@ -38,7 +40,7 @@ function firstOperand(words: readonly string[], valueOptions: ReadonlySet<string
 
 // The command a container runs prints its environment: `env` or `printenv` as the program, or as one run by `sh -c`.
 function printsEnv([program = '', ...args]: readonly string[]): boolean {
-  if (SHELLS.has(program) && args[0] === '-c')
+  if (SHELLS.has(program) && SHELL_COMMAND_FLAG.test(args[0] ?? ''))
     return splitCommand(args[1] ?? '').some(piece => ENV_PRINTERS.has(tokenize(piece.command)[0] ?? ''))
 
   return ENV_PRINTERS.has(program)

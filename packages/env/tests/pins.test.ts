@@ -65,6 +65,18 @@ describe('ev pins', () => {
     expect(out).toContain('3 reaching variables pinned')
   })
 
+  test('fails with a message on a bunfig.toml that does not parse', async () => {
+    await write('src/env.ts', SCHEMA)
+    await write('bunfig.toml', '[test\npreload = ')
+
+    const result = Bun.spawnSync([process.execPath, CLI, 'pins', dir], { cwd: tmpdir(), stdout: 'pipe', stderr: 'pipe' })
+    const err = result.stderr.toString()
+
+    expect(result.exitCode).not.toBe(0)
+    expect(err).toContain('bunfig.toml')
+    expect(err).not.toContain('SyntaxError')
+  })
+
   test('names the variables a rendering test leaves unpinned once a pin is removed', async () => {
     await write('src/env.ts', SCHEMA)
     await write('tests/proxy-key.test.ts', PINNING_TEST.replace(' HUBBLE_KEY_FILE: undefined, FORGEJO_TOKEN: undefined,', ''))

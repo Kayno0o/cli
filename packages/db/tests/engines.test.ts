@@ -337,6 +337,28 @@ describe('the MySQL forms of a write', () => {
   })
 })
 
+describe('a write on a client the abbreviations and test-looking words must not let through', () => {
+  const refused = async (command: string) => sqlViolation(command, async () => null)
+
+  test('refuses an abbreviated --command or --execute', async () => {
+    expect(await refused('psql -h prod --comm "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('psql -h prod --command "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('mysql -h prod --exec "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('mysql -h prod --exec="DELETE FROM users"')).not.toBeNull()
+  })
+
+  test('refuses a write when only an unrelated variable before the client says test', async () => {
+    expect(await refused('PGUSER=test_user psql -h prod -c "DELETE FROM users"')).not.toBeNull()
+    expect(await refused('PGPASSWORD=test psql -h prod -c "DELETE FROM users"')).not.toBeNull()
+  })
+
+  test('still lets a test-scoped target through', async () => {
+    expect(await refused('APP_ENV=test psql -c "DELETE FROM users"')).toBeNull()
+    expect(await refused('PGDATABASE=app_test psql -c "DELETE FROM users"')).toBeNull()
+    expect(await refused('psql -d app_test -c "DELETE FROM users"')).toBeNull()
+  })
+})
+
 describe('a file a client is fed and cannot be read', () => {
   const refused = async (command: string) => sqlViolation(command, async () => null)
 
@@ -353,7 +375,7 @@ describe('allowsKeyRetrieval, MySQL 8 logging in without TLS', () => {
     for (const url of ['mysql://app:pw@127.0.0.1:43306/app_test', 'mysql://app:pw@localhost/app', 'mysql://app:pw@[::1]:3306/app', 'mysql://app:pw@172.18.0.3:3306/app', 'mysql://app:pw@172.31.255.1/app'])
       expect(allowsKeyRetrieval(url)).toBe(true)
 
-    for (const url of ['mysql://app:pw@db.example.com/app', 'mysql://app:pw@192.168.1.20/app', 'mysql://app:pw@172.32.0.1/app', 'mysql://app:pw@10.0.0.5/app', 'not a url'])
+    for (const url of ['mysql://app:pw@db.example.com/app', 'mysql://app:pw@192.168.1.20/app', 'mysql://app:pw@172.32.0.1/app', 'mysql://app:pw@10.0.0.5/app', 'mysql://app:pw@172.20.evil.com/app', 'mysql://app:pw@172.20.1.1.evil.com/app', 'not a url'])
       expect(allowsKeyRetrieval(url)).toBe(false)
   })
 })

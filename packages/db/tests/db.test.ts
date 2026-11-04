@@ -98,6 +98,15 @@ async function db(args: string[], env: Record<string, string> = { DATABASE_URL: 
   return { out, err, code }
 }
 
+describe('the catalog commands', () => {
+  test.each(['tables', 'dbs', 'describe users'])('%s has no --raw, nothing of theirs being masked', async (command) => {
+    const result = await db([...command.split(' '), '--raw'])
+
+    expect(result.code).toBe(2)
+    expect(result.err).toContain('raw')
+  })
+})
+
 describe.skipIf(reason !== '')('db against Postgres', () => {
   test('runs a query, caps rows and masks sensitive columns', async () => {
     const result = await db(['select * from users order by id'])

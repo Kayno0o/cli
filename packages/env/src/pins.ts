@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
+import { fail } from '@kaynooo/cli-kit'
 import { parseDotenv } from './dotenv'
 
 export interface PinFinding {
@@ -204,7 +205,15 @@ async function pinningPreload(folder: string): Promise<string | undefined> {
   if (!await exists(path))
     return undefined
 
-  const config = Bun.TOML.parse(await readFile(path, 'utf8')) as { preload?: unknown, test?: { preload?: unknown } }
+  let config: { preload?: unknown, test?: { preload?: unknown } }
+
+  try {
+    config = Bun.TOML.parse(await readFile(path, 'utf8'))
+  }
+  catch {
+    fail(`${path} is not valid TOML`)
+  }
+
   const preloads = [config.test?.preload, config.preload].flat().filter((entry): entry is string => typeof entry === 'string' && entry.startsWith('.'))
 
   for (const preload of preloads) {

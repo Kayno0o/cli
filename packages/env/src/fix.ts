@@ -99,10 +99,13 @@ export function composeEntry(line: string): Entry | undefined {
   return { key, value: scalar.value, swap: ref => `${dash}${quote}${key}=${ref}${quote}${scalar.after}` }
 }
 
-// The .env line holding a value compose reads literally: plain when nothing needs quoting, single-quoted (never interpolated) otherwise.
-function envLine(key: string, value: string): string | undefined {
+// The .env line holding a value compose and Bun both read literally: plain when nothing needs quoting, single-quoted otherwise, double-quoted with each `$` escaped when it holds one since Bun expands it even in single quotes.
+export function envLine(key: string, value: string): string | undefined {
   if (ENV_PLAIN.test(value))
     return `${key}=${value}`
+
+  if (value.includes('$'))
+    return value.includes('\n') ? undefined : `${key}="${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('$', '\\$')}"`
 
   return value.includes('\'') || value.includes('\n') ? undefined : `${key}='${value}'`
 }

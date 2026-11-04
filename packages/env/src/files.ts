@@ -121,6 +121,29 @@ export async function withLocks<T>(paths: string[], fn: () => Promise<T>): Promi
   }
 }
 
+// Removes a stale lock under a guard file, so that of two waiters seeing it stale the second one reads the fresh lock the first one's successor wrote instead of removing it.
+async function reap(lock: string): Promise<void> {
+  const guard = `${lock}.reap`
+
+  try {
+    await writeFile(guard, String(process.pid), { flag: 'wx', mode: 0o600 })
+  }
+  catch {
+    return
+  }
+
+  try {
+    if (Date.now() - (await stat(lock)).mtimeMs > LOCK_STALE_MS)
+      await rm(lock, { force: true })
+  }
+  catch {
+    // released between the two calls
+  }
+  finally {
+    await rm(guard, { force: true })
+  }
+}
+
 async function acquire(path: string): Promise<string> {
   let real = path
 
@@ -145,13 +168,7 @@ async function acquire(path: string): Promise<string> {
         throw error
     }
 
-    try {
-      if (Date.now() - (await stat(lock)).mtimeMs > LOCK_STALE_MS)
-        await rm(lock, { force: true })
-    }
-    catch {
-      // released between the two calls
-    }
+    await reap(lock)
 
     if (Date.now() > deadline)
       fail(`${path} is locked by another ev run (${lock})`, 1)

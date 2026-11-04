@@ -17,6 +17,7 @@ const DATABASE_LONGS = new Set(['--dbname', '--database'])
 const VALUE_LONGS = new Set(['--host', '--port', '--username', '--user', '--output', '--set', '--variable', '--field-separator', '--record-separator', '--pset', '--log-file', '--socket'])
 // Programs piping their arguments into a client, `echo "DELETE ..." | psql`.
 const PRINTERS = new Set(['echo', 'printf'])
+const FILE_LONGS = new Set(['--file'])
 const LIST_OPTIONS = new Set(['-l', '--list'])
 const REDIRECT_ONLY = /^\d*(?:>|>>|>&|&>|>\||<&|<>)$/
 const REDIRECT_START = /^\d*>|^&>/
@@ -25,6 +26,9 @@ const URL_DATABASE = /^[a-z][a-z\d+.-]*:\/\/[^/]*\/([^?#]*)/i
 const WRITING_CONSOLE = /^(?:doctrine:(?:migrations:(?:migrate|execute|rollup)|schema:(?:update|create|drop)|database:(?:create|drop)|fixtures:load)|migrate(?::\w+)?|db:(?:seed|wipe))$/
 // A database, env file, compose file or service named for tests: `booki_test`, `.env.test`, `compose.test.yaml`, `-e test`, `APP_ENV=test`; "latest" is not one.
 const TEST_SCOPED = /(?:^|[^a-z])test/i
+const ASSIGNMENT = /^([A-Z_]\w*)=/i
+// The variables that pick an environment or a database; `PGUSER=test_user` or `PGPASSWORD=test` pick neither.
+const TARGET_VARIABLE = /(?:ENV|ENVIRONMENT|DATABASE|DB|DBNAME|NAME|URL|DSN)$/i
 // The disposable stack git-diff captures on, by its directory `.worktrees/<project>/shot` or its compose project `<project>--shot`.
 const SHOT_STACK = /\.worktrees\/[^/\s]+\/shot(?:\/|$)|--shot(?:-|$)/
 // Files a client cannot be read from without hanging or reading a device.
@@ -62,6 +66,18 @@ function databaseOf(operand: string): string {
   return URL_DATABASE.exec(operand)?.[1] ?? operand
 }
 
+// getopt_long and mysql's option parser take a long option cut short to what is unambiguous, `--comm` or `--exec`; it is read as the one option it prefixes.
+function fullOption(option: string): string {
+  const known = [...STATEMENT_LONGS, ...FILE_LONGS, ...DATABASE_LONGS, ...VALUE_LONGS]
+
+  if (known.includes(option) || option.length < 4)
+    return option
+
+  const candidates = known.filter(each => each.startsWith(option))
+
+  return candidates.length === 1 ? candidates[0]! : option
+}
+
 // Reads a client's words, `-c`, `-tAc STATEMENT`, `--command=...`, `-fFILE`, `--file FILE`, `< FILE`, `<<< 'STATEMENT'` and the database it names included.
 function clientInput(name: string, args: readonly string[]): ClientInput {
   const input: ClientInput = { statements: [], files: [], databases: [], operands: [] }
@@ -96,7 +112,8 @@ function clientInput(name: string, args: readonly string[]): ClientInput {
       continue
     }
     else if (arg.startsWith('--')) {
-      const [option = '', ...rest] = arg.split('=')
+      const [spelled = '', ...rest] = arg.split('=')
+      const option = fullOption(spelled)
       const attached = rest.length > 0 ? rest.join('=') : undefined
       const value = attached ?? args[i + 1] ?? ''
 
@@ -150,11 +167,20 @@ function clientInput(name: string, args: readonly string[]): ClientInput {
 }
 
 // Whether the words name a test-only target: what comes before the client (a compose file, an environment, a service) or the database it names; a client's statements and files never count.
+function isTestWord(word: string): boolean {
+  const assignment = ASSIGNMENT.exec(word)
+
+  if (assignment !== null && !TARGET_VARIABLE.test(assignment[1] ?? ''))
+    return false
+
+  return TEST_SCOPED.test(word) || SHOT_STACK.test(word)
+}
+
 function isTestScoped(words: readonly string[], client: number, input: ClientInput | null): boolean {
   if (client === -1)
-    return words.some(word => TEST_SCOPED.test(word) || SHOT_STACK.test(word))
+    return words.some(isTestWord)
 
-  return words.slice(0, client).some(word => TEST_SCOPED.test(word) || SHOT_STACK.test(word)) || (input?.databases ?? []).some(name => TEST_SCOPED.test(name))
+  return words.slice(0, client).some(isTestWord) || (input?.databases ?? []).some(name => TEST_SCOPED.test(name))
 }
 
 // Whether a piece runs a SQL client, anywhere in its words so `docker compose exec db psql` counts.

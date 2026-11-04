@@ -86,7 +86,7 @@ export function allowsKeyRetrieval(url: string): boolean {
   try {
     const host = hostOf(new URL(url))
 
-    return isLocal(host) || DOCKER_NETWORK.test(host)
+    return isLocal(host) || (isIP(host) !== 0 && DOCKER_NETWORK.test(host))
   }
   catch {
     return false

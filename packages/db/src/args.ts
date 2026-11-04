@@ -14,6 +14,12 @@ export const connectionOptions = {
   database: { type: 'string', short: 'd', description: 'database to read instead of the URL\'s or the service\'s' },
 } as const
 
+// The catalog commands list names, types and sizes: no column of theirs is masked, so there is no --raw.
+export const catalogOptions = {
+  limit: { type: 'string', short: 'n', description: `rows shown (${DEFAULT_LIMIT})` },
+  json: jsonOption(),
+} as const
+
 export const outputOptions = {
   limit: { type: 'string', short: 'n', description: `rows shown (${DEFAULT_LIMIT})` },
   raw: { type: 'boolean', description: 'show columns masked by default (emails, phones, tokens, password hashes, secret-named keys inside JSON values)' },

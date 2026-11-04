@@ -1,10 +1,12 @@
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { $ } from 'bun'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { audit, inlineSecrets } from '../src/audit'
-import { composeEntry, shutOthersOut } from '../src/fix'
+import { audit, groupReads, inlineSecrets } from '../src/audit'
+import { parseDotenv } from '../src/dotenv'
+import { withLocks } from '../src/files'
+import { composeEntry, envLine, shutOthersOut } from '../src/fix'
 
 const CLI = new URL('../src/ev.ts', import.meta.url).pathname
 const VALUE = 'hunter2-never-printed'
@@ -160,6 +162,45 @@ describe('composeEntry', () => {
   })
 })
 
+describe('withLocks', () => {
+  test('keeps waiters on a stale lock from taking each other\'s fresh lock', async () => {
+    const file = join(dir, 'counter')
+    const lock = join(dir, '.counter.lock')
+
+    await writeFile(file, '0')
+    await writeFile(lock, '1')
+    await utimes(lock, 1, 1)
+
+    await Promise.all(Array.from({ length: 12 }, async () => withLocks([file], async () => {
+      const count = Number(await Bun.file(file).text())
+
+      await Bun.sleep(15)
+      await writeFile(file, String(count + 1))
+    })))
+
+    expect(await Bun.file(file).text()).toBe('12')
+  })
+})
+
+describe('groupReads', () => {
+  test('counts a group that is not the owner\'s primary one, whatever its number is next to the owner\'s id', () => {
+    const mine = process.getgid?.() ?? 0
+
+    expect(groupReads(0o640, mine + 5, mine + 5)).toBe(false)
+    expect(groupReads(0o640, mine + 6, mine + 5)).toBe(true)
+    expect(groupReads(0o600, mine + 6, mine + 5)).toBe(false)
+  })
+})
+
+describe('envLine', () => {
+  test('writes a value holding a dollar so that Bun reads it back unchanged', () => {
+    for (const value of ['a$b', 'p$a"s\\s', '$5 off'])
+      expect(parseDotenv(`${envLine('K', value)}\n`).lines[0]?.value).toBe(value)
+
+    expect(envLine('K', 'a$b')).not.toContain('\'')
+  })
+})
+
 describe('shutOthersOut', () => {
   // As root the chmod would go through and change the real file.
   test.skipIf(process.getuid?.() === 0)('answers false on a file another account owns, leaving it as it was', async () => {
@@ -214,7 +255,7 @@ describe('ev audit --fix', () => {
       '      - DB_PASSWORD=${DB_PASSWORD}',
       '',
     ].join('\n'))
-    expect(await Bun.file(join(dir, '.env')).text()).toBe(`DB_PASSWORD=${VALUE}\nAPI_TOKEN='tok en'\nSESSION_SECRET=sq-secret\nDATABASE_URL=postgres://app:pw1@db/app\nMQTT_TOKEN='abc$def'\n`)
+    expect(await Bun.file(join(dir, '.env')).text()).toBe(`DB_PASSWORD=${VALUE}\nAPI_TOKEN='tok en'\nSESSION_SECRET=sq-secret\nDATABASE_URL=postgres://app:pw1@db/app\nMQTT_TOKEN="abc\\$def"\n`)
     expect((await stat(join(dir, '.env'))).mode & 0o777).toBe(0o600)
     expect((await stat(join(dir, 'compose.yml'))).mode & 0o777).toBe(0o640)
     expect(ev(['audit']).code).toBe(0)
@@ -242,7 +283,7 @@ describe('ev audit --fix', () => {
     expect(result.code).toBe(1)
     expect(result.out).toBe(`.env\n  now unreadable by other accounts\ncompose.yml\n  moved API_TOKEN, DATABASE_URL into .env\n  left DB_PASSWORD in place: .env already sets it to another value\n  left REDIS_URL in place: its value reads another variable\n  ${checked}\n  now unreadable by other accounts\n`)
     expect(result.out).not.toContain(VALUE)
-    expect(await Bun.file(join(dir, '.env')).text()).toBe('KEEP=1\nDB_PASSWORD=other\nAPI_TOKEN=same\nDATABASE_URL=\'postgres://${USER}:pw1@db/app\'\n')
+    expect(await Bun.file(join(dir, '.env')).text()).toBe('KEEP=1\nDB_PASSWORD=other\nAPI_TOKEN=same\nDATABASE_URL="postgres://\\${USER}:pw1@db/app"\n')
     expect(await Bun.file(join(dir, 'compose.yml')).text()).toContain(`DB_PASSWORD: ${VALUE}`)
     expect((await stat(join(dir, '.env'))).mode & 0o777).toBe(0o640)
   })

@@ -60,10 +60,26 @@ export async function openToOthers(path: string): Promise<boolean> {
   return true
 }
 
+/** Whether the group bit lets in a group other than the owner's primary one, which only the owner belongs to on a system with private groups. */
+export function groupReads(mode: number, gid: number, ownerGroup: number): boolean {
+  return (mode & 0o040) !== 0 && gid !== ownerGroup && gid !== process.getgid?.()
+}
+
+// The primary group of an account, the account's own id when the system does not tell.
+function primaryGroup(uid: number): number {
+  if (uid === process.getuid?.())
+    return process.getgid?.() ?? uid
+
+  const run = Bun.spawnSync(['id', '-g', String(uid)], { stdout: 'pipe', stderr: 'ignore' })
+  const gid = Number(run.stdout.toString().trim())
+
+  return run.exitCode === 0 && Number.isInteger(gid) ? gid : uid
+}
+
 // Accounts other than the owner can read it through a group that is not the owner's own, or through a named user or group of its ACL, and every folder above lets them through.
 export async function sharedWith(path: string): Promise<boolean> {
   const info = await stat(path)
-  const shared = (info.mode & 0o040) !== 0 && info.gid !== info.uid && info.gid !== process.getgid?.()
+  const shared = groupReads(info.mode, info.gid, primaryGroup(info.uid))
 
   if (!shared && (Bun.which('getfacl') === null || !await hasAclReader(path)))
     return false
