@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-workspace",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ws, repos, sweep, audit: the repositories of the workspace that need attention, the folders worth reclaiming and their known vulnerabilities.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
