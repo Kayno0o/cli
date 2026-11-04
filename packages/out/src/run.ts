@@ -6,6 +6,7 @@ import { fold, shouldFold } from './fold'
 import { cleanLogs, logDir, newLog } from './logs'
 import { filtered } from './stages'
 import { commandKey, record } from './stats'
+import { tidy } from './tidy'
 
 // Output kept in memory from the start and from the end; what lies between only reaches the log file.
 const HEAD_BYTES = 2 * 1024 * 1024
@@ -109,9 +110,18 @@ export class Recorder {
   }
 }
 
-function replay(chunks: Chunk[]): void {
-  for (const { stream, data } of chunks)
-    process[stream].write(data)
+// Writes the chunks tidied, and answers how many bytes that came to.
+function replay(chunks: Chunk[]): number {
+  let written = 0
+
+  for (const { stream, data } of chunks) {
+    const tidied = Buffer.from(tidy(Buffer.from(data).toString()))
+
+    written += tidied.length
+    process[stream].write(tidied)
+  }
+
+  return written
 }
 
 // What a run is recorded with: the words naming the command, and the tail, head or grep stages `out` stands in for.
@@ -121,10 +131,10 @@ export interface Recorded {
 }
 
 // Counts the run in the stats: the session reads what `out` shows instead of the whole output, or of what the stages it replaced would have printed.
-function count(recorder: Recorder, shown: number, recorded: Recorded): void {
+function count(recorder: Recorder, { shown, folded }: Presented, recorded: Recorded): void {
   const baseline = recorded.was.length === 0 || recorder.overflowing ? undefined : filtered(recorder.text, recorded.was)
 
-  record({ at: new Date().toISOString(), dir: process.cwd(), command: recorded.command, bytes: recorder.bytes, baseline: baseline === undefined ? recorder.bytes : Buffer.byteLength(baseline), shown, folded: shown !== recorder.bytes })
+  record({ at: new Date().toISOString(), dir: process.cwd(), command: recorded.command, bytes: recorder.bytes, baseline: baseline === undefined ? recorder.bytes : Buffer.byteLength(baseline), shown, folded })
 }
 
 // Runs the command with stdout and stderr captured in arrival order, then replays short output untouched or prints it folded. Returns the command's exit code, which a failure to fold never changes.
@@ -188,20 +198,23 @@ export async function readPiped(threshold: number, was: readonly string[] = []):
   return 0
 }
 
-// Prints the output untouched when short, folded otherwise, and answers how many bytes it printed.
-function present(recorder: Recorder, threshold: number): number {
+// How many bytes were printed, and whether the output was folded.
+interface Presented {
+  shown: number
+  folded: boolean
+}
+
+// Prints the output tidied when short, folded otherwise.
+function present(recorder: Recorder, threshold: number): Presented {
   const text = recorder.text
 
-  if (!recorder.overflowing && !shouldFold(text, threshold)) {
-    replay(recorder.chunks)
-
-    return recorder.bytes
-  }
+  if (!recorder.overflowing && !shouldFold(text, threshold))
+    return { shown: replay(recorder.chunks), folded: false }
 
   let printed
 
   try {
-    printed = fold(text, { threshold, logPath: recorder.save() })
+    printed = fold(tidy(text), { threshold, logPath: recorder.save() })
   }
   catch (error) {
     console.error(`out: could not fold the output: ${error instanceof Error ? error.message : String(error)}`)
@@ -211,12 +224,11 @@ function present(recorder: Recorder, threshold: number): number {
   // A fold leaving little out can come out longer than the output once its header is added.
   if (!recorder.overflowing && Buffer.byteLength(printed) >= recorder.bytes) {
     recorder.discard()
-    replay(recorder.chunks)
 
-    return recorder.bytes
+    return { shown: replay(recorder.chunks), folded: false }
   }
 
   process.stdout.write(printed)
 
-  return Buffer.byteLength(printed)
+  return { shown: Buffer.byteLength(printed), folded: true }
 }
