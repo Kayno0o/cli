@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { altSvcProtocols, cdnHint, certInfo, headersOf, httpRedirectOf, namesOf, nextUrl, offersOf, parseCurl, parseTarget, timingsOf, versionLabel, wantsHttpCheck, warningsOf, worthKnowing, WRITE_OUT } from '../src/analyze'
+import { altSvcProtocols, cdnHint, certInfo, daysLeftLabel, headersOf, httpRedirectOf, namesOf, nextUrl, offersOf, parseCurl, parseTarget, timingsOf, versionLabel, wantsHttpCheck, warningsOf, worthKnowing, WRITE_OUT } from '../src/analyze'
 
 const SEPARATOR = '\n---HEADERS---\n'
 
@@ -110,6 +110,11 @@ describe('headers', () => {
 describe('certificate', () => {
   const now = Date.parse('2026-11-03T00:00:00Z')
   const raw = { subject: { CN: 'a.test' }, issuer: { CN: 'R3', O: 'Lets' }, subjectaltname: 'DNS:a.test, DNS:*.a.test, IP Address:1.2.3.4', valid_from: 'Sep 1 00:00:00 2026 GMT', valid_to: 'Nov 13 00:00:00 2026 GMT' }
+
+  test('writes one day in the singular', () => {
+    expect(daysLeftLabel(1)).toBe('1 day left')
+    expect(daysLeftLabel(30)).toBe('30 days left')
+  })
 
   test('counts days left and names issuer and names', () => {
     expect(certInfo(raw, now)).toEqual({ subject: 'a.test', issuer: 'R3 (Lets)', names: ['a.test', '*.a.test', '1.2.3.4'], validFrom: '2026-09-01T00:00:00.000Z', validTo: '2026-11-13T00:00:00.000Z', daysLeft: 10 })

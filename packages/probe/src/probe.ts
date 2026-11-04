@@ -5,7 +5,7 @@ import type { Addresses, TlsInfo } from './net'
 import process from 'node:process'
 import { badUsage, fail, jsonOption, marked, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { version } from '../package.json'
-import { cdnHint, httpRedirectOf, isRedirect, MAX_HOPS, nextUrl, offersOf, parseTarget, versionLabel, wantsHttpCheck, warningsOf, worthKnowing } from './analyze'
+import { cdnHint, daysLeftLabel, httpRedirectOf, isRedirect, MAX_HOPS, nextUrl, offersOf, parseTarget, versionLabel, wantsHttpCheck, warningsOf, worthKnowing } from './analyze'
 import { addressesOf, curlHasHttp3, curlHop, tlsInfo } from './net'
 
 const LABEL_WIDTH = 13
@@ -171,7 +171,7 @@ function print(report: Report): void {
 
   if (cert !== null) {
     row('issuer', cert.issuer)
-    row('expires', `${cert.validTo.slice(0, 10)} (${cert.daysLeft} days left)`)
+    row('expires', `${cert.validTo.slice(0, 10)} (${daysLeftLabel(cert.daysLeft)})`)
     row('names', cert.names.join(', '))
   }
 

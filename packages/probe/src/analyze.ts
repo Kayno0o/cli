@@ -295,6 +295,10 @@ export interface RawCertificate {
   valid_to?: string
 }
 
+export function daysLeftLabel(days: number): string {
+  return `${days} ${days === 1 ? 'day' : 'days'} left`
+}
+
 export function certInfo(raw: RawCertificate, now = Date.now()): CertInfo | undefined {
   if (raw.valid_to === undefined || raw.valid_from === undefined)
     return undefined
