@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { PipelineListing } from '../pipelines'
 import { formatAge, formatSeconds, jsonOption, limitOf, limitOptions, moreFooter, parse, printJson, table, truncate } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
@@ -6,9 +7,9 @@ import { FINISHED, pipelinesOn, recentPipelines } from '../pipelines'
 
 const usage = `gl runs [--sha <ref>] [--branch <name>] [-n <rows> | --full] [--json]
 
-Lists recent pipelines with their ref, source, commit, duration and age, the commit's subject when the clone has it, ten by default with the count of the rest (--full for all of them).
+Lists recent pipelines with their ref, source, commit, duration and age, the commit's subject when the clone has it, ten by default with the count of the rest (--full for all of them).`
 
-Exits 0 when it listed them, 1 when GitLab or git cannot be read, 2 on a usage error.`
+const exits: ExitRow[] = [[0, 'it listed them'], [1, 'GitLab or git cannot be read'], [2, 'a usage error']]
 
 const DEFAULT_LIMIT = 10
 
@@ -30,7 +31,7 @@ async function onCommit(sha: string, limit: number, repo: string | undefined, re
 }
 
 export async function runs(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { exits })
 
   const { values } = parsed
   const limit = limitOf(values, DEFAULT_LIMIT)

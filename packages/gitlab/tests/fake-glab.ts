@@ -16,7 +16,8 @@ import { appendFileSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } fro
 
 const file = process.env.FAKE_GLAB_STATE
 const raw = process.argv.slice(2)
-const [command, endpoint] = raw
+const method = raw[1] === '--method' ? raw[2] : 'GET'
+const [command, endpoint] = raw[1] === '--method' ? [raw[0], raw[3]] : raw
 const sleep = ms => new Promise(done => setTimeout(done, ms))
 const barrier = JSON.parse(readFileSync(file, 'utf8')).barrier
 
@@ -50,7 +51,7 @@ process.on('exit', () => {
 
 const state = JSON.parse(readFileSync(file, 'utf8'))
 
-state.calls = [...(state.calls ?? []), endpoint]
+state.calls = [...(state.calls ?? []), method === 'GET' ? endpoint : method + ' ' + endpoint]
 writeFileSync(file, JSON.stringify(state))
 
 if (command !== 'api') {
@@ -59,7 +60,7 @@ if (command !== 'api') {
 }
 
 // Like glab, flags are read only before the endpoint: one after it is taken for a second endpoint.
-if (raw.slice(2).some(arg => arg.startsWith('-') && arg !== '-')) {
+if (raw.slice(method === 'GET' ? 2 : 4).some(arg => arg.startsWith('-') && arg !== '-')) {
   console.error('glab: only one endpoint is accepted, got ' + raw.slice(2).join(' '))
   process.exit(1)
 }
@@ -85,11 +86,23 @@ function paged(list, params) {
 
 const [path, query = ''] = endpoint.replace(/^projects\\/[^/]+\\//, '').split('?')
 const params = new URLSearchParams(query)
-const one = /^pipelines\\/(\\d+)(\\/jobs)?$/.exec(path)
+const one = /^pipelines\\/(\\d+)(\\/jobs|\\/retry)?$/.exec(path)
+const retried = /^jobs\\/(\\d+)\\/retry$/.exec(path)
 const trace = /^jobs\\/(\\d+)\\/trace$/.exec(path)
 const pipeline = one === null ? undefined : state.pipelines.find(each => each.id === Number(one[1]))
 
-if (path === 'pipelines')
+if (retried !== null || (one !== null && one[2] === '/retry')) {
+  const target = retried === null ? pipeline : Object.values(state.jobs ?? {}).flat().find(each => each.id === Number(retried[1]))
+
+  if (method !== 'POST' || target === undefined) {
+    console.log('{"message":"404 Not found"}')
+    console.error('glab: 404 Not found (HTTP 404)')
+    process.exit(1)
+  }
+
+  console.log(JSON.stringify({ ...target, status: 'running' }))
+}
+else if (path === 'pipelines')
   console.log(JSON.stringify(paged(state.pipelines.filter(each => (!params.has('sha') || each.sha === params.get('sha')) && (!params.has('ref') || each.ref === params.get('ref'))).sort((a, b) => b.id - a.id), params)))
 else if (pipeline !== undefined && one[2] === undefined)
   console.log(JSON.stringify(pipeline))

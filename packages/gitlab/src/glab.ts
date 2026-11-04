@@ -8,9 +8,9 @@ function projectPath(repo: string | undefined): string {
   return repo === undefined ? 'projects/:id' : `projects/${encodeURIComponent(repo)}`
 }
 
-async function request(path: string, repo: string | undefined): Promise<string> {
+async function request(path: string, repo: string | undefined, method?: 'POST'): Promise<string> {
   const endpoint = `${projectPath(repo)}/${path}`
-  const result = await runTool(`glab api ${endpoint}`, ['glab', 'api', endpoint], { timeoutMs: GLAB_MS })
+  const result = await runTool(`glab api ${endpoint}`, ['glab', 'api', ...method === undefined ? [] : ['--method', method], endpoint], { timeoutMs: GLAB_MS })
 
   // glab prints GitLab's error object on stdout and its own summary on stderr.
   if (result.code !== 0)
@@ -19,8 +19,8 @@ async function request(path: string, repo: string | undefined): Promise<string> 
   return result.stdout
 }
 
-export async function projectApi<T>(path: string, repo?: string): Promise<T> {
-  const text = await request(path, repo)
+export async function projectApi<T>(path: string, repo?: string, method?: 'POST'): Promise<T> {
+  const text = await request(path, repo, method)
 
   try {
     return JSON.parse(text) as T

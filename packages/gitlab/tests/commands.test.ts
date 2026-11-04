@@ -2,11 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { Exit } from '@kaynooo/cli-kit'
+import { Exit, fail } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { ci, judge } from '../src/commands/ci'
+import { ci, judge, waitingOn } from '../src/commands/ci'
 import { logs } from '../src/commands/logs'
+import { retry } from '../src/commands/retry'
 import { runs } from '../src/commands/runs'
 import { newest, waitingOnRunner } from '../src/pipelines'
 import { job, pipeline, withFakeGlab } from './fake-glab'
@@ -175,7 +176,142 @@ describe('gl ci', () => {
     })
 
     expect(refused.code).toBe(2)
-    expect(refused.message).toEndWith('is not on origin/main: push it first')
+    expect(refused.message).toStartWith('not on branch: ')
+    expect(refused.message).toEndWith('is not on origin/main, push it first')
+  })
+
+  test('says timeout first when the wait runs out, leaving other exits as they are', async () => {
+    const timedOut = await refusal(async () => waitingOn(async () => fail('CI has not finished on abc1234 in 30m')))
+    const other = await refusal(async () => waitingOn(async () => fail('no runner: stuck')))
+
+    expect(timedOut).toEqual({ code: 2, message: 'timeout: CI has not finished on abc1234 in 30m' })
+    expect(other).toEqual({ code: 2, message: 'no runner: stuck' })
+  })
+
+  test('takes a commit as [ref] or --sha, not both', async () => {
+    let refused = { code: 0, message: '' }
+
+    await withFakeGlab({ pipelines: [] }, async () => {
+      refused = await refusal(async () => ci(['--sha', 'HEAD', 'HEAD']))
+    })
+
+    expect(refused).toEqual({ code: 2, message: 'give the commit as [ref] or --sha, not both' })
+  })
+
+  test('--job: a pipeline that skipped that job leaves the work to the next commit\'s', async () => {
+    process.chdir(clone)
+
+    let code = -1
+    const { out } = await withFakeGlab({
+      pipelines: [pipeline(8, shas[0] ?? '', 'success'), pipeline(9, shas[1] ?? '', 'success')],
+      jobs: { 8: [job(80, 'deploy', 'skipped')], 9: [job(90, 'deploy', 'success')] },
+    }, async () => {
+      code = await ci([shas[0] ?? '', '--job', 'deploy'])
+    })
+
+    expect(code).toBe(0)
+    expect(out[0]).toBe(`following pipeline 9 on ${shas[1]?.slice(0, 7)}, which covers ${shas[0]?.slice(0, 7)}: https://gitlab/p/9`)
+  })
+})
+
+describe('gl ci on a tag', () => {
+  const tagged = async (tag: string, sha: string) => $`git tag ${tag} ${sha}`.cwd(clone).quiet()
+  const untag = async (tag: string) => $`git tag -d ${tag}`.cwd(clone).quiet()
+
+  test('follows the pipeline of a tag given by name, and exits on its result', async () => {
+    process.chdir(clone)
+    await tagged('v1.0.0', shas[1] ?? '')
+
+    try {
+      let code = -1
+      const { out } = await withFakeGlab({ pipelines: [pipeline(8, shas[1] ?? '', 'success', 'v1.0.0')] }, async () => {
+        code = await ci(['v1.0.0'])
+      })
+
+      expect(code).toBe(0)
+      expect(out[0]).toBe(`following pipeline 8 on ${shas[1]?.slice(0, 7)}: https://gitlab/p/8`)
+
+      const failing = await withFakeGlab({ pipelines: [pipeline(9, shas[1] ?? '', 'failed', 'v1.0.0')], jobs: { 9: [job(90, 'publish', 'failed')] }, traces: { 90: 'nope' } }, async () => {
+        code = await ci(['v1.0.0'])
+      })
+
+      expect(code).toBe(1)
+      expect(failing.err.join('\n')).toContain('job publish (test) failed')
+    }
+    finally {
+      await untag('v1.0.0')
+    }
+  })
+
+  test('a sha with only a tag pipeline follows it', async () => {
+    process.chdir(clone)
+    await tagged('v1.0.1', shas[1] ?? '')
+
+    try {
+      let code = -1
+
+      await withFakeGlab({ pipelines: [pipeline(8, shas[1] ?? '', 'success', 'v1.0.1')] }, async () => {
+        code = await ci(['--sha', shas[1] ?? ''])
+      })
+
+      expect(code).toBe(0)
+    }
+    finally {
+      await untag('v1.0.1')
+    }
+  })
+
+  test('the branch pipeline wins when both exist', async () => {
+    process.chdir(clone)
+    await tagged('v1.0.2', shas[1] ?? '')
+
+    try {
+      const { out } = await withFakeGlab({ pipelines: [pipeline(8, shas[1] ?? '', 'success', 'main'), pipeline(9, shas[1] ?? '', 'success', 'v1.0.2')] }, async () => ci([shas[1] ?? '']))
+
+      expect(out[0]).toContain('following pipeline 8 ')
+    }
+    finally {
+      await untag('v1.0.2')
+    }
+  })
+})
+
+describe('gl retry', () => {
+  const state = { pipelines: [pipeline(7, 'abc', 'failed')], jobs: { 7: [job(70, 'phpunit', 'failed'), job(71, 'build', 'success')] } }
+
+  test('retries the failed jobs of a pipeline', async () => {
+    const { out, calls } = await withFakeGlab(state, async () => retry(['7']))
+
+    expect(calls).toEqual(['POST projects/:id/pipelines/7/retry'])
+    expect(out).toEqual(['retrying the failed jobs of pipeline 7: https://gitlab/p/7'])
+  })
+
+  test('retries one job by name in a pipeline, or by id alone, --json naming it', async () => {
+    const byName = await withFakeGlab(state, async () => retry(['7', '-j', 'phpunit']))
+    const byId = await withFakeGlab(state, async () => retry(['-j', '70', '--json']))
+
+    expect(byName.calls).toEqual(['projects/:id/pipelines/7/jobs?per_page=100&page=1', 'POST projects/:id/jobs/70/retry'])
+    expect(byName.out).toEqual(['retrying job phpunit (70): https://gitlab/j/70'])
+    expect(JSON.parse(byId.out.join('\n'))).toEqual({ id: 70, name: 'phpunit', stage: 'test', status: 'running', url: 'https://gitlab/j/70' })
+  })
+
+  test('refuses a missing target, a job name without a pipeline and an unknown job', async () => {
+    const attempts: string[][] = [[], ['-j', 'phpunit'], ['7', '-j', 'nope']]
+    const refused: string[] = []
+
+    for (const attempt of attempts) {
+      await withFakeGlab(state, async () => {
+        const { code, message } = await refusal(async () => retry(attempt))
+
+        refused.push(`${code} ${message}`)
+      })
+    }
+
+    expect(refused).toEqual([
+      '2 a pipeline id or a job is needed',
+      '2 without a pipeline, -j takes a job id, not phpunit',
+      '2 pipeline 7 has no job nope: phpunit, build',
+    ])
   })
 })
 

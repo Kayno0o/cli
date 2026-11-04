@@ -75,6 +75,15 @@ export async function pipelineById(id: number, repo?: string): Promise<Pipeline>
   return projectApi<Pipeline>(`pipelines/${id}`, repo)
 }
 
+// Retries the failed jobs of a pipeline, which GitLab answers with the pipeline running again.
+export async function retryPipeline(id: number, repo?: string): Promise<Pipeline> {
+  return projectApi<Pipeline>(`pipelines/${id}/retry`, repo, 'POST')
+}
+
+export async function retryJob(id: number, repo?: string): Promise<Job> {
+  return projectApi<Job>(`jobs/${id}/retry`, repo, 'POST')
+}
+
 export async function jobsOf(pipeline: number, repo?: string): Promise<Job[]> {
   return (await pagedList<Job>(`pipelines/${pipeline}/jobs`, repo)).items
 }

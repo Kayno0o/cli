@@ -1,6 +1,7 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Pipeline } from '../pipelines'
 import process from 'node:process'
-import { badge, duration, fail, formatElapsed, jsonOption, paint, parse, printJson, waitForCi } from '@kaynooo/cli-kit'
+import { badge, duration, Exit, fail, formatElapsed, jsonOption, paint, parse, printJson, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
 import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
@@ -9,9 +10,13 @@ const usage = `gl ci [ref]
 Waits for the pipeline covering a commit on the branch, by default origin's tip, and prints what each failed job's trace says.
 GitLab runs a push's pipeline on its last commit only, and cancels a redundant one, so a commit without a pipeline of its own is covered by the next commit's.
 --json prints {status, runs, failedJobs, url} on stdout, the progress going to stderr; --quiet prints only the announcement, the failures and the result.
-Exits 0 when it passes, 1 when it fails, 2 on a timeout, jobs no runner picks up or a commit not on the branch.`
+An exit 2 says why on the first line of its message: timeout, no runner, no pipeline or not on branch.`
+
+const exits: ExitRow[] = [[0, 'the pipeline passed (or stopped at a manual job, its earlier stages passed)'], [1, 'the pipeline failed'], [2, 'a usage error, or could not check: timeout, no runner, no pipeline, not on branch']]
 
 const options = {
+  sha: { type: 'string', short: 's', description: 'the commit to cover, as the [ref] argument does' },
+  job: { type: 'string', short: 'j', description: 'a job whose skipping means the pipeline left its work to a newer push' },
   branch: { type: 'string', short: 'b', description: 'branch the commit is on, by default the one origin/HEAD names' },
   timeout: { type: 'string', short: 't', description: 'how long before giving up (30m), a bare number in minutes' },
   json: jsonOption('status, runs, failedJobs with their trace excerpts and url'),
@@ -22,6 +27,8 @@ const options = {
 const NO_PIPELINE = 3 * 60_000
 // How long jobs may wait for a runner while none of the pipeline's runs; shared runners can take minutes to pick one up.
 const STALLED = 10 * 60_000
+// How the kit words a wait that ran out of time.
+const TIMED_OUT = 'CI has not finished'
 
 export type Coverage = { kind: 'none' | 'passed-over' } | { kind: 'pipeline', pipeline: Pipeline }
 
@@ -33,36 +40,83 @@ export function judge(pipeline: Pipeline | undefined): Coverage {
   return pipeline.status === 'canceled' || pipeline.status === 'skipped' ? { kind: 'passed-over' } : { kind: 'pipeline', pipeline }
 }
 
+// The wait's own timeout says so first, like the other exit 2 messages do.
+export async function waitingOn<T>(wait: () => Promise<T>): Promise<T> {
+  try {
+    return await wait()
+  }
+  catch (error) {
+    if (error instanceof Exit && error.code === 2 && error.message.startsWith(TIMED_OUT))
+      throw new Exit(`timeout: ${error.message}`, error.code, error.hint)
+
+    throw error
+  }
+}
+
 export async function ci(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { positionals: ['[ref]'], exits })
 
   const { values, positionals } = parsed
+
+  if (values.sha !== undefined && positionals[0] !== undefined)
+    fail('give the commit as [ref] or --sha, not both')
+
   const branch = values.branch ?? await defaultBranch()
   const giveUp = duration(values.timeout, 'timeout', 30 * 60_000, 'm')
-  const sha = await resolveCommit(positionals[0] ?? `origin/${branch}`)
+  const given = values.sha ?? positionals[0] ?? `origin/${branch}`
+  const sha = await resolveCommit(given)
   const short = sha.slice(0, 7)
 
   await leaveWorktree()
 
+  // A tag's pipeline is on the tag's ref: a tag named as the argument is followed alone, otherwise the commit's tags are looked at after the branch.
+  const commitTags = (await git(['tag', '--points-at', sha])).split('\n').filter(Boolean)
+  const refs = commitTags.includes(given) ? [given] : [branch, ...commitTags]
+
   // Commits whose pipelines are over without testing, which no later poll needs to ask about again.
   const passedOver = new Set<string>()
+
+  // The first of the refs having a pipeline to follow, else passed over when one was, else none.
+  async function coverageOf(commit: string, among: string[]): Promise<Coverage> {
+    let passed = false
+
+    for (const ref of among) {
+      const coverage = judge(newest(await pipelinesOn(commit, undefined, ref)))
+
+      if (coverage.kind === 'pipeline')
+        return coverage
+
+      passed ||= coverage.kind === 'passed-over'
+    }
+
+    return { kind: passed ? 'passed-over' : 'none' }
+  }
 
   async function covering(): Promise<Pipeline | undefined> {
     await fetchBranch(branch)
 
-    if (!await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`]))
-      fail(`${short} is not on origin/${branch}: push it first`)
+    const onBranch = await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`])
 
-    const later = (await git(['rev-list', '--reverse', '--first-parent', `${sha}..origin/${branch}`])).split('\n').filter(Boolean)
+    if (!onBranch && commitTags.length === 0)
+      fail(`not on branch: ${short} is not on origin/${branch}, push it first`)
+
+    const later = !onBranch || refs[0] !== branch ? [] : (await git(['rev-list', '--reverse', '--first-parent', `${sha}..origin/${branch}`])).split('\n').filter(Boolean)
 
     for (const commit of [sha, ...later]) {
       if (passedOver.has(commit))
         continue
 
-      const coverage = judge(newest(await pipelinesOn(commit, undefined, branch)))
+      const coverage = await coverageOf(commit, commit === sha ? refs : [branch])
 
-      if (coverage.kind === 'pipeline')
+      if (coverage.kind === 'pipeline') {
+        if (values.job !== undefined && FINISHED.has(coverage.pipeline.status) && (await jobsOf(coverage.pipeline.id)).some(each => each.name === values.job && each.status === 'skipped')) {
+          passedOver.add(commit)
+
+          continue
+        }
+
         return coverage.pipeline
+      }
 
       if (coverage.kind === 'passed-over')
         passedOver.add(commit)
@@ -73,14 +127,14 @@ export async function ci(args: string[]): Promise<number> {
 
   const json = values.json === true
   const { dim } = paint(process.stderr)
-  const pipeline = await waitForCi<Pipeline>({
+  const pipeline = await waitingOn(async () => waitForCi<Pipeline>({
     tool: 'gl ci',
     short,
     giveUpMs: giveUp,
     noneMs: NO_PIPELINE,
     stalledMs: STALLED,
     quiet: values.quiet === true,
-    noneMessage: `no pipeline covers ${short} yet: its own was cancelled by a later push or never started, so the next push's will`,
+    noneMessage: `no pipeline: none covers ${short} yet, its own was cancelled by a later push or never started, so the next push's will`,
     covering,
     finished: found => FINISHED.has(found.status),
     key: found => String(found.id),
@@ -97,14 +151,14 @@ export async function ci(args: string[]): Promise<number> {
       if (waiting.length === 0)
         return undefined
 
-      return { message: `pipeline ${found.id} on ${short} has waited ${STALLED / 60_000} minutes for a runner: ${waiting.map(job => `${job.name}${job.tag_list.length === 0 ? '' : ` (tags ${job.tag_list.join(', ')})`}`).join('; ')}` }
+      return { message: `no runner: pipeline ${found.id} on ${short} has waited ${STALLED / 60_000} minutes for a runner: ${waiting.map(job => `${job.name}${job.tag_list.length === 0 ? '' : ` (tags ${job.tag_list.join(', ')})`}`).join('; ')}` }
     },
     // The pipeline followed and its state, on a terminal, under a line for the wait itself.
     lines: (spinner, found, started) => [
       `${spinner} CI on ${short} ${dim(formatElapsed(Date.now() - started))}`,
       ...found === undefined ? [] : [`  ${badge(found.status, process.stderr)} pipeline ${dim(String(found.id))}`],
     ],
-  })
+  }))
 
   if (pipeline.status === 'canceled' || pipeline.status === 'skipped')
     fail(`pipeline ${pipeline.id} on ${short} was ${pipeline.status} while GitLab could not be read: ${pipeline.web_url}`)
