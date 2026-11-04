@@ -23,8 +23,13 @@ export function paint(stream: { isTTY?: boolean }, env: Record<string, string | 
 // `✓ text` on a terminal, `ok: text` elsewhere; `detail` follows dimmed.
 export function marked(mark: Mark, text: string, stream: { isTTY?: boolean }, detail?: string, env: Record<string, string | undefined> = process.env): string {
   const colors = paint(stream, env)
-  const { theme } = activeTheme()
-  const head = takesControlCodes(stream, env) ? tinted(colors.bold, theme.colors[mark])(theme.glyphs[mark]) : MARK_WORDS[mark]
+  let head = MARK_WORDS[mark]
+
+  if (takesControlCodes(stream, env)) {
+    const { theme } = activeTheme()
+
+    head = tinted(colors.bold, theme.colors[mark])(theme.glyphs[mark])
+  }
 
   return `${head} ${text}${detail === undefined ? '' : ` ${colors.dim(detail)}`}`
 }
@@ -47,7 +52,9 @@ export function problem(text: string, detail?: string): void {
 
 // `role('id', process.stdout)('#49')`: plain text on a stream that takes no control codes.
 export function role(name: Role, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): (text: string) => string {
-  return tinted(paint(stream, env), activeTheme().theme.colors[name])
+  const colors = paint(stream, env)
+
+  return takesControlCodes(stream, env) ? tinted(colors, activeTheme().theme.colors[name]) : colors
 }
 
 // The words CI services report each status by.
@@ -86,7 +93,8 @@ export function header(bin: string, context: string | undefined, stream: { isTTY
   const colors = paint(stream, env)
   const hash = [...bin].reduce((sum, char) => sum + char.charCodeAt(0), 0)
   const { theme } = activeTheme()
-  const accent = tinted(colors.bold, theme.bins[bin] ?? theme.accents[hash % theme.accents.length]!)
+  const spec = theme.bins[bin] ?? theme.accents[hash % theme.accents.length]!
+  const accent = tinted(typeof spec === 'string' && spec.split(' ').includes('bold') ? colors : colors.bold, spec)
 
   return `${accent(bin)}${context === undefined ? '' : colors.dim(` › ${context}`)}`
 }

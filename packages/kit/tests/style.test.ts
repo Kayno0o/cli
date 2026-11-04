@@ -124,40 +124,47 @@ describe('table header rule', () => {
   })
 })
 
+// Runs `run` with KIT_THEME set, and puts the variable back whatever happens.
+function withTheme(name: string, run: () => void): void {
+  const before = process.env.KIT_THEME
+
+  process.env.KIT_THEME = name
+
+  try {
+    run()
+  }
+  finally {
+    if (before === undefined)
+      delete process.env.KIT_THEME
+    else
+      process.env.KIT_THEME = before
+  }
+}
+
 describe('a theme in force', () => {
-  it('redraws marks, badges, bars and roles from KIT_THEME', () => {
-    const before = process.env.KIT_THEME
-
-    process.env.KIT_THEME = 'ascii'
-
-    try {
+  it('redraws marks, badges, bars and roles on a terminal', () => {
+    withTheme('ascii', () => {
       expect(badge('success', TERMINAL, {})).toBe('\x1B[32m+ success\x1B[39m')
       expect(marked('problem', 'broke', TERMINAL, undefined, {})).toBe('\x1B[1m\x1B[31mx\x1B[39m\x1B[22m broke')
-      expect(bar(0.5, { stream: {}, env: {}, width: 4 })).toBe('##--')
-    }
-    finally {
-      if (before === undefined)
-        delete process.env.KIT_THEME
-      else
-        process.env.KIT_THEME = before
-    }
+      expect(bar(0.5, { stream: TERMINAL, env: {}, width: 4 })).toBe('\x1B[36m##\x1B[39m\x1B[2m##\x1B[22m')
+    })
 
     expect(badge('success', TERMINAL, {})).toBe('\x1B[32m✓ success\x1B[39m')
   })
 
-  it('draws a bin with the colour the theme gives it', () => {
-    const before = process.env.KIT_THEME
+  it('changes nothing off a terminal or under NO_COLOR', () => {
+    withTheme('ascii', () => {
+      expect(badge('success', {}, {})).toBe('success')
+      expect(marked('ok', 'built', {}, undefined, {})).toBe('ok: built')
+      expect(bar(0.5, { stream: {}, env: {}, width: 4 })).toBe('━━──')
+      expect(role('accent', TERMINAL, { NO_COLOR: '1' })('x')).toBe('x')
+      expect(header('ft', undefined, TERMINAL, { NO_COLOR: '1' })).toBe('')
+    })
+  })
 
-    process.env.KIT_THEME = 'mono'
-
-    try {
-      expect(header('ft', undefined, TERMINAL, {})).toBe('\x1B[1m\x1B[1mft\x1B[22m\x1B[22m')
-    }
-    finally {
-      if (before === undefined)
-        delete process.env.KIT_THEME
-      else
-        process.env.KIT_THEME = before
-    }
+  it('draws a bin with the colour the theme gives it, bold once', () => {
+    withTheme('mono', () => {
+      expect(header('ft', undefined, TERMINAL, {})).toBe('\x1B[1mft\x1B[22m')
+    })
   })
 })

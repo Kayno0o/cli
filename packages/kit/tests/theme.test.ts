@@ -53,7 +53,11 @@ describe('loadTheme', () => {
   it('applies a preset, KIT_THEME winning over the files and the files over the default', () => {
     expect(loadTheme(world({ preset: 'ascii' })).theme.glyphs.bar).toBe('#')
     expect(loadTheme(world({ preset: 'ascii' }, { preset: 'mono' })).theme.colors.accent).toBe('bold')
-    expect(loadTheme({ ...world({ preset: 'ascii' }), env: { KIT_THEME: 'mono' } }).theme.glyphs.bar).toBe('━')
+    const chosen = loadTheme({ ...world({ preset: 'ascii', colors: { id: 'red' } }), env: { KIT_THEME: 'mono' } })
+
+    expect(chosen.theme.glyphs.bar).toBe('━')
+    expect(chosen.theme.colors.id).toBe('bold')
+    expect(chosen.sources).toEqual([])
   })
 
   it('names the bins that choose their own colour', () => {
@@ -61,14 +65,16 @@ describe('loadTheme', () => {
   })
 
   it('tells about a bad colour, glyph, key or preset and keeps the rest', () => {
-    const where = world({ preset: 'neon', colors: { accent: 'chartreuse', nope: 'red', id: 'red' }, glyphs: { ok: '✓✓', bar: '=' } })
+    const where = world({ preset: 'neon', colors: { accent: 'chartreuse', nope: 'red', id: 'red' }, glyphs: { ok: '✓✓', bar: '=', warn: '\x1B]0;pwned\x07x', note: '\x1B[2J' } })
     const { theme } = loadTheme(where)
 
     expect(theme.colors.accent).toBe('cyan')
     expect(theme.colors.id).toBe('red')
     expect(theme.glyphs.ok).toBe('✓')
     expect(theme.glyphs.bar).toBe('=')
-    expect(where.warnings).toHaveLength(4)
+    expect(theme.glyphs.warn).toBe('▲')
+    expect(theme.glyphs.note).toBe('›')
+    expect(where.warnings).toHaveLength(6)
   })
 
   it('falls back to the default on a file that does not parse', () => {
@@ -109,5 +115,42 @@ describe('colour specs', () => {
     expect(tinted(colors, 'bold green')('x')).toContain('\x1B[1m')
     expect(tinted(colors, '#ff0000')('x')).toContain('38;2;255;0;0')
     expect(tinted(colors, 208)('x')).toContain('38;5;208')
+  })
+})
+
+describe('loadTheme, hostile input', () => {
+  it('ignores a theme that is not a regular file', () => {
+    const where = world()
+
+    mkdirSync(join(where.from, '.kaynooo', 'theme.json'), { recursive: true })
+
+    expect(loadTheme(where).sources).toEqual([])
+    expect(where.warnings[0]).toContain('not a regular file')
+  })
+
+  it('ignores a theme too large to be one', () => {
+    const where = world(undefined, { colors: { accent: 'red' }, padding: 'x'.repeat(70 * 1024) })
+
+    expect(loadTheme(where).theme.colors.accent).toBe('cyan')
+    expect(where.warnings[0]).toContain('not a regular file')
+  })
+
+  it('takes no inherited name as a colour, a preset or a bin', () => {
+    const where = world({ colors: { toString: 'red', constructor: 'red', ['__proto__']: 'red' }, bins: { toString: 'red' } })
+    const { theme } = loadTheme({ ...where, env: {} })
+
+    expect(where.warnings.filter(message => message.includes('no colour'))).toHaveLength(3)
+    expect(Object.getOwnPropertyDescriptor(theme.bins, 'toString')?.value).toBe('red')
+    expect(loadTheme({ ...world(), env: { KIT_THEME: 'constructor' } }).preset).toBe('default')
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
+  it('reads the file KIT_THEME names, and nothing else', () => {
+    const where = world({ colors: { accent: 'red' } })
+    const file = join(where.from, 'mine.json')
+
+    writeFileSync(file, JSON.stringify({ colors: { accent: 'green' } }))
+
+    expect(loadTheme({ ...where, env: { KIT_THEME: file } }).theme.colors.accent).toBe('green')
   })
 })

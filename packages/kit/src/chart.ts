@@ -6,6 +6,9 @@ import { activeTheme, tinted } from './theme'
 type Env = Record<string, string | undefined>
 
 const LEVELS = '▁▂▃▄▅▆▇█'
+// What a bar is drawn with where there is no colour to tell its two parts apart; a theme only changes the bar on a terminal.
+const FILLED = '━'
+const EMPTY = '─'
 
 // One block per value, tall in proportion to where it sits between the smallest and the largest; a flat series draws mid-height.
 export function sparkline(values: number[]): string {
@@ -29,10 +32,12 @@ export function bar(ratio: number, { width = 20, stream = process.stdout, env = 
   const colors = paint(stream, env)
   const filled = Math.round(Math.min(1, Math.max(0, ratio)) * width)
 
-  const { glyphs } = activeTheme().theme
-  const empty = takesControlCodes(stream, env) ? glyphs.bar : glyphs.barEmpty
+  if (!takesControlCodes(stream, env))
+    return `${FILLED.repeat(filled)}${EMPTY.repeat(width - filled)}`
 
-  return `${tinted(colors, activeTheme().theme.colors.accent)(glyphs.bar.repeat(filled))}${colors.dim(empty.repeat(width - filled))}`
+  const { theme } = activeTheme()
+
+  return `${tinted(colors, theme.colors.accent)(theme.glyphs.bar.repeat(filled))}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
 }
 
 export interface KeyValueSettings {
