@@ -2,10 +2,12 @@ import { existsSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import process from 'node:process'
-import { runCommand } from '@kaynooo/cli-kit'
+import { pool, runCommand } from '@kaynooo/cli-kit'
 
 export const MAX_DEPTH = 3
 export const CONCURRENCY = 8
+// Git calls in flight at once for the packages of one repository, on top of the repositories read together.
+const PACKAGE_CONCURRENCY = 4
 const GIT_MS = 10_000
 const FETCH_MS = 30_000
 const AHEAD_BEHIND = /\+(\d+) -(\d+)/
@@ -121,17 +123,14 @@ async function packageReleases(path: string): Promise<PackageRelease[]> {
       names.add(name)
   }
 
-  const releases: PackageRelease[] = []
-
-  for (const name of [...names].toSorted()) {
+  const releases = await pool([...names].toSorted(), PACKAGE_CONCURRENCY, async (name): Promise<PackageRelease | undefined> => {
     const folder = [join('packages', name), name].find(candidate => existsSync(join(path, candidate)))
     const tag = folder === undefined ? undefined : await read(path, ['describe', '--tags', '--abbrev=0', '--match', `${name}-v*`])
 
-    if (folder !== undefined && tag !== undefined && tag !== '')
-      releases.push({ name, tag, unreleased: await commitsSince(path, tag, folder) })
-  }
+    return folder !== undefined && tag !== undefined && tag !== '' ? { name, tag, unreleased: await commitsSince(path, tag, folder) } : undefined
+  })
 
-  return releases
+  return releases.filter(release => release !== undefined)
 }
 
 export async function inspect(path: string, fetch: boolean): Promise<RepoState> {
