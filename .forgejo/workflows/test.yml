@@ -34,9 +34,10 @@ jobs:
       - name: check
         run: bun run check
 
+      # Lints on several threads, which the cache makes useless locally but saves a third of the cold lint here.
       - name: lint
         if: ${{ !cancelled() }}
-        run: bun run lint
+        run: bun run lint --concurrency auto
 
       - name: test
         if: ${{ !cancelled() }}

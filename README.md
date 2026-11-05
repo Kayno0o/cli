@@ -38,6 +38,8 @@ bun install
 bun run check && bun run lint && bun run test
 ```
 
+`bun run test` starts the slowest files first, as `tests/timings.json` lists them; refresh it with `bun run test:timings` after adding a slow test file.
+
 ## Releasing
 
 Each CLI releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow builds that folder (`bun run build`, a Bun bundle per bin with `packages/kit` inlined) and publishes it. Kit is published like the CLIs (`just release kit minor`) for the libs outside this repo; the CLIs here take it as `workspace:*` and inline it, so a kit change reaches one of them with its next release.

@@ -10,7 +10,8 @@
     "check": "$npm_execpath check",
     "lint": "keslint --cache",
     "lint:fix": "keslint --fix --cache",
-    "test": "$npm_execpath test --parallel",
+    "test": "$npm_execpath test --parallel --timings=tests/timings.json",
+    "test:timings": "$npm_execpath test --parallel --timings=tests/timings.json --update-timings",
     "test:coverage": "$npm_execpath test --coverage",
     "docs": "$npm_execpath scripts/bins-docs.ts",
     "ft": "$npm_execpath packages/ft/src/cli.ts"
