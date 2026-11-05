@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-stack",
   "type": "module",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "stack: a stable port per service name, and an audit of a compose release setup against its release.config.ts.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
