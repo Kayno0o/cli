@@ -1,4 +1,4 @@
-import { ciLine, formatAge, formatSeconds } from '@kaynooo/cli-kit'
+import { ciLine, formatAge, formatSeconds, hyperlink } from '@kaynooo/cli-kit'
 import { excerpt } from './log'
 import { api, repoApi, repoApiText } from './tea'
 
@@ -50,7 +50,7 @@ function elapsed(run: Run, seen: number): string | undefined {
 
 // The line every watcher of runs draws for one, shared with the pipelines of gl through the kit.
 export function runLine(run: Run, out: { isTTY?: boolean }, seen = Date.now()): string {
-  return ciLine(run.status, run.workflow_id, [`run ${run.id}`, `on ${run.prettyref}`, elapsed(run, seen)], out)
+  return ciLine(run.status, run.workflow_id, [`run ${hyperlink(String(run.id), run.html_url, out)}`, `on ${run.prettyref}`, elapsed(run, seen)], out)
 }
 
 export function startedAge(run: Run, now = Date.now()): string {

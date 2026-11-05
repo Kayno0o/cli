@@ -2,7 +2,7 @@ import type { FakeState } from './fake-tea'
 import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { timing, watch, watchRuns } from '../src/commands/watch'
-import { jobLog, runsOn } from '../src/runs'
+import { jobLog, runLine, runsOn } from '../src/runs'
 import { refusal, withFakeTea } from './fake-tea'
 
 const run = (id: number, status: string) => ({ id, commit_sha: 'abc', event: 'push', status, workflow_id: 'test.yml', prettyref: 'main', html_url: `https://forge/runs/${id}`, title: 'x' })
@@ -200,5 +200,14 @@ describe('ft watch --json and --quiet', () => {
 
     expect(err).toContain('job test of test.yml failed:\nit broke')
     expect(out).toBe('failure test.yml run 2 on main\n')
+  })
+})
+
+describe('runLine', () => {
+  test('links the run id to the run on a terminal, and leaves it plain elsewhere', () => {
+    const queued = { ...run(5, 'waiting'), html_url: 'https://forge/runs/5' }
+
+    expect(runLine(queued, {})).toBe('waiting test.yml run 5 on main')
+    expect(runLine(queued, { isTTY: true })).toContain('\x1B]8;;https://forge/runs/5\x1B\\5\x1B]8;;\x1B\\')
   })
 })

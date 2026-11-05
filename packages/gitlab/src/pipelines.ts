@@ -1,4 +1,4 @@
-import { ciLine, formatSeconds } from '@kaynooo/cli-kit'
+import { ciLine, formatSeconds, hyperlink } from '@kaynooo/cli-kit'
 import { projectApi, projectApiText } from './glab'
 import { excerpt } from './trace'
 
@@ -43,7 +43,7 @@ function elapsedOf(pipeline: Pipeline): string | undefined {
 
 // The line every watcher of pipelines draws for one, the same shape ft draws for a run.
 export function pipelineLine(pipeline: Pipeline, out: { isTTY?: boolean }): string {
-  return ciLine(pipeline.status, 'pipeline', [String(pipeline.id), `on ${pipeline.ref}`, elapsedOf(pipeline)], out)
+  return ciLine(pipeline.status, 'pipeline', [hyperlink(String(pipeline.id), pipeline.web_url, out), `on ${pipeline.ref}`, elapsedOf(pipeline)], out)
 }
 
 const PAGE = 100
