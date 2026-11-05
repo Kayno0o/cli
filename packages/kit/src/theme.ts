@@ -27,15 +27,55 @@ export interface Theme {
   gradient: [string, string] | undefined
 }
 
-// The colour a ratio between 0 and 1 takes on the theme's gradient, undefined when the theme has none.
+type Triple = [number, number, number]
+
+function toLinear(channel: number): number {
+  const value = channel / 255
+
+  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+}
+
+const fromLinear = (value: number): number => Math.round(255 * Math.min(1, Math.max(0, value <= 0.0031308 ? value * 12.92 : 1.055 * value ** (1 / 2.4) - 0.055)))
+
+// A `#rrggbb` colour in OKLab, where equal steps look equal; the formulas are Björn Ottosson's, a few lines that cost less to run and to load than a colour library.
+function toOklab(hex: string): Triple {
+  const [r, g, b] = [1, 3, 5].map(at => toLinear(Number.parseInt(hex.slice(at, at + 2), 16))) as Triple
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s]
+}
+
+function fromOklab([lightness, a, b]: Triple): string {
+  const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3
+  const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3
+  const s = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3
+  const channels = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s]
+
+  return `#${channels.map(channel => fromLinear(channel).toString(16).padStart(2, '0')).join('')}`
+}
+
+// The ends of a gradient in OKLab, converted once per pair rather than for every cell drawn.
+const ENDS = new Map<string, [Triple, Triple]>()
+
+// The colour a ratio between 0 and 1 takes on the theme's gradient, blended in OKLab so the middle keeps the ends' lightness and saturation, undefined when the theme has none.
 export function gradientAt(theme: Theme, ratio: number): string | undefined {
   if (theme.gradient === undefined)
     return undefined
 
-  const [from, to] = theme.gradient.map(hex => [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16))) as [number[], number[]]
-  const at = Math.min(1, Math.max(0, ratio))
+  const key = theme.gradient.join()
+  let ends = ENDS.get(key)
 
-  return `#${from.map((start, index) => Math.round(start + (to[index]! - start) * at).toString(16).padStart(2, '0')).join('')}`
+  if (ends === undefined) {
+    ends = [toOklab(theme.gradient[0]), toOklab(theme.gradient[1])]
+    ENDS.set(key, ends)
+  }
+
+  const at = Math.min(1, Math.max(0, ratio))
+  const [from, to] = ends
+
+  return fromOklab(from.map((start, index) => start + (to[index]! - start) * at) as Triple)
 }
 
 const DEFAULT: Theme = {

@@ -106,8 +106,15 @@ describe('gradient', () => {
     expect(gradientAt(loadTheme(world({ preset: 'mono' })).theme, 0.5)).toBeUndefined()
   })
 
+  it('blends in OKLab, so black to white is perceptually halfway at #636363 and the ends stay exact', () => {
+    const { theme } = loadTheme(world({ gradient: ['#102030', '#a0b0c0'] }))
+
+    expect(gradientAt(theme, 0)).toBe('#102030')
+    expect(gradientAt(theme, 1)).toBe('#a0b0c0')
+  })
+
   it('takes two hex colours from a file, null for none, and tells about anything else', () => {
-    expect(gradientAt(loadTheme(world({ gradient: ['#000000', '#ffffff'] })).theme, 0.5)).toBe('#808080')
+    expect(gradientAt(loadTheme(world({ gradient: ['#000000', '#ffffff'] })).theme, 0.5)).toBe('#636363')
     expect(gradientAt(loadTheme(world({ gradient: null })).theme, 0.5)).toBeUndefined()
 
     const bad = world({ gradient: ['red', '#ffffff'] })
