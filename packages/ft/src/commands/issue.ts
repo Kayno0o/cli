@@ -79,6 +79,9 @@ export async function issue(args: string[]): Promise<number> {
   const held = positionals.length === 0 ? await heldIssues(values.repo) : []
   const numbers = held.length === 0 ? issueNumbers(positionals, issueUsage) : held
 
+  if (values.body === true && values.open === true)
+    badUsage('--open does not go with --body')
+
   if (values.copy === true && values.body !== true)
     badUsage('--copy goes with --body')
 

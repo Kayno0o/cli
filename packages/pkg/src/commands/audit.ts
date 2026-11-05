@@ -22,7 +22,7 @@ const EXITS: ExitRow[] = [[0, 'nothing blocks'], [1, 'a package is missing, too 
 
 const options = {
   'json': jsonOption('[{name, version, license, blocked, warnings, advisories}] for the packages with a finding'),
-  'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS})` },
+  'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS}, or the minAge setting)` },
   'level': { type: 'string', description: 'lowest advisory severity listed and failing: low, moderate, high, critical (moderate)' },
   'prod': { type: 'boolean', description: 'only the packages a production dependency or an optional one of a workspace reaches' },
   'ignore': { type: 'string', multiple: true, description: 'an advisory skipped by GHSA or numeric id, repeatable' },

@@ -159,7 +159,7 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
     return 0
   }
 
-  if (pool.length === 0 && options.names.length > 0) {
+  if (pool.length === 0 && (options.names.length > 0 || !isInteractive())) {
     console.log('everything is installed')
 
     return 0
@@ -252,11 +252,17 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
     }
   }
 
-  if (removing.plugin && host.which('claude') !== null) {
+  if (removing.plugin && host.which('claude') === null) {
+    console.error(`${yellow('not run')}  ${PLUGIN_UNINSTALL.join(' ')}: claude is not on PATH`)
+  }
+  else if (removing.plugin) {
     const ran = await host.run(PLUGIN_UNINSTALL)
 
-    if (ran.code !== 0)
+    if (ran.code !== 0) {
       console.error(`${red('failed')}   ${PLUGIN_UNINSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+
+      return 1
+    }
   }
 
   console.log('\nafter the install:')

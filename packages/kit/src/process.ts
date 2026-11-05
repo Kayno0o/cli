@@ -123,8 +123,8 @@ export async function copyText(text: string, which: (command: string) => string 
   for (const [command, ...args] of CLIPBOARDS) {
     const found = which(command!)
 
-    if (found !== null)
-      return pipeInto([found, ...args], text)
+    if (found !== null && await pipeInto([found, ...args], text))
+      return true
   }
 
   return false

@@ -9,6 +9,13 @@ function ft(...args: string[]) {
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
 
+describe('ft issue flags', () => {
+  test('--copy goes with --body, --open does not', () => {
+    expect(ft('issue', '1', '--copy')).toMatchObject({ code: 2, err: expect.stringContaining('--copy goes with --body') })
+    expect(ft('issue', '1', '--body', '--open')).toMatchObject({ code: 2, err: expect.stringContaining('--open does not go with --body') })
+  })
+})
+
 describe('ft', () => {
   test('lists its commands, and prints its version', () => {
     const help = ft('--help')

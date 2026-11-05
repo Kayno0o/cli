@@ -21,7 +21,7 @@ const EXITS: ExitRow[] = [[0, 'every package passes'], [1, 'one is blocked: miss
 
 const options = {
   'json': jsonOption(),
-  'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS})` },
+  'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS}, or the minAge setting)` },
   'from': { type: 'string', description: 'check the dependencies of this package.json' },
 } as const
 

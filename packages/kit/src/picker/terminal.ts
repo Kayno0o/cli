@@ -155,9 +155,11 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     terminal.write(frame)
   }
 
-  // The list rows on screen, less the prompt, the counts and a line of header.
+  // The list rows on screen, less the prompt, the counts and the header lines.
   function pageSize(): number {
-    return Math.max(1, layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined, settings.previewPosition).listHeight - 3)
+    const headerLines = state.header === '' ? 0 : state.header.split('\n').length
+
+    return Math.max(1, layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined, settings.previewPosition).listHeight - 2 - headerLines)
   }
 
   function refreshPreview(): void {

@@ -115,6 +115,7 @@ describe('copyText', () => {
   test('says false with no tool, or when it fails', async () => {
     expect(await copyText('x', () => null)).toBe(false)
     expect(await copyText('x', () => '/bin/false')).toBe(false)
+    expect(await copyText('y', command => ({ 'wl-copy': '/bin/false', 'xclip': '/no/such/tool' })[command] ?? null)).toBe(false)
     expect(await copyText('x', () => '/no/such/tool')).toBe(false)
   })
 })

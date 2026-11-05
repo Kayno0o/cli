@@ -20,7 +20,7 @@ const OPTIONS = {
   level: { type: 'string', choices: SEVERITIES, default: 'moderate', description: 'only the advisories at least this severe: low, moderate, high or critical' },
   prod: { type: 'boolean', description: 'only the packages a production dependency needs' },
   ignore: { type: 'string', multiple: true, description: 'an advisory skipped by GHSA or numeric id, repeatable' },
-  json: jsonOption('[{repo, path, findings: [{package, severity, scope, direct, via, fix, advisories: [{id, ghsa, url, title, severity, fixed}]}], error}]'),
+  json: jsonOption('[{repo, path, findings: [{package, severity, scope, direct, via, fix, advisories: [{id, ghsa, url, title, severity, fixed}]}], below: advisories under --level, warnings: what bun audit could not audit, error}]'),
 } as const
 
 const MAX_DEPTH = 3

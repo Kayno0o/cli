@@ -22,6 +22,12 @@ function out(...args: string[]) {
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
 
+describe('out --copy', () => {
+  test('goes with --last', () => {
+    expect(out('--copy')).toMatchObject({ code: 2, err: expect.stringContaining('--copy goes with --last') })
+  })
+})
+
 describe('out', () => {
   test('prints its version and its help', () => {
     expect(out('--version').out.trim()).toBe(version)

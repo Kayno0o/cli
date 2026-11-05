@@ -24,7 +24,7 @@ const FIRST_VERSION = /\d+(?:\.\d+){0,2}(?:-[\w.-]+)?/
 const DOT = /[.-]/
 
 const options = {
-  'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS})` },
+  'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS}, or the minAge setting)` },
   ...limitOptions(OUTDATED_LIMIT),
   'json': jsonOption('[{name, kind, spec, current, safe, change, published, latest?}]'),
 } as const
