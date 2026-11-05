@@ -5,6 +5,10 @@ export const repoOption = {
   repo: { type: 'string', short: 'r', description: 'owner/name of the repository, instead of the one origin points at' },
 } as const satisfies Options
 
+export const openOption = {
+  open: { type: 'boolean', short: 'o', description: 'also open the page in the browser (BROWSER, else the system opener)' },
+} as const satisfies Options
+
 const ISSUE_HASH = /^#/
 
 export function issueNumber(value: string | undefined, usage: string): number {

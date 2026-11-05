@@ -1,12 +1,14 @@
 import type { Run } from '../runs'
-import { badge, formatSeconds, jsonOption, limitOf, limitOptions, moreFooter, parse, printJson, table, truncate, upTo } from '@kaynooo/cli-kit'
-import { repoOption } from '../args'
+import { badge, formatSeconds, jsonOption, limitOf, limitOptions, moreFooter, openUrl, parse, printJson, table, truncate, upTo } from '@kaynooo/cli-kit'
+import { openOption, repoOption } from '../args'
 import { resolveCommit } from '../git'
 import { runSeconds, runsListing, runsOn, startedAge } from '../runs'
 
 const usage = `ft runs [--sha <ref>]
 
 Lists recent runs with what tea's own listing leaves empty: workflow, ref, duration and age, ten by default with the count of the rest (--full for all of them; --json is never cut unless --limit is given).
+
+--open also opens the newest run listed in the browser.
 
 Exits 0 when it listed them, 1 when Forgejo or git cannot be read, 2 on a usage error.`
 
@@ -17,6 +19,7 @@ const options = {
   sha: { type: 'string', short: 's', description: 'only the runs of this commit' },
   workflow: { type: 'string', short: 'w', description: 'only this workflow file, e.g. test.yml' },
   json: jsonOption(),
+  ...openOption,
   ...repoOption,
 } as const
 
@@ -39,6 +42,9 @@ export async function runs(args: string[]): Promise<number> {
   const matching = found.filter(run => values.workflow === undefined || run.workflow_id === values.workflow)
   const list = matching.slice(0, limit)
   const more = values.sha === undefined ? total - list.length : matching.length - list.length
+
+  if (values.open === true && list[0] !== undefined)
+    openUrl(list[0].html_url)
 
   if (values.json === true) {
     printJson(list.map(run => ({ id: run.id, number: run.index_in_repo, status: run.status, workflow: run.workflow_id, ref: run.prettyref, event: run.event, sha: run.commit_sha, seconds: runSeconds(run), started: run.started, title: run.title, url: run.html_url })))

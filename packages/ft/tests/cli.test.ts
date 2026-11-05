@@ -63,10 +63,10 @@ describe('ft', () => {
   test('exits 2 on an unknown command, an unknown flag or a missing argument', () => {
     expect(ft('nope').code).toBe(2)
 
-    const flag = ft('runs', '--nope')
+    const flag = ft('runs', '--zzzz')
 
     expect(flag.code).toBe(2)
-    expect(flag.err).toBe('error: ft runs: unknown option \'--nope\'\n  hint: run ft runs --help for its options\n')
+    expect(flag.err).toBe('error: ft runs: unknown option \'--zzzz\'\n  hint: run ft runs --help for its options\n')
 
     const missing = ft('tick', '12')
 

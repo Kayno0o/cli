@@ -1,6 +1,6 @@
 import type { Issue, IssueComment } from '../issues'
-import { formatAge, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
-import { issueNumbers, repoOption } from '../args'
+import { formatAge, jsonOption, openUrl, parse, printJson } from '@kaynooo/cli-kit'
+import { issueNumbers, openOption, repoOption } from '../args'
 import { boxes, numberedBody } from '../checklist'
 import { latestClaim } from '../claims'
 import { commentsOf, getIssue, sessionAuthor } from '../issues'
@@ -8,7 +8,7 @@ import { heldIssues } from './board'
 
 const issueUsage = `ft issue [<n>...]
 
-Prints each issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it.
+Prints each issue: its title, state, boxes left and claim, then its description with each checklist box numbered as \`ft tick\` takes it. --open also opens each in the browser.
 With --body, prints only the raw description, to edit and give back to \`ft edit -F\`.
 With no number, prints the open issues this session holds (\`ft take\`), and exits 2 when it holds none.
 
@@ -19,6 +19,7 @@ const issueOptions = {
   comments: { type: 'boolean', short: 'c', description: 'add the comments, each with its author and age' },
   body: { type: 'boolean', short: 'b', description: 'only the raw description, without numbered boxes' },
   json: jsonOption('number, title, state, url, labels, claim, boxes, body and comments, an array for several issues'),
+  ...openOption,
   ...repoOption,
 } as const
 
@@ -88,6 +89,11 @@ export async function issue(args: string[]): Promise<number> {
   const read = await Promise.all(numbers.map(async number => Promise.all([getIssue(number, values.repo), commentsOf(number, values.repo)])))
 
   const author = await sessionAuthor()
+
+  if (values.open === true) {
+    for (const [found] of read)
+      openUrl(found.html_url)
+  }
 
   if (values.json === true) {
     const json = read.map(([found, comments]) => issueJson(found, comments, author))

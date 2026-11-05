@@ -1,3 +1,4 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -89,5 +90,39 @@ describe('ft issue --body', () => {
     })
 
     expect(lines).toEqual(['Uses `tea` and $HOME, "quoted".\n\n- [ ] one\n'])
+  })
+})
+
+describe('ft issue --open', () => {
+  test('hands the issue url to the browser command', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ft-open-'))
+    const log = join(dir, 'opened')
+    const browser = join(dir, 'browser')
+    const before = process.env.BROWSER
+    const print = console.log
+
+    writeFileSync(browser, `#!/bin/sh\necho "$1" >> ${log}\n`, { mode: 0o755 })
+
+    await withFakeTea({ issues: [{ number: 6, title: 't', body: 'x', state: 'open' }] }, async () => {
+      process.env.BROWSER = browser
+      console.log = () => undefined
+
+      try {
+        expect(await issue(['6', '--open'])).toBe(0)
+      }
+      finally {
+        console.log = print
+
+        if (before === undefined)
+          delete process.env.BROWSER
+        else
+          process.env.BROWSER = before
+      }
+    })
+
+    await Bun.sleep(300)
+
+    expect(readFileSync(log, 'utf8')).toBe('https://forge/issues/6\n')
+    rmSync(dir, { recursive: true })
   })
 })
