@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { findRepos, pool, reasonsOf } from '../src/repos-scan'
+import { findRepos, reasonsOf } from '../src/repos-scan'
 
 const temp = tempDirs()
 
@@ -62,27 +62,5 @@ describe('findRepos', () => {
     repo(root, 'a', 'b', 'c', 'd')
 
     expect(await findRepos(root, new Set())).toEqual([join(root, 'a', 'b', 'c'), join(root, 'w')])
-  })
-})
-
-describe('pool', () => {
-  test('answers in the order of the items and never exceeds the limit in flight', async () => {
-    let flying = 0
-    let peak = 0
-    const result = await pool([30, 1, 20, 1, 10], 2, async (ms) => {
-      flying++
-      peak = Math.max(peak, flying)
-      await Bun.sleep(ms)
-      flying--
-
-      return ms * 2
-    })
-
-    expect(result).toEqual([60, 2, 40, 2, 20])
-    expect(peak).toBe(2)
-  })
-
-  test('answers empty for no items', async () => {
-    expect(await pool([], 4, async x => x)).toEqual([])
   })
 })

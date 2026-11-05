@@ -2,7 +2,7 @@ import { linkSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { pooled, sizeOf, walkSize } from '../src/size'
+import { sizeOf, walkSize } from '../src/size'
 
 const temp = tempDirs()
 
@@ -35,23 +35,5 @@ describe('sizeOf', () => {
 
     expect(size).toBeGreaterThanOrEqual(walked)
     expect(size).toBeLessThan(walked + 3 * 4096)
-  })
-})
-
-describe('pooled', () => {
-  test('keeps the order and the limit', async () => {
-    let running = 0
-    let peak = 0
-    const results = await pooled([1, 2, 3, 4, 5, 6], 2, async (item) => {
-      running++
-      peak = Math.max(peak, running)
-      await Bun.sleep(5)
-      running--
-
-      return item * 2
-    })
-
-    expect(results).toEqual([2, 4, 6, 8, 10, 12])
-    expect(peak).toBe(2)
   })
 })

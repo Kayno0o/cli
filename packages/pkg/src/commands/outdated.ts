@@ -4,7 +4,7 @@ import type { Locked } from '../lockfile'
 import type { Fetcher } from '../registry'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { capped, fail, formatAge, jsonOption, limitOf, limitOptions, parse, printJson, table, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { capped, fail, formatAge, jsonOption, limitOf, limitOptions, parse, pool, printJson, table, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { loadConfigs, registryFor } from '../config'
 import { registryDependencies } from '../consumers'
@@ -70,34 +70,28 @@ function changeOf(current: string, next: string): Outdated['change'] {
 export async function outdated(manifest: string, context: OutdatedContext): Promise<Outdated[]> {
   const configs = await loadConfigs()
   const dependencies = registryDependencies(manifest)
-  const rows: Outdated[] = []
+  const looked = await pool(dependencies, BATCH, async ({ name, kind, spec }) => {
+    const registry = registryFor(name, configs)
+    const packument = await fetchPackument(name, registry, context.fetcher)
 
-  for (let start = 0; start < dependencies.length; start += BATCH) {
-    const looked = await Promise.all(dependencies.slice(start, start + BATCH).map(async ({ name, kind, spec }) => {
-      const registry = registryFor(name, configs)
-      const packument = await fetchPackument(name, registry, context.fetcher)
+    if (packument === undefined) {
+      warn(`${name} is not on ${new URL(registry.url).host}`)
 
-      if (packument === undefined) {
-        warn(`${name} is not on ${new URL(registry.url).host}`)
+      return undefined
+    }
 
-        return undefined
-      }
+    const { safe, latest } = analyze({ spec: { name }, packument, registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays })
+    const current = currentOf(name, spec, context.locked)
 
-      const { safe, latest } = analyze({ spec: { name }, packument, registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays })
-      const current = currentOf(name, spec, context.locked)
+    if (safe === undefined || current === undefined || Bun.semver.order(safe.version, current) <= 0)
+      return undefined
 
-      if (safe === undefined || current === undefined || Bun.semver.order(safe.version, current) <= 0)
-        return undefined
+    const row: Outdated = { name, kind, spec, current, safe: safe.version, change: changeOf(current, safe.version), published: safe.published }
 
-      const row: Outdated = { name, kind, spec, current, safe: safe.version, change: changeOf(current, safe.version), published: safe.published }
+    return latest !== undefined && latest.version !== safe.version && Bun.semver.order(latest.version, safe.version) > 0 ? { ...row, latest: latest.version } : row
+  })
 
-      return latest !== undefined && latest.version !== safe.version && Bun.semver.order(latest.version, safe.version) > 0 ? { ...row, latest: latest.version } : row
-    }))
-
-    rows.push(...looked.filter(row => row !== undefined))
-  }
-
-  return rows.sort((a, b) => a.name.localeCompare(b.name))
+  return looked.filter(row => row !== undefined).sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export async function outdatedCommand(args: string[]): Promise<number> {

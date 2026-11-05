@@ -3,8 +3,8 @@ import { existsSync } from 'node:fs'
 import { lstat, readdir, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { runTool } from '@kaynooo/cli-kit'
-import { pooled, sizeOf } from './size'
+import { pool, runTool } from '@kaynooo/cli-kit'
+import { sizeOf } from './size'
 
 export const FOLDER_NAMES = new Set(['node_modules', '.nuxt', '.next', '.output', 'dist', 'build', '.turbo', '.svelte-kit', 'target'])
 export const MAX_DEPTH = 3
@@ -303,7 +303,7 @@ export async function inspect({ candidates, skipped }: Found): Promise<{ entries
   const entries: Entry[] = []
   const rejected = [...skipped]
 
-  await pooled(candidates, 8, async (candidate) => {
+  await pool(candidates, 8, async (candidate) => {
     const verdict = await judge(candidate)
 
     if ('skip' in verdict)

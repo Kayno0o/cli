@@ -1,12 +1,11 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Advisory, VersionAdvisory } from '../advisories'
-import type { AnalyzeInput } from '../analyze'
 import type { PkgSettings, RegistryConfig, Severity } from '../config'
 import type { Locked } from '../lockfile'
 import type { Fetcher, Packument, Registry } from '../registry'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, pool, printJson, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, isSeverity, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
@@ -71,16 +70,12 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
 
     return packuments.get(key)
   }
-  const looked: { name: string, version: string, registry: Registry, input: AnalyzeInput, safe?: string | undefined }[] = []
+  const looked = await pool(packages, BATCH, async ({ name, version }) => {
+    const registry = registryFor(name, context.configs)
+    const input = { spec: { name, request: version }, packument: await lookup(name, registry), registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings.licenses }
 
-  for (let start = 0; start < packages.length; start += BATCH) {
-    looked.push(...await Promise.all(packages.slice(start, start + BATCH).map(async ({ name, version }) => {
-      const registry = registryFor(name, context.configs)
-      const input = { spec: { name, request: version }, packument: await lookup(name, registry), registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings.licenses }
-
-      return { name, version, registry, input, safe: analyze(input).safe?.version }
-    })))
-  }
+    return { name, version, registry, input, safe: analyze(input).safe?.version }
+  })
 
   const registries = new Map<string, { registry: Registry, versions: Record<string, string[]> }>()
 

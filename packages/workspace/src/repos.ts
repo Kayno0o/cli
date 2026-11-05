@@ -4,8 +4,8 @@ import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, marked, oneOf, paint, parse, printJson, role, table, takesControlCodes, userConfigReadPath } from '@kaynooo/cli-kit'
-import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pool, pullBlocker, REASONS, reasonsOf } from './repos-scan'
+import { fail, jsonOption, marked, oneOf, paint, parse, pool, printJson, role, table, takesControlCodes, userConfigReadPath } from '@kaynooo/cli-kit'
+import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
 const USAGE = `repos [options] [root]: the git repositories under root (~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
 

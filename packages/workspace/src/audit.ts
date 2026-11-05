@@ -4,7 +4,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, oneOf, paint, parse, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
+import { fail, jsonOption, oneOf, paint, parse, pool, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
 import { directDependencies, findingsOf, parseAudit, SEVERITIES, workspaceFolders } from './report'
 
 const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun repositories under root (the current folder by default), one table per repository
@@ -70,23 +70,6 @@ async function findRepos(root: string): Promise<string[]> {
   await walk(root, 1)
 
   return found
-}
-
-async function pool<T, R>(items: readonly T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
-  const results = Array.from<R>({ length: items.length })
-  let next = 0
-
-  async function worker(): Promise<void> {
-    while (next < items.length) {
-      const index = next++
-
-      results[index] = await task(items[index] as T)
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-
-  return results
 }
 
 function children(root: string): (folder: string) => string[] {

@@ -1,20 +1,5 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-// Runs `work` over `items` with at most `limit` in flight, keeping the order of the results.
-export async function pooled<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = Array.from({ length: items.length })
-  let next = 0
-
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const index = next++
-
-      results[index] = await work(items[index] as T)
-    }
-  }))
-
-  return results
-}
 
 const FS_LIMIT = 32
 const waiting: (() => void)[] = []
