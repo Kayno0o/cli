@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
-import { directDependencies, findingsOf, fixedAt, fixFor, parseAudit, workspaceFolders } from '../src/report'
+import { directDependencies, findingsOf, fixedAt, fixFor, lockGraph, parseAudit, reachedFrom, workspaceFolders } from '../src/report'
 
 const advisory = (severity: Advisory['severity'], range: string, title = 'a flaw'): Advisory => ({ id: 1, url: 'https://github.com/advisories/GHSA-x', title, severity, vulnerable_versions: range })
 
@@ -96,5 +96,38 @@ describe('directDependencies', () => {
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ workspaces: { packages: ['tools'] } }))
 
     expect(workspaceFolders(dir, () => [])).toEqual(['tools'])
+  })
+})
+
+describe('which direct dependency leads to a package', () => {
+  const lock = `{
+    "packages": {
+      "nuxt": ["nuxt@4.6.2", "", { "dependencies": { "@nuxt/nitro-server": "^4", "glob": "^13" } }, "x"],
+      "@nuxt/nitro-server": ["@nuxt/nitro-server@4.6.2", "", { "dependencies": { "minimatch": "^10" } }, "x"],
+      "minimatch": ["minimatch@10.2.6", "", {}, "x"],
+      "glob": ["glob@13.0.6", "", { "dependencies": { "minimatch": "^10" } }, "x"],
+      "eslint": ["eslint@9.0.0", "", { "dependencies": { "minimatch": "^10" } }, "x"],
+      "lonely": ["lonely@1.0.0", "", {}, "x"]
+    }
+  }`
+
+  test('reads the dependency names of every package', () => {
+    expect(lockGraph(lock).get('nuxt')).toEqual(['@nuxt/nitro-server', 'glob'])
+    expect(lockGraph('not json').size).toBe(0)
+  })
+
+  test('names the direct dependencies a vulnerable package is reached from, sorted', () => {
+    const from = reachedFrom(lockGraph(lock), new Set(['nuxt', 'eslint', 'lonely']), new Set(['minimatch', 'glob', 'lonely']))
+
+    expect(from.get('minimatch')).toEqual(['eslint', 'nuxt'])
+    expect(from.get('glob')).toEqual(['nuxt'])
+    expect(from.has('lonely')).toBe(false)
+  })
+
+  test('findingsOf carries them for a package the repository does not ask for itself', () => {
+    const audit = { glob: [{ id: 1, url: 'https://github.com/advisories/GHSA-a', title: 't', severity: 'moderate' as const, vulnerable_versions: '<14.0.2' }] }
+
+    expect(findingsOf(audit, new Set(), new Set(['nuxt']), 'low', [], new Map([['glob', ['nuxt']]]))[0]?.via).toEqual(['nuxt'])
+    expect(findingsOf(audit, new Set(), new Set(['glob']), 'low', [], new Map([['glob', ['nuxt']]]))[0]?.via).toEqual([])
   })
 })

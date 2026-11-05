@@ -1,16 +1,16 @@
 import type { ExitRow, Ran } from '@kaynooo/cli-kit'
 import type { Finding, Severity } from './report'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, oneOf, paint, parse, pool, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
-import { directDependencies, findingsOf, parseAudit, SEVERITIES, workspaceFolders } from './report'
+import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEVERITIES, workspaceFolders } from './report'
 
 const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun repositories under root (the current folder by default), one table per repository
 
-Each package with an advisory is one row: its worst severity, how many advisories, whether a production dependency needs it (prod) or only a development one (dev), whether the repository asks for it itself (direct) or a dependency does (the row then says via), and the version that fixes every advisory at once, "-" when an advisory names none. The worst and the production ones come first.
-It runs \`bun audit --json\` in each repository holding a bun.lock, which reaches the registry; the walk goes three levels deep, stops at a bun.lock and skips node_modules and hidden folders.
+Each package with an advisory is one row: its worst severity, how many advisories, whether a production dependency needs it (prod) or only a development one (dev), whether the repository asks for it itself (direct) or a dependency does (the row then says via and the direct dependencies leading to it, upgrading one of which is what fixes it), and the version that fixes every advisory at once, "-" when an advisory names none. The worst and the production ones come first.
+Advisories under --level (moderate by default) are counted under the table, and what \`bun audit\` warned about, such as a private registry that would not audit its packages, is repeated there. It runs \`bun audit --json\` in each repository holding a bun.lock, which reaches the registry; the walk goes three levels deep, stops at a bun.lock and skips node_modules and hidden folders.
 
 Reach for it to sweep many repositories at once; \`pkg audit\` vets the one repository in a folder (package age, install scripts, licences) as well as its advisories, and shares --level, --prod and --ignore.`
 
@@ -20,7 +20,7 @@ const OPTIONS = {
   level: { type: 'string', choices: SEVERITIES, default: 'moderate', description: 'only the advisories at least this severe: low, moderate, high or critical' },
   prod: { type: 'boolean', description: 'only the packages a production dependency needs' },
   ignore: { type: 'string', multiple: true, description: 'an advisory skipped by GHSA or numeric id, repeatable' },
-  json: jsonOption('[{repo, path, findings: [{package, severity, scope, direct, fix, advisories: [{id, ghsa, url, title, severity, fixed}]}], error}]'),
+  json: jsonOption('[{repo, path, findings: [{package, severity, scope, direct, via, fix, advisories: [{id, ghsa, url, title, severity, fixed}]}], error}]'),
 } as const
 
 const MAX_DEPTH = 3
@@ -31,7 +31,18 @@ interface RepoAudit {
   repo: string
   path: string
   findings: Finding[]
+  /** Advisories under the level asked, counted so the table says what it leaves out. */
+  below: number
+  /** What `bun audit` said about packages it could not audit, such as a private registry answering 403. */
+  warnings: string[]
   error: string | undefined
+}
+
+const WARNING = /^warn: .+$/gm
+const VIA_SHOWN = 2
+
+function countAdvisories(findings: Finding[]): number {
+  return findings.reduce((sum, found) => sum + found.advisories.length, 0)
 }
 
 function holdsLock(dir: string): boolean {
@@ -92,12 +103,34 @@ async function audited(path: string, shown: string, level: Severity, ignore: rea
   const reached = parseAudit(stdoutOf(production))
 
   if (audit === undefined || reached === undefined)
-    return { repo: shown, path, findings: [], error: failure(audit === undefined ? all : production) }
+    return { repo: shown, path, findings: [], below: 0, warnings: [], error: failure(audit === undefined ? all : production) }
 
   const reaching = new Set(Object.keys(reached))
   const direct = directDependencies(path, workspaceFolders(path, children(path)))
+  const via = reachedFrom(lockGraph(lockText(path)), direct, new Set(Object.keys(audit)))
+  const findings = findingsOf(audit, reaching, direct, level, ignore, via)
 
-  return { repo: shown, path, findings: findingsOf(audit, reaching, direct, level, ignore), error: undefined }
+  return { repo: shown, path, findings, below: countAdvisories(findingsOf(audit, reaching, direct, 'low', ignore)) - countAdvisories(findings), warnings: [...new Set(all.text.match(WARNING) ?? [])], error: undefined }
+}
+
+function lockText(path: string): string {
+  try {
+    return readFileSync(join(path, 'bun.lock'), 'utf8')
+  }
+  catch {
+    return ''
+  }
+}
+
+/** Where a package came from: `direct`, or `via` the packages the repository asks for that lead to it. */
+function originOf(found: Finding): string {
+  if (found.direct)
+    return 'direct'
+
+  if (found.via.length === 0)
+    return 'via'
+
+  return `via ${found.via.slice(0, VIA_SHOWN).join(', ')}${found.via.length > VIA_SHOWN ? ` +${found.via.length - VIA_SHOWN}` : ''}`
 }
 
 function stdoutOf(ran: Ran): string {
@@ -123,7 +156,7 @@ function rows(findings: Finding[]): string[][] {
     tint(found.severity)(found.severity),
     String(found.advisories.length),
     found.scope,
-    found.direct ? 'direct' : 'via',
+    originOf(found),
     found.fix ?? '-',
   ])
 }
@@ -171,5 +204,14 @@ function show(audits: RepoAudit[], total: number): void {
 
     if (each.findings.length > 0)
       console.log(table([['package', 'severity', 'advisories', 'scope', 'origin', 'fix'], ...rows(each.findings)], { header: true, align: ['left', 'left', 'right', 'left', 'left', 'left'] }))
+
+    if (each.findings.some(found => !found.direct))
+      console.log(label('via: a dependency of the ones named, fixed by upgrading one of them to a release that depends on the fixed version'))
+
+    if (each.below > 0)
+      console.log(label(`${each.below} ${each.below === 1 ? 'advisory' : 'advisories'} below the level left out, --level low lists them`))
+
+    for (const warning of each.warnings)
+      console.log(label(warning))
   }
 }

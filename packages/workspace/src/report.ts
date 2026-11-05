@@ -24,6 +24,8 @@ export interface Finding {
   scope: 'prod' | 'dev'
   /** Whether the repository's own package.json asks for the package, rather than a dependency of one. */
   direct: boolean
+  /** The packages the repository asks for that lead to this one, empty when it asks for it itself or the lockfile cannot say; upgrading one of them is how a dependency's advisory gets fixed. */
+  via: string[]
   /** The lowest version past every advisory, undefined when a range names no fixed version. */
   fix: string | undefined
 }
@@ -66,7 +68,7 @@ export function fixFor(advisories: Advisory[]): string | undefined {
 }
 
 /** The audit as one finding per package, the worst first; `reaching` holds the names the production audit lists and `direct` the ones package.json asks for. */
-export function findingsOf(audit: Record<string, Advisory[]>, reaching: ReadonlySet<string>, direct: ReadonlySet<string>, level: Severity, ignore: readonly string[] = []): Finding[] {
+export function findingsOf(audit: Record<string, Advisory[]>, reaching: ReadonlySet<string>, direct: ReadonlySet<string>, level: Severity, ignore: readonly string[] = [], via: ReadonlyMap<string, string[]> = new Map()): Finding[] {
   const found: Finding[] = []
 
   for (const [name, all] of Object.entries(audit)) {
@@ -83,11 +85,65 @@ export function findingsOf(audit: Record<string, Advisory[]>, reaching: Readonly
       advisories,
       scope: reaching.has(name) ? 'prod' : 'dev',
       direct: direct.has(name),
+      via: direct.has(name) ? [] : via.get(name) ?? [],
       fix: fixFor(kept),
     })
   }
 
   return found.toSorted((a, b) => severityRank(b.severity) - severityRank(a.severity) || Number(b.scope === 'prod') - Number(a.scope === 'prod') || a.package.localeCompare(b.package))
+}
+
+/** For each package of a bun.lock the names of the packages it depends on, a name standing for all its versions. */
+export function lockGraph(lockText: string): Map<string, string[]> {
+  const graph = new Map<string, string[]>()
+  let lock: { packages?: Record<string, unknown[]> } | null
+
+  try {
+    lock = Bun.JSONC.parse(lockText) as typeof lock
+  }
+  catch {
+    return graph
+  }
+
+  for (const entry of Object.values(lock?.packages ?? {})) {
+    const resolution = entry[0]
+    const info = entry[2]
+
+    if (typeof resolution !== 'string' || typeof info !== 'object' || info === null)
+      continue
+
+    const at = resolution.indexOf('@', 1)
+    const name = at === -1 ? resolution : resolution.slice(0, at)
+    const wanted = DEPENDENCY_KINDS.flatMap(kind => Object.keys((info as Record<string, Record<string, string> | undefined>)[kind] ?? {}))
+
+    graph.set(name, [...new Set([...graph.get(name) ?? [], ...wanted])])
+  }
+
+  return graph
+}
+
+/** For each of `targets` the direct dependencies from which it can be reached through `graph`, sorted. */
+export function reachedFrom(graph: ReadonlyMap<string, string[]>, direct: ReadonlySet<string>, targets: ReadonlySet<string>): Map<string, string[]> {
+  const from = new Map<string, string[]>()
+
+  for (const start of direct) {
+    const seen = new Set<string>([start])
+    const queue = [start]
+
+    for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
+      if (name !== start && targets.has(name))
+        from.set(name, [...from.get(name) ?? [], start])
+
+      for (const next of graph.get(name) ?? []) {
+        if (!seen.has(next)) {
+          seen.add(next)
+          queue.push(next)
+        }
+      }
+    }
+  }
+
+  return new Map([...from].map(([name, starts]) => [name, starts.toSorted()]))
 }
 
 function readManifest(path: string): Record<string, unknown> {
