@@ -3,7 +3,7 @@ import type { Claim } from '../claims'
 import type { Issue } from '../issues'
 import type { Run } from '../runs'
 import process from 'node:process'
-import { currentSession, formatAge, jsonOption, liveSessions, parse, printHeader, printJson, runCommand, section, table, truncate, upTo, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { badge, currentSession, formatAge, jsonOption, liveSessions, paint, parse, printHeader, printJson, role, runCommand, section, table, truncate, upTo, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { boxes } from '../checklist'
 import { latestClaim } from '../claims'
@@ -130,7 +130,9 @@ export async function staleTodos(): Promise<StaleTodo[]> {
 }
 
 function claimLine(row: ClaimedIssue, now: number): string[] {
-  return [`#${row.number}`, row.holder, formatAge(row.since, now), row.boxesTotal === 0 ? '' : `${row.boxesLeft}/${row.boxesTotal} left`, truncate(row.title, TITLE_WIDTH)]
+  const id = role('id', process.stdout)
+
+  return [id(`#${row.number}`), row.holder, paint(process.stdout).dim(formatAge(row.since, now)), row.boxesTotal === 0 ? '' : `${row.boxesLeft}/${row.boxesTotal} left`, truncate(row.title, TITLE_WIDTH)]
 }
 
 function capped(lines: string[]): string[] {
@@ -139,15 +141,15 @@ function capped(lines: string[]): string[] {
 
 export function renderDigest(digest: Digest, now = Date.now()): string {
   const sections = [
-    { heading: 'held by this session', count: digest.held.length, lines: table(digest.held.map(row => claimLine(row, now))).split('\n') },
-    { heading: 'claimed, no live session here', count: digest.away.length, lines: table(digest.away.map(row => claimLine(row, now))).split('\n') },
-    { heading: 'CI on the default branch', count: digest.ci.length, lines: digest.ci.map(run => `${run.workflow} ${run.status} (run ${run.id}) ${truncate(upTo(run.title, '\n'), TITLE_WIDTH)}`) },
-    { heading: 'unpushed commits', count: digest.unpushed.length, lines: capped(digest.unpushed) },
-    { heading: 'dirty files', count: digest.dirty.length, lines: capped(digest.dirty.map(file => `${file.status} ${file.path}`)) },
-    { heading: 'stale TODO comments', count: digest.stale.length, lines: capped(digest.stale.map(todo => `${todo.issue} closed: ${todo.comments.map(each => `${each.path}:${each.line}`).join(', ')}`)) },
+    { heading: 'held by this session', tone: 'running' as const, count: digest.held.length, lines: table(digest.held.map(row => claimLine(row, now))).split('\n') },
+    { heading: 'claimed, no live session here', tone: 'warn' as const, count: digest.away.length, lines: table(digest.away.map(row => claimLine(row, now))).split('\n') },
+    { heading: 'CI on the default branch', tone: 'failed' as const, count: digest.ci.length, lines: digest.ci.map(run => `${run.workflow} ${badge(run.status, process.stdout)} (run ${run.id}) ${truncate(upTo(run.title, '\n'), TITLE_WIDTH)}`) },
+    { heading: 'unpushed commits', tone: 'queued' as const, count: digest.unpushed.length, lines: capped(digest.unpushed) },
+    { heading: 'dirty files', tone: 'warn' as const, count: digest.dirty.length, lines: capped(digest.dirty.map(file => `${file.status} ${role('path', process.stdout)(file.path)}`)) },
+    { heading: 'stale TODO comments', tone: 'skipped' as const, count: digest.stale.length, lines: capped(digest.stale.map(todo => `${todo.issue} closed: ${todo.comments.map(each => `${each.path}:${each.line}`).join(', ')}`)) },
   ].filter(each => each.count > 0)
 
-  return sections.length === 0 ? 'nothing to pick up' : sections.map(({ heading, count, lines }) => `${section(heading, count)}\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
+  return sections.length === 0 ? 'nothing to pick up' : sections.map(({ heading, tone, count, lines }) => `${section(heading, count, process.stdout, process.env, tone)}\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
 }
 
 const usage = `ft digest

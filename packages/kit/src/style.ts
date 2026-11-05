@@ -118,8 +118,8 @@ export function printHeader(bin: string, context?: string, stream: { isTTY?: boo
     console.log(line)
 }
 
-// `╭─ title (3) ───────` in dim, under the width of the terminal or `width`; the title alone, with its count, elsewhere.
-export function section(title: string, count: number | undefined, stream: { isTTY?: boolean, columns?: number } = process.stdout, env: Record<string, string | undefined> = process.env): string {
+// `╭─ title (3) ───────` in dim or the colour of a role, mark or status, under the width of the terminal or `width`; the title alone, with its count, elsewhere.
+export function section(title: string, count: number | undefined, stream: { isTTY?: boolean, columns?: number } = process.stdout, env: Record<string, string | undefined> = process.env, tone?: Role | Mark | Status): string {
   const label = count === undefined ? title : `${title} (${count})`
 
   if (!takesControlCodes(stream, env))
@@ -129,7 +129,9 @@ export function section(title: string, count: number | undefined, stream: { isTT
   const head = `${glyphs.corner}${glyphs.rule} ${label} `
   const width = Math.min(stream.columns ?? 60, 100)
 
-  return paint(stream, env).dim(head + glyphs.rule.repeat(Math.max(3, width - Bun.stringWidth(head))))
+  const rule = head + glyphs.rule.repeat(Math.max(3, width - Bun.stringWidth(head)))
+
+  return tone === undefined ? paint(stream, env).dim(rule) : tinted(paint(stream, env), activeTheme().theme.colors[tone], env)(rule)
 }
 
 // The text as a clickable link on a terminal and as it is anywhere else, for a cell whose url a log has no use for.

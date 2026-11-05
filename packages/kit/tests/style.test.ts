@@ -193,6 +193,7 @@ describe('section', () => {
     expect(stripAnsi(line)).toBe(`╭─ dirty files (3) ${'─'.repeat(11)}`)
     expect(line).toContain('\x1B[2m')
     expect(section('dirty files', 3, {}, {})).toBe('dirty files (3)')
+    expect(section('dirty files', 3, { isTTY: true, columns: 30 }, {}, 'warn')).toContain('\x1B[33m')
     expect(section('dirty files', undefined, { isTTY: true }, { NO_COLOR: '1' })).toBe('dirty files')
   })
 })

@@ -1,7 +1,7 @@
 import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
-import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHeader, printHint, printJson, role, runHint, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHeader, printHint, printJson, role, runHint, section, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -77,12 +77,12 @@ export function renderBoard(rows: BoardRow[], now = Date.now(), limit = Number.P
   const taken = claimed('taken')
   const away = claimed('away')
   const sections = [
-    { heading: 'available', count: available.length, ...within(available, limit, ({ issue }) => [issueNumber(issue), truncate(issue.title, TITLE_WIDTH), dimmed(issue.labels.map(label => label.name).join(', '))]) },
-    { heading: 'taken', count: taken.length, ...within(taken, limit, ({ issue, row }) => claimRow(issue, row, now)) },
-    { heading: 'claimed, no live session here', count: away.length, ...within(away, limit, ({ issue, row }) => claimRow(issue, row, now), (line, index) => [line, ...noteLine(away[index]?.comments ?? [], now)]) },
+    { heading: 'available', tone: 'ok' as const, count: available.length, ...within(available, limit, ({ issue }) => [issueNumber(issue), truncate(issue.title, TITLE_WIDTH), dimmed(issue.labels.map(label => label.name).join(', '))]) },
+    { heading: 'taken', tone: 'running' as const, count: taken.length, ...within(taken, limit, ({ issue, row }) => claimRow(issue, row, now)) },
+    { heading: 'claimed, no live session here', tone: 'warn' as const, count: away.length, ...within(away, limit, ({ issue, row }) => claimRow(issue, row, now), (line, index) => [line, ...noteLine(away[index]?.comments ?? [], now)]) },
   ].filter(section => section.count > 0)
 
-  return sections.length === 0 ? 'no open issue' : sections.map(({ heading, count, lines }) => `${paint(process.stdout).bold(`${heading} (${count})`)}\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
+  return sections.length === 0 ? 'no open issue' : sections.map(({ heading, tone, count, lines }) => `${section(heading, count, process.stdout, process.env, tone)}\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
 }
 
 // Each issue with the standing its latest claim gives it among the sessions running here.
