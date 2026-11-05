@@ -6,24 +6,18 @@ import process from 'node:process'
 import { fail } from './args'
 import { truncate } from './format'
 import { isInteractive } from './mode'
+import { parseKeys } from './picker/state'
 import { paint } from './style'
 
-// What the terminal sends for a key: a whole escape sequence, such as an arrow's or Home's, which no prompt but the arrows reads, or one character, a lone Escape included.
-// eslint-disable-next-line no-control-regex -- escape sequences are what it splits
-const KEY_SEQUENCES = /\x1B\[[0-9;]*[A-Z~]|\x1BO[A-Z]|[\s\S]/giu
-// eslint-disable-next-line no-control-regex -- control characters are what it leaves out
-const CONTROL = /^[\x00-\x1F\x7F]/
 const WORDS = /\s+/
 // Choices drawn at once at most, the rest scrolled to.
 const MAX_ROWS = 10
 
 type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | { text: string }
+const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel', 'erase'])
+
 type Outcome = 'enter' | 'cancel'
 type State = 'asking' | Outcome
-
-const PASTE_START = '\x1B[200~'
-const PASTE_END = '\x1B[201~'
-const KEYS: Record<string, Key> = { '\x1B[A': 'up', '\x1BOA': 'up', '\x1B[B': 'down', '\x1BOB': 'down', '\x1B[5~': 'pageup', '\x1B[6~': 'pagedown', '\x1B[H': 'home', '\x1B[1~': 'home', '\x1BOH': 'home', '\x1B[F': 'end', '\x1B[4~': 'end', '\x1BOF': 'end', '\r': 'enter', '\n': 'enter', '\x03': 'cancel', '\x1B': 'cancel', '\x7F': 'erase', '\b': 'erase' }
 
 export interface Choice<T> {
   value: T
@@ -43,20 +37,9 @@ export interface PromptSettings {
   terminal?: Terminal
 }
 
-// The keys a chunk of terminal input holds, in order: the ones prompts read, and printable text. A line break between the bracketed paste markers is dropped instead of answering the prompt; `paste` carries an unfinished paste to the next chunk.
+// The keys a chunk of terminal input holds that prompts read, through the picker's parser: what it has for filtering and marking rows is left out.
 function readKeys(input: string, paste = { active: false }): Key[] {
-  return (input.match(KEY_SEQUENCES) ?? []).flatMap((sequence) => {
-    if (sequence === PASTE_START || sequence === PASTE_END) {
-      paste.active = sequence === PASTE_START
-
-      return []
-    }
-
-    if (paste.active && (sequence === '\r' || sequence === '\n'))
-      return []
-
-    return KEYS[sequence] ?? (CONTROL.test(sequence) ? [] : [{ text: sequence }])
-  })
+  return parseKeys(input, paste).filter((key): key is Key => typeof key === 'object' ? 'text' in key : PROMPT_KEYS.has(key))
 }
 
 export interface SelectSettings<T> extends PromptSettings {
