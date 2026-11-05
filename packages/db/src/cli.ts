@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --config=/dev/null
 
 import process from 'node:process'
 import { runCli } from '@kaynooo/cli-kit'

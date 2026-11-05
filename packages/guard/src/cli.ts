@@ -1,4 +1,4 @@
-#!/usr/bin/env -S bun --no-env-file
+#!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import type { Context, Verdict, Violation } from './check'
 import type { Event, HookInput, Machine } from './hook'

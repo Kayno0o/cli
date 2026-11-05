@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const SHEBANG = /^#!\/usr\/bin\/env (?:-S )?bun(?: --no-env-file)?$/
+const SHEBANG = /^#!\/usr\/bin\/env -S bun(?: --no-env-file)? --config=\/dev\/null$/
 // These two read their own settings from the cwd's .env, so Bun keeps loading it for them.
 const READS_DOT_ENV = new Set(['db', 'changelog'])
 
@@ -36,5 +36,16 @@ describe('a bin does not load the cwd .env', () => {
     const run = Bun.spawnSync([process.execPath, '--no-env-file', `${ROOT}packages/wait/src/slot-cli.ts`, '--', 'sh', '-c', 'printenv KAYNOOO_CLI_LEAK || echo unset'], { cwd: folder, env: { ...process.env, KAYNOOO_CLI_LEAK: undefined }, stdout: 'pipe', stderr: 'pipe' })
 
     expect(run.stdout.toString().trim()).toBe('unset')
+  })
+})
+
+// A bunfig.toml in the cwd must not reach a bin: one that preloads a file the bin cannot load would kill it before it ran.
+describe('a bin does not load the cwd bunfig.toml', () => {
+  test('slot runs in a folder whose bunfig.toml preloads a missing file', () => {
+    writeFileSync(join(folder, 'bunfig.toml'), 'preload = ["./missing-plugin.ts"]\n')
+
+    const run = Bun.spawnSync([process.execPath, '--no-env-file', '--config=/dev/null', `${ROOT}packages/wait/src/slot-cli.ts`, '--', 'echo', 'ran'], { cwd: folder, stdout: 'pipe', stderr: 'pipe' })
+
+    expect(run.stdout.toString().trim()).toBe('ran')
   })
 })

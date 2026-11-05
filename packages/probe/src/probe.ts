@@ -1,4 +1,4 @@
-#!/usr/bin/env -S bun --no-env-file
+#!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { CertInfo, Headers, Hop, HttpRedirect, Offers, Target, Timings } from './analyze'
