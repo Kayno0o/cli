@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-db",
   "type": "module",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "db: run read-only SQL against Postgres, MySQL and MariaDB from the terminal without ever showing the connection credentials.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",

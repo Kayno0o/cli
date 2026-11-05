@@ -64,7 +64,7 @@
     },
     "packages/db": {
       "name": "@kaynooo/cli-db",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "bin": {
         "db": "./dist/cli.js",
       },
