@@ -12,6 +12,8 @@ const SPAWNS = 8
 
 // Bins whose commands hand the arguments to another program, which answers the unknown option.
 const PASS_THROUGH = new Set(['dc', 'dx', 'sf'])
+// Bins whose completion lists what they run here, not subcommands: walking it would run the jobs.
+const NO_SUBCOMMANDS = new Set(['j'])
 
 interface Answer {
   out: string
@@ -56,7 +58,7 @@ async function commandsOf(source: string, path: string[] = []): Promise<string[]
 }
 
 async function leavesOf(bin: string, source: string): Promise<Leaf[]> {
-  return Promise.all((await commandsOf(source)).map(async (path) => {
+  return Promise.all((NO_SUBCOMMANDS.has(bin) ? [[]] : await commandsOf(source)).map(async (path) => {
     const unknownOf = async () => PASS_THROUGH.has(bin) ? 2 : (await answer(source, [...path, UNKNOWN_OPTION])).code
     const [help, unknown] = await Promise.all([answer(source, [...path, '--help']), unknownOf()])
 
