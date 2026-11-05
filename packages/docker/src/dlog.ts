@@ -5,7 +5,7 @@ import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { maskLine, PEM_BEGIN, PEM_END } from '@kaynooo/cli-env/mask'
 import { badUsage, fail, jsonOption, paint, parse, printJson, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
-import { truncate } from '@kaynooo/utils'
+import { truncate } from '@kaynooo/utils/text'
 import { allServices, attempt, containers, key, stateColor } from './stack'
 
 const usage = `dlog [service...]

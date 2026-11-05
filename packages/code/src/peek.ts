@@ -3,7 +3,7 @@ import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { badUsage, capped, fail, isStdinPiped, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, wholeNumber } from '@kaynooo/cli-kit'
-import { counted } from '@kaynooo/utils'
+import { counted } from '@kaynooo/utils/text'
 import { listFiles, readText } from './files'
 import { around, definitions, locations, outline, spansAround, usages } from './source'
 

@@ -1,4 +1,4 @@
-import { truncate } from '@kaynooo/utils'
+import { truncate } from '@kaynooo/utils/text'
 import { isImportant, shape } from './shape'
 
 export interface FoldOptions {

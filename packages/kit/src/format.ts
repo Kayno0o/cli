@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { truncate as cut } from '@kaynooo/utils'
+import { truncate as cut } from '@kaynooo/utils/text'
 import { outputMode } from './mode'
 import { paint, takesControlCodes } from './style'
 

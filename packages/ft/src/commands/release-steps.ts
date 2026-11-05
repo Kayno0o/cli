@@ -1,7 +1,7 @@
 import type { Manifest } from './release-version'
 import { join, relative, resolve } from 'node:path'
 import { fail, isPermanentFailure, runTool, warn } from '@kaynooo/cli-kit'
-import { counted } from '@kaynooo/utils'
+import { counted } from '@kaynooo/utils/text'
 import { $ } from 'bun'
 import { git, tagsAt } from '../git'
 import { closedIssues, openIssues } from '../issues'

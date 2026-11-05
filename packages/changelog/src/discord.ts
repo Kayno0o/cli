@@ -1,4 +1,4 @@
-import type { DiscordWebhookPayload } from '@kaynooo/utils'
+import type { DiscordWebhookPayload } from '@kaynooo/utils/types/discord'
 import type { Highlights } from './highlights'
 import type { AuthorInfo, Commit, ResolvedChangelogOptions } from './types'
 import { compareUrl, foldedCounts, formatLine, formatTitle, groupCommits, releaseUrl, shortRef } from './markdown'

@@ -1,4 +1,4 @@
-import { counted, plural } from '@kaynooo/utils'
+import { counted, plural } from '@kaynooo/utils/text'
 
 export interface Pair {
   from: string

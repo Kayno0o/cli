@@ -1,5 +1,5 @@
 import type { ChangelogOptions } from './types'
-import { isSemver, parseSemver } from '@kaynooo/utils'
+import { isSemver, parseSemver } from '@kaynooo/utils/semver'
 import { $ } from 'bun'
 
 const gitSuffixRE = /\.git$/

@@ -6,7 +6,7 @@ import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSyn
 import { normalize, resolve } from 'node:path'
 import process from 'node:process'
 import { Exit, fail, jsonOption, parse, printJson, readInput, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
-import { counted, plural } from '@kaynooo/utils'
+import { counted, plural } from '@kaynooo/utils/text'
 import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
 import { applyPairs, compile, listLines } from './replace'

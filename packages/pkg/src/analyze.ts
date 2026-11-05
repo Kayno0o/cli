@@ -1,7 +1,7 @@
 import type { VersionAdvisory } from './advisories'
 import type { Severity } from './config'
 import type { Packument, Version } from './registry'
-import { counted } from '@kaynooo/utils'
+import { counted } from '@kaynooo/utils/text'
 import { filterAdvisories } from './advisories'
 import { isLicenseAllowed } from './licenses'
 import { nearMisses } from './nearmiss'

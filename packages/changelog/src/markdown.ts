@@ -1,7 +1,8 @@
 import type { Reference } from './changelog'
 import type { Highlights } from './highlights'
 import type { AuthorInfo, Commit, ResolvedChangelogOptions } from './types'
-import { capitalize, groupBy } from '@kaynooo/utils'
+import { groupBy } from '@kaynooo/utils/array'
+import { capitalize } from '@kaynooo/utils/text'
 
 const emojiRE = /\p{Extended_Pictographic}\uFE0F?/gu
 const fullHashRE = /^[\da-f]{40}$/
