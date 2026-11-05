@@ -11,7 +11,7 @@ lint:
 test:
     bun run test
 
-# release every package changed since its last tag, in one push: `just release-all patch` prints the plan, `just release-all patch go=1` releases
+# release every package changed since its last tag, in one push: `just release-all patch` prints the plan through `ft release --dry-run`, so it needs the same clean main in step with origin as a release; `just release-all patch go=1` releases
 release-all level go="":
     #!/usr/bin/env sh
     set -eu

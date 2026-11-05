@@ -155,6 +155,70 @@ describe('release --json', () => {
     expect((await $`git status --porcelain`.cwd(work).text()).trim()).toBe('')
   })
 
+  // Runs a release of a and b expected to fail before the push, then checks the repo is back on the commit it started on.
+  async function droppedBeforePush(work: string, runs: Record<string, unknown>[], error: string): Promise<void> {
+    const start = (await $`git rev-parse HEAD`.cwd(work).text()).trim()
+    const lock = await Bun.file(join(work, 'bun.lock')).text()
+
+    process.chdir(work)
+    await withFakeTea({ issues: [], runs }, async () => {
+      // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+      await expect(capture(async () => release(['patch', '-p', 'a,b', '--no-registry']))).rejects.toThrow(error)
+    })
+
+    expect((await $`git rev-parse HEAD`.cwd(work).text()).trim()).toBe(start)
+    expect((await $`git tag`.cwd(work).text()).trim()).toBe('')
+    expect((await $`git status --porcelain`.cwd(work).text()).trim()).toBe('')
+    expect(await Bun.file(join(work, 'bun.lock')).text()).toBe(lock)
+  }
+
+  test('a second package whose bump commit fails drops the first package\'s commit and tag too', async () => {
+    const { work, runs } = await workspace()
+    const hook = join(work, '.git', 'hooks', 'pre-commit')
+
+    await Bun.write(hook, `#!/bin/sh\nn=$(cat ../commits 2>/dev/null || echo 0)\necho $((n + 1)) > ../commits\n[ "$n" -lt 1 ] || { echo "second commit refused" >&2; exit 1; }\n`)
+    await chmod(hook, 0o755)
+    await droppedBeforePush(work, runs, 'second commit refused')
+  })
+
+  test('a signal between two bumps drops every bump before anything is pushed', async () => {
+    const { work, runs } = await workspace()
+    const hook = join(work, '.git', 'hooks', 'post-commit')
+
+    await Bun.write(hook, `#!/bin/sh\nkill -HUP ${process.pid}\n`)
+    await chmod(hook, 0o755)
+    await droppedBeforePush(work, runs, 'interrupted by SIGHUP before the push')
+    expect((await $`git ls-remote --tags origin`.cwd(work).text()).trim()).toBe('')
+  })
+
+  test('no package to release stops before the tests are waited for', async () => {
+    const { work } = await workspace()
+
+    process.chdir(work)
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(capture(async () => release(['patch', '-p', ',']))).rejects.toThrow('no package to release')
+  })
+
+  test('a registry serving the first package but not the second reports only the first as released', async () => {
+    const { work, runs } = await workspace()
+    const printed: unknown[] = []
+    const packument = { 'name': 'ft-json-a', 'dist-tags': { latest: '1.0.1' }, 'versions': { '1.0.1': { name: 'ft-json-a', version: '1.0.1' } } }
+
+    using registry = Bun.serve({ port: 0, fetch: request => new URL(request.url).pathname === '/ft-json-a' ? Response.json(packument) : new Response('not found', { status: 404 }) })
+
+    process.chdir(work)
+    process.env.BUN_CONFIG_REGISTRY = registry.url.href
+    registryWait.tries = 1
+    registryWait.poll = 1
+
+    await withFakeTea({ issues: [], runs }, async () => {
+      // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+      await expect(capture(async () => logging(printed, async () => release(['patch', '-p', 'a,b', '--json'])))).rejects.toThrow('the registry does not serve ft-json-b@2.0.1')
+    })
+
+    expect(printed.map(each => JSON.parse(String(each)) as unknown)).toMatchObject([[{ released: true, tag: 'a-v1.0.1' }, { released: false, tag: 'b-v2.0.1' }]])
+  })
+
   async function registryRefusing(args: string[]): Promise<unknown[]> {
     const { work, runs } = await workspace()
     const printed: unknown[] = []

@@ -81,6 +81,10 @@ export async function release(args: string[]): Promise<number> {
   const targets = several && level !== undefined
     ? await Promise.all(parseTargets(values.package ?? (await publishable()).join(','), level).map(async target => ({ level: target.level, dir: await packageDir(target.folder) })))
     : [{ level, dir: values.package === undefined ? undefined : await packageDir(values.package) }]
+
+  if (targets.length === 0)
+    fail('no package to release: --all found no published package, or --package named none')
+
   const timeout = duration(values.timeout, 'timeout', 15 * 60_000, 'm')
   const prefixOf = (dir: string | undefined): string => dir === undefined ? 'v' : `${basename(dir)}-v`
   const branch = await defaultBranch()
@@ -155,7 +159,7 @@ export async function release(args: string[]): Promise<number> {
     }
     catch (error) {
       isPushUnknown = true
-      fail(`${error instanceof Error ? error.message : String(error)}, so ${tags.join(', ')} and ${tags.length === 1 ? 'its commit are' : 'their commits are'} kept: the push may have landed`, 2, `git ls-remote origin refs/tags/${tags[0]} tells; if it is there, ft release --tagged waits for its runs`)
+      fail(`${error instanceof Error ? error.message : String(error)}, so ${tags.join(', ')} and ${tags.length === 1 ? 'its commit are' : 'their commits are'} kept: the push may have landed`, 2, tags.length === 1 ? `git ls-remote origin refs/tags/${tags[0]} tells; if it is there, ft release --tagged waits for its runs` : `git ls-remote --tags origin tells; if they are there, ft watch --after ${before} waits for their runs`)
     }
 
     if (push.code !== 0) {
@@ -175,7 +179,6 @@ export async function release(args: string[]): Promise<number> {
   }
 
   const heads = new Set(bumped.map(each => each.head))
-  const tip = bumped.at(-1)?.head
   const manifests = await Promise.all(bumped.map(async (each) => {
     const file = Bun.file(join(each.dir ?? '.', 'package.json'))
 
@@ -184,13 +187,13 @@ export async function release(args: string[]): Promise<number> {
   const released = new Set<Bumped>()
   let followed: Followed = { code: 0, runs: [], failedJobs: [] }
 
-  // Every package in one result each, those not released yet as false; a package reports the runs of its own commit and of the branch tip, which tests them all.
+  // Every package in one result each, those not released yet as false; a package reports the runs its tag started and those of the branch, which test them all.
   const report = (): void => {
     if (!json)
       return
 
     const results: Released[] = bumped.map((each, index) => {
-      const own = followed.runs.filter(run => run.commit_sha === each.head || run.commit_sha === tip)
+      const own = followed.runs.filter(run => run.prettyref === each.tag || run.prettyref === branch)
 
       return { released: released.has(each), tag: each.tag, package: manifests[index]?.name ?? null, version: each.tag.slice(each.prefix.length), ...ciJson(own, followed.failedJobs.filter(job => own.some(run => run.id === job.run))) }
     })
@@ -203,7 +206,7 @@ export async function release(args: string[]): Promise<number> {
     const late = signalOf()
 
     if (late !== undefined)
-      fail(`interrupted by ${late} after ${bumped.map(each => each.tag).join(', ')} ${bumped.length === 1 ? 'was' : 'were'} pushed: the runs are not waited for`, exitCodeOf(null, late))
+      fail(`interrupted by ${late} after ${bumped.map(each => each.tag).join(', ')} ${bumped.length === 1 ? 'was pushed: its runs are' : 'were pushed: their runs are'} not waited for`, exitCodeOf(null, late))
 
     say(`pushed ${branch} and ${bumped.map(each => each.tag).join(', ')}, waiting for their runs`)
     followed = await followRuns(runs => runs.filter(run => run.id > before && heads.has(run.commit_sha)), timeout, undefined, NO_RUN, json ? process.stderr : process.stdout, { json })
@@ -219,8 +222,11 @@ export async function release(args: string[]): Promise<number> {
       const version = each.tag.slice(each.prefix.length)
 
       if (values['no-registry'] !== true && pkg?.name !== undefined && pkg.private !== true) {
-        if (!await waitForRegistry(pkg.name, version))
-          fail(`the runs passed but the registry does not serve ${pkg.name}@${version}: read the publish job with \`ft logs\``, 1)
+        if (!await waitForRegistry(pkg.name, version)) {
+          const rest = bumped.slice(index + 1).map(next => next.tag)
+
+          fail(`the runs passed but the registry does not serve ${pkg.name}@${version}${rest.length === 0 ? '' : `, so ${rest.join(', ')} ${rest.length === 1 ? 'is' : 'are'} pushed but not waited for`}: read the publish job with \`ft logs\``, 1)
+        }
 
         say(`released ${pkg.name}@${version}`)
       }

@@ -60,22 +60,22 @@ export async function waitForRegistry(name: string, version: string): Promise<bo
 // Drops the bump commits and the tags they carry, back to the commit the release started on; a failure only warns, as the release already failed.
 export async function rollBack(preBump: string, dirs: string[]): Promise<void> {
   try {
+    // A failure before a package's bump commit leaves its manifest and the lockfile edited, which `reset --keep` would keep, or refuse once an earlier bump commit changed the lockfile too.
+    if (dirs.length > 0) {
+      const root = await git(['rev-parse', '--show-toplevel'])
+      const paths = [...dirs.map(dir => join(dir, 'package.json')), join(root, 'bun.lock')].map(path => relative(root, path))
+      const tracked = (await git(['ls-tree', '-r', '--full-tree', '--name-only', 'HEAD', '--', ...paths])).split('\n').filter(path => path !== '')
+
+      if (tracked.length > 0)
+        await git(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...tracked.map(path => join(root, path))])
+    }
+
     for (const commit of (await git(['rev-list', `${preBump}..HEAD`])).split('\n').filter(Boolean)) {
       for (const name of await tagsAt(commit))
         await git(['tag', '-d', name])
     }
 
     await git(['reset', '--keep', preBump])
-
-    // A failure before a bump commit leaves the edited manifest and lockfile on an unchanged HEAD, which the reset keeps.
-    if (dirs.length > 0) {
-      const root = await git(['rev-parse', '--show-toplevel'])
-      const paths = [...dirs.map(dir => join(dir, 'package.json')), join(root, 'bun.lock')].map(path => relative(root, path))
-      const tracked = (await git(['ls-tree', '-r', '--full-tree', '--name-only', preBump, '--', ...paths])).split('\n').filter(path => path !== '')
-
-      if (tracked.length > 0)
-        await git(['restore', `--source=${preBump}`, '--staged', '--worktree', '--', ...tracked.map(path => join(root, path))])
-    }
   }
   catch (error) {
     warn(`could not undo the bump, back to ${preBump.slice(0, 7)} by hand`, error instanceof Error ? error.message : String(error))
