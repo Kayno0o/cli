@@ -3,7 +3,7 @@ import type { Dotenv } from './dotenv'
 import type { KnownSecrets } from './mask'
 import { chmod, chown, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { fail, isSecretName } from '@kaynooo/cli-kit'
+import { fail, isSecretName, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
 import { entries, parseDotenv, serializeDotenv } from './dotenv'
 import { knownSecrets, urlPasswords } from './mask'
 
@@ -13,7 +13,8 @@ export const TEMPLATE = /\.(?:example|sample|template|dist|defaults)$/
 
 // Folders searched for secrets below the current one, and the ones never entered.
 const KNOWN_DEPTH = 3
-const SKIPPED = new Set(['node_modules', '.git', 'vendor'])
+
+export const SKIPPED = new Set([...SKIPPED_FOLDERS, '.git', '.kay'])
 const LOCK_WAIT_MS = 5000
 const LOCK_STALE_MS = 30_000
 // A reap takes a few milliseconds, so a guard older than this belongs to a reaper that died.

@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { fail } from '@kaynooo/cli-kit'
 import { parseDotenv } from './dotenv'
+import { SKIPPED } from './files'
 
 export interface PinFinding {
   // A test file that renders a page or starts the app, relative to the app folder.
@@ -35,7 +36,6 @@ const KEY = /(?:^|[{,])\s*([A-Z_]\w*)\s*:/gi
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$/
 const ENV_TEST = /^\.env\.test(?:\.local)?$/
 const TEST_ROOTS = ['tests', 'test', '__tests__', 'e2e', 'src']
-const SKIPPED = new Set(['node_modules', '.git', '.kay', 'dist', 'vendor'])
 const SCHEMA_CANDIDATES = ['src/env.ts', 'env.ts', 'src/env/index.ts']
 const OPENERS = new Set(['(', '[', '{'])
 const CLOSERS = new Set([')', ']', '}'])

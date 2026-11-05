@@ -3,7 +3,7 @@ import { readdir, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isSecretName } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
-import { ENV_FILE, isFileEntry, TEMPLATE } from './files'
+import { ENV_FILE, isFileEntry, SKIPPED, TEMPLATE } from './files'
 import { urlPasswords } from './mask'
 
 export interface Exposure {
@@ -18,7 +18,6 @@ export interface Exposure {
 }
 
 const MAX_DEPTH = 5
-const SKIPPED = new Set(['node_modules', '.git', 'vendor'])
 const COMPOSE_FILE = /^(?:docker-)?compose[\w.-]*\.ya?ml$/
 // An environment entry, `KEY: value` or `- KEY=value`, with its value written out.
 const ENTRY = /^\s*(?:-\s*)?["']?([A-Z0-9_]+)["']?\s*[:=]\s*["']?([^"'\s#]+)/
