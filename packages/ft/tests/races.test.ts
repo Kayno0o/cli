@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { take } from '../src/commands/board'
+import { drop, take } from '../src/commands/board'
 import { edit, tick } from '../src/commands/issue'
 import { comment, createIssue, editBody } from '../src/issues'
 import { refusal, withFakeTea } from './fake-tea'
@@ -91,5 +91,41 @@ describe('tea arguments', () => {
 
     expect(state.issues[0]?.body).toBe('y')
     expect(state.calls?.find(call => call[0] === 'issues')).toEqual(['issues', 'edit', '5', '-d', 'y'])
+  })
+})
+
+describe('drop --stale', () => {
+  test('refuses a claim of another session without --stale, naming the flag', async () => {
+    const state = await withFakeTea({ issues: [open(5, 'x')], comments: { 5: ['Taken by session ghost-9.'] } }, async () => {
+      expect(await refusal(drop(['5', '--as', 'a-1']))).toContain('taken by ghost-9, not a-1')
+    })
+
+    expect(state.comments?.[5]).toEqual(['Taken by session ghost-9.'])
+  })
+
+  test('releases a claim no live session answers to, in its holder\'s name, then says who did it', async () => {
+    const state = await withFakeTea({ issues: [open(5, 'x')], comments: { 5: ['Taken by session ghost-9.'] } }, async () => {
+      expect(await drop(['5', '--stale', '--as', 'a-1'])).toBe(0)
+    })
+
+    expect(state.comments?.[5]?.[1]).toBe('Released by session ghost-9.')
+    expect(state.comments?.[5]?.[2]).toContain('released as stale by session a-1')
+  })
+
+  test('--all-stale --dry-run lists them and writes nothing, and the real run releases each', async () => {
+    const issues = [open(5, 'x'), open(6, 'y'), open(7, 'z')]
+    const comments = { 5: ['Taken by session ghost-9.'], 6: ['Taken by session ghost-8.', 'Released by session ghost-8.'] }
+    const dry = await withFakeTea({ issues, comments }, async () => {
+      expect(await drop(['--all-stale', '--dry-run', '--as', 'a-1'])).toBe(0)
+    })
+
+    expect(dry.comments?.[5]).toEqual(['Taken by session ghost-9.'])
+
+    const real = await withFakeTea({ issues, comments }, async () => {
+      expect(await drop(['--all-stale', '--as', 'a-1'])).toBe(0)
+    })
+
+    expect(real.comments?.[5]?.[1]).toBe('Released by session ghost-9.')
+    expect(real.comments?.[6]).toHaveLength(2)
   })
 })

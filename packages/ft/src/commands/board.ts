@@ -1,7 +1,7 @@
 import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
-import { capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHint, printJson, role, runHint, table, truncate } from '@kaynooo/cli-kit'
+import { badUsage, capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHint, printJson, role, runHint, table, truncate } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -291,32 +291,85 @@ export async function take(args: string[]): Promise<number> {
   })
 }
 
-const dropUsage = `ft drop <n>...
+const dropUsage = `ft drop <n>... | --all-stale
 
 Gives each issue back with a "Released by session <name>." comment, when this session holds it.
+With --stale, a claim no session here answers to is released too, in the name of its holder, followed by a comment saying this session released it as stale; a claim a live session holds is still refused. --all-stale does that for every such claim on the board, and with --dry-run only lists them.
 
-Exits 0 when every issue is given back, 1 when one is not held by this session, 2 on a usage error.`
+Exits 0 when every issue is given back, 1 when one is not held by this session or, with --stale, by a live one, 2 on a usage error.`
 
 const dropOptions = {
-  as: { type: 'string', description: 'the name it was taken as, instead of this session\'s' },
+  'as': { type: 'string', description: 'the name it was taken as, instead of this session\'s' },
+  'stale': { type: 'boolean', description: 'also release a claim no live session here answers to' },
+  'all-stale': { type: 'boolean', description: 'release every stale claim of the board, none needing a number' },
+  'dry-run': { type: 'boolean', description: 'with --all-stale, list the claims without releasing them' },
   ...laneOption,
   ...repoOption,
 } as const
+
+// Releases the claim on an issue in its holder's name, as the claim is only undone by that name's release, then notes who did it; a holder a live session answers to is refused.
+async function releaseStale(number: number, me: string, author: string | undefined, sessions: Session[], repo: string | undefined): Promise<void> {
+  const claim = latestClaim(await commentsOf(number, repo), author)
+
+  if (claim === undefined)
+    fail(`#${number} is not taken`, 1)
+
+  const current = standing(claim, sessions)
+
+  if (current.state === 'taken')
+    fail(`#${number} is taken by ${claim.holder}, which still runs (${current.session.status})`, 1)
+
+  await comment(number, releasedComment(claim.holder), repo)
+  await comment(number, `Claim of ${claim.holder} from ${formatAge(claim.at)}, which no live session answered to, released as stale by session ${me}.`, repo)
+  console.log(`released #${number}, held by ${claim.holder}`)
+}
 
 export async function drop(args: string[]): Promise<number> {
   const parsed = parse(args, dropUsage, dropOptions)
 
   const { values, positionals } = parsed
-  const numbers = issueNumbers(positionals, dropUsage)
-  const nameFor = await claimant(values, await liveSessions())
+  const sessions = await liveSessions()
+  const nameFor = await claimant(values, sessions)
   const author = await sessionAuthor()
+
+  if (values['all-stale'] === true) {
+    if (positionals.length > 0)
+      badUsage('--all-stale takes no issue number')
+
+    const rows = await boardRows(await openIssues(undefined, values.repo), sessions, values.repo)
+    const stale = rows.flatMap(({ issue, standing: now }) => now.state === 'away' ? [{ issue, holder: now.claim.holder }] : [])
+
+    if (stale.length === 0) {
+      console.log('no stale claim')
+
+      return 0
+    }
+
+    for (const { issue, holder } of stale)
+      console.log(`${values['dry-run'] === true ? 'would release' : 'releasing'} #${issue.number} held by ${holder}: ${issue.title}`)
+
+    if (values['dry-run'] === true)
+      return 0
+
+    return eachIssue('drop', stale.map(({ issue }) => issue.number), async (number) => {
+      await releaseStale(number, nameFor(number), author, sessions, values.repo)
+    })
+  }
+
+  const numbers = issueNumbers(positionals, dropUsage)
 
   return eachIssue('drop', numbers, async (number) => {
     const name = nameFor(number)
     const claim = latestClaim(await commentsOf(number, values.repo), author)
 
+    if (claim !== undefined && claim.holder !== name && values.stale === true) {
+      await releaseStale(number, name, author, sessions, values.repo)
+
+      return
+    }
+
     if (claim?.holder !== name)
-      fail(`#${number} is ${claim === undefined ? 'not taken' : `taken by ${claim.holder}, not ${name}`}`, 1)
+      fail(`#${number} is ${claim === undefined ? 'not taken' : `taken by ${claim.holder}, not ${name}`}`, 1, claim === undefined ? undefined : runHint(`ft drop ${number} --stale`, 'release it if no session answers to it'))
 
     await comment(number, releasedComment(name), values.repo)
     console.log(`released #${number}`)
