@@ -95,8 +95,12 @@ function columnWidths(rows: string[][], width: number): number[] {
 function renderTable(rows: string[][], aligns: Align[], width: number, theme: Theme): string {
   const widths = columnWidths(rows, width)
 
-  const lines = rows.flatMap((row, index) => {
-    const cells = widths.map((each, column) => Bun.wrapAnsi(row[column] ?? '', each, { hard: true }).split('\n'))
+  const wrapped = rows.map(row => widths.map((each, column) => Bun.wrapAnsi(row[column] ?? '', each, { hard: true }).split('\n')))
+  // A blank line between the rows once any of them wraps, so each stays one block; a table whose rows all fit on a line stays compact.
+  const spaced = wrapped.some(cells => cells.some(cell => cell.length > 1))
+
+  const lines = rows.flatMap((_, index) => {
+    const cells = wrapped[index]!
     const height = Math.max(...cells.map(cell => cell.length))
 
     const drawn = Array.from({ length: height }, (_, at) => cells.map((cell, column) => {
@@ -107,7 +111,10 @@ function renderTable(rows: string[][], aligns: Align[], width: number, theme: Th
       return index === 0 ? theme.heading(aligned) : aligned
     }).join(' '.repeat(COLUMN_GAP)).trimEnd())
 
-    return index === 0 ? [...drawn, theme.dim('─'.repeat(Math.min(width, widths.reduce((sum, each) => sum + each, 0) + COLUMN_GAP * Math.max(0, widths.length - 1))))] : drawn
+    if (index === 0)
+      return [...drawn, theme.dim('─'.repeat(Math.min(width, widths.reduce((sum, each) => sum + each, 0) + COLUMN_GAP * Math.max(0, widths.length - 1))))]
+
+    return spaced && index > 1 ? ['', ...drawn] : drawn
   })
 
   return lines.join('\n')

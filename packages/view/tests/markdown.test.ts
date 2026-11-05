@@ -68,3 +68,12 @@ describe('block content and control characters', () => {
     expect(stripAnsi(out)).toContain('hello')
   })
 })
+
+describe('tables with wrapped cells', () => {
+  test('put a blank line between the rows once one wraps, and stay compact otherwise', () => {
+    const rows = '| name | what it does |\n|---|---|\n| one | a description that is much too long for one line |\n| two | short |'
+
+    expect(show(rows, 30)).toContain('\n\ntwo')
+    expect(show('| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |')).toBe('a  b\n────\n1  2\n3  4\n')
+  })
+})
