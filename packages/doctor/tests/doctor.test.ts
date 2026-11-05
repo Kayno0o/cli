@@ -101,6 +101,17 @@ describe('checkTea', () => {
     expect(await checkTea(fakeHost(publicLogin))).toMatchObject({ ok: true, detail: 'logged in to git.kaynooo.fr as pub, Forgejo 16.0.6' })
   })
 
+  test('takes another host of the forge from forgeHosts in doctor.json', async () => {
+    const other = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'mine', url: 'https://git.example.org' }]) }, 'tea api --login mine version': { stdout: '{"version":"16.0.6"}' } }
+
+    expect(await checkTea(fakeHost(other))).toMatchObject({ ok: false })
+
+    mkdirSync(join(home, '.config', 'kaynooo-cli'), { recursive: true })
+    writeFileSync(join(home, '.config', 'kaynooo-cli', 'doctor.json'), JSON.stringify({ forgeHosts: ['git.example.org'] }))
+
+    expect(await checkTea(fakeHost(other))).toMatchObject({ ok: true, detail: expect.stringContaining('git.example.org') })
+  })
+
   test('fails without tea, without a login to the forge, or when the forge does not answer', async () => {
     expect(await checkTea(fakeHost({}, []))).toMatchObject({ ok: false, detail: 'not installed, and ft goes through it' })
     expect(await checkTea(fakeHost({ 'tea login list -o json': { stdout: '[{"name":"gh","url":"https://gitea.com"}]' } }))).toMatchObject({ ok: false, fix: 'tea login add --url https://git.kaynooo.fr --oauth' })

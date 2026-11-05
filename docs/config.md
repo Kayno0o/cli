@@ -11,6 +11,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 | `.kaynooo/theme.json` | every bin | the same, found upward from the current folder to the repository root, laid over the user file |
 | `~/.config/kaynooo-cli/ft.json` | `ft` | `remoteHost`: the ssh host `ft remote` switches alias origins to (the older `~/.config/ft/config.json` is read when this one is missing) |
 | `~/.config/kaynooo-cli/db.json` | `db` | `allowedHosts`: hosts other than loopback and compose services that `db` may connect to (the older `~/.config/db/config.json` is read when this one is missing) |
+| `~/.config/kaynooo-cli/doctor.json` | `doctor` | `forgeHosts`: other hosts the forge answers on, accepted for the tea login check |
 | `~/.config/kaynooo-cli/pkg.json` | `pkg` | `licenses`, `blockSeverity`, `minAge`: the same keys as `.pkgrc.json` |
 | `.pkgrc.json` | `pkg` | `licenses`, `blockSeverity`, `minAge`, found upward, the nearest file that sets a key wins |
 | `~/.config/kaynooo-cli/pkg-excluded.json` | `pkg bump` | the folders left out of a package's bumps, `{ "<package>": ["<folder>"] }`: written by the checklist, editable |

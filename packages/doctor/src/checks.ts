@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { workspaceRoot } from '@kaynooo/cli-kit'
+import { userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
 import { HOOKS_REQUIRES, NEEDS } from './catalog'
 import { completionDir, missingCompletions } from './completions'
 
@@ -125,6 +125,18 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
   return { check, ok: true, detail: version }
 }
 
+// Other hosts the same forge answers on, from `forgeHosts` in ~/.config/kaynooo-cli/doctor.json.
+function extraForgeHosts(home: string): string[] {
+  const path = userConfigReadPath('doctor', [], { home })
+
+  if (!existsSync(path))
+    return []
+
+  const raw = readJsonText<{ forgeHosts?: unknown }>(readFileSync(path, 'utf8'))
+
+  return Array.isArray(raw?.forgeHosts) ? raw.forgeHosts.filter((each): each is string => typeof each === 'string') : []
+}
+
 // tea installed, logged in to the forge and reaching it, since ft goes through it.
 export async function checkTea(host: Host): Promise<Result> {
   if (host.which('tea') === null)
@@ -132,7 +144,8 @@ export async function checkTea(host: Host): Promise<Result> {
 
   const logins = await host.run(['tea', 'login', 'list', '-o', 'json'])
   const parsed = logins.code === 0 ? readJsonText<{ name: string, url: string }[]>(logins.stdout) : undefined
-  const login = parsed?.find(each => URL.canParse(each.url) && FORGE_HOSTS.has(new URL(each.url).host))
+  const hosts = new Set([...FORGE_HOSTS, ...extraForgeHosts(host.home)])
+  const login = parsed?.find(each => URL.canParse(each.url) && hosts.has(new URL(each.url).host))
 
   if (login === undefined)
     return { check: 'tea', ok: false, detail: `no login to ${FORGE}`, fix: `tea login add --url https://${FORGE} --oauth` }
