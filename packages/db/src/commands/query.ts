@@ -1,4 +1,4 @@
-import { Exit, fail, parse, readInput } from '@kaynooo/cli-kit'
+import { Exit, fail, jsonText, parse, readInput } from '@kaynooo/cli-kit'
 import { connectionOptions, DEFAULT_LIMIT, EXITS, HOSTS_NOTE, outputOptions, rowLimit, WRITE_NOTE } from '../args'
 import { inspect } from '../guard'
 import { jsonValue, render, shape } from '../output'
@@ -71,7 +71,7 @@ export async function query(args: string[]): Promise<number> {
     const shown = shape(written.rows, limit, values.raw === true, false)
 
     if (values.json === true)
-      console.log(JSON.stringify({ database: written.database, affected: written.affected, columns: shown.columns, rows: shown.rows, truncated: shown.truncated, masked: shown.masked }, jsonValue, 2))
+      console.log(jsonText({ database: written.database, affected: written.affected, columns: shown.columns, rows: shown.rows, truncated: shown.truncated, masked: shown.masked }, jsonValue))
     else
       console.log(`ran on ${written.database}, ${written.affected} ${written.affected === 1 ? 'row' : 'rows'} affected${written.rows.length === 0 ? '' : `\n${render(shown, false)}`}`)
 

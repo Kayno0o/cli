@@ -1,5 +1,5 @@
 import type { Dialect } from '../guard'
-import { fail, parse } from '@kaynooo/cli-kit'
+import { fail, jsonText, parse } from '@kaynooo/cli-kit'
 import { catalogOptions, connectionOptions, EXITS, HOSTS_NOTE, rowLimit } from '../args'
 import { jsonValue, render, shape } from '../output'
 import { connectionUrl, dialectOf, readRows } from '../run'
@@ -187,7 +187,7 @@ export async function describe(args: string[]): Promise<number> {
   const foreignKeys = await ask(plans.foreignKeys)
 
   if (values.json === true)
-    console.log(JSON.stringify({ columns: columns.columns, rows: columns.rows, truncated: columns.truncated, masked: columns.masked, indexes, foreignKeys }, jsonValue, 2))
+    console.log(jsonText({ columns: columns.columns, rows: columns.rows, truncated: columns.truncated, masked: columns.masked, indexes, foreignKeys }, jsonValue))
   else
     console.log(`${render(columns, false)}\n\nindexes\n${render(shape(indexes, indexes.length, true), false)}\n\nforeign keys\n${render(shape(foreignKeys, foreignKeys.length, true), false)}`)
 

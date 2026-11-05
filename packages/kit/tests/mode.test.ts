@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { jsonText } from '../src/format'
 import { outputMode } from '../src/mode'
 
 const TERMINAL = { isTTY: true }
@@ -26,5 +27,12 @@ describe('outputMode', () => {
     expect(outputMode(TERMINAL, { CLAUDECODE: '1', KIT_MODE: 'terminal' })).toBe('terminal')
     expect(outputMode({}, { KIT_MODE: 'agent' })).toBe('agent')
     expect(outputMode({}, { KIT_MODE: 'loud' })).toBe('pipe')
+  })
+})
+
+describe('jsonText', () => {
+  test('indents for a person and stays on one line for an agent', () => {
+    expect(jsonText({ a: [1] }, undefined, { stream: {}, env: {} })).toBe('{\n  "a": [\n    1\n  ]\n}')
+    expect(jsonText({ a: [1] }, undefined, { stream: {}, env: { CLAUDECODE: '1' } })).toBe('{"a":[1]}')
   })
 })

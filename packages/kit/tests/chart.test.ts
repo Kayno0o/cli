@@ -26,6 +26,16 @@ describe('chart', () => {
     expect(barChart([['ft', 40], ['db', 4]], { width: 10, stream: {}, env: {} })).toBe('ft  40\ndb   4')
   })
 
+  test('draws nothing an agent cannot read: fractions, numbers, tabs and indents', () => {
+    const agent = { stream: { isTTY: true }, env: { CLAUDECODE: '1' } }
+
+    expect(barChart([['ft', 42], ['db', 30], ['pick', 7]], agent)).toBe('ft\t42/42\ndb\t30/42\npick\t7/42')
+    expect(bar(0.5, agent)).toBe('50%')
+    expect(sparkline([1, 5, 3], agent)).toBe('1 5 3')
+    expect(keyValue([['state', 'open'], ['labels', 'ux']], agent)).toBe('state\topen\nlabels\tux')
+    expect(tree([{ label: 'packages', children: [{ label: 'kit', children: [{ label: 'src' }] }, { label: 'ft' }] }], agent)).toBe('packages\n  kit\n    src\n  ft')
+  })
+
   test('barChart scales to the largest value on a terminal', () => {
     const drawn = stripAnsi(barChart([['ft', 40], ['db', 4]], { width: 10, stream: { isTTY: true }, env: {} }))
 

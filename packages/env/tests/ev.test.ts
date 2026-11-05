@@ -281,7 +281,10 @@ describe('ev', () => {
     expect(JSON.parse(ev(['missing', '--json']).out)).toEqual({ a: '.env.example', b: '.env', onlyA: ['C'], onlyB: ['B'] })
 
     await write('.env', 'A=1\nC=3\n')
-    expect(ev(['missing', '--json'])).toMatchObject({ code: 0, out: expect.stringContaining('"onlyA": []') })
+    const same = ev(['missing', '--json'])
+
+    expect(same.code).toBe(0)
+    expect(JSON.parse(same.out)).toMatchObject({ onlyA: [] })
   })
 
   test('grep matches keys only and masks their values', async () => {

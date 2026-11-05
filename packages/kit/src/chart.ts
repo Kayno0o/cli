@@ -1,5 +1,6 @@
 import process from 'node:process'
-import { textWidth } from './format'
+import { formatPercent, textWidth } from './format'
+import { outputMode } from './mode'
 import { paint, takesControlCodes } from './style'
 import { activeTheme, tinted } from './theme'
 
@@ -10,10 +11,13 @@ const LEVELS = '▁▂▃▄▅▆▇█'
 const FILLED = '━'
 const EMPTY = '─'
 
-// One block per value, tall in proportion to where it sits between the smallest and the largest; a flat series draws mid-height.
-export function sparkline(values: number[]): string {
+// One block per value, tall in proportion to where it sits between the smallest and the largest; a flat series draws mid-height. For an agent, which cannot read the blocks, the values themselves apart by a space.
+export function sparkline(values: number[], { stream = process.stdout, env = process.env }: KeyValueSettings = {}): string {
   if (values.length === 0)
     return ''
+
+  if (outputMode(stream, env) === 'agent')
+    return values.join(' ')
 
   const low = Math.min(...values)
   const span = Math.max(...values) - low
@@ -29,6 +33,9 @@ export interface BarSettings {
 
 // `━━━━━━━━━━━━━━━━━━━━` for a ratio between 0 and 1, the filled part cyan and the rest the same glyph dimmed on a terminal, so the two share one baseline; with no colour the rest is `─`.
 export function bar(ratio: number, { width = 20, stream = process.stdout, env = process.env }: BarSettings = {}): string {
+  if (outputMode(stream, env) === 'agent')
+    return formatPercent(Math.min(1, Math.max(0, ratio)))
+
   const colors = paint(stream, env)
   const filled = Math.round(Math.min(1, Math.max(0, ratio)) * width)
 
@@ -45,8 +52,11 @@ export interface KeyValueSettings {
   env?: Env
 }
 
-// Labels dimmed and padded to the longest, one pair per line: `state   open`.
+// Labels dimmed and padded to the longest, one pair per line: `state   open`; for an agent the pair is split by a tab with no padding.
 export function keyValue(pairs: [label: string, value: string][], { stream = process.stdout, env = process.env }: KeyValueSettings = {}): string {
+  if (outputMode(stream, env) === 'agent')
+    return pairs.map(([label, value]) => `${label}\t${value}`).join('\n')
+
   const colors = paint(stream, env)
   const width = Math.max(0, ...pairs.map(([label]) => textWidth(label)))
 
@@ -60,11 +70,14 @@ export interface BarChartSettings extends KeyValueSettings {
   format?: (value: number) => string
 }
 
-// A bar per labelled value, scaled to the largest: `label  ██████░░░░░░  42`. Off a terminal the bars are left out, as a reader of a log or an agent has the numbers and no use for the drawing: `label  42`.
+// A bar per labelled value, scaled to the largest: `label  ██████░░░░░░  42`. For an agent, which cannot read the drawing, each value over the largest instead: `label  30/42`. Off a terminal the bars are left out: `label  42`.
 export function barChart(rows: [label: string, value: number][], { width = 24, format = String, stream = process.stdout, env = process.env }: BarChartSettings = {}): string {
   const largest = Math.max(0, ...rows.map(([, value]) => value))
   const labels = Math.max(0, ...rows.map(([label]) => textWidth(label)))
   const values = Math.max(0, ...rows.map(([, value]) => textWidth(format(value))))
+
+  if (outputMode(stream, env) === 'agent')
+    return rows.map(([label, value]) => `${label}\t${format(value)}/${format(largest)}`).join('\n')
 
   const drawn = takesControlCodes(stream, env)
 
@@ -76,8 +89,16 @@ export interface TreeNode {
   children?: TreeNode[]
 }
 
+// The nodes one per line, two spaces deeper per level and no branch drawing, which an agent reads by the indent alone.
+function indented(nodes: TreeNode[], indent: string): string {
+  return nodes.map(({ label, children = [] }) => [`${indent}${label}`, ...children.length === 0 ? [] : [indented(children, `${indent}  `)]].join('\n')).join('\n')
+}
+
 // Each root on a line of its own and its children under it, hung on dimmed `├─`, `└─` and `│` branches.
 export function tree(roots: TreeNode[], { stream = process.stdout, env = process.env }: KeyValueSettings = {}): string {
+  if (outputMode(stream, env) === 'agent')
+    return indented(roots, '')
+
   const colors = paint(stream, env)
   const lines: string[] = []
 

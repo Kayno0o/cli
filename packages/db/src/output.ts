@@ -1,5 +1,5 @@
 import type { Row } from './run'
-import { table } from '@kaynooo/cli-kit'
+import { jsonText, table } from '@kaynooo/cli-kit'
 import { maskRows } from './mask'
 
 export interface Shown {
@@ -45,7 +45,7 @@ export function shape(rows: Row[], limit: number, raw: boolean, exact = true): S
 
 export function render(shown: Shown, json: boolean): string {
   if (json)
-    return JSON.stringify({ columns: shown.columns, rows: shown.rows, ...(shown.exact ? { total: shown.total, omitted: shown.omitted } : {}), truncated: shown.truncated, masked: shown.masked }, jsonValue, 2)
+    return jsonText({ columns: shown.columns, rows: shown.rows, ...(shown.exact ? { total: shown.total, omitted: shown.omitted } : {}), truncated: shown.truncated, masked: shown.masked }, jsonValue)
 
   if (shown.total === 0)
     return 'no rows'

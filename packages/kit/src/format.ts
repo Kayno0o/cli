@@ -136,9 +136,14 @@ function narrow(rows: string[][], widths: number[], limit: number): string[][] {
   return rows.map(row => row.map((cell, index) => textWidth(cell) > (widths[index] ?? 0) ? truncate(cell, widths[index] ?? 0) : cell))
 }
 
-// What a `--json` flag prints: the value indented by two spaces, on stdout.
+// The JSON of `value`: indented by two spaces for a person or a log, on one line for an agent, which pays for every indent.
+export function jsonText(value: unknown, replacer?: (key: string, value: unknown) => unknown, { stream = process.stdout, env = process.env }: Pick<TableSettings, 'stream' | 'env'> = {}): string {
+  return JSON.stringify(value, replacer, outputMode(stream, env) === 'agent' ? undefined : 2)
+}
+
+// What a `--json` flag prints, through `jsonText`, on stdout.
 export function printJson(value: unknown): void {
-  console.log(JSON.stringify(value, undefined, 2))
+  console.log(jsonText(value))
 }
 
 // `0.62` as `62%`.
