@@ -2,9 +2,8 @@ import type { Ran } from '@kaynooo/cli-kit'
 import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher, Packument, Registry } from '../registry'
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
-import { duration, Exit, fail, formatDuration, formatElapsed, note, ok, parse, problem, runCommand, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, Exit, fail, formatDuration, formatElapsed, note, ok, parse, problem, runCommand, warn, wholeNumber, workspaceRoot } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { loadConfigs, loadSettings, registryFor } from '../config'
 import { addCommand, findConsumers, isLocal } from '../consumers'
@@ -21,7 +20,7 @@ With --all-consumers a folder whose package.json or lockfile already has uncommi
 
 Exits 0 when every install ran or was left as it is (with --all-consumers, and every check passed and every commit landed), 1 when the vetting refuses the version, an install, a check or a commit fails or the registry has no such package, 2 when the version never shows within the timeout (a registry that cannot be reached is retried until then) or on a usage error.`
 
-export const ROOT_OPTION = { type: 'string', description: 'the folder holding the repositories (~/Workspace)' } as const
+export const ROOT_OPTION = { type: 'string', description: 'the folder holding the repositories (the workspace of the user config or KAYNOOO_WORKSPACE, ~/Workspace by default)' } as const
 
 const options = {
   'root': ROOT_OPTION,
@@ -247,7 +246,7 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
 export async function bump(args: string[]): Promise<number> {
   const { values, positionals: [name, asked] } = parse(args, usage, options, { positionals: ['<name>', '[version]'] })
   const settings: BumpSettings = {
-    root: values.root ?? join(homedir(), 'Workspace'),
+    root: workspaceRoot({ given: values.root }),
     configs: await loadConfigs(),
     timeout: duration(values.timeout, 'timeout', 10 * 60_000),
     isDryRun: values['dry-run'] === true,

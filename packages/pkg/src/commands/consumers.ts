@@ -1,6 +1,4 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { capped, jsonOption, limitOf, limitOptions, parse, printJson, table } from '@kaynooo/cli-kit'
+import { capped, jsonOption, limitOf, limitOptions, parse, printJson, table, workspaceRoot } from '@kaynooo/cli-kit'
 import { findConsumers } from '../consumers'
 import { ROOT_OPTION } from './bump'
 
@@ -20,7 +18,7 @@ const options = {
 
 export function consumers(args: string[]): number {
   const { values, positionals: [name] } = parse(args, usage, options, { positionals: ['<name>'] })
-  const root = values.root ?? join(homedir(), 'Workspace')
+  const root = workspaceRoot({ given: values.root })
   const { shown, footer } = capped(findConsumers(name, root), limitOf(values, CONSUMERS_LIMIT))
 
   if (values.json === true)

@@ -1,8 +1,8 @@
 import type { Outcome } from './apply'
 import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, relative, resolve } from 'node:path'
-import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, paint, parse, parseSize, printJson, problem, role, runTool, table } from '@kaynooo/cli-kit'
+import { relative } from 'node:path'
+import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, paint, parse, parseSize, printJson, problem, role, runTool, table, workspaceRoot } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { applyAll } from './apply'
 import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
@@ -10,7 +10,7 @@ import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
 const LARGE = 100 * 1024 ** 2
 const BIG = 1024 ** 3
 
-const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
+const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
 
 Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. With --docker the Docker usage comes after the list, left to dclean.
 
@@ -48,7 +48,7 @@ export async function sweep(args: string[]): Promise<number> {
   if (positionals.length > 1)
     badUsage('give one root')
 
-  const root = resolve(positionals[0] ?? join(homedir(), 'Workspace'))
+  const root = workspaceRoot({ given: positionals[0] })
 
   if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`${root} is not a folder`)
