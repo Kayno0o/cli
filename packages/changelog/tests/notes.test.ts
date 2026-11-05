@@ -176,3 +176,14 @@ describe('capitalized descriptions', () => {
     expect(first('fix: `ft` exits')).toBe('`ft` exits')
   })
 })
+
+describe('discord highlights', () => {
+  it('turns a table, which Discord does not draw, into one bullet per row and leaves a fenced one alone', async () => {
+    const lines = ['Each name is gone.', '', '| Removed | Use |', '| --- | --- |', '| `uniqueArray` | `unique` |', '| `a`, `b` | `c \\| d` |', '', '```', '| keep | me |', '```']
+    const embed = generateDiscordPayload([], await options(), [], { lines, link: 'https://forge.example/h' }).embeds![0]!
+
+    expect(embed.description).toContain('- **`uniqueArray`**: `unique`\n- **`a`, `b`**: `c \\| d`')
+    expect(embed.description).not.toContain('| Removed')
+    expect(embed.description).toContain('| keep | me |')
+  })
+})

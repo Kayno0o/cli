@@ -72,10 +72,42 @@ function openFence(lines: string[]) {
   return open
 }
 
+const tableRowRE = /^\s*\|.*\|\s*$/
+const tableRuleRE = /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/
+// A `|` inside a code span or escaped is part of a cell.
+const cellSplitRE = /(?<!\\)\|(?=(?:[^`]*`[^`]*`)*[^`]*$)/
+
+// Discord draws no table: each row becomes a bullet, its first cell in bold and the others after it, the header and rule rows dropped.
+function bulletedTables(lines: string[]) {
+  let fenced = false
+  const out: string[] = []
+
+  for (const [index, line] of lines.entries()) {
+    if (fenceRE.test(line))
+      fenced = !fenced
+
+    if (fenced || !tableRowRE.test(line)) {
+      out.push(line)
+
+      continue
+    }
+
+    // The header row is the one followed by the rule row.
+    if (tableRuleRE.test(line) || tableRuleRE.test(lines[index + 1] ?? ''))
+      continue
+
+    const [first = '', ...rest] = line.trim().slice(1, -1).split(cellSplitRE).map(cell => cell.trim())
+
+    out.push(`- **${first}**${rest.length ? `: ${rest.join(' · ')}` : ''}`)
+  }
+
+  return out
+}
+
 // The highlights as Discord shows them: under a bold title, their headings in bold too, as an embed draws no heading.
 function highlightLines(highlights: Highlights, options: ResolvedChangelogOptions) {
   let fenced = false
-  const lines = highlights.lines.flatMap((line) => {
+  const lines = bulletedTables(highlights.lines).flatMap((line) => {
     if (fenceRE.test(line))
       fenced = !fenced
 
