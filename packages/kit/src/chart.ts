@@ -2,7 +2,7 @@ import process from 'node:process'
 import { formatPercent, textWidth } from './format'
 import { outputMode } from './mode'
 import { paint, takesControlCodes } from './style'
-import { activeTheme, gradientAt, tinted } from './theme'
+import { activeTheme, gradientAt, shaded, tinted } from './theme'
 
 type Env = Record<string, string | undefined>
 
@@ -53,7 +53,7 @@ export function bar(ratio: number, { width = 20, stream = process.stdout, env = 
 
   const { theme } = activeTheme()
 
-  return `${tinted(colors, gradientAt(theme, ratio) ?? theme.colors.accent, env)(theme.glyphs.bar.repeat(filled))}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
+  return `${shaded(theme, colors, theme.glyphs.bar, filled, width, env)}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
 }
 
 export interface KeyValueSettings {

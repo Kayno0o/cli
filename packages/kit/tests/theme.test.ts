@@ -100,7 +100,7 @@ describe('gradient', () => {
   it('blends from the first end to the second, and none for a theme without one', () => {
     const { theme } = loadTheme(world())
 
-    expect(gradientAt(theme, 0)).toBe('#c4b5fd')
+    expect(gradientAt(theme, 0)).toBe('#c084fc')
     expect(gradientAt(theme, 1)).toBe('#67e8f9')
     expect(gradientAt(theme, 2)).toBe('#67e8f9')
     expect(gradientAt(loadTheme(world({ preset: 'mono' })).theme, 0.5)).toBeUndefined()
@@ -112,7 +112,7 @@ describe('gradient', () => {
 
     const bad = world({ gradient: ['red', '#ffffff'] })
 
-    expect(loadTheme(bad).theme.gradient).toEqual(['#c4b5fd', '#67e8f9'])
+    expect(loadTheme(bad).theme.gradient).toEqual(['#c084fc', '#67e8f9'])
     expect(bad.warnings[0]).toContain('gradient')
   })
 })

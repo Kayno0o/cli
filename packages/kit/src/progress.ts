@@ -3,6 +3,7 @@ import process from 'node:process'
 import { formatDuration, formatElapsed } from './format'
 import { holdSignals } from './process'
 import { marked, paint, takesControlCodes } from './style'
+import { activeTheme, shaded, tinted } from './theme'
 
 export interface Progress {
   step: string
@@ -152,7 +153,7 @@ export function progressLine(stream: ProgressStream = process.stderr, env: Env =
   const begun = performance.now()
   let started = begun
   let current: Progress | undefined
-  const region = liveRegion(spinner => current === undefined ? [] : [tinted(progressParts(current, spinner, performance.now() - started), colors)], stream, env)
+  const region = liveRegion(spinner => current === undefined ? [] : [tintedParts(progressParts(current, spinner, performance.now() - started), colors)], stream, env)
   const end = (line: string) => {
     region.stop()
     write(`${line}\n`)
@@ -181,7 +182,7 @@ export function taskList(stream: ProgressStream = process.stderr, env: Env = pro
   const colors = paint(stream, env)
   const running = new Set<{ progress: Progress, started: number }>()
   let region: LiveRegion | undefined
-  const render = (spinner: string) => [...running].map(({ progress, started }) => tinted(progressParts(progress, spinner, performance.now() - started), colors))
+  const render = (spinner: string) => [...running].map(({ progress, started }) => tintedParts(progressParts(progress, spinner, performance.now() - started), colors))
 
   return {
     add: (label) => {
@@ -233,22 +234,24 @@ export async function task<T>(label: string, run: (update: (progress: Omit<Progr
   }
 }
 
-// `⠹ prerendering ████████░░░░░░░░░░░░ 8/20 routes 4.2s`; a step with no total has no bar.
+// `⠹ prerendering ━━━━━━━━░░░░░░░░░░░░ 8/20 routes 4.2s`; a step with no total has no bar.
 export function progressText(progress: Progress, spinner: string, ms: number): string {
   return progressParts(progress, spinner, ms).map(part => part.text).join('')
 }
 
 function progressParts({ step, done, total, unit }: Progress, spinner: string, ms: number): Part[] {
-  const parts: Part[] = [{ text: spinner, tint: colors => colors.cyan }, { text: ` ${step}`, tint: () => plain }]
+  const { theme } = activeTheme()
+  const parts: Part[] = [{ text: spinner, tint: colors => tinted(colors, theme.colors.accent) }, { text: ` ${step}`, tint: () => plain }]
 
   if (total !== undefined && total > 0) {
     const counted = Math.min(done ?? 0, total)
     const filled = Math.round(counted / total * BAR_WIDTH)
 
+    // The same bar `bar()` draws: the theme's glyph, the filled part on its gradient and the rest dimmed.
     parts.push(
       { text: ' ', tint: () => plain },
-      { text: '█'.repeat(filled), tint: colors => colors.cyan },
-      { text: '░'.repeat(BAR_WIDTH - filled), tint: colors => colors.dim },
+      { text: theme.glyphs.bar.repeat(filled), tint: colors => () => shaded(theme, colors, theme.glyphs.bar, filled, BAR_WIDTH) },
+      { text: theme.glyphs.bar.repeat(BAR_WIDTH - filled), tint: colors => colors.dim },
       { text: ` ${counted}/${total}${unit === undefined ? '' : ` ${unit}`}`, tint: colors => colors.dim },
     )
   }
@@ -262,7 +265,7 @@ function plain(text: string): string {
   return text
 }
 
-function tinted(parts: Part[], colors: Colors): string {
+function tintedParts(parts: Part[], colors: Colors): string {
   return parts.map(({ text, tint }) => tint(colors)(text)).join('')
 }
 

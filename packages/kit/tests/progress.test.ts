@@ -41,8 +41,8 @@ describe('the progress line', () => {
   })
 
   it('shows a bar and a count where the total is known, and the time alone where it is not', () => {
-    expect(progressText({ step: 'prerendering', done: 5, total: 10, unit: 'routes' }, '⠋', 1520)).toBe('⠋ prerendering ██████████░░░░░░░░░░ 5/10 routes 1s')
-    expect(progressText({ step: 'encoding images', done: 12, total: 10 }, '⠙', 0)).toBe('⠙ encoding images ████████████████████ 10/10 0s')
+    expect(progressText({ step: 'prerendering', done: 5, total: 10, unit: 'routes' }, '⠋', 1520)).toBe('⠋ prerendering ━━━━━━━━━━━━━━━━━━━━ 5/10 routes 1s')
+    expect(progressText({ step: 'encoding images', done: 12, total: 10 }, '⠙', 0)).toBe('⠙ encoding images ━━━━━━━━━━━━━━━━━━━━ 10/10 0s')
     expect(progressText({ step: 'bundling' }, '⠹', 240)).toBe('⠹ bundling 0s')
     expect(progressText({ step: 'bundling', done: 0, total: 0 }, '⠹', 61_900)).toBe('⠹ bundling 1m 1s')
   })
@@ -66,7 +66,7 @@ describe('the progress line', () => {
     for (const frame of frames) {
       expect(frame.startsWith(CLEAR_LINE)).toBe(true)
       // eslint-disable-next-line no-control-regex
-      expect(frame.slice(CLEAR_LINE.length).replaceAll(/\x1B\[\d+m/g, '')).toHaveLength(19)
+      expect(frame.slice(CLEAR_LINE.length).replaceAll(/\x1B\[[\d;]+m/g, '')).toHaveLength(19)
     }
 
     expect(written.at(-1)).toBe(CLEAR_LINE)
@@ -111,7 +111,7 @@ describe('the progress line', () => {
     line.stop()
 
     // eslint-disable-next-line no-control-regex
-    expect(written[0]!.slice(CLEAR_LINE.length).replaceAll(/\x1B\[\d+m/g, '')).toBe(`⠋ ${step}`.slice(0, 79))
+    expect(written[0]!.slice(CLEAR_LINE.length).replaceAll(/\x1B\[[\d;]+m/g, '')).toBe(`⠋ ${step}`.slice(0, 79))
   })
 
   it('clears itself before anything else is printed, and gives the console and the streams back once stopped', () => {

@@ -43,7 +43,7 @@ const DEFAULT: Theme = {
   glyphs: { ok: '✓', warn: '▲', problem: '✗', note: '›', passed: '✓', failed: '✗', running: '●', queued: '○', skipped: '-', bar: '━', rule: '─', corner: '╭' },
   accents: ['cyan', 'magenta', 'green', 'blue', 'yellow', 'redBright'],
   bins: {},
-  gradient: ['#c4b5fd', '#67e8f9'],
+  gradient: ['#c084fc', '#67e8f9'],
 }
 
 const BRIGHT: Partial<Theme['colors']> = { accent: 'cyanBright', id: 'yellowBright', path: 'blueBright', label: 'white', value: 'bold whiteBright', ok: 'greenBright', warn: 'yellowBright', problem: 'redBright', note: 'white', passed: 'greenBright', failed: 'redBright', running: 'cyanBright', queued: 'yellowBright', skipped: 'white' }
@@ -53,7 +53,7 @@ const ASCII: Partial<Theme['glyphs']> = { ok: '+', warn: '!', problem: 'x', note
 // Named themes, each a patch over the default one.
 export const PRESETS: Record<string, { colors?: Partial<Theme['colors']>, glyphs?: Partial<Theme['glyphs']>, accents?: ColorSpec[], gradient?: Theme['gradient'] }> = {
   'default': {},
-  'high-contrast': { colors: BRIGHT, accents: ['cyanBright', 'magentaBright', 'greenBright', 'blueBright', 'yellowBright', 'redBright'], gradient: ['#e9d5ff', '#a5f3fc'] },
+  'high-contrast': { colors: BRIGHT, accents: ['cyanBright', 'magentaBright', 'greenBright', 'blueBright', 'yellowBright', 'redBright'], gradient: ['#d8b4fe', '#a5f3fc'] },
   'mono': { colors: MONO, accents: ['bold'], gradient: undefined },
   'ascii': { glyphs: ASCII },
 }
@@ -108,6 +108,11 @@ export function tinted(colors: Colors, spec: ColorSpec, env: Env = process.env):
 
     return (chain as unknown as Record<string, Colors | undefined>)[token] ?? chain
   }, colors)
+}
+
+// `cells` glyphs drawn from the start of a bar `width` cells long, each on the gradient at its own place, so the colour shifts along the bar and a full one shows the whole blend; the accent when the theme has no gradient.
+export function shaded(theme: Theme, colors: Parameters<typeof tinted>[0], glyph: string, cells: number, width: number, env: Env = process.env): string {
+  return Array.from({ length: cells }, (_, index) => tinted(colors, gradientAt(theme, width <= 1 ? 0 : index / (width - 1)) ?? theme.colors.accent, env)(glyph)).join('')
 }
 
 export interface ThemeSettings {

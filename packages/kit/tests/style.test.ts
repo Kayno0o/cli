@@ -169,7 +169,7 @@ describe('a theme in force', () => {
     withTheme('ascii', () => {
       expect(badge('success', TERMINAL, {})).toBe('\x1B[32m+ success\x1B[39m')
       expect(marked('problem', 'broke', TERMINAL, undefined, {})).toBe('\x1B[1m\x1B[31mx\x1B[39m\x1B[22m broke')
-      expect(bar(0.5, { stream: TERMINAL, env: {}, width: 4 })).toBe('\x1B[38;5;117m##\x1B[39m\x1B[2m##\x1B[22m')
+      expect(bar(0.5, { stream: TERMINAL, env: {}, width: 4 })).toBe('\x1B[38;5;141m#\x1B[39m\x1B[38;5;147m#\x1B[39m\x1B[2m##\x1B[22m')
     })
 
     expect(badge('success', TERMINAL, {})).toBe('\x1B[32m✓ success\x1B[39m')
