@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun --no-env-file
 
 import process from 'node:process'
-import { badUsage, fail, parse, runMain } from '@kaynooo/cli-kit'
+import { badUsage, fail, jsonOption, parse, printJson, runMain } from '@kaynooo/cli-kit'
 import { choose, DEFAULT_HEIGHT, parseHeight } from '@kaynooo/cli-kit/picker'
 
 const USAGE = `pick [options]: a fuzzy selector, the lines on stdin in, the chosen one on stdout out
@@ -20,7 +20,15 @@ const OPTIONS = {
   query: { type: 'string', short: 'q', description: 'the query to start with' },
   preview: { type: 'string', description: 'a command shown for the highlighted line, {} standing for it' },
   height: { type: 'string', description: 'lines or a percentage of the terminal to draw in (40%)' },
+  json: jsonOption('{picked: [lines]}, the choice or the marked lines in input order'),
 } as const
+
+function print(chosen: string[], json: boolean): void {
+  if (json)
+    printJson({ picked: chosen })
+  else
+    process.stdout.write(`${chosen.join('\n')}\n`)
+}
 
 async function main(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { replaces: 'fzf for a quick choice in a pipe, select in a shell script', examples: ['git branch --format=\'%(refname:short)\' | pick', 'ls | pick --multi --preview \'head -20 {}\''] })
@@ -49,7 +57,7 @@ async function main(args: string[]): Promise<number> {
     if (matching.length === 0)
       return 1
 
-    process.stdout.write(`${(values.multi === true ? matching : matching.slice(0, 1)).join('\n')}\n`)
+    print(values.multi === true ? matching : matching.slice(0, 1), values.json === true)
 
     return 0
   }
@@ -59,7 +67,7 @@ async function main(args: string[]): Promise<number> {
   if (picked === undefined)
     return 1
 
-  process.stdout.write(`${picked.join('\n')}\n`)
+  print(picked, values.json === true)
 
   return 0
 }

@@ -16,6 +16,11 @@ describe('pick', () => {
     expect(pick(['--query', 'nope'], 'a\n')).toMatchObject({ code: 1, out: '' })
   })
 
+  test('prints the choice as JSON', () => {
+    expect(JSON.parse(pick(['--json'], 'a\nb\n').out)).toEqual({ picked: ['a'] })
+    expect(JSON.parse(pick(['--json', '--multi', '--query', 'b'], 'ab\nb\nc\n').out)).toEqual({ picked: ['ab', 'b'] })
+  })
+
   test('rejects arguments and a bad height before looking for a terminal', () => {
     expect(pick(['file'], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('stdin') })
     expect(pick(['--height', 'tall'], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('--height') })

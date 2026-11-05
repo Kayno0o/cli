@@ -27,6 +27,12 @@ describe('view', () => {
     expect(view(['--diff'], '# T\n').out).toBe('# T\n')
   })
 
+  test('describes what it showed as JSON', () => {
+    expect(JSON.parse(view(['--json'], '# T\n\nsome **text**\n').out)).toEqual({ kind: 'markdown', language: null, text: '# T\n\nsome text\n' })
+    expect(JSON.parse(view(['--json'], '@@ -1 +1 @@\n-a\n+b\n').out)).toMatchObject({ kind: 'diff', language: null })
+    expect(JSON.parse(view(['--json', '--lang', 'json'], '{"a":1}\n').out)).toMatchObject({ kind: 'code', language: 'json' })
+  })
+
   test('wraps to --width', () => {
     expect(view(['--width', '20'], 'one two three four five six seven\n').out).toBe('one two three four\nfive six seven\n')
   })

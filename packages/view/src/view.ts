@@ -1,7 +1,8 @@
 #!/usr/bin/env -S bun --no-env-file
 
+import type { Theme } from './theme'
 import process from 'node:process'
-import { badUsage, fail, parse, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, fail, jsonOption, parse, printJson, readInput, runMain, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
 import { languageOf, renderCode } from './code'
 import { looksLikeDiff, renderDiff } from './diff'
 import { renderMarkdown } from './markdown'
@@ -25,6 +26,7 @@ const OPTIONS = {
   lines: { type: 'boolean', description: 'number the lines of code (--no-lines turns it off; on a terminal by default)' },
   width: { type: 'string', short: 'w', description: 'columns to wrap to, instead of the terminal\'s' },
   pager: { type: 'boolean', description: 'page a long output on a terminal (--no-pager turns it off)' },
+  json: jsonOption('{kind: code, diff or markdown, language, text}, the text rendered without colour'),
 } as const
 
 // The text through the pager; a missing pager or one the reader quit leaves the text printed or dropped rather than failing.
@@ -72,14 +74,22 @@ async function main(args: string[]): Promise<number> {
   const forced = values.diff === true || values.markdown === true
   const isCode = values.lang !== undefined || (!forced && language !== undefined && !MARKDOWN_FILE.test(path) && !DIFF_FILE.test(path))
   const isDiff = !isCode && (values.diff === true || (values.markdown !== true && !MARKDOWN_FILE.test(path) && (DIFF_FILE.test(path) || looksLikeDiff(text))))
-  let shown: string
+  const kind = isDiff ? 'diff' : 'markdown'
 
-  if (isCode)
-    shown = renderCode(text, language, theme, values.lines ?? process.stdout.isTTY === true)
-  else if (isDiff)
-    shown = renderDiff(text, theme)
-  else
-    shown = renderMarkdown(text, { theme, width })
+  function render(as: Theme, numbered: boolean): string {
+    if (isCode)
+      return renderCode(text, language, as, numbered)
+
+    return isDiff ? renderDiff(text, as) : renderMarkdown(text, { theme: as, width })
+  }
+
+  if (values.json === true) {
+    printJson({ kind: isCode ? 'code' : kind, language: isCode ? language ?? null : null, text: stripAnsi(render(themeFor({ isTTY: false }), values.lines ?? false)) })
+
+    return 0
+  }
+
+  const shown = render(theme, values.lines ?? process.stdout.isTTY === true)
 
   if (process.stdout.isTTY === true && values.pager !== false && shown.split('\n').length > (process.stdout.rows || 24))
     await page(shown)
