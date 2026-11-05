@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-git",
   "type": "module",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "gst, gc and gb: a repository's state in one call, a commit of exactly the paths given, its message checked before anything is staged, and a branch picked.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
