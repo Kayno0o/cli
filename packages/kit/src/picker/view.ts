@@ -41,7 +41,7 @@ const RESET = '\x1B[0m'
 const SEPARATOR = ' │ '
 const HEIGHT = /^(\d+)(%?)$/
 
-export const DEFAULT_HEIGHT: Height = { percent: 40 }
+export const DEFAULT_HEIGHT: Height = { percent: 100 }
 
 export function parseHeight(text: string): Height | undefined {
   const found = HEIGHT.exec(text)

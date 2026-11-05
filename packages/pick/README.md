@@ -12,7 +12,7 @@ bun add -g @kaynooo/cli-pick
 | `ls \| pick --multi` | tab marks lines, enter prints the marked ones (the highlighted one when none is marked) |
 | `pick --prompt 'branch> ' --query main` | a custom prompt, a query to start with |
 | `ls \| pick --preview 'head -20 {}'` | a pane on the right (terminal at least 80 columns) shows the command run for the highlighted line, `{}` shell-quoted |
-| `--height 12`, `--height 60%` | lines or a share of the terminal to draw in (40%) |
+| `--height 12`, `--height 60%` | lines or a share of the terminal to draw in (100%) |
 
 Keys: type to filter, up and down or ctrl-p and ctrl-n to move, enter to pick, esc or ctrl-c to cancel (exit 1, nothing printed), ctrl-u clears the query, ctrl-w deletes a word, ctrl-/ or f1 opens a legend of the keys until the next key. The count line ends in a `ctrl-/ keys` hint, and the characters a query matched are underlined.
 

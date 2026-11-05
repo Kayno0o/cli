@@ -19,7 +19,7 @@ const OPTIONS = {
   prompt: { type: 'string', short: 'p', description: 'the prompt before the query (> )' },
   query: { type: 'string', short: 'q', description: 'the query to start with' },
   preview: { type: 'string', description: 'a command shown for the highlighted line, {} standing for it' },
-  height: { type: 'string', description: 'lines or a percentage of the terminal to draw in (40%)' },
+  height: { type: 'string', description: 'lines or a percentage of the terminal to draw in (100%)' },
   json: jsonOption('{picked: [lines]}, the choice or the marked lines in input order'),
 } as const
 
