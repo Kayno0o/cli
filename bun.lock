@@ -245,7 +245,7 @@
     },
     "packages/view": {
       "name": "@kaynooo/cli-view",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "bin": {
         "view": "./dist/view.js",
       },
