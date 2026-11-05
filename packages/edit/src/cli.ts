@@ -5,7 +5,7 @@ import type { Pair } from './replace'
 import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { normalize, resolve } from 'node:path'
 import process from 'node:process'
-import { Exit, fail, jsonOption, parse, printJson, readInput, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { Exit, fail, jsonOption, parse, printJson, readInput, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
 import { applyPairs, compile, listLines } from './replace'
@@ -351,7 +351,7 @@ async function main(argv: string[]): Promise<number> {
     }
 
     if (values.quiet !== true)
-      console.log(`${path}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, +${diff.added} -${diff.removed}`)
+      console.log(`${role('path', process.stdout)(path)}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, ${role('ok', process.stdout)(`+${diff.added}`)} ${role('problem', process.stdout)(`-${diff.removed}`)}`)
 
     if (values.diff === true && diff.unified !== '')
       process.stdout.write(diff.unified)

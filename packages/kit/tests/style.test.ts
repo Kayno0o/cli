@@ -65,6 +65,12 @@ describe('role and link', () => {
     expect(role('id', {}, {})('#49')).toBe('#49')
   })
 
+  it('tints by mark and status name too', () => {
+    expect(role('ok', TERMINAL, {})('done')).toBe('\x1B[32mdone\x1B[39m')
+    expect(role('problem', TERMINAL, {})('bad')).toBe('\x1B[31mbad\x1B[39m')
+    expect(role('ok', {}, {})('done')).toBe('done')
+  })
+
   it('links with OSC 8 on a terminal, and spells the url out elsewhere', () => {
     expect(link('#49', 'https://x/49', TERMINAL, {})).toBe('\x1B]8;;https://x/49\x1B\\#49\x1B]8;;\x1B\\')
     expect(link('#49', 'https://x/49', {}, {})).toBe('#49 (https://x/49)')

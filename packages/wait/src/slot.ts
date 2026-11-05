@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:f
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badge, currentSession, duration, exitCodeOf, fail, formatAge, formatDuration, holdSignals, jsonOption, liveSessions, parse, printJson, privateLogDirectory, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, currentSession, duration, exitCodeOf, fail, formatAge, formatDuration, holdSignals, jsonOption, liveSessions, paint, parse, printJson, privateLogDirectory, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { tryLock, writeHeld } from './flock'
 
 const RUN_USAGE = `slot [options] -- <cmd>...: waits for a free machine-wide slot, then runs the command and exits with its code
@@ -283,7 +283,7 @@ export async function listSlots(args: string[]): Promise<number> {
     return 0
   }
 
-  console.log(`slots: ${busy} of ${count} busy`)
+  console.log(paint(process.stdout).bold(`slots: ${busy} of ${count} busy`))
 
   if (entries.length > 0)
     console.log(table(entries.map(entry => [badge(entry.state, process.stdout), entry.resource, entry.session ?? `pid ${entry.pid}`, truncate(entry.command, COMMAND_WIDTH), entry.since === 0 ? '?' : formatAge(entry.since)])))

@@ -1,7 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Run } from './worktree'
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, wholeNumber } from '@kaynooo/cli-kit'
 import { checkout, defaultProofRef, folded, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
 const USAGE = 'proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with the default branch of origin (origin/main unless origin/HEAD names another) when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass.'
@@ -107,7 +107,7 @@ export async function proof(argv: string[]): Promise<number> {
     return proved ? 0 : 1
   }
 
-  console.log(message)
+  console.log(role(proved ? 'ok' : 'problem', process.stdout)(message))
 
   if (runs > 1)
     console.log(`now: ${codes.map((code, i) => `run ${i + 1} ${code === 0 ? 'passed' : `failed (exit ${code})`}`).join(', ')}`)
