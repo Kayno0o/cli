@@ -35,6 +35,17 @@ describe('layoutFor', () => {
 describe('render', () => {
   const layout = layoutFor({ columns: 40, rows: 20 }, { lines: 6 }, false)
 
+  test('draws the key legend in place of the list while help is open, any key closing it', () => {
+    const opened = press(createState(['one', 'two']), 'help')
+    const lines = render(opened, layout, plain)
+
+    expect(lines[0]).toBe('keys')
+    expect(lines.join('\n')).toContain('pgup, pgdn')
+    expect(lines.join('\n')).not.toContain('❯')
+    expect(press(opened, { text: 'x' }).help).toBe(false)
+    expect(press(opened, { text: 'x' }).query).toBe('')
+  })
+
   test('draws the prompt, the counts and the list with a pointer, exactly height lines', () => {
     const lines = render(createState(['one', 'two', 'three'], { prompt: '? ' }), layout, plain)
 

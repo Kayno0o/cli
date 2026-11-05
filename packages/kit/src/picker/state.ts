@@ -2,7 +2,7 @@ import type { Ranked } from './score'
 import { rank } from './score'
 
 /** `ctrl` is a control key the caller asked for, named as `ctrl-d`. */
-export type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | 'clear' | 'word' | 'tab' | { text: string } | { ctrl: string }
+export type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | 'clear' | 'word' | 'tab' | 'help' | { text: string } | { ctrl: string }
 
 /** A choice: the cells are drawn in columns and the first `searched` of them searched; the hidden fields are neither, and come back with the choice. */
 export interface Row {
@@ -33,6 +33,8 @@ export interface State {
   matches: Ranked[]
   /** Where the highlighted match stands in `matches`. */
   cursor: number
+  /** Whether the key legend is drawn in place of the list. */
+  help: boolean
   /** How many rows page up and page down move by, the list rows on screen. */
   page: number
   /** The marked rows, by index in `rows`. */
@@ -84,6 +86,9 @@ const KEYS: Record<string, Key> = {
   '\x15': 'clear',
   '\x17': 'word',
   '\t': 'tab',
+  '\x1F': 'help',
+  '\x1BOP': 'help',
+  '\x1B[11~': 'help',
 }
 
 /** The control keys a caller can ask for, `ctrl-a` to `ctrl-z` but those standing for tab, enter, backspace and cancel. */
@@ -209,7 +214,7 @@ export interface StateSettings {
 
 /** A line is a row of one cell with nothing hidden. */
 export function createState(rows: readonly (string | Row)[], { multi = false, prompt = '> ', query = '', header = '', expect = [], searched = Number.POSITIVE_INFINITY }: StateSettings = {}): State {
-  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, matches: [], cursor: 0, page: 10, marked: new Set(), multi, prompt, done: undefined }
+  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, matches: [], cursor: 0, help: false, page: 10, marked: new Set(), multi, prompt, done: undefined }
 
   return withRows(state, rows)
 }
@@ -242,6 +247,10 @@ export function press(state: State, key: Key): State {
   if (state.done !== undefined)
     return state
 
+  // The legend covers the list, so the key that reads it is the one that closes it.
+  if (state.help)
+    return { ...state, help: false }
+
   if (typeof key === 'object') {
     if ('text' in key)
       return withQuery(state, state.query + key.text)
@@ -257,6 +266,7 @@ export function press(state: State, key: Key): State {
     case 'home': return move(state, -state.matches.length)
     case 'end': return move(state, state.matches.length)
     case 'cancel': return { ...state, done: 'cancel' }
+    case 'help': return { ...state, help: true }
     case 'erase': return withQuery(state, [...state.query].slice(0, -1).join(''))
     case 'clear': return withQuery(state, '')
     case 'word': return withQuery(state, state.query.replace(LAST_WORD, ''))

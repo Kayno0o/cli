@@ -114,7 +114,23 @@ export function caretColumn(state: State, layout: Layout): number {
   return Math.min(layout.listWidth, Bun.stringWidth(state.prompt) + Bun.stringWidth(state.query) + 1)
 }
 
+/** The keys the picker answers to, drawn in place of the list while help is open, short enough for the smallest box. */
+function helpLines(state: State, layout: Layout, theme: Theme): Fitted[] {
+  const lines = [
+    'type to filter, up and down or ctrl-p and ctrl-n move',
+    `pgup, pgdn, home and end jump, enter picks${state.multi ? ', tab marks' : ''}`,
+    'ctrl-u clears the query, ctrl-w a word, esc or ctrl-c cancels',
+    ...state.expect.length > 0 ? [`${state.expect.join(', ')} end the pick as this command asks`] : [],
+    'any key closes this help',
+  ]
+
+  return [{ text: theme.accent('keys'), width: 4 }, ...lines.map(line => fit(`  ${line}`, layout.listWidth, theme.label))]
+}
+
 function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {
+  if (state.help)
+    return helpLines(state, layout, theme)
+
   const header = state.header === '' ? [] : state.header.split('\n').map(line => fitStyled(line, layout.listWidth, theme.label))
   const rows = Math.max(1, layout.listHeight - 2 - header.length)
   const prefixWidth = state.multi ? 4 : 2
