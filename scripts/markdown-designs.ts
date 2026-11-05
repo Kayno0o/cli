@@ -36,6 +36,54 @@ function highlighted(line: string): string {
   return line.replace('const', magenta('const')).replace(COMMENT, comment => dim(comment))
 }
 
+const ROWS = [
+  ['ft runs', 'recent runs with workflow, ref, duration and age (-n, --sha, -w test.yml, --json)'],
+  ['ft ci [ref]', 'waits for the push runs covering a commit on the default branch and prints each failed test\'s output'],
+  ['ft watch', 'waits for the runs in progress, or --after <id> those newer than a run'],
+  ['ft logs <run>', 'what the failed jobs of a run say went wrong, -j <name or id> picks a job, --full for whole logs'],
+]
+const TABLE_WIDTH = 38
+const FIRST = 14
+
+interface BigTable { hanging?: boolean, cards?: boolean, separators?: boolean, cut?: boolean, spaced?: boolean }
+
+const wrapped = (text: string, width: number) => Bun.wrapAnsi(text, width, { hard: true }).split('\n')
+
+function bigTable(options: BigTable): string[] {
+  const header = ['Command', 'What it does']
+
+  if (options.hanging) {
+    return ROWS.flatMap(([name, text]) => [bold(accent(name!)), ...wrapped(text!, TABLE_WIDTH - 2).map(line => `  ${line}`)])
+  }
+
+  if (options.cards) {
+    return ROWS.flatMap(([name, text], index) => [
+      ...index === 0 ? [] : [''],
+      `${dim(header[0]!.padEnd(13))}${accent(name!)}`,
+      ...wrapped(text!, TABLE_WIDTH - 13).map((line, at) => `${dim(at === 0 ? header[1]!.padEnd(13) : ' '.repeat(13))}${line}`),
+    ])
+  }
+
+  const second = TABLE_WIDTH - FIRST - 2
+  const lines = [`${bold(accent(header[0]!.padEnd(FIRST)))}  ${bold(accent(header[1]!))}`, dim('─'.repeat(TABLE_WIDTH))]
+
+  for (const [index, [name, text]] of ROWS.entries()) {
+    const cells = options.cut ? [text!.length > second ? `${text!.slice(0, second - 1)}…` : text!] : wrapped(text!, second)
+
+    if (index > 0 && options.separators)
+      lines.push(dim('┈'.repeat(TABLE_WIDTH)))
+
+    if (index > 0 && options.spaced)
+      lines.push('')
+
+    for (const [at, line] of cells.entries()) {
+      lines.push(`${(at === 0 ? name! : '').padEnd(FIRST)}  ${line}`)
+    }
+  }
+
+  return lines
+}
+
 const sections: Section[] = [
   {
     id: 'headings',
@@ -107,6 +155,18 @@ const sections: Section[] = [
       { name: '4. header band', about: 'tinted header row', draw: () => [background(236, bold(' name       files ')), ' kit           34', ' ft            21'] },
       { name: '5. separators', about: 'dim bars between columns', draw: () => [`${bold('name  ')} ${dim('│')} ${bold('files')}`, dim('───────┼──────'), `kit    ${dim('│')}    34`, `ft     ${dim('│')}    21`] },
       { name: '6. zebra', about: 'every other row tinted', draw: () => [bold(accent('name       files')), background(235, 'kit           34'), 'ft            21', background(235, 'pick           8')] },
+    ],
+  },
+  {
+    id: 'bigtable',
+    title: 'Tables with long cells',
+    variants: [
+      { name: '1. wrapped (now)', about: 'columns, cells wrap inside', draw: () => bigTable({}) },
+      { name: '2. hanging', about: 'first cell as a title, text below', draw: () => bigTable({ hanging: true }) },
+      { name: '3. cards', about: 'one block per row, labelled', draw: () => bigTable({ cards: true }) },
+      { name: '4. separated', about: 'wrapped, a dim rule between rows', draw: () => bigTable({ separators: true }) },
+      { name: '5. one line', about: 'cells cut with … to one line', draw: () => bigTable({ cut: true }) },
+      { name: '6. spaced', about: 'wrapped, a blank line between rows', draw: () => bigTable({ spaced: true }) },
     ],
   },
   {
