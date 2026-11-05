@@ -155,9 +155,6 @@
         "gc": "./dist/gc.js",
         "gb": "./dist/gb.js",
       },
-      "dependencies": {
-        "@kaynooo/utils": "3.0.0",
-      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
@@ -167,9 +164,6 @@
       "version": "0.9.0",
       "bin": {
         "gl": "./dist/cli.js",
-      },
-      "dependencies": {
-        "@kaynooo/utils": "3.0.0",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",

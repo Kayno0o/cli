@@ -43,9 +43,6 @@
     "gc": "$npm_execpath src/gc.ts",
     "gb": "$npm_execpath src/gb.ts"
   },
-  "dependencies": {
-    "@kaynooo/utils": "3.0.0"
-  },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"
   }
