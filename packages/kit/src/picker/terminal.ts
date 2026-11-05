@@ -4,7 +4,7 @@ import { openSync } from 'node:fs'
 import process from 'node:process'
 import tty from 'node:tty'
 import { fail } from '../args'
-import { role } from '../style'
+import { paint, role } from '../style'
 import { previewLines, runPreview } from './preview'
 import { chosen, createState, highlighted, parseKeys, press, withRows } from './state'
 import { caretColumn, layoutFor, render } from './view'
@@ -110,7 +110,7 @@ export function openTerminal(): Terminal {
     get rows() {
       return out.rows || 24
     },
-    theme: { accent: role('accent', out), label: role('label', out), value: role('value', out), id: role('id', out) },
+    theme: { accent: role('accent', out), label: role('label', out), value: role('value', out), id: role('id', out), match: text => paint(out).underline(role('accent', out)(text)) },
     write: text => void out.write(text),
     listen(onChunk, onResize) {
       resize = onResize

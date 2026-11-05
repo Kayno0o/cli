@@ -49,7 +49,7 @@ describe('render', () => {
   test('draws the prompt, the counts and the list with a pointer, exactly height lines', () => {
     const lines = render(createState(['one', 'two', 'three'], { prompt: '? ' }), layout, plain)
 
-    expect(lines).toEqual(['? ', '  3/3', '❯ one', '  two', '  three', ''])
+    expect(lines).toEqual(['? ', '  3/3  ctrl-/ keys', '❯ one', '  two', '  three', ''])
   })
 
   test('highlights the matched characters and the current line', () => {
@@ -59,11 +59,17 @@ describe('render', () => {
     expect(lines[2]).toBe('<❯> *f**o**o**-*<b><a>*r*')
   })
 
+  test('draws the matched characters with the match style of the theme when it has one', () => {
+    const lines = render(createState(['foo-bar'], { query: 'ba' }), layout, { ...tagged, match: text => `_${text}_` })
+
+    expect(lines[2]).toBe('<❯> *f**o**o**-*_b__a_*r*')
+  })
+
   test('shows marks in --multi and counts them', () => {
     const state = press(createState(['one', 'two'], { multi: true }), 'tab')
     const lines = render(state, layout, plain)
 
-    expect(lines[1]).toBe('  2/2 (1 marked)')
+    expect(lines[1]).toBe('  2/2 (1 marked)  ctrl-/ keys')
     expect(lines[2]).toBe('  ● one')
     expect(lines[3]).toBe('❯   two')
   })
@@ -71,7 +77,7 @@ describe('render', () => {
   test('says so on an empty match list', () => {
     const lines = render(createState(['one'], { query: 'zz' }), layout, plain)
 
-    expect(lines.slice(0, 3)).toEqual(['> zz', '  0/1', '  no match'])
+    expect(lines.slice(0, 3)).toEqual(['> zz', '  0/1  ctrl-/ keys', '  no match'])
   })
 
   test('scrolls to keep the highlighted line in view', () => {
@@ -99,7 +105,7 @@ describe('render', () => {
 
     expect(lines).toHaveLength(4)
     expect(lines[0]).toBe(`>${' '.repeat(39)} │ line a`)
-    expect(lines[1]).toBe(`  1/1${' '.repeat(35)} │ ${'b'.repeat(36)}…`)
+    expect(lines[1]).toBe(`  1/1  ctrl-/ keys${' '.repeat(22)} │ ${'b'.repeat(36)}…`)
     expect(lines[3]).toBe(`${' '.repeat(40)} │ `)
   })
 
@@ -113,7 +119,7 @@ describe('render with a header, colors and a preview below', () => {
     const layout = layoutFor({ columns: 40, rows: 20 }, { lines: 6 }, false)
     const lines = render(createState(['one', 'two', 'three', 'four'], { header: 'first\nsecond' }), layout, plain)
 
-    expect(lines).toEqual(['> ', '  4/4 (1 of 4)', 'first', 'second', '❯ one', '  two'])
+    expect(lines).toEqual(['> ', '  4/4 (1 of 4)  ctrl-/ keys', 'first', 'second', '❯ one', '  two'])
   })
 
   test('the colors of a cell survive, the matched characters being drawn by the theme', () => {

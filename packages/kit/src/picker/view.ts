@@ -7,6 +7,8 @@ export interface Theme {
   label: (text: string) => string
   value: (text: string) => string
   id: (text: string) => string
+  /** How the characters a query matched are drawn, the accent by default. */
+  match?: (text: string) => string
 }
 
 export interface Size {
@@ -139,7 +141,7 @@ function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {
   const query = fit(state.query, Math.max(1, layout.listWidth - promptWidth), identity)
   // Where the highlight stands when the list is longer than the box, as there is no scrollbar to show it.
   const place = state.matches.length > rows ? ` (${state.cursor + 1} of ${state.matches.length})` : ''
-  const count = fit(`  ${state.matches.length}/${state.items.length}${place}${marks}`, layout.listWidth, theme.label)
+  const count = fit(`  ${state.matches.length}/${state.items.length}${place}${marks}  ctrl-/ keys`, layout.listWidth, theme.label)
   const lines: Fitted[] = [{ text: theme.accent(state.prompt) + query.text, width: promptWidth + query.width }, count, ...header]
 
   if (state.matches.length === 0)
@@ -149,7 +151,7 @@ function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {
     const current = top + offset === state.cursor
     const pointer = current ? theme.accent('❯') : ' '
     const mark = state.multi ? `${state.marked.has(match.index) ? theme.id('●') : ' '} ` : ''
-    const text = fit(state.items[match.index]!, layout.listWidth - prefixWidth, current ? theme.value : identity, theme.accent, new Set(match.positions), state.styles[match.index])
+    const text = fit(state.items[match.index]!, layout.listWidth - prefixWidth, current ? theme.value : identity, theme.match ?? theme.accent, new Set(match.positions), state.styles[match.index])
 
     lines.push({ text: `${pointer} ${mark}${text.text}`, width: prefixWidth + text.width })
   }

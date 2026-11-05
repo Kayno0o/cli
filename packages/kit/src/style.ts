@@ -1,5 +1,7 @@
 import type { Mark, Role, Status } from './theme'
+import { resolve } from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 import { createColors } from '@kaynooo/utils/tools/colors'
 import { outputMode } from './mode'
 import { activeTheme, tinted } from './theme'
@@ -128,4 +130,14 @@ export function section(title: string, count: number | undefined, stream: { isTT
   const width = Math.min(stream.columns ?? 60, 100)
 
   return paint(stream, env).dim(head + glyphs.rule.repeat(Math.max(3, width - Bun.stringWidth(head))))
+}
+
+// The text as a clickable link on a terminal and as it is anywhere else, for a cell whose url a log has no use for.
+export function hyperlink(text: string, url: string, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
+  return takesControlCodes(stream, env) ? link(text, url, stream, env) : text
+}
+
+// A path as a link that opens the file, relative paths taken from `from`.
+export function fileLink(text: string, path: string, stream: { isTTY?: boolean }, from = process.cwd(), env: Record<string, string | undefined> = process.env): string {
+  return hyperlink(text, pathToFileURL(resolve(from, path)).href, stream, env)
 }

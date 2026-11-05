@@ -1,6 +1,6 @@
 import { readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { badUsage, copyText, fail, formatAge, formatFileSize, paint, role, table } from '@kaynooo/cli-kit'
+import { badUsage, copyText, fail, fileLink, formatAge, formatFileSize, paint, role, table } from '@kaynooo/cli-kit'
 import { logDir } from './logs'
 
 export interface SavedLog {
@@ -62,7 +62,7 @@ export async function printList(): Promise<number> {
   const colors = paint(process.stdout)
   const path = role('path', process.stdout)
 
-  console.log(table(logs.map(log => [path(log.path), formatFileSize(log.size), colors.dim(formatAge(log.mtimeMs))])))
+  console.log(table(logs.map(log => [fileLink(path(log.path), log.path, process.stdout), formatFileSize(log.size), colors.dim(formatAge(log.mtimeMs))])))
 
   return 0
 }

@@ -3,7 +3,7 @@ import { helpText, parse } from '../src/args'
 import { bar } from '../src/chart'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
-import { badge, header, link, marked, paint, printHeader, role, section, statusOf } from '../src/style'
+import { badge, fileLink, header, hyperlink, link, marked, paint, printHeader, role, section, statusOf } from '../src/style'
 import { capture } from '../src/test'
 import { stripAnsi } from '../src/text'
 
@@ -201,5 +201,14 @@ describe('printHeader', () => {
   it('prints the header line on a terminal and nothing elsewhere', async () => {
     expect((await capture(() => printHeader('ft', 'board', {}, {}))).out).toBe('')
     expect(stripAnsi((await capture(() => printHeader('ft', 'board', TERMINAL, {}))).out)).toBe('ft › board\n')
+  })
+})
+
+describe('hyperlink and fileLink', () => {
+  it('link on a terminal and give the text alone elsewhere', () => {
+    expect(hyperlink('#7', 'https://x.test/7', TERMINAL, {})).toBe('\x1B]8;;https://x.test/7\x1B\\#7\x1B]8;;\x1B\\')
+    expect(hyperlink('#7', 'https://x.test/7', {}, {})).toBe('#7')
+    expect(fileLink('a.ts', 'src/a.ts', TERMINAL, '/repo', {})).toContain('\x1B]8;;file:///repo/src/a.ts\x1B\\')
+    expect(fileLink('a.ts', 'src/a.ts', {}, '/repo', {})).toBe('a.ts')
   })
 })

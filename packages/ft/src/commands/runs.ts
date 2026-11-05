@@ -1,5 +1,5 @@
 import type { Run } from '../runs'
-import { badge, formatSeconds, jsonOption, limitOf, limitOptions, moreFooter, openUrl, parse, printHeader, printJson, table, truncate, upTo } from '@kaynooo/cli-kit'
+import { badge, formatSeconds, hyperlink, jsonOption, limitOf, limitOptions, moreFooter, openUrl, parse, printHeader, printJson, table, truncate, upTo } from '@kaynooo/cli-kit'
 import { openOption, repoOption } from '../args'
 import { resolveCommit } from '../git'
 import { runSeconds, runsListing, runsOn, startedAge } from '../runs'
@@ -62,7 +62,7 @@ export async function runs(args: string[]): Promise<number> {
 
   console.log(table([
     ['ID', 'STATUS', 'WORKFLOW', 'REF', 'EVENT', 'TOOK', 'STARTED', 'TITLE'],
-    ...list.map(run => [String(run.id), badge(run.status, process.stdout), run.workflow_id, run.prettyref, run.event, run.duration > 0 ? formatSeconds(runSeconds(run)) : '-', startedAge(run), truncate(upTo(run.title, '\n'), TITLE_WIDTH)]),
+    ...list.map(run => [hyperlink(String(run.id), run.html_url, process.stdout), badge(run.status, process.stdout), run.workflow_id, run.prettyref, run.event, run.duration > 0 ? formatSeconds(runSeconds(run)) : '-', startedAge(run), truncate(upTo(run.title, '\n'), TITLE_WIDTH)]),
   ], { header: true }))
 
   if (more > 0)
