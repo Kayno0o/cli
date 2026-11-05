@@ -1,5 +1,6 @@
 import type { Described, Example, Options } from './args'
 import process from 'node:process'
+import { outputMode } from './mode'
 import { paint } from './style'
 
 // Optional parts of a usage line, `[options]` or `[tag]`, dimmed in the help.
@@ -29,9 +30,9 @@ export function exitRows(exits: ExitRow[], colors = paint(process.stdout)): stri
   return ['', colors.bold('Exits:'), ...exits.map(([code, meaning]) => `  ${colors.cyan(String(code).padEnd(width))}  ${meaning}`)]
 }
 
-// An `Instead of:` line, after a blank line; nothing without one.
+// An `Instead of:` line, after a blank line; nothing without one, and nothing for an agent, which has picked the command already.
 export function replacesRows(replaces: string | undefined, colors = paint(process.stdout)): string[] {
-  return replaces === undefined ? [] : ['', `${colors.bold('Instead of:')} ${replaces}`]
+  return replaces === undefined || outputMode() === 'agent' ? [] : ['', `${colors.bold('Instead of:')} ${replaces}`]
 }
 
 // What a bin's --help prints under KIT_HELP=json, for `cli list` to read without parsing the text.
@@ -67,9 +68,9 @@ export function description(usage: string, { examples = [], replaces, exits }: D
   }
 }
 
-// An `Examples:` section, after a blank line, with a line per example; nothing without one.
+// An `Examples:` section, after a blank line, with a line per example; nothing without one, and nothing for an agent, which reads the usage and the options.
 export function exampleRows(examples: Example[], colors = paint(process.stdout)): string[] {
-  if (examples.length === 0)
+  if (examples.length === 0 || outputMode() === 'agent')
     return []
 
   return ['', colors.bold('Examples:'), ...examples.map(example => typeof example === 'string' ? `  ${example}` : `  ${example[0]}  ${colors.dim(`# ${example[1]}`)}`)]

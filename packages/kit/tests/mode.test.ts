@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { jsonText } from '../src/format'
+import { exampleRows, replacesRows } from '../src/help'
 import { outputMode } from '../src/mode'
 
 const TERMINAL = { isTTY: true }
@@ -34,5 +35,26 @@ describe('jsonText', () => {
   test('indents for a person and stays on one line for an agent', () => {
     expect(jsonText({ a: [1] }, undefined, { stream: {}, env: {} })).toBe('{\n  "a": [\n    1\n  ]\n}')
     expect(jsonText({ a: [1] }, undefined, { stream: {}, env: { CLAUDECODE: '1' } })).toBe('{"a":[1]}')
+  })
+})
+
+describe('help for an agent', () => {
+  test('drops the examples and the instead-of line', () => {
+    const before = process.env.CLAUDECODE
+
+    process.env.CLAUDECODE = '1'
+
+    try {
+      expect(exampleRows(['a --b'])).toEqual([])
+      expect(replacesRows('grep')).toEqual([])
+    }
+    finally {
+      if (before === undefined)
+        delete process.env.CLAUDECODE
+      else
+        process.env.CLAUDECODE = before
+    }
+
+    expect(exampleRows(['a --b'])).not.toEqual([])
   })
 })
