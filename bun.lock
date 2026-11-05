@@ -116,7 +116,7 @@
     },
     "packages/env": {
       "name": "@kaynooo/cli-env",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "bin": {
         "ev": "./dist/ev.js",
         "redact": "./dist/redact.js",
