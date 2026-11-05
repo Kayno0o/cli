@@ -52,10 +52,10 @@ describe('tree', () => {
     expect(tree(roots, { stream: {}, env: {} })).toBe('• packages/\n│ • kit/\n│ │ · src\n│ │ · tests\n│ · ft\n· README.md')
   })
 
-  test('shades the folder dots by depth along the gradient, dims the guides and the file dots on a terminal', () => {
+  test('shades the folder dots by depth along the gradient, tints the guides by level at half strength and dims the file dots on a terminal', () => {
     const drawn = tree([{ label: 'a', children: [{ label: 'b' }] }], { stream: { isTTY: true }, env: {} })
 
-    expect(drawn).toBe('\x1B[38;5;141m•\x1B[39m \x1B[36m\x1B[1ma/\x1B[22m\x1B[39m\n\x1B[2m│ \x1B[22m\x1B[2m·\x1B[22m b')
+    expect(drawn).toBe('\x1B[38;5;141m•\x1B[39m \x1B[36m\x1B[1ma/\x1B[22m\x1B[39m\n\x1B[38;5;60m│ \x1B[39m\x1B[2m·\x1B[22m b')
     expect(sparkline([1, 2], { stream: { isTTY: true }, env: {} })).toBe('\x1B[38;5;141m▁\x1B[39m\x1B[38;5;81m█\x1B[39m')
     expect(sparkline([1, 2], { stream: {}, env: {} })).toBe('▁█')
   })

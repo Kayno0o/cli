@@ -103,11 +103,20 @@ function indented(nodes: TreeNode[], indent: string): string {
   return nodes.map(({ label, children = [] }) => [`${indent}${label}`, ...children.length === 0 ? [] : [indented(children, `${indent}  `)]].join('\n')).join('\n')
 }
 
+const GUIDE_STRENGTH = 0.55
+
+// A `#rrggbb` colour with its channels scaled down.
+function fade(hex: string): `#${string}` {
+  const channels = [1, 3, 5].map(at => Math.round(Number.parseInt(hex.slice(at, at + 2), 16) * GUIDE_STRENGTH).toString(16).padStart(2, '0'))
+
+  return `#${channels.join('')}`
+}
+
 function depthOf(nodes: TreeNode[]): number {
   return Math.max(0, ...nodes.map(({ children = [] }) => 1 + depthOf(children)))
 }
 
-// The nodes one per line, a dimmed `│` guide per level above each: a node with children is a folder, a `•` and its name bold in the theme's accent and ending in a slash on a terminal, any other a file, a dimmed `·` and its name in plain text; the folder dots shade along the theme's gradient from the roots to the deepest level, as a bar does across its cells.
+// The nodes one per line, a `│` guide per level above each, in that level's gradient shade at half strength: a node with children is a folder, a `•` and its name bold in the theme's accent and ending in a slash on a terminal, any other a file, a dimmed `·` and its name in plain text; the folder dots shade along the theme's gradient from the roots to the deepest level, as a bar does across its cells.
 export function tree(roots: TreeNode[], { stream = process.stdout, env = process.env }: KeyValueSettings = {}): string {
   if (outputMode(stream, env) === 'agent')
     return indented(roots, '')
@@ -119,13 +128,20 @@ export function tree(roots: TreeNode[], { stream = process.stdout, env = process
   const deepest = depthOf(roots) - 1
   const lines: string[] = []
 
+  // The guide of a level, its shade at half strength so it stays behind the names, dimmed where the theme has no gradient.
+  function guide(level: number): string {
+    const at = gradientAt(theme, deepest <= 0 ? 0 : level / deepest)
+
+    return at === undefined ? colors.dim(`${marks.guide} `) : tinted(colors, fade(at), env)(`${marks.guide} `)
+  }
+
   function walk(nodes: TreeNode[], depth: number) {
     const shade = tinted(colors, gradientAt(theme, deepest <= 0 ? 0 : depth / deepest) ?? theme.colors.accent, env)
 
     for (const { label, children = [] } of nodes) {
       const folder = children.length > 0
 
-      lines.push(`${depth === 0 ? '' : colors.dim(`${marks.guide} `.repeat(depth))}${folder ? shade(marks.open) : colors.dim(marks.leaf)} ${folder ? tinted(colors, theme.colors.accent, env).bold(`${label}/`) : label}`)
+      lines.push(`${Array.from({ length: depth }, (_, level) => guide(level)).join('')}${folder ? shade(marks.open) : colors.dim(marks.leaf)} ${folder ? tinted(colors, theme.colors.accent, env).bold(`${label}/`) : label}`)
       walk(children, depth + 1)
     }
   }
