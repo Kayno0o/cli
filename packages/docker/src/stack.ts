@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
 import { captureOutput, composeError, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
+import { spawnText } from '@kaynooo/utils/cli'
 
 /** How to reach one compose project: the command a user runs, and the one this package lists it with. */
 export interface Stack {
@@ -133,12 +134,16 @@ export function labelled(text: string): Labels[] {
 /** A stack whose files were renamed or deleted since it came up is left out, there being nothing to run it with. */
 export async function labels(project?: string): Promise<Labels[]> {
   const filter = project === undefined ? [] : ['--filter', `label=com.docker.compose.project=${project}`]
-  const proc = Bun.spawn(['docker', 'ps', '--all', ...filter, '--format', LABEL_FORMAT], { stdout: 'pipe', stderr: 'ignore' })
+  let listing: string
 
-  if ((await proc.exited) !== 0)
+  try {
+    listing = await spawnText(['docker', 'ps', '--all', ...filter, '--format', LABEL_FORMAT], { trim: false })
+  }
+  catch {
     return []
+  }
 
-  return labelled(await new Response(proc.stdout).text()).filter(stack => [...stack.files, ...stack.envFiles].every(file => existsSync(file)))
+  return labelled(listing).filter(stack => [...stack.files, ...stack.envFiles].every(file => existsSync(file)))
 }
 
 /** Run from the folder it came up in, with the files it came up with, paths kept short from there. */

@@ -29,6 +29,9 @@
     "popular": "$npm_execpath scripts/popular.ts",
     "record": "$npm_execpath scripts/record.ts"
   },
+  "dependencies": {
+    "@kaynooo/utils": "3.0.0"
+  },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"
   }

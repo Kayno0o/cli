@@ -18,7 +18,6 @@ const file = process.env.FAKE_GLAB_STATE
 const raw = process.argv.slice(2)
 const method = raw[1] === '--method' ? raw[2] : 'GET'
 const [command, endpoint] = raw[1] === '--method' ? [raw[0], raw[3]] : raw
-const sleep = ms => new Promise(done => setTimeout(done, ms))
 const barrier = JSON.parse(readFileSync(file, 'utf8')).barrier
 
 // Matching calls wait here until \`parties\` of them arrived, so two sessions reach the same step together.
@@ -26,7 +25,7 @@ if (barrier !== undefined && raw.join(' ').includes(barrier.match)) {
   appendFileSync(file + '.barrier', 'x')
 
   for (let waited = 0; waited < 10000 && readFileSync(file + '.barrier', 'utf8').length < barrier.parties; waited += 5)
-    await sleep(5)
+    await Bun.sleep(5)
 }
 
 // One call at a time reads and writes the state.
@@ -38,7 +37,7 @@ for (;;) {
     break
   }
   catch {
-    await sleep(5)
+    await Bun.sleep(5)
   }
 }
 

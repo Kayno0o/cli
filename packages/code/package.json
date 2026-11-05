@@ -42,6 +42,9 @@
     "todo-scan": "$npm_execpath src/todo-scan-cli.ts",
     "hotspots": "$npm_execpath src/hotspots-cli.ts"
   },
+  "dependencies": {
+    "@kaynooo/utils": "3.0.0"
+  },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"
   }

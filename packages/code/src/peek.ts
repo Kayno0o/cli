@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
 import { badUsage, capped, fail, isStdinPiped, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, wholeNumber } from '@kaynooo/cli-kit'
+import { counted } from '@kaynooo/utils'
 import { listFiles, readText } from './files'
 import { around, definitions, locations, outline, spansAround, usages } from './source'
 
@@ -153,7 +154,7 @@ async function spanOf(target: string): Promise<Span> {
     badUsage(`${target}: a span reads <file>:<from>-<to>, from 1 and from <= to`)
 
   if (from > count)
-    fail(`${path} has ${count} line${count === 1 ? '' : 's'}, ${target} starts past the end`, 1)
+    fail(`${path} has ${counted(count, 'line')}, ${target} starts past the end`, 1)
 
   return { path, from, to: Math.min(to, count) }
 }

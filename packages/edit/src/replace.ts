@@ -1,3 +1,5 @@
+import { counted, plural } from '@kaynooo/utils'
+
 export interface Pair {
   from: string
   to: string
@@ -61,7 +63,7 @@ function firstLineHint(text: string, from: string): string {
 
   const lines = text.split('\n').flatMap((line, i) => line.includes(first) ? [i + 1] : [])
 
-  return lines.length === 0 ? '' : ` (its first line is on line${lines.length > 1 ? 's' : ''} ${listLines(lines)})`
+  return lines.length === 0 ? '' : ` (its first line is on ${plural('line', lines.length)} ${listLines(lines)})`
 }
 
 export function compile(source: string): RegExp {
@@ -105,7 +107,7 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
       if (indexes.length === 0)
         where = pattern === undefined ? firstLineHint(text, from) : ''
 
-      problems.push(`${label}matched ${indexes.length} time${indexes.length === 1 ? '' : 's'}, expected ${wanted}${where}`)
+      problems.push(`${label}matched ${counted(indexes.length, 'time')}, expected ${wanted}${where}`)
 
       continue
     }

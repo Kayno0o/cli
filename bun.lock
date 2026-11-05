@@ -55,6 +55,9 @@
         "todo-scan": "./dist/todo-scan-cli.js",
         "hotspots": "./dist/hotspots-cli.js",
       },
+      "dependencies": {
+        "@kaynooo/utils": "3.0.0",
+      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
@@ -88,6 +91,9 @@
         "dx": "./dist/dx-cli.js",
         "sf": "./dist/sf-cli.js",
       },
+      "dependencies": {
+        "@kaynooo/utils": "3.0.0",
+      },
       "devDependencies": {
         "@kaynooo/cli-env": "workspace:*",
         "@kaynooo/cli-kit": "workspace:*",
@@ -110,6 +116,9 @@
       "bin": {
         "sub": "./dist/cli.js",
       },
+      "dependencies": {
+        "@kaynooo/utils": "3.0.0",
+      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
@@ -131,6 +140,9 @@
       "bin": {
         "ft": "./dist/cli.js",
       },
+      "dependencies": {
+        "@kaynooo/utils": "3.0.0",
+      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
@@ -143,6 +155,9 @@
         "gc": "./dist/gc.js",
         "gb": "./dist/gb.js",
       },
+      "dependencies": {
+        "@kaynooo/utils": "3.0.0",
+      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
@@ -152,6 +167,9 @@
       "version": "0.9.0",
       "bin": {
         "gl": "./dist/cli.js",
+      },
+      "dependencies": {
+        "@kaynooo/utils": "3.0.0",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -186,6 +204,9 @@
       "bin": {
         "out": "./dist/cli.js",
       },
+      "dependencies": {
+        "@kaynooo/utils": "3.0.0",
+      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
@@ -205,6 +226,9 @@
       "version": "0.12.0",
       "bin": {
         "pkg": "./dist/cli.js",
+      },
+      "dependencies": {
+        "@kaynooo/utils": "3.0.0",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",

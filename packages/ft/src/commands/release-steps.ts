@@ -1,6 +1,7 @@
 import type { Manifest } from './release-version'
 import { join, relative, resolve } from 'node:path'
 import { fail, isPermanentFailure, runTool, warn } from '@kaynooo/cli-kit'
+import { counted } from '@kaynooo/utils'
 import { $ } from 'bun'
 import { git, tagsAt } from '../git'
 import { closedIssues, openIssues } from '../issues'
@@ -93,7 +94,7 @@ export async function settleMilestone(version: string, tag: string, say: (line: 
 
     const [done, left] = await Promise.all([closedIssues(found.id), openIssues(undefined, undefined, found.id)])
 
-    say(`milestone ${found.title}: ${done.length} closed issue${done.length === 1 ? '' : 's'}${done.length === 0 ? '' : `\n${done.map(issue => `  #${issue.number} ${issue.title}`).join('\n')}`}`)
+    say(`milestone ${found.title}: ${counted(done.length, 'closed issue')}${done.length === 0 ? '' : `\n${done.map(issue => `  #${issue.number} ${issue.title}`).join('\n')}`}`)
 
     if (left.length > 0)
       warn(`${left.length} issue${left.length === 1 ? ' is' : 's are'} still open in it`, left.map(issue => `#${issue.number}`).join(' '))

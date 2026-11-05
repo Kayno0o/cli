@@ -6,6 +6,7 @@ import { basename, dirname, join, relative } from 'node:path'
 import { duration, Exit, fail, formatDuration, formatElapsed, isInteractive, note, ok, parse, problem, runCommand, warn, wholeNumber, workspaceRoot } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { checklist, confirm } from '@kaynooo/cli-kit/prompt'
+import { counted } from '@kaynooo/utils'
 import { loadConfigs, loadSettings, registryFor } from '../config'
 import { addCommand, findConsumers, isLocal, RANGE_PREFIX, similarDependencies, wantedVersion } from '../consumers'
 import { loadExcluded, saveExcluded } from '../excluded'
@@ -209,11 +210,11 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
     note(`nothing under ${settings.root} depends on ${name}`, similar.length === 0 ? undefined : `did you mean ${similar.join(', ')}`)
   }
   else if (left > 0) {
-    note(`${left} folder${left === 1 ? '' : 's'} left out by --only or --except`)
+    note(`${counted(left, 'folder')} left out by --only or --except`)
   }
 
   if (declined.size > 0)
-    note(`${declined.size} folder${declined.size === 1 ? '' : 's'} left out by your choice`)
+    note(`${counted(declined.size, 'folder')} left out by your choice`)
 
   // a monorepo's own packages take it from the workspace, one line saying so for all of them
   if (local > 0)
@@ -317,7 +318,7 @@ export async function choosePlan(name: string, version: string, settings: BumpSe
     note('plan', plan.line)
 
   // What is unchecked is kept once the plan is confirmed, so a cancelled run changes nothing.
-  if (chosen.length === 0 || await chooser.confirm(`bump ${name} to ${version} in ${chosen.length} folder${chosen.length === 1 ? '' : 's'}?`) !== true)
+  if (chosen.length === 0 || await chooser.confirm(`bump ${name} to ${version} in ${counted(chosen.length, 'folder')}?`) !== true)
     return { chosen: [], declined: plans.map(plan => plan.dir) }
 
   const declined = plans.filter(plan => !picked.has(plan.dir)).map(plan => plan.dir)

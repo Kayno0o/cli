@@ -7,6 +7,7 @@ import process from 'node:process'
 import { fail, isInteractive, paint, parse, printJson } from '@kaynooo/cli-kit'
 import { byRecency, emit, list, pick, record, runs, table } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
+import { spawnText } from '@kaynooo/utils/cli'
 import { children, from, nearestStack, services, up } from './stack'
 
 interface Argument {
@@ -112,15 +113,11 @@ function fromCache(dir: string): Command[] | undefined {
 }
 
 export async function live(app: Console): Promise<Command[]> {
-  const proc = Bun.spawn([...app.list.argv, 'list', '--format=json'], { cwd: app.list.cwd, env: app.list.env, stdout: 'pipe', stderr: 'pipe' })
-  const text = await new Response(proc.stdout).text()
-
-  if ((await proc.exited) !== 0)
-    return fromCache(app.dir) ?? []
-
   let commands: Command[]
 
   try {
+    const text = await spawnText([...app.list.argv, 'list', '--format=json'], { cwd: app.list.cwd, env: app.list.env })
+
     commands = (JSON.parse(text) as { commands: Command[] }).commands.filter(command => !command.hidden)
   }
   catch {

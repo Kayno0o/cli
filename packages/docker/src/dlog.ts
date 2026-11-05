@@ -5,6 +5,7 @@ import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { maskLine, PEM_BEGIN, PEM_END } from '@kaynooo/cli-env/mask'
 import { badUsage, fail, jsonOption, paint, parse, printJson, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
+import { truncate } from '@kaynooo/utils'
 import { allServices, attempt, containers, key, stateColor } from './stack'
 
 const usage = `dlog [service...]
@@ -50,10 +51,6 @@ function shape(line: string): string {
   return line.replace(TIMESTAMP, '').replace(IDENTIFIER, '#').replace(NUMBER, '#').replace(LEADING_BRACKETS, '').trim()
 }
 
-function clip(line: string): string {
-  return line.length > MAX_WIDTH ? `${line.slice(0, MAX_WIDTH - 1)}…` : line
-}
-
 /** The last `limit` distinct lines of a log matching `matches`, oldest first, each as its latest occurrence with how often its message came up, secrets masked. */
 export function errorLines(log: string, limit: number, known?: KnownSecrets, matches: RegExp = ERROR): ErrorLine[] {
   const seen = new Map<string, ErrorLine>()
@@ -69,7 +66,7 @@ export function errorLines(log: string, limit: number, known?: KnownSecrets, mat
 
     // Re-inserted so the Map's order is the order of the latest occurrences.
     seen.delete(shared)
-    seen.set(shared, { line: clip(maskLine(line, known)), count: (before?.count ?? 0) + 1 })
+    seen.set(shared, { line: truncate(maskLine(line, known), MAX_WIDTH, { suffix: '…', includeSuffix: true }), count: (before?.count ?? 0) + 1 })
   }
 
   return [...seen.values()].slice(-limit)
@@ -200,7 +197,7 @@ export async function dlog(args: string[]): Promise<number> {
     const { health, fine } = healthOf(service.state, container)
     const lines = withoutKeys(log.split('\n'))
     const errors = errorLines(lines.join('\n'), limit, known, matches)
-    const tail = parsed.values.all === true && errors.length === 0 ? lines.map(text => clip(maskLine(stripAnsi(text).trim(), known))).filter(Boolean).slice(-limit) : []
+    const tail = parsed.values.all === true && errors.length === 0 ? lines.map(text => truncate(maskLine(stripAnsi(text).trim(), known), MAX_WIDTH, { suffix: '…', includeSuffix: true })).filter(Boolean).slice(-limit) : []
 
     return { key: key(service), state: service.state, health, status: service.status, errors, tail, unreadable, fine, down: !isUp(service.state, container), unhealthy: isUp(service.state, container) && !fine }
   }))

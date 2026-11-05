@@ -2,6 +2,7 @@ import type { Issue } from '../issues'
 import type { Milestone } from '../milestones'
 import process from 'node:process'
 import { bar, capped, fail, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, pool, printJson, role, runHint, section, table, takesControlCodes, truncate } from '@kaynooo/cli-kit'
+import { counted } from '@kaynooo/utils'
 import { repoOption } from '../args'
 import { good } from '../good'
 import { closedIssues, openIssues } from '../issues'
@@ -164,7 +165,7 @@ async function closeOne(args: string[]): Promise<number> {
   const open = await openIssues(undefined, values.repo, found.id)
 
   if (open.length > 0 && values.force !== true)
-    fail(`milestone ${found.title} has ${open.length} open issue${open.length === 1 ? '' : 's'}:\n${open.map(issue => `  #${issue.number} ${truncate(issue.title, TITLE_WIDTH)}`).join('\n')}`, 1, `${runHint(`ft milestone close ${found.title} --force`, 'close it with them open')}, or move them with \`ft edit <n> -m <milestone>\``)
+    fail(`milestone ${found.title} has ${counted(open.length, 'open issue')}:\n${open.map(issue => `  #${issue.number} ${truncate(issue.title, TITLE_WIDTH)}`).join('\n')}`, 1, `${runHint(`ft milestone close ${found.title} --force`, 'close it with them open')}, or move them with \`ft edit <n> -m <milestone>\``)
 
   await closeMilestone(found.id, values.repo)
   console.log(good(`closed milestone ${found.title}`))

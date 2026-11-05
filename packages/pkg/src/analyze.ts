@@ -1,6 +1,7 @@
 import type { VersionAdvisory } from './advisories'
 import type { Severity } from './config'
 import type { Packument, Version } from './registry'
+import { counted } from '@kaynooo/utils'
 import { filterAdvisories } from './advisories'
 import { isLicenseAllowed } from './licenses'
 import { nearMisses } from './nearmiss'
@@ -96,7 +97,7 @@ function ageDays(published: string | undefined, now: number): number | undefined
 }
 
 function daysAgo(age: number): string {
-  return age < 1 ? 'less than a day' : `${Math.floor(age)} day${Math.floor(age) === 1 ? '' : 's'}`
+  return age < 1 ? 'less than a day' : counted(Math.floor(age), 'day')
 }
 
 function installScriptsOf(version: Version | undefined): Record<string, string> {

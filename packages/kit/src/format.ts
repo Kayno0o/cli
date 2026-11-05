@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { truncate as cut } from '@kaynooo/utils'
 import { outputMode } from './mode'
 import { paint, takesControlCodes } from './style'
 
@@ -55,7 +56,7 @@ export function formatAge(date: string | number, now = Date.now()): string {
 }
 
 export function truncate(text: string, width: number): string {
-  return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 1))}…`
+  return cut(text, width, { suffix: '…', includeSuffix: true })
 }
 
 const LINE_BREAKS = /\s*\n\s*/g

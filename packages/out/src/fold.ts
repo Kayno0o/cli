@@ -1,3 +1,4 @@
+import { truncate } from '@kaynooo/utils'
 import { isImportant, shape } from './shape'
 
 export interface FoldOptions {
@@ -122,7 +123,7 @@ function toUnits(lines: string[], keys: string[]): Unit[] {
 function clip(line: string, width = 100): string {
   const trimmed = line.trim()
 
-  return trimmed.length > width ? `${trimmed.slice(0, width)}...` : trimmed
+  return truncate(trimmed, width)
 }
 
 function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repeated: string[] } {

@@ -19,7 +19,6 @@ import { appendFileSync, mkdirSync, readFileSync, renameSync, rmdirSync, writeFi
 const file = process.env.FAKE_TEA_STATE
 const raw = process.argv.slice(2)
 const repoAt = raw.indexOf('--repo')
-const sleep = ms => new Promise(done => setTimeout(done, ms))
 const barrier = JSON.parse(readFileSync(file, 'utf8')).barrier
 
 // Matching calls wait here until \`parties\` of them arrived, so two sessions reach the same step together.
@@ -27,7 +26,7 @@ if (barrier !== undefined && raw.join(' ').includes(barrier.match) && (barrier.m
   appendFileSync(file + '.barrier', 'x')
 
   for (let waited = 0; waited < 10000 && readFileSync(file + '.barrier', 'utf8').length < barrier.parties; waited += 5)
-    await sleep(5)
+    await Bun.sleep(5)
 }
 
 // One call at a time reads and writes the state, as the server serialises its writes.
@@ -39,7 +38,7 @@ for (;;) {
     break
   }
   catch {
-    await sleep(5)
+    await Bun.sleep(5)
   }
 }
 

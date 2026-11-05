@@ -27,6 +27,9 @@
     "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
     "out": "$npm_execpath src/cli.ts"
   },
+  "dependencies": {
+    "@kaynooo/utils": "3.0.0"
+  },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"
   }

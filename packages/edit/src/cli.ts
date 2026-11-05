@@ -6,6 +6,7 @@ import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSyn
 import { normalize, resolve } from 'node:path'
 import process from 'node:process'
 import { Exit, fail, jsonOption, parse, printJson, readInput, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { counted, plural } from '@kaynooo/utils'
 import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
 import { applyPairs, compile, listLines } from './replace'
@@ -72,7 +73,7 @@ function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   const unknown = Object.keys(rest)
 
   if (unknown.length > 0)
-    fail(`${label}unknown key${unknown.length === 1 ? '' : 's'} ${unknown.join(', ')}, known: ${PAIR_KEYS.join(', ')}`)
+    fail(`${label}unknown ${plural('key', unknown.length)} ${unknown.join(', ')}, known: ${PAIR_KEYS.join(', ')}`)
 
   if (typeof from !== 'string' || typeof to !== 'string')
     fail(`${label}from and to must both be strings`)
@@ -107,10 +108,6 @@ async function readPairs(path: string, defaults: Defaults): Promise<Pair[]> {
     fail('--pairs takes a JSON array of at least one {from, to}')
 
   return items.map((item, i) => pairFrom(item, i, defaults))
-}
-
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? '' : 's'}`
 }
 
 function writable(path: string): boolean {
@@ -351,7 +348,7 @@ async function main(argv: string[]): Promise<number> {
     }
 
     if (values.quiet !== true)
-      console.log(`${role('path', process.stdout)(path)}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, ${role(diff.added === 0 ? 'label' : 'ok', process.stdout)(`+${diff.added}`)} ${role(diff.removed === 0 ? 'label' : 'problem', process.stdout)(`-${diff.removed}`)}`)
+      console.log(`${role('path', process.stdout)(path)}: ${counted(lines.length, 'replacement')} on ${plural('line', lines.length, { zero: 'plural' })} ${listLines(lines)}, ${role(diff.added === 0 ? 'label' : 'ok', process.stdout)(`+${diff.added}`)} ${role(diff.removed === 0 ? 'label' : 'problem', process.stdout)(`-${diff.removed}`)}`)
 
     if (values.diff === true && diff.unified !== '')
       process.stdout.write(diff.unified)
