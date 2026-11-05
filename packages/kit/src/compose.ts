@@ -12,10 +12,10 @@ export interface CommandOutput {
   stderr: string
 }
 
-// Runs a command to its end with no stdin and returns both streams apart, whatever its exit code; it throws when the command cannot start.
+// Runs a command to its end with no stdin and returns both streams apart, whatever its exit code; it throws when the command cannot start. The streams are read through a Response, as a consumer type-checking this source under the DOM lib has no `ReadableStream.text()`.
 export async function captureOutput(argv: string[], { cwd, env }: Pick<ComposeOptions, 'cwd' | 'env'> = {}): Promise<CommandOutput> {
   const run = Bun.spawn(argv, { ...cwd === undefined ? {} : { cwd }, env: { ...process.env, ...env }, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
-  const [stdout, stderr, code] = await Promise.all([run.stdout.text(), run.stderr.text(), run.exited])
+  const [stdout, stderr, code] = await Promise.all([new Response(run.stdout).text(), new Response(run.stderr).text(), run.exited])
 
   return { code, stdout, stderr }
 }

@@ -5,6 +5,7 @@ import { compose, composeError, jsonLines } from '../src'
 import { tempDirs } from '../src/test'
 
 const temp = tempDirs()
+const STREAM_TEXT = /\.std(?:out|err)\.text\(\)/
 
 // A `docker` on the PATH that prints its arguments, its working directory and COMPOSE_FILE, and exits with the code in FAKE_EXIT.
 function fakeDocker(): Record<string, string> {
@@ -64,5 +65,15 @@ describe('jsonLines', () => {
     expect(jsonLines<{ ID: string }>('{"ID":"a"}\n{"ID":"b"}\n').map(row => row.ID)).toEqual(['a', 'b'])
     expect(jsonLines<{ ID: string }>('[{"ID":"a"}]').map(row => row.ID)).toEqual(['a'])
     expect(jsonLines('\n')).toEqual([])
+  })
+})
+
+describe('the kit source', () => {
+  // Apps type-check the kit's source under the DOM lib, whose ReadableStream has no text(): a stream is read through a Response.
+  test('reads no spawned stream with the Bun-only text()', async () => {
+    const files = await Array.fromAsync(new Bun.Glob('**/*.ts').scan(join(import.meta.dir, '../src')))
+    const reads = await Promise.all(files.map(async file => STREAM_TEXT.test(await Bun.file(join(import.meta.dir, '../src', file)).text()) ? file : undefined))
+
+    expect(reads.filter(file => file !== undefined)).toEqual([])
   })
 })
