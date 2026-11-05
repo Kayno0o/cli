@@ -76,17 +76,32 @@ function up(lines: number): string {
 
 /** The keyboard from /dev/tty in raw mode and the screen on stderr, so stdout stays free for the choice. */
 export function openTerminal(): Terminal {
-  let input: tty.ReadStream
+  let mode: tty.ReadStream
 
   try {
-    input = new tty.ReadStream(openSync('/dev/tty', 'r'))
+    mode = new tty.ReadStream(openSync('/dev/tty', 'r'))
   }
   catch {
     return fail('no terminal to read keys from (/dev/tty)')
   }
 
+  // Bun's tty.ReadStream left a read pending once destroyed outside its data callback, holding the process until one more key that it swallowed (kaynooo/cli#178), so it only switches raw mode and the keys come from a reader cancel() stops.
+  const keys = Bun.file('/dev/tty').stream().getReader()
   const out = process.stderr
   let resize: (() => void) | undefined
+
+  // A terminal that stops answering cancels the pick, as ctrl-c would.
+  async function read(onChunk: (chunk: string) => void): Promise<void> {
+    const decoder = new TextDecoder()
+
+    try {
+      for (let chunk = await keys.read(); !chunk.done; chunk = await keys.read())
+        onChunk(decoder.decode(chunk.value, { stream: true }))
+    }
+    catch {
+      onChunk('\x03')
+    }
+  }
 
   return {
     get columns() {
@@ -99,19 +114,20 @@ export function openTerminal(): Terminal {
     write: text => void out.write(text),
     listen(onChunk, onResize) {
       resize = onResize
-      input.setRawMode(true)
+      mode.setRawMode(true)
       out.on('resize', onResize)
-      input.on('data', chunk => onChunk(chunk.toString()))
+      void read(onChunk)
     },
     close() {
       if (resize !== undefined)
         out.off('resize', resize)
 
       try {
-        input.setRawMode(false)
+        mode.setRawMode(false)
       }
       finally {
-        input.destroy()
+        mode.destroy()
+        void keys.cancel()
       }
     },
   }
