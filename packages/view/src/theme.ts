@@ -1,6 +1,6 @@
 import type { Colors } from '@kaynooo/cli-kit'
 import process from 'node:process'
-import { link, paint, role } from '@kaynooo/cli-kit'
+import { activeTheme, gradientAt, link, paint, role, takesControlCodes, tinted } from '@kaynooo/cli-kit'
 
 // What each part of a document is drawn in, the roles every @kaynooo CLI colours its data with.
 export interface Theme {
@@ -19,6 +19,8 @@ export interface Theme {
   string: (text: string) => string
   number: (text: string) => string
   link: (text: string, url: string) => string
+  // The text in the shade the kit's gradient has at `ratio`, 0 its first end and 1 its second, the accent where the theme has no gradient.
+  shade: (text: string, ratio: number) => string
 }
 
 interface Stream { isTTY?: boolean }
@@ -44,5 +46,6 @@ export function themeFor(stream: Stream = process.stdout, env: Record<string, st
     string: colors.green,
     number: colors.yellow,
     link: (text, url) => path(colors.underline(link(text, url, stream, env))),
+    shade: (text, ratio) => takesControlCodes(stream, env) ? tinted(colors, gradientAt(activeTheme().theme, ratio) ?? activeTheme().theme.colors.accent, env)(text) : text,
   }
 }

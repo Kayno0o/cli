@@ -13,19 +13,20 @@ describe('renderMarkdown', () => {
   })
 
   test('keeps emphasis, code and a link readable without colour', () => {
-    expect(show('**bold** *em* ~~gone~~ `code` [site](https://a.b)')).toBe('bold em gone code site (https://a.b)\n')
+    expect(show('**bold** *em* ~~gone~~ `code` [site](https://a.b)')).toBe('bold em gone `code` site (https://a.b)\n')
     expect(show('[https://a.b](https://a.b)')).toBe('https://a.b\n')
     expect(show('![logo](x.png) ![](y.png)')).toBe('[image: logo] [image: y.png]\n')
   })
 
   test('draws bullets by depth, numbers, and task boxes, wrapping behind the marker', () => {
-    expect(show('- one\n  - nested\n- two\n\n1. first\n2. second\n\n- [x] done\n- [ ] todo')).toBe('• one\n  ◦ nested\n• two\n\n1. first\n2. second\n\n✓ done\n○ todo\n')
-    expect(show('1. an ordered item with long text that wraps around\n   - nested with long text that wraps around as well', 30)).toBe('1. an ordered item with long\n   text that wraps around\n   ◦ nested with long text\n     that wraps around as well\n')
+    expect(show('- one\n  - nested\n- two\n\n1. first\n2. second\n\n- [x] done\n- [ ] todo')).toBe('- one\n  - nested\n- two\n\n1. first\n2. second\n\n✓ done\n○ todo\n')
+    expect(show('1. an ordered item with long text that wraps around\n   - nested with long text that wraps around as well', 30)).toBe('1. an ordered item with long\n   text that wraps around\n   - nested with long text\n     that wraps around as well\n')
   })
 
-  test('bars a quote and a code block, the code left unwrapped', () => {
-    expect(show('> a quote with a very long line that needs to wrap around too', 30)).toBe('▎ a quote with a very long\n▎ line that needs to wrap\n▎ around too\n')
-    expect(show('```ts\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n```', 20)).toBe('│ const a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n')
+  test('opens a quote with a mark and hangs the rest, and puts a code block between rules with no mark before its lines', () => {
+    expect(show('> a quote with a very long line that needs to wrap around too', 30)).toBe('❝ a quote with a very long\n  line that needs to wrap\n  around too\n')
+    expect(show('```ts\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n```', 20)).toBe(`ts ${'─'.repeat(17)}\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n${'─'.repeat(20)}\n`)
+    expect(show('```\nx\n```', 30)).toBe(`${'─'.repeat(20)}\nx\n${'─'.repeat(20)}\n`)
   })
 
   test('lays a table out in columns with a rule under the header, wrapping cells that do not fit', () => {
@@ -45,9 +46,9 @@ describe('renderMarkdown', () => {
     const out = renderMarkdown('# Title\n\nsome `code` and **bold**', { theme: colour, width: 40 })
 
     expect(out).toContain('\u001B[36m')
-    expect(out).toContain('\u001B[33mcode\u001B[39m')
+    expect(out).toContain('\u001B[36mcode\u001B[39m')
     expect(out).toContain('\u001B[1mbold\u001B[22m')
-    expect(Bun.stripANSI(out)).toBe('# Title\n\nsome code and bold\n')
+    expect(Bun.stripANSI(out)).toBe('# Title\n\nsome `code` and bold\n')
   })
 })
 

@@ -8,7 +8,7 @@ bun add -g @kaynooo/cli-view
 
 | Command | What it does |
 | --- | --- |
-| `view README.md` | headings with their `#` marks, emphasis, lists with bullets by depth, numbers and task boxes, quotes and code blocks behind a bar, tables with wrapped cells, links as OSC 8 links |
+| `view README.md` | headings with their `#` marks shaded by level, emphasis, lists with dashes and numbers that copy as plain text, task boxes, quotes behind a mark, code blocks between rules, tables with wrapped cells, links as OSC 8 links |
 | `view src/app.ts`, `view config.yaml` | source highlighted (comments, strings, numbers, keywords, keys) behind line numbers on a terminal; ts, js, json, yaml, toml, ini, py, sh, css, html, sql, rs, go, php, java, c, rb, lua, Dockerfile, Makefile |
 | `view --lang ts`, `--no-lines` | read stdin as that language; leave the line numbers off |
 | `git diff \| view` | file headers, hunk ranges, added and removed lines coloured; a `git log -p` or `git show` too |

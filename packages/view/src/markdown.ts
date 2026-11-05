@@ -20,8 +20,10 @@ const ROW = '\u0007'
 // Starts a block, so a tight list item can tell its text from the block that follows it.
 const BLOCK = '\u0008'
 
-const BULLETS = ['•', '◦', '▪']
 const MAX_RULE = 60
+const MIN_RULE = 20
+// The shade of a heading by level along the gradient, the deeper ones toward its end.
+const HEADING_SHADES = [0, 0.35, 0.7, 1]
 const MIN_ROOM = 20
 const MIN_COLUMN = 8
 const COLUMN_GAP = 2
@@ -100,7 +102,7 @@ function renderTable(rows: string[][], aligns: Align[], width: number, theme: Th
       const gap = ' '.repeat(Math.max(0, (widths[column] ?? 0) - textWidth(text)))
       const aligned = aligns[column] === 'right' ? `${gap}${text}` : `${text}${gap}`
 
-      return index === 0 ? theme.bold(aligned) : aligned
+      return index === 0 ? theme.heading(aligned) : aligned
     }).join(' '.repeat(COLUMN_GAP)).trimEnd())
 
     return index === 0 ? [...drawn, theme.dim('─'.repeat(Math.min(width, widths.reduce((sum, each) => sum + each, 0) + COLUMN_GAP * Math.max(0, widths.length - 1))))] : drawn
@@ -115,41 +117,43 @@ function printable(source: string): string {
 }
 
 export function renderMarkdown(source: string, { theme, width }: RenderSettings): string {
-  const bar = theme.dim('│ ')
-  const quote = theme.dim('▎ ')
+  const quote = [`${theme.shade('❝', 0)} `, '  ']
   let aligns: Align[] = []
 
   const rendered = Bun.markdown.render(printable(source), {
-    heading: (children, { level }) => block(`${reflow(theme.heading(children), theme.dim(`${'#'.repeat(level)} `), ' '.repeat(level + 1))}\n\n`),
+    heading: (children, { level }) => block(`${reflow(theme.shade(theme.bold(children), HEADING_SHADES[Math.min(level, HEADING_SHADES.length) - 1] ?? 1), theme.dim(`${'#'.repeat(level)} `), ' '.repeat(level + 1))}\n\n`),
     paragraph: children => block(`${reflow(children.replaceAll('\n', ' '))}\n\n`),
-    strong: theme.bold,
+    strong: text => theme.shade(theme.bold(text), 0),
     emphasis: theme.italic,
     strikethrough: theme.strike,
-    codespan: theme.code,
+    codespan: text => `${theme.dim('`')}${theme.accent(text)}${theme.dim('`')}`,
     link: (children, { href }) => theme.link(children, href),
     image: (children, { src }) => theme.dim(`[image: ${children === '' ? src : children}]`),
     html: children => block(`${theme.dim(trimmed(children))}\n\n`),
     code: (children, meta) => {
       const language = languageOf(meta?.language ?? '')
       const body = trimmed(children)
+      const lines = (language === undefined ? body : highlight(body, language, theme)).split('\n')
+      const rule = Math.min(width, Math.max(MIN_RULE, ...lines.map(line => textWidth(line))))
+      const label = meta?.language === undefined || meta.language === '' ? '' : `${meta.language} `
 
-      return block(`${(language === undefined ? body : highlight(body, language, theme)).split('\n').map(line => `${bar}${line}`).join('\n')}\n\n`)
+      return block(`${theme.dim(`${label}${'─'.repeat(Math.max(0, rule - textWidth(label)))}`)}\n${lines.join('\n')}\n${theme.dim('─'.repeat(rule))}\n\n`)
     },
-    blockquote: children => block(`${indent(trimmed(children.replaceAll(BLOCK, '')), quote, quote)}\n\n`),
+    blockquote: children => block(`${indent(trimmed(children.replaceAll(BLOCK, '')), quote[0]!, quote[1]!)}\n\n`),
     hr: () => block(`${theme.dim('─'.repeat(Math.min(width, MAX_RULE)))}\n\n`),
     list: (children, { depth }) => depth > 0 ? `${NESTED}${trimmed(children)}\n\n` : block(`${trimmed(children)}\n\n`),
-    listItem: (children, { index, ordered, start, depth, checked }) => {
+    listItem: (children, { index, ordered, start, checked }) => {
       const [head = '', ...nested] = children.split(NESTED)
       const blocksAt = head.indexOf(BLOCK)
       const inline = (blocksAt === -1 ? head : head.slice(0, blocksAt)).trim()
       const blocks = blocksAt === -1 ? '' : trimmed(head.slice(blocksAt).replaceAll(BLOCK, ''))
       const text = [inline === '' ? '' : reflow(inline.replaceAll('\n', ' ')), blocks].filter(part => part !== '').join('\n') || reflow('')
-      let marker = theme.accent(BULLETS[depth % BULLETS.length] ?? '•')
+      let marker = theme.dim('-')
 
       if (checked !== undefined)
         marker = checked ? theme.added('✓') : theme.dim('○')
       else if (ordered)
-        marker = theme.accent(`${(start ?? 1) + index}.`)
+        marker = theme.dim(`${(start ?? 1) + index}.`)
 
       return `${indent([text, ...nested.map(trimmed)].join('\n'), `${marker} `, ' '.repeat(textWidth(marker) + 1))}\n`
     },
