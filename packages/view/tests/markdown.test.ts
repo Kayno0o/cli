@@ -25,8 +25,8 @@ describe('renderMarkdown', () => {
 
   test('opens a quote with a mark and hangs the rest, and puts a code block between rules with no mark before its lines', () => {
     expect(show('> a quote with a very long line that needs to wrap around too', 30)).toBe('❝ a quote with a very long\n  line that needs to wrap\n  around too\n')
-    expect(show('```ts\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n```', 80)).toBe(`ts ${'─'.repeat(21)}\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n${'─'.repeat(24)}\n`)
-    expect(show('```\nx\n```', 30)).toBe(`${'─'.repeat(12)}\nx\n${'─'.repeat(12)}\n`)
+    expect(show('```ts\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n```', 80)).toBe(`ts ${'─'.repeat(2)}\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n${'─'.repeat(5)}\n`)
+    expect(show('```\nx\n```', 30)).toBe(`${'─'.repeat(4)}\nx\n${'─'.repeat(4)}\n`)
   })
 
   test('lays a table out in columns with a rule under the header, wrapping cells that do not fit', () => {
@@ -75,5 +75,14 @@ describe('tables with wrapped cells', () => {
 
     expect(show(rows, 30)).toContain('\n\ntwo')
     expect(show('| a | b |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |')).toBe('a  b\n────\n1  2\n3  4\n')
+  })
+})
+
+describe('table column sizing', () => {
+  test('a long first cell wraps on its spaces while the description keeps the room it needs', () => {
+    const table = '| Command | What it does |\n|---|---|\n| `ft runs` | recent runs |\n| `ft plan add <plan> <n>...` / `ft plan carry <from> <to>` | adds lines to a release plan checklist, or copies one plan unticked lines into the next |'
+    const first = show(table, 90).split('\n').map(line => line.slice(0, 30).trimEnd())
+
+    expect(first).toContain('`ft plan add <plan> <n>...` /')
   })
 })

@@ -22,12 +22,14 @@ const BLOCK = '\u0008'
 
 const MAX_RULE = 60
 // How far the rules around a code block reach at most, so a wide block does not stretch them across the screen.
-const MAX_CODE_RULE = 24
-const MIN_CODE_RULE = 12
+const MAX_CODE_RULE = 5
+const MIN_CODE_RULE = 4
 // The shade of a heading by level along the gradient, the deeper ones toward its end.
 const HEADING_SHADES = [0, 0.35, 0.7, 1]
 const MIN_ROOM = 20
 const MIN_COLUMN = 8
+// How much wider than its average cell a column starts out.
+const TYPICAL = 1.4
 const COLUMN_GAP = 2
 const TRAILING_BREAKS = /\n+$/
 
@@ -74,10 +76,31 @@ function finish(block: string, width: number): string {
   }).join('\n')
 }
 
-// The columns' widths, the widest narrowed one character at a time until the row fits `width`.
+// The columns' widths. A table that fits keeps each column as wide as its widest cell; otherwise a column starts at what its cells typically take, so one long cell wraps instead of widening its whole column, the room left goes to the columns with cells longer than that, and the widest are narrowed one character at a time if even the typical widths do not fit.
 function columnWidths(rows: string[][], width: number): number[] {
-  const widths = rows[0]?.map((_, column) => Math.max(...rows.map(row => textWidth(row[column] ?? '')))) ?? []
-  const total = () => widths.reduce((sum, each) => sum + each, 0) + COLUMN_GAP * Math.max(0, widths.length - 1)
+  const longest = rows[0]?.map((_, column) => Math.max(...rows.map(row => textWidth(row[column] ?? '')))) ?? []
+  const gaps = COLUMN_GAP * Math.max(0, longest.length - 1)
+  const sum = (list: number[]) => list.reduce((total, each) => total + each, 0)
+
+  if (sum(longest) + gaps <= width)
+    return longest
+
+  const typical = longest.map((most, column) => Math.min(most, Math.max(MIN_COLUMN, Math.ceil(TYPICAL * sum(rows.map(row => textWidth(row[column] ?? ''))) / rows.length))))
+  const widths = [...typical]
+  const room = width - gaps - sum(typical)
+  const wanting = longest.map((most, column) => most - typical[column]!)
+
+  if (room > 0 && sum(wanting) > 0) {
+    for (const [column, want] of wanting.entries())
+      widths[column]! += Math.min(want, Math.floor(room * want / sum(wanting)))
+
+    const left = width - gaps - sum(widths)
+    const hungriest = wanting.indexOf(Math.max(...wanting))
+
+    widths[hungriest]! += Math.max(0, Math.min(left, longest[hungriest]! - widths[hungriest]!))
+  }
+
+  const total = () => sum(widths) + gaps
 
   while (total() > width) {
     const widest = widths.indexOf(Math.max(...widths))
