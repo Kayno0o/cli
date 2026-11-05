@@ -4,9 +4,9 @@ import { runCommand } from '@kaynooo/cli-kit'
 
 const FS_LIMIT = 32
 // A hung mount stops holding a slot after this long and is measured by the walk instead.
-const DU_MS = 60_000
-// The total line among du's complaints about unreadable files, which share the captured text.
-const DU_LINE = /^(\d+)\t/m
+const FIND_MS = 60_000
+// A file per line as `find` prints it (links, device:inode, bytes), among its complaints about unreadable folders, which share the captured text.
+const FIND_LINE = /^(\d+) (\S+) (\d+)$/gm
 const waiting: (() => void)[] = []
 let running = 0
 
@@ -69,21 +69,36 @@ export async function walkSize(folder: string): Promise<number> {
   return total
 }
 
-// The apparent size of a folder from `du`, about seven times faster than walking it here, the folders' own entries included; undefined when du is missing or says nothing usable. Unreadable files make du exit nonzero yet still print the total of the rest.
-async function duSize(folder: string): Promise<number | undefined> {
+// The sum of the file and symlink sizes of a folder from `find`, the same total as the walk, several times faster than making it here; undefined when find is missing or timed out. Unreadable folders make find exit nonzero yet still print the rest.
+async function findSize(folder: string): Promise<number | undefined> {
   try {
-    const ran = await runCommand(['du', '-sb', '--', folder], { timeoutMs: DU_MS })
+    const ran = await runCommand(['find', '-P', folder, '(', '-type', 'f', '-o', '-type', 'l', ')', '-printf', '%n %D:%i %s\\n'], { timeoutMs: FIND_MS })
 
-    const total = ran.timedOut ? undefined : DU_LINE.exec(ran.text)?.[1]
+    if (ran.timedOut)
+      return undefined
 
-    return total === undefined ? undefined : Number(total)
+    const seen = new Set<string>()
+    let total = 0
+
+    for (const [, links, id, bytes] of ran.text.matchAll(FIND_LINE)) {
+      if (Number(links) > 1) {
+        if (seen.has(id!))
+          continue
+
+        seen.add(id!)
+      }
+
+      total += Number(bytes)
+    }
+
+    return total
   }
   catch {
     return undefined
   }
 }
 
-// The size of a folder in bytes, by `du` where there is one and by a walk otherwise.
+// The size of a folder in bytes, by `find` where there is one and by a walk otherwise.
 export async function sizeOf(folder: string): Promise<number> {
-  return await duSize(folder) ?? await walkSize(folder)
+  return await findSize(folder) ?? await walkSize(folder)
 }

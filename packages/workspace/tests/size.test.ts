@@ -29,7 +29,7 @@ describe('sizeOf', () => {
   })
 
   test('agrees with the walk to within the folders\' own entries', async () => {
-    const dir = temp('size-du-')
+    const dir = temp('size-find-')
 
     mkdirSync(join(dir, 'a'), { recursive: true })
     writeFileSync(join(dir, 'a', 'one'), 'x'.repeat(5000))
