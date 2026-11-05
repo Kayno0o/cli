@@ -65,6 +65,10 @@ describe('j', () => {
     expect(j('--emit').code).toBe(1)
   })
 
+  test('completes the names found here, and the last run again', () => {
+    expect(j('__complete', '').out).toBe('greet\tmake, bun\nmake:greet\tSay hi\nbun:greet\tbun\necho\tbun\n-\tthe last one again, with its arguments\n')
+  })
+
   test('shows the body of a target', () => {
     expect(j('--show', 'make', '.', 'greet').out).toContain('$ make greet')
   })

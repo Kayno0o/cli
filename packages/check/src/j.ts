@@ -51,6 +51,16 @@ function names(found: Entry[]): [name: string, description: string][] {
   })
 }
 
+// What Tab offers for the name: this folder's jobs and `-`, nothing where there are none to run.
+function completions(): [string, string][] {
+  try {
+    return [...names(everything()), ['-', 'the last one again, with its arguments']]
+  }
+  catch {
+    return []
+  }
+}
+
 // The rows term lists in place of the picker.
 function listed(found: Entry[]) {
   const labels = labelled(found)
@@ -124,6 +134,7 @@ export async function j(argv: string[]): Promise<number> {
     ? { values: {} as { json?: boolean }, positionals: ['-'], rest: args.slice(1) }
     : parse(args, usage, options, {
       positionals: ['[name]'],
+      candidates: { '[name]': completions },
       trailing: true,
       replaces: 'reading the Justfile, Makefile, package.json scripts or composer scripts to find what to run, then retyping it',
       examples: ['j', ['j test', 'run the test recipe, script or task'], ['j api/test --watch', 'a child folder\'s, with an argument'], ['j just:check', 'the one of a runner, when several share the name'], ['j -', 'the last one again']],
