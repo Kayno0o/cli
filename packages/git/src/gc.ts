@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, runMain } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, jsonOption, parse, printError, printJson, runHint, runMain } from '@kaynooo/cli-kit'
 import { git } from './git'
 import { commitMessageViolation, RULE, TICKET } from './message'
 
@@ -117,7 +117,7 @@ async function main(argv: string[]): Promise<number> {
       if (values.json === true)
         fail(refusal, 1)
 
-      console.error(`gc: ${refusal}`)
+      printError('gc', refusal)
 
       return 1
     }

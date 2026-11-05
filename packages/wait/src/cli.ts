@@ -4,7 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Line } from './conditions'
 import { existsSync } from 'node:fs'
 import process from 'node:process'
-import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, runCommand, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, problem, runCommand, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { FileWatch, portProblem, urlCheck } from './conditions'
 import { exitCode, isTranscript, pidAlive, taskEnd, taskFile } from './task'
@@ -221,7 +221,7 @@ async function main(args: string[]): Promise<number> {
             continue
           }
 
-          console.error(`waitfor: ${watch.path}:${event.line.number} matched --fail after ${formatDuration(Date.now() - started)}\n${numbered(event.excerpt, event.line)}`)
+          problem(`waitfor: ${watch.path}:${event.line.number} matched --fail after ${formatDuration(Date.now() - started)}\n${numbered(event.excerpt, event.line)}`)
 
           if (json)
             printJson({ met: false, ms: Date.now() - started, line: { number: event.line.number, text: event.line.text } })

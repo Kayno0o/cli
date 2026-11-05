@@ -3,7 +3,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve as resolvePath } from 'node:path'
-import { SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
+import { SKIPPED_FOLDERS, warn } from '@kaynooo/cli-kit'
 import { MAKEFILES } from './steps'
 
 export interface Parameter {
@@ -429,7 +429,7 @@ function guarded(reader: Reader, dir: string, here: boolean, isWarned = false): 
   }
   catch (error) {
     if (isWarned)
-      console.error(`j: skipped ${join(dir, MANIFEST_OF.get(reader) ?? 'a manifest')}, it does not parse (${error instanceof Error ? error.message : String(error)})`)
+      warn(`j: skipped ${join(dir, MANIFEST_OF.get(reader) ?? 'a manifest')}, it does not parse (${error instanceof Error ? error.message : String(error)})`)
 
     return []
   }
