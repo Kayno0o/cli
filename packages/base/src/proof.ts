@@ -4,12 +4,12 @@ import process from 'node:process'
 import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
 import { checkout, defaultProofRef, folded, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
-const USAGE = 'proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with origin/main when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass.'
+const USAGE = 'proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with the default branch of origin (origin/main unless origin/HEAD names another) when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass.'
 
 const EXITS: ExitRow[] = [[0, 'the command fails before and passes in every run now'], [1, 'it passes before too, fails in any run now, or passes before and fails now'], [2, 'a usage error, an unknown ref, a command that cannot start or ends with exit 126, 127 or a signal'], [130, 'interrupted (128 plus the signal)']]
 
 const OPTIONS = {
-  'ref': { type: 'string', short: 'r', description: 'the commit to run before at (default: the merge base with origin/main on a branch ahead of it, else HEAD)' },
+  'ref': { type: 'string', short: 'r', description: 'the commit to run before at (default: the merge base with the default branch of origin on a branch ahead of it, else HEAD)' },
   'runs': { type: 'string', short: 'n', description: 'run the command this many times now, every run must pass (1)' },
   'keep': { type: 'string', short: 'k', multiple: true, description: 'a working-tree file or folder copied over to the ref, such as the new test, repeatable' },
   'no-link': { type: 'boolean', description: 'do not link the ignored env files, node_modules, vendor and .venv of the checkout' },

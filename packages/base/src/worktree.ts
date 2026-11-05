@@ -7,6 +7,7 @@ import process from 'node:process'
 import { exitCodeOf, fail, holdSignals, runCommand } from '@kaynooo/cli-kit'
 
 const WHITESPACE = /\s/
+const ORIGIN_PREFIX = /^origin\//
 const ENV_FILE = /^\.env(?:\..+)?$/
 const DEPENDENCIES = new Set(['node_modules', 'vendor', '.venv'])
 const TRAILING_SLASH = /\/$/
@@ -53,14 +54,22 @@ export async function resolveRef(root: string, ref: string): Promise<string> {
   return stdoutOf(ran)
 }
 
-// The ref `proof` runs before at when none is given: the merge base with origin/main when HEAD is on a branch other than main that is ahead of it, else HEAD.
+// The remote ref the repository's default branch is: what origin's HEAD names (`origin/master`), else origin/main.
+async function defaultRemoteRef(root: string): Promise<string> {
+  const head = await git(['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], root)
+
+  return head.code === 0 && stdoutOf(head) !== '' ? stdoutOf(head) : 'origin/main'
+}
+
+// The ref `proof` runs before at when none is given: the merge base with origin's default branch (main unless origin's HEAD names another) when HEAD is on another branch that is ahead of it, else HEAD.
 export async function defaultProofRef(root: string): Promise<string> {
   const branch = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], root)
+  const remote = await defaultRemoteRef(root)
 
-  if (branch.code !== 0 || stdoutOf(branch) === 'main')
+  if (branch.code !== 0 || stdoutOf(branch) === remote.replace(ORIGIN_PREFIX, ''))
     return 'HEAD'
 
-  const base = await git(['merge-base', 'HEAD', 'origin/main'], root)
+  const base = await git(['merge-base', 'HEAD', remote], root)
   const head = await git(['rev-parse', 'HEAD'], root)
 
   return base.code === 0 && stdoutOf(base) !== stdoutOf(head) ? stdoutOf(base) : 'HEAD'

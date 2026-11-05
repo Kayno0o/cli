@@ -180,4 +180,14 @@ describe('proof default ref', () => {
     expect(result.out).toStartWith(`fails at ${git('rev-parse', '--short=7', 'origin/main')}, passes now`)
     expect(proof(['--ref', 'HEAD', ...check('fixed')]).code).toBe(1)
   })
+
+  test('follows origin/HEAD when the default branch is not main', () => {
+    git('update-ref', 'refs/remotes/origin/master', 'HEAD')
+    git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/master')
+    git('checkout', '-q', '-b', 'feat')
+    file('a.txt', 'fixed\n')
+    git('commit', '-q', '-am', 'fix')
+
+    expect(proof(check('fixed')).out).toStartWith(`fails at ${git('rev-parse', '--short=7', 'origin/master')}, passes now`)
+  })
 })
