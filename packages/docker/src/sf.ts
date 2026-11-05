@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, paint, parse, printJson } from '@kaynooo/cli-kit'
+import { fail, isInteractive, paint, parse, printJson } from '@kaynooo/cli-kit'
 import { byRecency, emit, list, pick, record, runs, table } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { children, from, nearestStack, services, up } from './stack'
@@ -234,7 +234,7 @@ export async function answered(command: Arg[], ask: (name: string) => Promise<st
 }
 
 function interactive(): boolean {
-  return process.stdin.isTTY && process.stderr.isTTY
+  return isInteractive()
 }
 
 /** What `--emit` prints for tmux, or, standalone, the command run once its prompts are answered. */

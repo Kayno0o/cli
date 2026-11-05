@@ -28,3 +28,8 @@ export function outputMode(stream: { isTTY?: boolean } = process.stdout, env: En
 
   return isSet(env.CI) ? 'ci' : 'pipe'
 }
+
+// Whether a person can answer a prompt: input arrives from a terminal and the prompt, drawn on stderr, lands on one.
+export function isInteractive(streams: { stdin?: { isTTY?: boolean }, stderr?: { isTTY?: boolean } } = process): boolean {
+  return streams.stdin?.isTTY === true && streams.stderr?.isTTY === true
+}

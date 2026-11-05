@@ -1,7 +1,7 @@
 import type { Choice } from '@kaynooo/cli-kit/prompt'
 import type { Host } from './checks'
 import process from 'node:process'
-import { badUsage, paint, saveWorkspace, userConfigPath, workspaceChosen } from '@kaynooo/cli-kit'
+import { badUsage, isInteractive, paint, saveWorkspace, userConfigPath, workspaceChosen } from '@kaynooo/cli-kit'
 import { checklist, input } from '@kaynooo/cli-kit/prompt'
 import { ABOUT, HOOKS_REQUIRES, NEEDS } from './catalog'
 import { firstLine, FORGE, hooksWiring, isInstalled, TOOLS } from './checks'
@@ -103,7 +103,7 @@ function checksFor(packages: readonly string[], plugin: boolean): string[] {
 }
 
 async function ask(pool: readonly Candidate[]): Promise<Candidate[]> {
-  if (process.stdin.isTTY !== true || process.stderr.isTTY !== true)
+  if (!isInteractive())
     badUsage('name what to install, or all: doctor --install forgejo check hooks (doctor --install --list shows the choices)')
 
   const choices: Choice<Candidate>[] = pool.map(each => ({ value: each, label: each.label, hint: each.hint }))
@@ -114,7 +114,7 @@ async function ask(pool: readonly Candidate[]): Promise<Candidate[]> {
 
 // On a terminal, asks where the repositories live when the user has not said, and keeps the answer in the user config; off one, or with the folder already chosen, it asks nothing.
 async function askWorkspace(host: Host): Promise<void> {
-  if (process.stdin.isTTY !== true || process.stderr.isTTY !== true || workspaceChosen({ home: host.home }))
+  if (!isInteractive() || workspaceChosen({ home: host.home }))
     return
 
   const folder = await input('folder holding your repositories (repos, sweep and pkg bump look there)', { default: '~/Workspace' })

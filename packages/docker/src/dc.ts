@@ -1,6 +1,6 @@
 import type { Labels, Stack } from './stack'
 import process from 'node:process'
-import { paint } from '@kaynooo/cli-kit'
+import { isInteractive, paint } from '@kaynooo/cli-kit'
 import { nearestStack, recordedNearby, stackAt, stackOf } from './stack'
 
 // The words a compose command starts with, which never name a stack, so the containers are not listed to check.
@@ -39,7 +39,7 @@ export async function target(args: string[]): Promise<Target> {
 async function choose(recorded: Labels[]): Promise<Labels | undefined> {
   const picker = Bun.which('pick')
 
-  if (picker === null || !process.stdin.isTTY)
+  if (picker === null || !isInteractive())
     return undefined
 
   const proc = Bun.spawn([picker, '--prompt', 'dc> '], { stdin: new Blob([recorded.map(stack => stack.project).join('\n')]), stdout: 'pipe', stderr: 'inherit' })

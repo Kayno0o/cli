@@ -3,7 +3,7 @@ import type { Action, Service } from './stack'
 import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
-import { closest, fail, jsonOption, paint, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
+import { closest, fail, isInteractive, jsonOption, paint, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
 import { byRecency, record, runs } from '@kaynooo/cli-kit/picker'
 import { KEY_LABELS, KEYS, pickService } from './picker'
 import { ACTIONS, allServices, commandFor, defaultAction, key, LOGS_TAIL, logsOf, serviceNamed, stateColor } from './stack'
@@ -139,7 +139,7 @@ export async function dx(args: string[]): Promise<number> {
   let action: Action | undefined
 
   if (named === undefined) {
-    const interactive = process.stdin.isTTY && process.stderr.isTTY && parsed.values.json !== true
+    const interactive = isInteractive() && parsed.values.json !== true
 
     if (!interactive) {
       if (emit)

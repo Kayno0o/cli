@@ -10,7 +10,9 @@ Type to filter: the query matches as a subsequence, best matches first (a word s
 The keys are read from the terminal and the selector is drawn on stderr, so \`pick\` in a pipe or a command substitution prints only the choice. With --multi, tab marks the highlighted line and enter prints the marked lines in input order (the highlighted one when none is marked).
 --preview runs a command for the highlighted line, \`{}\` standing for it shell-quoted, in a pane on the right when the terminal is at least 80 columns wide; its output is cut at 64 KiB and 200 lines.
 
-Exits 0 when it printed a choice, 1 when cancelled or there are no lines, 2 on a usage error or without a terminal.`
+Without a terminal on stderr there is nobody to choose: it prints the first line containing the query (case-insensitive), every one with --multi.
+
+Exits 0 when it printed a choice, 1 when cancelled, nothing matches or there are no lines, 2 on a usage error.`
 
 const OPTIONS = {
   multi: { type: 'boolean', short: 'm', description: 'tab marks several lines, enter prints them' },
@@ -31,9 +33,6 @@ async function main(args: string[]): Promise<number> {
   if (height === undefined)
     badUsage(`--height takes a number of lines or a percentage such as 40%, not ${values.height}`)
 
-  if (!process.stderr.isTTY)
-    fail('pick draws on stderr and it is not a terminal')
-
   if (process.stdin.isTTY)
     badUsage('pipe the lines to pick on stdin')
 
@@ -41,6 +40,19 @@ async function main(args: string[]): Promise<number> {
 
   if (lines.length === 0)
     fail('nothing to pick from', 1)
+
+  // Nobody to choose, so the lines the query matches are the choice: all of them with --multi, else the first.
+  if (!process.stderr.isTTY) {
+    const query = (values.query ?? '').toLowerCase()
+    const matching = lines.filter(line => line.toLowerCase().includes(query))
+
+    if (matching.length === 0)
+      return 1
+
+    process.stdout.write(`${(values.multi === true ? matching : matching.slice(0, 1)).join('\n')}\n`)
+
+    return 0
+  }
 
   const picked = await choose(lines, { multi: values.multi === true, prompt: values.prompt ?? '> ', query: values.query ?? '', height, preview: values.preview })
 

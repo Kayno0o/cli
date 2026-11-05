@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { jsonText } from '../src/format'
 import { exampleRows, replacesRows } from '../src/help'
-import { outputMode } from '../src/mode'
+import { isInteractive, outputMode } from '../src/mode'
 
 const TERMINAL = { isTTY: true }
 
@@ -56,5 +56,14 @@ describe('help for an agent', () => {
     }
 
     expect(exampleRows(['a --b'])).not.toEqual([])
+  })
+})
+
+describe('isInteractive', () => {
+  test('needs input and the prompt on a terminal', () => {
+    expect(isInteractive({ stdin: { isTTY: true }, stderr: { isTTY: true } })).toBe(true)
+    expect(isInteractive({ stdin: { isTTY: true }, stderr: { isTTY: false } })).toBe(false)
+    expect(isInteractive({ stdin: {}, stderr: { isTTY: true } })).toBe(false)
+    expect(isInteractive({})).toBe(false)
   })
 })

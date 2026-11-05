@@ -1,7 +1,7 @@
 import type { Arg } from '@kaynooo/cli-kit/picker'
 import type { Entry, Kind } from './jobs'
 import process from 'node:process'
-import { closest, fail, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
+import { closest, fail, isInteractive, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
 import { byRecency, emit, list, record, runs } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { labelled, pickJob } from './job-picker'
@@ -136,7 +136,7 @@ export async function j(argv: string[]): Promise<number> {
     fail('nothing to run here: no recipe, target, script or task', 1)
 
   const previous = runs('j')
-  const interactive = process.stdin.isTTY && process.stderr.isTTY && parsed.values.json !== true
+  const interactive = isInteractive() && parsed.values.json !== true
   let entry: Entry | undefined
   let words = given
 

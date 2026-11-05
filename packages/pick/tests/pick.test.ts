@@ -9,8 +9,11 @@ function pick(args: string[], stdin: string) {
 }
 
 describe('pick', () => {
-  test('exits 2 with a clear message when stderr is not a terminal', () => {
-    expect(pick([], 'a\nb\n')).toMatchObject({ code: 2, out: '', err: expect.stringContaining('not a terminal') })
+  test('prints the first line the query matches when stderr is not a terminal', () => {
+    expect(pick([], 'a\nb\n')).toMatchObject({ code: 0, out: 'a\n' })
+    expect(pick(['--query', 'B'], 'abc\nxbz\nq\n')).toMatchObject({ code: 0, out: 'abc\n' })
+    expect(pick(['--query', 'b', '--multi'], 'abc\nxbz\nq\n')).toMatchObject({ code: 0, out: 'abc\nxbz\n' })
+    expect(pick(['--query', 'nope'], 'a\n')).toMatchObject({ code: 1, out: '' })
   })
 
   test('rejects arguments and a bad height before looking for a terminal', () => {

@@ -2,7 +2,7 @@ import type { Colors, ExitRow } from '@kaynooo/cli-kit'
 import type { Arg, Row } from '@kaynooo/cli-kit/picker'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { closest, fail, jsonOption, paint, parse, printJson, takesControlCodes } from '@kaynooo/cli-kit'
+import { closest, fail, isInteractive, jsonOption, paint, parse, printJson, takesControlCodes } from '@kaynooo/cli-kit'
 import { emit, list, pick, table } from '@kaynooo/cli-kit/picker'
 
 export interface Branch {
@@ -325,7 +325,7 @@ export async function gb(args: string[]): Promise<number> {
     let key = ''
 
     if (named === undefined) {
-      const interactive = process.stdin.isTTY && process.stderr.isTTY && parsed.values.json !== true
+      const interactive = isInteractive() && parsed.values.json !== true
 
       if (!interactive) {
         if (emitting)
