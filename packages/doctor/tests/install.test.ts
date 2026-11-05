@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { ABOUT, NEEDS } from '../src/catalog'
 import { TOOLS } from '../src/checks'
 import { main } from '../src/doctor'
+import { install, removal } from '../src/install'
 
 const temp = tempDirs()
 
@@ -140,5 +141,43 @@ describe('doctor --install', () => {
     }
 
     expect(refusal).toContain('--install')
+  })
+})
+
+describe('doctor --install, checking and unchecking', () => {
+  test('installs what was checked and removes what was unchecked, hooks keeping guard', async () => {
+    put('@kaynooo/cli-edit', '1.0.0')
+    put('@kaynooo/cli-guard', '1.0.0')
+
+    const { host, ran } = recording([])
+    const { result } = await capture(async () => install(host, { names: [], list: false, dryRun: false, force: false }, async () => 0, async (all) => {
+      const named = (id: string) => all.find(each => each.id === id)!
+
+      expect(named('@kaynooo/cli-edit').installed).toBe(true)
+      expect(named('@kaynooo/cli-forgejo').installed).toBe(false)
+
+      return { add: [named('@kaynooo/cli-forgejo')], remove: [named('@kaynooo/cli-edit')] }
+    }))
+
+    expect(result).toBe(0)
+    expect(ran.filter(line => line.startsWith('bun '))).toEqual(['bun install -g @kaynooo/cli-forgejo', 'bun remove -g @kaynooo/cli-edit'])
+  })
+
+  test('--dry-run says what it would remove and runs nothing', async () => {
+    put('@kaynooo/cli-edit', '1.0.0')
+
+    const { host, ran } = recording([])
+    const { out } = await capture(async () => install(host, { names: [], list: false, dryRun: true, force: false }, async () => 0, async all => ({ add: [], remove: [all.find(each => each.id === '@kaynooo/cli-edit')!] })))
+
+    expect(out).toContain('bun remove -g @kaynooo/cli-edit')
+    expect(ran.filter(line => line.startsWith('bun '))).toEqual([])
+  })
+
+  test('removal keeps guard while the hooks plugin stays', () => {
+    const guard = { id: '@kaynooo/cli-guard', names: [], label: 'guard', hint: '', packages: ['@kaynooo/cli-guard'], installed: true }
+    const hooks = { id: 'hooks', names: [], label: 'hooks', hint: '', packages: ['@kaynooo/cli-guard'], installed: true }
+
+    expect(removal([guard, hooks], [guard])).toEqual({ packages: [], plugin: false })
+    expect(removal([guard, hooks], [guard, hooks])).toEqual({ packages: ['@kaynooo/cli-guard'], plugin: true })
   })
 })

@@ -132,7 +132,7 @@ doctor
 doctor --json  # the checks for a script
 doctor -q  # silent unless something fails
 doctor --fix --dry-run  # what --fix would run
-doctor --install  # pick the packages to add
+doctor --install  # check to install, uncheck to remove
 doctor --install forgejo check hooks  # three named ones
 doctor --install all --dry-run  # what installing everything would run
 ```

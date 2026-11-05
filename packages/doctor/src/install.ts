@@ -2,18 +2,19 @@ import type { Choice } from '@kaynooo/cli-kit/prompt'
 import type { Host } from './checks'
 import process from 'node:process'
 import { badUsage, isInteractive, paint, saveWorkspace, userConfigPath, workspaceChosen } from '@kaynooo/cli-kit'
-import { checklist, input } from '@kaynooo/cli-kit/prompt'
+import { checklist, confirm, input } from '@kaynooo/cli-kit/prompt'
 import { ABOUT, HOOKS_REQUIRES, NEEDS } from './catalog'
 import { firstLine, FORGE, hooksWiring, isInstalled, TOOLS } from './checks'
 
 // What `doctor --install` can add: a package, or the Claude Code hooks plugin that calls guard.
-interface Candidate {
+export interface Candidate {
   id: string
   // The words typed after --install to name it.
   names: string[]
   label: string
   hint: string
   packages: string[]
+  installed: boolean
 }
 
 export interface InstallOptions {
@@ -24,23 +25,25 @@ export interface InstallOptions {
 }
 
 const HOOKS = 'hooks'
+const PLUGIN_UNINSTALL = ['claude', 'plugin', 'uninstall', 'cli-hooks']
 const PLUGIN_INSTALL = ['claude', 'plugin', 'install', 'cli-hooks', '--marketplace', `https://${FORGE}/kaynooo/cli.git`]
 
 const CLI_PREFIX = /^cli-/
 const shortName = (name: string) => name.slice(name.indexOf('/') + 1).replace(CLI_PREFIX, '')
 
+// Every package and the hooks plugin, installed or not; hooks wired by hand as a mod are left out, as this cannot add or take them away.
 function candidates(host: Host): Candidate[] {
-  const packages = Object.entries(TOOLS).filter(([name]) => !isInstalled(host, name)).map(([name, bins]): Candidate => {
+  const packages = Object.entries(TOOLS).map(([name, bins]): Candidate => {
     const needs = (NEEDS[name] ?? []).map(need => need.bin)
 
-    return { id: name, names: [shortName(name), name, `cli-${shortName(name)}`, ...bins], label: shortName(name), hint: `${bins.join(' ')}: ${ABOUT[name] ?? ''}${needs.length === 0 ? '' : `, needs ${needs.join(', ')}`}`, packages: [name] }
+    return { id: name, names: [shortName(name), name, `cli-${shortName(name)}`, ...bins], label: shortName(name), hint: `${bins.join(' ')}: ${ABOUT[name] ?? ''}${needs.length === 0 ? '' : `, needs ${needs.join(', ')}`}`, packages: [name], installed: isInstalled(host, name) }
   })
   const { plugin, mod } = hooksWiring(host)
 
-  if (plugin || mod !== undefined)
+  if (mod !== undefined && !plugin)
     return packages
 
-  return [...packages, { id: HOOKS, names: [HOOKS, 'plugin', 'cli-hooks'], label: 'hooks', hint: `the Claude Code plugin running guard on every tool call, needs ${HOOKS_REQUIRES}`, packages: isInstalled(host, HOOKS_REQUIRES) ? [] : [HOOKS_REQUIRES] }]
+  return [...packages, { id: HOOKS, names: [HOOKS, 'plugin', 'cli-hooks'], label: 'hooks', hint: `the Claude Code plugin running guard on every tool call, needs ${HOOKS_REQUIRES}`, packages: isInstalled(host, HOOKS_REQUIRES) ? [] : [HOOKS_REQUIRES], installed: plugin }]
 }
 
 function choose(pool: readonly Candidate[], names: readonly string[]): Candidate[] {
@@ -102,14 +105,31 @@ function checksFor(packages: readonly string[], plugin: boolean): string[] {
   return [...packages.map(name => name.slice(name.indexOf('/') + 1)), ...plugin ? ['hooks'] : [], 'needs', 'completions', ...packages.includes('@kaynooo/cli-forgejo') ? ['tea'] : []]
 }
 
-async function ask(pool: readonly Candidate[]): Promise<Candidate[]> {
+// Every candidate in a checklist with the installed ones checked: what is checked and was not gets installed, what was checked and is not any more gets removed. Undefined once cancelled.
+async function ask(all: readonly Candidate[]): Promise<{ add: Candidate[], remove: Candidate[] } | undefined> {
   if (!isInteractive())
     badUsage('name what to install, or all: doctor --install forgejo check hooks (doctor --install --list shows the choices)')
 
-  const choices: Choice<Candidate>[] = pool.map(each => ({ value: each, label: each.label, hint: each.hint }))
-  const picked = await checklist('install which?', choices, { hint: 'name them instead: doctor --install forgejo check' })
+  const choices: Choice<Candidate>[] = all.map(each => ({ value: each, label: each.label, hint: `${each.installed ? 'installed, ' : ''}${each.hint}` }))
+  const picked = await checklist('installed packages', choices, { initial: new Set(all.filter(each => each.installed)), hint: 'check to install, uncheck to remove: doctor --install forgejo check names them' })
 
-  return picked === undefined ? [] : [...picked]
+  if (picked === undefined)
+    return undefined
+
+  const remove = all.filter(each => !picked.has(each) && each.installed)
+
+  // Unchecking is easy to do by accident, so the removal is confirmed; declining keeps what is installed and still adds what was checked.
+  if (remove.length > 0 && await confirm(`remove ${remove.map(each => each.label).join(', ')}?`, { default: false }) !== true)
+    return { add: all.filter(each => picked.has(each) && !each.installed), remove: [] }
+
+  return { add: all.filter(each => picked.has(each) && !each.installed), remove }
+}
+
+// What removing the candidates takes out: their packages, except guard while the hooks plugin stays, and the plugin itself.
+export function removal(all: readonly Candidate[], remove: readonly Candidate[]): { packages: string[], plugin: boolean } {
+  const keepsGuard = all.some(each => each.id === HOOKS && each.installed && !remove.includes(each))
+
+  return { packages: [...new Set(remove.flatMap(each => each.id === HOOKS ? [] : each.packages))].filter(name => !(keepsGuard && name === HOOKS_REQUIRES)), plugin: remove.some(each => each.id === HOOKS) }
 }
 
 // On a terminal, asks where the repositories live when the user has not said, and keeps the answer in the user config; off one, or with the folder already chosen, it asks nothing.
@@ -124,8 +144,9 @@ async function askWorkspace(host: Host): Promise<void> {
 }
 
 // Installs what the user names or picks, refusing a package whose required tool is missing unless --force, then checks and fixes what it installed through `recheck`.
-export async function install(host: Host, options: InstallOptions, recheck: (only: string[]) => Promise<number>): Promise<number> {
-  const pool = candidates(host)
+export async function install(host: Host, options: InstallOptions, recheck: (only: string[]) => Promise<number>, choosing = ask): Promise<number> {
+  const all = candidates(host)
+  const pool = all.filter(each => !each.installed)
   const { dim, green, red, yellow } = paint(process.stdout)
 
   if (options.list) {
@@ -138,26 +159,30 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
     return 0
   }
 
-  if (pool.length === 0) {
+  if (pool.length === 0 && options.names.length > 0) {
     console.log('everything is installed')
 
     return 0
   }
 
-  const unknown = options.names.filter(name => name !== 'all' && !Object.values(candidatesAll(host)).some(each => each.names.includes(name)))
+  const unknown = options.names.filter(name => name !== 'all' && !all.some(each => each.names.includes(name)))
 
   if (unknown.length > 0)
     badUsage(`nothing to install is named ${unknown.join(', ')}: doctor --install --list`)
 
-  const picked = options.names.length === 0 ? await ask(pool) : choose(pool, options.names)
+  const chosen = options.names.length === 0 ? await choosing(all) : { add: choose(pool, options.names), remove: [] }
+  const picked = chosen?.add ?? []
   const skipped = options.names.filter(name => name !== 'all' && !pool.some(each => each.names.includes(name)))
 
   for (const name of skipped)
     console.log(`${dim('already')}  ${name} is installed`)
 
-  if (picked.length === 0) {
+  const removing = removal(all, chosen?.remove ?? [])
+  const removes = removing.packages.length > 0 || removing.plugin
+
+  if (picked.length === 0 && !removes) {
     if (skipped.length === 0)
-      console.log('nothing picked')
+      console.log('nothing changed')
 
     return 0
   }
@@ -170,7 +195,7 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
   for (const each of planned.warnings)
     console.log(`${yellow('warn   ')}  ${each.package}: ${each.need} is missing, ${each.why}`)
 
-  if (planned.packages.length === 0 && !planned.plugin)
+  if (planned.packages.length === 0 && !planned.plugin && !removes)
     return 1
 
   if (!options.dryRun && planned.packages.some(name => name === '@kaynooo/cli-workspace' || name === '@kaynooo/cli-pkg'))
@@ -183,6 +208,14 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
 
   if (planned.plugin)
     console.log(`${options.dryRun ? dim('would  ') : green('install')}  ${PLUGIN_INSTALL.join(' ')}`)
+
+  const uninstall = ['bun', 'remove', '-g', ...removing.packages]
+
+  if (removing.packages.length > 0)
+    console.log(`${options.dryRun ? dim('would  ') : green('remove ')}  ${uninstall.join(' ')}`)
+
+  if (removing.plugin)
+    console.log(`${options.dryRun ? dim('would  ') : green('remove ')}  ${PLUGIN_UNINSTALL.join(' ')}`)
 
   if (options.dryRun)
     return planned.blocked.length > 0 ? 1 : 0
@@ -209,17 +242,26 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
     }
   }
 
+  if (removing.packages.length > 0) {
+    const ran = await host.run(uninstall)
+
+    if (ran.code !== 0) {
+      console.error(`${red('failed')}   bun remove -g: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+
+      return 1
+    }
+  }
+
+  if (removing.plugin && host.which('claude') !== null) {
+    const ran = await host.run(PLUGIN_UNINSTALL)
+
+    if (ran.code !== 0)
+      console.error(`${red('failed')}   ${PLUGIN_UNINSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+  }
+
   console.log('\nafter the install:')
 
   const code = await recheck(checksFor(planned.packages, planned.plugin))
 
   return planned.blocked.length > 0 ? 1 : code
-}
-
-// Every candidate by any name, installed or not, so a name already installed is told apart from a typo.
-function candidatesAll(host: Host): Candidate[] {
-  const open = candidates(host)
-  const done = Object.entries(TOOLS).filter(([name]) => isInstalled(host, name)).map(([name, bins]): Candidate => ({ id: name, names: [shortName(name), name, `cli-${shortName(name)}`, ...bins], label: shortName(name), hint: '', packages: [name] }))
-
-  return [...open, ...done]
 }

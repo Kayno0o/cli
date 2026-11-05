@@ -25,7 +25,7 @@ const OPTIONS = {
   'quiet': { type: 'boolean', short: 'q', description: 'print only the failing checks' },
   'fix': { type: 'boolean', description: 'run the fix: lines doctor may run, then check again' },
   'dry-run': { type: 'boolean', description: 'with --fix or --install, show what would run without running it (alone, it implies --fix)' },
-  'install': { type: 'boolean', description: 'install the packages named, or picked from a checklist: forgejo, ft, hooks, all' },
+  'install': { type: 'boolean', description: 'install the packages named, or managed from a checklist, installed ones checked and unchecking removing them: forgejo, ft, hooks, all' },
   'list': { type: 'boolean', description: 'with --install, print the choices' },
   'force': { type: 'boolean', description: 'with --install, install a package even though a tool it requires is missing' },
 } as const
@@ -55,7 +55,7 @@ function printOutcomes(outcomes: readonly Outcome[], log: (line: string) => void
 }
 
 export async function main(args: string[], host: Host = hostHere()): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[name...]'], exits: EXITS, replaces: 'checking each bin\'s version, tea\'s login and the hooks by hand', examples: ['doctor', ['doctor --json', 'the checks for a script'], ['doctor -q', 'silent unless something fails'], ['doctor --fix --dry-run', 'what --fix would run'], ['doctor --install', 'pick the packages to add'], ['doctor --install forgejo check hooks', 'three named ones'], ['doctor --install all --dry-run', 'what installing everything would run']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[name...]'], exits: EXITS, replaces: 'checking each bin\'s version, tea\'s login and the hooks by hand', examples: ['doctor', ['doctor --json', 'the checks for a script'], ['doctor -q', 'silent unless something fails'], ['doctor --fix --dry-run', 'what --fix would run'], ['doctor --install', 'check to install, uncheck to remove'], ['doctor --install forgejo check hooks', 'three named ones'], ['doctor --install all --dry-run', 'what installing everything would run']] })
   const only = values.only ?? []
 
   if (values.install !== true && (positionals.length > 0 || values.list === true || values.force === true))
