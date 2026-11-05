@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { checkBun, checkHooks, checkNeeds, checkTea, checkTool, runChecks, TOOLS } from '../src/checks'
+import { checkBun, checkHooks, checkNeeds, checkTea, checkTool, checkWorkspace, runChecks, TOOLS } from '../src/checks'
 import { main } from '../src/doctor'
 
 const GUARD = '@kaynooo/cli-guard'
@@ -288,5 +288,26 @@ describe('doctor --fix', () => {
 
     expect(JSON.parse(out)).toEqual([{ check: 'cli-forgejo', ok: true, detail: '0.5.1' }])
     expect(err).toContain('bun install -g @kaynooo/cli-forgejo')
+  })
+})
+
+describe('checkWorkspace', () => {
+  test('names the folder in use, failing with a fix when it does not exist', () => {
+    const missing = checkWorkspace(fakeHost(), {})
+
+    expect(missing).toMatchObject({ check: 'workspace', ok: false })
+    expect(missing.detail).toBe(`${join(home, 'Workspace')} does not exist`)
+    expect(missing.fix).toContain('mkdir -p')
+
+    mkdirSync(join(home, 'Workspace'))
+
+    expect(checkWorkspace(fakeHost(), {})).toEqual({ check: 'workspace', ok: true, detail: join(home, 'Workspace') })
+  })
+
+  test('follows the workspace of the user config', () => {
+    write(join(home, '.config', 'kaynooo-cli', 'config.json'), { workspace: '~/code' })
+    mkdirSync(join(home, 'code'))
+
+    expect(checkWorkspace(fakeHost(), {})).toMatchObject({ ok: true, detail: join(home, 'code') })
   })
 })

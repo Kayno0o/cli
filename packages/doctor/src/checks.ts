@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { workspaceRoot } from '@kaynooo/cli-kit'
 import { HOOKS_REQUIRES, NEEDS } from './catalog'
 import { completionDir, missingCompletions } from './completions'
 
@@ -211,8 +212,19 @@ export function checkNeeds(host: Host): Result {
 }
 
 const toolCheck = (name: string) => name.slice(name.indexOf('/') + 1)
-const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions']
+const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'workspace']
 const FORGEJO = '@kaynooo/cli-forgejo'
+const WORKSPACE = '@kaynooo/cli-workspace'
+
+// The folder repos, sweep and pkg bump look under, and whether it exists.
+export function checkWorkspace(host: Host, env: Record<string, string | undefined> = process.env): Result {
+  const folder = workspaceRoot({ home: host.home, env })
+
+  if (existsSync(folder))
+    return { check: 'workspace', ok: true, detail: folder }
+
+  return { check: 'workspace', ok: false, detail: `${folder} does not exist`, fix: `mkdir -p ${folder}, or set "workspace" in ~/.config/kaynooo-cli/config.json to your folder` }
+}
 
 // Every name `runChecks` can be limited to.
 export const CHECK_NAMES = [...Object.keys(TOOLS).map(toolCheck), ...OTHER_CHECKS]
@@ -235,5 +247,6 @@ export async function runChecks(host: Host, only: readonly string[] = []): Promi
     ...wanted('needs') ? [checkNeeds(host)] : [],
     ...wanted('bun') ? [checkBun(host)] : [],
     ...wanted('completions') ? [checkCompletions(host)] : [],
+    ...wanted('workspace') && (only.length > 0 || isInstalled(host, WORKSPACE) || isInstalled(host, '@kaynooo/cli-pkg')) ? [checkWorkspace(host)] : [],
   ]
 }
