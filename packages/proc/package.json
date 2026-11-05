@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-proc",
   "type": "module",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "pid, ports, procs: one process inspected, who listens on a port, and leftover or heavy dev processes cleaned, read straight from /proc (Linux).",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
