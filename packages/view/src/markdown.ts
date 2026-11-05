@@ -22,8 +22,8 @@ const BLOCK = '\u0008'
 
 const MAX_RULE = 60
 // How far the rules around a code block reach at most, so a wide block does not stretch them across the screen.
-const MAX_CODE_RULE = 5
-const MIN_CODE_RULE = 4
+const MAX_CODE_RULE = 12
+const MIN_CODE_RULE = 8
 // The shade of a heading by level along the gradient, the deeper ones toward its end.
 const HEADING_SHADES = [0, 0.35, 0.7, 1]
 const MIN_ROOM = 20

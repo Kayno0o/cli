@@ -25,8 +25,8 @@ describe('renderMarkdown', () => {
 
   test('opens a quote with a mark and hangs the rest, and puts a code block between rules with no mark before its lines', () => {
     expect(show('> a quote with a very long line that needs to wrap around too', 30)).toBe('❝ a quote with a very long\n  line that needs to wrap\n  around too\n')
-    expect(show('```ts\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n```', 80)).toBe(`ts ${'─'.repeat(2)}\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n${'─'.repeat(5)}\n`)
-    expect(show('```\nx\n```', 30)).toBe(`${'─'.repeat(4)}\nx\n${'─'.repeat(4)}\n`)
+    expect(show('```ts\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n```', 80)).toBe(`ts ${'─'.repeat(9)}\nconst a = 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10\n${'─'.repeat(12)}\n`)
+    expect(show('```\nx\n```', 30)).toBe(`${'─'.repeat(8)}\nx\n${'─'.repeat(8)}\n`)
   })
 
   test('lays a table out in columns with a rule under the header, wrapping cells that do not fit', () => {
