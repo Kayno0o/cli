@@ -1,6 +1,6 @@
 import type { FailedJob, Run } from '../runs'
 import process from 'node:process'
-import { ciHeader, duration, fail, jsonOption, parse, printJson, runHint, waitForCi } from '@kaynooo/cli-kit'
+import { ciHeader, duration, fail, jsonOption, parse, printJson, runHint, takesControlCodes, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { good } from '../good'
 import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runLine, runsOn, stallReason } from '../runs'
@@ -111,6 +111,8 @@ export async function ci(args: string[]): Promise<number> {
   }
 
   const json = values.json === true
+  // On a terminal the runs are followed in a live region and end as one line each, in place of the announcement and the result sentence.
+  const live = takesControlCodes(process.stderr) && takesControlCodes(process.stdout) && !json && values.quiet !== true
   const runs = await waitForCi<Run[]>({
     tool: 'ft ci',
     short,
@@ -123,6 +125,10 @@ export async function ci(args: string[]): Promise<number> {
     finished: found => found.every(run => FINISHED.has(run.status)),
     key: found => found.map(run => run.id).join(','),
     announce: (found) => {
+      // The live region links each run, so the announcement would only repeat it.
+      if (live)
+        return
+
       const say = json ? console.error : console.log
 
       for (const run of found)
@@ -138,7 +144,7 @@ export async function ci(args: string[]): Promise<number> {
     // The runs followed and their state, on a terminal, under a line for the wait itself.
     lines: (spinner, found, started) => [
       ciHeader(spinner, `CI on ${short}`, started, process.stderr),
-      ...(found ?? []).map(run => `  ${runLine(run, process.stderr)}`),
+      ...(found ?? []).map(run => `  ${runLine(run, process.stderr, undefined, run.commit_sha.slice(0, 7))}`),
     ],
   })
 
@@ -158,7 +164,15 @@ export async function ci(args: string[]): Promise<number> {
     return status === 'failure' ? 1 : 0
   }
 
+  if (live) {
+    for (const run of runs)
+      console.log(runLine(run, process.stdout, undefined, run.commit_sha.slice(0, 7)))
+  }
+
   if (status !== 'failure') {
+    if (live)
+      return 0
+
     console.log(good(`CI ${status === 'success' ? 'passed' : 'skipped its tests, a release tag\'s workflow testing them'} on ${short}`))
 
     return 0

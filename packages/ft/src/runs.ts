@@ -49,8 +49,8 @@ function elapsed(run: Run, seen: number): string | undefined {
 }
 
 // The line every watcher of runs draws for one, shared with the pipelines of gl through the kit.
-export function runLine(run: Run, out: { isTTY?: boolean }, seen = Date.now()): string {
-  return ciLine(run.status, run.workflow_id, [`run ${hyperlink(String(run.id), run.html_url, out)}`, `on ${run.prettyref}`, elapsed(run, seen)], out)
+export function runLine(run: Run, out: { isTTY?: boolean }, seen = Date.now(), ref = run.prettyref): string {
+  return ciLine(run.status, run.workflow_id, [`run ${hyperlink(String(run.id), run.html_url, out)}`, `on ${ref}`, elapsed(run, seen)], out)
 }
 
 export function startedAge(run: Run, now = Date.now()): string {

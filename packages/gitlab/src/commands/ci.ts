@@ -1,7 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Pipeline } from '../pipelines'
 import process from 'node:process'
-import { ciHeader, duration, Exit, fail, jsonOption, parse, printJson, role, waitForCi } from '@kaynooo/cli-kit'
+import { ciHeader, duration, Exit, fail, jsonOption, parse, printJson, role, takesControlCodes, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
 import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newest, pipelineLine, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
@@ -126,6 +126,8 @@ export async function ci(args: string[]): Promise<number> {
   }
 
   const json = values.json === true
+  // On a terminal the pipeline is followed in a live region and ends as one line, in place of the announcement and the result sentence.
+  const live = takesControlCodes(process.stderr) && takesControlCodes(process.stdout) && !json && values.quiet !== true
   const pipeline = await waitingOn(async () => waitForCi<Pipeline>({
     tool: 'gl ci',
     short,
@@ -137,7 +139,8 @@ export async function ci(args: string[]): Promise<number> {
     covering,
     finished: found => FINISHED.has(found.status),
     key: found => String(found.id),
-    announce: found => (json ? console.error : console.log)(`following pipeline ${found.id} on ${found.sha.slice(0, 7)}${found.sha === sha ? '' : `, which covers ${short}`}: ${found.web_url}`),
+    // The live region links the pipeline, so on a terminal the announcement would only repeat it.
+    announce: found => live ? undefined : (json ? console.error : console.log)(`following pipeline ${found.id} on ${found.sha.slice(0, 7)}${found.sha === sha ? '' : `, which covers ${short}`}: ${found.web_url}`),
     links: found => found.web_url,
     settle: async (found) => {
       const latest = await refreshed(found.id)
@@ -155,7 +158,7 @@ export async function ci(args: string[]): Promise<number> {
     // The pipeline followed and its state, on a terminal, under a line for the wait itself.
     lines: (spinner, found, started) => [
       ciHeader(spinner, `CI on ${short}`, started, process.stderr),
-      ...found === undefined ? [] : [`  ${pipelineLine(found, process.stderr)}`],
+      ...found === undefined ? [] : [`  ${pipelineLine(found, process.stderr, found.sha.slice(0, 7))}`],
     ],
   }))
 
@@ -168,7 +171,13 @@ export async function ci(args: string[]): Promise<number> {
     return pipeline.status === 'failed' ? 1 : 0
   }
 
+  if (live)
+    console.log(pipelineLine(pipeline, process.stdout, pipeline.sha.slice(0, 7)))
+
   if (pipeline.status !== 'failed') {
+    if (live)
+      return 0
+
     console.log(role(pipeline.status === 'manual' ? 'skipped' : 'ok', process.stdout)(pipeline.status === 'manual' ? `CI passed on ${short} up to a manual job: ${pipeline.web_url}` : `CI passed on ${short}`))
 
     return 0
