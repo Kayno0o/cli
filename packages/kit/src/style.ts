@@ -61,7 +61,7 @@ export function role(name: Role, stream: { isTTY?: boolean }, env: Record<string
 const STATUS_WORDS: Record<Status, string[]> = {
   passed: ['passed', 'success', 'succeeded', 'ok'],
   failed: ['failed', 'failure', 'error', 'errored'],
-  running: ['running', 'in_progress', 'started'],
+  running: ['running', 'in_progress', 'started', 'holding'],
   queued: ['queued', 'waiting', 'pending', 'created', 'blocked', 'scheduled'],
   skipped: ['skipped', 'cancelled', 'canceled', 'manual'],
 }
