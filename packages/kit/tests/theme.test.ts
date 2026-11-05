@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { createColors } from '@kaynooo/utils/tools/colors'
 import { describe, expect, it } from 'bun:test'
 import { tempDirs } from '../src/test'
-import { isColorSpec, loadTheme, tinted } from '../src/theme'
+import { isColorSpec, loadTheme, nearest256, tinted } from '../src/theme'
 
 const temp = tempDirs()
 
@@ -113,8 +113,16 @@ describe('colour specs', () => {
   it('draws each kind of spec', () => {
     expect(tinted(colors, 'green')('x')).toBe('\x1B[32mx\x1B[39m')
     expect(tinted(colors, 'bold green')('x')).toContain('\x1B[1m')
-    expect(tinted(colors, '#ff0000')('x')).toContain('38;2;255;0;0')
+    expect(tinted(colors, '#ff0000', { COLORTERM: 'truecolor' })('x')).toContain('38;2;255;0;0')
+    expect(tinted(colors, '#ff0000', { COLORTERM: '24bit' })('x')).toContain('38;2;255;0;0')
     expect(tinted(colors, 208)('x')).toContain('38;5;208')
+  })
+
+  it('falls back to the nearest 256-colour index without truecolour', () => {
+    expect(tinted(colors, '#ff0000', {})('x')).toContain('38;5;196')
+    expect(tinted(colors, 'bold #808080', {})('x')).toContain('38;5;244')
+    expect(nearest256('#ff8800')).toBe(214)
+    expect(nearest256('#000000')).toBe(232)
   })
 })
 

@@ -59,12 +59,34 @@ export function isColorSpec(spec: unknown): spec is ColorSpec {
   return typeof spec === 'string' && spec.trim() !== '' && spec.trim().split(SPACES).every(token => STYLES.has(token) || HEX.test(token))
 }
 
-// `colors` carrying the styles `spec` names, on top of whatever it already carries.
-export function tinted(colors: Colors, spec: ColorSpec): Colors {
+// The 256-colour index nearest to `#rrggbb`: the grey ramp when the three channels are close, the 6x6x6 cube otherwise.
+export function nearest256(hex: string): number {
+  const [red, green, blue] = [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16)) as [number, number, number]
+
+  if (Math.max(red, green, blue) - Math.min(red, green, blue) < 8)
+    return Math.round((red + green + blue) / 3 / 255 * 23) + 232
+
+  const level = (channel: number): number => Math.round(channel / 255 * 5)
+
+  return 16 + 36 * level(red) + 6 * level(green) + level(blue)
+}
+
+// Whether the terminal says it draws 24-bit colour, which `COLORTERM` announces.
+function hasTrueColor(env: Env): boolean {
+  return env.COLORTERM === 'truecolor' || env.COLORTERM === '24bit'
+}
+
+// `colors` carrying the styles `spec` names, on top of whatever it already carries; a `#rrggbb` becomes its nearest 256-colour index where the terminal does not announce truecolour.
+export function tinted(colors: Colors, spec: ColorSpec, env: Env = process.env): Colors {
   if (typeof spec === 'number')
     return colors.ansi256(spec)
 
-  return spec.trim().split(SPACES).reduce((chain, token) => HEX.test(token) ? chain.hex(token) : (chain as unknown as Record<string, Colors | undefined>)[token] ?? chain, colors)
+  return spec.trim().split(SPACES).reduce((chain, token) => {
+    if (HEX.test(token))
+      return hasTrueColor(env) ? chain.hex(token) : chain.ansi256(nearest256(token))
+
+    return (chain as unknown as Record<string, Colors | undefined>)[token] ?? chain
+  }, colors)
 }
 
 export interface ThemeSettings {
