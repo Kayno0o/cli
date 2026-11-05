@@ -22,7 +22,9 @@ export function sparkline(values: number[], { stream = process.stdout, env = pro
   const low = Math.min(...values)
   const span = Math.max(...values) - low
 
-  return values.map(value => LEVELS[span === 0 ? 3 : Math.round((value - low) / span * (LEVELS.length - 1))]).join('')
+  const blocks = values.map(value => LEVELS[span === 0 ? 3 : Math.round((value - low) / span * (LEVELS.length - 1))]).join('')
+
+  return takesControlCodes(stream, env) ? tinted(paint(stream, env), activeTheme().theme.colors.accent, env)(blocks) : blocks
 }
 
 export interface BarSettings {
@@ -94,25 +96,26 @@ function indented(nodes: TreeNode[], indent: string): string {
   return nodes.map(({ label, children = [] }) => [`${indent}${label}`, ...children.length === 0 ? [] : [indented(children, `${indent}  `)]].join('\n')).join('\n')
 }
 
-// Each root on a line of its own and its children under it, hung on dimmed `├─`, `└─` and `│` branches.
+// Each root on a line of its own, bold on a terminal, and its children under it, hung on dimmed `├─`, `└─` and `│` branches, the horizontal stroke the theme's rule glyph.
 export function tree(roots: TreeNode[], { stream = process.stdout, env = process.env }: KeyValueSettings = {}): string {
   if (outputMode(stream, env) === 'agent')
     return indented(roots, '')
 
   const colors = paint(stream, env)
+  const stroke = takesControlCodes(stream, env) ? activeTheme().theme.glyphs.rule : '─'
   const lines: string[] = []
 
   function branch(nodes: TreeNode[], indent: string) {
     for (const [index, { label, children = [] }] of nodes.entries()) {
       const last = index === nodes.length - 1
 
-      lines.push(`${colors.dim(`${indent}${last ? '└─' : '├─'}`)} ${label}`)
+      lines.push(`${colors.dim(`${indent}${last ? '└' : '├'}${stroke}`)} ${label}`)
       branch(children, `${indent}${last ? '   ' : '│  '}`)
     }
   }
 
   for (const { label, children = [] } of roots) {
-    lines.push(label)
+    lines.push(colors.bold(label))
     branch(children, '')
   }
 

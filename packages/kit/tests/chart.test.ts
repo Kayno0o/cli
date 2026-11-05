@@ -51,6 +51,8 @@ describe('tree', () => {
   })
 
   test('dims the branches on a terminal', () => {
-    expect(tree([{ label: 'a', children: [{ label: 'b' }] }], { stream: { isTTY: true }, env: {} })).toBe('a\n\x1B[2m└─\x1B[22m b')
+    expect(tree([{ label: 'a', children: [{ label: 'b' }] }], { stream: { isTTY: true }, env: {} })).toBe('\x1B[1ma\x1B[22m\n\x1B[2m└─\x1B[22m b')
+    expect(sparkline([1, 2], { stream: { isTTY: true }, env: {} })).toBe('\x1B[36m▁█\x1B[39m')
+    expect(sparkline([1, 2], { stream: {}, env: {} })).toBe('▁█')
   })
 })
