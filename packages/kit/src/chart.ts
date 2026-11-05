@@ -60,13 +60,15 @@ export interface BarChartSettings extends KeyValueSettings {
   format?: (value: number) => string
 }
 
-// A bar per labelled value, scaled to the largest: `label  ██████░░░░░░  42`.
+// A bar per labelled value, scaled to the largest: `label  ██████░░░░░░  42`. Off a terminal the bars are left out, as a reader of a log or an agent has the numbers and no use for the drawing: `label  42`.
 export function barChart(rows: [label: string, value: number][], { width = 24, format = String, stream = process.stdout, env = process.env }: BarChartSettings = {}): string {
   const largest = Math.max(0, ...rows.map(([, value]) => value))
   const labels = Math.max(0, ...rows.map(([label]) => textWidth(label)))
   const values = Math.max(0, ...rows.map(([, value]) => textWidth(format(value))))
 
-  return rows.map(([label, value]) => `${label}${' '.repeat(labels - textWidth(label))}  ${bar(largest === 0 ? 0 : value / largest, { width, stream, env })}  ${' '.repeat(values - textWidth(format(value)))}${format(value)}`).join('\n')
+  const drawn = takesControlCodes(stream, env)
+
+  return rows.map(([label, value]) => `${label}${' '.repeat(labels - textWidth(label))}  ${drawn ? `${bar(largest === 0 ? 0 : value / largest, { width, stream, env })}  ` : ''}${' '.repeat(values - textWidth(format(value)))}${format(value)}`).join('\n')
 }
 
 export interface TreeNode {

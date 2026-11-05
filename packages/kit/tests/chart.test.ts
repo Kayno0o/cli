@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { bar, barChart, keyValue, sparkline, tree } from '../src/chart'
+import { stripAnsi } from '../src/text'
 
 describe('chart', () => {
   test('sparkline scales between the smallest and largest value', () => {
@@ -21,8 +22,14 @@ describe('chart', () => {
     expect(keyValue([['state', 'open'], ['labels', 'a, b']], { stream: {}, env: {} })).toBe('state   open\nlabels  a, b')
   })
 
-  test('barChart scales to the largest value and right-aligns the numbers', () => {
-    expect(barChart([['ft', 40], ['db', 4]], { width: 10, stream: {}, env: {} })).toBe('ft  ━━━━━━━━━━  40\ndb  ━─────────   4')
+  test('barChart draws no bars off a terminal and right-aligns the numbers', () => {
+    expect(barChart([['ft', 40], ['db', 4]], { width: 10, stream: {}, env: {} })).toBe('ft  40\ndb   4')
+  })
+
+  test('barChart scales to the largest value on a terminal', () => {
+    const drawn = stripAnsi(barChart([['ft', 40], ['db', 4]], { width: 10, stream: { isTTY: true }, env: {} }))
+
+    expect(drawn).toBe('ft  ━━━━━━━━━━  40\ndb  ━━━━━━━━━━   4')
   })
 })
 
