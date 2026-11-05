@@ -144,7 +144,7 @@ const BOARD_LIMIT = 30
 const boardOptions = {
   labels: { type: 'string', short: 'L', description: 'only issues with these labels, comma separated' },
   milestone: { type: 'string', short: 'm', description: 'only issues of this milestone, a title or an id' },
-  query: { type: 'string', short: 'q', description: 'only issues whose title matches this, a case-insensitive regex such as dom|eager' },
+  query: { type: 'string', description: 'only issues whose title matches this, a case-insensitive regex such as dom|eager' },
   state: { type: 'string', description: 'only issues in this state: available, taken or away (claimed, no live session here)' },
   ...limitOptions(BOARD_LIMIT),
   json: jsonOption('number, title, labels, state, holder, since, session, boxesTotal, boxesLeft and note (author, at, body of the latest comment that is not a claim)'),
