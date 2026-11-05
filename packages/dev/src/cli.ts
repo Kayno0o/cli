@@ -3,7 +3,7 @@
 import type { Algorithm } from './hash'
 import type { Format } from './password'
 import process from 'node:process'
-import { badUsage, fail, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, copyText, fail, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
 import { b64Decode, b64Encode } from './encode'
 import { ALGORITHMS, hashHex } from './hash'
 import { ulid, uuidV4, uuidV7 } from './ids'
@@ -57,15 +57,6 @@ async function bytesInput(argument: string | undefined, what: string): Promise<U
   return new Uint8Array(await Bun.stdin.arrayBuffer())
 }
 
-async function copyToClipboard(text: string): Promise<boolean> {
-  if (Bun.which('wl-copy') === null)
-    return false
-
-  const copy = Bun.spawn(['wl-copy'], { stdin: new Blob([text]), stdout: 'ignore', stderr: 'ignore' })
-
-  return await copy.exited === 0
-}
-
 function printRows(rows: [label: string, value: string][]): void {
   const { cyan } = paint(process.stdout)
   const width = Math.max(...rows.map(([label]) => label.length))
@@ -76,7 +67,7 @@ function printRows(rows: [label: string, value: string][]): void {
 
 const PASSWORD_USAGE = `dev password [length] [format] [-b|--bcrypt [password]]: a random password of <length> bytes (default ${DEFAULT_LENGTH}) as hex, base64 (default) or base64url
 
-Printed on stdout and copied to the clipboard with wl-copy when it exists (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given, or of a generated one, which then prints on stderr and is the one copied. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.
+Printed on stdout and copied to the clipboard when a tool for it (wl-copy, xclip, xsel, pbcopy) exists (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given, or of a generated one, which then prints on stderr and is the one copied. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.
 Exits 0 when it printed the password or hash, 2 on a usage error.`
 
 const PASSWORD_OPTIONS = {
@@ -103,7 +94,7 @@ export async function password(args: string[]): Promise<number> {
   const given = values.bcrypt === undefined || values.bcrypt === '' ? undefined : values.bcrypt
   const secret = given ?? generatePassword(bytes, format)
   const hash = values.bcrypt === undefined ? undefined : await bcryptHash(secret)
-  const copied = values['no-copy'] === true ? false : await copyToClipboard(given === undefined ? secret : hash ?? secret)
+  const copied = values['no-copy'] === true ? false : await copyText(given === undefined ? secret : hash ?? secret)
 
   if (values.json === true) {
     printJson({ ...hash === undefined ? {} : { hash }, ...given === undefined ? { password: secret } : {}, format, bytes, copied })

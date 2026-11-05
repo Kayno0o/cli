@@ -2,7 +2,7 @@
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
-import { badUsage, duration, fail, isStdinPiped, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, copyOption, duration, fail, isStdinPiped, jsonOption, parse, printJson, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { FOLD_LINES } from './fold'
 import { readPiped, run } from './run'
 import { grepLog, printLast, printList } from './saved'
@@ -16,6 +16,7 @@ const OPTIONS = {
   lines: { type: 'string', short: 'n', description: 'longest output left untouched (default 150)' },
   was: { type: 'string', multiple: true, description: 'a tail, head or grep stage out stands in for, so the stats count against what it would have printed (repeatable, in pipeline order)' },
   last: { type: 'boolean', description: 'print the path of the most recent full log' },
+  copy: copyOption('the path --last prints'),
   list: { type: 'boolean', description: 'list the saved logs, the newest first' },
   grep: { type: 'string', description: 'print the lines of a saved log matching this regular expression, with their line numbers' },
   log: { type: 'string', description: 'with --grep, the saved log to read (its name or path) instead of the last' },
@@ -50,11 +51,14 @@ async function main(argv: string[]): Promise<number> {
   if (reads === 1 && ((parsed.rest ?? []).length > 0 || parsed.positionals.length > 0))
     badUsage('--last, --list, --grep and --stats run no command')
 
+  if (values.copy === true && values.last !== true)
+    badUsage('--copy goes with --last')
+
   if (values.log !== undefined && values.grep === undefined)
     badUsage('--log goes with --grep')
 
   if (values.last === true)
-    return printLast()
+    return printLast(values.copy === true)
 
   if (values.list === true)
     return printList()

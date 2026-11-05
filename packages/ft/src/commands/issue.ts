@@ -1,5 +1,5 @@
 import type { Issue, IssueComment } from '../issues'
-import { formatAge, jsonOption, openUrl, parse, printJson } from '@kaynooo/cli-kit'
+import { badUsage, copyOption, copyText, formatAge, jsonOption, openUrl, parse, printJson } from '@kaynooo/cli-kit'
 import { issueNumbers, openOption, repoOption } from '../args'
 import { boxes, numberedBody } from '../checklist'
 import { latestClaim } from '../claims'
@@ -19,6 +19,7 @@ const issueOptions = {
   comments: { type: 'boolean', short: 'c', description: 'add the comments, each with its author and age' },
   body: { type: 'boolean', short: 'b', description: 'only the raw description, without numbered boxes' },
   json: jsonOption('number, title, state, url, labels, claim, boxes, body and comments, an array for several issues'),
+  copy: copyOption('the description --body prints'),
   ...openOption,
   ...repoOption,
 } as const
@@ -78,10 +79,16 @@ export async function issue(args: string[]): Promise<number> {
   const held = positionals.length === 0 ? await heldIssues(values.repo) : []
   const numbers = held.length === 0 ? issueNumbers(positionals, issueUsage) : held
 
+  if (values.copy === true && values.body !== true)
+    badUsage('--copy goes with --body')
+
   if (values.body === true) {
     const bodies = await Promise.all(numbers.map(async number => (await getIssue(number, values.repo)).body.replaceAll('\r\n', '\n')))
 
     console.log(bodies.join('\n\n'))
+
+    if (values.copy === true && !await copyText(bodies.join('\n\n')))
+      console.error('warning: no clipboard tool found (wl-copy, xclip, xsel, pbcopy)')
 
     return 0
   }

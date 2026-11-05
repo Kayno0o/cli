@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { distance, exitCodeOf, holdSignals, openUrl, runCommand, stripAnsi } from '../src'
+import { copyText, distance, exitCodeOf, holdSignals, openUrl, runCommand, stripAnsi } from '../src'
 import { tempDirs } from '../src/test'
 
 const temp = tempDirs()
@@ -97,6 +97,25 @@ describe('openUrl', () => {
 
   test('says false when the opener cannot start', () => {
     expect(openUrl('https://example.test', { BROWSER: '/no/such/opener' })).toBe(false)
+  })
+})
+
+describe('copyText', () => {
+  test('pipes the text into the first clipboard tool found', async () => {
+    const dir = temp('kit-copy-')
+    const tool = join(dir, 'tool')
+
+    writeFileSync(tool, `#!/bin/sh\ncat > "${join(dir, 'clip')}"\n`)
+    chmodSync(tool, 0o755)
+
+    expect(await copyText('hello', command => command === 'xclip' ? tool : null)).toBe(true)
+    expect(await written(join(dir, 'clip'))).toBe('hello')
+  })
+
+  test('says false with no tool, or when it fails', async () => {
+    expect(await copyText('x', () => null)).toBe(false)
+    expect(await copyText('x', () => '/bin/false')).toBe(false)
+    expect(await copyText('x', () => '/no/such/tool')).toBe(false)
   })
 })
 

@@ -31,6 +31,11 @@ export function jsonOption(holds?: string) {
   return { type: 'boolean', description: holds === undefined ? 'print JSON' : `print JSON: ${holds}` } as const
 }
 
+// The `--copy` flag every CLI words alike, for what a command printed to also land on the clipboard.
+export function copyOption(what: string) {
+  return { type: 'boolean', description: `also copy ${what} to the clipboard` } as const
+}
+
 // Thrown to end a command with this exit code and message, which runCli prints as `error: <cli> <command>: <message>`, the hint on a line of its own.
 export class Exit extends Error {
   constructor(message: string, readonly code: number, readonly hint?: string) {

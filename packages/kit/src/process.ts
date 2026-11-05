@@ -116,6 +116,31 @@ export function openUrl(target: string, env: Record<string, string | undefined> 
   }
 }
 
+const CLIPBOARDS: string[][] = [['wl-copy'], ['xclip', '-selection', 'clipboard'], ['xsel', '--clipboard', '--input'], ['pbcopy'], ['clip.exe']]
+
+// Puts text on the system clipboard through the first of wl-copy, xclip, xsel, pbcopy and clip.exe found; false when none is there or it fails.
+export async function copyText(text: string, which: (command: string) => string | null = Bun.which): Promise<boolean> {
+  for (const [command, ...args] of CLIPBOARDS) {
+    const found = which(command!)
+
+    if (found !== null)
+      return pipeInto([found, ...args], text)
+  }
+
+  return false
+}
+
+async function pipeInto(argv: string[], text: string): Promise<boolean> {
+  try {
+    const copy = Bun.spawn(argv, { stdin: new Blob([text]), stdout: 'ignore', stderr: 'ignore' })
+
+    return await copy.exited === 0
+  }
+  catch {
+    return false
+  }
+}
+
 // Runs a command with stdout and stderr captured; throws when it cannot be started. With `timeoutMs`, `signal`, `onStart` or `onChunk` the child leads its own process group, and the whole group is ended (SIGTERM, then SIGKILL after a short grace) on the timeout, an abort or a throwing `onChunk`; the pipes are drained to their end either way.
 export async function runCommand(argv: string[], { cwd, env, stdin = 'ignore', timeoutMs, signal, maxBytes = Infinity, onChunk, onStart }: RunSettings = {}): Promise<Ran> {
   const chunks: Chunk[] = []
