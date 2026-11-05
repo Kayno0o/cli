@@ -1,4 +1,4 @@
-import { fail, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
 import { entries } from '../dotenv'
 import { readEnv } from '../files'
 
@@ -43,7 +43,9 @@ export async function diff(args: string[]): Promise<number> {
     return onlyA.length + onlyB.length === 0 ? 0 : 1
   }
 
-  const lines = [...onlyA.map(key => `only in ${a}: ${key}`), ...onlyB.map(key => `only in ${b}: ${key}`)]
+  const path = role('path', process.stdout)
+  const value = role('value', process.stdout)
+  const lines = [...onlyA.map(key => `only in ${path(a)}: ${value(key)}`), ...onlyB.map(key => `only in ${path(b)}: ${value(key)}`)]
 
   if (lines.length === 0)
     return 0
@@ -71,7 +73,9 @@ export async function missing(args: string[]): Promise<number> {
   if (absent.length === 0)
     return 0
 
-  console.log(absent.map(key => `${key} (set in ${against}, not in ${file})`).join('\n'))
+  const path = role('path', process.stdout)
+
+  console.log(absent.map(key => `${role('value', process.stdout)(key)} (set in ${path(against)}, not in ${path(file)})`).join('\n'))
 
   return 1
 }

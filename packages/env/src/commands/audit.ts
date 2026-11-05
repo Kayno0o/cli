@@ -3,7 +3,7 @@ import type { ComposeFix } from '../fix'
 import { stat } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
 import { shellQuote } from '@kaynooo/cli-kit/shell'
 import { audit as findExposed } from '../audit'
 import { fixCompose, shutOthersOut } from '../fix'
@@ -68,7 +68,7 @@ async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: Comp
       ...tracked ? [`tracked by git: git rm --cached ${shellQuote(shown(path))}, then ignore it`] : [],
     ]
 
-    console.log(`${shown(path)}\n  ${lines.join('\n  ')}`)
+    console.log(`${role('path', process.stdout)(shown(path))}\n  ${lines.join('\n  ')}`)
   }
 
   return { fixed, left }
@@ -128,7 +128,7 @@ export async function audit(args: string[]): Promise<number> {
       ...tracked ? [`tracked by git: git rm --cached ${shellQuote(shown(path))}, then ignore it`] : [],
     ]
 
-    console.log(`${shown(path)}\n  ${problems.join('\n  ')}`)
+    console.log(`${role('path', process.stdout)(shown(path))}\n  ${problems.join('\n  ')}`)
   }
 
   return 1
