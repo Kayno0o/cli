@@ -1,7 +1,8 @@
 import type { Milestone } from '../milestones'
-import { capped, fail, jsonOption, limitOf, limitOptions, liveSessions, parse, printJson, runHint, table, truncate } from '@kaynooo/cli-kit'
+import process from 'node:process'
+import { bar, capped, fail, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printJson, role, runHint, section, table, takesControlCodes, truncate } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
-import { openIssues } from '../issues'
+import { closedIssues, openIssues } from '../issues'
 import { closeMilestone, createMilestone, dueDate, dueOn, findMilestone, listMilestones, progress } from '../milestones'
 import { boardJson, boardRows, renderBoard } from './board'
 
@@ -12,14 +13,48 @@ function counts(milestone: Milestone): string {
   return `${milestone.open_issues} open, ${milestone.closed_issues} closed`
 }
 
+// The bar of closed over all issues, empty off a terminal where the percentage says the same.
+function progressBar(milestone: Milestone): string {
+  const total = milestone.open_issues + milestone.closed_issues
+
+  return takesControlCodes(process.stdout) ? bar(total === 0 ? 0 : milestone.closed_issues / total, { width: 16 }) : ''
+}
+
+function milestoneCells(each: Milestone, showState: boolean): string[] {
+  const drawn = progressBar(each)
+
+  return [String(each.id), truncate(each.title, TITLE_WIDTH), `${each.open_issues} open`, `${each.closed_issues} closed`, ...drawn === '' ? [] : [drawn], progress(each), dueDate(each) === '' ? '' : `due ${dueDate(each)}`, ...showState ? [each.state] : []]
+}
+
+// Each milestone as a titled section with its bar, then its open issues and its closed ones dimmed.
+async function printWithIssues(list: Milestone[], repo: string | undefined): Promise<void> {
+  const colors = paint(process.stdout)
+  const id = role('id', process.stdout)
+  const issuesOf = await Promise.all(list.map(async each => Promise.all([openIssues(undefined, repo, each.id), closedIssues(each.id, repo)])))
+  const blocks = list.map((each, index) => {
+    const [open, closed] = issuesOf[index]!
+    const drawn = progressBar(each)
+    const facts = [counts(each), progress(each), dueDate(each) === '' ? '' : `due ${dueDate(each)}`].filter(fact => fact !== '').join(', ')
+    const lines = [
+      ...open.map(issue => `  ${id(`#${issue.number}`)}  ${truncate(issue.title, TITLE_WIDTH)}`),
+      ...closed.map(issue => colors.dim(`  #${issue.number}  ${truncate(issue.title, TITLE_WIDTH)} (closed)`)),
+    ]
+
+    return [`${section(each.title, undefined, process.stdout, process.env, 'accent')}${drawn === '' ? '' : ` ${drawn}`}  ${facts}`, ...lines].join('\n')
+  })
+
+  console.log(blocks.join('\n\n'))
+}
+
 const listUsage = `ft milestones
 
-Lists the repository's milestones, the open ones unless --state says otherwise, with the issues open and closed in each, the progress and the due date.
+Lists the repository's milestones, the open ones unless --state says otherwise, with the issues open and closed in each, the progress and the due date; on a terminal the progress is a bar, and --issues lists the title of every issue under its milestone.
 
 Exits 0 when it listed them, 1 when Forgejo refuses, 2 on a usage error.`
 
 const listOptions = {
   state: { type: 'string', description: 'open (the default), closed or all' },
+  issues: { type: 'boolean', short: 'i', description: 'list the open and closed issues of each milestone by title' },
   ...limitOptions(LIST_LIMIT),
   json: jsonOption('id, title, state, description, open, closed, due (YYYY-MM-DD or null)'),
   ...repoOption,
@@ -50,10 +85,11 @@ export async function milestones(args: string[]): Promise<number> {
   }
 
   const { shown, footer } = capped(found, limit)
-  const showState = state === 'all'
-  const rows = shown.map(each => [String(each.id), truncate(each.title, TITLE_WIDTH), `${each.open_issues} open`, `${each.closed_issues} closed`, progress(each), dueDate(each) === '' ? '' : `due ${dueDate(each)}`, ...showState ? [each.state] : []])
 
-  console.log(table(rows))
+  if (values.issues === true)
+    await printWithIssues(shown, values.repo)
+  else
+    console.log(table(shown.map(each => milestoneCells(each, state === 'all'))))
 
   if (footer !== undefined)
     console.log(footer)
