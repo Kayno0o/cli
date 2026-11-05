@@ -21,7 +21,6 @@ export interface Consumer {
 }
 
 // Folders never holding a consumer of their own.
-const SKIPPED = SKIPPED_FOLDERS
 const MAX_DEPTH = 5
 // Specs that are not a registry version or range: workspace:, link:, file:, git+, github:, tarball URLs, npm: aliases, catalog: and owner/repo shorthands.
 const LOCAL_SPEC = /[:/]/
@@ -39,7 +38,7 @@ function packageFiles(dir: string, depth: number, found: string[]): string[] {
   for (const entry of entries) {
     if (entry.isFile() && entry.name === 'package.json')
       found.push(join(dir, entry.name))
-    else if (entry.isDirectory() && depth < MAX_DEPTH && !entry.name.startsWith('.') && !SKIPPED.has(entry.name))
+    else if (entry.isDirectory() && depth < MAX_DEPTH && !entry.name.startsWith('.') && !SKIPPED_FOLDERS.has(entry.name))
       packageFiles(join(dir, entry.name), depth + 1, found)
   }
 

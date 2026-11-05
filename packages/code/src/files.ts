@@ -7,7 +7,6 @@ const MAX_BYTES = 2_000_000
 // Bytes looked at for a NUL, the sign of a binary file.
 const SNIFF_BYTES = 8000
 // Folders a walk outside git never enters.
-const SKIPPED = SKIPPED_FOLDERS
 
 function walk(dir: string, found: string[]): string[] {
   let entries
@@ -20,7 +19,7 @@ function walk(dir: string, found: string[]): string[] {
   }
 
   for (const entry of entries) {
-    if (entry.name.startsWith('.') || SKIPPED.has(entry.name))
+    if (entry.name.startsWith('.') || SKIPPED_FOLDERS.has(entry.name))
       continue
 
     if (entry.isDirectory())

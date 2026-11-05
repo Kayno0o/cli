@@ -42,6 +42,12 @@ source <(cli completions bash)            # in ~/.bashrc
 
 Each bin completes itself through `<bin> __complete`. fish gets a file per bin (put the folder first in `fish_complete_path`), bash one script sourced from `~/.bashrc`. zsh has no script of its own: load `compinit` and `bashcompinit` in `~/.zshrc`, then the bash line above (not tested, zsh is not installed on the machine this was written on). The fish files are checked by `doctor`.
 
+## cli config
+
+```sh
+cli config [--json]   # every config file a bin looks for (set, absent or invalid), the main variables set with secrets hidden, the workspace folder and the theme in force
+```
+
 ## cli stats
 
 ```sh

@@ -1,6 +1,6 @@
 import type { Host } from './checks'
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { findUp, loadTheme, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
 
@@ -23,7 +23,7 @@ export interface ConfigReport {
 // [bin, older path under the config folder].
 const USER_FILES: [string, string[][]][] = [['config', []], ['theme', []], ['doctor', []], ['ft', [['ft', 'config.json']]], ['db', [['db', 'config.json']]], ['pkg', []], ['pkg-excluded', []], ['repos', []]]
 const PROJECT_FILES = [join('.kaynooo', 'theme.json'), '.pkgrc.json']
-const ENV = ['KAYNOOO_WORKSPACE', 'KAYNOOO_CLI_NO_USAGE', 'KIT_MODE', 'KIT_THEME', 'KIT_HELP', 'NO_COLOR', 'FORCE_COLOR', 'BROWSER', 'EDITOR', 'VISUAL', 'SLOT_DIR', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'GITHUB_TOKEN', 'DISCORD_WEBHOOK']
+const ENV = ['KAYNOOO_WORKSPACE', 'KAYNOOO_CLI_NO_USAGE', 'KIT_MODE', 'KIT_THEME', 'KIT_HELP', 'CI', 'CLAUDECODE', 'AI_AGENT', 'NO_COLOR', 'FORCE_COLOR', 'NODE_DISABLE_COLORS', 'COLORTERM', 'TERM', 'BROWSER', 'EDITOR', 'VISUAL', 'SLOT_DIR', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'XDG_RUNTIME_DIR', 'BUN_INSTALL', 'COMPOSE_FILE', 'COMPOSE_PATH_SEPARATOR', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_TMPDIR', 'GITHUB_TOKEN', 'DISCORD_WEBHOOK']
 const SECRETS = new Set(['GITHUB_TOKEN', 'DISCORD_WEBHOOK'])
 
 function fileStatus(path: string): ConfigSource['status'] {
@@ -49,7 +49,8 @@ export function configReport(host: Pick<Host, 'home'>, env: Record<string, strin
   })
 
   for (const name of PROJECT_FILES) {
-    const where = findUp(name, from)
+    // Up to the repository root or the home folder, as the bins look.
+    const where = findUp(name, from, dir => dir === resolve(host.home) || existsSync(join(dir, '.git')))
 
     sources.push({ kind: 'file', name, where: where ?? `${name} (none found upward from ${from})`, status: where === undefined ? 'absent' : fileStatus(where) })
   }

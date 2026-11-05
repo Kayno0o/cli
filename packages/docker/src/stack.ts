@@ -54,7 +54,6 @@ export interface Container {
 const LABEL_FORMAT = ['project', 'project.config_files', 'project.environment_file', 'project.working_dir'].map(label => `{{.Label "com.docker.compose.${label}"}}`).join('\t')
 const COMPOSE_FILE_VAR = /^\s*(?:export\s+)?COMPOSE_FILE\s*=\s*\S/m
 const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml']
-const SKIPPED = SKIPPED_FOLDERS
 
 export const ACTIONS: Action[] = ['shell', 'logs', 'restart', 'up', 'stop', 'build']
 
@@ -66,7 +65,7 @@ export function from(dir: string, command: string[]): string[] {
 /** The direct child folders, hidden and built ones aside. */
 export function children(dir = '.'): string[] {
   return readdirSync(dir, { withFileTypes: true })
-    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !SKIPPED.has(child.name))
+    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !SKIPPED_FOLDERS.has(child.name))
     .map(child => child.name)
     .sort()
 }

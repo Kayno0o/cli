@@ -95,7 +95,7 @@ const STATS_OPTIONS = {
 
 const CONFIG_USAGE = `cli config [--json]: where every bin looks for its config and which environment variables are set
 
-Lists each user and project config file with the path read and whether it is there (set, absent, or invalid when it does not parse), then the environment variables that change a bin's behaviour; a token or webhook shows as hidden. Ends on the workspace folder and the theme in force. docs/config.md in the repository describes every key.
+Lists each user and project config file with the path read and whether it is there (set, absent, or invalid when it does not parse), then the main environment variables that change a bin's behaviour (docs/config.md has the rest); a token or webhook shows as hidden. Ends on the workspace folder and the theme in force. docs/config.md in the repository describes every key.
 Exits 0 when it printed the report, 2 on a usage error.`
 
 const CONFIG_OPTIONS = {
@@ -115,7 +115,9 @@ export function config(args: string[], host: Host = hostHere()): number {
   const { dim } = paint(process.stdout)
 
   console.log(table(report.sources.filter(each => each.kind === 'file').map(each => [each.name, each.status === 'absent' ? dim(each.status) : each.status, dim(each.where)])))
-  console.log(`\n${table(report.sources.filter(each => each.kind === 'env' && each.status === 'set').map(each => [each.name, each.value ?? '']))}`)
+  const variables = report.sources.filter(each => each.kind === 'env' && each.status === 'set')
+
+  console.log(variables.length === 0 ? `\n${dim('no variable set')}` : `\n${table(variables.map(each => [each.name, each.value ?? '']))}`)
   console.log(`\nworkspace  ${report.workspace}\ntheme      ${report.theme.preset}${report.theme.sources.length === 0 ? '' : `, from ${report.theme.sources.join(', ')}`}`)
 
   return 0

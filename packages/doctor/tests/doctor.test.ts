@@ -2,7 +2,7 @@ import type { Host } from '../src/checks'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { checkBun, checkHooks, checkNeeds, checkTea, checkTool, checkWorkspace, runChecks, TOOLS } from '../src/checks'
 import { configReport } from '../src/config-report'
 import { main } from '../src/doctor'
@@ -92,6 +92,16 @@ describe('runChecks', () => {
 })
 
 describe('checkTea', () => {
+  const xdg = process.env.XDG_CONFIG_HOME
+
+  beforeEach(() => {
+    delete process.env.XDG_CONFIG_HOME
+  })
+  afterEach(() => {
+    if (xdg !== undefined)
+      process.env.XDG_CONFIG_HOME = xdg
+  })
+
   const logins = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'forge', url: 'https://git.kaynooo.fr' }]) } }
 
   test('passes a login reaching the forge, by its public or its private name', async () => {
@@ -111,6 +121,22 @@ describe('checkTea', () => {
     writeFileSync(join(home, '.config', 'kaynooo-cli', 'doctor.json'), JSON.stringify({ forgeHosts: ['git.example.org'] }))
 
     expect(await checkTea(fakeHost(other))).toMatchObject({ ok: true, detail: expect.stringContaining('git.example.org') })
+  })
+
+  test('ignores a doctor.json that does not parse or holds the wrong types', async () => {
+    const other = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'mine', url: 'https://git.example.org' }]) }, 'tea api --login mine version': { stdout: '{"version":"16.0.6"}' } }
+
+    mkdirSync(join(home, '.config', 'kaynooo-cli'), { recursive: true })
+
+    for (const text of ['{ nope', '{"forgeHosts":"git.example.org"}', '{"forgeHosts":[1,null]}']) {
+      writeFileSync(join(home, '.config', 'kaynooo-cli', 'doctor.json'), text)
+
+      expect(await checkTea(fakeHost(other))).toMatchObject({ ok: false })
+    }
+
+    writeFileSync(join(home, '.config', 'kaynooo-cli', 'doctor.json'), '{ "forgeHosts": ["git.example.org",], // mine\n}')
+
+    expect(await checkTea(fakeHost(other))).toMatchObject({ ok: true })
   })
 
   test('fails without tea, without a login to the forge, or when the forge does not answer', async () => {
@@ -339,5 +365,20 @@ describe('configReport', () => {
     expect(by('GITHUB_TOKEN')).toMatchObject({ status: 'set', value: '(hidden)' })
     expect(by('KAYNOOO_WORKSPACE')).toMatchObject({ value: '/work' })
     expect(report.workspace).toBe('/work')
+  })
+
+  test('finds a project file upward to the repository root, a legacy path, and skips an empty variable', () => {
+    mkdirSync(join(home, 'repo', '.git'), { recursive: true })
+    mkdirSync(join(home, 'repo', 'sub'), { recursive: true })
+    writeFileSync(join(home, 'repo', '.pkgrc.json'), '{}')
+    mkdirSync(join(home, '.config', 'ft'), { recursive: true })
+    writeFileSync(join(home, '.config', 'ft', 'config.json'), '{}')
+
+    const report = configReport({ home }, { EDITOR: '' }, join(home, 'repo', 'sub'))
+    const by = (name: string) => report.sources.find(each => each.name === name)
+
+    expect(by('.pkgrc.json')).toMatchObject({ status: 'set', where: join(home, 'repo', '.pkgrc.json') })
+    expect(by('ft.json')).toMatchObject({ status: 'set', where: join(home, '.config', 'ft', 'config.json') })
+    expect(by('EDITOR')).toMatchObject({ status: 'absent' })
   })
 })

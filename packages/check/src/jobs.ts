@@ -70,7 +70,6 @@ const LOCKFILES: [string, Manager][] = [
   ['package-lock.json', 'npm'],
 ]
 // Folders holding what was built or installed, never a project of their own.
-const SKIPPED = SKIPPED_FOLDERS
 const QUALIFIED = /^([a-z]+):(?!:)(.+)$/
 const BLANKS = /\s+/
 const TRAILING_SLASHES = /\/+$/
@@ -113,7 +112,7 @@ export function locate(dir: string, here: boolean, names: string[]): string | un
 // The direct children, hidden and built ones aside.
 export function children(dir = '.'): string[] {
   return readdirSync(dir, { withFileTypes: true })
-    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !SKIPPED.has(child.name))
+    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !SKIPPED_FOLDERS.has(child.name))
     .map(child => child.name)
     .toSorted()
 }

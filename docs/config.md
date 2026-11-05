@@ -43,4 +43,4 @@ Every file below is optional, nothing is assumed without it. The user files live
 | `DISCORD_WEBHOOK` | `changelog` | the webhook the release is posted to when `--discord-webhook` is not given |
 | `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_TMPDIR` | `ft`, `waitfor` | where Claude Code keeps its sessions, and the temporary folder a background task writes to |
 
-`cli config` shows which of these files and variables this host has. `<bin> <command> --help` lists each bin's flags, `bun run docs` regenerates [bins.md](bins.md).
+`cli config` shows which of these files this host has, and the main variables set. `<bin> <command> --help` lists each bin's flags, `bun run docs` regenerates [bins.md](bins.md).

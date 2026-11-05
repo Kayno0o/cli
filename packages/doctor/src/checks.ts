@@ -127,14 +127,19 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
 
 // Other hosts the same forge answers on, from `forgeHosts` in ~/.config/kaynooo-cli/doctor.json.
 function extraForgeHosts(home: string): string[] {
-  const path = userConfigReadPath('doctor', [], { home })
+  try {
+    const path = userConfigReadPath('doctor', [], { home, xdg: process.env.XDG_CONFIG_HOME })
 
-  if (!existsSync(path))
+    if (!existsSync(path))
+      return []
+
+    const raw = Bun.JSONC.parse(readFileSync(path, 'utf8')) as { forgeHosts?: unknown } | null
+
+    return Array.isArray(raw?.forgeHosts) ? raw.forgeHosts.filter((each): each is string => typeof each === 'string') : []
+  }
+  catch {
     return []
-
-  const raw = readJsonText<{ forgeHosts?: unknown }>(readFileSync(path, 'utf8'))
-
-  return Array.isArray(raw?.forgeHosts) ? raw.forgeHosts.filter((each): each is string => typeof each === 'string') : []
+  }
 }
 
 // tea installed, logged in to the forge and reaching it, since ft goes through it.
