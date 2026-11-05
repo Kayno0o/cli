@@ -13,26 +13,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  check:
-    runs-on: alpine
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: https://git.kaynooo.fr/kaynooo/actions/setup-bun@v1
-
-      - run: bun run check
-
-  lint:
-    runs-on: alpine
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: https://git.kaynooo.fr/kaynooo/actions/setup-bun@v1
-
-      - run: bun run lint
-
+  # One job, as the runner takes one at a time: three would each pay their own container, checkout and install. Each step runs even when one before it failed, so a push shows every failure at once.
   test:
     runs-on: alpine
     timeout-minutes: 10
@@ -50,4 +31,13 @@ jobs:
           password-auth: true
           env-name: DB_TOOLS_TEST_SERVER
 
-      - run: bun run test
+      - name: check
+        run: bun run check
+
+      - name: lint
+        if: ${{ !cancelled() }}
+        run: bun run lint
+
+      - name: test
+        if: ${{ !cancelled() }}
+        run: bun run test
