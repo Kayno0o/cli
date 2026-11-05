@@ -100,7 +100,12 @@ section('theme', (() => {
 
   return keyValue([['preset', preset], ['files', sources.length === 0 ? 'none' : sources.join(', ')]], { stream: out })
 })())
-section('header', [header('check', 'cli · 4 steps', out), header('ft', undefined, out), header('pick', 'kit', out), header('db', 'local', out)].join('\n'))
+// A header is empty off a terminal, so a plain gallery has no section for it.
+const headers = [header('check', 'cli · 4 steps', out), header('ft', undefined, out), header('pick', 'kit', out), header('db', 'local', out)].filter(line => line !== '')
+
+if (headers.length > 0)
+  section('header', headers.join('\n'))
+
 section('marks', ['ok', 'warn', 'problem', 'note'].map(mark => marked(mark as 'ok', `a ${mark} line`, out, 'detail')).join('\n'))
 section('roles', (['accent', 'id', 'path', 'label', 'value'] as const).map(name => role(name, out)(name)).join('  '))
 section('status badges', ['success', 'failure', 'running', 'waiting', 'skipped'].map(word => badge(word, out)).join('  '))
