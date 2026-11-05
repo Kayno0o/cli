@@ -29,7 +29,7 @@ Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea
 | `ft close <n>... [-m reason]` | closes issues no commit fixed (a duplicate, one dropped), posting the reason first; `ft reopen` reopens them the same way |
 | `ft label <n> [+]a -b` | adds the labels named bare or with `+`, removes those named with `-`, refusing one the repository lacks, and prints the issue's labels |
 | `ft plan add <plan> <n>...` / `ft plan carry <from> <to>` | adds `- [ ] #<n> <title>` lines to a release plan's checklist, or copies one plan's unticked `#<n>` lines into the next, both under `--section "Bugs:"` (created when missing) and skipping issues already listed |
-| `ft milestones` | lists the milestones (`--state open\|closed\|all`, `--json`) with the issues open and closed in each, the progress and the due date |
+| `ft milestones` | lists the milestones (`--state open\|closed\|all`, `--json`, `--issues` for each one's issues by title) with the issues open and closed in each, the progress and the due date |
 | `ft milestone <title\|id>` | shows a milestone's open issues as `ft board` does (available, taken, claimed by one gone); `ft milestone new <title> [-d text] [--due YYYY-MM-DD]` creates one through the API, sending no `due_on` unless `--due` is given, never a zero date; `ft milestone close <m>` refuses while issues are open in it, naming them, unless `--force` |
 | `ft remote [--fix]` | switches an origin using an ssh alias (`forgejo:owner/repo`) to `git@<host>:owner/repo.git`, which tea matches; the host comes from `--host` or `remoteHost` in `~/.config/kaynooo-cli/ft.json` (`{"remoteHost": "git.example.com"}`; the older `~/.config/ft/config.json` is read while the new file is missing), and with neither it checks nothing |
 

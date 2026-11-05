@@ -2,6 +2,7 @@ import type { FailedJob, Run } from '../runs'
 import process from 'node:process'
 import { badge, duration, fail, formatElapsed, jsonOption, paint, parse, printJson, runHint, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
+import { good } from '../good'
 import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
 
 const usage = `ft ci [ref]
@@ -159,7 +160,7 @@ export async function ci(args: string[]): Promise<number> {
   }
 
   if (status !== 'failure') {
-    console.log(`CI ${status === 'success' ? 'passed' : 'skipped its tests, a release tag\'s workflow testing them'} on ${short}`)
+    console.log(good(`CI ${status === 'success' ? 'passed' : 'skipped its tests, a release tag\'s workflow testing them'} on ${short}`))
 
     return 0
   }

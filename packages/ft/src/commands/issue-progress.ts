@@ -70,7 +70,7 @@ export async function tick(args: string[]): Promise<number> {
 
   if (note !== undefined) {
     await comment(number, note, values.repo)
-    console.log(`commented on #${number}`)
+    console.log(good(`commented on #${number}`))
   }
 
   return 0
@@ -135,7 +135,7 @@ async function tickListings(closed: number, repo: string | undefined): Promise<v
       continue
 
     if (await editBody(listing.number, body => tickReferences(body, issue => issue === closed).body, repo))
-      console.log(`ticked #${closed} in #${listing.number}`)
+      console.log(good(`ticked #${closed} in #${listing.number}`))
   }
 }
 

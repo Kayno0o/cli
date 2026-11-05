@@ -47,6 +47,19 @@ describe('ft milestones', () => {
     })
   })
 
+  test('--issues lists the open and closed issues of each milestone by title', async () => {
+    await withFakeTea({ issues, milestones: [v1, v2] }, async () => {
+      const { out } = await capture(async () => milestones(['--issues']))
+
+      expect(out).toContain('1.0.0')
+      expect(out).toContain('#3  three')
+      expect(out).toContain('#1  one (closed)')
+      expect(out).toContain('#2  two (closed)')
+      expect(out.indexOf('#1')).toBeLessThan(out.indexOf('#2'))
+      expect(await refusal(milestones(['--issues', '--json']))).toContain('--issues')
+    })
+  })
+
   test('--state closed and --json', async () => {
     await withFakeTea({ issues, milestones: [v1, old] }, async () => {
       expect((await capture(async () => milestones(['--state', 'closed']))).out).toContain('0.9.0')

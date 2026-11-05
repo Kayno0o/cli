@@ -170,7 +170,7 @@ export async function ci(args: string[]): Promise<number> {
   }
 
   if (pipeline.status !== 'failed') {
-    console.log(role('ok', process.stdout)(pipeline.status === 'manual' ? `CI passed on ${short} up to a manual job: ${pipeline.web_url}` : `CI passed on ${short}`))
+    console.log(role(pipeline.status === 'manual' ? 'skipped' : 'ok', process.stdout)(pipeline.status === 'manual' ? `CI passed on ${short} up to a manual job: ${pipeline.web_url}` : `CI passed on ${short}`))
 
     return 0
   }

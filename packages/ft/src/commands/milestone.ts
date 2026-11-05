@@ -1,6 +1,7 @@
+import type { Issue } from '../issues'
 import type { Milestone } from '../milestones'
 import process from 'node:process'
-import { bar, capped, fail, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printJson, role, runHint, section, table, takesControlCodes, truncate } from '@kaynooo/cli-kit'
+import { bar, capped, fail, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, pool, printJson, role, runHint, section, table, takesControlCodes, truncate } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { good } from '../good'
 import { closedIssues, openIssues } from '../issues'
@@ -9,6 +10,7 @@ import { boardJson, boardRows, renderBoard } from './board'
 
 const TITLE_WIDTH = 60
 const LIST_LIMIT = 30
+const CONCURRENCY = 4
 
 function counts(milestone: Milestone): string {
   return `${milestone.open_issues} open, ${milestone.closed_issues} closed`
@@ -31,9 +33,10 @@ function milestoneCells(each: Milestone, showState: boolean): string[] {
 async function printWithIssues(list: Milestone[], repo: string | undefined): Promise<void> {
   const colors = paint(process.stdout)
   const id = role('id', process.stdout)
-  const issuesOf = await Promise.all(list.map(async each => Promise.all([openIssues(undefined, repo, each.id), closedIssues(each.id, repo)])))
+  const issuesOf = await pool(list, CONCURRENCY, async each => Promise.all([openIssues(undefined, repo, each.id), closedIssues(each.id, repo)]))
   const blocks = list.map((each, index) => {
-    const [open, closed] = issuesOf[index]!
+    const byNumber = (left: Issue, right: Issue) => left.number - right.number
+    const [open, closed] = issuesOf[index]!.map(found => found.toSorted(byNumber)) as [Issue[], Issue[]]
     const drawn = progressBar(each)
     const facts = [counts(each), progress(each), dueDate(each) === '' ? '' : `due ${dueDate(each)}`].filter(fact => fact !== '').join(', ')
     const lines = [
@@ -41,7 +44,7 @@ async function printWithIssues(list: Milestone[], repo: string | undefined): Pro
       ...closed.map(issue => colors.dim(`  #${issue.number}  ${truncate(issue.title, TITLE_WIDTH)} (closed)`)),
     ]
 
-    return [`${section(each.title, undefined, process.stdout, process.env, 'accent')}${drawn === '' ? '' : ` ${drawn}`}  ${facts}`, ...lines].join('\n')
+    return [section(`${each.title}${drawn === '' ? '' : `  ${drawn}`}  ${facts}`, undefined, process.stdout, process.env, 'accent'), ...lines].join('\n')
   })
 
   console.log(blocks.join('\n\n'))
@@ -72,6 +75,9 @@ export async function milestones(args: string[]): Promise<number> {
 
   const limit = limitOf(values, LIST_LIMIT)
   const found = await listMilestones(state, values.repo)
+
+  if (values.issues === true && values.json === true)
+    fail('--issues lists for a person, --json has the counts only')
 
   if (values.json === true) {
     printJson(found.slice(0, limit).map(each => ({ id: each.id, title: each.title, state: each.state, description: each.description, open: each.open_issues, closed: each.closed_issues, due: dueDate(each) || null })))

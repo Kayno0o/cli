@@ -1,5 +1,5 @@
 import type { Job } from '../runs'
-import { badge, fail, jsonOption, parse, printJson, runHint, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, fail, jsonOption, paint, parse, printJson, role, runHint, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { excerpt, logLines } from '../log'
 import { ciJson, jobLog, jobsOf, runById } from '../runs'
@@ -59,10 +59,10 @@ export async function logs(args: string[]): Promise<number> {
     return 0
   }
 
-  console.log(`${run.workflow_id} run ${run.id} on ${run.prettyref} (${run.commit_sha.slice(0, 7)}): ${badge(run.status, process.stdout)}, ${run.html_url}`)
+  console.log(`${paint(process.stdout).bold(`${run.workflow_id} run ${run.id}`)} on ${run.prettyref} (${run.commit_sha.slice(0, 7)}): ${badge(run.status, process.stdout)}, ${role('path', process.stdout)(run.html_url)}`)
 
   for (const job of picked) {
-    console.log(`\njob ${job.name}: ${badge(job.status, process.stdout)}\n${await text(job)}`)
+    console.log(`\n${paint(process.stdout).bold(`job ${job.name}`)}: ${badge(job.status, process.stdout)}\n${await text(job)}`)
   }
 
   return 0

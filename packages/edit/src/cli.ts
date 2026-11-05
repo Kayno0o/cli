@@ -351,7 +351,7 @@ async function main(argv: string[]): Promise<number> {
     }
 
     if (values.quiet !== true)
-      console.log(`${role('path', process.stdout)(path)}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, ${role('ok', process.stdout)(`+${diff.added}`)} ${role('problem', process.stdout)(`-${diff.removed}`)}`)
+      console.log(`${role('path', process.stdout)(path)}: ${plural(lines.length, 'replacement')} on line${lines.length === 1 ? '' : 's'} ${listLines(lines)}, ${role(diff.added === 0 ? 'label' : 'ok', process.stdout)(`+${diff.added}`)} ${role(diff.removed === 0 ? 'label' : 'problem', process.stdout)(`-${diff.removed}`)}`)
 
     if (values.diff === true && diff.unified !== '')
       process.stdout.write(diff.unified)

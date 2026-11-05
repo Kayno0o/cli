@@ -5,6 +5,7 @@ import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jso
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
+import { good } from '../good'
 import { comment, commentsOf, commentsOfAll, getIssue, openIssues, sessionAuthor } from '../issues'
 import { findMilestone } from '../milestones'
 
@@ -300,7 +301,7 @@ export async function take(args: string[]): Promise<number> {
     if (standingNow?.holder !== name)
       fail(`#${number} was taken by ${standingNow?.holder ?? 'another session'} at the same moment`, 1)
 
-    console.log(`took #${number} as ${name}: ${found.title}`)
+    console.log(good(`took #${number} as ${name}: ${found.title}`))
   })
 }
 
@@ -334,7 +335,7 @@ async function releaseStale(number: number, me: string, author: string | undefin
 
   await comment(number, releasedComment(claim.holder), repo)
   await comment(number, `Claim of ${claim.holder} from ${formatAge(claim.at)}, which no live session answered to, released as stale by session ${me}.`, repo)
-  console.log(`released #${number}, held by ${claim.holder}`)
+  console.log(good(`released #${number}, held by ${claim.holder}`))
 }
 
 export async function drop(args: string[]): Promise<number> {
@@ -388,6 +389,6 @@ export async function drop(args: string[]): Promise<number> {
       fail(`#${number} is ${claim === undefined ? 'not taken' : `taken by ${claim.holder}, not ${name}`}`, 1, claim === undefined ? undefined : runHint(`ft drop ${number} --stale`, 'release it if no session answers to it'))
 
     await comment(number, releasedComment(name), values.repo)
-    console.log(`released #${number}`)
+    console.log(good(`released #${number}`))
   })
 }
