@@ -103,28 +103,34 @@ function indented(nodes: TreeNode[], indent: string): string {
   return nodes.map(({ label, children = [] }) => [`${indent}${label}`, ...children.length === 0 ? [] : [indented(children, `${indent}  `)]].join('\n')).join('\n')
 }
 
-// Each root on a line of its own, bold on a terminal, and its children under it, hung on dimmed `├─`, `└─` and `│` branches, the horizontal stroke the theme's rule glyph.
+function depthOf(nodes: TreeNode[]): number {
+  return Math.max(0, ...nodes.map(({ children = [] }) => 1 + depthOf(children)))
+}
+
+// The nodes one per line, a dimmed `│` guide per level above each: a node with children is a folder, a `•` and its name bold in the theme's accent and ending in a slash on a terminal, any other a file, a dimmed `·` and its name in plain text; the folder dots shade along the theme's gradient from the roots to the deepest level, as a bar does across its cells.
 export function tree(roots: TreeNode[], { stream = process.stdout, env = process.env }: KeyValueSettings = {}): string {
   if (outputMode(stream, env) === 'agent')
     return indented(roots, '')
 
   const colors = paint(stream, env)
-  const stroke = takesControlCodes(stream, env) ? activeTheme().theme.glyphs.rule : '─'
+  const terminal = takesControlCodes(stream, env)
+  const { theme } = activeTheme()
+  const marks = terminal ? theme.glyphs : { open: '•', leaf: '·', guide: '│' }
+  const deepest = depthOf(roots) - 1
   const lines: string[] = []
 
-  function branch(nodes: TreeNode[], indent: string) {
-    for (const [index, { label, children = [] }] of nodes.entries()) {
-      const last = index === nodes.length - 1
+  function walk(nodes: TreeNode[], depth: number) {
+    const shade = tinted(colors, gradientAt(theme, deepest <= 0 ? 0 : depth / deepest) ?? theme.colors.accent, env)
 
-      lines.push(`${colors.dim(`${indent}${last ? '└' : '├'}${stroke}`)} ${label}`)
-      branch(children, `${indent}${last ? '   ' : '│  '}`)
+    for (const { label, children = [] } of nodes) {
+      const folder = children.length > 0
+
+      lines.push(`${depth === 0 ? '' : colors.dim(`${marks.guide} `.repeat(depth))}${folder ? shade(marks.open) : colors.dim(marks.leaf)} ${folder ? tinted(colors, theme.colors.accent, env).bold(`${label}/`) : label}`)
+      walk(children, depth + 1)
     }
   }
 
-  for (const { label, children = [] } of roots) {
-    lines.push(colors.bold(label))
-    branch(children, '')
-  }
+  walk(roots, 0)
 
   return lines.join('\n')
 }

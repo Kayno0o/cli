@@ -48,12 +48,14 @@ describe('chart', () => {
 describe('tree', () => {
   const roots = [{ label: 'packages', children: [{ label: 'kit', children: [{ label: 'src' }, { label: 'tests' }] }, { label: 'ft' }] }, { label: 'README.md' }]
 
-  test('hangs each child on a branch under its parent', () => {
-    expect(tree(roots, { stream: {}, env: {} })).toBe('packages\n├─ kit\n│  ├─ src\n│  └─ tests\n└─ ft\nREADME.md')
+  test('marks a folder with a dot and a slash and a file with a small one, a guide per level above', () => {
+    expect(tree(roots, { stream: {}, env: {} })).toBe('• packages/\n│ • kit/\n│ │ · src\n│ │ · tests\n│ · ft\n· README.md')
   })
 
-  test('dims the branches on a terminal', () => {
-    expect(tree([{ label: 'a', children: [{ label: 'b' }] }], { stream: { isTTY: true }, env: {} })).toBe('\x1B[1ma\x1B[22m\n\x1B[2m└─\x1B[22m b')
+  test('shades the folder dots by depth along the gradient, dims the guides and the file dots on a terminal', () => {
+    const drawn = tree([{ label: 'a', children: [{ label: 'b' }] }], { stream: { isTTY: true }, env: {} })
+
+    expect(drawn).toBe('\x1B[38;5;141m•\x1B[39m \x1B[36m\x1B[1ma/\x1B[22m\x1B[39m\n\x1B[2m│ \x1B[22m\x1B[2m·\x1B[22m b')
     expect(sparkline([1, 2], { stream: { isTTY: true }, env: {} })).toBe('\x1B[38;5;141m▁\x1B[39m\x1B[38;5;81m█\x1B[39m')
     expect(sparkline([1, 2], { stream: {}, env: {} })).toBe('▁█')
   })
