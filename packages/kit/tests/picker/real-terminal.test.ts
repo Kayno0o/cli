@@ -9,9 +9,14 @@ async function hung(ms: number): Promise<'hung'> {
   return 'hung'
 }
 
+// Fails rather than going on once two seconds have passed, so a screen that never shows what is awaited is not mistaken for a slow one.
 async function until(done: () => boolean): Promise<void> {
-  for (let tries = 0; tries < 100 && !done(); tries++)
+  for (let tries = 0; !done(); tries++) {
+    if (tries === 100)
+      throw new Error('the terminal never showed what the test waits for')
+
     await Bun.sleep(20)
+  }
 }
 
 // Runs the fixture under a pseudo-terminal, typing `keys` once the picker is drawn and `next` once it has ended.
@@ -21,7 +26,8 @@ async function run(keys: string, next: string): Promise<{ code: number | 'hung',
   const proc = Bun.spawn([process.execPath, FIXTURE], { terminal: { cols: 80, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
 
   try {
-    await until(() => screen.includes('install'))
+    // Where colours are on, the picker draws each letter of a match in its own style, so the screen is read without them
+    await until(() => Bun.stripANSI(screen).includes('install'))
     proc.terminal?.write(keys)
     await until(() => screen.includes('cancelled') || screen.includes('picked'))
     proc.terminal?.write(next)
@@ -51,7 +57,7 @@ describe('select on a real terminal', () => {
     try {
       await Bun.sleep(300)
       proc.terminal?.write('a')
-      expect(await Promise.race([proc.exited, hung(1000)])).toBe('hung')
+      expect(await Promise.race([proc.exited, hung(500)])).toBe('hung')
     }
     finally {
       proc.kill()
