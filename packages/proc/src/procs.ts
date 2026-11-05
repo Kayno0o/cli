@@ -2,7 +2,7 @@ import type { Group } from './select'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import process from 'node:process'
-import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printJson, table, truncate } from '@kaynooo/cli-kit'
+import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printJson, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { terminate } from './kill'
 import { maskArgs } from './mask'
 import { ancestry, snapshot } from './read'
@@ -18,7 +18,8 @@ Exits 0 when it listed or stopped everything, 1 when a process survived SIGKILL,
 
 const options = {
   'json': jsonOption('{ groups: [{ origin, kind, count, rss, oldestSeconds, tools, orphans, pids, processes }], skipped }'),
-  'kill': { type: 'boolean', description: 'stop the listed processes: a dry run without --yes' },
+  'kill': { type: 'boolean', conflicts: ['watch'], description: 'stop the listed processes: a dry run without --yes' },
+  'watch': watchOption('the processes'),
   'yes': { type: 'boolean', short: 'y', description: 'with --kill, really stop them, without asking' },
   'min-mem': { type: 'string', description: 'heavy from this resident size (500M), and the least a left over process must use to be listed; a bare number counts megabytes' },
   'older': { type: 'string', description: 'only processes at least this old: 30m, 2h, 1d' },
@@ -72,6 +73,9 @@ export async function procs(args: string[]): Promise<number> {
 
   if (values['min-mem'] !== undefined && minMem === undefined)
     fail(`--min-mem takes a size such as 500M or 1.5G, not ${values['min-mem']}`, 2)
+
+  if (values.watch !== undefined)
+    return watching(values.watch, async () => procs(withoutWatch(args)))
 
   const olderMs = values.older === undefined ? undefined : duration(values.older, 'older', 0, 'm')
   const uid = process.getuid?.() ?? -1

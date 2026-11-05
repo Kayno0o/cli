@@ -3,7 +3,7 @@ import type { RepoState } from './repos-scan'
 import { existsSync, statSync } from 'node:fs'
 import { relative } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, marked, oneOf, paint, parse, pool, printJson, role, table, takesControlCodes, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
+import { fail, jsonOption, marked, oneOf, paint, parse, pool, printJson, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
 const USAGE = `repos [options] [root]: the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
@@ -19,8 +19,9 @@ const EXITS: ExitRow[] = [[0, 'it listed the repositories, including when none n
 const OPTIONS = {
   all: { type: 'boolean', short: 'a', description: 'list the repositories with nothing to report too' },
   only: { type: 'string', choices: REASONS, description: 'only the repositories with this reason: dirty, unpushed, unreleased or behind' },
-  fetch: { type: 'boolean', description: 'refresh the upstreams first (reaches the remote)' },
-  pull: { type: 'boolean', description: 'fetch, then fast-forward the clean repositories listed that are only behind their upstream (reaches the remote)' },
+  watch: watchOption('the repositories'),
+  fetch: { type: 'boolean', conflicts: ['watch'], description: 'refresh the upstreams first (reaches the remote)' },
+  pull: { type: 'boolean', conflicts: ['watch'], description: 'fetch, then fast-forward the clean repositories listed that are only behind their upstream (reaches the remote)' },
   path: { type: 'boolean', conflicts: ['json'], description: 'print only the paths of the repositories listed, one per line' },
   json: jsonOption('[{name, path, branch, upstream, dirty, ahead, behind, worktrees, tag, unreleased, packages, reasons, fetchFailed, unreadable}]'),
 } as const
@@ -96,6 +97,10 @@ function row(repo: RepoState, shown: string): string[] {
 
 export async function repos(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a cd, git status, git log and git tag loop over each repository of the workspace', examples: ['repos', 'repos ~/Workspace --only unreleased --fetch', ['repos --only behind --pull', 'fast-forward what is behind and clean'], ['repos --only dirty --path', 'the paths, for xargs']] })
+
+  if (values.watch !== undefined)
+    return watching(values.watch, async () => repos(withoutWatch(args)))
+
   const root = workspaceRoot({ given: positionals[0] })
 
   if (!existsSync(root) || !statSync(root).isDirectory())

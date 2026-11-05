@@ -3,7 +3,7 @@ import type { Claim } from '../claims'
 import type { Issue } from '../issues'
 import type { Run } from '../runs'
 import process from 'node:process'
-import { currentSession, formatAge, jsonOption, liveSessions, parse, printJson, runCommand, table, truncate, upTo } from '@kaynooo/cli-kit'
+import { currentSession, formatAge, jsonOption, liveSessions, parse, printJson, runCommand, table, truncate, upTo, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { boxes } from '../checklist'
 import { latestClaim } from '../claims'
@@ -159,6 +159,7 @@ Exits 0 when it summarised the repository, 1 when Forgejo cannot be read, 2 on a
 
 const options = {
   json: jsonOption('held and away (number, title, holder, since, boxesLeft, boxesTotal), ci (id, status, workflow, started, title), unpushed, dirty (status, path) and stale (issue, comments: path, line)'),
+  watch: watchOption('the digest'),
   ...repoOption,
 } as const
 
@@ -166,6 +167,10 @@ export async function digest(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options)
 
   const { values } = parsed
+
+  if (values.watch !== undefined)
+    return watching(values.watch, async () => digest(withoutWatch(args)))
+
   const [issues, sessions, branch, runs] = await Promise.all([openIssues(undefined, values.repo), liveSessions(), defaultBranch(), recentRuns(RUNS_SCANNED, values.repo)])
   const comments = await commentsOfAll(issues, values.repo)
   const me = await currentSession(sessions)

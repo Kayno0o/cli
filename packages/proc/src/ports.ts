@@ -2,7 +2,7 @@ import type { Container, Protocol, Socket } from './parse'
 import type { ProcInfo } from './read'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { badUsage, duration, fail, jsonOption, paint, parse, printJson, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, paint, parse, printJson, table, truncate, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { dockerContainers } from './docker'
 import { protectionOf, terminate } from './kill'
@@ -19,7 +19,8 @@ Exits 0 when it listed or stopped, 1 when nothing listens on the given port or t
 
 const options = {
   json: jsonOption('[{ port, protocol, addresses, pid, command, cwd, container }]'),
-  kill: { type: 'boolean', description: 'stop the owner of the given port' },
+  kill: { type: 'boolean', conflicts: ['watch'], description: 'stop the owner of the given port' },
+  watch: watchOption('the ports'),
   force: { type: 'boolean', description: 'with --kill, SIGKILL what SIGTERM did not stop within --grace' },
   yes: { type: 'boolean', short: 'y', description: 'with --kill, do not ask first' },
   grace: { type: 'string', description: 'with --force, how long SIGTERM gets before SIGKILL (5s)' },
@@ -150,6 +151,10 @@ export async function ports(args: string[]): Promise<number> {
       'ports --json',
     ],
   })
+
+  if (values.watch !== undefined)
+    return watching(values.watch, async () => ports(withoutWatch(args)))
+
   const [given] = positionals
   const port = given === undefined ? undefined : wholeNumber(given, '<port>', 0)
 

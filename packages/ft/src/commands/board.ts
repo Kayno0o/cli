@@ -1,7 +1,7 @@
 import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
-import { badUsage, capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, link, liveSessions, paint, parse, printHint, printJson, role, runHint, table, takesControlCodes, truncate } from '@kaynooo/cli-kit'
+import { badUsage, capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, link, liveSessions, paint, parse, printHint, printJson, role, runHint, table, takesControlCodes, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -147,6 +147,7 @@ const boardOptions = {
   state: { type: 'string', description: 'only issues in this state: available, taken or away (claimed, no live session here)' },
   ...limitOptions(BOARD_LIMIT),
   json: jsonOption('number, title, labels, state, holder, since, session, boxesTotal, boxesLeft and note (author, at, body of the latest comment that is not a claim)'),
+  watch: watchOption('the board'),
   ...repoOption,
 } as const
 
@@ -154,6 +155,10 @@ export async function board(args: string[]): Promise<number> {
   const parsed = parse(args, boardUsage, boardOptions)
 
   const { values } = parsed
+
+  if (values.watch !== undefined)
+    return watching(values.watch, async () => board(withoutWatch(args)))
+
   const state = values.state
   const limit = limitOf(values, BOARD_LIMIT)
 

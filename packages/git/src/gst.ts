@@ -2,7 +2,7 @@
 
 import type { Change } from './status'
 import process from 'node:process'
-import { fail, jsonOption, paint, parse, printJson, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, paint, parse, printJson, role, runMain, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
 import { letter } from './colour'
 import { git } from './git'
 import { parseStatus, summary } from './status'
@@ -11,6 +11,7 @@ const USAGE = 'gst [--log N]: the repository\'s branch, upstream, changed files 
 
 const OPTIONS = {
   log: { type: 'string', short: 'l', description: 'add the last N commits as <sha7> <title>' },
+  watch: watchOption('the status'),
   json: jsonOption('{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, commits}'),
 } as const
 
@@ -27,6 +28,9 @@ async function main(argv: string[]): Promise<number> {
 
   if (parsed.positionals.length > 0)
     fail(`gst takes no paths\n\n${USAGE}`)
+
+  if (parsed.values.watch !== undefined)
+    return watching(parsed.values.watch, async () => main(withoutWatch(argv)))
 
   const count = parsed.values.log === undefined ? 0 : wholeNumber(parsed.values.log, 'log', 1)
   const [read, head, log] = await Promise.all([
