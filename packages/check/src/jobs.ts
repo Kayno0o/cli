@@ -3,6 +3,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve as resolvePath } from 'node:path'
+import { SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
 import { MAKEFILES } from './steps'
 
 export interface Parameter {
@@ -69,7 +70,7 @@ const LOCKFILES: [string, Manager][] = [
   ['package-lock.json', 'npm'],
 ]
 // Folders holding what was built or installed, never a project of their own.
-const SKIPPED = new Set(['node_modules', 'vendor', 'dist', 'build', 'target', 'venv', '__pycache__'])
+const SKIPPED = SKIPPED_FOLDERS
 const QUALIFIED = /^([a-z]+):(?!:)(.+)$/
 const BLANKS = /\s+/
 const TRAILING_SLASHES = /\/+$/

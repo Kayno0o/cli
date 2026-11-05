@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fail, runCommand } from '@kaynooo/cli-kit'
+import { fail, runCommand, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
 
 export interface Step {
   name: string
@@ -22,7 +22,7 @@ export const CS_FIXER_CONFIGS = ['.php-cs-fixer.php', '.php-cs-fixer.dist.php']
 const JUST_TIMEOUT_MS = 10_000
 const PHPSTAN_CONFIGS = ['phpstan.neon', 'phpstan.neon.dist', 'phpstan.dist.neon']
 const PHPUNIT_CONFIGS = ['phpunit.xml', 'phpunit.xml.dist', 'phpunit.dist.xml']
-const SKIPPED = new Set(['node_modules', 'vendor', 'dist', 'build', 'var', 'tmp', 'coverage'])
+const SKIPPED = new Set([...SKIPPED_FOLDERS, 'var', 'tmp'])
 
 interface JustDump {
   recipes?: Record<string, { private?: boolean, parameters?: { default: unknown, kind: string }[] }>

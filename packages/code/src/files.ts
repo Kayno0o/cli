@@ -1,13 +1,13 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { runCommand } from '@kaynooo/cli-kit'
+import { runCommand, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
 
 // A file past this size is generated or data, never read.
 const MAX_BYTES = 2_000_000
 // Bytes looked at for a NUL, the sign of a binary file.
 const SNIFF_BYTES = 8000
 // Folders a walk outside git never enters.
-const SKIPPED = new Set(['node_modules', 'dist', 'build', 'vendor', 'target', 'coverage'])
+const SKIPPED = SKIPPED_FOLDERS
 
 function walk(dir: string, found: string[]): string[] {
   let entries

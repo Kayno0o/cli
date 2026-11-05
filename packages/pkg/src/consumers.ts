@@ -1,7 +1,7 @@
 import type { Manager } from './pin'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { fail } from '@kaynooo/cli-kit'
+import { fail, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
 import { LOCKFILES } from './pin'
 
 export const KINDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const
@@ -21,7 +21,7 @@ export interface Consumer {
 }
 
 // Folders never holding a consumer of their own.
-const SKIPPED = new Set(['node_modules', 'dist', 'build', 'vendor', 'target', 'coverage'])
+const SKIPPED = SKIPPED_FOLDERS
 const MAX_DEPTH = 5
 // Specs that are not a registry version or range: workspace:, link:, file:, git+, github:, tarball URLs, npm: aliases, catalog: and owner/repo shorthands.
 const LOCAL_SPEC = /[:/]/

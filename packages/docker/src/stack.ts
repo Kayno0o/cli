@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
-import { captureOutput, composeError } from '@kaynooo/cli-kit'
+import { captureOutput, composeError, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
 
 /** How to reach one compose project: the command a user runs, and the one this package lists it with. */
 export interface Stack {
@@ -54,7 +54,7 @@ export interface Container {
 const LABEL_FORMAT = ['project', 'project.config_files', 'project.environment_file', 'project.working_dir'].map(label => `{{.Label "com.docker.compose.${label}"}}`).join('\t')
 const COMPOSE_FILE_VAR = /^\s*(?:export\s+)?COMPOSE_FILE\s*=\s*\S/m
 const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml']
-const SKIPPED = new Set(['node_modules', 'vendor', 'dist', 'build', 'target', 'venv', '__pycache__'])
+const SKIPPED = SKIPPED_FOLDERS
 
 export const ACTIONS: Action[] = ['shell', 'logs', 'restart', 'up', 'stop', 'build']
 
