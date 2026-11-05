@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { jsonText } from '../src/format'
 import { exampleRows, replacesRows } from '../src/help'
 import { isInteractive, outputMode } from '../src/mode'
+import { takesControlCodes } from '../src/style'
 
 const TERMINAL = { isTTY: true }
 
@@ -56,6 +57,15 @@ describe('help for an agent', () => {
     }
 
     expect(exampleRows(['a --b'])).not.toEqual([])
+  })
+})
+
+describe('KIT_MODE on a terminal', () => {
+  test('ci and pipe take no control codes, terminal does', () => {
+    expect(takesControlCodes(TERMINAL, { KIT_MODE: 'ci' })).toBe(false)
+    expect(takesControlCodes(TERMINAL, { KIT_MODE: 'pipe' })).toBe(false)
+    expect(takesControlCodes(TERMINAL, { KIT_MODE: 'terminal' })).toBe(true)
+    expect(takesControlCodes(TERMINAL, {})).toBe(true)
   })
 })
 

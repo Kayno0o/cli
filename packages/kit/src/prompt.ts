@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { fail } from './args'
 import { truncate } from './format'
+import { isInteractive } from './mode'
 import { paint } from './style'
 
 // What the terminal sends for a key: a whole escape sequence, such as an arrow's or Home's, which no prompt but the arrows reads, or one character, a lone Escape included.
@@ -288,7 +289,7 @@ type Render = (colors: Colors, state: State, size: { columns: number, rows: numb
 async function ask(question: string, { hint, terminal = process }: PromptSettings, render: Render, press: (key: Key) => Outcome | undefined): Promise<boolean> {
   const { stdin, stderr } = terminal
 
-  if (stdin.isTTY !== true || stderr.isTTY !== true)
+  if (!isInteractive(terminal))
     fail(`cannot ask "${question}" off a terminal`, 2, hint)
 
   const colors = paint(stderr)
@@ -358,9 +359,9 @@ export interface EditorSettings extends PromptSettings {
 
 // A text edited in VISUAL or EDITOR (vi without either) on a temp file, the editor taking the terminal until it exits; undefined when it exits nonzero, as `:cq` does.
 export async function editor(question: string, { default: text = '', extension = '.txt', env = process.env, hint, terminal = process }: EditorSettings = {}): Promise<string | undefined> {
-  const { stdin, stderr } = terminal
+  const { stderr } = terminal
 
-  if (stdin.isTTY !== true || stderr.isTTY !== true)
+  if (!isInteractive(terminal))
     fail(`cannot ask "${question}" off a terminal`, 2, hint)
 
   const colors = paint(stderr)

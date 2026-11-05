@@ -291,7 +291,7 @@ export async function take(args: string[]): Promise<number> {
   })
 }
 
-const dropUsage = `ft drop <n>... | --all-stale
+const dropUsage = `ft drop <n>... [--stale] | --all-stale [--dry-run]
 
 Gives each issue back with a "Released by session <name>." comment, when this session holds it.
 With --stale, a claim no session here answers to is released too, in the name of its holder, followed by a comment saying this session released it as stale; a claim a live session holds is still refused. --all-stale does that for every such claim on the board, and with --dry-run only lists them.
@@ -331,6 +331,9 @@ export async function drop(args: string[]): Promise<number> {
   const sessions = await liveSessions()
   const nameFor = await claimant(values, sessions)
   const author = await sessionAuthor()
+
+  if (values['dry-run'] === true && values['all-stale'] !== true)
+    badUsage('--dry-run goes with --all-stale, which is the one that lists before releasing')
 
   if (values['all-stale'] === true) {
     if (positionals.length > 0)

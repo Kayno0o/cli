@@ -87,7 +87,7 @@ export function table(rows: string[][], { cellWidth, header = false, align = [],
   const cells = cellWidth === undefined ? rows : rows.map(row => row.map(cell => truncate(cell.replaceAll(LINE_BREAKS, ' '), cellWidth)))
 
   if (outputMode(stream, env) === 'agent')
-    return cells.map(row => row.map(cell => Bun.stripANSI(cell)).join('\t').trimEnd()).join('\n')
+    return cells.map(row => row.map(cell => Bun.stripANSI(cell).replaceAll(/[\t\r\n]+/g, ' ')).join('\t')).join('\n')
 
   const widths: number[] = []
 

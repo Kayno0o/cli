@@ -8,7 +8,7 @@ bun add -g @kaynooo/cli-workspace
 
 ## repos
 
-`repos` lists the git repositories under a workspace folder (`~/Workspace` by default) that need attention: dirty files, commits not pushed, an upstream ahead of the branch, commits since the latest tag.
+`repos` lists the git repositories under a workspace folder (the configured workspace folder, `~/Workspace` by default) that need attention: dirty files, commits not pushed, an upstream ahead of the branch, commits since the latest tag.
 
 | Command | What it does |
 | --- | --- |
@@ -36,7 +36,7 @@ Without `--fetch` the ahead and behind counts are those of the last fetch. The w
 
 | Command | What it does |
 | --- | --- |
-| `sweep [root]` | lists `node_modules`, `.output`, `dist`, `build`, `target` (beside a `Cargo.toml`), the caches (per project `.nuxt`, `.next`, `.turbo`, `.svelte-kit`, `node_modules/.cache`, listed only when `node_modules` is not; global `~/.bun/install/cache`, `~/.npm/_cacache`, `~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript}`, `~/.cargo/registry`, exact paths only, listed only when no root is given or with `--only caches`; a root narrows the scan to its own projects) and `.worktrees/*` and `.claude/worktrees/*` under root (`~/Workspace` by default, three levels down) with size and the age of the repo's last commit; deletes nothing |
+| `sweep [root]` | lists `node_modules`, `.output`, `dist`, `build`, `target` (beside a `Cargo.toml`), the caches (per project `.nuxt`, `.next`, `.turbo`, `.svelte-kit`, `node_modules/.cache`, listed only when `node_modules` is not; global `~/.bun/install/cache`, `~/.npm/_cacache`, `~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript}`, `~/.cargo/registry`, exact paths only, listed only when no root is given or with `--only caches`; a root narrows the scan to its own projects) and `.worktrees/*` and `.claude/worktrees/*` under root (the configured workspace folder, `~/Workspace` by default, three levels down) with size and the age of the repo's last commit; deletes nothing |
 | `sweep --apply` | deletes what is listed as removable after a confirm showing the total, read from the terminal |
 | `--yes` | with `--apply`, skip the confirm; without it, `--apply` refuses off a terminal |
 | `--older <duration>`, `--min <size>` | only the entries whose repo last committed longer ago (`30d`) or that weigh at least this much (`500K`, `10M`, `1G`) |

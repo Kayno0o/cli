@@ -53,6 +53,14 @@ Exceptions, each stated in the command's own `Exits:`:
 
 On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, command and flag names in cyan and descriptions dimmed; an error reads as a red `error`, the dimmed `<cli> <command>:` and the message, with a yellow `hint` under it. Piped, in CI or under `NO_COLOR`, `NODE_DISABLE_COLORS` or `TERM=dumb`, the same text prints with plain words (`error: demo greet: give a name`, `  hint: run demo greet --help for its options`), so logs and what agents read stay greppable. `FORCE_COLOR` forces colours as `@kaynooo/utils` reads it.
 
+## Who reads the output
+
+`outputMode(stream, env)` says who reads: `terminal`, `ci` (not a TTY, `CI` set), `agent` (`CLAUDECODE` or `AI_AGENT` set) or `pipe`. `KIT_MODE=terminal|ci|agent|pipe` overrides it for one run. Only a `terminal` draws: colour, glyphs, links, spinners. An `agent` pays for every token it reads, so it also gets tables as tab-separated rows with no padding, a bar chart as `label<TAB>30/42`, a `bar` as `50%`, a sparkline as its values, one-line JSON (`jsonText`, `printJson`) and help without `Examples:` and `Instead of:`. `isInteractive()` is the one gate for prompts: stdin and stderr both a terminal.
+
+## The workspace folder
+
+`workspaceRoot({ given })` is where the repositories live: the `--root` or positional given, else `KAYNOOO_WORKSPACE`, else the `workspace` key of `~/.config/kaynooo-cli/config.json`, else `~/Workspace`. `pkg bump`, `pkg consumers`, `repos` and `sweep` use it; `doctor --install` asks for it on a terminal and `doctor` reports it.
+
 ## API
 
 - `version` is optional on `runCli`, `runMain` and `mainArgs`: it defaults to `packageVersion()`, the version of the nearest `package.json` above the entry file (links resolved, so `src/cli.ts` and the built `dist/cli.js` both find the package's own), which saves each bin its `import { version } from '../package.json'`.

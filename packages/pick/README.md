@@ -1,6 +1,6 @@
 # @kaynooo/cli-pick
 
-`pick` is a fuzzy selector in the colours of the other @kaynooo CLIs: lines on stdin, the chosen one on stdout. It is for a person at a terminal, not for a Claude Code session, which has no terminal to answer it.
+`pick` is a fuzzy selector in the colours of the other @kaynooo CLIs: lines on stdin, the chosen one on stdout. It is for a person at a terminal, not for a Claude Code session, which has no terminal to answer it; without a terminal on stderr it prints the first line containing `--query` (case-insensitive, every one with `--multi`) and exits 1 when none does.
 
 ```sh
 bun add -g @kaynooo/cli-pick

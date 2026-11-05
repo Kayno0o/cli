@@ -80,12 +80,17 @@ export function findConsumers(name: string, root: string): Consumer[] {
     if (manifest === undefined)
       continue
 
+    const seen = new Set<string>()
+
     for (const kind of KINDS) {
       for (const [key, spec] of Object.entries(manifest[kind] ?? {})) {
         const aliased = typeof spec === 'string' && key !== name && ALIAS.exec(spec)?.[1] === name
 
-        if (typeof spec === 'string' && (key === name || aliased))
+        // A key listed under two kinds, a library's dev and peer dependency, is one consumer: the first kind found.
+        if (typeof spec === 'string' && (key === name || aliased) && !seen.has(key)) {
+          seen.add(key)
           consumers.push({ dir: relative(root, dirname(path)) || '.', path, kind, spec, ...aliased ? { alias: key } : {}, manager: managerFor(dirname(path), root) })
+        }
       }
     }
   }
@@ -111,7 +116,7 @@ export function similarDependencies(name: string, root: string): string[] {
         for (const candidate of [key, target]) {
           const last = candidate?.slice(candidate.lastIndexOf('/') + 1).toLowerCase()
 
-          if (candidate !== undefined && last !== undefined && candidate !== name && last.length >= MIN_SIMILAR && (last.includes(base) || base.includes(last)))
+          if (candidate !== undefined && last !== undefined && candidate !== name && last.length >= MIN_SIMILAR && base.length >= MIN_SIMILAR && (last.includes(base) || base.includes(last)))
             found.add(candidate)
         }
       }
@@ -133,7 +138,7 @@ export function wantedVersion(consumer: Consumer): string {
 
 const KIND_FLAGS: Record<Kind, string[]> = { dependencies: [], devDependencies: ['--dev'], optionalDependencies: ['--optional'], peerDependencies: ['--peer'] }
 
-const RANGE_PREFIX = /^[~^]/
+export const RANGE_PREFIX = /^[~^]/
 
 // The `bun add` putting the version in the consumer, under the same kind of dependency; an alias keeps its key and the `~` or `^` of its range, a plain dependency is pinned exactly.
 export function addCommand(consumer: Consumer, name: string, version: string): string[] {

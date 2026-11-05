@@ -6,7 +6,7 @@ import { basename, dirname, join, relative } from 'node:path'
 import { duration, Exit, fail, formatDuration, formatElapsed, note, ok, parse, problem, runCommand, warn, wholeNumber, workspaceRoot } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { loadConfigs, loadSettings, registryFor } from '../config'
-import { addCommand, findConsumers, isLocal, similarDependencies, wantedVersion } from '../consumers'
+import { addCommand, findConsumers, isLocal, RANGE_PREFIX, similarDependencies, wantedVersion } from '../consumers'
 import { fetchPackument, isValidName } from '../registry'
 import { EXACT_VERSION } from '../semver'
 import { checkPackage } from './check'
@@ -35,7 +35,6 @@ const options = {
 } as const
 
 const POLL = 5000
-const RANGE_PREFIX = /^[~^]/
 
 export interface BumpSettings {
   root: string
@@ -175,19 +174,19 @@ export async function checkAndCommit(name: string, version: string, where: strin
   return committed.code === 0 ? undefined : `gc exited ${committed.code}: ${committed.text.trim().split('\n').at(-1) ?? ''}`
 }
 
-// Whether a folder (relative to the root) is named by one of the patterns, as a whole path or by its last segment.
-function matchesAny(dir: string, patterns: readonly string[]): boolean {
-  return patterns.some((pattern) => {
-    const glob = new Bun.Glob(pattern)
+// A test for whether a folder (relative to the root) is named by one of the patterns, as a whole path or by its last segment.
+function matcher(patterns: readonly string[]): (dir: string) => boolean {
+  const globs = patterns.map(pattern => new Bun.Glob(pattern))
 
-    return glob.match(dir) || glob.match(basename(dir))
-  })
+  return dir => globs.some(glob => glob.match(dir) || glob.match(basename(dir)))
 }
 
 // Puts the version in every consumer under the root, returning whether every install went through and, with isAll, every check passed and every commit landed.
 export async function bumpConsumers(name: string, version: string, settings: BumpSettings): Promise<boolean> {
   const everyone = findConsumers(name, settings.root)
-  const found = everyone.filter(each => (settings.only === undefined || settings.only.length === 0 || matchesAny(each.dir, settings.only)) && !matchesAny(each.dir, settings.except ?? []))
+  const isOnly = matcher(settings.only ?? [])
+  const isExcept = matcher(settings.except ?? [])
+  const found = everyone.filter(each => (settings.only === undefined || settings.only.length === 0 || isOnly(each.dir)) && !isExcept(each.dir))
   const consumers = found.filter(each => !isLocal(each))
   const left = everyone.length - found.length
   const local = found.length - consumers.length
@@ -218,7 +217,7 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
       skipped.push(consumer.dir)
       note(consumer.dir, `peer range ${consumer.spec}, left as it is`)
     }
-    else if (wantedVersion(consumer).replace(RANGE_PREFIX, '') === version && (consumer.alias !== undefined || consumer.spec === version)) {
+    else if ((consumer.alias === undefined ? consumer.spec : wantedVersion(consumer).replace(RANGE_PREFIX, '')) === version) {
       skipped.push(consumer.dir)
       note(consumer.dir, `already on ${version}`)
     }

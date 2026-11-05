@@ -112,6 +112,14 @@ describe('drop --stale', () => {
     expect(state.comments?.[5]?.[2]).toContain('released as stale by session a-1')
   })
 
+  test('--dry-run without --all-stale is a usage error that writes nothing', async () => {
+    const state = await withFakeTea({ issues: [open(5, 'x')], comments: { 5: ['Taken by session ghost-9.'] } }, async () => {
+      expect(await refusal(drop(['5', '--stale', '--dry-run', '--as', 'a-1']))).toContain('--all-stale')
+    })
+
+    expect(state.comments?.[5]).toEqual(['Taken by session ghost-9.'])
+  })
+
   test('--all-stale --dry-run lists them and writes nothing, and the real run releases each', async () => {
     const issues = [open(5, 'x'), open(6, 'y'), open(7, 'z')]
     const comments = { 5: ['Taken by session ghost-9.'], 6: ['Taken by session ghost-8.', 'Released by session ghost-8.'] }

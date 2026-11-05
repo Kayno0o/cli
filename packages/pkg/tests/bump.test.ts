@@ -379,6 +379,12 @@ describe('an npm alias of the package', () => {
     manifest('odd', { name: 'odd', dependencies: { kay: 'npm:other-thing@^1.0.0' } })
   })
 
+  test('a key under dev and peer dependencies is one consumer, the first kind', () => {
+    manifest('lib', { name: 'lib', devDependencies: { [KAY]: '1.0.0' }, peerDependencies: { [KAY]: '^1.0.0' } })
+
+    expect(findConsumers(KAY, root).filter(each => each.dir === 'lib').map(each => each.kind)).toEqual(['devDependencies'])
+  })
+
   test('is found under its key, with the dependencies naming the package itself', () => {
     expect(findConsumers(KAY, root).map(each => [each.dir, each.alias, each.spec])).toEqual([
       ['blog', 'kay', `npm:${KAY}@~1.88.0`],

@@ -12,7 +12,7 @@ import { applyPairs, compile, listLines } from './replace'
 
 const USAGE = `sub [options] <file>...: replaces text in files, writing nothing unless every replacement matches as often as expected
 
-Multi-line text: give no --from, --to or --pairs and pipe SEARCH/REPLACE blocks on stdin from a quoted heredoc, which needs no escaping. The blocks apply in order to the files on the command line, each matching exactly once unless --count or --all says otherwise:
+Multi-line text: give no --from, --to or --pairs and pipe SEARCH/REPLACE blocks on stdin from a quoted heredoc, which needs no escaping; a producer silent for 3 s is taken for no heredoc at all, so write a slow one to a file first. The blocks apply in order to the files on the command line, each matching exactly once unless --count or --all says otherwise:
 
 sub src/a.php <<'EOF'
 <<<<<<< SEARCH
