@@ -3,10 +3,12 @@ import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher, Packument, Registry } from '../registry'
 import { existsSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
-import { duration, Exit, fail, formatDuration, formatElapsed, note, ok, parse, problem, runCommand, warn, wholeNumber, workspaceRoot } from '@kaynooo/cli-kit'
+import { duration, Exit, fail, formatDuration, formatElapsed, isInteractive, note, ok, parse, problem, runCommand, warn, wholeNumber, workspaceRoot } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
+import { checklist, confirm } from '@kaynooo/cli-kit/prompt'
 import { loadConfigs, loadSettings, registryFor } from '../config'
 import { addCommand, findConsumers, isLocal, RANGE_PREFIX, similarDependencies, wantedVersion } from '../consumers'
+import { loadExcluded, saveExcluded } from '../excluded'
 import { fetchPackument, isValidName } from '../registry'
 import { EXACT_VERSION } from '../semver'
 import { checkPackage } from './check'
@@ -17,6 +19,7 @@ Waits until the registry serves the version (the latest when none is given, an e
 A version the vetting blocks is refused before any folder is touched, unless --force is given.
 A dependency declared through an alias of the package (\`"kay": "npm:@kaynooo/kayjs@~1.77.0"\`) is bumped under its own key, keeping the \`~\` or \`^\` of its range; --only and --except narrow the folders by name or glob (\`app\`, \`kay-*\`, a path relative to --root).
 A dependency that is not a registry version (workspace:, link:, file:, git, a URL, an npm: alias of another package, catalog:), a peer range, a folder already on the version and one whose lockfile pins another manager are left as they are, each said so.
+On a terminal with no --only or --except, a checklist asks which consumers to bump (those left out last time are unchecked, and what is unchecked is remembered in ~/.config/kaynooo-cli/pkg-excluded.json), then the plan is printed and confirmed; --yes skips both, as a pipe or --dry-run does.
 With --all-consumers a folder whose package.json or lockfile already has uncommitted changes is left alone, and each folder whose install went through then runs its own \`check\` (the check bin) and is committed with \`gc 'chore(deps): bump <name> to <version>' -- package.json <lockfile>\` only when that passes; a failing one is left uncommitted and listed in the summary with the skipped ones, and nothing is ever pushed.
 
 Exits 0 when every install ran or was left as it is (with --all-consumers, and every check passed and every commit landed), 1 when the vetting refuses the version, an install, a check or a commit fails or the registry has no such package, 2 when the version never shows within the timeout (a registry that cannot be reached is retried until then) or on a usage error.`
@@ -30,6 +33,7 @@ const options = {
   'only': { type: 'string', multiple: true, description: 'bump only the folders matching this name or glob, repeatable' },
   'except': { type: 'string', multiple: true, description: 'leave the folders matching this name or glob alone, repeatable' },
   'dry-run': { type: 'boolean', description: 'print what would run, changing nothing' },
+  'yes': { type: 'boolean', short: 'y', description: 'on a terminal, bump every consumer without the checklist and the confirmation' },
   'force': { type: 'boolean', description: 'bump even when the version is blocked by the vetting' },
   'min-age': { type: 'string', description: 'days a version must be old (0: a bump adopts a release on purpose, often one just made)' },
 } as const
@@ -51,6 +55,8 @@ export interface BumpSettings {
   // Folders by name or glob: only these when given, never those of `except`.
   only?: readonly string[] | undefined
   except?: readonly string[] | undefined
+  // Exactly these folders, as the plan chose them.
+  folders?: readonly string[] | undefined
   run?: (argv: string[], cwd: string) => Promise<Ran>
   poll?: number
 }
@@ -186,7 +192,7 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
   const everyone = findConsumers(name, settings.root)
   const isOnly = matcher(settings.only ?? [])
   const isExcept = matcher(settings.except ?? [])
-  const found = everyone.filter(each => (settings.only === undefined || settings.only.length === 0 || isOnly(each.dir)) && !isExcept(each.dir))
+  const found = everyone.filter(each => (settings.only === undefined || settings.only.length === 0 || isOnly(each.dir)) && !isExcept(each.dir) && (settings.folders === undefined || settings.folders.includes(each.dir)))
   const consumers = found.filter(each => !isLocal(each))
   const left = everyone.length - found.length
   const local = found.length - consumers.length
@@ -266,6 +272,54 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
   return isClean
 }
 
+export interface Plan {
+  dir: string
+  line: string
+}
+
+// The folders a bump would touch, each as the line the plan prints: the ones a bump leaves as they are (peer ranges, already on the version, local specs, another manager's lockfile) are not offered.
+export function plannedBumps(name: string, version: string, settings: BumpSettings): Plan[] {
+  return findConsumers(name, settings.root)
+    .filter(each => !isLocal(each) && each.kind !== 'peerDependencies' && each.manager === 'bun' && (each.alias === undefined ? each.spec : wantedVersion(each).replace(RANGE_PREFIX, '')) !== version)
+    .map(each => ({ dir: each.dir, line: `${each.dir}  ${each.spec} -> ${version}` }))
+}
+
+export interface Chooser {
+  pick: (name: string, plans: Plan[], excluded: ReadonlySet<string>) => Promise<ReadonlySet<string> | undefined>
+  confirm: (question: string) => Promise<boolean | undefined>
+}
+
+const terminalChooser: Chooser = {
+  pick: async (name, plans, excluded) => checklist(`bump ${name} in`, plans.map(plan => ({ value: plan.dir, label: plan.line, hint: excluded.has(plan.dir) ? 'left out last time' : '' })), { initial: new Set(plans.filter(plan => !excluded.has(plan.dir)).map(plan => plan.dir)), hint: 'pass --yes to bump every consumer' }),
+  confirm: async question => confirm(question, { default: true }),
+}
+
+// Asks which of the consumers to bump, the ones left out last time unchecked, remembers what is unchecked now and prints the plan for a yes; the folders to bump, none when declined.
+export async function choosePlan(name: string, version: string, settings: BumpSettings, chooser: Chooser = terminalChooser, home?: string): Promise<string[]> {
+  const plans = plannedBumps(name, version, settings)
+
+  if (plans.length === 0)
+    return []
+
+  const excluded = new Set(loadExcluded(home)[name] ?? [])
+  const picked = await chooser.pick(name, plans, excluded)
+
+  if (picked === undefined)
+    return []
+
+  saveExcluded(name, [...excluded].filter(dir => !plans.some(plan => plan.dir === dir)).concat(plans.filter(plan => !picked.has(plan.dir)).map(plan => plan.dir)), home)
+
+  const chosen = plans.filter(plan => picked.has(plan.dir))
+
+  if (chosen.length === 0)
+    return []
+
+  for (const plan of chosen)
+    note('plan', plan.line)
+
+  return await chooser.confirm(`bump ${name} to ${version} in ${chosen.length} folder${chosen.length === 1 ? '' : 's'}?`) === true ? chosen.map(plan => plan.dir) : []
+}
+
 export async function bump(args: string[]): Promise<number> {
   const { values, positionals: [name, asked] } = parse(args, usage, options, { positionals: ['<name>', '[version]'] })
   const settings: BumpSettings = {
@@ -284,6 +338,19 @@ export async function bump(args: string[]): Promise<number> {
 
   if (!await vet(name, version, settings))
     return 1
+
+  // On a terminal with no folder named, the user picks which consumers and confirms the plan; --yes and a pipe keep bumping every one.
+  if (settings.isDryRun !== true && values.yes !== true && isInteractive() && (settings.only?.length ?? 0) === 0 && (settings.except?.length ?? 0) === 0) {
+    const chosen = await choosePlan(name, version, settings)
+
+    if (chosen.length === 0) {
+      note('nothing to bump', 'none chosen or not confirmed')
+
+      return 0
+    }
+
+    settings.folders = chosen
+  }
 
   return await bumpConsumers(name, version, settings) ? 0 : 1
 }

@@ -5,8 +5,9 @@ import { join } from 'node:path'
 import { Exit } from '@kaynooo/cli-kit'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { bumpConsumers, checkAndCommit, lockfileOf, servedVersion, vet } from '../src/commands/bump'
+import { bumpConsumers, checkAndCommit, choosePlan, lockfileOf, servedVersion, vet } from '../src/commands/bump'
 import { addCommand, findConsumers, isLocal } from '../src/consumers'
+import { loadExcluded } from '../src/excluded'
 
 const temp = tempDirs()
 
@@ -419,6 +420,43 @@ describe('an npm alias of the package', () => {
     await capture(async () => bumpConsumers(KAY, '1.88.0', settings({ run, only: ['s*'], except: ['shop'] })))
 
     expect(ran).toEqual([`site: --no-cache kay@npm:${KAY}@~1.88.0`])
+  })
+
+  test('choosePlan offers the folders a bump would touch, remembers the unchecked ones and asks to confirm', async () => {
+    const home = temp('pkg-home-')
+    const offered: string[][] = []
+    const chooser = (picked: string[], yes: boolean) => ({
+      pick: async (_name: string, plans: { dir: string }[], excluded: ReadonlySet<string>) => {
+        offered.push([...plans.map(plan => plan.dir), ...[...excluded].map(dir => `-${dir}`)])
+
+        return new Set(picked)
+      },
+      confirm: async () => yes,
+    })
+    const first = await capture(async () => choosePlan(KAY, '1.88.0', settings(), chooser(['site'], true), home))
+
+    expect(first.result).toEqual(['site'])
+    expect(offered[0]).toEqual(['shop', 'site'])
+    expect(loadExcluded(home)).toEqual({ [KAY]: ['shop'] })
+
+    const second = await capture(async () => choosePlan(KAY, '1.88.0', settings(), chooser(['shop', 'site'], false), home))
+
+    expect(second.result).toEqual([])
+    expect(offered[1]).toEqual(['shop', 'site', '-shop'])
+    expect(loadExcluded(home)).toEqual({})
+  })
+
+  test('folders narrows bumpConsumers to exactly those named', async () => {
+    const ran: string[] = []
+    const run = async (_argv: string[], cwd: string): Promise<Ran> => {
+      ran.push(cwd.slice(root.length + 1))
+
+      return quiet()
+    }
+
+    await capture(async () => bumpConsumers(KAY, '1.88.0', settings({ run, folders: ['site'] })))
+
+    expect(ran).toEqual(['site'])
   })
 
   test('hints at what is named alike when nothing depends on the package', async () => {
