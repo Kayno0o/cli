@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-kit",
   "type": "module",
-  "version": "0.27.0",
+  "version": "0.27.1",
   "description": "What every @kaynooo CLI shares: argument parsing with --help, a command dispatcher with typo hints and shell completion, and output formatting.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
