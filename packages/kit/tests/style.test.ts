@@ -213,7 +213,7 @@ describe('printHeader', () => {
 
 describe('hyperlink and fileLink', () => {
   it('link on a terminal, underlined, and give the text alone elsewhere', () => {
-    expect(hyperlink('#7', 'https://x.test/7', TERMINAL, {})).toBe('\x1B]8;;https://x.test/7\x1B\\#7\x1B]8;;\x1B\\')
+    expect(hyperlink('#7', 'https://x.test/7', TERMINAL, {})).toBe('\x1B[4m\x1B]8;;https://x.test/7\x1B\\#7\x1B]8;;\x1B\\\x1B[24m')
     expect(hyperlink('#7', 'https://x.test/7', {}, {})).toBe('#7')
     expect(fileLink('a.ts', 'src/a.ts', TERMINAL, '/repo', {})).toContain('\x1B]8;;file:///repo/src/a.ts\x1B\\')
     expect(fileLink('a.ts', 'src/a.ts', {}, '/repo', {})).toBe('a.ts')
