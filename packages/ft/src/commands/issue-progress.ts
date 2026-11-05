@@ -4,6 +4,7 @@ import { fail, parse, runHint } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { boxes, referencedBoxes, setBoxes, tickReferences } from '../checklist'
 import { commitsNaming, defaultBranch, git, resolveCommit } from '../git'
+import { good } from '../good'
 import { close, comment, commentsOf, editBody, getIssue, openIssues } from '../issues'
 import { closedReferences, noteOptions, noteText, targetIssue } from './issue-target'
 
@@ -61,7 +62,7 @@ export async function tick(args: string[]): Promise<number> {
   }
 
   for (const box of result.changed)
-    console.log(`${done ? 'ticked' : 'unticked'} ${box.number}: ${box.text}`)
+    console.log(good(`${done ? 'ticked' : 'unticked'} ${box.number}: ${box.text}`))
 
   const left = boxes(result.body).filter(box => !box.done).length
 
@@ -153,7 +154,7 @@ export async function fixed(args: string[]): Promise<number> {
 
   if (left.length > 0 && values.tick === true) {
     await editBody(number, body => setBoxes(body, boxes(body).filter(box => !box.done).map(box => String(box.number)), true).body, values.repo)
-    console.log(`ticked ${left.length} box${left.length === 1 ? '' : 'es'} of #${number}`)
+    console.log(good(`ticked ${left.length} box${left.length === 1 ? '' : 'es'} of #${number}`))
   }
   else if (left.length > 0 && values.force !== true) {
     fail(`#${number} has ${left.length} boxes left:\n${left.map(box => `${String(box.number).padStart(3)} [ ] ${box.text}`).join('\n')}`, 1, `${runHint(`ft fixed ${number} --tick`, 'tick them and close')}, or ${runHint(`ft fixed ${number} --force`, 'close with them left')}`)
@@ -168,7 +169,7 @@ export async function fixed(args: string[]): Promise<number> {
     await comment(number, line, values.repo)
 
   await close(number, values.repo)
-  console.log(`closed #${number}: fixed in ${shas}`)
+  console.log(good(`closed #${number}: fixed in ${shas}`))
   await tickListings(number, values.repo)
 
   return 0

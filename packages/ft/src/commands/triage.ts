@@ -1,5 +1,6 @@
 import { fail, parse } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
+import { good } from '../good'
 import { close, comment, editLabels, getIssue, reopen, repoLabels } from '../issues'
 
 // Fails on a label the repository lacks, listing those it has, before anything is written.
@@ -39,7 +40,7 @@ async function setState(args: string[], usage: string, wanted: 'open' | 'closed'
     else
       await reopen(number, values.repo)
 
-    console.log(`${wanted === 'closed' ? 'closed' : 'reopened'} #${number}`)
+    console.log(good(`${wanted === 'closed' ? 'closed' : 'reopened'} #${number}`))
   }
 
   return 0

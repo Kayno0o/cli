@@ -1,6 +1,7 @@
 import { fail, parse } from '@kaynooo/cli-kit'
 import { issueNumber, repoOption } from '../args'
 import { appendBoxes, boxes } from '../checklist'
+import { good } from '../good'
 import { comment, createIssue, editBody, editIssue } from '../issues'
 import { findMilestone } from '../milestones'
 import { noteOptions, noteText, targetIssue } from './issue-target'
@@ -109,7 +110,7 @@ export async function edit(args: string[]): Promise<number> {
     }, values.repo)
   }
 
-  console.log(`edited #${number}`)
+  console.log(good(`edited #${number}`))
 
   return 0
 }
@@ -138,7 +139,7 @@ export async function commentOn(args: string[]): Promise<number> {
     fail(`nothing to comment\n\n${commentUsage}`)
 
   await comment(number, text, values.repo)
-  console.log(`commented on #${number}`)
+  console.log(good(`commented on #${number}`))
 
   return 0
 }

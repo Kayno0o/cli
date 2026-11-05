@@ -3,6 +3,7 @@ import { fail, note, parse, runTool } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { loadSettings, settingsPath } from '../config'
 import { git } from '../git'
+import { good } from '../good'
 import { canonicalRemote, parseSshRemote, reachesHost, redactUrl } from '../remote'
 
 const usage = `ft remote [--fix]
@@ -134,7 +135,7 @@ export async function remote(args: string[], home?: string): Promise<number> {
     return fail(`the switched origin does not answer, so the old URLs were put back: ${redactUrl(error instanceof Error ? error.message : String(error))}`, 1)
   }
 
-  console.log('origin switched, and git ls-remote reaches it')
+  console.log(good('origin switched, and git ls-remote reaches it'))
 
   return 0
 }

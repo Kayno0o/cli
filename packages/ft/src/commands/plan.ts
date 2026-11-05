@@ -1,6 +1,7 @@
 import type { Command } from '@kaynooo/cli-kit'
 import { fail, parse } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
+import { good } from '../good'
 import { editBody, getIssue } from '../issues'
 import { addLines, listedIssues, openLines } from '../plan'
 
@@ -87,5 +88,5 @@ function report(plan: number, added: string[], skipped: number): void {
   for (const line of added)
     console.log(`#${plan}: ${line}`)
 
-  console.log(`#${plan}: ${added.length} added${skipped === 0 ? '' : `, ${skipped} already listed`}`)
+  console.log(good(`#${plan}: ${added.length} added${skipped === 0 ? '' : `, ${skipped} already listed`}`))
 }

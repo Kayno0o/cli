@@ -2,6 +2,7 @@ import type { Milestone } from '../milestones'
 import process from 'node:process'
 import { bar, capped, fail, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printJson, role, runHint, section, table, takesControlCodes, truncate } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
+import { good } from '../good'
 import { closedIssues, openIssues } from '../issues'
 import { closeMilestone, createMilestone, dueDate, dueOn, findMilestone, listMilestones, progress } from '../milestones'
 import { boardJson, boardRows, renderBoard } from './board'
@@ -160,7 +161,7 @@ async function closeOne(args: string[]): Promise<number> {
     fail(`milestone ${found.title} has ${open.length} open issue${open.length === 1 ? '' : 's'}:\n${open.map(issue => `  #${issue.number} ${truncate(issue.title, TITLE_WIDTH)}`).join('\n')}`, 1, `${runHint(`ft milestone close ${found.title} --force`, 'close it with them open')}, or move them with \`ft edit <n> -m <milestone>\``)
 
   await closeMilestone(found.id, values.repo)
-  console.log(`closed milestone ${found.title}`)
+  console.log(good(`closed milestone ${found.title}`))
 
   return 0
 }
