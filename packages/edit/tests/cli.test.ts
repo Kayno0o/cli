@@ -370,3 +370,28 @@ describe('sub --pairs inline', () => {
     expect(result.err).toContain('unknown key n, known: from, to, count, all, regex')
   })
 })
+
+describe('sub misused', () => {
+  test('names --from and --to when later arguments are no files', () => {
+    file('a.txt', 'old')
+
+    const run = sub(['a.txt', 'old', 'new'])
+
+    expect(run.code).not.toBe(0)
+    expect(run.err).toContain('no file old, no file new')
+    expect(run.err).toContain('--from and --to')
+    expect(read('a.txt')).toBe('old')
+  })
+
+  test('fails at once on a stdin that stays open and silent', async () => {
+    file('a.txt', 'old')
+
+    const started = performance.now()
+    const proc = Bun.spawn([process.execPath, CLI, 'a.txt'], { cwd: dir, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' })
+    const code = await proc.exited
+
+    expect(code).not.toBe(0)
+    expect(await new Response(proc.stderr).text()).toContain('--from and --to')
+    expect(performance.now() - started).toBeLessThan(8000)
+  }, 15_000)
+})

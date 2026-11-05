@@ -176,6 +176,43 @@ function writeAtomic(path: string, text: string) {
   }
 }
 
+// How long stdin may stay silent before it is taken for one that will never close, as in a tool call with no heredoc.
+const STDIN_SILENCE_MS = 3000
+
+// The text piped on stdin; it ends the command at once on a terminal, and after a silence of `STDIN_SILENCE_MS` when nothing has arrived, since there is then no heredoc or pipe to wait for.
+async function blocksOnStdin(files: string[]): Promise<string> {
+  const extra = files.slice(1).filter(path => !existsSync(path))
+  const strings = extra.length === 0 ? '' : `${extra.map(path => `no file ${path}`).join(', ')}: with several strings on the command line use --from and --to, as in sub --from old --to new ${files[0]}\n\n`
+  const hint = `${strings}give --from and --to, or pipe SEARCH/REPLACE blocks on stdin from a heredoc\n\n${USAGE}`
+
+  if (process.stdin.isTTY)
+    fail(hint)
+
+  return new Promise<string>((resolve) => {
+    const chunks: Buffer[] = []
+    // fail() would only throw into a timer, so the usage error is printed and the process ended here, with its exit code.
+    const timer = setTimeout(() => {
+      console.error(`error: sub: ${hint}`)
+      process.exit(2)
+    }, STDIN_SILENCE_MS)
+
+    process.stdin.on('data', (chunk: Buffer) => {
+      clearTimeout(timer)
+      chunks.push(chunk)
+    })
+    process.stdin.on('end', () => {
+      clearTimeout(timer)
+
+      if (chunks.length === 0 && extra.length > 0) {
+        console.error(`error: sub: ${hint}`)
+        process.exit(2)
+      }
+
+      resolve(Buffer.concat(chunks).toString('utf8'))
+    })
+  })
+}
+
 // The pairs each file gets: the one set of --from/--to or --pairs for every file argument, or the stdin blocks, each for the file it names or else for the file arguments.
 async function plan(values: { from?: string, to?: string, pairs?: string }, files: string[], defaults: Defaults): Promise<Map<string, Pair[]>> {
   const edits = new Map<string, Pair[]>()
@@ -208,7 +245,7 @@ async function plan(values: { from?: string, to?: string, pairs?: string }, file
     return edits
   }
 
-  const blocks = parseBlocks(await readInput('-', { noStdin: `give --from and --to, or pipe SEARCH/REPLACE blocks on stdin\n\n${USAGE}` }))
+  const blocks = parseBlocks(await blocksOnStdin(files))
 
   if (typeof blocks === 'string')
     fail(`blocks: ${blocks}`)
