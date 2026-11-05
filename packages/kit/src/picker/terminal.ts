@@ -85,7 +85,7 @@ export function openTerminal(): Terminal {
     return fail('no terminal to read keys from (/dev/tty)')
   }
 
-  // Bun's tty.ReadStream left a read pending once destroyed outside its data callback, holding the process until one more key that it swallowed (kaynooo/cli#178), so it only switches raw mode and the keys come from a reader cancel() stops.
+  // Bun's tty.ReadStream left a read pending once destroyed outside its data callback, holding the process until one more key that it swallowed (oven-sh/bun#47964), so it only switches raw mode and the keys come from a reader cancel() stops.
   const keys = Bun.file('/dev/tty').stream().getReader()
   const out = process.stderr
   let resize: (() => void) | undefined

@@ -44,6 +44,21 @@ describe('select on a real terminal', () => {
     expect(code).toBe(0)
   })
 
+  // Fails once Bun fixes oven-sh/bun#47964: openTerminal can then read keys from the tty.ReadStream again.
+  test('bun still holds the process when a tty.ReadStream is destroyed outside its data callback', async () => {
+    const proc = Bun.spawn([process.execPath, `${import.meta.dir}/fixtures/destroy-later.ts`], { terminal: {} })
+
+    try {
+      await Bun.sleep(300)
+      proc.terminal?.write('a')
+      expect(await Promise.race([proc.exited, hung(1000)])).toBe('hung')
+    }
+    finally {
+      proc.kill()
+      proc.terminal?.close()
+    }
+  })
+
   test('enter leaves the next key to the command run after the pick', async () => {
     const { code, screen } = await run('\r', 'y')
 
