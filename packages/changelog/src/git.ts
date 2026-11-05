@@ -1,5 +1,5 @@
 import type { ChangelogOptions } from './types'
-import { parseSemver, validateSemver } from '@kaynooo/utils'
+import { isSemver, parseSemver } from '@kaynooo/utils'
 import { $ } from 'bun'
 
 const gitSuffixRE = /\.git$/
@@ -77,9 +77,9 @@ export async function getLastMatchingTag(
   firstParent = false,
 ) {
   const inputVersionString = getVersionString(tagTemplate, inputTag)
-  // `validateSemver` only accepts stable `x.y.z` versions, so it doubles as a
+  // `isSemver` only accepts stable `x.y.z` versions, so it doubles as a
   // "is a stable (non-prerelease) version" check.
-  const isStableVersion = validateSemver(inputVersionString)
+  const isStableVersion = isSemver(inputVersionString)
   const tags = await getGitTags(firstParent)
   const filteredTags = tags.filter(tagFilter)
 
@@ -103,7 +103,7 @@ export async function getLastMatchingTag(
     tag = filteredTags.find((tag) => {
       const versionString = getVersionString(tagTemplate, tag)
 
-      if (versionString === inputVersionString || !validateSemver(versionString))
+      if (versionString === inputVersionString || !isSemver(versionString))
         return false
 
       return boundary ? boundary(parseSemver(versionString)) : true

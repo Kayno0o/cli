@@ -34,6 +34,6 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "dependencies": {
-    "@kaynooo/utils": "^2.31.2"
+    "@kaynooo/utils": "3.0.0"
   }
 }
