@@ -20,33 +20,50 @@ const TO = [103, 232, 249]
 const wanted = process.argv[2]
 const modes = { '--plain': [false], '--color': [true] }[wanted ?? ''] ?? [false, true]
 
+type Tint = 'dim' | 'shade' | 'faded' | 'accent' | 'blue' | 'violet' | 'none'
+
 interface Look {
   name: string
   about: string
-  folder: string
-  guide: string
+  // How the guide of each level is coloured; plain output is the same for all.
+  guide: Tint
+  // The file dots and names.
+  file: Tint
 }
 
-// Folders end in a slash and are bold in the accent; files are plain behind a dim dot; the guide stands where the two spaces of a level were.
+// Small dots, folders bold cyan ending in a slash; only the colour of the guides and the file dots varies.
 const looks: Look[] = [
-  { name: '1. ▸ solid', about: 'the arrow of 5, solid guides', folder: '▸', guide: '│ ' },
-  { name: '2. ❯ solid', about: 'chevron, solid guides', folder: '❯', guide: '│ ' },
-  { name: '3. ▶ solid', about: 'big triangle, solid guides', folder: '▶', guide: '│ ' },
-  { name: '4. › broken', about: 'light chevron, broken guides', folder: '›', guide: '┆ ' },
-  { name: '5. ➜ dotted', about: 'arrow, dotted guides', folder: '➜', guide: '┊ ' },
-  { name: '6. » dashed', about: 'double chevron, dashed guides', folder: '»', guide: '╎ ' },
-  { name: '7. ▸ dashed', about: 'the arrow of 5, dashed guides', folder: '▸', guide: '╎ ' },
-  { name: '8. ❯ dotted', about: 'chevron, dotted guides', folder: '❯', guide: '┊ ' },
-  { name: '9. ▶ broken', about: 'big triangle, broken guides', folder: '▶', guide: '┆ ' },
+  { name: '1. dim', about: 'grey guides (now)', guide: 'dim', file: 'dim' },
+  { name: '2. shaded', about: 'each level its depth shade', guide: 'shade', file: 'dim' },
+  { name: '3. faded', about: 'depth shade at half strength', guide: 'faded', file: 'dim' },
+  { name: '4. accent', about: 'guides in the theme accent', guide: 'accent', file: 'dim' },
+  { name: '5. faded + shaded files', about: 'half strength guides, file dots shaded', guide: 'faded', file: 'shade' },
+  { name: '6. blue', about: 'one soft blue for guides', guide: 'blue', file: 'dim' },
+  { name: '7. violet', about: 'one soft violet for guides', guide: 'violet', file: 'dim' },
+  { name: '8. shaded + faded files', about: 'full shade guides, faded file dots', guide: 'shade', file: 'faded' },
+  { name: '9. faded, plain files', about: 'half strength guides, no file dot colour', guide: 'faded', file: 'none' },
 ]
 
 const depthOf = (nodes: Node[]): number => Math.max(0, ...nodes.map(node => 1 + depthOf(node.children ?? [])))
 const deepest = depthOf(sample) - 1
 
-function shade(depth: number): string {
+function shade(depth: number, strength = 1): string {
   const t = deepest <= 0 ? 0 : depth / deepest
 
-  return FROM.map((start, index) => Math.round(start + (TO[index]! - start) * t)).join(';')
+  return FROM.map((start, index) => Math.round((start + (TO[index]! - start) * t) * strength)).join(';')
+}
+
+// The SGR code a tint gives the guide or the file dot of a level.
+function code(tint: Tint, level: number): string {
+  return {
+    dim: '2',
+    shade: `38;2;${shade(level)}`,
+    faded: `38;2;${shade(level, 0.55)}`,
+    accent: '36',
+    blue: '38;2;96;130;170',
+    violet: '38;2;130;100;170',
+    none: '0',
+  }[tint]
 }
 
 const wrap = (code: string, text: string, color: boolean) => color ? `\x1B[${code}m${text}\x1B[0m` : text
@@ -59,11 +76,13 @@ function draw(look: Look, color: boolean): string[] {
 
     for (const node of nodes) {
       const folder = (node.children ?? []).length > 0
-      const mark = wrap(folder ? rgb : '2', folder ? look.folder : '·', color)
+      const mark = wrap(folder ? rgb : code(look.file, depth), folder ? '•' : '·', color)
       const note = node.note === undefined ? '' : ` ${wrap('2', node.note, color)}`
       const label = folder ? wrap('1;36', `${node.label}/`, color) : node.label
 
-      lines.push(`${wrap('2', look.guide.repeat(depth), color)}${mark} ${label}${note}`)
+      const guides = Array.from({ length: depth }, (_, level) => wrap(code(look.guide, level), '│ ', color)).join('')
+
+      lines.push(`${guides}${mark} ${label}${note}`)
       walk(node.children ?? [], depth + 1)
     }
   }
