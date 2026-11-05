@@ -15,7 +15,9 @@ describe('chart', () => {
     expect(bar(0.5, plain)).toBe('━━━━━─────')
     expect(bar(2, plain)).toBe('━━━━━━━━━━')
     expect(bar(-1, plain)).toBe('──────────')
-    expect(bar(0.5, { stream: { isTTY: true }, env: {}, width: 2 })).toBe('\x1B[36m━\x1B[39m\x1B[2m━\x1B[22m')
+    expect(bar(0.5, { stream: { isTTY: true }, env: {}, width: 2 })).toBe('\x1B[38;5;117m━\x1B[39m\x1B[2m━\x1B[22m')
+    expect(bar(1, { stream: { isTTY: true }, env: { COLORTERM: 'truecolor' }, width: 1 })).toBe('\x1B[38;2;103;232;249m━\x1B[39m\x1B[2m\x1B[22m')
+    expect(bar(0.01, { stream: { isTTY: true }, env: { COLORTERM: 'truecolor' }, width: 100 }).startsWith('\x1B[38;2;168;85;247m')).toBe(false)
   })
 
   test('keyValue pads labels to the longest', () => {
@@ -52,7 +54,7 @@ describe('tree', () => {
 
   test('dims the branches on a terminal', () => {
     expect(tree([{ label: 'a', children: [{ label: 'b' }] }], { stream: { isTTY: true }, env: {} })).toBe('\x1B[1ma\x1B[22m\n\x1B[2m└─\x1B[22m b')
-    expect(sparkline([1, 2], { stream: { isTTY: true }, env: {} })).toBe('\x1B[36m▁█\x1B[39m')
+    expect(sparkline([1, 2], { stream: { isTTY: true }, env: {} })).toBe('\x1B[38;5;183m▁\x1B[39m\x1B[38;5;81m█\x1B[39m')
     expect(sparkline([1, 2], { stream: {}, env: {} })).toBe('▁█')
   })
 })

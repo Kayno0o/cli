@@ -23,6 +23,19 @@ export interface Theme {
   // The tints a bin's header can take, picked by its name, and the bins that choose their own.
   accents: ColorSpec[]
   bins: Record<string, ColorSpec>
+  // The two `#rrggbb` ends a bar and a sparkline blend between as the value grows, or none to draw them in the accent.
+  gradient: [string, string] | undefined
+}
+
+// The colour a ratio between 0 and 1 takes on the theme's gradient, undefined when the theme has none.
+export function gradientAt(theme: Theme, ratio: number): string | undefined {
+  if (theme.gradient === undefined)
+    return undefined
+
+  const [from, to] = theme.gradient.map(hex => [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16))) as [number[], number[]]
+  const at = Math.min(1, Math.max(0, ratio))
+
+  return `#${from.map((start, index) => Math.round(start + (to[index]! - start) * at).toString(16).padStart(2, '0')).join('')}`
 }
 
 const DEFAULT: Theme = {
@@ -30,6 +43,7 @@ const DEFAULT: Theme = {
   glyphs: { ok: '✓', warn: '▲', problem: '✗', note: '›', passed: '✓', failed: '✗', running: '●', queued: '○', skipped: '-', bar: '━', rule: '─', corner: '╭' },
   accents: ['cyan', 'magenta', 'green', 'blue', 'yellow', 'redBright'],
   bins: {},
+  gradient: ['#c4b5fd', '#67e8f9'],
 }
 
 const BRIGHT: Partial<Theme['colors']> = { accent: 'cyanBright', id: 'yellowBright', path: 'blueBright', label: 'white', value: 'bold whiteBright', ok: 'greenBright', warn: 'yellowBright', problem: 'redBright', note: 'white', passed: 'greenBright', failed: 'redBright', running: 'cyanBright', queued: 'yellowBright', skipped: 'white' }
@@ -37,10 +51,10 @@ const MONO: Partial<Theme['colors']> = { accent: 'bold', id: 'bold', path: 'unde
 const ASCII: Partial<Theme['glyphs']> = { ok: '+', warn: '!', problem: 'x', note: '>', passed: '+', failed: 'x', running: '*', queued: 'o', skipped: '-', bar: '#', rule: '-', corner: '+' }
 
 // Named themes, each a patch over the default one.
-export const PRESETS: Record<string, { colors?: Partial<Theme['colors']>, glyphs?: Partial<Theme['glyphs']>, accents?: ColorSpec[] }> = {
+export const PRESETS: Record<string, { colors?: Partial<Theme['colors']>, glyphs?: Partial<Theme['glyphs']>, accents?: ColorSpec[], gradient?: Theme['gradient'] }> = {
   'default': {},
-  'high-contrast': { colors: BRIGHT, accents: ['cyanBright', 'magentaBright', 'greenBright', 'blueBright', 'yellowBright', 'redBright'] },
-  'mono': { colors: MONO, accents: ['bold'] },
+  'high-contrast': { colors: BRIGHT, accents: ['cyanBright', 'magentaBright', 'greenBright', 'blueBright', 'yellowBright', 'redBright'], gradient: ['#e9d5ff', '#a5f3fc'] },
+  'mono': { colors: MONO, accents: ['bold'], gradient: undefined },
   'ascii': { glyphs: ASCII },
 }
 
@@ -117,6 +131,7 @@ interface ThemeFile {
   glyphs?: unknown
   accents?: unknown
   bins?: unknown
+  gradient?: unknown
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -171,6 +186,9 @@ function applyPreset(theme: Theme, name: unknown, warn: (message: string) => voi
   if (preset.accents !== undefined)
     theme.accents = [...preset.accents]
 
+  if (Object.hasOwn(preset, 'gradient'))
+    theme.gradient = preset.gradient
+
   return name
 }
 
@@ -202,6 +220,13 @@ function applyFile(theme: Theme, file: ThemeFile, where: string, warn: (message:
     theme.accents = [...file.accents]
   else if (file.accents !== undefined)
     warn(`${where}: accents must be a non-empty list of colours`)
+
+  if (file.gradient === null)
+    theme.gradient = undefined
+  else if (Array.isArray(file.gradient) && file.gradient.length === 2 && file.gradient.every(end => typeof end === 'string' && HEX.test(end)))
+    theme.gradient = [file.gradient[0] as string, file.gradient[1] as string]
+  else if (file.gradient !== undefined)
+    warn(`${where}: gradient must be two \`#rrggbb\` colours, or null for none`)
 
   if (isRecord(file.bins)) {
     for (const [bin, value] of Object.entries(file.bins)) {
@@ -235,7 +260,7 @@ function isPath(chosen: string): boolean {
 
 // The default theme, then the global file `~/.config/kaynooo-cli/theme.json`, then the project's `.kaynooo/theme.json` found upward, each over the last, a `preset` in a file applied before them, the nearest file naming one winning. `KIT_THEME` replaces all of that for one run: a preset name alone, or the file it names. Reads JSON only, so a project file cannot run anything.
 export function loadTheme({ env = process.env, from = process.cwd(), home = homedir(), warn = warnOnce }: ThemeSettings = {}): LoadedTheme {
-  const theme: Theme = { colors: { ...DEFAULT.colors }, glyphs: { ...DEFAULT.glyphs }, accents: [...DEFAULT.accents], bins: Object.create(null) as Theme['bins'] }
+  const theme: Theme = { colors: { ...DEFAULT.colors }, glyphs: { ...DEFAULT.glyphs }, accents: [...DEFAULT.accents], bins: Object.create(null) as Theme['bins'], gradient: DEFAULT.gradient }
   const sources: string[] = []
   const chosen = env.KIT_THEME ?? ''
   const wanted = chosen === '' ? [userConfigPath('theme', { home, xdg: env.XDG_CONFIG_HOME }), findUp(join('.kaynooo', 'theme.json'), from, endsWalk(home))] : []

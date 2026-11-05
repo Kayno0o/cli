@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { createColors } from '@kaynooo/utils/tools/colors'
 import { describe, expect, it } from 'bun:test'
 import { tempDirs } from '../src/test'
-import { isColorSpec, loadTheme, nearest256, tinted } from '../src/theme'
+import { gradientAt, isColorSpec, loadTheme, nearest256, tinted } from '../src/theme'
 
 const temp = tempDirs()
 
@@ -93,6 +93,27 @@ describe('loadTheme', () => {
     writeFileSync(join(outer, '.kaynooo', 'theme.json'), JSON.stringify({ colors: { accent: 'red' } }))
 
     expect(loadTheme({ ...world(), from: repo }).theme.colors.accent).toBe('cyan')
+  })
+})
+
+describe('gradient', () => {
+  it('blends from the first end to the second, and none for a theme without one', () => {
+    const { theme } = loadTheme(world())
+
+    expect(gradientAt(theme, 0)).toBe('#c4b5fd')
+    expect(gradientAt(theme, 1)).toBe('#67e8f9')
+    expect(gradientAt(theme, 2)).toBe('#67e8f9')
+    expect(gradientAt(loadTheme(world({ preset: 'mono' })).theme, 0.5)).toBeUndefined()
+  })
+
+  it('takes two hex colours from a file, null for none, and tells about anything else', () => {
+    expect(gradientAt(loadTheme(world({ gradient: ['#000000', '#ffffff'] })).theme, 0.5)).toBe('#808080')
+    expect(gradientAt(loadTheme(world({ gradient: null })).theme, 0.5)).toBeUndefined()
+
+    const bad = world({ gradient: ['red', '#ffffff'] })
+
+    expect(loadTheme(bad).theme.gradient).toEqual(['#c4b5fd', '#67e8f9'])
+    expect(bad.warnings[0]).toContain('gradient')
   })
 })
 

@@ -2,7 +2,7 @@ import process from 'node:process'
 import { formatPercent, textWidth } from './format'
 import { outputMode } from './mode'
 import { paint, takesControlCodes } from './style'
-import { activeTheme, tinted } from './theme'
+import { activeTheme, gradientAt, tinted } from './theme'
 
 type Env = Record<string, string | undefined>
 
@@ -22,9 +22,16 @@ export function sparkline(values: number[], { stream = process.stdout, env = pro
   const low = Math.min(...values)
   const span = Math.max(...values) - low
 
-  const blocks = values.map(value => LEVELS[span === 0 ? 3 : Math.round((value - low) / span * (LEVELS.length - 1))]).join('')
+  const levels = values.map(value => span === 0 ? 3 : Math.round((value - low) / span * (LEVELS.length - 1)))
 
-  return takesControlCodes(stream, env) ? tinted(paint(stream, env), activeTheme().theme.colors.accent, env)(blocks) : blocks
+  if (!takesControlCodes(stream, env))
+    return levels.map(level => LEVELS[level]).join('')
+
+  const { theme } = activeTheme()
+  const colors = paint(stream, env)
+
+  // Each block takes the colour of its height on the gradient, the accent when the theme has none.
+  return levels.map(level => tinted(colors, gradientAt(theme, level / (LEVELS.length - 1)) ?? theme.colors.accent, env)(LEVELS[level]!)).join('')
 }
 
 export interface BarSettings {
@@ -33,7 +40,7 @@ export interface BarSettings {
   env?: Env
 }
 
-// `━━━━━━━━━━━━━━━━━━━━` for a ratio between 0 and 1, the filled part cyan and the rest the same glyph dimmed on a terminal, so the two share one baseline; with no colour the rest is `─`.
+// `━━━━━━━━━━━━━━━━━━━━` for a ratio between 0 and 1, the filled part on the theme's gradient, light purple at the start to light blue at the end, and the rest the same glyph dimmed on a terminal, so the two share one baseline; with no colour the rest is `─`.
 export function bar(ratio: number, { width = 20, stream = process.stdout, env = process.env }: BarSettings = {}): string {
   if (outputMode(stream, env) === 'agent')
     return formatPercent(Math.min(1, Math.max(0, ratio)))
@@ -46,7 +53,7 @@ export function bar(ratio: number, { width = 20, stream = process.stdout, env = 
 
   const { theme } = activeTheme()
 
-  return `${tinted(colors, theme.colors.accent, env)(theme.glyphs.bar.repeat(filled))}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
+  return `${tinted(colors, gradientAt(theme, ratio) ?? theme.colors.accent, env)(theme.glyphs.bar.repeat(filled))}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
 }
 
 export interface KeyValueSettings {
