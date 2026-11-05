@@ -205,7 +205,7 @@ describe('ft watch --json and --quiet', () => {
 
 describe('runLine', () => {
   test('links the run id to the run on a terminal, and leaves it plain elsewhere', () => {
-    const queued = { ...run(5, 'waiting'), html_url: 'https://forge/runs/5' }
+    const queued = { ...run(5, 'waiting'), index_in_repo: 5, started: '', stopped: '', duration: 0 }
 
     expect(runLine(queued, {})).toBe('waiting test.yml run 5 on main')
     expect(runLine(queued, { isTTY: true })).toContain('\x1B]8;;https://forge/runs/5\x1B\\5\x1B]8;;\x1B\\')
