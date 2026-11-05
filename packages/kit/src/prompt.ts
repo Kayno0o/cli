@@ -32,7 +32,7 @@ export interface Choice<T> {
 // The ends a prompt reads keys from and draws on, the process's own by default.
 export interface Terminal {
   stdin: Pick<NodeJS.ReadStream, 'setRawMode' | 'resume' | 'pause' | 'on' | 'off'> & { isTTY?: boolean }
-  stderr: Pick<NodeJS.WriteStream, 'write' | 'columns' | 'rows'> & { isTTY?: boolean }
+  stderr: Pick<NodeJS.WriteStream, 'write' | 'columns' | 'rows'> & { isTTY?: boolean, on?: NodeJS.WriteStream['on'], off?: NodeJS.WriteStream['off'] }
 }
 
 export interface PromptSettings {
@@ -293,17 +293,24 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
     fail(`cannot ask "${question}" off a terminal`, 2, hint)
 
   const colors = paint(stderr)
-  let drawn = 0
+  let drawn: string[] = []
+  let current: State = 'asking'
   let outcome: Outcome | undefined
+  // A terminal that does not say its size, as a pseudo-terminal may, answers 0.
+  const columns = () => stderr.columns || 80
   const draw = (state: State) => {
-    // A terminal that does not say its size, as a pseudo-terminal may, answers 0.
-    const frame = render(colors, state, { columns: stderr.columns || 80, rows: stderr.rows || 24 })
+    const frame = render(colors, state, { columns: columns(), rows: stderr.rows || 24 })
+    // The cursor ends the last line, so it climbs the rows the previous frame takes at the width now, which a resize may have changed.
+    const rows = drawn.reduce((sum, line) => sum + Math.max(1, Math.ceil(Bun.stringWidth(line) / columns())), 0)
 
-    stderr.write(`${drawn > 1 ? `\x1B[${drawn - 1}A` : ''}\r\x1B[0J${frame.join('\n')}`)
-    drawn = frame.length
+    stderr.write(`${rows > 1 ? `\x1B[${rows - 1}A` : ''}\r\x1B[0J${frame.join('\n')}`)
+    drawn = frame
+    current = state
   }
+  const redraw = () => draw(current)
 
   try {
+    stderr.on?.('resize', redraw)
     stdin.setRawMode(true)
     stdin.resume()
     stderr.write('\x1B[?25l')
@@ -341,6 +348,7 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
     })
   }
   finally {
+    stderr.off?.('resize', redraw)
     draw(outcome ?? 'cancel')
     stderr.write('\n\x1B[?25h')
     stdin.setRawMode(false)

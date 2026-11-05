@@ -11,8 +11,9 @@ const HEIGHT = { lines: 8 }
 const plain = (text: string): string => text
 
 // A terminal whose keys the test types once the picker listens.
-function fake(): { terminal: Terminal, type: (text: string) => void, written: string[], closed: () => boolean } {
+function fake(): { terminal: Terminal, type: (text: string) => void, resize: (columns: number) => void, written: string[], closed: () => boolean } {
   let onChunk: (chunk: string) => void = plain
+  let onResize: () => void = () => undefined
   let closed = false
   const written: string[] = []
   const terminal: Terminal = {
@@ -20,15 +21,25 @@ function fake(): { terminal: Terminal, type: (text: string) => void, written: st
     rows: 20,
     theme: { accent: plain, label: plain, value: plain, id: plain },
     write: text => void written.push(text),
-    listen: (chunk) => {
+    listen: (chunk, resized) => {
       onChunk = chunk
+      onResize = resized
     },
     close: () => {
       closed = true
     },
   }
 
-  return { terminal, type: text => onChunk(text), written, closed: () => closed }
+  return {
+    terminal,
+    type: text => onChunk(text),
+    resize: (columns) => {
+      terminal.columns = columns
+      onResize()
+    },
+    written,
+    closed: () => closed,
+  }
 }
 
 function settings(more: object = {}) {
@@ -45,6 +56,22 @@ describe('select', () => {
 
     expect(await running).toEqual({ rows: [ROWS[1]!], key: '', query: 'install' })
     expect(closed()).toBe(true)
+  })
+
+  test('a resize climbs to the first row of the rewrapped line before clearing', async () => {
+    const { terminal, type, resize, written } = fake()
+    const running = select(ROWS, settings(), terminal)
+
+    type('x'.repeat(45))
+    written.length = 0
+    resize(20)
+
+    const frame = written.join('')
+
+    expect(frame).toContain('\x1B[2A\r\x1B[J')
+
+    type('\x03')
+    expect(await running).toBeUndefined()
   })
 
   test('an expected key ends the pick and says which, the query coming back', async () => {

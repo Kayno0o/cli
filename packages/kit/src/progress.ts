@@ -16,6 +16,8 @@ interface ProgressStream {
   columns?: number | undefined
   rows?: number | undefined
   write: (text: string) => unknown
+  on?: (event: 'resize', listener: () => void) => unknown
+  off?: (event: 'resize', listener: () => void) => unknown
 }
 
 export interface LiveRegion {
@@ -80,16 +82,19 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
   // Its own write, taken before the region clears itself ahead of every other.
   const write = stream.write.bind(stream)
   let frame = 0
-  let drawn = 0
+  // The visible width of each line drawn, since a terminal narrowed after the draw wraps them over more rows.
+  let drawn: number[] = []
+  const columns = () => stream.columns === undefined || stream.columns === 0 ? 80 : stream.columns
+  const rowsDrawn = () => drawn.reduce((sum, width) => sum + Math.max(1, Math.ceil(width / columns())), 0)
   const clear = () => {
-    if (drawn > 0)
-      write(`${CLEAR_LINE}${LINE_UP.repeat(drawn - 1)}`)
+    if (drawn.length > 0)
+      write(`${CLEAR_LINE}${LINE_UP.repeat(rowsDrawn() - 1)}`)
 
-    drawn = 0
+    drawn = []
   }
   const draw = () => {
     // A terminal that does not say its size, as a pseudo-terminal may, answers 0.
-    const width = (stream.columns === undefined || stream.columns === 0 ? 80 : stream.columns) - 1
+    const width = columns() - 1
     const height = stream.rows === undefined || stream.rows === 0 ? 24 : stream.rows
     const lines = render(FRAMES[frame++ % FRAMES.length]!).slice(0, Math.max(1, height - 1)).map(line => cutToWidth(line, width))
 
@@ -99,10 +104,12 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
       return
     }
 
-    write(`${drawn > 0 ? `${CLEAR_LINE}${LINE_UP.repeat(drawn - 1)}` : CLEAR_LINE}${lines.join('\n')}`)
-    drawn = lines.length
+    write(`${drawn.length > 0 ? `${CLEAR_LINE}${LINE_UP.repeat(rowsDrawn() - 1)}` : CLEAR_LINE}${lines.join('\n')}`)
+    drawn = lines.map(line => Bun.stringWidth(line))
   }
   const timer = setInterval(draw, FRAME_MS)
+
+  stream.on?.('resize', draw)
   const restore = interceptOutput(clear)
   const release = swallowInput()
   const onExit = () => {
@@ -114,6 +121,7 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
 
   function stop() {
     clearInterval(timer)
+    stream.off?.('resize', draw)
     clear()
     restore()
     release()

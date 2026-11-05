@@ -130,6 +130,8 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
   let shownLine: number | undefined
   let finish: (() => void) | undefined
   let restored = false
+  // Where the cursor stood after the last frame, to find the row it is on once the terminal has rewrapped the text above it.
+  let caret: number | undefined
 
   function draw(clear = false): void {
     if (restored)
@@ -139,11 +141,14 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     let frame = HIDE_CURSOR
 
     if (reserved !== layout.height || clear) {
+      // A resize rewraps the lines drawn before it, so the cursor may sit rows below the frame's first line, which a clear from there would leave behind.
+      frame += clear && caret !== undefined ? up(Math.floor((caret - 1) / terminal.columns)) : ''
       frame += CLEAR_BELOW + '\n'.repeat(layout.height - 1) + up(layout.height - 1)
       reserved = layout.height
     }
 
-    frame += `\r${render(state, layout, theme, preview).map(line => `\x1B[2K${line}`).join('\n')}${up(layout.height - 1)}\r\x1B[${caretColumn(state, layout)}G${SHOW_CURSOR}`
+    caret = caretColumn(state, layout)
+    frame += `\r${render(state, layout, theme, preview).map(line => `\x1B[2K${line}`).join('\n')}${up(layout.height - 1)}\r\x1B[${caret}G${SHOW_CURSOR}`
     terminal.write(frame)
   }
 

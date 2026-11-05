@@ -249,6 +249,20 @@ describe('the live region', () => {
     expect(written).toEqual([`${CLEAR_LINE}one\n\x1B[36mlong long \x1B[0m\nthree`, `${CLEAR_LINE}${LINE_UP}${LINE_UP}four`, CLEAR_LINE])
   })
 
+  it('climbs the rows a narrowed terminal wraps what it drew over, and redraws on a resize', () => {
+    const { written, stream } = terminal(40)
+    const listeners: (() => void)[] = []
+    const narrowing = { ...stream, on: (_event: 'resize', listener: () => void) => void listeners.push(listener) }
+    const region = liveRegion(() => ['x'.repeat(30), 'y'.repeat(10)], narrowing, {})
+
+    region.redraw()
+    narrowing.columns = 10
+    listeners[0]!()
+    region.stop()
+
+    expect(written[1]!.startsWith(`${CLEAR_LINE}${LINE_UP.repeat(3)}xxxxxxxxx`)).toBe(true)
+  })
+
   it('keeps to the terminal\'s height, and prints above itself', () => {
     const { written, stream } = terminal()
     const region = liveRegion(() => ['a', 'b', 'c', 'd'], { ...stream, rows: 3 }, {})

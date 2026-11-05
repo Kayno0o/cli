@@ -316,3 +316,21 @@ describe('editor', () => {
     expect(await thrown(editor('notes', { terminal: terminal([], { tty: false }).fake }))).toBeInstanceOf(Exit)
   })
 })
+
+describe('a resize while asking', () => {
+  it('redraws, climbing the rows the frame now takes', async () => {
+    const stdin = Object.assign(new EventEmitter(), { isTTY: true, setRawMode: () => undefined, resume: () => undefined, pause: () => undefined })
+    const raw: string[] = []
+    const stderr = Object.assign(new EventEmitter(), { isTTY: true, columns: 80, rows: 24, write: (text: string) => raw.push(text) })
+    const running = input('a question that is quite long indeed, forty or so', { terminal: { stdin, stderr } as unknown as Terminal })
+
+    raw.length = 0
+    stderr.columns = 20
+    stderr.emit('resize')
+
+    expect(raw.join('')).toContain('A\r\x1B[0J')
+
+    stdin.emit('data', Buffer.from('\x03'))
+    await running
+  })
+})
