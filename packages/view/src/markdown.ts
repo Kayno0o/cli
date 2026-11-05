@@ -21,7 +21,9 @@ const ROW = '\u0007'
 const BLOCK = '\u0008'
 
 const MAX_RULE = 60
-const MIN_RULE = 20
+// How far the rules around a code block reach at most, so a wide block does not stretch them across the screen.
+const MAX_CODE_RULE = 24
+const MIN_CODE_RULE = 12
 // The shade of a heading by level along the gradient, the deeper ones toward its end.
 const HEADING_SHADES = [0, 0.35, 0.7, 1]
 const MIN_ROOM = 20
@@ -134,7 +136,7 @@ export function renderMarkdown(source: string, { theme, width }: RenderSettings)
       const language = languageOf(meta?.language ?? '')
       const body = trimmed(children)
       const lines = (language === undefined ? body : highlight(body, language, theme)).split('\n')
-      const rule = Math.min(width, Math.max(MIN_RULE, ...lines.map(line => textWidth(line))))
+      const rule = Math.min(width, MAX_CODE_RULE, Math.max(MIN_CODE_RULE, ...lines.map(line => textWidth(line))))
       const label = meta?.language === undefined || meta.language === '' ? '' : `${meta.language} `
 
       return block(`${theme.dim(`${label}${'─'.repeat(Math.max(0, rule - textWidth(label)))}`)}\n${lines.join('\n')}\n${theme.dim('─'.repeat(rule))}\n\n`)

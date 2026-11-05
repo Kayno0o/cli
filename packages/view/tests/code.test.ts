@@ -68,3 +68,17 @@ describe('markdown code blocks', () => {
     expect(renderMarkdown('```nope\nconst a = 1\n```\n', { theme: tint, width: 80 })).not.toContain(tint.keyword('const'))
   })
 })
+
+describe('shell commands', () => {
+  test('draws the command of each pipeline step and the flags, and leaves the arguments', () => {
+    const out = highlight('$ bun install -g pkg | tee out && ft ci --json', 'shell', tint)
+
+    expect(Bun.stripANSI(out)).toBe('$ bun install -g pkg | tee out && ft ci --json')
+    expect(out).toContain('\x1B[36mbun\x1B[39m install')
+    expect(out).toContain('\x1B[36mtee\x1B[39m out')
+    expect(out).toContain('\x1B[36mft\x1B[39m ci')
+    expect(out).toContain('\x1B[33m-g\x1B[39m')
+    expect(out).toContain('\x1B[33m--json\x1B[39m')
+    expect(out).not.toContain('\x1B[36m$')
+  })
+})

@@ -8,6 +8,8 @@ interface Language {
   keywords: Set<string>
   // A name at the start of a line followed by the match, drawn as a key: a yaml mapping, a toml or ini setting.
   key?: RegExp
+  // Whether the first word of a command, and a flag, are drawn as such: a shell.
+  commands?: boolean
   // Whether a quoted string followed by a colon is a key.
   quotedKeys?: boolean
   // A whole line drawn as a heading, such as an ini or toml section.
@@ -22,6 +24,10 @@ const AFTER_KEY = /^\s*:/
 const YAML_KEY = /^(\s*(?:- )?)([\w.\-/]+)(?=:(?:\s|$))/
 const SETTING_KEY = /^(\s*)([\w.-]+)(?=\s*[=:])/
 const SECTION = /^\s*\[.*\]\s*$/
+const WHITESPACE = /\s/
+const FLAG = /^--?[a-z][\w-]*/i
+const COMMAND_END = /[|&;(]\s*$/
+const PROMPT = /^\s*(?:[$>]\s*)?$/
 const DIGIT = /\d/
 const TRAILING_NEWLINE = /\n$/
 const LEADING_DOT = /^\./
@@ -43,7 +49,7 @@ const LANGUAGES = {
   json: { line: [], quotes: '"', keywords: words('true false null'), quotedKeys: true },
   jsonc: { ...SLASHES, quotes: '"', keywords: words('true false null'), quotedKeys: true },
   python: { ...HASH, quotes: '"\'', keywords: words('def class return if elif else for while in not and or is import from as with try except finally raise pass break continue lambda yield async await global nonlocal del assert None True False self') },
-  shell: { ...HASH, quotes: '"\'`', keywords: words('if then else elif fi for while until do done case esac in function return exit local export set unset source alias echo cd end switch begin and or not') },
+  shell: { ...HASH, commands: true, quotes: '"\'`', keywords: words('if then else elif fi for while until do done case esac in function return exit local export set unset source alias echo cd end switch begin and or not') },
   yaml: { ...HASH, quotes: '"\'', keywords: words('true false null yes no'), key: YAML_KEY, quotedKeys: true },
   toml: { ...HASH, quotes: '"\'', keywords: words('true false'), key: SETTING_KEY, section: SECTION },
   ini: { line: ['#', ';'], quotes: '"\'', keywords: words('true false yes no on off'), key: SETTING_KEY, section: SECTION },
@@ -199,10 +205,22 @@ export function highlight(source: string, name: Name, theme: Theme): string {
       out += theme.number(number)
       at += number.length
     }
+    else if (language.commands === true && char === '-' && (at === 0 || WHITESPACE.test(text.charAt(at - 1))) && FLAG.test(text.slice(at))) {
+      const flag = FLAG.exec(text.slice(at))?.[0] ?? char
+
+      out += theme.number(flag)
+      at += flag.length
+    }
     else if (WORD_START.test(char)) {
       const word = WORD.exec(text.slice(at))?.[0] ?? char
+      const before = text.slice(text.lastIndexOf('\n', at - 1) + 1, at)
+      const command = language.commands === true && (PROMPT.test(before) || COMMAND_END.test(before))
 
-      out += language.keywords.has(word) ? theme.keyword(word) : word
+      if (language.keywords.has(word))
+        out += theme.keyword(word)
+      else
+        out += command && !word.startsWith('$') ? theme.accent(word) : word
+
       at += word.length
     }
     else {
