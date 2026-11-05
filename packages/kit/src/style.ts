@@ -134,9 +134,9 @@ export function section(title: string, count: number | undefined, stream: { isTT
   return tone === undefined ? paint(stream, env).dim(rule) : tinted(paint(stream, env), activeTheme().theme.colors[tone], env)(rule)
 }
 
-// The text as a clickable link on a terminal and as it is anywhere else, for a cell whose url a log has no use for.
+// The text as a clickable link on a terminal, underlined so it reads as one, and as it is anywhere else, for a cell whose url a log has no use for.
 export function hyperlink(text: string, url: string, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
-  return takesControlCodes(stream, env) ? link(text, url, stream, env) : text
+  return takesControlCodes(stream, env) ? paint(stream, env).underline(link(text, url, stream, env)) : text
 }
 
 // A path as a link that opens the file, relative paths taken from `from`.
