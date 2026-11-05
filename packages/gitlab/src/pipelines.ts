@@ -1,4 +1,4 @@
-import { ciLine, formatSeconds, hyperlink } from '@kaynooo/cli-kit'
+import { ciLine, formatSeconds, hyperlink, role } from '@kaynooo/cli-kit'
 import { projectApi, projectApiText } from './glab'
 import { excerpt } from './trace'
 
@@ -146,8 +146,11 @@ export async function failedJobsOf(pipeline: Pipeline, repo?: string): Promise<F
   return failed
 }
 
-export function failureText(failed: FailedJob[]): string {
-  return failed.map(job => `job ${job.name} (${job.stage}) failed${job.reason === null || job.reason === 'script_failure' ? '' : `, ${job.reason}`}: ${job.url}\n${job.excerpt}`).join('\n\n')
+// What each failed job's trace says, on stderr: only the title is red on a terminal, ending the colour so the trace under it is not a wall of red.
+export function failureText(failed: FailedJob[], out: { isTTY?: boolean } = process.stderr): string {
+  const problem = role('failed', out)
+
+  return failed.map(job => `${problem(`job ${job.name} (${job.stage}) failed${job.reason === null || job.reason === 'script_failure' ? '' : `, ${job.reason}`}`)}: ${job.url}\n${job.excerpt}`).join('\n\n')
 }
 
 // GitLab's statuses under the names `ft` prints, so a script reads both alike; the others (running, pending, manual...) are kept.

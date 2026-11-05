@@ -2,7 +2,7 @@ import type { FakeState } from './fake-tea'
 import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { timing, watch, watchRuns } from '../src/commands/watch'
-import { jobLog, runLine, runsOn } from '../src/runs'
+import { failureText, jobLog, runLine, runsOn } from '../src/runs'
 import { refusal, withFakeTea } from './fake-tea'
 
 const run = (id: number, status: string) => ({ id, commit_sha: 'abc', event: 'push', status, workflow_id: 'test.yml', prettyref: 'main', html_url: `https://forge/runs/${id}`, title: 'x' })
@@ -209,5 +209,17 @@ describe('runLine', () => {
 
     expect(runLine(queued, {})).toBe('waiting test.yml run 5 on main')
     expect(runLine(queued, { isTTY: true })).toContain('\x1B]8;;https://forge/runs/5\x1B\\5\x1B]8;;\x1B\\')
+  })
+})
+
+describe('failureText', () => {
+  const jobs = [{ run: 5, name: 'test', workflow: 'test.yml', excerpt: 'it broke' }]
+
+  test('colours only the title on a terminal, so the log under it is not red', () => {
+    expect(failureText(jobs, {})).toBe('job test of test.yml failed:\nit broke')
+    const drawn = failureText(jobs, { isTTY: true })
+
+    expect(Bun.stripANSI(drawn)).toBe('job test of test.yml failed:\nit broke')
+    expect(drawn.endsWith('failed\x1B[39m:\nit broke')).toBe(true)
   })
 })

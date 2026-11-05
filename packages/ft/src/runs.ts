@@ -1,4 +1,4 @@
-import { ciLine, formatAge, formatSeconds, hyperlink } from '@kaynooo/cli-kit'
+import { ciLine, formatAge, formatSeconds, hyperlink, role } from '@kaynooo/cli-kit'
 import { excerpt } from './log'
 import { api, repoApi, repoApiText } from './tea'
 
@@ -202,8 +202,11 @@ export async function failedJobsOf(run: Run, repo?: string): Promise<FailedJob[]
   return failed
 }
 
-export function failureText(failed: FailedJob[]): string {
-  return failed.map(job => `job ${job.name} of ${job.workflow} failed:\n${job.excerpt}`).join('\n\n')
+// What each failed job's log says, on stderr: only the title is red on a terminal, ending the colour so the log under it is not a wall of red.
+export function failureText(failed: FailedJob[], out: { isTTY?: boolean } = process.stderr): string {
+  const problem = role('failed', out)
+
+  return failed.map(job => `${problem(`job ${job.name} of ${job.workflow} failed`)}:\n${job.excerpt}`).join('\n\n')
 }
 
 export async function failureReport(run: Run, repo?: string): Promise<string> {
