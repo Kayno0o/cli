@@ -230,7 +230,7 @@
     },
     "packages/probe": {
       "name": "@kaynooo/cli-probe",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "bin": {
         "probe": "./dist/probe.js",
       },

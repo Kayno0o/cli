@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-probe",
   "type": "module",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "probe: a site's HTTP version, redirect chain, timings, addresses, TLS certificate and notable headers in one call, with warnings.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
