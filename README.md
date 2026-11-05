@@ -29,6 +29,8 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 | [`@kaynooo/cli-doctor`](packages/doctor) | `doctor`, `cli` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix; every bin in one line, what it does and what it replaces, read from its own help |
 | [`@kaynooo/cli-kit`](packages/kit) | - | the CLI kit every @kaynooo CLI is built on: argument parsing with `--help`, the command dispatcher, prompts, the progress line, config loading, the shell command parser every guard reads with, and output helpers |
 
+Every bin and command is described in [docs/bins.md](docs/bins.md), every config file and environment variable in [docs/config.md](docs/config.md).
+
 ## Development
 
 ```sh
