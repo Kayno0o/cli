@@ -1,9 +1,9 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { RepoState } from './repos-scan'
 import { existsSync, statSync } from 'node:fs'
-import { relative } from 'node:path'
+import { basename, relative } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, marked, oneOf, paint, parse, pool, printJson, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
+import { fail, jsonOption, marked, oneOf, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
 const USAGE = `repos [options] [root]: the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
@@ -156,6 +156,8 @@ export async function repos(args: string[]): Promise<number> {
   }
 
   const label = role('label', process.stdout)
+
+  printHeader('repos', basename(root))
 
   if (kept.length === 0) {
     console.log(label(`nothing needs attention in ${states.length} repositories`))

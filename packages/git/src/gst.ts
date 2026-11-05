@@ -2,7 +2,7 @@
 
 import type { Change } from './status'
 import process from 'node:process'
-import { fail, jsonOption, paint, parse, printJson, role, runMain, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
+import { fail, jsonOption, paint, parse, printHeader, printJson, role, runMain, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
 import { letter } from './colour'
 import { git } from './git'
 import { parseStatus, summary } from './status'
@@ -74,6 +74,7 @@ async function main(argv: string[]): Promise<number> {
     ...group('commits', commits.map(([commitSha = '', commitTitle = '']) => `${role('id', process.stdout)(commitSha)} ${commitTitle}`)),
   ]
 
+  printHeader('gst')
   console.log(lines.join('\n'))
 
   return 0

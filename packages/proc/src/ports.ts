@@ -2,7 +2,7 @@ import type { Container, Protocol, Socket } from './parse'
 import type { ProcInfo } from './read'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { badUsage, duration, fail, jsonOption, paint, parse, printJson, table, truncate, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, paint, parse, printHeader, printJson, table, truncate, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { dockerContainers } from './docker'
 import { protectionOf, terminate } from './kill'
@@ -189,6 +189,7 @@ export async function ports(args: string[]): Promise<number> {
     return 0
   }
 
+  printHeader('ports')
   console.log(render(rows))
 
   const unknown = rows.filter(row => row.pid === undefined && row.container === undefined).length

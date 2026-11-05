@@ -3,7 +3,7 @@ import type { Claim } from '../claims'
 import type { Issue } from '../issues'
 import type { Run } from '../runs'
 import process from 'node:process'
-import { currentSession, formatAge, jsonOption, liveSessions, parse, printJson, runCommand, table, truncate, upTo, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { currentSession, formatAge, jsonOption, liveSessions, parse, printHeader, printJson, runCommand, section, table, truncate, upTo, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { boxes } from '../checklist'
 import { latestClaim } from '../claims'
@@ -145,9 +145,9 @@ export function renderDigest(digest: Digest, now = Date.now()): string {
     { heading: 'unpushed commits', count: digest.unpushed.length, lines: capped(digest.unpushed) },
     { heading: 'dirty files', count: digest.dirty.length, lines: capped(digest.dirty.map(file => `${file.status} ${file.path}`)) },
     { heading: 'stale TODO comments', count: digest.stale.length, lines: capped(digest.stale.map(todo => `${todo.issue} closed: ${todo.comments.map(each => `${each.path}:${each.line}`).join(', ')}`)) },
-  ].filter(section => section.count > 0)
+  ].filter(each => each.count > 0)
 
-  return sections.length === 0 ? 'nothing to pick up' : sections.map(({ heading, count, lines }) => `${heading} (${count})\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
+  return sections.length === 0 ? 'nothing to pick up' : sections.map(({ heading, count, lines }) => `${section(heading, count)}\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
 }
 
 const usage = `ft digest
@@ -179,10 +179,13 @@ export async function digest(args: string[]): Promise<number> {
   const [unpushed, dirty, stale] = await Promise.all([quietly(unpushedCommits), quietly(dirtyTree), staleTodos()])
   const summary: Digest = { ...claims(rows, sessions, me), ci: unsettled(runs, branch), unpushed, dirty, stale }
 
-  if (values.json === true)
+  if (values.json === true) {
     printJson(summary)
-  else
+  }
+  else {
+    printHeader('ft', 'digest')
     console.log(renderDigest(summary))
+  }
 
   return 0
 }

@@ -1,5 +1,5 @@
 import type { Run } from '../runs'
-import { badge, formatSeconds, jsonOption, limitOf, limitOptions, moreFooter, openUrl, parse, printJson, table, truncate, upTo } from '@kaynooo/cli-kit'
+import { badge, formatSeconds, jsonOption, limitOf, limitOptions, moreFooter, openUrl, parse, printHeader, printJson, table, truncate, upTo } from '@kaynooo/cli-kit'
 import { openOption, repoOption } from '../args'
 import { resolveCommit } from '../git'
 import { runSeconds, runsListing, runsOn, startedAge } from '../runs'
@@ -51,6 +51,8 @@ export async function runs(args: string[]): Promise<number> {
 
     return 0
   }
+
+  printHeader('ft', 'runs')
 
   if (list.length === 0) {
     console.log('no run')

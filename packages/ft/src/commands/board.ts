@@ -1,7 +1,7 @@
 import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
-import { badUsage, capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, link, liveSessions, paint, parse, printHint, printJson, role, runHint, table, takesControlCodes, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { badUsage, capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, link, liveSessions, paint, parse, printHeader, printHint, printJson, role, runHint, table, takesControlCodes, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -185,6 +185,7 @@ export async function board(args: string[]): Promise<number> {
     return 0
   }
 
+  printHeader('ft', 'board')
   console.log(rows.length === 0 && (query !== undefined || state !== undefined) ? 'no open issue matches' : renderBoard(rows, Date.now(), limit))
 
   return 0

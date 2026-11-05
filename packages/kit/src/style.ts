@@ -107,3 +107,25 @@ export function link(text: string, url: string, stream: { isTTY?: boolean }, env
 
   return text === url ? text : `${text} (${url})`
 }
+
+// Prints the `header()` line on a terminal, the first line of a command that lists or reports; nothing elsewhere.
+export function printHeader(bin: string, context?: string, stream: { isTTY?: boolean } = process.stdout, env: Record<string, string | undefined> = process.env): void {
+  const line = header(bin, context, stream, env)
+
+  if (line !== '')
+    console.log(line)
+}
+
+// `╭─ title (3) ───────` in dim, under the width of the terminal or `width`; the title alone, with its count, elsewhere.
+export function section(title: string, count: number | undefined, stream: { isTTY?: boolean, columns?: number } = process.stdout, env: Record<string, string | undefined> = process.env): string {
+  const label = count === undefined ? title : `${title} (${count})`
+
+  if (!takesControlCodes(stream, env))
+    return label
+
+  const { glyphs } = activeTheme().theme
+  const head = `${glyphs.corner}${glyphs.rule} ${label} `
+  const width = Math.min(stream.columns ?? 60, 100)
+
+  return paint(stream, env).dim(head + glyphs.rule.repeat(Math.max(3, width - Bun.stringWidth(head))))
+}

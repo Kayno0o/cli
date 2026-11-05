@@ -3,7 +3,7 @@ import { helpText, parse } from '../src/args'
 import { bar } from '../src/chart'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
-import { badge, header, link, marked, paint, role, statusOf } from '../src/style'
+import { badge, header, link, marked, paint, printHeader, role, section, statusOf } from '../src/style'
 import { capture } from '../src/test'
 import { stripAnsi } from '../src/text'
 
@@ -183,5 +183,23 @@ describe('a theme in force', () => {
     withTheme('mono', () => {
       expect(header('ft', undefined, TERMINAL, {})).toBe('\x1B[1mft\x1B[22m')
     })
+  })
+})
+
+describe('section', () => {
+  it('draws a dim rounded rule to the width on a terminal and the title with its count elsewhere', () => {
+    const line = section('dirty files', 3, { isTTY: true, columns: 30 }, {})
+
+    expect(stripAnsi(line)).toBe(`╭─ dirty files (3) ${'─'.repeat(11)}`)
+    expect(line).toContain('\x1B[2m')
+    expect(section('dirty files', 3, {}, {})).toBe('dirty files (3)')
+    expect(section('dirty files', undefined, { isTTY: true }, { NO_COLOR: '1' })).toBe('dirty files')
+  })
+})
+
+describe('printHeader', () => {
+  it('prints the header line on a terminal and nothing elsewhere', async () => {
+    expect((await capture(() => printHeader('ft', 'board', {}, {}))).out).toBe('')
+    expect(stripAnsi((await capture(() => printHeader('ft', 'board', TERMINAL, {}))).out)).toBe('ft › board\n')
   })
 })

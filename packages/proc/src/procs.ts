@@ -2,7 +2,7 @@ import type { Group } from './select'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import process from 'node:process'
-import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printJson, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printHeader, printJson, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { terminate } from './kill'
 import { maskArgs } from './mask'
 import { ancestry, snapshot } from './read'
@@ -85,10 +85,13 @@ export async function procs(args: string[]): Promise<number> {
   const pids = groups.flatMap(group => group.members.map(({ proc }) => proc.pid))
 
   const show = (extra: object = {}): void => {
-    if (values.json === true)
+    if (values.json === true) {
       printJson({ groups: groups.map(summary), skipped: protectedCount, ...extra })
-    else
+    }
+    else {
+      printHeader('procs')
       console.log(groups.length === 0 ? 'nothing to clean' : render(groups))
+    }
   }
 
   if (values.kill !== true || pids.length === 0 || values.yes !== true) {
