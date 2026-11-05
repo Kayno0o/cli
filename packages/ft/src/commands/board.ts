@@ -1,7 +1,7 @@
 import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
-import { badUsage, capped, currentSession, Exit, fail, formatAge, jsonOption, limitOf, limitOptions, link, liveSessions, paint, parse, printHeader, printHint, printJson, role, runHint, table, takesControlCodes, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHeader, printHint, printJson, role, runHint, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -39,7 +39,7 @@ function dimmed(text: string): string {
 function issueNumber(issue: Issue): string {
   const number = role('id', process.stdout)(`#${issue.number}`)
 
-  return takesControlCodes(process.stdout) ? link(number, issue.html_url, process.stdout) : number
+  return hyperlink(number, issue.html_url, process.stdout)
 }
 
 function boxesLeft(issue: Issue): string {

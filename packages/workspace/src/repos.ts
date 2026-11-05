@@ -157,7 +157,7 @@ export async function repos(args: string[]): Promise<number> {
 
   const label = role('label', process.stdout)
 
-  printHeader('repos', basename(root))
+  printHeader('repos', basename(root) || undefined)
 
   if (kept.length === 0) {
     console.log(label(`nothing needs attention in ${states.length} repositories`))
