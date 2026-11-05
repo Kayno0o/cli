@@ -17,11 +17,13 @@ const WORDS = /\s+/
 // Choices drawn at once at most, the rest scrolled to.
 const MAX_ROWS = 10
 
-type Key = 'up' | 'down' | 'enter' | 'cancel' | 'erase' | { text: string }
+type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | { text: string }
 type Outcome = 'enter' | 'cancel'
 type State = 'asking' | Outcome
 
-const KEYS: Record<string, Key> = { '\x1B[A': 'up', '\x1BOA': 'up', '\x1B[B': 'down', '\x1BOB': 'down', '\r': 'enter', '\n': 'enter', '\x03': 'cancel', '\x1B': 'cancel', '\x7F': 'erase', '\b': 'erase' }
+const PASTE_START = '\x1B[200~'
+const PASTE_END = '\x1B[201~'
+const KEYS: Record<string, Key> = { '\x1B[A': 'up', '\x1BOA': 'up', '\x1B[B': 'down', '\x1BOB': 'down', '\x1B[5~': 'pageup', '\x1B[6~': 'pagedown', '\x1B[H': 'home', '\x1B[1~': 'home', '\x1BOH': 'home', '\x1B[F': 'end', '\x1B[4~': 'end', '\x1BOF': 'end', '\r': 'enter', '\n': 'enter', '\x03': 'cancel', '\x1B': 'cancel', '\x7F': 'erase', '\b': 'erase' }
 
 export interface Choice<T> {
   value: T
@@ -41,9 +43,20 @@ export interface PromptSettings {
   terminal?: Terminal
 }
 
-// The keys a chunk of terminal input holds, in order: the ones prompts read, and printable text.
-function readKeys(input: string): Key[] {
-  return (input.match(KEY_SEQUENCES) ?? []).flatMap(sequence => KEYS[sequence] ?? (CONTROL.test(sequence) ? [] : [{ text: sequence }]))
+// The keys a chunk of terminal input holds, in order: the ones prompts read, and printable text. A line break between the bracketed paste markers is dropped instead of answering the prompt; `paste` carries an unfinished paste to the next chunk.
+function readKeys(input: string, paste = { active: false }): Key[] {
+  return (input.match(KEY_SEQUENCES) ?? []).flatMap((sequence) => {
+    if (sequence === PASTE_START || sequence === PASTE_END) {
+      paste.active = sequence === PASTE_START
+
+      return []
+    }
+
+    if (paste.active && (sequence === '\r' || sequence === '\n'))
+      return []
+
+    return KEYS[sequence] ?? (CONTROL.test(sequence) ? [] : [{ text: sequence }])
+  })
 }
 
 export interface SelectSettings<T> extends PromptSettings {
@@ -231,6 +244,16 @@ class List<T> {
       return
     }
 
+    // Home, End and the pages stop at the ends instead of wrapping round as the arrows do.
+    if (key === 'home' || key === 'end' || key === 'pageup' || key === 'pagedown') {
+      const last = this.matches.length - 1
+      const to = { home: 0, end: last, pageup: this.cursor - MAX_ROWS, pagedown: this.cursor + MAX_ROWS }[key]
+
+      this.cursor = Math.max(0, Math.min(last, to))
+
+      return
+    }
+
     if (key === 'erase')
       this.filter([...this.query].slice(0, -1).join(''))
     else if (typeof key === 'object')
@@ -308,17 +331,18 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
     current = state
   }
   const redraw = () => draw(current)
+  const paste = { active: false }
 
   try {
     stderr.on?.('resize', redraw)
     stdin.setRawMode(true)
     stdin.resume()
-    stderr.write('\x1B[?25l')
+    stderr.write('\x1B[?25l\x1B[?2004h')
     draw('asking')
 
     return await new Promise<boolean>((resolve) => {
       function onData(data: Buffer) {
-        for (const key of readKeys(data.toString())) {
+        for (const key of readKeys(data.toString(), paste)) {
           const pressed = press(key)
 
           if (pressed !== undefined) {
@@ -350,7 +374,7 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
   finally {
     stderr.off?.('resize', redraw)
     draw(outcome ?? 'cancel')
-    stderr.write('\n\x1B[?25h')
+    stderr.write('\n\x1B[?25h\x1B[?2004l')
     stdin.setRawMode(false)
     stdin.pause()
   }

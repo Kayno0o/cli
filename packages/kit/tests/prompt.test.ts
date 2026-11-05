@@ -64,7 +64,7 @@ describe('select', () => {
   })
 
   it('reads several keys sent in one chunk, the sequences it does not take left out', async () => {
-    expect(await select('pick', CHOICES, { terminal: terminal([`${DOWN}\x1B[H${DOWN}\r`]).fake })).toBe('c')
+    expect(await select('pick', CHOICES, { terminal: terminal([`${DOWN}\x1B[15~${DOWN}\r`]).fake })).toBe('c')
   })
 
   it('filters on every word typed, in the label or the hint, case ignored', async () => {
@@ -106,8 +106,8 @@ describe('select', () => {
 
     expect(modes).toEqual([true, false])
     expect(listeners()).toBe(0)
-    expect(raw[0]).toBe('\x1B[?25l')
-    expect(raw.at(-1)).toBe('\n\x1B[?25h')
+    expect(raw[0]).toBe('\x1B[?25l\x1B[?2004h')
+    expect(raw.at(-1)).toBe('\n\x1B[?25h\x1B[?2004l')
     expect(written.at(-2)).toEndWith('✓ pick alpha')
   })
 
@@ -332,5 +332,19 @@ describe('a resize while asking', () => {
 
     stdin.emit('data', Buffer.from('\x03'))
     await running
+  })
+})
+
+describe('paging and pasting', () => {
+  const MANY = Array.from({ length: 25 }, (_, index) => ({ value: index, label: `item ${index}`, hint: '' }))
+
+  it('End and Home jump to the last choice and the first, the pages stopping at the ends', async () => {
+    expect(await select('pick', MANY, { terminal: terminal(['\x1B[F', '\r']).fake })).toBe(24)
+    expect(await select('pick', MANY, { terminal: terminal(['\x1B[6~', '\x1B[6~', '\x1B[6~', '\x1B[5~', '\r']).fake })).toBe(14)
+    expect(await select('pick', MANY, { terminal: terminal(['\x1B[F', '\x1B[H', '\r']).fake })).toBe(0)
+  })
+
+  it('a pasted line break is dropped instead of answering the prompt', async () => {
+    expect(await input('name', { terminal: terminal(['\x1B[200~one\ntwo\x1B[201~', '\r']).fake })).toBe('onetwo')
   })
 })
