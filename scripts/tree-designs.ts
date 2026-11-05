@@ -24,24 +24,20 @@ interface Look {
   name: string
   about: string
   folder: string
-  file: string
-  // What the label of a folder and of a file is drawn with, given the depth's shade.
-  folderLabel: 'bold-accent' | 'bold' | 'shade' | 'bold-shade'
-  fileLabel: 'plain' | 'dim' | 'blue'
-  slash?: boolean
-  shadeFile?: boolean
+  guide: string
 }
 
+// Folders end in a slash and are bold in the accent; files are plain behind a dim dot; the guide stands where the two spaces of a level were.
 const looks: Look[] = [
-  { name: '1. accent folders', about: 'bold cyan folders, plain files', folder: '▾', file: '·', folderLabel: 'bold-accent', fileLabel: 'plain' },
-  { name: '2. shaded folders', about: 'folders take their depth shade', folder: '▾', file: '·', folderLabel: 'bold-shade', fileLabel: 'plain' },
-  { name: '3. dim files', about: 'bold folders, dimmed files', folder: '▾', file: '·', folderLabel: 'bold', fileLabel: 'dim' },
-  { name: '4. blue files', about: 'shaded folders, blue files', folder: '▾', file: '·', folderLabel: 'shade', fileLabel: 'blue' },
-  { name: '5. slash', about: 'folders end in /, arrows ▸', folder: '▸', file: '·', folderLabel: 'bold-accent', fileLabel: 'plain', slash: true },
-  { name: '6. dots', about: 'filled and hollow dots', folder: '●', file: '○', folderLabel: 'bold-shade', fileLabel: 'dim' },
-  { name: '7. triangles', about: 'open and closed triangles', folder: '▼', file: '▷', folderLabel: 'bold', fileLabel: 'plain' },
-  { name: '8. chevrons', about: 'chevrons for both, files dimmed', folder: '❯', file: '›', folderLabel: 'bold-accent', fileLabel: 'dim', shadeFile: true },
-  { name: '9. squares', about: 'squares, files shaded too', folder: '■', file: '□', folderLabel: 'bold-shade', fileLabel: 'plain', shadeFile: true },
+  { name: '1. ▸ solid', about: 'the arrow of 5, solid guides', folder: '▸', guide: '│ ' },
+  { name: '2. ❯ solid', about: 'chevron, solid guides', folder: '❯', guide: '│ ' },
+  { name: '3. ▶ solid', about: 'big triangle, solid guides', folder: '▶', guide: '│ ' },
+  { name: '4. › broken', about: 'light chevron, broken guides', folder: '›', guide: '┆ ' },
+  { name: '5. ➜ dotted', about: 'arrow, dotted guides', folder: '➜', guide: '┊ ' },
+  { name: '6. » dashed', about: 'double chevron, dashed guides', folder: '»', guide: '╎ ' },
+  { name: '7. ▸ dashed', about: 'the arrow of 5, dashed guides', folder: '▸', guide: '╎ ' },
+  { name: '8. ❯ dotted', about: 'chevron, dotted guides', folder: '❯', guide: '┊ ' },
+  { name: '9. ▶ broken', about: 'big triangle, broken guides', folder: '▶', guide: '┆ ' },
 ]
 
 const depthOf = (nodes: Node[]): number => Math.max(0, ...nodes.map(node => 1 + depthOf(node.children ?? [])))
@@ -63,14 +59,11 @@ function draw(look: Look, color: boolean): string[] {
 
     for (const node of nodes) {
       const folder = (node.children ?? []).length > 0
-      const mark = wrap(folder || look.shadeFile === true ? rgb : '2', folder ? look.folder : look.file, color)
-      const name = folder && look.slash === true ? `${node.label}/` : node.label
+      const mark = wrap(folder ? rgb : '2', folder ? look.folder : '·', color)
       const note = node.note === undefined ? '' : ` ${wrap('2', node.note, color)}`
-      let label = name
+      const label = folder ? wrap('1;36', `${node.label}/`, color) : node.label
 
-      label = folder ? wrap({ 'bold-accent': '1;36', 'bold': '1', 'shade': rgb, 'bold-shade': `1;${rgb}` }[look.folderLabel], name, color) : wrap({ plain: '0', dim: '2', blue: '34' }[look.fileLabel], name, color)
-
-      lines.push(`${'  '.repeat(depth)}${mark} ${label}${note}`)
+      lines.push(`${wrap('2', look.guide.repeat(depth), color)}${mark} ${label}${note}`)
       walk(node.children ?? [], depth + 1)
     }
   }
