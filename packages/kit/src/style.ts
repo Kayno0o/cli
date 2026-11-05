@@ -11,7 +11,7 @@ export type Colors = ReturnType<typeof createColors>
 export type { Mark, Role, Status }
 
 // The word each mark prints as off a terminal, so a log stays greppable whatever the theme draws on one.
-const MARK_WORDS: Record<Mark, string> = { ok: 'ok:', warn: 'warning:', problem: 'error:', note: 'note:' }
+const MARK_WORDS: Record<Mark, string> = { ok: 'ok:', warn: 'warning:', problem: 'error:', note: 'note:', plan: 'would:' }
 
 // A terminal that draws in place: not a log or a pipe, not an agent that reads text and no drawing, nor a run that KIT_MODE says is CI or a pipe, and not asked for plain output by `NO_COLOR` or a dumb `TERM`.
 export function takesControlCodes(stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): boolean {

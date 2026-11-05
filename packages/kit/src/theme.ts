@@ -7,7 +7,7 @@ import { findUp } from './config'
 import { userConfigPath } from './user-config'
 
 export type Role = 'accent' | 'id' | 'path' | 'label' | 'value'
-export type Mark = 'ok' | 'warn' | 'problem' | 'note'
+export type Mark = 'ok' | 'warn' | 'problem' | 'note' | 'plan'
 export type Status = 'passed' | 'failed' | 'running' | 'queued' | 'skipped'
 
 // A colour is written as an ANSI name or style (`cyan`, `redBright`, `bold`), several of them (`bold cyan`), a 256-colour index or `#rrggbb`.
@@ -79,16 +79,16 @@ export function gradientAt(theme: Theme, ratio: number): string | undefined {
 }
 
 const DEFAULT: Theme = {
-  colors: { accent: 'cyan', id: 'yellow', path: 'blue', label: 'dim', value: 'bold', ok: 'green', warn: 'yellow', problem: 'red', note: 'dim', passed: 'green', failed: 'red', running: 'cyan', queued: 'yellow', skipped: 'dim' },
-  glyphs: { ok: '✓', warn: '▲', problem: '✗', note: '›', passed: '✓', failed: '✗', running: '●', queued: '○', skipped: '-', bar: '━', rule: '─', corner: '╭', open: '•', leaf: '·', guide: '│' },
+  colors: { accent: 'cyan', id: 'yellow', path: 'blue', label: 'dim', value: 'bold', ok: 'green', warn: 'yellow', problem: 'red', note: 'dim', plan: 'magenta', passed: 'green', failed: 'red', running: 'cyan', queued: 'yellow', skipped: 'dim' },
+  glyphs: { ok: '✓', warn: '▲', problem: '✗', note: '›', plan: '◇', passed: '✓', failed: '✗', running: '●', queued: '○', skipped: '-', bar: '━', rule: '─', corner: '╭', open: '•', leaf: '·', guide: '│' },
   accents: ['cyan', 'magenta', 'green', 'blue', 'yellow', 'redBright'],
   bins: {},
   gradient: ['#c084fc', '#67e8f9'],
 }
 
-const BRIGHT: Partial<Theme['colors']> = { accent: 'cyanBright', id: 'yellowBright', path: 'blueBright', label: 'white', value: 'bold whiteBright', ok: 'greenBright', warn: 'yellowBright', problem: 'redBright', note: 'white', passed: 'greenBright', failed: 'redBright', running: 'cyanBright', queued: 'yellowBright', skipped: 'white' }
-const MONO: Partial<Theme['colors']> = { accent: 'bold', id: 'bold', path: 'underline', label: 'dim', value: 'bold', ok: 'bold', warn: 'bold', problem: 'bold', note: 'dim', passed: 'bold', failed: 'bold', running: 'bold', queued: 'dim', skipped: 'dim' }
-const ASCII: Partial<Theme['glyphs']> = { ok: '+', warn: '!', problem: 'x', note: '>', passed: '+', failed: 'x', running: '*', queued: 'o', skipped: '-', bar: '#', rule: '-', corner: '+', open: '*', leaf: '-', guide: '|' }
+const BRIGHT: Partial<Theme['colors']> = { accent: 'cyanBright', id: 'yellowBright', path: 'blueBright', label: 'white', value: 'bold whiteBright', ok: 'greenBright', warn: 'yellowBright', problem: 'redBright', note: 'white', plan: 'magentaBright', passed: 'greenBright', failed: 'redBright', running: 'cyanBright', queued: 'yellowBright', skipped: 'white' }
+const MONO: Partial<Theme['colors']> = { accent: 'bold', id: 'bold', path: 'underline', label: 'dim', value: 'bold', ok: 'bold', warn: 'bold', problem: 'bold', note: 'dim', plan: 'dim', passed: 'bold', failed: 'bold', running: 'bold', queued: 'dim', skipped: 'dim' }
+const ASCII: Partial<Theme['glyphs']> = { ok: '+', warn: '!', problem: 'x', note: '>', plan: '?', passed: '+', failed: 'x', running: '*', queued: 'o', skipped: '-', bar: '#', rule: '-', corner: '+', open: '*', leaf: '-', guide: '|' }
 
 // Named themes, each a patch over the default one.
 export const PRESETS: Record<string, { colors?: Partial<Theme['colors']>, glyphs?: Partial<Theme['glyphs']>, accents?: ColorSpec[], gradient?: Theme['gradient'] }> = {
