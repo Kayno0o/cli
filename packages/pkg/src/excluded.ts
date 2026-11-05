@@ -10,7 +10,8 @@ export function excludedPath(home?: string): string {
   return userConfigPath('pkg-excluded', { home })
 }
 
-export function loadExcluded(home?: string): Excluded {
+// Undefined when the file is there but does not parse, so a hand-edited one is never written over.
+export function loadExcluded(home?: string): Excluded | undefined {
   const path = excludedPath(home)
 
   if (!existsSync(path))
@@ -28,7 +29,7 @@ export function loadExcluded(home?: string): Excluded {
     return excluded
   }
   catch {
-    return {}
+    return undefined
   }
 }
 
@@ -36,6 +37,9 @@ export function loadExcluded(home?: string): Excluded {
 export function saveExcluded(name: string, dirs: readonly string[], home?: string): void {
   const path = excludedPath(home)
   const excluded = loadExcluded(home)
+
+  if (excluded === undefined)
+    return
 
   if (dirs.length === 0)
     delete excluded[name]

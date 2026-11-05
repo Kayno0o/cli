@@ -117,14 +117,13 @@ export function caretColumn(state: State, layout: Layout): number {
 /** The keys the picker answers to, drawn in place of the list while help is open, short enough for the smallest box. */
 function helpLines(state: State, layout: Layout, theme: Theme): Fitted[] {
   const lines = [
-    'type to filter, up and down or ctrl-p and ctrl-n move',
-    `pgup, pgdn, home and end jump, enter picks${state.multi ? ', tab marks' : ''}`,
-    'ctrl-u clears the query, ctrl-w a word, esc or ctrl-c cancels',
+    'type to filter, up, down, ctrl-p, ctrl-n, pgup, pgdn, home, end move',
+    `enter picks${state.multi ? ', tab marks' : ''}, ctrl-u clears the query, ctrl-w a word, esc or ctrl-c cancels`,
     ...state.expect.length > 0 ? [`${state.expect.join(', ')} end the pick as this command asks`] : [],
-    'any key closes this help',
   ]
+  const title = 'keys, any key closes this help'
 
-  return [{ text: theme.accent('keys'), width: 4 }, ...lines.map(line => fit(`  ${line}`, layout.listWidth, theme.label))]
+  return [{ text: theme.accent(title), width: title.length }, ...lines.map(line => fit(`  ${line}`, layout.listWidth, theme.label))]
 }
 
 function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {

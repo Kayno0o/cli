@@ -11,6 +11,10 @@ const LINES = ['apple', 'banana', 'cherry', 'apricot']
 const lines = (state: State): string[] => chosen(state).map(row => row.cells[0]!)
 
 describe('parseKeys', () => {
+  test('reads ctrl-/ and the f1 key as the help key', () => {
+    expect(parseKeys('\x1F\x1BOP\x1B[11~')).toEqual(['help', 'help', 'help'])
+  })
+
   test('reads the keys the picker handles', () => {
     expect(parseKeys('\x1B[A\x1B[B\x10\x0E\r\x03\x7F\t\x15\x17')).toEqual(['up', 'down', 'up', 'down', 'enter', 'cancel', 'erase', 'tab', 'clear', 'word'])
   })

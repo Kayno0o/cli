@@ -55,8 +55,8 @@ export interface BumpSettings {
   // Folders by name or glob: only these when given, never those of `except`.
   only?: readonly string[] | undefined
   except?: readonly string[] | undefined
-  // Exactly these folders, as the plan chose them.
-  folders?: readonly string[] | undefined
+  // Folders the user unchecked in the plan: left out, and counted apart from --only and --except.
+  declined?: readonly string[] | undefined
   run?: (argv: string[], cwd: string) => Promise<Ran>
   poll?: number
 }
@@ -192,9 +192,10 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
   const everyone = findConsumers(name, settings.root)
   const isOnly = matcher(settings.only ?? [])
   const isExcept = matcher(settings.except ?? [])
-  const found = everyone.filter(each => (settings.only === undefined || settings.only.length === 0 || isOnly(each.dir)) && !isExcept(each.dir) && (settings.folders === undefined || settings.folders.includes(each.dir)))
+  const declined = new Set(settings.declined ?? [])
+  const found = everyone.filter(each => (settings.only === undefined || settings.only.length === 0 || isOnly(each.dir)) && !isExcept(each.dir) && !declined.has(each.dir))
   const consumers = found.filter(each => !isLocal(each))
-  const left = everyone.length - found.length
+  const left = everyone.length - found.length - declined.size
   const local = found.length - consumers.length
   const run = settings.run ?? (async (argv, cwd) => runCommand(argv, { cwd }))
   const committed: string[] = []
@@ -210,6 +211,9 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
   else if (left > 0) {
     note(`${left} folder${left === 1 ? '' : 's'} left out by --only or --except`)
   }
+
+  if (declined.size > 0)
+    note(`${declined.size} folder${declined.size === 1 ? '' : 's'} left out by your choice`)
 
   // a monorepo's own packages take it from the workspace, one line saying so for all of them
   if (local > 0)
@@ -294,30 +298,33 @@ const terminalChooser: Chooser = {
   confirm: async question => confirm(question, { default: true }),
 }
 
-// Asks which of the consumers to bump, the ones left out last time unchecked, remembers what is unchecked now and prints the plan for a yes; the folders to bump, none when declined.
-export async function choosePlan(name: string, version: string, settings: BumpSettings, chooser: Chooser = terminalChooser, home?: string): Promise<string[]> {
+// Asks which of the consumers to bump, the ones left out last time unchecked, remembers what is unchecked now and prints the plan for a yes; the folders to bump and those left out, none to bump when declined, undefined when there is nothing to choose from.
+export async function choosePlan(name: string, version: string, settings: BumpSettings, chooser: Chooser = terminalChooser, home?: string): Promise<{ chosen: string[], declined: string[] } | undefined> {
   const plans = plannedBumps(name, version, settings)
 
   if (plans.length === 0)
-    return []
+    return undefined
 
-  const excluded = new Set(loadExcluded(home)[name] ?? [])
+  const excluded = new Set(loadExcluded(home)?.[name] ?? [])
   const picked = await chooser.pick(name, plans, excluded)
 
   if (picked === undefined)
-    return []
-
-  saveExcluded(name, [...excluded].filter(dir => !plans.some(plan => plan.dir === dir)).concat(plans.filter(plan => !picked.has(plan.dir)).map(plan => plan.dir)), home)
+    return { chosen: [], declined: plans.map(plan => plan.dir) }
 
   const chosen = plans.filter(plan => picked.has(plan.dir))
-
-  if (chosen.length === 0)
-    return []
 
   for (const plan of chosen)
     note('plan', plan.line)
 
-  return await chooser.confirm(`bump ${name} to ${version} in ${chosen.length} folder${chosen.length === 1 ? '' : 's'}?`) === true ? chosen.map(plan => plan.dir) : []
+  // What is unchecked is kept once the plan is confirmed, so a cancelled run changes nothing.
+  if (chosen.length === 0 || await chooser.confirm(`bump ${name} to ${version} in ${chosen.length} folder${chosen.length === 1 ? '' : 's'}?`) !== true)
+    return { chosen: [], declined: plans.map(plan => plan.dir) }
+
+  const declined = plans.filter(plan => !picked.has(plan.dir)).map(plan => plan.dir)
+
+  saveExcluded(name, [...excluded].filter(dir => !plans.some(plan => plan.dir === dir)).concat(declined), home)
+
+  return { chosen: chosen.map(plan => plan.dir), declined }
 }
 
 export async function bump(args: string[]): Promise<number> {
@@ -341,15 +348,15 @@ export async function bump(args: string[]): Promise<number> {
 
   // On a terminal with no folder named, the user picks which consumers and confirms the plan; --yes and a pipe keep bumping every one.
   if (settings.isDryRun !== true && values.yes !== true && isInteractive() && (settings.only?.length ?? 0) === 0 && (settings.except?.length ?? 0) === 0) {
-    const chosen = await choosePlan(name, version, settings)
+    const plan = await choosePlan(name, version, settings)
 
-    if (chosen.length === 0) {
+    if (plan?.chosen.length === 0) {
       note('nothing to bump', 'none chosen or not confirmed')
 
       return 0
     }
 
-    settings.folders = chosen
+    settings.declined = plan?.declined
   }
 
   return await bumpConsumers(name, version, settings) ? 0 : 1

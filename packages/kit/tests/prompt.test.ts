@@ -63,6 +63,10 @@ describe('select', () => {
     expect(await select('pick', CHOICES, { initial: 1, terminal: terminal(['\x1BOA', '\n']).fake })).toBe('a')
   })
 
+  it('moves with ctrl-n and leaves out the keys only the picker takes (f1, ctrl-/, tab)', async () => {
+    expect(await select('pick', CHOICES, { terminal: terminal([`\x0E\x1BOP\x1F\t\r`]).fake })).toBe('b')
+  })
+
   it('reads several keys sent in one chunk, the sequences it does not take left out', async () => {
     expect(await select('pick', CHOICES, { terminal: terminal([`${DOWN}\x1B[15~${DOWN}\r`]).fake })).toBe('c')
   })

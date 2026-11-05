@@ -1,10 +1,12 @@
 import process from 'node:process'
+import { format } from 'node:util'
 import { badUsage } from './args'
 import { duration } from './input'
 import { takesControlCodes } from './style'
 
 const CLEAR_SCREEN = '\x1B[H\x1B[2J'
 const DEFAULT_SECONDS = 2
+const ATTACHED_SHORT = /^-w./
 const INTERVAL = /^\d+(?:\.\d+)?(?:ms|[smh])?$/
 
 /** The `--watch [interval]` flag every CLI words alike: bare it redraws every two seconds. */
@@ -23,7 +25,7 @@ export function withoutWatch(args: string[]): string[] {
       if (args[at + 1] !== undefined && INTERVAL.test(args[at + 1]!))
         at++
     }
-    else if (!arg.startsWith('--watch=')) {
+    else if (!arg.startsWith('--watch=') && !ATTACHED_SHORT.test(arg)) {
       rest.push(arg)
     }
   }
@@ -31,7 +33,7 @@ export function withoutWatch(args: string[]): string[] {
   return rest
 }
 
-/** Runs `step` again every interval until interrupted, clearing the screen before each, for a command that only prints. Needs a terminal: a pipe or an agent reads one answer, not a screen redrawn. */
+/** Runs `step` again every interval until interrupted, clearing the screen once the output of each is whole, for a command that only prints. Needs a terminal: a pipe or an agent reads one answer, not a screen redrawn. */
 export async function watching(value: string, step: () => Promise<number>, stream: NodeJS.WriteStream = process.stdout, sleep: (ms: number) => Promise<unknown> = Bun.sleep, rounds = Number.POSITIVE_INFINITY): Promise<number> {
   const interval = value === '' ? DEFAULT_SECONDS * 1000 : duration(value, 'watch', DEFAULT_SECONDS * 1000)
 
@@ -41,8 +43,30 @@ export async function watching(value: string, step: () => Promise<number>, strea
   let code = 0
 
   for (let round = 0; round < rounds; round++) {
-    stream.write(CLEAR_SCREEN)
-    code = await step()
+    // The step's output is held until it is whole, so a slow one leaves the last screen up instead of a blank.
+    const held: string[] = []
+    const { log, info } = console
+    const write = process.stdout.write.bind(process.stdout)
+    const hold = (...parts: unknown[]) => void held.push(`${format(...parts)}\n`)
+
+    console.log = hold
+    console.info = hold
+    process.stdout.write = (text: string | Uint8Array) => {
+      held.push(typeof text === 'string' ? text : Buffer.from(text).toString())
+
+      return true
+    }
+
+    try {
+      code = await step()
+    }
+    finally {
+      console.log = log
+      console.info = info
+      process.stdout.write = write
+    }
+
+    stream.write(`${CLEAR_SCREEN}${held.join('')}`)
     await sleep(interval)
   }
 

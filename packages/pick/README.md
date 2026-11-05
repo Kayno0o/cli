@@ -14,7 +14,7 @@ bun add -g @kaynooo/cli-pick
 | `ls \| pick --preview 'head -20 {}'` | a pane on the right (terminal at least 80 columns) shows the command run for the highlighted line, `{}` shell-quoted |
 | `--height 12`, `--height 60%` | lines or a share of the terminal to draw in (40%) |
 
-Keys: type to filter, up and down or ctrl-p and ctrl-n to move, enter to pick, esc or ctrl-c to cancel (exit 1, nothing printed), ctrl-u clears the query, ctrl-w deletes a word.
+Keys: type to filter, up and down or ctrl-p and ctrl-n to move, enter to pick, esc or ctrl-c to cancel (exit 1, nothing printed), ctrl-u clears the query, ctrl-w deletes a word, ctrl-/ or f1 opens a legend of the keys until the next key.
 
 The query matches as a subsequence, best first: a word start, a run of consecutive characters or a prefix scores higher, a lowercase query ignores case and an uppercase letter makes it exact. Keys come from `/dev/tty` and the selector is drawn on stderr, so a pipe or a command substitution takes only the choice. Without a terminal on stderr it exits 2.
 

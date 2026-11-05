@@ -39,8 +39,8 @@ describe('render', () => {
     const opened = press(createState(['one', 'two']), 'help')
     const lines = render(opened, layout, plain)
 
-    expect(lines[0]).toBe('keys')
-    expect(lines.join('\n')).toContain('pgup, pgdn')
+    expect(lines[0]).toBe('keys, any key closes this help')
+    expect(lines.join('\n')).toContain('type to filter')
     expect(lines.join('\n')).not.toContain('❯')
     expect(press(opened, { text: 'x' }).help).toBe(false)
     expect(press(opened, { text: 'x' }).query).toBe('')

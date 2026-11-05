@@ -16,10 +16,23 @@ describe('watching', () => {
 
     expect(code).toBe(3)
     expect(written).toHaveLength(3)
+    expect(written[0]).toBe('\x1B[H\x1B[2J')
     expect(written[0]).toContain('\x1B[2J')
     expect(slept).toEqual([2000, 2000, 2000])
     expect((await watching('500ms', async () => 0, stream, async ms => void slept.push(ms), 1))).toBe(0)
     expect(slept.at(-1)).toBe(500)
+  })
+
+  test('holds what the step prints and writes it after the clear', async () => {
+    const { written, stream } = terminal()
+
+    await watching('', async () => {
+      console.log('hello', 1)
+
+      return 0
+    }, stream, async () => undefined, 1)
+
+    expect(written).toEqual(['\x1B[H\x1B[2Jhello 1\n'])
   })
 
   test('is a usage error off a terminal', async () => {
@@ -42,5 +55,6 @@ describe('withoutWatch', () => {
     expect(withoutWatch(['-w', '--json'])).toEqual(['--json'])
     expect(withoutWatch(['--watch=1s', 'a'])).toEqual(['a'])
     expect(withoutWatch(['--watch', 'repo'])).toEqual(['repo'])
+    expect(withoutWatch(['-w5s', 'x'])).toEqual(['x'])
   })
 })

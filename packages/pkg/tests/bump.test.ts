@@ -435,18 +435,19 @@ describe('an npm alias of the package', () => {
     })
     const first = await capture(async () => choosePlan(KAY, '1.88.0', settings(), chooser(['site'], true), home))
 
-    expect(first.result).toEqual(['site'])
+    expect(first.result?.chosen).toEqual(['site'])
+    expect(first.result?.declined).toEqual(['shop'])
     expect(offered[0]).toEqual(['shop', 'site'])
     expect(loadExcluded(home)).toEqual({ [KAY]: ['shop'] })
 
     const second = await capture(async () => choosePlan(KAY, '1.88.0', settings(), chooser(['shop', 'site'], false), home))
 
-    expect(second.result).toEqual([])
+    expect(second.result?.chosen).toEqual([])
     expect(offered[1]).toEqual(['shop', 'site', '-shop'])
-    expect(loadExcluded(home)).toEqual({})
+    expect(loadExcluded(home)).toEqual({ [KAY]: ['shop'] })
   })
 
-  test('folders narrows bumpConsumers to exactly those named', async () => {
+  test('declined folders are left out and counted apart from --only and --except', async () => {
     const ran: string[] = []
     const run = async (_argv: string[], cwd: string): Promise<Ran> => {
       ran.push(cwd.slice(root.length + 1))
@@ -454,9 +455,11 @@ describe('an npm alias of the package', () => {
       return quiet()
     }
 
-    await capture(async () => bumpConsumers(KAY, '1.88.0', settings({ run, folders: ['site'] })))
+    const { out } = await capture(async () => bumpConsumers(KAY, '1.88.0', settings({ run, declined: ['shop'] })))
 
     expect(ran).toEqual(['site'])
+    expect(out).toContain('1 folder left out by your choice')
+    expect(out).not.toContain('--only or --except')
   })
 
   test('hints at what is named alike when nothing depends on the package', async () => {
