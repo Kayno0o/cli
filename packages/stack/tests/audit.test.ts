@@ -215,6 +215,23 @@ describe('audit', () => {
     expect(messages(result)).toEqual(['warn layout: service "api" bind-mounts ./secrets, absent from the header\'s expected server layout'])
   })
 
+  test('a bind source starting with a variable is read as its default, in both syntaxes', async () => {
+    const root = project({ 'release.config.ts': CONFIG(), 'compose.yaml': COMPOSE, '.gitignore': IGNORE })
+    const config = (await import(join(root, 'release.config.ts')) as { default: Parameters<typeof runAudit>[0] }).default
+    const volumes = [
+      { source: `${root}/\${DATA:-./data}/db` },
+      { source: `${root}/\${DATA-./data}/db` },
+      '${DATA:-./data}/db:/x',
+      '${DATA:-./secrets}:/y',
+      { source: `${root}/\${DATA}/db` },
+      '${DATA}:/z',
+    ]
+    const model: ComposeModel = { services: { api: { ...HEALTHY.services?.api, volumes } } }
+    const result = await runAudit(config, { root, loadCompose: models({ 'compose.yaml': model }), env: {}, home: '/nonexistent-home' })
+
+    expect(messages(result)).toEqual(['warn layout: service "api" bind-mounts ./secrets, absent from the header\'s expected server layout'])
+  })
+
   test('a failing docker compose config is an error and the checks carry on', async () => {
     const result = await run({ 'release.config.ts': CONFIG(), 'compose.yaml': COMPOSE }, {})
 

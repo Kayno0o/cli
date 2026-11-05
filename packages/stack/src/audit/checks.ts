@@ -243,9 +243,14 @@ export function routingFindings(config: ReleaseConfig, gated: Set<string>, model
   return findings
 }
 
-// A bind source relative to the project: `docker compose config` resolves `./data` to an absolute path, so one inside the project folder is made relative again. Named volumes and paths elsewhere give undefined.
-function relativeSource(root: string, source: string | undefined): string | undefined {
-  if (source === undefined)
+const SOURCE_END = /:(?![-+?=])/
+const DEFAULTED_VARIABLE = /\$\{[A-Z_]\w*:?-([^}$]*)\}/gi
+
+// A bind source relative to the project: `docker compose config` resolves `./data` to an absolute path, so one inside the project folder is made relative again. A variable with a default, `${DATA:-./data}/db`, reads as its default; one without, named volumes and paths elsewhere give undefined.
+function relativeSource(root: string, written: string | undefined): string | undefined {
+  const source = written?.replaceAll(DEFAULTED_VARIABLE, '$1')
+
+  if (source === undefined || source.includes('$'))
     return undefined
 
   if (source.startsWith('.'))
@@ -265,7 +270,8 @@ export function layoutFindings(root: string, base: string | undefined, model: Co
 
   for (const [name, service] of services(model)) {
     for (const volume of service.volumes ?? []) {
-      const source = relativeSource(root, typeof volume === 'string' ? before(volume, ':') : volume.source)
+      // The `:` of a `${VAR:-default}` is not the one ending the source.
+      const source = relativeSource(root, typeof volume === 'string' ? volume.split(SOURCE_END)[0] : volume.source)
 
       if (source !== undefined && !header.includes(stripDotSlash(source)))
         findings.push({ level: 'warn', check: 'layout', message: `service "${name}" bind-mounts ${source}, absent from the header's expected server layout` })
