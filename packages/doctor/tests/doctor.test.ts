@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { checkBun, checkHooks, checkNeeds, checkTea, checkTool, checkWorkspace, runChecks, TOOLS } from '../src/checks'
+import { configReport } from '../src/config-report'
 import { main } from '../src/doctor'
 
 const GUARD = '@kaynooo/cli-guard'
@@ -320,5 +321,23 @@ describe('checkWorkspace', () => {
     mkdirSync(join(home, 'code'))
 
     expect(checkWorkspace(fakeHost(), {})).toMatchObject({ ok: true, detail: join(home, 'code') })
+  })
+})
+
+describe('configReport', () => {
+  test('lists the files looked for, the variables set with secrets hidden, and the workspace', () => {
+    mkdirSync(join(home, '.config', 'kaynooo-cli'), { recursive: true })
+    writeFileSync(join(home, '.config', 'kaynooo-cli', 'ft.json'), '{ nope')
+    writeFileSync(join(home, '.config', 'kaynooo-cli', 'repos.json'), '{"skip":["x"]}')
+
+    const report = configReport({ home }, { KAYNOOO_WORKSPACE: '/work', GITHUB_TOKEN: 'abc' }, home)
+    const by = (name: string) => report.sources.find(each => each.name === name)
+
+    expect(by('ft.json')).toMatchObject({ status: 'invalid' })
+    expect(by('repos.json')).toMatchObject({ status: 'set' })
+    expect(by('db.json')).toMatchObject({ status: 'absent' })
+    expect(by('GITHUB_TOKEN')).toMatchObject({ status: 'set', value: '(hidden)' })
+    expect(by('KAYNOOO_WORKSPACE')).toMatchObject({ value: '/work' })
+    expect(report.workspace).toBe('/work')
   })
 })

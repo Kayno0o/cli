@@ -5,6 +5,7 @@ import type { Listed } from './list'
 import process from 'node:process'
 import { badUsage, duration, jsonOption, paint, parse, printJson, readUsage, runCli, summarizeUsage, table, usagePath } from '@kaynooo/cli-kit'
 import { bashScript, completionDir, completionFile, installCompletions, installedBins, zshScript } from './completions'
+import { configReport } from './config-report'
 import { main as doctor } from './doctor'
 import { hostHere } from './host'
 import { listBins } from './list'
@@ -92,6 +93,34 @@ const STATS_OPTIONS = {
   json: jsonOption('{runs, bins: [{bin, runs, failed, usageErrors}], commands: [{bin, command, runs, failed, usageErrors}], usageErrors: [{bin, command?, unknown, count}]}'),
 } as const
 
+const CONFIG_USAGE = `cli config [--json]: where every bin looks for its config and which environment variables are set
+
+Lists each user and project config file with the path read and whether it is there (set, absent, or invalid when it does not parse), then the environment variables that change a bin's behaviour; a token or webhook shows as hidden. Ends on the workspace folder and the theme in force. docs/config.md in the repository describes every key.
+Exits 0 when it printed the report, 2 on a usage error.`
+
+const CONFIG_OPTIONS = {
+  json: jsonOption('{workspace, theme: {preset, sources}, sources: [{kind, name, where, status, value?}]}'),
+} as const
+
+export function config(args: string[], host: Host = hostHere()): number {
+  const { values } = parse(args, CONFIG_USAGE, CONFIG_OPTIONS, { positionals: [], examples: ['cli config', ['cli config --json', 'for a script']] })
+  const report = configReport(host)
+
+  if (values.json === true) {
+    printJson(report)
+
+    return 0
+  }
+
+  const { dim } = paint(process.stdout)
+
+  console.log(table(report.sources.filter(each => each.kind === 'file').map(each => [each.name, each.status === 'absent' ? dim(each.status) : each.status, dim(each.where)])))
+  console.log(`\n${table(report.sources.filter(each => each.kind === 'env' && each.status === 'set').map(each => [each.name, each.value ?? '']))}`)
+  console.log(`\nworkspace  ${report.workspace}\ntheme      ${report.theme.preset}${report.theme.sources.length === 0 ? '' : `, from ${report.theme.sources.join(', ')}`}`)
+
+  return 0
+}
+
 export async function stats(args: string[], path = usagePath()): Promise<number> {
   const { values } = parse(args, STATS_USAGE, STATS_OPTIONS, { positionals: [], examples: ['cli stats', ['cli stats --since 7d', 'the last week']] })
   const window = values.since === undefined ? undefined : duration(values.since, 'since', 0, 'h')
@@ -131,6 +160,7 @@ if (import.meta.main) {
     commands: {
       doctor: { summary: 'checks this host\'s install of the bins, one line per check, the command that fixes a failing one beside it', run: async args => doctor(args) },
       list: { summary: 'every bin in one line: what it does and what it is reached for instead of', run: async args => list(args) },
+      config: { summary: 'where every bin looks for its config and which environment variables are set', run: async args => Promise.resolve(config(args)) },
       stats: { summary: 'how often each bin ran and the options usage errors did not know', run: async args => stats(args) },
       completions: { summary: 'fish completions for every installed bin, printed or written to the folder fish reads', run: async args => completions(args) },
     },
