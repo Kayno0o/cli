@@ -1,11 +1,11 @@
-// Candidate looks for kit's tree(), each drawn plain and with colours: `bun scripts/tree-designs.ts [--plain|--color]`.
+// Candidate looks for kit's tree(), variants of the indented design three to a row: `bun scripts/tree-designs.ts [--plain|--color]`.
 interface Node { label: string, note?: string, children?: Node[] }
 
 const sample: Node[] = [{
   label: 'packages',
   children: [
-    { label: 'kit', note: '34 files', children: [{ label: 'picker', children: [{ label: 'view.ts' }, { label: 'terminal.ts' }] }, { label: 'ci.ts' }, { label: 'chart.ts' }] },
-    { label: 'ft', note: '21 files', children: [{ label: 'commands', children: [{ label: 'watch.ts' }, { label: 'ci.ts' }] }, { label: 'runs.ts' }] },
+    { label: 'kit', note: '34', children: [{ label: 'picker', children: [{ label: 'view.ts' }, { label: 'terminal.ts' }] }, { label: 'ci.ts' }] },
+    { label: 'ft', note: '21', children: [{ label: 'commands', children: [{ label: 'watch.ts' }] }, { label: 'runs.ts' }] },
     { label: 'pick', children: [{ label: 'pick.ts' }] },
   ],
 }, {
@@ -13,63 +13,90 @@ const sample: Node[] = [{
   children: [{ label: 'style-gallery.ts' }, { label: 'tree-designs.ts' }],
 }]
 
+const PER_ROW = 3
+const FROM = [192, 132, 252]
+const TO = [103, 232, 249]
+
 const wanted = process.argv[2]
 const modes = { '--plain': [false], '--color': [true] }[wanted ?? ''] ?? [false, true]
 
-interface Design {
+interface Look {
   name: string
   about: string
-  root: (n: Node, c: Palette) => string
-  line: (n: Node, last: boolean, depth: number, c: Palette) => string
-  pad: (last: boolean, c: Palette) => string
-  // Prefix of a root's children, for a design with no guides to hang them on.
-  indent?: string
+  folder: string
+  file: string
+  // What the label of a folder and of a file is drawn with, given the depth's shade.
+  folderLabel: 'bold-accent' | 'bold' | 'shade' | 'bold-shade'
+  fileLabel: 'plain' | 'dim' | 'blue'
+  slash?: boolean
+  shadeFile?: boolean
 }
 
-interface Palette { dim: (s: string) => string, bold: (s: string) => string, accent: (s: string) => string, soft: (s: string) => string, level: (depth: number, s: string) => string }
-
-const on = (code: string) => (s: string) => `\x1B[${code}m${s}\x1B[0m`
-const colored: Palette = { dim: on('2'), bold: on('1'), accent: on('38;2;103;232;249'), soft: on('38;2;192;132;252'), level: (depth, s) => on(['1;38;2;192;132;252', '38;2;165;180;252', '38;2;103;232;249', '0'][Math.min(depth, 3)]!)(s) }
-const id = (s: string) => s
-const plain: Palette = { dim: id, bold: id, accent: id, soft: id, level: (_, s) => s }
-const note = (n: Node, c: Palette) => n.note === undefined ? '' : ` ${c.dim(n.note)}`
-const isDir = (n: Node) => n.children !== undefined
-
-const designs: Design[] = [
-  { name: 'A. current', about: 'dim ├─ └─ │, bold roots', root: (n, c) => c.bold(n.label), line: (n, last, _d, c) => `${c.dim(last ? '└─' : '├─')} ${n.label}${note(n, c)}`, pad: (last, c) => c.dim(last ? '   ' : '│  ') },
-  { name: 'B. rounded', about: 'soft corners, short stroke', root: (n, c) => c.bold(n.label), line: (n, last, _d, c) => `${c.dim(last ? '╰╴' : '├╴')}${n.label}${note(n, c)}`, pad: (last, c) => c.dim(last ? '  ' : '│ ') },
-  { name: 'C. heavy', about: 'heavy guides, folders marked', root: (n, c) => c.bold(n.label), line: (n, last, _d, c) => `${c.dim(last ? '┗━' : '┣━')} ${isDir(n) ? c.bold(`${n.label}/`) : n.label}${note(n, c)}`, pad: (last, c) => c.dim(last ? '   ' : '┃  ') },
-  { name: 'D. no lines', about: 'indent only, markers by kind (readable without box drawing)', root: (n, c) => `${c.soft('▾')} ${c.bold(n.label)}`, line: (n, _l, _d, c) => `${isDir(n) ? `${c.soft('▾')} ${c.bold(n.label)}` : `${c.dim('·')} ${n.label}`}${note(n, c)}`, pad: (_l, _c) => '  ', indent: '  ' },
-  { name: 'E. dotted', about: 'quiet dotted guides', root: (n, c) => c.bold(n.label), line: (n, last, _d, c) => `${c.dim(last ? '└┈' : '├┈')} ${n.label}${note(n, c)}`, pad: (last, c) => c.dim(last ? '   ' : '┊  ') },
-  { name: 'F. by depth', about: 'classic lines, label colour shifts with depth (the gradient purple to blue)', root: (n, c) => c.level(0, n.label), line: (n, last, d, c) => `${c.dim(last ? '└─' : '├─')} ${c.level(d, n.label)}${note(n, c)}`, pad: (last, c) => c.dim(last ? '   ' : '│  ') },
-  { name: 'G. wide', about: 'wider strokes, folders in the accent colour', root: (n, c) => c.bold(n.label), line: (n, last, _d, c) => `${c.dim(last ? '╰──' : '├──')} ${isDir(n) ? c.accent(n.label) : n.label}${note(n, c)}`, pad: (last, c) => c.dim(last ? '    ' : '│   ') },
+const looks: Look[] = [
+  { name: '1. accent folders', about: 'bold cyan folders, plain files', folder: '▾', file: '·', folderLabel: 'bold-accent', fileLabel: 'plain' },
+  { name: '2. shaded folders', about: 'folders take their depth shade', folder: '▾', file: '·', folderLabel: 'bold-shade', fileLabel: 'plain' },
+  { name: '3. dim files', about: 'bold folders, dimmed files', folder: '▾', file: '·', folderLabel: 'bold', fileLabel: 'dim' },
+  { name: '4. blue files', about: 'shaded folders, blue files', folder: '▾', file: '·', folderLabel: 'shade', fileLabel: 'blue' },
+  { name: '5. slash', about: 'folders end in /, arrows ▸', folder: '▸', file: '·', folderLabel: 'bold-accent', fileLabel: 'plain', slash: true },
+  { name: '6. dots', about: 'filled and hollow dots', folder: '●', file: '○', folderLabel: 'bold-shade', fileLabel: 'dim' },
+  { name: '7. triangles', about: 'open and closed triangles', folder: '▼', file: '▷', folderLabel: 'bold', fileLabel: 'plain' },
+  { name: '8. chevrons', about: 'chevrons for both, files dimmed', folder: '❯', file: '›', folderLabel: 'bold-accent', fileLabel: 'dim', shadeFile: true },
+  { name: '9. squares', about: 'squares, files shaded too', folder: '■', file: '□', folderLabel: 'bold-shade', fileLabel: 'plain', shadeFile: true },
 ]
 
-function draw(design: Design, c: Palette): string[] {
-  const out: string[] = []
+const depthOf = (nodes: Node[]): number => Math.max(0, ...nodes.map(node => 1 + depthOf(node.children ?? [])))
+const deepest = depthOf(sample) - 1
 
-  function walk(nodes: Node[], prefix: string, depth: number) {
-    for (const [index, node] of nodes.entries()) {
-      const last = index === nodes.length - 1
+function shade(depth: number): string {
+  const t = deepest <= 0 ? 0 : depth / deepest
 
-      out.push(prefix + design.line(node, last, depth, c))
-      walk(node.children ?? [], prefix + design.pad(last, c), depth + 1)
+  return FROM.map((start, index) => Math.round(start + (TO[index]! - start) * t)).join(';')
+}
+
+const wrap = (code: string, text: string, color: boolean) => color ? `\x1B[${code}m${text}\x1B[0m` : text
+
+function draw(look: Look, color: boolean): string[] {
+  const lines: string[] = []
+
+  function walk(nodes: Node[], depth: number) {
+    const rgb = `38;2;${shade(depth)}`
+
+    for (const node of nodes) {
+      const folder = (node.children ?? []).length > 0
+      const mark = wrap(folder || look.shadeFile === true ? rgb : '2', folder ? look.folder : look.file, color)
+      const name = folder && look.slash === true ? `${node.label}/` : node.label
+      const note = node.note === undefined ? '' : ` ${wrap('2', node.note, color)}`
+      let label = name
+
+      label = folder ? wrap({ 'bold-accent': '1;36', 'bold': '1', 'shade': rgb, 'bold-shade': `1;${rgb}` }[look.folderLabel], name, color) : wrap({ plain: '0', dim: '2', blue: '34' }[look.fileLabel], name, color)
+
+      lines.push(`${'  '.repeat(depth)}${mark} ${label}${note}`)
+      walk(node.children ?? [], depth + 1)
     }
   }
 
-  for (const root of sample) {
-    out.push(design.root(root, c))
-    walk(root.children ?? [], design.indent ?? '', 1)
-  }
+  walk(sample, 0)
 
-  return out
+  return lines
 }
+
+const GAP = 4
 
 for (const color of modes) {
   console.log(`\n=== ${color ? 'with colours' : 'plain'} ===`)
 
-  for (const design of designs) {
-    console.log(`\n${design.name}: ${design.about}`)
-    console.log(draw(design, color ? colored : plain).join('\n'))
+  for (let start = 0; start < looks.length; start += PER_ROW) {
+    const group = looks.slice(start, start + PER_ROW)
+    const drawn = group.map(look => draw(look, color))
+    const width = Math.max(...drawn.flat().map(line => Bun.stringWidth(line)), ...group.map(look => look.about.length))
+    const rows = Math.max(...drawn.map(lines => lines.length))
+    const cell = (text: string) => text + ' '.repeat(width - Bun.stringWidth(text) + GAP)
+
+    console.log()
+    console.log(group.map(look => cell(wrap('1', look.name, color))).join('').trimEnd())
+    console.log(group.map(look => cell(wrap('2', look.about, color))).join('').trimEnd())
+
+    for (let row = 0; row < rows; row++)
+      console.log(drawn.map(lines => cell(lines[row] ?? '')).join('').trimEnd())
   }
 }
