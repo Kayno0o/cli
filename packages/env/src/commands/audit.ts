@@ -46,6 +46,7 @@ function shown(path: string): string {
 async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: ComposeFix[], left: boolean }> {
   const fixed: ComposeFix[] = []
   let left = false
+  const tint = role('path', process.stdout)
 
   for (const { path, readable, group, tracked, secrets } of exposed) {
     const fix = secrets === undefined ? undefined : await fixCompose(path, group === true)
@@ -68,7 +69,7 @@ async function fixAll(exposed: Exposure[], json: boolean): Promise<{ fixed: Comp
       ...tracked ? [`tracked by git: git rm --cached ${shellQuote(shown(path))}, then ignore it`] : [],
     ]
 
-    console.log(`${role('path', process.stdout)(shown(path))}\n  ${lines.join('\n  ')}`)
+    console.log(`${tint(shown(path))}\n  ${lines.join('\n  ')}`)
   }
 
   return { fixed, left }
@@ -118,6 +119,7 @@ export async function audit(args: string[]): Promise<number> {
   }
 
   const uid = process.getuid?.()
+  const tint = role('path', process.stdout)
 
   for (const { path, readable, group, tracked, secrets } of exposed) {
     // Only the owner or root can change a file's mode.
@@ -128,7 +130,7 @@ export async function audit(args: string[]): Promise<number> {
       ...tracked ? [`tracked by git: git rm --cached ${shellQuote(shown(path))}, then ignore it`] : [],
     ]
 
-    console.log(`${role('path', process.stdout)(shown(path))}\n  ${problems.join('\n  ')}`)
+    console.log(`${tint(shown(path))}\n  ${problems.join('\n  ')}`)
   }
 
   return 1

@@ -1,7 +1,12 @@
 import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { runCommand } from '@kaynooo/cli-kit'
 
 const FS_LIMIT = 32
+// A hung mount stops holding a slot after this long and is measured by the walk instead.
+const DU_MS = 60_000
+// The total line among du's complaints about unreadable files, which share the captured text.
+const DU_LINE = /^(\d+)\t/m
 const waiting: (() => void)[] = []
 let running = 0
 
@@ -67,10 +72,11 @@ export async function walkSize(folder: string): Promise<number> {
 // The apparent size of a folder from `du`, about seven times faster than walking it here, the folders' own entries included; undefined when du is missing or says nothing usable. Unreadable files make du exit nonzero yet still print the total of the rest.
 async function duSize(folder: string): Promise<number | undefined> {
   try {
-    const out = await Bun.$`du -sb -- ${folder}`.quiet().nothrow().text()
-    const bytes = Number(out.slice(0, out.indexOf('\t')))
+    const ran = await runCommand(['du', '-sb', '--', folder], { timeoutMs: DU_MS })
 
-    return out !== '' && Number.isFinite(bytes) ? bytes : undefined
+    const total = ran.timedOut ? undefined : DU_LINE.exec(ran.text)?.[1]
+
+    return total === undefined ? undefined : Number(total)
   }
   catch {
     return undefined

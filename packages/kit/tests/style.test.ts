@@ -112,6 +112,14 @@ describe('header accents', () => {
   })
 })
 
+describe('a slot state as a badge', () => {
+  it('reads holding as running and waiting as queued', () => {
+    expect(badge('holding', TERMINAL, {})).toBe('\x1B[36m● holding\x1B[39m')
+    expect(badge('waiting', TERMINAL, {})).toBe('\x1B[33m○ waiting\x1B[39m')
+    expect(badge('holding', {}, {})).toBe('holding')
+  })
+})
+
 describe('table header rule', () => {
   const rows = [['bin', 'runs'], ['check', '12']]
 

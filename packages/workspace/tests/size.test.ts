@@ -24,6 +24,10 @@ describe('sizeOf', () => {
     expect(size).toBeLessThan(1000)
   })
 
+  test('answers 0 for a folder that does not exist, by the walk', async () => {
+    expect(await sizeOf(join(temp('size-gone-'), 'nope'))).toBe(0)
+  })
+
   test('agrees with the walk to within the folders\' own entries', async () => {
     const dir = temp('size-du-')
 

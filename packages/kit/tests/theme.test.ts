@@ -121,8 +121,11 @@ describe('colour specs', () => {
   it('falls back to the nearest 256-colour index without truecolour', () => {
     expect(tinted(colors, '#ff0000', {})('x')).toContain('38;5;196')
     expect(tinted(colors, 'bold #808080', {})('x')).toContain('38;5;244')
-    expect(nearest256('#ff8800')).toBe(214)
-    expect(nearest256('#000000')).toBe(232)
+    expect(nearest256('#ff8800')).toBe(208)
+    expect(nearest256('#000000')).toBe(16)
+    expect(nearest256('#ffffff')).toBe(231)
+    expect(nearest256('#808080')).toBe(244)
+    expect(nearest256('#5f87af')).toBe(67)
   })
 })
 

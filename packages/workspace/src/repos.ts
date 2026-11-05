@@ -68,8 +68,8 @@ export function syncCell(repo: RepoState, stream: { isTTY?: boolean } = process.
 const DEFAULT_BRANCHES = new Set(['main', 'master'])
 
 // A branch other than the usual default one stands out, so a repository left on a feature branch is seen at a glance.
-function branchCell(repo: RepoState): string {
-  const colors = paint(process.stdout)
+export function branchCell(repo: RepoState, stream: { isTTY?: boolean } = process.stdout): string {
+  const colors = paint(stream)
 
   if (repo.unreadable)
     return colors.red('? (unreadable)')
@@ -77,7 +77,7 @@ function branchCell(repo: RepoState): string {
   if (repo.branch === '(detached)')
     return colors.yellow(repo.branch)
 
-  return DEFAULT_BRANCHES.has(repo.branch) ? repo.branch : role('accent', process.stdout)(repo.branch)
+  return DEFAULT_BRANCHES.has(repo.branch) ? repo.branch : role('accent', stream)(repo.branch)
 }
 
 function row(repo: RepoState, shown: string): string[] {

@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
 import { entries } from '../dotenv'
 import { readEnv } from '../files'
@@ -74,8 +75,9 @@ export async function missing(args: string[]): Promise<number> {
     return 0
 
   const path = role('path', process.stdout)
+  const value = role('value', process.stdout)
 
-  console.log(absent.map(key => `${role('value', process.stdout)(key)} (set in ${path(against)}, not in ${path(file)})`).join('\n'))
+  console.log(absent.map(key => `${value(key)} (set in ${path(against)}, not in ${path(file)})`).join('\n'))
 
   return 1
 }

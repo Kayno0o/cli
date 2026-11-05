@@ -37,7 +37,7 @@ export function bar(ratio: number, { width = 20, stream = process.stdout, env = 
 
   const { theme } = activeTheme()
 
-  return `${tinted(colors, theme.colors.accent)(theme.glyphs.bar.repeat(filled))}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
+  return `${tinted(colors, theme.colors.accent, env)(theme.glyphs.bar.repeat(filled))}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
 }
 
 export interface KeyValueSettings {

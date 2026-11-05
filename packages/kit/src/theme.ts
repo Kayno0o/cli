@@ -59,16 +59,23 @@ export function isColorSpec(spec: unknown): spec is ColorSpec {
   return typeof spec === 'string' && spec.trim() !== '' && spec.trim().split(SPACES).every(token => STYLES.has(token) || HEX.test(token))
 }
 
-// The 256-colour index nearest to `#rrggbb`: the grey ramp when the three channels are close, the 6x6x6 cube otherwise.
+// The values the 6x6x6 colour cube of the 256-colour palette takes per channel.
+const CUBE = [0, 95, 135, 175, 215, 255]
+
+function cubeLevel(channel: number): number {
+  return CUBE.reduce((best, value, level) => Math.abs(value - channel) < Math.abs(CUBE[best]! - channel) ? level : best, 0)
+}
+
+// The 256-colour index nearest to `#rrggbb`: the closer of the nearest cube colour and the nearest step of the grey ramp (indexes 232 to 255, 8 to 238 in steps of 10), by squared distance in RGB.
 export function nearest256(hex: string): number {
-  const [red, green, blue] = [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16)) as [number, number, number]
+  const rgb = [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16)) as [number, number, number]
+  const levels = rgb.map(cubeLevel) as [number, number, number]
+  const cube = levels.map(level => CUBE[level]!)
+  const grey = Math.min(23, Math.max(0, Math.round((rgb.reduce((sum, channel) => sum + channel, 0) / 3 - 8) / 10)))
+  const greyValue = 8 + grey * 10
+  const distance = (colour: number[]): number => colour.reduce((sum, channel, at) => sum + (channel - rgb[at]!) ** 2, 0)
 
-  if (Math.max(red, green, blue) - Math.min(red, green, blue) < 8)
-    return Math.round((red + green + blue) / 3 / 255 * 23) + 232
-
-  const level = (channel: number): number => Math.round(channel / 255 * 5)
-
-  return 16 + 36 * level(red) + 6 * level(green) + level(blue)
+  return distance([greyValue, greyValue, greyValue]) < distance(cube) ? 232 + grey : 16 + 36 * levels[0] + 6 * levels[1] + levels[2]
 }
 
 // Whether the terminal says it draws 24-bit colour, which `COLORTERM` announces.

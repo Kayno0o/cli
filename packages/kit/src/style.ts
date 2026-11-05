@@ -28,7 +28,7 @@ export function marked(mark: Mark, text: string, stream: { isTTY?: boolean }, de
   if (takesControlCodes(stream, env)) {
     const { theme } = activeTheme()
 
-    head = tinted(colors.bold, theme.colors[mark])(theme.glyphs[mark])
+    head = tinted(colors.bold, theme.colors[mark], env)(theme.glyphs[mark])
   }
 
   return `${head} ${text}${detail === undefined ? '' : ` ${colors.dim(detail)}`}`
@@ -54,7 +54,7 @@ export function problem(text: string, detail?: string): void {
 export function role(name: Role, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): (text: string) => string {
   const colors = paint(stream, env)
 
-  return takesControlCodes(stream, env) ? tinted(colors, activeTheme().theme.colors[name]) : colors
+  return takesControlCodes(stream, env) ? tinted(colors, activeTheme().theme.colors[name], env) : colors
 }
 
 // The words CI services report each status by.
@@ -82,7 +82,7 @@ export function badge(word: string, stream: { isTTY?: boolean }, env: Record<str
 
   const { theme } = activeTheme()
 
-  return tinted(paint(stream, env), theme.colors[status])(`${theme.glyphs[status]} ${word}`)
+  return tinted(paint(stream, env), theme.colors[status], env)(`${theme.glyphs[status]} ${word}`)
 }
 
 // `check › cli · 4 steps` with the bin in its own accent, bold, and the context dimmed, the accent the theme gives the bin or one of its accents picked by the bin's name so each keeps one colour everywhere; empty off a terminal, where a log has no use for it.
@@ -94,7 +94,7 @@ export function header(bin: string, context: string | undefined, stream: { isTTY
   const hash = [...bin].reduce((sum, char) => sum + char.charCodeAt(0), 0)
   const { theme } = activeTheme()
   const spec = theme.bins[bin] ?? theme.accents[hash % theme.accents.length]!
-  const accent = tinted(typeof spec === 'string' && spec.split(' ').includes('bold') ? colors : colors.bold, spec)
+  const accent = tinted(typeof spec === 'string' && spec.split(' ').includes('bold') ? colors : colors.bold, spec, env)
 
   return `${accent(bin)}${context === undefined ? '' : colors.dim(` › ${context}`)}`
 }

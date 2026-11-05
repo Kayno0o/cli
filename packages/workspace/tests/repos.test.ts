@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { syncCell } from '../src/repos'
+import { branchCell, syncCell } from '../src/repos'
 
 const CLI = new URL('../src/repos-cli.ts', import.meta.url).pathname
 const temp = tempDirs()
@@ -253,6 +253,18 @@ describe('repos --pull', () => {
 
     repos(['--fetch'], pulling)
     expect(head('clean')).not.toBe(git(bare, 'rev-parse', 'main'))
+  })
+})
+
+describe('branchCell', () => {
+  const on = (branch: string) => ({ branch, unreadable: false }) as RepoState
+
+  test('leaves main and master plain and lifts any other branch on a terminal', () => {
+    expect(branchCell(on('main'), { isTTY: true })).toBe('main')
+    expect(branchCell(on('master'), { isTTY: true })).toBe('master')
+    expect(branchCell(on('feat/x'), { isTTY: true })).toBe('\x1B[36mfeat/x\x1B[39m')
+    expect(branchCell(on('(detached)'), { isTTY: true })).toBe('\x1B[33m(detached)\x1B[39m')
+    expect(branchCell(on('feat/x'), {})).toBe('feat/x')
   })
 })
 
