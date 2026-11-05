@@ -74,13 +74,16 @@ async function findSize(folder: string): Promise<number | undefined> {
   try {
     const ran = await runCommand(['find', '-P', folder, '(', '-type', 'f', '-o', '-type', 'l', ')', '-printf', '%n %D:%i %s\\n'], { timeoutMs: FIND_MS })
 
-    if (ran.timedOut)
+    const lines = [...ran.text.matchAll(FIND_LINE)]
+
+    // A find without -printf, as busybox's, prints nothing and fails; that is no size.
+    if (ran.timedOut || (ran.code !== 0 && lines.length === 0))
       return undefined
 
     const seen = new Set<string>()
     let total = 0
 
-    for (const [, links, id, bytes] of ran.text.matchAll(FIND_LINE)) {
+    for (const [, links, id, bytes] of lines) {
       if (Number(links) > 1) {
         if (seen.has(id!))
           continue
