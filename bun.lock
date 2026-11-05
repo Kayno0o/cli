@@ -95,7 +95,7 @@
     },
     "packages/doctor": {
       "name": "@kaynooo/cli-doctor",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "bin": {
         "doctor": "./dist/cli.js",
         "cli": "./dist/cli-bin.js",

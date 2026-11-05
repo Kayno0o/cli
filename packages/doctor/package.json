@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-doctor",
   "type": "module",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "doctor: checks the @kaynooo/cli-* install of a host: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks and the Bun floor; cli list: every bin in one line, read from its own help.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
