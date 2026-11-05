@@ -5,6 +5,8 @@ import { capitalize, groupBy } from '@kaynooo/utils'
 
 const emojiRE = /\p{Extended_Pictographic}\uFE0F?/gu
 const fullHashRE = /^[\da-f]{40}$/
+// A first word that reads as an identifier, a path or a code span: camelCase, a dot, underscore, slash or digit in it, or a backtick.
+const IDENTIFIER_START = /^(?:`|[a-z]+[A-Z]|\S*\d|\S*[._/]\w)/
 
 export interface Section {
   title: string
@@ -68,9 +70,14 @@ function formatIssue(ref: Reference, options: ResolvedChangelogOptions, withTitl
   return `[${text}](${repoUrl(options)}/issues/${ref.value.slice(1)})`
 }
 
+// Capitalizes a plain first word, and leaves an identifier such as `getUser`, `foo.ts` or `a/b` as written.
+function capitalized(description: string): string {
+  return IDENTIFIER_START.test(description) ? description : capitalize(description)
+}
+
 // One commit as `description · hash · issues`; Discord has no hover card on issue links, so it asks for their titles inline.
 export function formatLine(commit: Commit, options: ResolvedChangelogOptions, prefix = '', issueTitles = false) {
-  const description = options.capitalize ? capitalize(commit.description) : commit.description
+  const description = options.capitalize ? capitalized(commit.description) : commit.description
   const hash = `[\`${commit.shortHash.slice(0, 7)}\`](${repoUrl(options)}/commit/${commit.shortHash})`
   const issues = commit.references
     .filter(ref => ref.type !== 'hash')

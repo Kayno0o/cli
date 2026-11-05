@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 import { parseGitCommit } from '../src/changelog'
 import { loadConfig } from '../src/config'
 import { generateDiscordPayload } from '../src/discord'
-import { generateMarkdown } from '../src/markdown'
+import { formatLine, generateMarkdown } from '../src/markdown'
 import { releasedRepo } from './fixture'
 
 const tempDir = tempDirs()
@@ -161,4 +161,18 @@ it('cli writes the notes to --output, reading negated flags', async () => {
 
   expect(md).toStartWith(`> **1 fixed · 2 maintenance** · \`${from.slice(0, 7)}\` → \`${to.slice(0, 7)}\``)
   expect(md).toContain('### Fixed')
+})
+
+describe('capitalized descriptions', () => {
+  it('capitalizes a plain first word and leaves an identifier, a path or a code span as written', async () => {
+    const config = await options()
+    const first = (message: string) => formatLine(commit(message), config).slice(0, formatLine(commit(message), config).indexOf(' · '))
+
+    expect(first('fix: the parser')).toBe('The parser')
+    expect(first('fix: getUser returns null')).toBe('getUser returns null')
+    expect(first('fix: foo.ts is read twice')).toBe('foo.ts is read twice')
+    expect(first('fix: snake_case names')).toBe('snake_case names')
+    expect(first('fix: a/b paths')).toBe('a/b paths')
+    expect(first('fix: `ft` exits')).toBe('`ft` exits')
+  })
 })
