@@ -120,6 +120,15 @@ describe('a slot state as a badge', () => {
   })
 })
 
+describe('table for an agent', () => {
+  it('joins cells with a tab, no padding, rule or colour', () => {
+    const rows = [['bin', 'runs'], ['\x1B[33mcheck\x1B[39m', '12'], ['ft', '1042']]
+
+    expect(table(rows, { header: true, stream: TERMINAL, env: { CLAUDECODE: '1' } })).toBe('bin\truns\ncheck\t12\nft\t1042')
+    expect(table(rows, { align: ['left', 'right'], env: { KIT_MODE: 'agent' } })).toBe('bin\truns\ncheck\t12\nft\t1042')
+  })
+})
+
 describe('table header rule', () => {
   const rows = [['bin', 'runs'], ['check', '12']]
 

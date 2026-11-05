@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { outputMode } from './mode'
 import { paint, takesControlCodes } from './style'
 
 export { formatFileSize, formatUnit } from '@kaynooo/utils/format'
@@ -73,6 +74,7 @@ export interface TableSettings {
   fit?: number
   // The stream the header's bold and rule are drawn for, `process.stdout` by default.
   stream?: { isTTY?: boolean }
+  env?: Record<string, string | undefined>
 }
 
 // Columns in the visible width of a cell, escapes and wide characters accounted for.
@@ -80,8 +82,13 @@ export function textWidth(text: string): number {
   return Bun.stringWidth(text)
 }
 
-export function table(rows: string[][], { cellWidth, header = false, align = [], fit, stream = process.stdout }: TableSettings = {}): string {
+// Rows of cells aligned in columns; for an agent, one row per line with the cells apart by a tab and no padding, rule or colour, since the spaces that line columns up are tokens it pays for and reads no better.
+export function table(rows: string[][], { cellWidth, header = false, align = [], fit, stream = process.stdout, env = process.env }: TableSettings = {}): string {
   const cells = cellWidth === undefined ? rows : rows.map(row => row.map(cell => truncate(cell.replaceAll(LINE_BREAKS, ' '), cellWidth)))
+
+  if (outputMode(stream, env) === 'agent')
+    return cells.map(row => row.map(cell => Bun.stripANSI(cell)).join('\t').trimEnd()).join('\n')
+
   const widths: number[] = []
 
   for (const row of cells) {
