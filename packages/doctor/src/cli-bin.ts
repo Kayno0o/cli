@@ -4,7 +4,7 @@ import type { Host } from './checks'
 import type { Listed } from './list'
 import process from 'node:process'
 import { badUsage, duration, jsonOption, paint, parse, printJson, readUsage, runCli, summarizeUsage, table, usagePath } from '@kaynooo/cli-kit'
-import { bashScript, completionDir, completionFile, installCompletions, installedBins } from './completions'
+import { bashScript, completionDir, completionFile, installCompletions, installedBins, zshScript } from './completions'
 import { main as doctor } from './doctor'
 import { hostHere } from './host'
 import { listBins } from './list'
@@ -41,12 +41,12 @@ export async function list(args: string[], host: Host = hostHere()): Promise<num
   return 0
 }
 
-const COMPLETIONS_USAGE = `cli completions <fish|bash> [--install] [--dir <folder>]: shell completions for every installed bin of the @kaynooo/cli-* packages
+const COMPLETIONS_USAGE = `cli completions <fish|bash|zsh> [--install] [--dir <folder>]: shell completions for every installed bin of the @kaynooo/cli-* packages
 
 Each bin completes itself through \`<bin> __complete\`; this writes the glue a shell needs per bin.
 fish: without --install the files print on stdout, with it they go to ~/.cache/fish/kaynooo-cli (or $XDG_CACHE_HOME), one <bin>.fish each, the stale ones this command wrote taken out. That folder has to be in fish_complete_path, first so a completion fish ships for the same name does not win: \`set -p fish_complete_path ~/.cache/fish/kaynooo-cli\`.
 bash: one script on stdout, sourced from ~/.bashrc with \`source <(cli completions bash)\`; --install and --dir are fish's.
-zsh: has no script of its own, it reads the bash one through bashcompinit: \`autoload -U +X compinit && compinit\`, \`autoload -U +X bashcompinit && bashcompinit\`, then the bash line above in ~/.zshrc (untested, zsh is not installed on the machine this was written on).`
+zsh: one script on stdout like bash's, after compinit in ~/.zshrc: \`autoload -U +X compinit && compinit\`, then \`source <(cli completions zsh)\` (written without zsh at hand to run it, so untested).`
 
 const COMPLETIONS_OPTIONS = {
   install: { type: 'boolean', description: 'write the files to the folder instead of printing them' },
@@ -54,19 +54,16 @@ const COMPLETIONS_OPTIONS = {
 } as const
 
 export async function completions(args: string[], host: Host = hostHere()): Promise<number> {
-  const { values, positionals } = parse(args, COMPLETIONS_USAGE, COMPLETIONS_OPTIONS, { positionals: ['<shell>'], exits: [[0, 'it printed or wrote them'], [2, 'a usage error or a shell without a script']], candidates: { '<shell>': () => ['fish', 'bash'] }, examples: ['cli completions fish', ['cli completions fish --install', 'write one file per bin'], ['source <(cli completions bash)', 'in ~/.bashrc']] })
+  const { values, positionals } = parse(args, COMPLETIONS_USAGE, COMPLETIONS_OPTIONS, { positionals: ['<shell>'], exits: [[0, 'it printed or wrote them'], [2, 'a usage error or a shell without a script']], candidates: { '<shell>': () => ['fish', 'bash', 'zsh'] }, examples: ['cli completions fish', ['cli completions fish --install', 'write one file per bin'], ['source <(cli completions bash)', 'in ~/.bashrc'], ['source <(cli completions zsh)', 'in ~/.zshrc after compinit']] })
 
-  if (positionals[0] === 'zsh')
-    badUsage('zsh has no script of its own: it reads the bash one through bashcompinit, see cli completions --help')
+  if (positionals[0] !== 'fish' && positionals[0] !== 'bash' && positionals[0] !== 'zsh')
+    badUsage('completions exist for fish, bash and zsh: cli completions fish')
 
-  if (positionals[0] !== 'fish' && positionals[0] !== 'bash')
-    badUsage('completions exist for fish and bash: cli completions fish')
-
-  if (positionals[0] === 'bash') {
+  if (positionals[0] === 'bash' || positionals[0] === 'zsh') {
     if (values.install === true || values.dir !== undefined)
-      badUsage('--install and --dir are for fish: source the bash script instead')
+      badUsage(`--install and --dir are for fish: source the ${positionals[0]} script instead`)
 
-    console.log(bashScript(installedBins(host)).trimEnd())
+    console.log((positionals[0] === 'zsh' ? zshScript : bashScript)(installedBins(host)).trimEnd())
 
     return 0
   }
