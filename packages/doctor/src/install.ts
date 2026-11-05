@@ -1,8 +1,8 @@
 import type { Choice } from '@kaynooo/cli-kit/prompt'
 import type { Host } from './checks'
 import process from 'node:process'
-import { badUsage, paint } from '@kaynooo/cli-kit'
-import { checklist } from '@kaynooo/cli-kit/prompt'
+import { badUsage, paint, saveWorkspace, userConfigPath, workspaceChosen } from '@kaynooo/cli-kit'
+import { checklist, input } from '@kaynooo/cli-kit/prompt'
 import { ABOUT, HOOKS_REQUIRES, NEEDS } from './catalog'
 import { firstLine, FORGE, hooksWiring, isInstalled, TOOLS } from './checks'
 
@@ -112,6 +112,17 @@ async function ask(pool: readonly Candidate[]): Promise<Candidate[]> {
   return picked === undefined ? [] : [...picked]
 }
 
+// On a terminal, asks where the repositories live when the user has not said, and keeps the answer in the user config; off one, or with the folder already chosen, it asks nothing.
+async function askWorkspace(host: Host): Promise<void> {
+  if (process.stdin.isTTY !== true || process.stderr.isTTY !== true || workspaceChosen({ home: host.home }))
+    return
+
+  const folder = await input('folder holding your repositories (repos, sweep and pkg bump look there)', { default: '~/Workspace' })
+
+  if (folder !== undefined && folder !== '' && !saveWorkspace(folder, { home: host.home }))
+    console.error(`could not write the workspace into ${userConfigPath('config', { home: host.home })}: it does not parse, fix it by hand`)
+}
+
 // Installs what the user names or picks, refusing a package whose required tool is missing unless --force, then checks and fixes what it installed through `recheck`.
 export async function install(host: Host, options: InstallOptions, recheck: (only: string[]) => Promise<number>): Promise<number> {
   const pool = candidates(host)
@@ -161,6 +172,9 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
 
   if (planned.packages.length === 0 && !planned.plugin)
     return 1
+
+  if (!options.dryRun && planned.packages.some(name => name === '@kaynooo/cli-workspace' || name === '@kaynooo/cli-pkg'))
+    await askWorkspace(host)
 
   const command = ['bun', 'install', '-g', ...planned.packages]
 

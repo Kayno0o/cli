@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { userConfigPath } from './user-config'
 
@@ -42,4 +42,34 @@ export function workspaceRoot({ given, env = process.env, home = homedir() }: Wo
   const fromEnv = env.KAYNOOO_WORKSPACE === '' ? undefined : env.KAYNOOO_WORKSPACE
 
   return resolve(expandHome(given ?? fromEnv ?? configured(env, home) ?? join(home, 'Workspace'), home))
+}
+
+// Whether the user has chosen a workspace folder, by the variable or by the config file.
+export function workspaceChosen({ env = process.env, home = homedir() }: Pick<WorkspaceRootSettings, 'env' | 'home'> = {}): boolean {
+  return (env.KAYNOOO_WORKSPACE ?? '') !== '' || configured(env, home) !== undefined
+}
+
+// Writes `workspace` into `~/.config/kaynooo-cli/config.json`, keeping every other key; a file that does not parse is left alone and the write refused.
+export function saveWorkspace(folder: string, { env = process.env, home = homedir() }: Pick<WorkspaceRootSettings, 'env' | 'home'> = {}): boolean {
+  const path = userConfigPath('config', { home, xdg: env.XDG_CONFIG_HOME })
+  let current: Record<string, unknown> = {}
+
+  if (existsSync(path)) {
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+        return false
+
+      current = parsed as Record<string, unknown>
+    }
+    catch {
+      return false
+    }
+  }
+
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify({ ...current, workspace: folder }, undefined, 2)}\n`)
+
+  return true
 }

@@ -1,8 +1,8 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { tempDirs } from '../src/test'
-import { workspaceRoot } from '../src/workspace-root'
+import { saveWorkspace, workspaceChosen, workspaceRoot } from '../src/workspace-root'
 
 const temp = tempDirs()
 
@@ -44,5 +44,25 @@ describe('workspaceRoot', () => {
     writeFileSync(join(xdg, 'kaynooo-cli', 'config.json'), JSON.stringify({ workspace: '/from/xdg' }))
 
     expect(workspaceRoot({ home: home(), env: { XDG_CONFIG_HOME: xdg } })).toBe('/from/xdg')
+  })
+})
+
+describe('saveWorkspace', () => {
+  test('writes the key, keeps the others and is seen as chosen', () => {
+    const dir = home(JSON.stringify({ other: 1 }))
+
+    expect(workspaceChosen({ home: dir, env: {} })).toBe(false)
+    expect(saveWorkspace('~/code', { home: dir, env: {} })).toBe(true)
+    expect(workspaceChosen({ home: dir, env: {} })).toBe(true)
+    expect(JSON.parse(readFileSync(join(dir, '.config', 'kaynooo-cli', 'config.json'), 'utf8'))).toEqual({ other: 1, workspace: '~/code' })
+  })
+
+  test('creates the file, and refuses to overwrite one that does not parse', () => {
+    const fresh = home()
+    const broken = home('{ nope')
+
+    expect(saveWorkspace('/srv', { home: fresh, env: {} })).toBe(true)
+    expect(workspaceRoot({ home: fresh, env: {} })).toBe('/srv')
+    expect(saveWorkspace('/srv', { home: broken, env: {} })).toBe(false)
   })
 })
