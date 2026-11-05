@@ -122,7 +122,9 @@ function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {
   const marks = (state.marked.size > 0 ? ` (${state.marked.size} marked)` : '') + (state.status === '' ? '' : ` ${state.status}`)
   const promptWidth = Bun.stringWidth(state.prompt)
   const query = fit(state.query, Math.max(1, layout.listWidth - promptWidth), identity)
-  const count = fit(`  ${state.matches.length}/${state.items.length}${marks}`, layout.listWidth, theme.label)
+  // Where the highlight stands when the list is longer than the box, as there is no scrollbar to show it.
+  const place = state.matches.length > rows ? ` (${state.cursor + 1} of ${state.matches.length})` : ''
+  const count = fit(`  ${state.matches.length}/${state.items.length}${place}${marks}`, layout.listWidth, theme.label)
   const lines: Fitted[] = [{ text: theme.accent(state.prompt) + query.text, width: promptWidth + query.width }, count, ...header]
 
   if (state.matches.length === 0)

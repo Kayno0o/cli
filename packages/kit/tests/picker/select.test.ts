@@ -74,6 +74,35 @@ describe('select', () => {
     expect(await running).toBeUndefined()
   })
 
+  test('a lone escape cancels after a moment, an escape sequence split in two reads does not', async () => {
+    const lone = fake()
+    const cancelled = select(ROWS, settings(), lone.terminal)
+
+    lone.type('\x1B')
+    expect(await cancelled).toBeUndefined()
+
+    const split = fake()
+    const running = select(ROWS, settings(), split.terminal)
+
+    split.type('\x1B')
+    split.type('[B')
+    split.type('\r')
+
+    expect((await running)?.rows).toEqual([ROWS[1]!])
+  })
+
+  test('page down and end move through the list, page up and home back', async () => {
+    const { terminal, type } = fake()
+    const running = select(Array.from({ length: 30 }, (_, index) => ({ hidden: [String(index)], cells: [`row-${index}`] })), settings({ height: { lines: 8 } }), terminal)
+
+    type('\x1B[6~')
+    type('\x1B[5~')
+    type('\x1B[F')
+    type('\r')
+
+    expect((await running)?.rows[0]?.hidden).toEqual(['29'])
+  })
+
   test('an expected key ends the pick and says which, the query coming back', async () => {
     const { terminal, type } = fake()
     const running = select(ROWS, settings({ expect: ['ctrl-d', 'ctrl-n'] }), terminal)

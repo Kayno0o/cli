@@ -60,6 +60,7 @@ export interface Terminal {
 }
 
 const PREVIEW_DELAY_MS = 120
+const ESCAPE_WAIT_MS = 30
 // What a reload on open is queued as, having no key of its own.
 const OPEN: Key = { ctrl: 'open' }
 const HIDE_CURSOR = '\x1B[?25l'
@@ -130,6 +131,8 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
   let shownLine: number | undefined
   let finish: (() => void) | undefined
   let restored = false
+  // A lone escape may be the start of a sequence the terminal sends in two reads, such as an Alt-key, so it waits a moment for the rest before it cancels.
+  let escape: ReturnType<typeof setTimeout> | undefined
   // Where the cursor stood after the last frame, to find the row it is on once the terminal has rewrapped the text above it.
   let caret: number | undefined
 
@@ -150,6 +153,11 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     caret = caretColumn(state, layout)
     frame += `\r${render(state, layout, theme, preview).map(line => `\x1B[2K${line}`).join('\n')}${up(layout.height - 1)}\r\x1B[${caret}G${SHOW_CURSOR}`
     terminal.write(frame)
+  }
+
+  // The list rows on screen, less the prompt, the counts and a line of header.
+  function pageSize(): number {
+    return Math.max(1, layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined, settings.previewPosition).listHeight - 3)
   }
 
   function refreshPreview(): void {
@@ -191,6 +199,7 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
 
     restored = true
     clearTimeout(previewTimer)
+    clearTimeout(escape)
     previewing.abort()
     terminal.write(`${CLEAR_BELOW}${PASTE_OFF}${SHOW_CURSOR}`)
     terminal.close()
@@ -241,7 +250,7 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
         if (key === OPEN || (typeof key === 'object' && 'ctrl' in key && key.ctrl === reload?.key))
           await reloadRows()
         else
-          state = press(state, key)
+          state = press({ ...state, page: pageSize() }, key)
       }
     }
     finally {
@@ -259,6 +268,24 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
   }
 
   function onChunk(chunk: string): void {
+    if (escape !== undefined) {
+      clearTimeout(escape)
+      escape = undefined
+      chunk = `\x1B${chunk}`
+    }
+    else if (chunk === '\x1B') {
+      escape = setTimeout(() => {
+        escape = undefined
+        takeKeys('\x1B')
+      }, ESCAPE_WAIT_MS)
+
+      return
+    }
+
+    takeKeys(chunk)
+  }
+
+  function takeKeys(chunk: string): void {
     const keys = parseKeys(chunk, paste, [...settings.expect ?? [], ...reload?.key === undefined ? [] : [reload.key]])
 
     if (busy && keys.includes('cancel')) {

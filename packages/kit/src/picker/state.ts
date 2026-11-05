@@ -2,7 +2,7 @@ import type { Ranked } from './score'
 import { rank } from './score'
 
 /** `ctrl` is a control key the caller asked for, named as `ctrl-d`. */
-export type Key = 'up' | 'down' | 'enter' | 'cancel' | 'erase' | 'clear' | 'word' | 'tab' | { text: string } | { ctrl: string }
+export type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | 'clear' | 'word' | 'tab' | { text: string } | { ctrl: string }
 
 /** A choice: the cells are drawn in columns and the first `searched` of them searched; the hidden fields are neither, and come back with the choice. */
 export interface Row {
@@ -33,6 +33,8 @@ export interface State {
   matches: Ranked[]
   /** Where the highlighted match stands in `matches`. */
   cursor: number
+  /** How many rows page up and page down move by, the list rows on screen. */
+  page: number
   /** The marked rows, by index in `rows`. */
   marked: ReadonlySet<number>
   multi: boolean
@@ -65,6 +67,14 @@ const KEYS: Record<string, Key> = {
   '\x1B[B': 'down',
   '\x1BOB': 'down',
   '\x0E': 'down',
+  '\x1B[5~': 'pageup',
+  '\x1B[6~': 'pagedown',
+  '\x1B[H': 'home',
+  '\x1B[1~': 'home',
+  '\x1BOH': 'home',
+  '\x1B[F': 'end',
+  '\x1B[4~': 'end',
+  '\x1BOF': 'end',
   '\r': 'enter',
   '\n': 'enter',
   '\x03': 'cancel',
@@ -163,7 +173,7 @@ function lay(rows: readonly Row[], searched: number): Laid[] {
   })
 }
 
-/** The keys a chunk of terminal input holds, in order; keys nothing handles, such as Home or a function key, are dropped. A newline between the bracketed paste markers is text, not enter; `paste` carries an unfinished paste to the next chunk. A control key named in `ctrls` (`ctrl-d`) comes back as `{ ctrl }` in place of what it does otherwise, ctrl-p and ctrl-n moving among the rows. */
+/** The keys a chunk of terminal input holds, in order; keys nothing handles, such as a function key, are dropped. A newline between the bracketed paste markers is text, not enter; `paste` carries an unfinished paste to the next chunk. A control key named in `ctrls` (`ctrl-d`) comes back as `{ ctrl }` in place of what it does otherwise, ctrl-p and ctrl-n moving among the rows. */
 export function parseKeys(input: string, paste = { active: false }, ctrls: readonly string[] = []): Key[] {
   const codes = new Map(ctrls.map(name => [String.fromCharCode(name.codePointAt(name.length - 1)! - 96), name]))
 
@@ -199,7 +209,7 @@ export interface StateSettings {
 
 /** A line is a row of one cell with nothing hidden. */
 export function createState(rows: readonly (string | Row)[], { multi = false, prompt = '> ', query = '', header = '', expect = [], searched = Number.POSITIVE_INFINITY }: StateSettings = {}): State {
-  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, matches: [], cursor: 0, marked: new Set(), multi, prompt, done: undefined }
+  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, matches: [], cursor: 0, page: 10, marked: new Set(), multi, prompt, done: undefined }
 
   return withRows(state, rows)
 }
@@ -242,6 +252,10 @@ export function press(state: State, key: Key): State {
   switch (key) {
     case 'up': return move(state, -1)
     case 'down': return move(state, 1)
+    case 'pageup': return move(state, -state.page)
+    case 'pagedown': return move(state, state.page)
+    case 'home': return move(state, -state.matches.length)
+    case 'end': return move(state, state.matches.length)
     case 'cancel': return { ...state, done: 'cancel' }
     case 'erase': return withQuery(state, [...state.query].slice(0, -1).join(''))
     case 'clear': return withQuery(state, '')

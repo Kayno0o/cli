@@ -102,7 +102,7 @@ describe('render with a header, colors and a preview below', () => {
     const layout = layoutFor({ columns: 40, rows: 20 }, { lines: 6 }, false)
     const lines = render(createState(['one', 'two', 'three', 'four'], { header: 'first\nsecond' }), layout, plain)
 
-    expect(lines).toEqual(['> ', '  4/4', 'first', 'second', '❯ one', '  two'])
+    expect(lines).toEqual(['> ', '  4/4 (1 of 4)', 'first', 'second', '❯ one', '  two'])
   })
 
   test('the colors of a cell survive, the matched characters being drawn by the theme', () => {
