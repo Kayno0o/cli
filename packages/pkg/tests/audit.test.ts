@@ -77,6 +77,9 @@ describe('settings', () => {
   test('keeps the keys of the right shape', () => {
     expect(parseSettings('{ "licenses": ["MIT"], "blockSeverity": "high" }')).toEqual({ licenses: ['MIT'], blockSeverity: 'high' })
     expect(parseSettings('{ "licenses": "MIT", "blockSeverity": "severe" }')).toEqual({})
+    expect(parseSettings('{ "minAge": 30 }')).toEqual({ minAge: 30 })
+    expect(parseSettings('{ "minAge": -1 }')).toEqual({})
+    expect(parseSettings('{ "minAge": "30" }')).toEqual({})
   })
 
   test('each key comes from the nearest file that sets it', async () => {

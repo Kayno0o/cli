@@ -137,10 +137,11 @@ export async function audit(args: string[]): Promise<number> {
   const text = await lock.text()
   const production = values.prod === true ? productionPackages(text) : undefined
   const packages = parseBunLock(text).filter(({ name, version }) => production?.has(`${name}@${version}`) ?? true)
+  const settings = await loadSettings(dir)
   const context: AuditContext = {
     configs: await loadConfigs(dir),
-    settings: await loadSettings(dir),
-    minAgeDays: wholeNumber(values['min-age'], 'min-age', DEFAULT_MIN_AGE_DAYS, 0),
+    settings,
+    minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0),
     level,
     ignore: values.ignore ?? [],
   }

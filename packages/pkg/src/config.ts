@@ -188,6 +188,8 @@ export const DEFAULT_BLOCK_SEVERITY: Severity = 'high'
 export interface PkgSettings {
   licenses?: string[] | undefined
   blockSeverity?: Severity | undefined
+  // Days a version must be old, when --min-age is not given.
+  minAge?: number | undefined
 }
 
 const SETTINGS_FILE = '.pkgrc.json'
@@ -198,7 +200,7 @@ export function isSeverity(value: unknown): value is Severity {
 
 // The settings in one config file's text, a key of the wrong shape left out.
 export function parseSettings(text: string): PkgSettings {
-  const raw = Bun.JSONC.parse(text) as { licenses?: unknown, blockSeverity?: unknown } | null
+  const raw = Bun.JSONC.parse(text) as { licenses?: unknown, blockSeverity?: unknown, minAge?: unknown } | null
   const settings: PkgSettings = {}
 
   if (Array.isArray(raw?.licenses) && raw.licenses.every(each => typeof each === 'string'))
@@ -206,6 +208,9 @@ export function parseSettings(text: string): PkgSettings {
 
   if (isSeverity(raw?.blockSeverity))
     settings.blockSeverity = raw.blockSeverity
+
+  if (typeof raw?.minAge === 'number' && Number.isInteger(raw.minAge) && raw.minAge >= 0)
+    settings.minAge = raw.minAge
 
   return settings
 }
@@ -231,6 +236,7 @@ export async function loadSettings(cwd = process.cwd(), home?: string): Promise<
 
     settings.licenses ??= found.licenses
     settings.blockSeverity ??= found.blockSeverity
+    settings.minAge ??= found.minAge
   }
 
   return settings

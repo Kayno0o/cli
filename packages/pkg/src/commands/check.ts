@@ -108,7 +108,8 @@ export async function check(args: string[]): Promise<number> {
   if (positionals.length === 0)
     fail(values.from === undefined ? `a package name is needed\n\n${usage}` : `${values.from} has no registry dependency to check`)
 
-  const context: Context = { configs: await loadConfigs(), settings: await loadSettings(), minAgeDays: wholeNumber(values['min-age'], 'min-age', DEFAULT_MIN_AGE_DAYS, 0) }
+  const settings = await loadSettings()
+  const context: Context = { configs: await loadConfigs(), settings, minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0) }
   const reports = await Promise.all(positionals.map(async text => checkPackage(text, context)))
 
   if (values.json === true)

@@ -28,6 +28,7 @@ pkg outdated
 ```
 
 - `licenses` is the allowlist of SPDX ids, compared without regard to case. An expression is allowed when one side of an `OR` is and every term of an `AND` is; a `WITH` exception is ignored. With an allowlist set, `pkg check` refuses a package whose licence is outside it or missing (a legacy `SEE LICENSE IN` or `UNLICENSED` counts as outside), so the `bun add` the guard checks through `pkg check` is refused with it. Without the key the licence is only printed.
+- `minAge` (a whole number of days, 14 when no config sets it) is how old a version must be when `--min-age` is not given, in `check`, `audit` and `outdated`.
 - `blockSeverity` (`low`, `moderate`, `high` or `critical`, `high` when no config sets it) makes `pkg check` ask the registry for the advisories of the exact `name@version` and refuse it when one is at that severity or above. The request is the one `bun audit` makes: a `POST` of `{"name": ["version"]}` to `<registry>/-/npm/v1/security/advisories/bulk`. A registry without that endpoint (a private one, say) leaves the version unrefused with a warning, while an advisory request that fails (unreachable, a 5xx, not JSON) exits 2, since the advisories could not be read.
 
 ## Auditing a lockfile

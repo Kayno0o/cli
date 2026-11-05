@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { capped, fail, formatAge, jsonOption, limitOf, limitOptions, parse, pool, printJson, table, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
-import { loadConfigs, registryFor } from '../config'
+import { loadConfigs, loadSettings, registryFor } from '../config'
 import { registryDependencies } from '../consumers'
 import { parseBunLock } from '../lockfile'
 import { fetchPackument } from '../registry'
@@ -104,7 +104,7 @@ export async function outdatedCommand(args: string[]): Promise<number> {
 
   const lockPath = join(folder, 'bun.lock')
   const locked = existsSync(lockPath) ? parseBunLock(await Bun.file(lockPath).text()) : []
-  const rows = await outdated(await manifest.text(), { minAgeDays: wholeNumber(values['min-age'], 'min-age', DEFAULT_MIN_AGE_DAYS, 0), locked })
+  const rows = await outdated(await manifest.text(), { minAgeDays: wholeNumber(values['min-age'], 'min-age', (await loadSettings(folder)).minAge ?? DEFAULT_MIN_AGE_DAYS, 0), locked })
   const { shown, footer } = capped(rows, limitOf(values, OUTDATED_LIMIT))
 
   if (values.json === true)
