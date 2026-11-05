@@ -3,7 +3,7 @@ import type { Action, Service } from './stack'
 import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
-import { closest, fail, isInteractive, jsonOption, paint, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
+import { closest, fail, isInteractive, jsonOption, paint, parse, printJson, table, wholeNumber } from '@kaynooo/cli-kit'
 import { byRecency, record, runs } from '@kaynooo/cli-kit/picker'
 import { KEY_LABELS, KEYS, pickService } from './picker'
 import { ACTIONS, allServices, commandFor, defaultAction, key, LOGS_TAIL, logsOf, serviceNamed, stateColor } from './stack'
@@ -23,18 +23,10 @@ const options = {
   follow: { type: 'boolean', negative: 'print the logs once and exit instead of following them' },
 } as const
 
-function table(services: Service[]): string {
+function serviceTable(services: Service[]): string {
   const colors = paint(process.stdout)
-  const keys = services.map(key)
-  const width = Math.max(...keys.map(name => name.length))
-  const states = Math.max(...services.map(service => service.state.length))
 
-  return services.map((service, index) => [
-    keys[index]!.padEnd(width),
-    colors[stateColor(service.state)](service.state.padEnd(states)),
-    colors.cyan(service.ports),
-    colors.dim(service.image),
-  ].join('  ').trimEnd()).join('\n')
+  return table(services.map(service => [key(service), colors[stateColor(service.state)](service.state), colors.cyan(service.ports), colors.dim(service.image)]))
 }
 
 // This folder's service first, then the same name in a child folder.
@@ -148,7 +140,7 @@ export async function dx(args: string[]): Promise<number> {
       if (parsed.values.json === true)
         printJson(services.map(each => ({ key: key(each), project: each.project, name: each.name, state: each.state, status: each.status, ports: each.ports, image: each.image })))
       else
-        console.log(table(services))
+        console.log(serviceTable(services))
 
       return 0
     }
