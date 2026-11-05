@@ -47,25 +47,24 @@ describe('release of several packages', () => {
     }
   }
 
-  test('--package a,b:minor plans each one with its own level', async () => {
+  test('--package a,b:minor plans each one with its own level, in one push', async () => {
     const { result, out } = await inside(await workspace(), async () => capture(async () => release(['patch', '--dry-run', '--package', 'a,b:minor'])))
 
     expect(result).toBe(0)
-    expect(out).toContain('== patch a (1/2)')
     expect(out).toContain('would release a 1.0.0 -> 1.0.1, tagged a-v1.0.1')
-    expect(out).toContain('== minor b (2/2)')
     expect(out).toContain('would release b 2.0.0 -> 2.1.0, tagged b-v2.1.0')
+    expect(out).toContain('push main and a-v1.0.1, b-v2.1.0 in one atomic push')
   })
 
   test('--all takes the published packages only', async () => {
     const { out } = await inside(await workspace(), async () => capture(async () => release(['patch', '--dry-run', '--all'])))
 
-    expect(out).toContain('== patch a (1/2)')
-    expect(out).toContain('== patch b (2/2)')
+    expect(out).toContain('tagged a-v1.0.1')
+    expect(out).toContain('tagged b-v2.0.1')
     expect(out).not.toContain('kit')
   })
 
-  test('stops at the first package that fails', async () => {
+  test('a folder with no package stops the release before anything runs', async () => {
     const work = await workspace()
 
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void

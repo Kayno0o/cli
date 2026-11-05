@@ -120,6 +120,41 @@ describe('release --json', () => {
     })
   })
 
+  test('several packages go out in one push, the branch and every tag together', async () => {
+    const { work, runs } = await workspace()
+    const pushes = join(work, '..', 'pushes')
+
+    await Bun.write(join(work, '..', 'origin.git', 'hooks', 'post-receive'), `#!/bin/sh\necho push >> ${pushes}\n`)
+    await chmod(join(work, '..', 'origin.git', 'hooks', 'post-receive'), 0o755)
+    process.chdir(work)
+    await withFakeTea({ issues: [], runs }, async () => {
+      const { result, err } = await capture(async () => release(['patch', '-p', 'a,b', '--no-registry', '--json']))
+
+      expect(result).toBe(0)
+      expect(err).toContain('pushed main and a-v1.0.1, b-v2.0.1, waiting for their runs')
+    })
+
+    expect((await Bun.file(pushes).text()).trim().split('\n')).toHaveLength(1)
+    expect((await $`git ls-remote --tags origin`.cwd(work).text()).match(/refs\/tags\/[ab]-v[\d.]+$/gm)).toEqual(['refs/tags/a-v1.0.1', 'refs/tags/b-v2.0.1'])
+  })
+
+  test('a refused push of several packages drops every bump commit and tag', async () => {
+    const { work, runs } = await workspace()
+    const start = (await $`git rev-parse HEAD`.cwd(work).text()).trim()
+
+    await Bun.write(join(work, '..', 'origin.git', 'hooks', 'pre-receive'), '#!/bin/sh\necho "no" >&2\nexit 1\n')
+    await chmod(join(work, '..', 'origin.git', 'hooks', 'pre-receive'), 0o755)
+    process.chdir(work)
+    await withFakeTea({ issues: [], runs }, async () => {
+      // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+      await expect(capture(async () => release(['patch', '-p', 'a,b', '--no-registry']))).rejects.toThrow('a-v1.0.1, b-v2.0.1 and their commits were dropped')
+    })
+
+    expect((await $`git rev-parse HEAD`.cwd(work).text()).trim()).toBe(start)
+    expect((await $`git tag`.cwd(work).text()).trim()).toBe('')
+    expect((await $`git status --porcelain`.cwd(work).text()).trim()).toBe('')
+  })
+
   async function registryRefusing(args: string[]): Promise<unknown[]> {
     const { work, runs } = await workspace()
     const printed: unknown[] = []
@@ -141,7 +176,7 @@ describe('release --json', () => {
     expect(await registryRefusing(['patch', '-p', 'a', '--json'])).toMatchObject([{ released: false, tag: 'a-v1.0.1', status: 'success' }])
   })
 
-  test('a package throwing in a several-package run prints the results so far before the error', async () => {
-    expect(await registryRefusing(['patch', '-p', 'a,b', '--json'])).toMatchObject([[{ released: false, tag: 'a-v1.0.1' }]])
+  test('a registry refusing in a several-package run prints every package as not released before the error', async () => {
+    expect(await registryRefusing(['patch', '-p', 'a,b', '--json'])).toMatchObject([[{ released: false, tag: 'a-v1.0.1' }, { released: false, tag: 'b-v2.0.1' }]])
   })
 })

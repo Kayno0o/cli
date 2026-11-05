@@ -57,20 +57,20 @@ export async function waitForRegistry(name: string, version: string): Promise<bo
   return false
 }
 
-// Drops the bump commit and the tags it made, back to the commit the release started on; a failure only warns, as the release already failed.
-export async function rollBack(preBump: string, tagsBefore: Set<string>, dir?: string): Promise<void> {
+// Drops the bump commits and the tags they carry, back to the commit the release started on; a failure only warns, as the release already failed.
+export async function rollBack(preBump: string, dirs: string[]): Promise<void> {
   try {
-    for (const name of await tagsAt('HEAD')) {
-      if (!tagsBefore.has(name))
+    for (const commit of (await git(['rev-list', `${preBump}..HEAD`])).split('\n').filter(Boolean)) {
+      for (const name of await tagsAt(commit))
         await git(['tag', '-d', name])
     }
 
     await git(['reset', '--keep', preBump])
 
-    // A failure before the bump commit leaves the edited manifest and lockfile on an unchanged HEAD, which the reset keeps.
-    if (dir !== undefined) {
+    // A failure before a bump commit leaves the edited manifest and lockfile on an unchanged HEAD, which the reset keeps.
+    if (dirs.length > 0) {
       const root = await git(['rev-parse', '--show-toplevel'])
-      const paths = [join(dir, 'package.json'), join(root, 'bun.lock')].map(path => relative(root, path))
+      const paths = [...dirs.map(dir => join(dir, 'package.json')), join(root, 'bun.lock')].map(path => relative(root, path))
       const tracked = (await git(['ls-tree', '-r', '--full-tree', '--name-only', preBump, '--', ...paths])).split('\n').filter(path => path !== '')
 
       if (tracked.length > 0)
