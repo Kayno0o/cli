@@ -1,5 +1,5 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
-import { fail, jsonOption, parse, printJson, runHint, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, role, runHint, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { jobsOf, jsonStatus, pipelineJson, retryJob, retryPipeline } from '../pipelines'
 
@@ -30,7 +30,7 @@ export async function retry(args: string[]): Promise<number> {
     if (values.json === true)
       printJson(pipelineJson(pipeline))
     else
-      console.log(`retrying the failed jobs of pipeline ${pipeline.id}: ${pipeline.web_url}`)
+      console.log(`${role('running', process.stdout)(`retrying the failed jobs of pipeline ${pipeline.id}`)}: ${role('path', process.stdout)(pipeline.web_url)}`)
 
     return 0
   }
@@ -56,7 +56,7 @@ export async function retry(args: string[]): Promise<number> {
   if (values.json === true)
     printJson({ id: job.id, name: job.name, stage: job.stage, status: jsonStatus(job.status), url: job.web_url })
   else
-    console.log(`retrying job ${job.name} (${job.id}): ${job.web_url}`)
+    console.log(`${role('running', process.stdout)(`retrying job ${job.name} (${job.id})`)}: ${role('path', process.stdout)(job.web_url)}`)
 
   return 0
 }

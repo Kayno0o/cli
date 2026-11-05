@@ -1,6 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Job } from '../pipelines'
-import { fail, jsonOption, parse, printJson, runHint, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, fail, jsonOption, paint, parse, printJson, role, runHint, wholeNumber } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { ciJson, failedJobs, jobsOf, jobTrace, jsonStatus, pipelineById } from '../pipelines'
 import { excerpt, traceLines } from '../trace'
@@ -62,10 +62,10 @@ export async function logs(args: string[]): Promise<number> {
     return 0
   }
 
-  console.log(`pipeline ${pipeline.id} on ${pipeline.ref} (${pipeline.sha.slice(0, 7)}): ${pipeline.status}, ${pipeline.web_url}`)
+  console.log(`${paint(process.stdout).bold(`pipeline ${pipeline.id}`)} on ${pipeline.ref} (${pipeline.sha.slice(0, 7)}): ${badge(pipeline.status, process.stdout)}, ${role('path', process.stdout)(pipeline.web_url)}`)
 
   for (const job of picked)
-    console.log(`\njob ${job.name} (${job.stage}): ${job.status}${job.allow_failure && job.status === 'failed' ? ', allowed to fail' : ''}\n${await text(job)}`)
+    console.log(`\n${paint(process.stdout).bold(`job ${job.name}`)} (${job.stage}): ${badge(job.status, process.stdout)}${job.allow_failure && job.status === 'failed' ? ', allowed to fail' : ''}\n${await text(job)}`)
 
   return 0
 }

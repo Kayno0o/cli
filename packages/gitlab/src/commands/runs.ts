@@ -1,6 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { PipelineListing } from '../pipelines'
-import { formatAge, formatSeconds, jsonOption, limitOf, limitOptions, moreFooter, parse, printJson, table, truncate } from '@kaynooo/cli-kit'
+import { badge, formatAge, formatSeconds, hyperlink, jsonOption, limitOf, limitOptions, moreFooter, parse, printJson, table, truncate } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { resolveCommit, subjects } from '../git'
 import { FINISHED, pipelinesOn, recentPipelines } from '../pipelines'
@@ -55,8 +55,8 @@ export async function runs(args: string[]): Promise<number> {
   // The list carries no duration, so a finished pipeline's is the time from its creation to its last update.
   console.log(table([
     ['ID', 'STATUS', 'REF', 'SOURCE', 'SHA', 'TOOK', 'CREATED', 'TITLE'],
-    ...list.map(pipeline => [String(pipeline.id), pipeline.status, pipeline.ref, pipeline.source, pipeline.sha.slice(0, 7), FINISHED.has(pipeline.status) ? formatSeconds((Date.parse(pipeline.updated_at) - Date.parse(pipeline.created_at)) / 1000) : '-', formatAge(pipeline.created_at), truncate(titles.get(pipeline.sha) ?? '', TITLE_WIDTH)]),
-  ]))
+    ...list.map(pipeline => [hyperlink(String(pipeline.id), pipeline.web_url, process.stdout), badge(pipeline.status, process.stdout), pipeline.ref, pipeline.source, pipeline.sha.slice(0, 7), FINISHED.has(pipeline.status) ? formatSeconds((Date.parse(pipeline.updated_at) - Date.parse(pipeline.created_at)) / 1000) : '-', formatAge(pipeline.created_at), truncate(titles.get(pipeline.sha) ?? '', TITLE_WIDTH)]),
+  ], { header: true }))
 
   if (more > 0)
     console.log(exact ? moreFooter(more) : `${more}+ more, rerun with --full`)

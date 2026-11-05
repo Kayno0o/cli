@@ -1,7 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Pipeline } from '../pipelines'
 import process from 'node:process'
-import { badge, duration, Exit, fail, formatElapsed, jsonOption, paint, parse, printJson, waitForCi } from '@kaynooo/cli-kit'
+import { badge, duration, Exit, fail, formatElapsed, jsonOption, paint, parse, printJson, role, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
 import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
@@ -170,7 +170,7 @@ export async function ci(args: string[]): Promise<number> {
   }
 
   if (pipeline.status !== 'failed') {
-    console.log(pipeline.status === 'manual' ? `CI passed on ${short} up to a manual job: ${pipeline.web_url}` : `CI passed on ${short}`)
+    console.log(role('ok', process.stdout)(pipeline.status === 'manual' ? `CI passed on ${short} up to a manual job: ${pipeline.web_url}` : `CI passed on ${short}`))
 
     return 0
   }

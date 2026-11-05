@@ -53,8 +53,8 @@ export function problem(text: string, detail?: string): void {
   console.error(marked('problem', text, process.stderr, detail))
 }
 
-// `role('id', process.stdout)('#49')`: plain text on a stream that takes no control codes.
-export function role(name: Role, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): (text: string) => string {
+// `role('id', process.stdout)('#49')`: plain text on a stream that takes no control codes; a mark or status name tints with its own colour (`role('ok', stream)`).
+export function role(name: Role | Mark | Status, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): (text: string) => string {
   const colors = paint(stream, env)
 
   return takesControlCodes(stream, env) ? tinted(colors, activeTheme().theme.colors[name], env) : colors
