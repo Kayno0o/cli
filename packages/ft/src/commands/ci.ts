@@ -1,9 +1,9 @@
 import type { FailedJob, Run } from '../runs'
 import process from 'node:process'
-import { badge, duration, fail, formatElapsed, jsonOption, paint, parse, printJson, runHint, waitForCi } from '@kaynooo/cli-kit'
+import { ciHeader, duration, fail, jsonOption, parse, printJson, runHint, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { good } from '../good'
-import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runsOn, stallReason } from '../runs'
+import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runLine, runsOn, stallReason } from '../runs'
 
 const usage = `ft ci [ref]
 
@@ -111,7 +111,6 @@ export async function ci(args: string[]): Promise<number> {
   }
 
   const json = values.json === true
-  const { dim } = paint(process.stderr)
   const runs = await waitForCi<Run[]>({
     tool: 'ft ci',
     short,
@@ -138,8 +137,8 @@ export async function ci(args: string[]): Promise<number> {
     },
     // The runs followed and their state, on a terminal, under a line for the wait itself.
     lines: (spinner, found, started) => [
-      `${spinner} CI on ${short} ${dim(formatElapsed(Date.now() - started))}`,
-      ...(found ?? []).map(run => `  ${badge(run.status, process.stderr)} ${run.workflow_id} ${dim(`run ${run.id}`)}`),
+      ciHeader(spinner, `CI on ${short}`, started, process.stderr),
+      ...(found ?? []).map(run => `  ${runLine(run, process.stderr)}`),
     ],
   })
 

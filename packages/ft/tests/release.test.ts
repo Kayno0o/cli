@@ -67,7 +67,7 @@ describe('testsPass on a commit origin has', () => {
       const { result, out } = await inRepo(work, 1, async () => capture(async () => testsPass(sha, 'main', 1000)))
 
       expect(result).toBe(false)
-      expect(out).toStartWith(`main at ${sha.slice(0, 7)} is on origin, waiting for its runs before the bump\ntest.yml run 7 on main: failure in 1m\n`)
+      expect(out).toStartWith(`main at ${sha.slice(0, 7)} is on origin, waiting for its runs before the bump\nfailure test.yml run 7 on main in 1m\n`)
     })
   })
 })

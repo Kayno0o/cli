@@ -1,6 +1,6 @@
 import type { CiWait } from '../src'
 import { describe, expect, test } from 'bun:test'
-import { Exit, isPermanentFailure, runTool, waitForCi } from '../src'
+import { ciHeader, ciLine, Exit, isPermanentFailure, runTool, waitForCi } from '../src'
 import { capture } from '../src/test'
 
 function wait(overrides: Partial<CiWait<string>>): CiWait<string> {
@@ -162,5 +162,17 @@ describe('runTool', () => {
 
     expect(ran).toEqual({ code: 3, stdout: 'out\n', stderr: 'err\n' })
     expect(await refusal(runTool('sleeper', ['sleep', '5'], { timeoutMs: 100 }))).toBe('sleeper: no answer in 0.1s')
+  })
+})
+
+describe('ciLine and ciHeader', () => {
+  test('draw the status first and the details after it, plain off a terminal', () => {
+    expect(ciLine('success', 'test.yml', ['run 5', 'on main', undefined, 'in 49s'], {})).toBe('success test.yml run 5 on main in 49s')
+    expect(ciLine('running', 'pipeline', [], {})).toBe('running pipeline')
+    expect(ciHeader('-', 'CI on abc1234', Date.now(), {})).toMatch(/^- CI on abc1234 \d/)
+  })
+
+  test('dim the details on a terminal', () => {
+    expect(ciLine('success', 'test.yml', ['run 5'], { isTTY: true })).toContain('\x1B[2mrun 5')
   })
 })

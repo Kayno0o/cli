@@ -1,6 +1,7 @@
 import { Exit, fail } from './args'
-import { formatDuration } from './format'
+import { formatDuration, formatElapsed } from './format'
 import { liveRegion } from './progress'
+import { badge, paint } from './style'
 import { cwdGone, isPermanentFailure } from './tool'
 
 export interface CiStall {
@@ -135,4 +136,16 @@ export async function waitForCi<T>(wait: CiWait<T>): Promise<T> {
   finally {
     region?.stop()
   }
+}
+
+// The line every CI watcher draws for one run or pipeline: its status badge, what it is, then the details dimmed (`✓ success test.yml run 5 on main in 49s`).
+export function ciLine(status: string, subject: string, details: (string | undefined)[], out: { isTTY?: boolean }): string {
+  const rest = details.filter(each => each !== undefined && each !== '').join(' ')
+
+  return `${badge(status, out)} ${subject}${rest === '' ? '' : ` ${paint(out).dim(rest)}`}`
+}
+
+// The line over the runs of a live region: the spinner, what is waited for and how long it has been.
+export function ciHeader(spinner: string, label: string, startedAt: number, out: { isTTY?: boolean }): string {
+  return `${spinner} ${label} ${paint(out).dim(formatElapsed(Date.now() - startedAt))}`
 }

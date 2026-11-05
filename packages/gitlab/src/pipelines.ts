@@ -1,3 +1,4 @@
+import { ciLine, formatSeconds } from '@kaynooo/cli-kit'
 import { projectApi, projectApiText } from './glab'
 import { excerpt } from './trace'
 
@@ -29,6 +30,22 @@ export interface Job {
 
 // A manual pipeline waits on a job nobody has played, its earlier stages done.
 export const FINISHED = new Set(['success', 'failed', 'canceled', 'skipped', 'manual'])
+
+// `in 3m 2s` once a pipeline is over, `for 1m 12s` while it runs, nothing before a second has passed.
+function elapsedOf(pipeline: Pipeline): string | undefined {
+  if (FINISHED.has(pipeline.status))
+    return (pipeline.duration ?? 0) > 0 ? `in ${formatSeconds(pipeline.duration!)}` : undefined
+
+  const seconds = Math.floor((Date.now() - Date.parse(pipeline.started_at ?? '')) / 1000)
+
+  return seconds > 0 ? `for ${formatSeconds(seconds)}` : undefined
+}
+
+// The line every watcher of pipelines draws for one, the same shape ft draws for a run.
+export function pipelineLine(pipeline: Pipeline, out: { isTTY?: boolean }): string {
+  return ciLine(pipeline.status, 'pipeline', [String(pipeline.id), `on ${pipeline.ref}`, elapsedOf(pipeline)], out)
+}
+
 const PAGE = 100
 const JSON_STATUS: Record<string, string> = { failed: 'failure', canceled: 'cancelled' }
 

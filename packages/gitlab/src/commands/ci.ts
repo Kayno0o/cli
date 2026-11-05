@@ -1,9 +1,9 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Pipeline } from '../pipelines'
 import process from 'node:process'
-import { badge, duration, Exit, fail, formatElapsed, jsonOption, paint, parse, printJson, role, waitForCi } from '@kaynooo/cli-kit'
+import { ciHeader, duration, Exit, fail, jsonOption, parse, printJson, role, waitForCi } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit } from '../git'
-import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newest, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
+import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newest, pipelineLine, pipelinesOn, refreshed, waitingOnRunner } from '../pipelines'
 
 const usage = `gl ci [ref]
 
@@ -126,7 +126,6 @@ export async function ci(args: string[]): Promise<number> {
   }
 
   const json = values.json === true
-  const { dim } = paint(process.stderr)
   const pipeline = await waitingOn(async () => waitForCi<Pipeline>({
     tool: 'gl ci',
     short,
@@ -155,8 +154,8 @@ export async function ci(args: string[]): Promise<number> {
     },
     // The pipeline followed and its state, on a terminal, under a line for the wait itself.
     lines: (spinner, found, started) => [
-      `${spinner} CI on ${short} ${dim(formatElapsed(Date.now() - started))}`,
-      ...found === undefined ? [] : [`  ${badge(found.status, process.stderr)} pipeline ${dim(String(found.id))}`],
+      ciHeader(spinner, `CI on ${short}`, started, process.stderr),
+      ...found === undefined ? [] : [`  ${pipelineLine(found, process.stderr)}`],
     ],
   }))
 

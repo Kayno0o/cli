@@ -84,7 +84,7 @@ describe('watchRuns output', () => {
     const left = Bun.stripANSI(text.slice(text.lastIndexOf('\x1B[2K') + 4))
 
     expect(text).toContain('\x1B[1A')
-    expect(left).toBe('test.yml run 2 on main: ✓ success\ntest.yml run 1 on main: ✓ success\n')
+    expect(left).toBe('✓ success test.yml run 2 on main\n✓ success test.yml run 1 on main\n')
   })
 
   test('elsewhere, prints a line per run as it is first seen', async () => {
@@ -94,7 +94,7 @@ describe('watchRuns output', () => {
       expect(await watchRuns(runs => runs, 1000, undefined, undefined, out)).toBe(0)
     })
 
-    expect(written.join('')).toBe('test.yml run 2 on main: success\ntest.yml run 1 on main: success\n')
+    expect(written.join('')).toBe('success test.yml run 2 on main\nsuccess test.yml run 1 on main\n')
   })
 
   test('says how long a run has been running, and how long it took once over', async () => {
@@ -105,7 +105,7 @@ describe('watchRuns output', () => {
       expect(await refusal(watchRuns(runs => runs, 100, undefined, undefined, out))).toContain('did not finish')
     })
 
-    expect(written.join('')).toBe('test.yml run 2 on main: running for 1m 15s\ntest.yml run 1 on main: success in 3m 2s\n')
+    expect(written.join('')).toBe('running test.yml run 2 on main for 1m 15s\nsuccess test.yml run 1 on main in 3m 2s\n')
   })
 })
 
@@ -199,6 +199,6 @@ describe('ft watch --json and --quiet', () => {
     }, failing))
 
     expect(err).toContain('job test of test.yml failed:\nit broke')
-    expect(out).toBe('test.yml run 2 on main: failure\n')
+    expect(out).toBe('failure test.yml run 2 on main\n')
   })
 })

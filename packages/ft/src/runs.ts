@@ -1,4 +1,4 @@
-import { formatAge } from '@kaynooo/cli-kit'
+import { ciLine, formatAge, formatSeconds } from '@kaynooo/cli-kit'
 import { excerpt } from './log'
 import { api, repoApi, repoApiText } from './tea'
 
@@ -36,6 +36,21 @@ export function startedAt(run: Run): number | undefined {
   const at = Date.parse(run.started)
 
   return Number.isNaN(at) || at < EPOCH ? undefined : at
+}
+
+// `in 3m 2s` once a run is over, `for 1m 12s` while it runs or waits (from `seen` when Forgejo has not started it), nothing before a second has passed.
+function elapsed(run: Run, seen: number): string | undefined {
+  if (FINISHED.has(run.status))
+    return run.duration > 0 ? `in ${formatSeconds(runSeconds(run))}` : undefined
+
+  const seconds = Math.floor((Date.now() - (startedAt(run) ?? seen)) / 1000)
+
+  return seconds > 0 ? `for ${formatSeconds(seconds)}` : undefined
+}
+
+// The line every watcher of runs draws for one, shared with the pipelines of gl through the kit.
+export function runLine(run: Run, out: { isTTY?: boolean }, seen = Date.now()): string {
+  return ciLine(run.status, run.workflow_id, [`run ${run.id}`, `on ${run.prettyref}`, elapsed(run, seen)], out)
 }
 
 export function startedAge(run: Run, now = Date.now()): string {

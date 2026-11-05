@@ -1,8 +1,8 @@
 import type { FailedJob, Run } from '../runs'
-import { badge, duration, Exit, fail, formatDuration, formatSeconds, isPermanentFailure, jsonOption, parse, printJson, takesControlCodes, wholeNumber } from '@kaynooo/cli-kit'
+import { ciHeader, duration, Exit, fail, formatDuration, isPermanentFailure, jsonOption, parse, printJson, takesControlCodes, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { repoOption } from '../args'
-import { ciJson, failedJobsOf, failureText, FINISHED, overall, recentRuns, runById, runSeconds, stallReason, startedAt } from '../runs'
+import { ciJson, failedJobsOf, failureText, FINISHED, overall, recentRuns, runById, runLine, stallReason } from '../runs'
 
 const usage = `ft watch [--after <id>]
 
@@ -47,8 +47,8 @@ export async function followRuns(pick: (runs: Run[]) => Run[], timeout: number, 
   const latest = new Map<number, Run>()
   // When each run was first seen, the wait counted from there until Forgejo says it started.
   const seen = new Map<number, number>()
-  const line = (run: Run) => `${run.workflow_id} run ${run.id} on ${run.prettyref}: ${badge(run.status, out)}${elapsed(run, seen.get(run.id) ?? Date.now())}`
-  const region = takesControlCodes(out) && !quiet ? liveRegion(() => [...latest.values()].map(line), out) : undefined
+  const line = (run: Run) => runLine(run, out, seen.get(run.id) ?? Date.now())
+  const region = takesControlCodes(out) && !quiet ? liveRegion(spinner => [ciHeader(spinner, 'CI', started, out), ...[...latest.values()].map(run => `  ${line(run)}`)], out) : undefined
   // Every run ever picked, read again by id once newer runs push it out of the page of the newest ones.
   const followed = new Set<number>()
   const failed = new Set<number>()
@@ -158,16 +158,6 @@ export async function followRuns(pick: (runs: Run[]) => Run[], timeout: number, 
         out.write(`${line(run)}\n`)
     }
   }
-}
-
-// ` in 3m 2s` once a run is over, ` for 1m 12s` while it runs or waits, nothing before a second has passed.
-function elapsed(run: Run, seen: number): string {
-  if (FINISHED.has(run.status))
-    return run.duration > 0 ? ` in ${formatSeconds(runSeconds(run))}` : ''
-
-  const seconds = Math.floor((Date.now() - (startedAt(run) ?? seen)) / 1000)
-
-  return seconds > 0 ? ` for ${formatSeconds(seconds)}` : ''
 }
 
 export async function watch(args: string[]): Promise<number> {
