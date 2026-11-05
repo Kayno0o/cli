@@ -1,5 +1,5 @@
 import type { Hotspot } from './churn'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import process from 'node:process'
 import { badUsage, capped, duration, fail, fileLink, jsonOption, limitOf, limitOptions, paint, parse, printHeader, printJson, role, table } from '@kaynooo/cli-kit'
 import { churnSince, complexityOf, isCandidate, isGenerated } from './churn'
@@ -96,7 +96,7 @@ export async function hotspots(args: string[]): Promise<number> {
     return top > 0 && score >= top * WARM ? colors.yellow(text) : text
   }
 
-  printHeader('hotspots')
+  printHeader('hotspots', `${basename(cwd)} · since ${values.since ?? DEFAULT_SINCE}`)
   console.log(table([['rank', 'score', 'churn', 'recent', 'complexity', 'lines', 'file', 'most complex declaration'], ...shown.map(row => [colors.dim(String(row.rank)), heat(row.score, String(row.score)), ...[row.churn, row.recent, row.complexity, row.lines].map(String), fileLink(path(row.path), row.path, process.stdout, cwd), row.worst === undefined ? '' : `${row.worst.name} (${row.worst.complexity}, line ${row.worst.line})`])], { header: true, align: ['right', 'right', 'right', 'right', 'right', 'right', 'left', 'left'] }))
 
   if (footer !== undefined)

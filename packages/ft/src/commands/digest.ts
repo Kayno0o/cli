@@ -3,7 +3,7 @@ import type { Claim } from '../claims'
 import type { Issue } from '../issues'
 import type { Run } from '../runs'
 import process from 'node:process'
-import { badge, currentSession, formatAge, jsonOption, liveSessions, paint, parse, printHeader, printJson, role, runCommand, section, table, truncate, upTo, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { badge, currentSession, formatAge, jsonOption, liveSessions, paint, parse, printJson, role, runCommand, section, table, truncate, upTo, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { boxes } from '../checklist'
 import { latestClaim } from '../claims'
@@ -185,7 +185,6 @@ export async function digest(args: string[]): Promise<number> {
     printJson(summary)
   }
   else {
-    printHeader('ft', 'digest')
     console.log(renderDigest(summary))
   }
 

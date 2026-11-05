@@ -185,7 +185,7 @@ export async function board(args: string[]): Promise<number> {
     return 0
   }
 
-  printHeader('ft', 'board')
+  printHeader('ft', `${rows.length} open ${rows.length === 1 ? 'issue' : 'issues'}`)
   console.log(rows.length === 0 && (query !== undefined || state !== undefined) ? 'no open issue matches' : renderBoard(rows, Date.now(), limit))
 
   return 0
