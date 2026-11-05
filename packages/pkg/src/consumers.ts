@@ -14,6 +14,8 @@ export interface Consumer {
   path: string
   kind: Kind
   spec: string
+  // The dependency's own key when it differs from the package, as in `"kay": "npm:@kaynooo/kayjs@~1.77.0"`.
+  alias?: string
   // The manager its nearest lockfile pins, bun when there is none.
   manager: Manager
 }
@@ -56,39 +58,91 @@ function managerFor(dir: string, root: string): Manager {
   }
 }
 
-// Every package.json under the root declaring the package, sorted by folder, a `node_modules` or dot folder never entered.
+// `npm:@scope/name@~1.2.3` as its target and the version range it asks for.
+const ALIAS = /^npm:(@[^@/]+\/[^@/]+|[^@/]+)@(.+)$/
+
+function readManifest(path: string): Partial<Record<Kind, Record<string, string>>> | undefined {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8')) as Partial<Record<Kind, Record<string, string>>>
+  }
+  catch {
+    return undefined
+  }
+}
+
+// Every package.json under the root declaring the package, by its own name or through an `npm:` alias of it, sorted by folder, a `node_modules` or dot folder never entered.
 export function findConsumers(name: string, root: string): Consumer[] {
   const consumers: Consumer[] = []
 
   for (const path of packageFiles(root, 0, []).sort()) {
-    let manifest: Partial<Record<Kind, Record<string, string>>>
+    const manifest = readManifest(path)
 
-    try {
-      manifest = JSON.parse(readFileSync(path, 'utf8')) as typeof manifest
-    }
-    catch {
+    if (manifest === undefined)
       continue
+
+    for (const kind of KINDS) {
+      for (const [key, spec] of Object.entries(manifest[kind] ?? {})) {
+        const aliased = typeof spec === 'string' && key !== name && ALIAS.exec(spec)?.[1] === name
+
+        if (typeof spec === 'string' && (key === name || aliased))
+          consumers.push({ dir: relative(root, dirname(path)) || '.', path, kind, spec, ...aliased ? { alias: key } : {}, manager: managerFor(dirname(path), root) })
+      }
     }
-
-    const kind = KINDS.find(each => typeof manifest[each]?.[name] === 'string')
-    const spec = kind === undefined ? undefined : manifest[kind]?.[name]
-
-    if (kind !== undefined && spec !== undefined)
-      consumers.push({ dir: relative(root, dirname(path)) || '.', path, kind, spec, manager: managerFor(dirname(path), root) })
   }
 
   return consumers
 }
 
-// Whether the dependency is on something other than a registry version, which a bump must not overwrite.
+// Shorter names than this are contained in too many others to hint at one.
+const MIN_SIMILAR = 3
+
+// The dependency names and alias targets under the root whose last segment holds, or is held by, that of `name`, for a hint when nothing matches it.
+export function similarDependencies(name: string, root: string): string[] {
+  const base = name.slice(name.lastIndexOf('/') + 1).toLowerCase()
+  const found = new Set<string>()
+
+  for (const path of packageFiles(root, 0, []).sort()) {
+    const manifest = readManifest(path)
+
+    for (const kind of KINDS) {
+      for (const [key, spec] of Object.entries(manifest?.[kind] ?? {})) {
+        const target = typeof spec === 'string' ? ALIAS.exec(spec)?.[1] : undefined
+
+        for (const candidate of [key, target]) {
+          const last = candidate?.slice(candidate.lastIndexOf('/') + 1).toLowerCase()
+
+          if (candidate !== undefined && last !== undefined && candidate !== name && last.length >= MIN_SIMILAR && (last.includes(base) || base.includes(last)))
+            found.add(candidate)
+        }
+      }
+    }
+  }
+
+  return [...found].toSorted().slice(0, 5)
+}
+
+// Whether the dependency is on something other than a registry version, which a bump must not overwrite; an alias of the package is a registry version under another key.
 export function isLocal(consumer: Consumer): boolean {
-  return LOCAL_SPEC.test(consumer.spec)
+  return consumer.alias === undefined && LOCAL_SPEC.test(consumer.spec)
+}
+
+// The version an `npm:` alias asks for, or the spec as it is.
+export function wantedVersion(consumer: Consumer): string {
+  return consumer.alias === undefined ? consumer.spec : ALIAS.exec(consumer.spec)?.[2] ?? consumer.spec
 }
 
 const KIND_FLAGS: Record<Kind, string[]> = { dependencies: [], devDependencies: ['--dev'], optionalDependencies: ['--optional'], peerDependencies: ['--peer'] }
 
-// The `bun add` putting the version in the consumer, under the same kind of dependency.
+const RANGE_PREFIX = /^[~^]/
+
+// The `bun add` putting the version in the consumer, under the same kind of dependency; an alias keeps its key and the `~` or `^` of its range, a plain dependency is pinned exactly.
 export function addCommand(consumer: Consumer, name: string, version: string): string[] {
+  if (consumer.alias !== undefined) {
+    const prefix = RANGE_PREFIX.exec(wantedVersion(consumer))?.[0] ?? ''
+
+    return ['bun', 'add', ...KIND_FLAGS[consumer.kind], ...prefix === '' ? ['--exact'] : [], '--no-cache', `${consumer.alias}@npm:${name}@${prefix}${version}`]
+  }
+
   return ['bun', 'add', ...KIND_FLAGS[consumer.kind], '--exact', '--no-cache', `${name}@${version}`]
 }
 

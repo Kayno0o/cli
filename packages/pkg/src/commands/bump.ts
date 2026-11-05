@@ -2,11 +2,11 @@ import type { Ran } from '@kaynooo/cli-kit'
 import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher, Packument, Registry } from '../registry'
 import { existsSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { duration, Exit, fail, formatDuration, formatElapsed, note, ok, parse, problem, runCommand, warn, wholeNumber, workspaceRoot } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { loadConfigs, loadSettings, registryFor } from '../config'
-import { addCommand, findConsumers, isLocal } from '../consumers'
+import { addCommand, findConsumers, isLocal, similarDependencies, wantedVersion } from '../consumers'
 import { fetchPackument, isValidName } from '../registry'
 import { EXACT_VERSION } from '../semver'
 import { checkPackage } from './check'
@@ -15,7 +15,8 @@ const usage = `pkg bump <name> [version]
 
 Waits until the registry serves the version (the latest when none is given, an exact version otherwise), vets it as \`pkg check\` does (advisories, licence allowlist, and a minimum age only when --min-age asks for one), then runs \`bun add --exact --no-cache\` in each folder under --root whose package.json depends on the package, the kind of dependency kept, a line per folder.
 A version the vetting blocks is refused before any folder is touched, unless --force is given.
-A dependency that is not a registry version (workspace:, link:, file:, git, a URL, an npm: alias, catalog:), a peer range, a folder already on the version and one whose lockfile pins another manager are left as they are, each said so.
+A dependency declared through an alias of the package (\`"kay": "npm:@kaynooo/kayjs@~1.77.0"\`) is bumped under its own key, keeping the \`~\` or \`^\` of its range; --only and --except narrow the folders by name or glob (\`app\`, \`kay-*\`, a path relative to --root).
+A dependency that is not a registry version (workspace:, link:, file:, git, a URL, an npm: alias of another package, catalog:), a peer range, a folder already on the version and one whose lockfile pins another manager are left as they are, each said so.
 With --all-consumers a folder whose package.json or lockfile already has uncommitted changes is left alone, and each folder whose install went through then runs its own \`check\` (the check bin) and is committed with \`gc 'chore(deps): bump <name> to <version>' -- package.json <lockfile>\` only when that passes; a failing one is left uncommitted and listed in the summary with the skipped ones, and nothing is ever pushed.
 
 Exits 0 when every install ran or was left as it is (with --all-consumers, and every check passed and every commit landed), 1 when the vetting refuses the version, an install, a check or a commit fails or the registry has no such package, 2 when the version never shows within the timeout (a registry that cannot be reached is retried until then) or on a usage error.`
@@ -26,12 +27,15 @@ const options = {
   'root': ROOT_OPTION,
   'timeout': { type: 'string', short: 't', description: 'how long to wait for the registry (10m): 30s, 5m, 1h' },
   'all-consumers': { type: 'boolean', description: 'after each install run the folder\'s check and commit it through gc when it passes' },
+  'only': { type: 'string', multiple: true, description: 'bump only the folders matching this name or glob, repeatable' },
+  'except': { type: 'string', multiple: true, description: 'leave the folders matching this name or glob alone, repeatable' },
   'dry-run': { type: 'boolean', description: 'print what would run, changing nothing' },
   'force': { type: 'boolean', description: 'bump even when the version is blocked by the vetting' },
   'min-age': { type: 'string', description: 'days a version must be old (0: a bump adopts a release on purpose, often one just made)' },
 } as const
 
 const POLL = 5000
+const RANGE_PREFIX = /^[~^]/
 
 export interface BumpSettings {
   root: string
@@ -45,6 +49,9 @@ export interface BumpSettings {
   pkgSettings?: PkgSettings | undefined
   minAgeDays?: number | undefined
   isForced?: boolean
+  // Folders by name or glob: only these when given, never those of `except`.
+  only?: readonly string[] | undefined
+  except?: readonly string[] | undefined
   run?: (argv: string[], cwd: string) => Promise<Ran>
   poll?: number
 }
@@ -168,10 +175,21 @@ export async function checkAndCommit(name: string, version: string, where: strin
   return committed.code === 0 ? undefined : `gc exited ${committed.code}: ${committed.text.trim().split('\n').at(-1) ?? ''}`
 }
 
+// Whether a folder (relative to the root) is named by one of the patterns, as a whole path or by its last segment.
+function matchesAny(dir: string, patterns: readonly string[]): boolean {
+  return patterns.some((pattern) => {
+    const glob = new Bun.Glob(pattern)
+
+    return glob.match(dir) || glob.match(basename(dir))
+  })
+}
+
 // Puts the version in every consumer under the root, returning whether every install went through and, with isAll, every check passed and every commit landed.
 export async function bumpConsumers(name: string, version: string, settings: BumpSettings): Promise<boolean> {
-  const found = findConsumers(name, settings.root)
+  const everyone = findConsumers(name, settings.root)
+  const found = everyone.filter(each => (settings.only === undefined || settings.only.length === 0 || matchesAny(each.dir, settings.only)) && !matchesAny(each.dir, settings.except ?? []))
   const consumers = found.filter(each => !isLocal(each))
+  const left = everyone.length - found.length
   const local = found.length - consumers.length
   const run = settings.run ?? (async (argv, cwd) => runCommand(argv, { cwd }))
   const committed: string[] = []
@@ -179,8 +197,14 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
   const skipped: string[] = []
   let isClean = true
 
-  if (found.length === 0)
-    note(`nothing under ${settings.root} depends on ${name}`)
+  if (everyone.length === 0) {
+    const similar = similarDependencies(name, settings.root)
+
+    note(`nothing under ${settings.root} depends on ${name}`, similar.length === 0 ? undefined : `did you mean ${similar.join(', ')}`)
+  }
+  else if (left > 0) {
+    note(`${left} folder${left === 1 ? '' : 's'} left out by --only or --except`)
+  }
 
   // a monorepo's own packages take it from the workspace, one line saying so for all of them
   if (local > 0)
@@ -194,7 +218,7 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
       skipped.push(consumer.dir)
       note(consumer.dir, `peer range ${consumer.spec}, left as it is`)
     }
-    else if (consumer.spec === version) {
+    else if (wantedVersion(consumer).replace(RANGE_PREFIX, '') === version && (consumer.alias !== undefined || consumer.spec === version)) {
       skipped.push(consumer.dir)
       note(consumer.dir, `already on ${version}`)
     }
@@ -252,6 +276,8 @@ export async function bump(args: string[]): Promise<number> {
     isDryRun: values['dry-run'] === true,
     isAll: values['all-consumers'] === true,
     isForced: values.force === true,
+    only: values.only,
+    except: values.except,
     pkgSettings: await loadSettings(),
     minAgeDays: wholeNumber(values['min-age'], 'min-age', 0, 0),
   }

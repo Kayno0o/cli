@@ -367,3 +367,58 @@ describe('helpers', () => {
     expect(calls).toEqual(['check', 'check', 'gc', 'check', 'gc'])
   })
 })
+
+describe('an npm alias of the package', () => {
+  const KAY = '@kaynooo/kayjs'
+  const quiet = async (): Promise<Ran> => Promise.resolve({ code: 0, text: '', output: '', chunks: [] } as unknown as Ran)
+
+  beforeEach(() => {
+    manifest('site', { name: 'site', dependencies: { kay: `npm:${KAY}@~1.77.0` } })
+    manifest('shop', { name: 'shop', devDependencies: { kay: `npm:${KAY}@1.77.0` } })
+    manifest('blog', { name: 'blog', dependencies: { kay: `npm:${KAY}@~1.88.0` } })
+    manifest('odd', { name: 'odd', dependencies: { kay: 'npm:other-thing@^1.0.0' } })
+  })
+
+  test('is found under its key, with the dependencies naming the package itself', () => {
+    expect(findConsumers(KAY, root).map(each => [each.dir, each.alias, each.spec])).toEqual([
+      ['blog', 'kay', `npm:${KAY}@~1.88.0`],
+      ['shop', 'kay', `npm:${KAY}@1.77.0`],
+      ['site', 'kay', `npm:${KAY}@~1.77.0`],
+    ])
+    expect(isLocal(findConsumers(KAY, root)[0]!)).toBe(false)
+  })
+
+  test('is added back under its key, keeping the ~ or ^ of its range', () => {
+    const [blog, shop, site] = findConsumers(KAY, root) as [ReturnType<typeof findConsumers>[number], ReturnType<typeof findConsumers>[number], ReturnType<typeof findConsumers>[number]]
+
+    expect(addCommand(site, KAY, '1.88.0')).toEqual(['bun', 'add', '--no-cache', `kay@npm:${KAY}@~1.88.0`])
+    expect(addCommand(shop, KAY, '1.88.0')).toEqual(['bun', 'add', '--dev', '--exact', '--no-cache', `kay@npm:${KAY}@1.88.0`])
+    expect(blog.alias).toBe('kay')
+  })
+
+  test('is bumped by bumpConsumers, a folder already on the version left, and --only and --except narrowing the folders', async () => {
+    const ran: string[] = []
+    const run = async (argv: string[], cwd: string): Promise<Ran> => {
+      ran.push(`${cwd.slice(root.length + 1)}: ${argv.slice(2).join(' ')}`)
+
+      return quiet()
+    }
+    const { result, out } = await capture(async () => bumpConsumers(KAY, '1.88.0', settings({ run })))
+
+    expect(result).toBe(true)
+    expect(ran).toEqual([`shop: --dev --exact --no-cache kay@npm:${KAY}@1.88.0`, `site: --no-cache kay@npm:${KAY}@~1.88.0`])
+    expect(out).toContain('blog already on 1.88.0')
+
+    ran.length = 0
+    await capture(async () => bumpConsumers(KAY, '1.88.0', settings({ run, only: ['s*'], except: ['shop'] })))
+
+    expect(ran).toEqual([`site: --no-cache kay@npm:${KAY}@~1.88.0`])
+  })
+
+  test('hints at what is named alike when nothing depends on the package', async () => {
+    const { out } = await capture(async () => bumpConsumers('@kaynooo/kayjs-ui', '1.0.0', settings({ run: quiet })))
+
+    expect(out).toContain('did you mean')
+    expect(out).toContain('@kaynooo/kayjs')
+  })
+})
