@@ -339,23 +339,23 @@ function candidateLine(candidate: Candidate): string {
   return typeof candidate === 'string' ? candidate : candidate.join('\t')
 }
 
-// The name of the positional the last word is, counting the words before it that are neither options, nor the values of string ones; the last name repeats when it ends in `...`.
-function positionalBeingTyped(before: string[], { options, positionals }: Completing): string | undefined {
+// The positionals written before the last word, leaving out options and the values of string ones, and the name of the positional the last word is; the last name repeats when it ends in `...`.
+function positionalBeingTyped(before: string[], { options, positionals }: Completing): { name: string | undefined, typed: string[] } {
   const takesValue = (word: string) => !word.includes('=') && Object.entries(options).some(([name, { short, type }]) => type === 'string' && (word === `--${name}` || word === `-${short}`))
-  let index = 0
+  const typed: string[] = []
   let at = 0
 
   while (at < before.length) {
     const word = before[at]!
 
     if (word === '--') {
-      index += before.length - at - 1
+      typed.push(...before.slice(at + 1))
 
       break
     }
 
     if (!word.startsWith('-'))
-      index++
+      typed.push(word)
     else if (takesValue(word))
       at++
 
@@ -364,10 +364,10 @@ function positionalBeingTyped(before: string[], { options, positionals }: Comple
 
   const last = positionals.at(-1)
 
-  if (index < positionals.length)
-    return positionals[index]
+  if (typed.length < positionals.length)
+    return { name: positionals[typed.length], typed }
 
-  return last?.replace(']', '').endsWith('...') === true ? last : undefined
+  return { name: last?.replace(']', '').endsWith('...') === true ? last : undefined, typed }
 }
 
 // A leaf command's candidates: the values of the string option just typed or of the positional being typed, else paths for a word not starting with a dash; its long options for one that does.
@@ -380,14 +380,15 @@ async function leafCandidates(run: (args: string[]) => Promise<number>, words: s
   const flag = words.at(-2)
   const option = flag?.startsWith('-') === true ? Object.entries(completing.options).find(([name, { short }]) => flag === `--${name}` || flag === `-${short}`)?.[1] : undefined
 
+  const { name, typed } = positionalBeingTyped(words.slice(0, -1), completing)
+
   if (option?.type === 'string') {
-    const values = option.choices === undefined ? await option.candidates?.() : option.choices
+    const values = option.choices === undefined ? await option.candidates?.(typed) : option.choices
 
     return values === undefined ? [FILES] : values.map(candidateLine)
   }
 
-  const name = positionalBeingTyped(words.slice(0, -1), completing)
-  const values = name === undefined ? undefined : await completing.candidates[name]?.()
+  const values = name === undefined ? undefined : await completing.candidates[name]?.(typed)
 
   return values === undefined ? [FILES] : values.map(candidateLine)
 }

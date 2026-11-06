@@ -281,6 +281,29 @@ describe('__complete', () => {
     expect(await complete('--', 'p', '')).toBe('x\ny\n')
   })
 
+  test('hands the candidates the positionals typed before the word being completed', async () => {
+    const seen: string[][] = []
+    const nested = { ...cli, commands: { ...cli.commands, restart: { summary: 'restarts', run: async (args: string[]) => {
+      parse(args, 'restart <stack> [service]', { bg: { type: 'boolean' }, log: { type: 'string', candidates: (typed) => {
+        seen.push(typed)
+
+        return ['l']
+      } } }, {
+        positionals: ['<stack>', '[service]'],
+        candidates: { '<stack>': () => ['booki'], '[service]': ([stack]) => stack === 'booki' ? ['php', 'nginx'] : [] },
+      })
+
+      return 0
+    } } } }
+    const complete = async (...words: string[]) => (await capture(async () => runCli(nested, ['__complete', 'restart', ...words]))).out
+
+    expect(await complete('booki', '')).toBe('php\nnginx\n')
+    expect(await complete('--bg', 'booki', '--log', 'x', 'p')).toBe('php\nnginx\n')
+    expect(await complete('other', '')).toBe('')
+    expect(await complete('booki', '--log', '')).toBe('l\n')
+    expect(seen).toEqual([['booki']])
+  })
+
   test('still offers paths for a positional with no candidates', async () => {
     const plain = { ...cli, commands: { ...cli.commands, put: { summary: 'puts', run: async (args: string[]) => {
       parse(args, 'put <file> <name>', { to: { type: 'string' } }, { positionals: ['<file>', '<name>'], candidates: { '<name>': () => ['n'] } })

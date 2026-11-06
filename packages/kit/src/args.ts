@@ -73,8 +73,8 @@ export class Completing {
 // A value `__complete` offers, with an optional description shown beside it.
 export type Candidate = string | [value: string, description: string]
 
-// The values a positional or an option can take, read only while a shell completes it.
-export type Candidates = () => Candidate[] | Promise<Candidate[]>
+// The values a positional or an option can take, read only while a shell completes it; `typed` holds the positionals written before the word being completed, so one can depend on another (`acme restart <stack> <service>`).
+export type Candidates = (typed: string[]) => Candidate[] | Promise<Candidate[]>
 
 export const completion = { active: false }
 
@@ -101,7 +101,7 @@ export interface ParseSettings<Names extends readonly string[] = string[]> {
   allowNegative?: boolean
   // The positionals the command takes, by name as its usage writes them: `<key>` or `KEY` required, `[file]` optional, a last one ending in `...` taking any more. One missing or one too many is a usage error, and the positionals come back typed by these names.
   positionals?: Names
-  // The values `__complete` offers for a positional, by its name as `positionals` writes it: `{ '<project>': async () => names }`. A positional without one completes as a path.
+  // The values `__complete` offers for a positional, by its name as `positionals` writes it: `{ '<project>': async () => names }`, or `{ '<service>': async ([stack]) => servicesOf(stack) }` from the ones typed before it. A positional without one completes as a path.
   candidates?: Partial<Record<Names[number], Candidates>>
   // Command lines shown under `Examples:` in the help, each with an optional dimmed note: `['ft ci HEAD~1', 'wait for the commit before the last']`.
   examples?: Example[]
