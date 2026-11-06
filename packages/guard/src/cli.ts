@@ -132,6 +132,7 @@ function rules(args: string[]): number {
   }
 
   for (const rule of RULES)
+    // Not padEnd: the colour codes of the name would count in the width.
     console.log(`${role('id', process.stdout)(rule.name)}${' '.repeat(Math.max(0, 16 - rule.name.length))} ${rule.refuses}\n${' '.repeat(16)} -> ${rule.route}${rule.runs === 'hook' ? ' (hook only)' : ''}`)
 
   return 0

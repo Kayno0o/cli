@@ -139,7 +139,7 @@ describe('checkPackage', () => {
   test('renders the recorded package as a table with its warnings', async () => {
     const { fetcher } = await recorded()
     const now = ESBUILD_LATEST + 3 * DAY
-    const text = render(await checkPackage('esbuild', { configs: [], fetcher, minAgeDays: 14, now }), now)
+    const text = render(await checkPackage('esbuild', { configs: [], fetcher, minAgeDays: 14, now }), now, { isTTY: false })
 
     expect(text).toContain('esbuild: An extremely fast JavaScript and CSS bundler and minifier.')
     expect(text).toContain('safe         0.28.1, published')

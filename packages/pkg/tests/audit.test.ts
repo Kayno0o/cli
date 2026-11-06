@@ -237,27 +237,17 @@ describe('auditPackages', () => {
     expect(findings[2]?.advisories.map(each => each.id)).toEqual([12])
     expect(seen.filter(each => each.url.endsWith('/vuln-lib'))).toHaveLength(1)
     expect(seen.filter(each => each.method === 'POST')).toHaveLength(1)
-    expect(renderAudit(findings, audited.length)).toContain('GHSA-aaaa-bbbb-cccc high: Prototype pollution (fixed in 1.2.0)')
+    expect(renderAudit(findings, audited.length, { isTTY: false })).toContain('GHSA-aaaa-bbbb-cccc high: Prototype pollution (fixed in 1.2.0)')
   })
 
   test('renderAudit colours the package, the warnings and the severity on a terminal only', () => {
     const findings = [{ name: 'lib', version: '1.0.0', blocked: true, warnings: ['too fresh'], advisories: [{ id: 1, ghsa: 'GHSA-a', severity: 'high', title: 'Bad', url: '' }] }] as Parameters<typeof renderAudit>[0]
-    const previous = process.env.KIT_MODE
+    const styled = renderAudit(findings, 3, { isTTY: true }, { KIT_MODE: 'terminal' })
+    const plain = renderAudit(findings, 3, { isTTY: false }, {})
 
-    process.env.KIT_MODE = 'terminal'
-
-    try {
-      const styled = renderAudit(findings, 3, { isTTY: true })
-
-      expect(styled).toContain('\x1B[')
-      expect(Bun.stripANSI(styled)).toBe(renderAudit(findings, 3, { isTTY: false }))
-    }
-    finally {
-      if (previous === undefined)
-        delete process.env.KIT_MODE
-      else
-        process.env.KIT_MODE = previous
-    }
+    expect(styled).toContain('\x1B[')
+    expect(Bun.stripANSI(styled)).toBe(plain)
+    expect(plain).toContain('GHSA-a high: Bad')
   })
 
   test('--level and --ignore narrow the advisories, an unblocked package stays clean', async () => {

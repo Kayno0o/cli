@@ -11,7 +11,7 @@ Exits 0 when every extracted file matches the archive, 1 when anything was refus
 const WHITESPACE = /\s+/
 
 function say(message: string): void {
-  console.error(`${role('label', process.stderr)('arc unpack:')} ${message}`)
+  console.error(`${role('note', process.stderr)('arc unpack:')} ${message}`)
 }
 
 export async function unpack(args: string[]): Promise<number> {

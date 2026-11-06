@@ -68,9 +68,9 @@ function when(release: { published?: string | undefined } | undefined, now: numb
   return release?.published === undefined ? '' : `, published ${formatAge(release.published, now)} (${release.published.slice(0, 10)})`
 }
 
-export function render(report: Report, now = Date.now(), stream: { isTTY?: boolean } = process.stdout): string {
-  const id = role('id', stream)
-  const warn = role('warn', stream)
+export function render(report: Report, now = Date.now(), stream: { isTTY?: boolean } = process.stdout, env: Record<string, string | undefined> = process.env): string {
+  const id = role('id', stream, env)
+  const warn = role('warn', stream, env)
 
   if (!report.exists)
     return [id(report.name), ...report.warnings.map(warning => `  ${warn('warning:')} ${warning}`)].join('\n')

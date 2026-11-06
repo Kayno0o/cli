@@ -11,7 +11,7 @@ Exits 0 when the archive is verified (and the folder deleted unless -k), 1 when 
 const TRAILING_SLASHES = /\/+$/
 
 function say(message: string): void {
-  console.error(`${role('label', process.stderr)('arc pack:')} ${message}`)
+  console.error(`${role('note', process.stderr)('arc pack:')} ${message}`)
 }
 
 export async function pack(args: string[]): Promise<number> {

@@ -113,11 +113,11 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
 
 const HIGH_SEVERITIES = new Set<string>(['high', 'critical'])
 
-export function renderAudit(findings: Audited[], total: number, stream: { isTTY?: boolean } = process.stdout): string {
-  const id = role('id', stream)
-  const label = role('label', stream)
-  const warning = role('warn', stream)
-  const problem = role('problem', stream)
+export function renderAudit(findings: Audited[], total: number, stream: { isTTY?: boolean } = process.stdout, env: Record<string, string | undefined> = process.env): string {
+  const id = role('id', stream, env)
+  const label = role('label', stream, env)
+  const warning = role('warn', stream, env)
+  const problem = role('problem', stream, env)
   const blocking = findings.filter(each => each.blocked).length
   const blocks = findings.map(({ name, version, warnings, advisories }) => [
     id(`${name}@${version}`),
