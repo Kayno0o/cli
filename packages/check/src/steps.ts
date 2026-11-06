@@ -15,6 +15,7 @@ export const STEP_NAMES = ['check', 'typecheck', 'lint', 'test'] as const
 // A recipe or target line, `@` and parameters included, which a variable set with := is not.
 const TARGET = /^@?([\w-]+)(?:[ \t][^:=\n]*)?:(?!=)/gm
 const JUSTFILES = ['justfile', 'Justfile', '.justfile']
+const TASK_RUNNERS = new Set(['Justfile', 'Makefile'])
 
 // The order make itself reads them in.
 export const MAKEFILES = ['GNUmakefile', 'makefile', 'Makefile']
@@ -186,11 +187,13 @@ export async function discoverProjects(dir: string): Promise<Project[]> {
 }
 
 // The repo's steps: each of STEP_NAMES once, from package.json, else composer.json, else a Justfile, else a Makefile.
+// A Justfile or Makefile `check` comes first, as a task runner's check is the repo's whole validation and usually wraps the script of that name.
 export async function discover(dir: string): Promise<Step[]> {
   const found = await candidates(dir, 'check')
+  const runnerCheck = found.find(candidate => candidate.name === 'check' && TASK_RUNNERS.has(candidate.source))
 
   return STEP_NAMES.flatMap((name) => {
-    const step = found.find(candidate => candidate.name === name)
+    const step = name === 'check' && runnerCheck !== undefined ? runnerCheck : found.find(candidate => candidate.name === name)
 
     return step === undefined ? [] : [step]
   })

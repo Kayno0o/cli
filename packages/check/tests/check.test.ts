@@ -60,6 +60,17 @@ describe('discover', () => {
     expect((await discover(dir)).map(step => step.name)).toEqual(['test'])
   })
 
+  test.skipIf(Bun.which('just') === null)('a Justfile or Makefile check wins over a package.json check, the other steps keeping theirs', async () => {
+    const dir = temp('check-runner-')
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { check: 'tsc', lint: 'eslint .' } }))
+    writeFileSync(join(dir, 'Makefile'), 'check:\n\ttrue\n')
+    expect((await discover(dir)).map(step => step.command)).toEqual(['make check', 'bun run lint'])
+
+    writeFileSync(join(dir, 'justfile'), 'check:\n  true\n\nlint:\n  true\n')
+    expect((await discover(dir)).map(step => step.command)).toEqual(['just check', 'bun run lint'])
+  })
+
   test('composer.json scripts, even as an array', async () => {
     expect((await discover(repo('composer'))).map(step => step.command)).toEqual(['composer run lint', 'composer run test'])
   })

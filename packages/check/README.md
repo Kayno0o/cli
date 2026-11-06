@@ -19,7 +19,7 @@ check --json     # [{name, command, in?, ok, ms, log, failed?}] once every step 
 
 ## Steps
 
-`check`, `typecheck`, `lint` and `test`, run in that order, from the first source that has each one:
+`check`, `typecheck`, `lint` and `test`, run in that order, from the first source that has each one, but for a Justfile or Makefile `check`, which wins over a script of that name: a task runner's check is the repo's whole validation and usually wraps the script, as `check: bun run check -p tsconfig.json` does.
 
 | Source | Command |
 | --- | --- |
