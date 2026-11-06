@@ -48,6 +48,8 @@ Each bin completes itself through `<bin> __complete`. fish gets a file per bin (
 cli config [--json]   # every config file a bin looks for (set, absent or invalid), the main variables set with secrets hidden, the workspace folder and the theme in force
 ```
 
+`~/.config/kaynooo-cli/doctor.json` takes `forgeHosts` (other hosts the same forge answers on) and `concurrency` (a positive whole number, 4 when unset), how many registry lookups run at once.
+
 ## cli stats
 
 ```sh

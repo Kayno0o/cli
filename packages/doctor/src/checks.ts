@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
+import { configuredNumber, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
 import { HOOKS_REQUIRES, NEEDS } from './catalog'
 import { completionDir, missingCompletions } from './completions'
 
@@ -63,7 +63,7 @@ interface Manifest { version?: string, engines?: { bun?: string }, bin?: Record<
 
 const VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/
 // `bun info` calls in flight at once, so the registry is not asked for every package together.
-const INFO_AT_ONCE = 4
+const INFO_AT_ONCE = configuredNumber('doctor', 'concurrency', 4)
 
 export function readJsonText<T>(text: string): T | undefined {
   try {
