@@ -4,7 +4,7 @@ import type { Container, Service } from './stack'
 import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { maskLine, PEM_BEGIN, PEM_END } from '@kaynooo/cli-env/mask'
-import { badUsage, fail, jsonOption, paint, parse, printJson, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, configuredNumber, fail, jsonOption, paint, parse, printJson, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
 import { truncate } from '@kaynooo/utils/text'
 import { allServices, attempt, containers, key, stateColor } from './stack'
 
@@ -33,8 +33,8 @@ const options = {
 const ERROR = /\b(?:error|err|fatal|exception|panic|critical|crit|traceback|failed|failure|refused|denied|timeout|timed out|oom|killed)\b/i
 const WARNING = /\b(?:warn|warning|deprecated|deprecation)\b/i
 const LEVELS = { error: ERROR, warn: new RegExp(`${ERROR.source}|${WARNING.source}`, 'i') }
-const TAIL = 500
-const MAX_WIDTH = 220
+const TAIL = configuredNumber('dlog', 'tail', 500)
+const MAX_WIDTH = configuredNumber('dlog', 'width', 220)
 const TIMESTAMP = /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?|\d{2}[/-][A-Za-z]{3}[/-]\d{4}:\d{2}:\d{2}:\d{2}(?: [+-]\d{4})?|\d{2}:\d{2}:\d{2}(?:[.,]\d+)?/g
 const IDENTIFIER = /\b(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|0x[0-9a-f]+|[0-9a-f]{12,})\b/gi
 const NUMBER = /\d+/g

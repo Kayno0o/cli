@@ -1,16 +1,17 @@
 import type { Hotspot } from './churn'
 import { basename, join } from 'node:path'
 import process from 'node:process'
-import { badUsage, capped, duration, fail, fileLink, jsonOption, limitOf, limitOptions, paint, parse, printHeader, printJson, role, table } from '@kaynooo/cli-kit'
+import { badUsage, capped, configuredNumber, duration, fail, fileLink, jsonOption, limitOf, limitOptions, paint, parse, printHeader, printJson, readUserConfig, role, table } from '@kaynooo/cli-kit'
 import { churnSince, complexityOf, isCandidate, isGenerated } from './churn'
 import { listFiles, readText } from './files'
 import { worstUnit } from './units'
 
-const DEFAULT_SINCE = '6 months ago'
-const DEFAULT_BULK = 25
+const SETTINGS = readUserConfig('hotspots')
+const DEFAULT_SINCE = typeof SETTINGS.since === 'string' && SETTINGS.since !== '' ? SETTINGS.since : '6 months ago'
+const DEFAULT_BULK = configuredNumber('hotspots', 'bulk', 25)
 const DAY_MS = 86_400_000
 const DEFAULT_HALF_LIFE = '90d'
-const DEFAULT_COUNT = 20
+const DEFAULT_COUNT = configuredNumber('hotspots', 'limit', 20)
 
 const USAGE = `hotspots [options] [dir]: ranks the source files under dir (here by default) by complexity times churn, the ones both hard to read and often edited first, honouring .gitignore
 

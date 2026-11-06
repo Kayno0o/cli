@@ -1,14 +1,15 @@
 import { existsSync, statSync } from 'node:fs'
+import { configuredNumber } from '@kaynooo/cli-kit'
 
 // Lines kept from the end of the file for a timeout's excerpt, and on each side of a failure line.
-const TAIL = 20
-const AROUND = 5
+const TAIL = configuredNumber('wait', 'tail', 20)
+const AROUND = configuredNumber('wait', 'around', 5)
 const CARRIAGE_RETURN = /\r$/
 // Bytes read from the file at a time, so a large one is never held whole.
 const SLICE_BYTES = 1024 * 1024
 // A line is cut to this length before the user's patterns see it, which bounds a pattern that backtracks.
 const MAX_LINE = 10_000
-const PORT_TIMEOUT_MS = 3000
+const PORT_TIMEOUT_MS = configuredNumber('wait', 'portTimeoutMs', 3000)
 
 export interface Line {
   number: number
