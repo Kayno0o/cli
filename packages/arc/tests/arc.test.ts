@@ -5,6 +5,8 @@ import { describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const temp = tempDirs()
+// GNU tar with ACL and xattr support, and util-linux's findmnt and mountpoint: a busybox image has none of them.
+const GNU = Bun.which('zstd') !== null && Bun.which('findmnt') !== null && Bun.which('mountpoint') !== null && Bun.spawnSync(['tar', '--version']).stdout.toString().includes('GNU tar')
 
 function arc(args: string[], cwd = process.cwd()) {
   const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
@@ -25,7 +27,7 @@ function project(): { root: string, folder: string, dest: string } {
   return { root, folder, dest }
 }
 
-describe('arc pack', () => {
+describe.skipIf(!GNU)('arc pack', () => {
   test('packs, verifies and deletes the folder', () => {
     const { folder, dest } = project()
     const result = arc(['pack', folder, dest])
@@ -58,6 +60,34 @@ describe('arc pack', () => {
     expect(existsSync(folder)).toBe(true)
   })
 
+  test('keeps the folder and reports when an entry cannot be archived', () => {
+    const { folder, dest } = project()
+    const socket = Bun.listen({ unix: join(folder, 'sock'), socket: { data: () => undefined } })
+
+    try {
+      const result = arc(['pack', folder, dest])
+
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('kept')
+      expect(existsSync(join(folder, 'src/a.txt'))).toBe(true)
+    }
+    finally {
+      socket.stop(true)
+    }
+  })
+
+  test('sees through a symlinked parent when checking the destination', () => {
+    const { root, folder } = project()
+
+    symlinkSync(root, join(root, 'via'))
+
+    const result = arc(['pack', join(root, 'via/project'), join(folder, 'src')])
+
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('inside')
+    expect(existsSync(folder)).toBe(true)
+  })
+
   test('refuses a symlink, a missing destination and a destination inside the folder', () => {
     const { root, folder, dest } = project()
 
@@ -73,7 +103,7 @@ describe('arc pack', () => {
   })
 })
 
-describe('arc unpack', () => {
+describe.skipIf(!GNU)('arc unpack', () => {
   test('round-trips what pack made', () => {
     const { folder, dest, root } = project()
     const restored = join(root, 'restored')

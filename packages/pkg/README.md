@@ -73,9 +73,9 @@ The metadata comes from the registry the name is installed from. A `@scope/` nam
 pkg manager dev
 ```
 
-`pkg manager <install|dev|remove|update|exec>` prints the command the manager of this folder runs for the action, such as `bun add -d`, `composer require --dev` or `pnpm dlx`. The manager is the one whose lockfile (`bun.lock`, `yarn.lock`, `pnpm-lock.yaml`, `package-lock.json`, `uv.lock`) or `composer.json` is nearest, here or in a parent folder, bun when none is found. `--json` prints `{manager, action, command}`.
+`pkg manager <install|dev|remove|update|exec>` prints the command the manager of this folder runs for the action, such as `bun add -d`, `composer require --dev` or `pnpm dlx`. The manager is the one whose lockfile (`bun.lock`, `bun.lockb`, `yarn.lock`, `pnpm-lock.yaml`, `package-lock.json`, `uv.lock`) or `composer.json` is nearest, here or in a parent folder, bun when none is found. `--json` prints `{manager, action, command}`.
 
-A shell abbreviation can call it, in fish `abbr -a nd --function 'pkg manager dev'`.
+A shell abbreviation can call it through a small function, in fish `function __nd; pkg manager dev; end` then `abbr -a nd --function __nd`.
 
 ## Maintenance
 

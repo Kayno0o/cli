@@ -11,14 +11,14 @@ test('reads the address the service answers', async () => {
 })
 
 test('throws when the service fails', async () => {
-  let thrown = false
+  let failure: unknown
 
   try {
     await publicIp(undefined, `http://127.0.0.1:${server.port}/other`)
   }
-  catch {
-    thrown = true
+  catch (error) {
+    failure = error
   }
 
-  expect(thrown).toBe(true)
+  expect(failure).toBeInstanceOf(Error)
 })

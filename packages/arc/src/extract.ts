@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { fail, parse } from '@kaynooo/cli-kit'
-import { run } from './proc'
+import { interactive } from './proc'
 
 const USAGE = `arc extract <file>: extracts an archive of any common kind into the current folder, by its extension
 
@@ -39,10 +39,10 @@ export async function extract(args: string[]): Promise<number> {
   if (extractor === undefined)
     return fail(`'${file}' cannot be extracted: unknown extension`, 1)
 
-  const [bin] = extractor[1](file)
+  const argv = extractor[1](file)
 
-  if (Bun.which(bin!) === null)
-    return fail(`${bin} is not on PATH`, 1)
+  if (Bun.which(argv[0] ?? '') === null)
+    return fail(`${argv[0]} is not on PATH`, 1)
 
-  return (await run(extractor[1](file))).code === 0 ? 0 : 1
+  return await interactive(argv) === 0 ? 0 : 1
 }

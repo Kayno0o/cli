@@ -35,8 +35,9 @@ export async function pipeline(left: string[], right: string[], capture = false)
   return { codes: [a, b], stdout }
 }
 
-export function failed(codes: [number, number]): boolean {
-  return codes[0] !== 0 || codes[1] !== 0
+// Runs a command on the terminal, its output shown and its prompts answerable, answering its exit code.
+export async function interactive(argv: string[]): Promise<number> {
+  return Bun.spawn(argv, { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' }).exited
 }
 
 export function lines(text: string): string[] {
