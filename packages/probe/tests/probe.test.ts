@@ -51,6 +51,14 @@ const server = Bun.serve({
       return new Response('late')
     }
 
+    // Allows https://app.test to PUT with content-type, when the preflight asks the way a browser does.
+    if (pathname === '/cors' && request.method === 'OPTIONS') {
+      const origin = request.headers.get('origin')
+      const asked = request.headers.get('access-control-request-method') !== null
+
+      return new Response(null, { status: 204, headers: origin === 'https://app.test' && asked ? { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'GET, PUT', 'access-control-allow-headers': 'content-type', 'vary': 'Origin' } : {} })
+    }
+
     if (pathname === '/nohead' && request.method === 'HEAD')
       return new Response(null, { status: 405 })
 
@@ -131,6 +139,32 @@ describe('probe against a local http server', () => {
     expect(report.addresses).toEqual({ a: ['127.0.0.1'], aaaa: [] })
     expect((await probe([target, '--resolve', 'my.test'])).code).toBe(2)
     expect((await probe([target, '--resolve', 'my.test:nope'])).code).toBe(2)
+  })
+
+  test('--cors says whether the preflight lets the request through, exiting 1 when it does not', async () => {
+    const allowed = await probe([`${base}/cors`, '--cors', 'https://app.test/', '--method', 'put'])
+
+    expect(allowed.code).toBe(0)
+    expect(allowed.out).toStartWith(`ok: allowed 204 ${base}/cors  from https://app.test, PUT with content-type`)
+    expect(allowed.out).toContain('  access-control-allow-methods GET, PUT')
+
+    const refused = await probe([`${base}/cors`, '--cors', 'https://evil.test', '--json'])
+
+    expect(refused.code).toBe(1)
+    expect(JSON.parse(refused.out)).toEqual({ target: `${base}/cors`, url: `${base}/cors`, status: 204, request: { origin: 'https://evil.test', method: 'POST', headers: ['content-type'] }, allowed: false, reasons: ['no access-control-allow-origin', 'access-control-allow-headers does not cover content-type'], warnings: [], headers: {} })
+
+    const header = await probe([`${base}/cors`, '--cors', 'https://app.test', '--cors-headers', 'content-type, x-trace', '--json'])
+
+    expect((JSON.parse(header.out) as { reasons: string[] }).reasons).toEqual(['access-control-allow-headers does not cover x-trace'])
+    expect((await probe(['http://127.0.0.1:1/', '--cors', 'https://app.test'])).code).toBe(1)
+  })
+
+  test('--cors, --method and --dns refuse what they cannot go with', async () => {
+    expect((await probe([base, '--cors', 'not an origin'])).code).toBe(2)
+    expect((await probe([base, '--method', 'PUT'])).err).toContain('--method goes with --cors')
+    expect((await probe([base, '--cors-headers', 'x'])).code).toBe(2)
+    expect((await probe([base, '--dns', '-H', 'X: 1'])).err).toContain('--dns cannot be used with --header')
+    expect((await probe(['127.0.0.1', '--dns'])).err).toContain('--dns takes a name, not the address 127.0.0.1')
   })
 
   test('--timeout gives up on a slow answer', async () => {

@@ -42,6 +42,8 @@ export interface HopOptions extends Wire {
   http3: boolean
   insecure: boolean
   get: boolean
+  // Sent as this method, a body-less request read whole: OPTIONS for a CORS preflight.
+  method?: string
 }
 
 // The port a URL is reached on, which curl's --resolve needs spelled out.
@@ -62,13 +64,15 @@ function curlResolve(url: string, resolve: ReadonlyMap<string, string> | undefin
   return ['--resolve', `${parsed.hostname}:${portOf(parsed)}:${isIP(address) === 6 ? `[${address}]` : address}`]
 }
 
-async function runCurl(url: string, { http3: wantsH3, insecure, get, headers = [], resolve, timeoutS = MAX_TIME }: HopOptions): Promise<CurlResult> {
+async function runCurl(url: string, { http3: wantsH3, insecure, get, method, headers = [], resolve, timeoutS = MAX_TIME }: HopOptions): Promise<CurlResult> {
   const args = ['-sS', '-o', '/dev/null', '--connect-timeout', String(Math.min(CONNECT_TIMEOUT, timeoutS)), '--max-time', String(timeoutS), '--write-out', WRITE_OUT, ...curlResolve(url, resolve)]
 
   for (const header of headers)
     args.push('-H', header)
 
-  if (!get)
+  if (method !== undefined)
+    args.push('-X', method)
+  else if (!get)
     args.push('-I')
 
   if (wantsH3)
@@ -99,6 +103,13 @@ export async function curlHop(url: string, options: HopOptions): Promise<CurlRes
     result = await runCurl(url, { ...options, get: true })
 
   return result
+}
+
+/** The preflight a browser sends before a cross-origin request: the answer as is, no retry with another method. */
+export async function curlPreflight(url: string, request: { origin: string, method: string, headers: string[] }, options: Wire & { insecure: boolean }): Promise<CurlResult> {
+  const asked = [`Origin: ${request.origin}`, `Access-Control-Request-Method: ${request.method}`, ...request.headers.length > 0 ? [`Access-Control-Request-Headers: ${request.headers.join(', ')}`] : []]
+
+  return runCurl(url, { ...options, headers: [...options.headers ?? [], ...asked], http3: false, get: true, method: 'OPTIONS' })
 }
 
 export interface Addresses {

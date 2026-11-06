@@ -372,7 +372,7 @@ ports --json
 
 reports each site's negotiated HTTP version, redirect chain, timings, addresses, TLS and certificate, the headers worth knowing and what warrants a warning. Package `probe`.
 
-Instead of: the httpversion fish function, curl -sI chains and openssl s_client one-liners
+Instead of: the httpversion fish function, curl -sI chains, openssl s_client and dig @server one-liners
 
 ```sh
 probe [options] <url|domain>...
@@ -380,6 +380,8 @@ probe example.com
 probe https://example.com/path --json
 probe a.test b.test  # one line each
 probe https://example.com --resolve example.com:203.0.113.7 -H "Host: example.com" --verbose  # a server before its DNS points at it
+probe --dns example.com  # whether a DNS change has reached every resolver
+probe --cors https://app.example.com --method PUT --cors-headers content-type,authorization https://api.example.com/items  # whether the browser would let the call through
 ```
 
 ## proc

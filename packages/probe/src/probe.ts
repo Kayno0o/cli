@@ -2,12 +2,16 @@
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { CertInfo, Headers, Hop, HttpRedirect, Offers, Target, Timings } from './analyze'
+import type { CorsRequest, CorsVerdict } from './cors'
+import type { DnsReport } from './dns'
 import type { Addresses, TlsInfo, Wire } from './net'
 import { isIP } from 'node:net'
 import process from 'node:process'
 import { badUsage, duration, fail, jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { cdnHint, daysLeftLabel, httpRedirectOf, isRedirect, MAX_HOPS, nextUrl, offersOf, parseTarget, versionLabel, wantsHttpCheck, warningsOf, worthKnowing } from './analyze'
-import { addressesOf, curlHasHttp3, curlHop, portOf, tlsInfo } from './net'
+import { corsVerdict } from './cors'
+import { dnsReport, known, network } from './dns'
+import { addressesOf, curlHasHttp3, curlHop, curlPreflight, portOf, tlsInfo } from './net'
 
 const LABEL_WIDTH = 13
 
@@ -17,18 +21,29 @@ By default one line per target: the HTTP version, status, final URL, total time,
 A bare domain is tried over https first and over http when that fails. Redirects are followed hop by hop (at most ${MAX_HOPS}), each hop's status and HTTP version listed. HTTP/3 is spoken only when the installed curl lists it, otherwise it is reported from alt-svc. The certificate is read even when it is not trusted, and --insecure also lets curl go on with it.
 -H adds a header to every request, --resolve host:ip reaches a host at that address instead of the DNS answer (the certificate and the Host header stay the host's), both repeatable.
 
-Warns on a certificate with fewer than 14 days left or not trusted, and on an http:// twin that does not redirect to https (checked for a bare domain or an https URL on the default port).`
+Warns on a certificate with fewer than 14 days left or not trusted, and on an http:// twin that does not redirect to https (checked for a bare domain or an https URL on the default port).
 
-const EXITS: ExitRow[] = [[0, 'every site answered, warnings or not'], [1, 'a site could not be reached'], [2, 'a usage error']]
+--dns makes no HTTP request: it asks the system resolver, Cloudflare, Google, Quad9 and each nameserver of the host's zone for its A, AAAA and CNAME records with their TTL, and warns on a resolver answering otherwise than the zone's nameservers, a change not reached it yet.
+--cors <origin> sends the preflight a browser on that origin would send before a --method request carrying --cors-headers, and says whether the browser would go on, with each reason when it would not.`
+
+const EXITS: ExitRow[] = [[0, 'every site answered, warnings or not'], [1, 'a site could not be reached, a CORS preflight was refused, or no resolver knows a name'], [2, 'a usage error']]
 
 const OPTIONS = {
-  insecure: { type: 'boolean', short: 'k', description: 'let curl go on with a certificate it does not trust' },
-  header: { type: 'string', short: 'H', multiple: true, description: 'a `Name: value` header sent with every request, repeatable' },
-  resolve: { type: 'string', multiple: true, description: 'host:ip, reach the host at that address instead of the DNS answer, repeatable' },
-  timeout: { type: 'string', short: 't', description: 'longest one request may take (20s): 5s, 1m, a bare number in seconds' },
-  verbose: { type: 'boolean', description: 'the whole table for each target instead of one line' },
-  json: jsonOption('one object per target {target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, warnings}, an array of them for several targets (an unreachable one is {target, error})'),
+  'insecure': { type: 'boolean', short: 'k', description: 'let curl go on with a certificate it does not trust' },
+  'header': { type: 'string', short: 'H', multiple: true, description: 'a `Name: value` header sent with every request, repeatable' },
+  'resolve': { type: 'string', multiple: true, description: 'host:ip, reach the host at that address instead of the DNS answer, repeatable' },
+  'timeout': { type: 'string', short: 't', description: 'longest one request may take (20s, 3s for a DNS query): 5s, 1m, a bare number in seconds' },
+  'verbose': { type: 'boolean', description: 'the whole table for each target instead of one line' },
+  'dns': { type: 'boolean', description: 'compare what each resolver and the zone\'s nameservers answer for the host, no HTTP request', conflicts: ['cors', 'header', 'resolve', 'insecure', 'verbose'] },
+  'cors': { type: 'string', description: 'the origin a browser would call from: whether its CORS preflight lets the request through', conflicts: ['dns', 'verbose'] },
+  'method': { type: 'string', description: 'with --cors, the method of the request the preflight asks for (POST)' },
+  'cors-headers': { type: 'string', description: 'with --cors, the headers it carries, comma separated, empty for none (content-type)' },
+  'json': jsonOption('one object per target {target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, warnings}, an array of them for several targets (an unreachable one is {target, error}); with --dns {target, zone, answers, agree, warnings}, with --cors {target, url, status, request, allowed, reasons, warnings, headers}'),
 } as const
+
+const DNS_TIMEOUT_MS = 3000
+const LIST = /\s*,\s*/
+const TRAILING_SLASH = /\/$/
 
 const BRACKETS = /^\[|\]$/g
 const HEADER_LINE = /^[\w!#$%&'*+.^`|~-]+:/
@@ -232,8 +247,135 @@ function print(report: Report): void {
     console.log(marked('warn', warning, process.stdout))
 }
 
+function printDns(report: DnsReport): void {
+  const label = role('label', process.stdout)
+  const listed = (values: string[]): string => values.length === 0 ? '-' : values.join(' ')
+
+  console.log(`${role('path', process.stdout)(report.target)}  ${label(report.zone === null ? 'no zone found' : `zone ${report.zone}`)}`)
+  console.log(table([
+    ['RESOLVER', 'SERVER', 'A', 'AAAA', 'CNAME', 'TTL'],
+    ...report.answers.map(answer => [
+      answer.authoritative ? `${answer.resolver} (ns)` : answer.resolver,
+      answer.server,
+      ...answer.error === undefined ? [listed(answer.a), listed(answer.aaaa), listed(answer.cname)] : [answer.error, '', ''],
+      answer.ttl === null ? '-' : `${answer.ttl}s`,
+    ]),
+  ], { header: true }))
+
+  if (report.agree)
+    console.log(marked('ok', 'every resolver gives the same answer', process.stdout))
+
+  for (const warning of report.warnings)
+    console.log(marked('warn', warning, process.stdout))
+}
+
+async function dnsMain(inputs: string[], timeoutMs: number | undefined, json: boolean): Promise<number> {
+  const hosts = inputs.map((input) => {
+    const host = parseTarget(input)?.url.hostname
+
+    if (host === undefined)
+      badUsage(`not a URL or domain: ${input}`)
+
+    if (isIP(host.replace(BRACKETS, '')) !== 0)
+      badUsage(`--dns takes a name, not the address ${input}`)
+
+    return { input, host }
+  })
+  const client = network(timeoutMs ?? DNS_TIMEOUT_MS)
+  const reports = await Promise.all(hosts.map(async ({ input, host }) => dnsReport(input, host, client)))
+
+  if (json) {
+    printJson(reports.length === 1 ? reports[0] : reports)
+  }
+  else {
+    for (const [at, report] of reports.entries()) {
+      if (at > 0)
+        console.log('')
+
+      printDns(report)
+    }
+  }
+
+  return reports.every(known) ? 0 : 1
+}
+
+interface CorsReport extends CorsVerdict {
+  target: string
+  url: string
+  status: number
+  request: CorsRequest
+}
+
+function printCors(report: CorsReport): void {
+  const label = role('label', process.stdout)
+  const { request } = report
+  const asked = `from ${request.origin}, ${request.method}${request.headers.length === 0 ? '' : ` with ${request.headers.join(', ')}`}`
+
+  console.log(`${marked(report.allowed ? 'ok' : 'problem', report.allowed ? 'allowed' : 'refused', process.stdout)} ${role('value', process.stdout)(String(report.status))} ${role('path', process.stdout)(report.url)}  ${label(asked)}`)
+
+  for (const [name, value] of Object.entries(report.headers))
+    console.log(`  ${label(name)} ${value}`)
+
+  for (const reason of report.reasons)
+    console.log(marked('problem', reason, process.stdout))
+
+  for (const warning of report.warnings)
+    console.log(marked('warn', warning, process.stdout))
+}
+
+// The origin as a browser sends it: scheme, host and port, no path; `null` for an opaque one.
+function originOf(input: string): string {
+  if (input === 'null')
+    return input
+
+  if (!URL.canParse(input))
+    badUsage(`--cors takes an origin such as https://app.example.com, not ${input}`)
+
+  const { origin } = new URL(input)
+
+  return origin === 'null' ? input.replace(TRAILING_SLASH, '') : origin
+}
+
+async function corsMain(targets: { input: string, target: Target }[], request: CorsRequest, { insecure, wire }: Settings, json: boolean): Promise<number> {
+  const reports = await Promise.all(targets.map(async ({ input, target }): Promise<CorsReport | { target: string, error: string }> => {
+    const { hop, errormsg } = await curlPreflight(target.url.href, request, { ...wire, insecure })
+
+    if (hop === undefined)
+      return { target: input, error: `could not reach ${target.url.host}: ${errormsg ?? 'no response'}` }
+
+    return { target: input, url: hop.url, status: hop.status, request, ...corsVerdict(hop.status, hop.headers, request) }
+  }))
+  const [only] = reports
+
+  if (reports.length === 1 && only !== undefined && 'error' in only)
+    fail(only.error, 1)
+
+  if (json) {
+    printJson(reports.length === 1 ? only : reports)
+  }
+  else {
+    for (const report of reports) {
+      if ('error' in report)
+        console.error(marked('problem', report.error, process.stderr))
+      else
+        printCors(report)
+    }
+  }
+
+  return reports.every(report => 'allowed' in report && report.allowed) ? 0 : 1
+}
+
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['<url|domain>...'], exits: EXITS, replaces: 'the httpversion fish function, curl -sI chains and openssl s_client one-liners', examples: ['probe example.com', 'probe https://example.com/path --json', ['probe a.test b.test', 'one line each'], ['probe https://example.com --resolve example.com:203.0.113.7 -H "Host: example.com" --verbose', 'a server before its DNS points at it']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['<url|domain>...'], exits: EXITS, replaces: 'the httpversion fish function, curl -sI chains, openssl s_client and dig @server one-liners', examples: ['probe example.com', 'probe https://example.com/path --json', ['probe a.test b.test', 'one line each'], ['probe https://example.com --resolve example.com:203.0.113.7 -H "Host: example.com" --verbose', 'a server before its DNS points at it'], ['probe --dns example.com', 'whether a DNS change has reached every resolver'], ['probe --cors https://app.example.com --method PUT --cors-headers content-type,authorization https://api.example.com/items', 'whether the browser would let the call through']] })
+
+  if (values.cors === undefined) {
+    if (values.method !== undefined)
+      badUsage('--method goes with --cors')
+
+    if (values['cors-headers'] !== undefined)
+      badUsage('--cors-headers goes with --cors')
+  }
+
   const headers = values.header ?? []
 
   for (const header of headers) {
@@ -242,6 +384,10 @@ async function main(args: string[]): Promise<number> {
   }
 
   const timeoutMs = values.timeout === undefined ? undefined : duration(values.timeout, 'timeout', 0, 's')
+
+  if (values.dns === true)
+    return dnsMain(positionals, timeoutMs, values.json === true)
+
   const wire: Wire = { headers, resolve: resolvesOf(values.resolve ?? []), ...timeoutMs === undefined ? {} : { timeoutS: timeoutMs / 1000 } }
   const targets = positionals.map((input) => {
     const target = parseTarget(input)
@@ -251,6 +397,13 @@ async function main(args: string[]): Promise<number> {
 
     return { input, target }
   })
+
+  if (values.cors !== undefined) {
+    const request = { origin: originOf(values.cors), method: (values.method ?? 'POST').toUpperCase(), headers: (values['cors-headers'] ?? 'content-type').split(LIST).filter(name => name !== '') }
+
+    return corsMain(targets, request, { insecure: values.insecure === true, wire }, values.json === true)
+  }
+
   const reports = await Promise.all(targets.map(async ({ input, target }) => probe(target, input, { insecure: values.insecure === true, wire })))
   const [only] = reports
 
