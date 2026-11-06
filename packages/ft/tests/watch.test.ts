@@ -81,9 +81,9 @@ describe('watchRuns output', () => {
     }
 
     const text = written.join('')
-    const left = Bun.stripANSI(text.slice(text.lastIndexOf('\x1B[2K') + 4))
+    const left = Bun.stripANSI(text.slice(text.lastIndexOf('\x1B[J') + 3))
 
-    expect(text).toContain('\x1B[1A')
+    expect(text).toContain('\x1B[2A')
     expect(left).toBe('✓ success test.yml run 2 on main\n✓ success test.yml run 1 on main\n')
   })
 

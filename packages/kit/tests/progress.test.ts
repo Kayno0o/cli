@@ -5,7 +5,7 @@ import { liveRegion, progressLine, progressText, task, taskList } from '../src/p
 import { takesControlCodes } from '../src/style'
 import { stripAnsi } from '../src/text'
 
-const CLEAR_LINE = '\r\x1B[2K'
+const CLEAR_LINE = '\r\x1B[J'
 
 function terminal(columns = 80) {
   const written: string[] = []
@@ -66,7 +66,7 @@ describe('the progress line', () => {
     for (const frame of frames) {
       expect(frame.startsWith(CLEAR_LINE)).toBe(true)
       // eslint-disable-next-line no-control-regex
-      expect(frame.slice(CLEAR_LINE.length).replaceAll(/\x1B\[[\d;]+m/g, '')).toHaveLength(19)
+      expect(frame.slice(CLEAR_LINE.length, -1).replaceAll(/\x1B\[[\d;]+m/g, '')).toHaveLength(19)
     }
 
     expect(written.at(-1)).toBe(CLEAR_LINE)
@@ -89,7 +89,7 @@ describe('the progress line', () => {
         line.update({ step: 'prerendering', done, total: 50, unit: 'routes' })
 
       expect(written.slice(drawn)).toHaveLength(1)
-      expect(stripAnsi(written.at(-1)!)).toEndWith(' 0/50 routes 0s')
+      expect(stripAnsi(written.at(-1)!)).toEndWith(' 0/50 routes 0s\r')
 
       // The count shows with the next frame of the spinner's timer.
       for (const limit = Date.now() + 5000; !stripAnsi(written.at(-1)!).includes(' 50/50 routes ') && Date.now() < limit;)
@@ -111,7 +111,7 @@ describe('the progress line', () => {
     line.stop()
 
     // eslint-disable-next-line no-control-regex
-    expect(written[0]!.slice(CLEAR_LINE.length).replaceAll(/\x1B\[[\d;]+m/g, '')).toBe(`⠋ ${step}`.slice(0, 79))
+    expect(written[0]!.slice(CLEAR_LINE.length, -1).replaceAll(/\x1B\[[\d;]+m/g, '')).toBe(`⠋ ${step}`.slice(0, 79))
   })
 
   it('clears itself before anything else is printed, and gives the console and the streams back once stopped', () => {
@@ -233,10 +233,8 @@ describe('task', () => {
   })
 })
 
-const LINE_UP = '\x1B[1A\x1B[2K'
-
 describe('the live region', () => {
-  it('redraws its lines in place, clearing as many as it drew, each cut to the width with its styles ended', () => {
+  it('redraws its lines in place, the cursor left at the start of the first, each cut to the width with its styles ended', () => {
     const { written, stream } = terminal(11)
     let lines = ['one', `\x1B[36m${'long '.repeat(4)}\x1B[39m`, 'three']
     const region = liveRegion(() => lines, stream, {})
@@ -246,10 +244,10 @@ describe('the live region', () => {
     region.redraw()
     region.stop()
 
-    expect(written).toEqual([`${CLEAR_LINE}one\n\x1B[36mlong long \x1B[0m\nthree`, `${CLEAR_LINE}${LINE_UP}${LINE_UP}four`, CLEAR_LINE])
+    expect(written).toEqual([`${CLEAR_LINE}one\n\x1B[36mlong long \x1B[0m\nthree\x1B[2A\r`, `${CLEAR_LINE}four\r`, CLEAR_LINE])
   })
 
-  it('climbs the rows a narrowed terminal wraps what it drew over, and redraws on a resize', () => {
+  it('redraws on a resize, erasing from the first line down whatever rows the terminal wrapped it over', () => {
     const { written, stream } = terminal(40)
     const listeners: (() => void)[] = []
     const narrowing = { ...stream, on: (_event: 'resize', listener: () => void) => void listeners.push(listener) }
@@ -260,7 +258,7 @@ describe('the live region', () => {
     listeners[0]!()
     region.stop()
 
-    expect(written[1]!.startsWith(`${CLEAR_LINE}${LINE_UP.repeat(3)}xxxxxxxxx`)).toBe(true)
+    expect(written[1]!.startsWith(`${CLEAR_LINE}xxxxxxxxx`)).toBe(true)
   })
 
   it('keeps to the terminal\'s height, and prints above itself', () => {
@@ -271,7 +269,7 @@ describe('the live region', () => {
     region.print('kept')
     region.stop()
 
-    expect(written).toEqual([`${CLEAR_LINE}a\nb`, `${CLEAR_LINE}${LINE_UP}`, 'kept\n', `${CLEAR_LINE}a\nb`, `${CLEAR_LINE}${LINE_UP}`])
+    expect(written).toEqual([`${CLEAR_LINE}a\nb\x1B[1A\r`, CLEAR_LINE, 'kept\n', `${CLEAR_LINE}a\nb\x1B[1A\r`, CLEAR_LINE])
   })
 
   it('draws nothing off a terminal, where print still prints', () => {
@@ -299,7 +297,7 @@ describe('the task list', () => {
 
     const shown = written.map(stripAnsi)
 
-    expect(shown[1]).toMatch(/^\r⠙ lint 0s\n⠙ test 0s$/)
+    expect(shown[1]).toMatch(/^\r⠙ lint 0s\n⠙ test 0s\r$/)
     expect(shown.find(text => text.startsWith('✓ lint'))).toMatch(/^✓ lint \d\.\ds\n$/)
     expect(shown.at(-1)).toBe('✗ test: 2 failed\n')
   })

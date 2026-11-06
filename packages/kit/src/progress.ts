@@ -59,10 +59,9 @@ type Env = Record<string, string | undefined>
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const FRAME_MS = 200
 const BAR_WIDTH = 20
-// Back to the start of the line, then erases it.
-const CLEAR_LINE = '\r\x1B[2K'
-// Up a line, then erases it.
-const LINE_UP = '\x1B[1A\x1B[2K'
+// Back to the start of the line, then erases it and everything under it.
+const CLEAR_BELOW = '\r\x1B[J'
+
 const ESC = String.fromCharCode(27)
 // A colour or cursor code, or an OSC 8 link's opening or closing, read where `lastIndex` points.
 const ESCAPE_CODE = new RegExp(`${ESC}(?:\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]|\\][^\\u0007${ESC}]*(?:\\u0007|${ESC}\\\\))`, 'y')
@@ -85,20 +84,19 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
   // Its own write, taken before the region clears itself ahead of every other.
   const write = stream.write.bind(stream)
   let frame = 0
-  // The visible width of each line drawn, since a terminal narrowed after the draw wraps them over more rows.
-  let drawn: number[] = []
+  let drawn = false
   // Asked of the terminal at every draw: one more column than it has wraps the line, and each frame then leaves a row behind.
   const columns = () => {
     const now = stream.getWindowSize?.()[0] ?? stream.columns
 
     return now === undefined || now === 0 ? 80 : now
   }
-  const rowsDrawn = () => drawn.reduce((sum, width) => sum + Math.max(1, Math.ceil(width / columns())), 0)
+  // The cursor rests at the start of the block's first line, so a terminal that rewraps the block as it narrows cannot move it off that row, and one erase from there takes the block however many rows it spans.
   const clear = () => {
-    if (drawn.length > 0)
-      write(`${CLEAR_LINE}${LINE_UP.repeat(rowsDrawn() - 1)}`)
+    if (drawn)
+      write(CLEAR_BELOW)
 
-    drawn = []
+    drawn = false
   }
   const draw = () => {
     // A terminal that does not say its size, as a pseudo-terminal may, answers 0.
@@ -112,8 +110,8 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
       return
     }
 
-    write(`${drawn.length > 0 ? `${CLEAR_LINE}${LINE_UP.repeat(rowsDrawn() - 1)}` : CLEAR_LINE}${lines.join('\n')}`)
-    drawn = lines.map(line => Bun.stringWidth(line))
+    write(`${CLEAR_BELOW}${lines.join('\n')}${lines.length > 1 ? `\x1B[${lines.length - 1}A` : ''}\r`)
+    drawn = true
   }
   const timer = setInterval(draw, FRAME_MS)
 
