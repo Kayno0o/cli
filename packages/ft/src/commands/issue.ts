@@ -1,5 +1,5 @@
 import type { Issue, IssueComment } from '../issues'
-import { badUsage, copyOption, copyText, formatAge, jsonOption, openUrl, parse, printJson } from '@kaynooo/cli-kit'
+import { badUsage, copyOption, copyText, formatAge, jsonOption, openUrl, parse, printJson, warn } from '@kaynooo/cli-kit'
 import { issueNumbers, openOption, repoOption } from '../args'
 import { boxes, numberedBody } from '../checklist'
 import { latestClaim } from '../claims'
@@ -91,7 +91,7 @@ export async function issue(args: string[]): Promise<number> {
     console.log(bodies.join('\n\n'))
 
     if (values.copy === true && !await copyText(bodies.join('\n\n')))
-      console.error('warning: no clipboard tool found (wl-copy, xclip, xsel, pbcopy)')
+      warn('no clipboard tool found (wl-copy, xclip, xsel, pbcopy)')
 
     return 0
   }

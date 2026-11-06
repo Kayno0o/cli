@@ -7,25 +7,27 @@ const DEFAULT_FILE = '.env'
 const TRAILING_NEWLINE = /\r?\n$/
 const KEY_NAME = /^[A-Z_][\w.-]*$/i
 
-const setUsage = `ev set KEY [file]
+const QUIET = { quiet: { type: 'boolean', short: 'q', description: 'print nothing on success' } } as const
+
+const setUsage = `ev set KEY [file] [--quiet]
 
 Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; --empty sets it to an empty value.
 
 Exits 0 when it wrote the key, 1 when it could not, 2 on a usage error.`
 
-const unsetUsage = `ev unset KEY [file]
+const unsetUsage = `ev unset KEY [file] [--quiet]
 
 Removes every line setting KEY from the file (.env by default), leaving comments and other lines as they are.
 
 Exits 0 when it removed the key, 1 when the file does not set it, 2 on a usage error.`
 
-const mvUsage = `ev mv KEY --from <file> --to <file>
+const mvUsage = `ev mv KEY --from <file> --to <file> [--quiet]
 
 Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force.
 
 Exits 0 when it moved the key, 1 when the source lacks it or the target already sets it, 2 on a usage error.`
 
-const cpUsage = `ev cp KEY --from <file> --to <file> [--as NEWKEY]
+const cpUsage = `ev cp KEY --from <file> --to <file> [--as NEWKEY] [--quiet]
 
 Copies KEY's value from one file to another without printing it, replacing the key's line in the target in place or appending one, and prints the masked result as ev set does. --as stores the copy under another key.
 
@@ -54,6 +56,7 @@ export async function set(args: string[]): Promise<number> {
   const parsed = parse(args, setUsage, {
     file: { type: 'string', short: 'F', description: 'read the value from this file instead of stdin' },
     empty: { type: 'boolean', description: 'set an empty value, reading nothing' },
+    ...QUIET,
   })
 
   const [key, target = DEFAULT_FILE] = parsed.positionals
@@ -77,13 +80,14 @@ export async function set(args: string[]): Promise<number> {
     return current
   })
 
-  console.log(`${target}: ${key}=${maskValue(key, value, await loadKnown(process.cwd(), [file])).replaceAll('\n', '\\n')}`)
+  if (parsed.values.quiet !== true)
+    console.log(`${target}: ${key}=${maskValue(key, value, await loadKnown(process.cwd(), [file])).replaceAll('\n', '\\n')}`)
 
   return 0
 }
 
 export async function unset(args: string[]): Promise<number> {
-  const parsed = parse(args, unsetUsage, {})
+  const parsed = parse(args, unsetUsage, QUIET)
 
   const [key, target = DEFAULT_FILE] = parsed.positionals
 
@@ -99,7 +103,8 @@ export async function unset(args: string[]): Promise<number> {
     await writeEnv(target, file)
   })
 
-  console.log(`${target}: removed ${key}`)
+  if (parsed.values.quiet !== true)
+    console.log(`${target}: removed ${key}`)
 
   return 0
 }
@@ -139,6 +144,7 @@ export async function mv(args: string[]): Promise<number> {
     from: { type: 'string', description: 'the file to take KEY from' },
     to: { type: 'string', description: 'the file to put KEY in, created when missing' },
     force: { type: 'boolean', description: 'replace KEY when the target already sets it' },
+    ...QUIET,
   })
 
   const [key] = parsed.positionals
@@ -154,7 +160,8 @@ export async function mv(args: string[]): Promise<number> {
     await writeEnv(from, source)
   })
 
-  console.log(`${key}: ${from} -> ${to}`)
+  if (parsed.values.quiet !== true)
+    console.log(`${key}: ${from} -> ${to}`)
 
   return 0
 }
@@ -164,6 +171,7 @@ export async function cp(args: string[]): Promise<number> {
     from: { type: 'string', description: 'the file to take KEY from' },
     to: { type: 'string', description: 'the file to put the copy in, created when missing' },
     as: { type: 'string', description: 'store the copy under this key instead' },
+    ...QUIET,
   })
 
   const [key] = parsed.positionals
@@ -173,9 +181,9 @@ export async function cp(args: string[]): Promise<number> {
     fail(`needs KEY, --from and --to\n\n${cpUsage}`)
 
   const { source, target, value, name } = await withLocks([from, to], async () => transfer(key, from, to, as, true))
-  const known = await loadKnown(process.cwd(), [source, target])
 
-  console.log(`${to}: ${name}=${maskValue(name, value, known).replaceAll('\n', '\\n')}`)
+  if (parsed.values.quiet !== true)
+    console.log(`${to}: ${name}=${maskValue(name, value, await loadKnown(process.cwd(), [source, target])).replaceAll('\n', '\\n')}`)
 
   return 0
 }

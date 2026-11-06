@@ -15,6 +15,7 @@ export const fixOptions = {
 export const options = {
   ...fixOptions,
   fix: { type: 'boolean', short: 'f', description: 'run the folder\'s fixers and formatters instead of the steps, as the fix bin does' },
+  quiet: { type: 'boolean', short: 'q', description: 'print nothing for a passing step, and nothing at all when every step passes' },
   failed: { type: 'boolean', description: 'run only the steps that failed in the last run of this folder, read from the run folder' },
   changed: { type: 'boolean', short: 'c', description: 'narrow lint and test to the files changed against HEAD (a bare linter script, a bare bun test script), every other step runs in full and says so' },
   slot: { type: 'boolean', description: 'run each step through slot, queued behind the machine-wide slots of the other sessions (needs the slot bin)' },

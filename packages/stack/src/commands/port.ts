@@ -1,4 +1,4 @@
-import { fail, jsonOption, parse, printJson, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { DEFAULT_MAX_PORT, isListening, MAX_PORT, MIN_PORT, stringToPort } from '../port'
 
 const usage = `stack port <name>
@@ -38,7 +38,7 @@ export async function port(args: string[]): Promise<number> {
   console.log(number)
 
   if (isListening(number))
-    console.error(`port ${number} is already in use on this machine`)
+    warn(`port ${number} is already in use on this machine`)
 
   return 0
 }

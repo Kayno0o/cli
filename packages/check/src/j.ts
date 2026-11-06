@@ -1,7 +1,7 @@
 import type { Arg } from '@kaynooo/cli-kit/picker'
 import type { Entry, Kind } from './jobs'
 import process from 'node:process'
-import { closest, fail, isInteractive, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
+import { closest, fail, isInteractive, jsonOption, paint, parse, printJson, table } from '@kaynooo/cli-kit'
 import { byRecency, emit, list, record, runs } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { labelled, pickJob } from './job-picker'
@@ -74,13 +74,11 @@ function listed(found: Entry[]) {
   }))
 }
 
-function table(found: Entry[]): string {
+function listing(found: Entry[]): string {
   const colors = paint(process.stdout)
   const labels = labelled(found)
-  const rows = found.map(entry => [...labels ? [entry.tag] : [], key(entry), signature(entry)])
-  const widths = rows[0]?.map((_, column) => Math.max(...rows.map(cells => cells[column]!.length))) ?? []
 
-  return found.map((entry, index) => `${rows[index]!.map((cell, column) => cell.padEnd(widths[column]!)).join('  ')}  ${colors.dim(entry.doc ?? '')}`.trimEnd()).join('\n')
+  return table(found.map(entry => [...labels ? [entry.tag] : [], key(entry), signature(entry), colors.dim(entry.doc ?? '')]))
 }
 
 // The words typed after the name fill its parameters in order, so only the required ones past them are asked for.
@@ -169,7 +167,7 @@ export async function j(argv: string[]): Promise<number> {
       if (parsed.values.json === true)
         printJson(found.map(each => ({ id: id(each), key: key(each), runner: each.tag, dir: each.dir, name: each.name, doc: each.doc, parameters: each.parameters })))
       else
-        console.log(table(found))
+        console.log(listing(found))
 
       return 0
     }

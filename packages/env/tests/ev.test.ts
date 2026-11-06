@@ -120,6 +120,17 @@ describe('ev', () => {
     expect(await read('.env.new')).toBe('A="two words"\nB=b\n')
   })
 
+  test('--quiet prints nothing when set, unset, cp and mv succeed', async () => {
+    await write('.env', 'A=1\nB=2\n')
+
+    expect(ev(['set', 'C', '.env', '--quiet'], 'c')).toMatchObject({ code: 0, out: '' })
+    expect(ev(['cp', 'A', '--from', '.env', '--to', '.env.copy', '-q'])).toMatchObject({ code: 0, out: '' })
+    expect(ev(['mv', 'B', '--from', '.env', '--to', '.env.copy', '-q'])).toMatchObject({ code: 0, out: '' })
+    expect(ev(['unset', 'C', '.env', '-q'])).toMatchObject({ code: 0, out: '' })
+    expect(await read('.env')).toBe('A=1\n')
+    expect(await read('.env.copy')).toBe('A=1\nB=2\n')
+  })
+
   test('set refuses an empty value unless --empty says so', async () => {
     expect(ev(['set', 'A'], '').err).toContain('--empty')
     expect(ev(['set', 'A', '--empty']).code).toBe(0)

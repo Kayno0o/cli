@@ -1,7 +1,7 @@
 import type { Chunk } from '@kaynooo/cli-kit'
 import { closeSync, rmSync, writeSync } from 'node:fs'
 import process from 'node:process'
-import { holdSignals, runCommand } from '@kaynooo/cli-kit'
+import { holdSignals, problem, runCommand, warn } from '@kaynooo/cli-kit'
 import { fold, shouldFold } from './fold'
 import { cleanLogs, logDir, newLog } from './logs'
 import { filtered } from './stages'
@@ -56,7 +56,7 @@ export class Recorder {
     }
     catch (error) {
       this.logFailed = true
-      console.error(`out: cannot write the log, the output past ${HEAD_BYTES} bytes is kept in memory only: ${error instanceof Error ? error.message : String(error)}`)
+      warn(`out: cannot write the log, the output past ${HEAD_BYTES} bytes is kept in memory only: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -165,12 +165,12 @@ export async function run(command: string[], threshold: number, was: readonly st
   }
   catch (error) {
     if (!started) {
-      console.error(`out: cannot run ${command[0]}: ${error instanceof Error ? error.message : String(error)}`)
+      problem(`out: cannot run ${command[0]}: ${error instanceof Error ? error.message : String(error)}`)
 
       return (error as { code?: unknown }).code === 'EACCES' ? 126 : 127
     }
 
-    console.error(`out: ${error instanceof Error ? error.message : String(error)}`)
+    problem(`out: ${error instanceof Error ? error.message : String(error)}`)
     code = 1
   }
   finally {
@@ -217,7 +217,7 @@ function present(recorder: Recorder, threshold: number): Presented {
     printed = fold(tidy(text), { threshold, logPath: recorder.save() })
   }
   catch (error) {
-    console.error(`out: could not fold the output: ${error instanceof Error ? error.message : String(error)}`)
+    warn(`out: could not fold the output: ${error instanceof Error ? error.message : String(error)}`)
     printed = text.split('\n').slice(-FALLBACK_LINES).join('\n')
   }
 

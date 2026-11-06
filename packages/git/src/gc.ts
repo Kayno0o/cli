@@ -10,6 +10,7 @@ const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: comm
 const OPTIONS = {
   message: { type: 'string', short: 'm', multiple: true, description: 'a line on what changed, at most two' },
   ticket: { type: 'string', multiple: true, description: 'a ticket line, `#<n> - <title>` (`owner/repo#<n> - <title>` across repositories) copied verbatim from the ticket' },
+  quiet: { type: 'boolean', short: 'q', description: 'print nothing once committed, failures aside' },
   json: jsonOption('{sha, subject, files: [{status, path, from?}]} of the commit'),
 } as const
 
@@ -134,7 +135,7 @@ async function main(argv: string[]): Promise<number> {
 
       printJson({ sha: (await checked(['rev-parse', 'HEAD'])).trim(), subject: head.slice(head.indexOf(' ') + 1), files: changes })
     }
-    else {
+    else if (values.quiet !== true) {
       console.log([head, ...lines.filter(Boolean).map(fileLine)].join('\n'))
     }
 

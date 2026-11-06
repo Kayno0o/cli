@@ -3,7 +3,7 @@ import type { ComposeFix } from '../fix'
 import { stat } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, role, warn } from '@kaynooo/cli-kit'
 import { shellQuote } from '@kaynooo/cli-kit/shell'
 import { audit as findExposed } from '../audit'
 import { fixCompose, shutOthersOut } from '../fix'
@@ -90,11 +90,11 @@ export async function audit(args: string[]): Promise<number> {
 
   // Container data folders owned by another account often run to dozens, so past a few they are only counted.
   if (!json && unread.length > MAX_UNREAD_LISTED) {
-    console.error(`could not read ${unread.length} folders, so they were not audited (--json lists them)`)
+    warn(`could not read ${unread.length} folders, so they were not audited (--json lists them)`)
   }
   else if (!json) {
     for (const dir of unread)
-      console.error(`could not read ${dir}, so it was not audited`)
+      warn(`could not read ${dir}, so it was not audited`)
   }
 
   if (parsed.values.fix === true && (json || exposed.length > 0)) {

@@ -1,5 +1,5 @@
-import { Exit, fail, jsonText, parse, readInput } from '@kaynooo/cli-kit'
-import { connectionOptions, DEFAULT_LIMIT, EXITS, HOSTS_NOTE, outputOptions, rowLimit, WRITE_NOTE } from '../args'
+import { Exit, fail, jsonText, parse, problem, readInput } from '@kaynooo/cli-kit'
+import { connectionOptions, DEFAULT_LIMIT, EXITS, HOSTS_NOTE, outputOptions, rowLimit, WRITE_EXIT, WRITE_NOTE } from '../args'
 import { inspect } from '../guard'
 import { jsonValue, render, shape } from '../output'
 import { connectionUrl, databaseOfUrl, dialectOf, readRows, TEST_SUFFIX, writeRows } from '../run'
@@ -17,8 +17,6 @@ ${HOSTS_NOTE}`
 
 const options = { ...connectionOptions, ...outputOptions } as const
 
-export const WRITE_EXIT = 1
-
 const NO_SQL = 'no SQL given: pass it as an argument or on stdin'
 
 export async function readSql(positionals: string[]): Promise<string> {
@@ -31,7 +29,8 @@ export async function readSql(positionals: string[]): Promise<string> {
 }
 
 function handBack(sql: string, reasons: string[], note = ''): number {
-  console.log(`db: not run, this statement would write or cannot be shown to only read (${reasons.join('; ')})${note}. Run it yourself:\n\n\`\`\`sql\n${sql.trim()}\n\`\`\``)
+  problem(`db: not run, this statement would write or cannot be shown to only read (${reasons.join('; ')})${note}. Run it yourself:`)
+  console.log(`\`\`\`sql\n${sql.trim()}\n\`\`\``)
 
   return WRITE_EXIT
 }

@@ -17,6 +17,7 @@ Exits 0 when it printed a choice, 1 when cancelled, nothing matches or there are
 const OPTIONS = {
   multi: { type: 'boolean', short: 'm', description: 'tab marks several lines, enter prints them' },
   prompt: { type: 'string', short: 'p', description: 'the prompt before the query (> )' },
+  // -q is the query here, not quiet: it predates the convention and pick has nothing to silence.
   query: { type: 'string', short: 'q', description: 'the query to start with' },
   preview: { type: 'string', description: 'a command shown for the highlighted line, {} standing for it' },
   height: { type: 'string', description: 'lines or a percentage of the terminal to draw in (100%)' },

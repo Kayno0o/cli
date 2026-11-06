@@ -6,6 +6,7 @@ import { version } from '../package.json'
 
 const GST = new URL('../src/gst.ts', import.meta.url).pathname
 const GC = new URL('../src/gc.ts', import.meta.url).pathname
+const GB = new URL('../src/gb.ts', import.meta.url).pathname
 // The user's global hooks and settings stay out of the test repositories.
 const ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
 
@@ -20,6 +21,7 @@ function run(argv: string[], env: Record<string, string> = {}) {
 const git = (...args: string[]) => run(['git', ...args]).out.trim()
 const gst = (...args: string[]) => run([process.execPath, GST, ...args])
 const gc = (...args: string[]) => run([process.execPath, GC, ...args])
+const gb = (...args: string[]) => run([process.execPath, GB, ...args])
 
 function file(name: string, text = `${name}\n`): void {
   writeFileSync(join(dir, name), text)
@@ -39,7 +41,7 @@ afterEach(() => {
 describe('gst', () => {
   test('prints its version and its help', () => {
     expect(gst('--version').out.trim()).toBe(version)
-    expect(gst('--help').out).toContain('gst [--log N]')
+    expect(gst('--help').out).toContain('gst [-n N]')
   })
 
   test('a repository without commits', () => {
@@ -83,12 +85,39 @@ describe('gst', () => {
     })
   })
 
+  test('-n and --limit add the last commits, --log and -l are the former spellings of it', () => {
+    file('a.ts')
+    git('add', 'a.ts')
+    git('commit', '-q', '-m', 'feat: first')
+
+    const sha = git('rev-parse', '--short', 'HEAD')
+    const shown = `commits:\n  ${sha} feat: first\n`
+
+    for (const flags of [['-n', '1'], ['--limit', '1'], ['--log', '1'], ['-l', '1']])
+      expect(gst(...flags).out).toContain(shown)
+
+    expect(gst('-n', '1', '--log', '1').code).toBe(2)
+  })
+
   test('outside a repository it says so', () => {
     rmSync(join(dir, '.git'), { recursive: true })
     const result = run([process.execPath, GST], { GIT_CEILING_DIRECTORIES: dirname(realpathSync(dir)) })
 
     expect(result.code).toBe(2)
     expect(result.err).toContain('not a git repository')
+  })
+})
+
+describe('gb', () => {
+  test('--json words a branch\'s last commit through formatAge', () => {
+    file('a.ts')
+    git('add', 'a.ts')
+    git('commit', '-q', '-m', 'feat: first')
+    git('branch', 'other')
+
+    const [first] = JSON.parse(gb('--json').out) as { name: string, when: string }[]
+
+    expect(first).toMatchObject({ name: 'other', when: 'just now' })
   })
 })
 
@@ -110,6 +139,15 @@ describe('gc', () => {
     expect(result.out).toBe(`${sha} feat(x): add a\n  A a.ts\n  M base.ts\n`)
     expect(git('log', '-1', '--format=%B')).toBe('feat(x): add a\n\nAdds a beside base.\n\n#12 - [UC3] Ajouter a')
     expect(git('status', '--porcelain')).toBe('?? b.ts')
+  })
+
+  test('--quiet commits and prints nothing', () => {
+    file('a.ts')
+
+    const result = gc('feat(x): add a', '-q', '--', 'a.ts')
+
+    expect(result).toMatchObject({ code: 0, out: '', err: '' })
+    expect(git('log', '-1', '--format=%s')).toBe('feat(x): add a')
   })
 
   test('--json prints the sha, subject and files of the commit, a rename with its old path', () => {
