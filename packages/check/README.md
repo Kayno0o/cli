@@ -32,7 +32,7 @@ check --json     # [{name, command, in?, ok, ms, log, failed?}] once every step 
 
 Scripts always go through `bun run`, so a `check` script of `$npm_execpath check` runs Bun's type checker, and a script that calls this bin by name is skipped.
 
-A folder with no step of its own but subfolders that have some (a root with `api/` and `client/`) runs each subfolder's steps, in alphabetical order, each line naming it: `api/lint`, `client/test`. `--only lint` picks `lint` in every one, and each step runs in its own subfolder. Only the folder's direct children are looked at, without hidden ones, `node_modules`, `vendor`, `dist`, `build`, `var`, `tmp` and `coverage`.
+A folder with no step of its own but subfolders that have some (a root with `api/` and `client/`) runs each subfolder's steps, in alphabetical order, each line naming it: `api/lint`, `client/test`. `--only lint` picks `lint` in every one, and each step runs in its own subfolder. Only the folder's direct children are looked at, without hidden ones, `node_modules`, `vendor`, `dist`, `build`, `var`, `tmp` and `coverage`, plus the names in the `ignore` array of `~/.config/kaynooo-cli/config.json`.
 
 ## In the compose service
 

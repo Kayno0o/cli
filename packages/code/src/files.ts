@@ -1,14 +1,13 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { runCommand, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
+import { ignoredFolders, runCommand } from '@kaynooo/cli-kit'
 
 // A file past this size is generated or data, never read.
 const MAX_BYTES = 2_000_000
 // Bytes looked at for a NUL, the sign of a binary file.
 const SNIFF_BYTES = 8000
-// Folders a walk outside git never enters.
 
-function walk(dir: string, found: string[]): string[] {
+function walk(dir: string, found: string[], ignored: ReadonlySet<string>): string[] {
   let entries
 
   try {
@@ -19,11 +18,11 @@ function walk(dir: string, found: string[]): string[] {
   }
 
   for (const entry of entries) {
-    if (entry.name.startsWith('.') || SKIPPED_FOLDERS.has(entry.name))
+    if (entry.name.startsWith('.') || ignored.has(entry.name))
       continue
 
     if (entry.isDirectory())
-      walk(join(dir, entry.name), found)
+      walk(join(dir, entry.name), found, ignored)
     else if (entry.isFile())
       found.push(join(dir, entry.name))
   }
@@ -40,7 +39,9 @@ export async function listFiles(paths: readonly string[], cwd: string): Promise<
 
   const roots = paths.length === 0 ? [cwd] : paths.map(path => join(cwd, path))
 
-  return roots.flatMap(root => statSync(root, { throwIfNoEntry: false })?.isFile() === true ? [root] : walk(root, [])).map(path => relative(cwd, path)).sort()
+  const ignored = ignoredFolders()
+
+  return roots.flatMap(root => statSync(root, { throwIfNoEntry: false })?.isFile() === true ? [root] : walk(root, [], ignored)).map(path => relative(cwd, path)).sort()
 }
 
 // The file's text, undefined for a binary file, one too large or one that cannot be read.

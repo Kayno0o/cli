@@ -3,7 +3,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve as resolvePath } from 'node:path'
-import { SKIPPED_FOLDERS, warn } from '@kaynooo/cli-kit'
+import { ignoredFolders, warn } from '@kaynooo/cli-kit'
 import { MAKEFILES } from './steps'
 
 export interface Parameter {
@@ -111,8 +111,10 @@ export function locate(dir: string, here: boolean, names: string[]): string | un
 
 // The direct children, hidden and built ones aside.
 export function children(dir = '.'): string[] {
+  const ignored = ignoredFolders()
+
   return readdirSync(dir, { withFileTypes: true })
-    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !SKIPPED_FOLDERS.has(child.name))
+    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !ignored.has(child.name))
     .map(child => child.name)
     .toSorted()
 }

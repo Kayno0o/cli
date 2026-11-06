@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -31,4 +31,21 @@ export function userConfigReadPath(bin: string, legacy: string[][] = [], where: 
   const base = configBase(where)
 
   return legacy.map(parts => join(base, ...parts)).find(path => existsSync(path)) ?? current
+}
+
+// The keys of `~/.config/kaynooo-cli/<bin>.json`, empty when the file is missing, does not parse or is no object.
+export function readUserConfig(bin: string, where: UserConfigLocation = {}): Record<string, unknown> {
+  const path = userConfigPath(bin, where)
+
+  if (!existsSync(path))
+    return {}
+
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}
+  }
+  catch {
+    return {}
+  }
 }

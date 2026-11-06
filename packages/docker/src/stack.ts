@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
-import { captureOutput, composeError, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
+import { captureOutput, composeError, ignoredFolders } from '@kaynooo/cli-kit'
 import { spawnText } from '@kaynooo/utils/cli'
 
 /** How to reach one compose project: the command a user runs, and the one this package lists it with. */
@@ -65,8 +65,10 @@ export function from(dir: string, command: string[]): string[] {
 
 /** The direct child folders, hidden and built ones aside. */
 export function children(dir = '.'): string[] {
+  const ignored = ignoredFolders()
+
   return readdirSync(dir, { withFileTypes: true })
-    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !SKIPPED_FOLDERS.has(child.name))
+    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !ignored.has(child.name))
     .map(child => child.name)
     .sort()
 }

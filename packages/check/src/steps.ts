@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fail, runCommand, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
+import { fail, ignoredFolders, runCommand } from '@kaynooo/cli-kit'
 
 export interface Step {
   name: string
@@ -22,7 +22,6 @@ export const CS_FIXER_CONFIGS = ['.php-cs-fixer.php', '.php-cs-fixer.dist.php']
 const JUST_TIMEOUT_MS = 10_000
 const PHPSTAN_CONFIGS = ['phpstan.neon', 'phpstan.neon.dist', 'phpstan.dist.neon']
 const PHPUNIT_CONFIGS = ['phpunit.xml', 'phpunit.xml.dist', 'phpunit.dist.xml']
-const SKIPPED = new Set([...SKIPPED_FOLDERS, 'var', 'tmp'])
 
 interface JustDump {
   recipes?: Record<string, { private?: boolean, parameters?: { default: unknown, kind: string }[] }>
@@ -171,9 +170,10 @@ export async function discoverProjects(dir: string): Promise<Project[]> {
 
   const projects: Project[] = []
   const entries = await readdir(dir, { withFileTypes: true })
+  const ignored = ignoredFolders(['var', 'tmp'])
 
   for (const entry of entries.toSorted((a, b) => a.name.localeCompare(b.name))) {
-    if (!entry.isDirectory() || entry.name.startsWith('.') || SKIPPED.has(entry.name))
+    if (!entry.isDirectory() || entry.name.startsWith('.') || ignored.has(entry.name))
       continue
 
     const steps = await discover(join(dir, entry.name))
