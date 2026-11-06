@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-wait",
   "type": "module",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "waitfor and slot: waits for a log line, a listening port or a URL answering, and queues heavy commands behind machine-wide slots and named locks, for Claude Code, instead of sleep and polling loops.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
