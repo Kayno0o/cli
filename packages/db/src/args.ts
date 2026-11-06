@@ -6,6 +6,9 @@ export const DEFAULT_LIMIT = 20
 // What --all shows: the cap before the default was lowered.
 export const ALL_LIMIT = 100
 
+// The exit code of a statement handed back instead of run: it would write.
+export const WRITE_EXIT = 1
+
 export const EXITS: ExitRow[] = [[0, 'it ran'], [1, 'the database refused it, was unreachable, or the statement would write and was not run'], [2, 'a usage error or a host that is not allowed']]
 
 export const HOSTS_NOTE = 'db connects to a local host (localhost, 127.0.0.1, ::1) or a compose service only: any other host is refused (exit 2) unless it is listed under "allowedHosts" in ~/.config/kaynooo-cli/db.json.'

@@ -1,5 +1,5 @@
 import { Exit, fail, jsonText, parse, problem, readInput } from '@kaynooo/cli-kit'
-import { connectionOptions, DEFAULT_LIMIT, EXITS, HOSTS_NOTE, outputOptions, rowLimit, WRITE_NOTE } from '../args'
+import { connectionOptions, DEFAULT_LIMIT, EXITS, HOSTS_NOTE, outputOptions, rowLimit, WRITE_EXIT, WRITE_NOTE } from '../args'
 import { inspect } from '../guard'
 import { jsonValue, render, shape } from '../output'
 import { connectionUrl, databaseOfUrl, dialectOf, readRows, TEST_SUFFIX, writeRows } from '../run'
@@ -16,8 +16,6 @@ ${WRITE_NOTE}
 ${HOSTS_NOTE}`
 
 const options = { ...connectionOptions, ...outputOptions } as const
-
-export const WRITE_EXIT = 1
 
 const NO_SQL = 'no SQL given: pass it as an argument or on stdin'
 
