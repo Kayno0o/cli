@@ -27,3 +27,7 @@ bun install -g @kaynooo/cli-docker
 `dc` takes no option of its own, every word reaches compose as typed. With several stacks that only have containers here and no name, it asks with `pick` when that is installed and a terminal is attached, and otherwise lists the projects. When it picked the stack through its containers it prints the compose command it stands for on stderr.
 
 Services are named `php` for this folder's stack, `api/php` for a child folder's and `<project>:php` for a stack found through its containers; a bare name also finds the same service in a child folder.
+
+## Config
+
+`~/.config/kaynooo-cli/dlog.json` (`$XDG_CONFIG_HOME/kaynooo-cli/` when set) takes `tail` (500 by default, the log lines read per service) and `width` (220, the longest error line kept) as positive whole numbers.

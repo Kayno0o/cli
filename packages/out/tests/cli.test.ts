@@ -169,6 +169,17 @@ describe('out', () => {
     expect(out('-n', '6', '--', 'seq', '1', '6').out).toBe('1\n2\n3\n4\n5\n6\n')
     expect(out('-n', 'x', '--', 'seq', '1', '6').code).toBe(2)
   })
+
+  test('takes the default threshold from the lines key of out.json', () => {
+    const config = temp('out-config-')
+    const env = { ...ENV, XDG_RUNTIME_DIR: temp('out-configured-'), XDG_CONFIG_HOME: config }
+    const run = () => Bun.spawnSync([process.execPath, CLI, '--', 'seq', '1', '120'], { stdout: 'pipe', stderr: 'pipe', env }).stdout.toString()
+
+    mkdirSync(join(config, 'kaynooo-cli'))
+    expect(run()).not.toContain('full log:')
+    writeFileSync(join(config, 'kaynooo-cli', 'out.json'), '{ "lines": 10 }')
+    expect(run()).toContain('full log:')
+  })
 })
 
 describe('out around a step that runs in a compose service', () => {

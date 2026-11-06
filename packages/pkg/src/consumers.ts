@@ -1,7 +1,7 @@
 import type { Manager } from './pin'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { fail, SKIPPED_FOLDERS } from '@kaynooo/cli-kit'
+import { fail, ignoredFolders } from '@kaynooo/cli-kit'
 import { LOCKFILES } from './pin'
 
 export const KINDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const
@@ -20,12 +20,11 @@ export interface Consumer {
   manager: Manager
 }
 
-// Folders never holding a consumer of their own.
 const MAX_DEPTH = 5
 // Specs that are not a registry version or range: workspace:, link:, file:, git+, github:, tarball URLs, npm: aliases, catalog: and owner/repo shorthands.
 const LOCAL_SPEC = /[:/]/
 
-function packageFiles(dir: string, depth: number, found: string[]): string[] {
+function packageFiles(dir: string, depth: number, found: string[], ignored = ignoredFolders()): string[] {
   let entries
 
   try {
@@ -38,8 +37,8 @@ function packageFiles(dir: string, depth: number, found: string[]): string[] {
   for (const entry of entries) {
     if (entry.isFile() && entry.name === 'package.json')
       found.push(join(dir, entry.name))
-    else if (entry.isDirectory() && depth < MAX_DEPTH && !entry.name.startsWith('.') && !SKIPPED_FOLDERS.has(entry.name))
-      packageFiles(join(dir, entry.name), depth + 1, found)
+    else if (entry.isDirectory() && depth < MAX_DEPTH && !entry.name.startsWith('.') && !ignored.has(entry.name))
+      packageFiles(join(dir, entry.name), depth + 1, found, ignored)
   }
 
   return found

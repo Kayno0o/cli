@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { userConfigPath } from './user-config'
+import { readUserConfig, userConfigPath } from './user-config'
 
 export interface WorkspaceRootSettings {
   // The root a `--root` flag or a positional gave, which wins over everything.
@@ -21,20 +21,9 @@ function expandHome(path: string, home: string): string {
 
 // The `workspace` key of `~/.config/kaynooo-cli/config.json`, undefined when the file or the key is missing or the file does not parse.
 function configured(env: Record<string, string | undefined>, home: string): string | undefined {
-  const path = userConfigPath('config', { home, xdg: env.XDG_CONFIG_HOME })
+  const folder = readUserConfig('config', { home, xdg: env.XDG_CONFIG_HOME }).workspace
 
-  if (!existsSync(path))
-    return undefined
-
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
-    const folder = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>).workspace : undefined
-
-    return typeof folder === 'string' && folder !== '' ? folder : undefined
-  }
-  catch {
-    return undefined
-  }
+  return typeof folder === 'string' && folder !== '' ? folder : undefined
 }
 
 // The folder holding the user's repositories: what was given on the command line, else `KAYNOOO_WORKSPACE`, else `workspace` in `~/.config/kaynooo-cli/config.json`, else `~/Workspace`; `~` is expanded in each and the result is absolute.

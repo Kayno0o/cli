@@ -61,6 +61,10 @@ On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, comma
 
 `workspaceRoot({ given })` is where the repositories live: the `--root` or positional given, else `KAYNOOO_WORKSPACE`, else the `workspace` key of `~/.config/kaynooo-cli/config.json`, else `~/Workspace`. `pkg bump`, `pkg consumers`, `repos` and `sweep` use it; `doctor --install` asks for it on a terminal and `doctor` reports it.
 
+## Ignored folders
+
+`ignoredFolders(extra?)` is the set of folder names a walk never enters: `SKIPPED_FOLDERS` (`node_modules`, `vendor`, `dist`, `build`, `target`, `coverage`, `venv`, `__pycache__`), the names a bin adds, and the names listed in the `ignore` key of `~/.config/kaynooo-cli/config.json`, an array of strings. `code` outside git, `check`, `docker`, `env` and `pkg consumers` use it. `readUserConfig(bin)` reads the keys of a bin's config file, `{}` when it is missing or does not parse.
+
 ## API
 
 - `version` is optional on `runCli`, `runMain` and `mainArgs`: it defaults to `packageVersion()`, the version of the nearest `package.json` above the entry file (links resolved, so `src/cli.ts` and the built `dist/cli.js` both find the package's own), which saves each bin its `import { version } from '../package.json'`.

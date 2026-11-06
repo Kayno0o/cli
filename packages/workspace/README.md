@@ -30,6 +30,8 @@ Without `--fetch` the ahead and behind counts are those of the last fetch. The w
 { "skip": ["archived-thing", "vendored-clone"] }
 ```
 
+`concurrency` (a positive whole number, 8 by default) in the same file sets how many repositories are read at once. `audit` reads the same key from `~/.config/kaynooo-cli/audit.json` (4 by default, the repositories audited at once).
+
 ## sweep
 
 `sweep` reclaims disk across many repos: it lists the regenerable folders and clean git worktrees under a root, largest first, and deletes them only on `--apply`.

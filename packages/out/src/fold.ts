@@ -1,3 +1,4 @@
+import { configuredNumber } from '@kaynooo/cli-kit'
 import { truncate } from '@kaynooo/utils/text'
 import { isImportant, shape } from './shape'
 
@@ -8,14 +9,14 @@ export interface FoldOptions {
 }
 
 // The longest output out leaves untouched unless told otherwise.
-export const FOLD_LINES = 150
-const HEAD = 40
-const TAIL = 60
+export const FOLD_LINES = configuredNumber('out', 'lines', 150)
+const HEAD = configuredNumber('out', 'head', 40)
+const TAIL = configuredNumber('out', 'tail', 60)
 const MAX_BLOCK = 20
 const MIN_REFERENCED = 20
 // Output over this many bytes per allowed line folds even when it has few lines.
 const BYTES_PER_LINE = 55
-const MAX_WIDTH = 300
+const MAX_WIDTH = configuredNumber('out', 'width', 300)
 const MAX_KEPT_IMPORTANT = 40
 const TOP_REPEATED = 3
 const LINE_BREAK = /\r\n|\r|\n/

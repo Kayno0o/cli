@@ -70,7 +70,7 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
 
     return packuments.get(key)
   }
-  const looked = await pool(packages, BATCH, async ({ name, version }) => {
+  const looked = await pool(packages, context.settings.concurrency ?? BATCH, async ({ name, version }) => {
     const registry = registryFor(name, context.configs)
     const input = { spec: { name, request: version }, packument: await lookup(name, registry), registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings.licenses }
 

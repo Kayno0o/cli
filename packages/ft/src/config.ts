@@ -1,9 +1,14 @@
-import { userConfigReadPath, warn } from '@kaynooo/cli-kit'
+import { configuredNumber, userConfigReadPath, warn } from '@kaynooo/cli-kit'
 
 // What ~/.config/kaynooo-cli/ft.json (or the older ~/.config/ft/config.json) may set; every key is optional and nothing is assumed without it.
 export interface FtSettings {
   // The Forgejo ssh host `ft remote` switches alias origins to: `git.example.com`.
   remoteHost?: string
+}
+
+// The `concurrency` key: calls to the forge in flight at once when ft reads comments or milestone issues, `fallback` when it is not set.
+export function concurrencyOf(fallback: number, home?: string): number {
+  return configuredNumber('ft', 'concurrency', fallback, { home }, [['ft', 'config.json']])
 }
 
 export function settingsPath(home?: string): string {

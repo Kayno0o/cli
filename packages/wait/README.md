@@ -55,3 +55,7 @@ check --slot
 - `slot ls` is the listing even as a first word, `slot -- ls` being read as `slot ls` because Bun drops a leading `--`: write `slot -n 4 -- ls` for the command.
 - State lives in `$XDG_RUNTIME_DIR/kaynooo-cli/slot` (`~/.cache/kaynooo-cli/slot` without it), only the user can enter it; `$SLOT_DIR` points elsewhere.
 - Exit codes: the command's, 2 on a timeout or a usage error.
+
+## Config
+
+`~/.config/kaynooo-cli/wait.json` (`$XDG_CONFIG_HOME/kaynooo-cli/` when set) takes positive whole numbers: `tail` (20, the lines of a file kept for a timeout excerpt), `around` (5, the lines kept on each side of a failure line) and `portTimeoutMs` (3000, how long one port probe waits).
