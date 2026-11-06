@@ -284,7 +284,7 @@
     },
     "packages/workspace": {
       "name": "@kaynooo/cli-workspace",
-      "version": "0.10.0",
+      "version": "0.10.1",
       "bin": {
         "ws": "./dist/cli.js",
         "repos": "./dist/repos-cli.js",
