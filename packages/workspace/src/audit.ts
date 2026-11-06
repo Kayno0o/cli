@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, oneOf, paint, parse, pool, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
+import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
 import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEVERITIES, workspaceFolders } from './report'
 
 const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun repositories under root (the current folder by default), one table per repository
@@ -174,7 +174,7 @@ export async function audit(args: string[]): Promise<number> {
   if (paths.length === 0)
     fail(`no bun.lock under ${root}`)
 
-  const audits = await pool(paths, CONCURRENCY, async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []))
+  const audits = await pool(paths, configuredNumber('audit', 'concurrency', CONCURRENCY), async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []))
   const kept = audits.map(each => ({ ...each, findings: values.prod === true ? each.findings.filter(found => found.scope === 'prod') : each.findings }))
 
   if (values.json === true)

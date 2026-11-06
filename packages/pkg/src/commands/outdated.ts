@@ -45,6 +45,8 @@ export interface OutdatedContext {
   fetcher?: Fetcher | undefined
   now?: number | undefined
   minAgeDays: number
+  // Registry lookups in flight at once, BATCH when not given.
+  concurrency?: number | undefined
   // The versions a lockfile pins.
   locked: Locked[]
 }
@@ -70,7 +72,7 @@ function changeOf(current: string, next: string): Outdated['change'] {
 export async function outdated(manifest: string, context: OutdatedContext): Promise<Outdated[]> {
   const configs = await loadConfigs()
   const dependencies = registryDependencies(manifest)
-  const looked = await pool(dependencies, BATCH, async ({ name, kind, spec }) => {
+  const looked = await pool(dependencies, context.concurrency ?? BATCH, async ({ name, kind, spec }) => {
     const registry = registryFor(name, configs)
     const packument = await fetchPackument(name, registry, context.fetcher)
 
@@ -104,7 +106,8 @@ export async function outdatedCommand(args: string[]): Promise<number> {
 
   const lockPath = join(folder, 'bun.lock')
   const locked = existsSync(lockPath) ? parseBunLock(await Bun.file(lockPath).text()) : []
-  const rows = await outdated(await manifest.text(), { minAgeDays: wholeNumber(values['min-age'], 'min-age', (await loadSettings(folder)).minAge ?? DEFAULT_MIN_AGE_DAYS, 0), locked })
+  const settings = await loadSettings(folder)
+  const rows = await outdated(await manifest.text(), { minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0), concurrency: settings.concurrency, locked })
   const { shown, footer } = capped(rows, limitOf(values, OUTDATED_LIMIT))
 
   if (values.json === true)

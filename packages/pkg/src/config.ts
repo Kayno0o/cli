@@ -190,6 +190,8 @@ export interface PkgSettings {
   blockSeverity?: Severity | undefined
   // Days a version must be old, when --min-age is not given.
   minAge?: number | undefined
+  // Registry lookups in flight at once in `audit` and `outdated`.
+  concurrency?: number | undefined
 }
 
 const SETTINGS_FILE = '.pkgrc.json'
@@ -200,7 +202,7 @@ export function isSeverity(value: unknown): value is Severity {
 
 // The settings in one config file's text, a key of the wrong shape left out.
 export function parseSettings(text: string): PkgSettings {
-  const raw = Bun.JSONC.parse(text) as { licenses?: unknown, blockSeverity?: unknown, minAge?: unknown } | null
+  const raw = Bun.JSONC.parse(text) as { licenses?: unknown, blockSeverity?: unknown, minAge?: unknown, concurrency?: unknown } | null
   const settings: PkgSettings = {}
 
   if (Array.isArray(raw?.licenses) && raw.licenses.every(each => typeof each === 'string'))
@@ -211,6 +213,9 @@ export function parseSettings(text: string): PkgSettings {
 
   if (typeof raw?.minAge === 'number' && Number.isInteger(raw.minAge) && raw.minAge >= 0)
     settings.minAge = raw.minAge
+
+  if (typeof raw?.concurrency === 'number' && Number.isInteger(raw.concurrency) && raw.concurrency > 0)
+    settings.concurrency = raw.concurrency
 
   return settings
 }
@@ -237,6 +242,7 @@ export async function loadSettings(cwd = process.cwd(), home?: string): Promise<
     settings.licenses ??= found.licenses
     settings.blockSeverity ??= found.blockSeverity
     settings.minAge ??= found.minAge
+    settings.concurrency ??= found.concurrency
   }
 
   return settings

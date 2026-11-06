@@ -4,6 +4,7 @@ import process from 'node:process'
 import { bar, capped, fail, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, pool, printJson, role, runHint, section, table, takesControlCodes, truncate } from '@kaynooo/cli-kit'
 import { counted } from '@kaynooo/utils/text'
 import { repoOption } from '../args'
+import { concurrencyOf } from '../config'
 import { good } from '../good'
 import { closedIssues, openIssues } from '../issues'
 import { closeMilestone, createMilestone, dueDate, dueOn, findMilestone, listMilestones, progress } from '../milestones'
@@ -34,7 +35,7 @@ function milestoneCells(each: Milestone, showState: boolean): string[] {
 async function printWithIssues(list: Milestone[], repo: string | undefined): Promise<void> {
   const colors = paint(process.stdout)
   const id = role('id', process.stdout)
-  const issuesOf = await pool(list, CONCURRENCY, async each => Promise.all([openIssues(undefined, repo, each.id), closedIssues(each.id, repo)]))
+  const issuesOf = await pool(list, concurrencyOf(CONCURRENCY), async each => Promise.all([openIssues(undefined, repo, each.id), closedIssues(each.id, repo)]))
   const blocks = list.map((each, index) => {
     const byNumber = (left: Issue, right: Issue) => left.number - right.number
     const [open, closed] = issuesOf[index]!.map(found => found.toSorted(byNumber)) as [Issue[], Issue[]]

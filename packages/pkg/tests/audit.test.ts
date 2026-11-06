@@ -80,6 +80,9 @@ describe('settings', () => {
     expect(parseSettings('{ "minAge": 30 }')).toEqual({ minAge: 30 })
     expect(parseSettings('{ "minAge": -1 }')).toEqual({})
     expect(parseSettings('{ "minAge": "30" }')).toEqual({})
+    expect(parseSettings('{ "concurrency": 3 }')).toEqual({ concurrency: 3 })
+    expect(parseSettings('{ "concurrency": 0 }')).toEqual({})
+    expect(parseSettings('{ "concurrency": 2.5 }')).toEqual({})
   })
 
   test('each key comes from the nearest file that sets it', async () => {

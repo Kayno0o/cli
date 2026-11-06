@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { ignoredFolders, SKIPPED_FOLDERS } from '../src/folders'
 import { tempDirs } from '../src/test'
-import { readUserConfig } from '../src/user-config'
+import { configuredNumber, readUserConfig } from '../src/user-config'
 
 const temp = tempDirs()
 
@@ -46,5 +46,37 @@ describe('readUserConfig', () => {
 
   test('returns the keys of the bin file', () => {
     expect(readUserConfig('config', { home: home('{"ignore":["a"]}') })).toEqual({ ignore: ['a'] })
+  })
+})
+
+describe('configuredNumber', () => {
+  function homeWith(bin: string, content: string) {
+    const dir = temp('folders-home-')
+
+    mkdirSync(join(dir, '.config', 'kaynooo-cli'), { recursive: true })
+    writeFileSync(join(dir, '.config', 'kaynooo-cli', `${bin}.json`), content)
+
+    return dir
+  }
+
+  test('is the number the bin file sets, comments allowed', () => {
+    expect(configuredNumber('ft', 'concurrency', 8, { home: homeWith('ft', '{ // faster\n "concurrency": 2 }') })).toBe(2)
+  })
+
+  test('is the fallback for a missing file, a missing key and a value that is no positive whole number', () => {
+    expect(configuredNumber('ft', 'concurrency', 8, { home: home() })).toBe(8)
+    expect(configuredNumber('ft', 'concurrency', 8, { home: homeWith('ft', '{}') })).toBe(8)
+
+    for (const value of ['0', '-1', '1.5', '"3"', 'null'])
+      expect(configuredNumber('ft', 'concurrency', 8, { home: homeWith('ft', `{ "concurrency": ${value} }`) })).toBe(8)
+  })
+
+  test('reads the older file while the new one is missing', () => {
+    const dir = temp('folders-home-')
+
+    mkdirSync(join(dir, '.config', 'ft'), { recursive: true })
+    writeFileSync(join(dir, '.config', 'ft', 'config.json'), '{ "concurrency": 5 }')
+
+    expect(configuredNumber('ft', 'concurrency', 8, { home: dir }, [['ft', 'config.json']])).toBe(5)
   })
 })

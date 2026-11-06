@@ -1,5 +1,6 @@
 import type { Comment } from './claims'
 import { pool } from '@kaynooo/cli-kit'
+import { concurrencyOf } from './config'
 import { api, repoApi, repoWrite, tea } from './tea'
 
 export interface Issue { number: number, title: string, body: string, state: string, html_url: string, comments: number, labels: { name: string }[], milestone?: { id: number, title: string } | null }
@@ -42,7 +43,7 @@ export async function commentsOf(number: number, repo?: string): Promise<IssueCo
 // Each issue's comments, an issue without any skipping the call.
 export async function commentsOfAll(issues: Issue[], repo?: string): Promise<Map<number, IssueComment[]>> {
   const commented = issues.filter(issue => issue.comments > 0)
-  const comments = await pool(commented, CONCURRENCY, async issue => commentsOf(issue.number, repo))
+  const comments = await pool(commented, concurrencyOf(CONCURRENCY), async issue => commentsOf(issue.number, repo))
 
   return new Map(commented.map((issue, index) => [issue.number, comments[index]!]))
 }

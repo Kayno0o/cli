@@ -33,19 +33,26 @@ export function userConfigReadPath(bin: string, legacy: string[][] = [], where: 
   return legacy.map(parts => join(base, ...parts)).find(path => existsSync(path)) ?? current
 }
 
-// The keys of `~/.config/kaynooo-cli/<bin>.json`, empty when the file is missing, does not parse or is no object.
-export function readUserConfig(bin: string, where: UserConfigLocation = {}): Record<string, unknown> {
-  const path = userConfigPath(bin, where)
+// The keys of a bin's config file (see `userConfigReadPath` for `legacy`), comments allowed; empty when the file is missing, does not parse or is no object.
+export function readUserConfig(bin: string, where: UserConfigLocation = {}, legacy: string[][] = []): Record<string, unknown> {
+  const path = userConfigReadPath(bin, legacy, where)
 
   if (!existsSync(path))
     return {}
 
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    const parsed: unknown = Bun.JSONC.parse(readFileSync(path, 'utf8'))
 
     return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}
   }
   catch {
     return {}
   }
+}
+
+// A positive whole number the bin's config file sets under `key`, `fallback` when the key is missing or is anything else.
+export function configuredNumber(bin: string, key: string, fallback: number, where: UserConfigLocation = {}, legacy: string[][] = []): number {
+  const value = readUserConfig(bin, where, legacy)[key]
+
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }
