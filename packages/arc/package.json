@@ -1,0 +1,41 @@
+{
+  "name": "@kaynooo/cli-arc",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "arc: packs a folder into a verified .tar.zst before deleting it, unpacks one without overwriting anything and checks it, and extracts any other archive.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/arc#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/arc"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "archive",
+    "tar",
+    "zstd",
+    "backup"
+  ],
+  "bin": {
+    "arc": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "arc": "$npm_execpath src/cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}

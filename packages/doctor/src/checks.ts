@@ -26,6 +26,7 @@ export interface Host {
 
 // Every @kaynooo/cli-* package and the bins it installs; the repo's tests check it against packages/*.
 export const TOOLS: Record<string, string[]> = {
+  '@kaynooo/cli-arc': ['arc'],
   '@kaynooo/cli-base': ['base', 'proof'],
   '@kaynooo/cli-changelog': ['changelog'],
   '@kaynooo/cli-check': ['check', 'fix', 'errs', 'j'],

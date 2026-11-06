@@ -20,6 +20,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 | [`@kaynooo/cli-guard`](packages/guard) | `guard` | the safety rules a Claude Code Bash call is held to (remote machines, git, commit messages, SQL writes, env files, package managers, in-place edits), each refusal naming the route |
 | [`@kaynooo/cli-code`](packages/code) | `src`, `peek`, `todo-scan`, `hotspots` | source read by spans, declarations, usages and outlines in one call; the TODO and issue-reference comments of a repository, those naming a closed issue flagged; the files ranked by complexity times git churn |
 | [`@kaynooo/cli-changelog`](packages/changelog) | `changelog` | a release's notes generated from its conventional commits and published as a Forgejo release, posted to Discord too; a release undone |
+| [`@kaynooo/cli-arc`](packages/arc) | `arc` | a folder packed into a `.tar.zst` verified file by file before it is deleted, unpacked without overwriting anything, any other archive extracted |
 | [`@kaynooo/cli-dev`](packages/dev) | `dev` | small developer utilities: random passwords and bcrypt hashes, JWT decoding, timestamps, UUIDs and ULIDs, base64, URL parts, file hashes |
 | [`@kaynooo/cli-pick`](packages/pick) | `pick` | a themed fuzzy selector, lines on stdin and the chosen one on stdout |
 | [`@kaynooo/cli-probe`](packages/probe) | `probe` | a site's HTTP version, redirects, timings, TLS certificate and notable headers in one call |
