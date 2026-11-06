@@ -2,7 +2,7 @@ import type { Colors, ExitRow } from '@kaynooo/cli-kit'
 import type { Arg, Row } from '@kaynooo/cli-kit/picker'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { closest, fail, isInteractive, jsonOption, paint, parse, printJson, takesControlCodes } from '@kaynooo/cli-kit'
+import { closest, fail, formatAge, isInteractive, jsonOption, paint, parse, printJson, takesControlCodes } from '@kaynooo/cli-kit'
 import { emit, list, pick, table } from '@kaynooo/cli-kit/picker'
 
 export interface Branch {
@@ -39,7 +39,7 @@ const options = {
   json: jsonOption('[{ name, remote, worktree, when, subject, date, upstream, track, merged }]'),
 } as const
 
-const FIELDS = ['%(refname)', '%(refname:short)', '%(committerdate:unix)', '%(committerdate:relative)', '%(subject)', '%(worktreepath)', '%(upstream:short)', '%(upstream:track,nobracket)']
+const FIELDS = ['%(refname)', '%(refname:short)', '%(committerdate:unix)', '%(subject)', '%(worktreepath)', '%(upstream:short)', '%(upstream:track,nobracket)']
 const CHECKOUT = /^checkout: moving from (\S+) to (\S+)$/
 const KEYS = 'enter go, ctrl-n new from query, ctrl-d delete if merged, ctrl-r fetch'
 const TRACK_TINTS: Record<string, 'green' | 'red' | 'yellow'> = { ahead: 'green', behind: 'red', gone: 'yellow' }
@@ -98,14 +98,14 @@ export function branches(against: string | undefined): Branch[] {
   const merged = new Set(against !== undefined ? read(['branch', '--merged', against, '--format=%(refname:short)']).split('\n') : [])
 
   // A remote's HEAD only points at its default branch, and goes by the remote's bare name.
-  return lines.map(line => line.split('\0')).filter(([ref = '']) => !ref.endsWith('/HEAD')).map(([ref = '', name = '', date = '0', when = '', subject = '', worktree = '', upstream = '', track = '']) => {
+  return lines.map(line => line.split('\0')).filter(([ref = '']) => !ref.endsWith('/HEAD')).map(([ref = '', name = '', date = '0', subject = '', worktree = '', upstream = '', track = '']) => {
     const remote = ref.startsWith('refs/remotes/')
 
     return {
       name,
       remote,
       worktree: worktree === here ? '' : worktree,
-      when,
+      when: formatAge(Number(date) * 1000),
       subject,
       date: Number(date),
       upstream,

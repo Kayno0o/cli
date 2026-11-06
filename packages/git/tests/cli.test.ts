@@ -6,6 +6,7 @@ import { version } from '../package.json'
 
 const GST = new URL('../src/gst.ts', import.meta.url).pathname
 const GC = new URL('../src/gc.ts', import.meta.url).pathname
+const GB = new URL('../src/gb.ts', import.meta.url).pathname
 // The user's global hooks and settings stay out of the test repositories.
 const ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
 
@@ -20,6 +21,7 @@ function run(argv: string[], env: Record<string, string> = {}) {
 const git = (...args: string[]) => run(['git', ...args]).out.trim()
 const gst = (...args: string[]) => run([process.execPath, GST, ...args])
 const gc = (...args: string[]) => run([process.execPath, GC, ...args])
+const gb = (...args: string[]) => run([process.execPath, GB, ...args])
 
 function file(name: string, text = `${name}\n`): void {
   writeFileSync(join(dir, name), text)
@@ -103,6 +105,19 @@ describe('gst', () => {
 
     expect(result.code).toBe(2)
     expect(result.err).toContain('not a git repository')
+  })
+})
+
+describe('gb', () => {
+  test('--json words a branch\'s last commit through formatAge', () => {
+    file('a.ts')
+    git('add', 'a.ts')
+    git('commit', '-q', '-m', 'feat: first')
+    git('branch', 'other')
+
+    const [first] = JSON.parse(gb('--json').out) as { name: string, when: string }[]
+
+    expect(first).toMatchObject({ name: 'other', when: 'just now' })
   })
 })
 
