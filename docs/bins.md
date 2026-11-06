@@ -240,16 +240,32 @@ gl ci  # wait for the pipeline of origin's tip, failed tests printed
 gl logs 1234 -j test  # one job's failed tests
 ```
 
+## gp
+
+pushes the current branch of the repository, or of each dir's, when it is ahead of its upstream as of the last fetch or has none yet, the latter with -u to origin (the only remote when there is no origin). Package `git`.
+
+Instead of: git push, git push -u origin <branch> and a git -C <repo> push per nested repository
+
+```sh
+gp [dir]...
+gp
+gp --repos  # every repository nested in this one
+gp --repos --dry-run  # what would go out
+gp . ../other  # this repository and a sibling
+gp -- --force-with-lease  # flags for git push
+```
+
 ## gst
 
 the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked. Package `git`.
 
-Instead of: git status --short and git log --oneline
+Instead of: git status --short, git log --oneline and a git -C <repo> status per nested repository
 
 ```sh
 gst [-n N]
 gst
 gst -n 5  # with the last five commits
+gst --repos  # the repositories nested in this one
 ```
 
 ## guard

@@ -1,4 +1,4 @@
-# gst, gc and gb
+# gst, gc, gb and gp
 
 Git for Claude Code, where a session would otherwise chain `git status --short` and `git log --oneline` to read the state, or `git add <paths> && git status && git commit -m ...` to commit and have the commit bounced over its message.
 
@@ -11,6 +11,17 @@ gc 'fix(band): keep it visible' -m 'The band stays above a long prompt.' --ticke
 ## gst
 
 Prints one line with the branch, its upstream and how far ahead and behind it is as of the last fetch, the counts of changed, untracked and conflicted files and HEAD, then the paths grouped as `staged`, `unstaged`, `untracked` and `conflicted`, each with git's letter (`M`, `A`, `D`, `R old -> new`). `-n N` (`--limit`, and the former `--log` and `-l`) adds the last N commits as `<sha7> <title>`. `--json` prints the same as `{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, commits}`, a change as `{status, path, from?}`. It takes no index lock, so it runs beside another git command. Exit codes: 0, 2 outside a repository or a usage error.
+
+`gst --repos [dir]...` (`-r`) lists every repository at and below the current one's toplevel, or below each dir given (the current directory outside a repository): a folder holding `.git` is one, four levels down, `node_modules`, `vendor`, `dist` and hidden folders never walked into, symlinks never followed. One line each: its path from the current directory, branch, how it stands against its upstream as of the last fetch (`2 ahead, 1 behind`, `up to date`, `no upstream`, `upstream gone`) and the files left to commit (`3 changed, 1 untracked` or `clean`). `--json` prints an array of the objects above, each with its `path` and no `commits`.
+
+## gp
+
+`gp [dir]...` pushes the current branch of the repository, or of each dir's, when it is ahead of its upstream as of the last fetch, and with `-u` to origin (the only remote when there is no origin) when it has no upstream yet. `--repos` (`-r`) pushes every repository `gst --repos` lists, one after another.
+
+- A detached HEAD, a branch with nothing ahead and a repository with no remote are skipped, saying so; a refused push shows git's reason and the next repository is still pushed.
+- What follows `--` goes to each `git push` (`gp -- --tags`, `gp -- --force-with-lease`), and a branch with nothing ahead is then pushed too.
+- `--dry-run` says what would be pushed; `--json` prints `{path, branch, remote, commits, outcome, reason?}` per repository, `outcome` being `pushed`, `would-push`, `skipped` or `refused`.
+- Exit codes: 0 every push went through or there was nothing to push, 1 a push was refused or a repository could not be read, 2 outside a repository or a usage error.
 
 ## gc
 

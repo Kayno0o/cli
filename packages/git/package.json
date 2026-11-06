@@ -2,7 +2,7 @@
   "name": "@kaynooo/cli-git",
   "type": "module",
   "version": "0.13.1",
-  "description": "gst, gc and gb: a repository's state in one call, a commit of exactly the paths given, its message checked before anything is staged, and a branch picked.",
+  "description": "gst, gc, gb and gp: a repository's state in one call, a commit of exactly the paths given, its message checked before anything is staged, a branch picked, and the branches of nested repositories pushed.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/git#readme",
@@ -25,7 +25,8 @@
   "bin": {
     "gst": "./dist/gst.js",
     "gc": "./dist/gc.js",
-    "gb": "./dist/gb.js"
+    "gb": "./dist/gb.js",
+    "gp": "./dist/gp.js"
   },
   "files": [
     "dist",
@@ -38,10 +39,11 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/gst.ts src/gc.ts src/gb.ts --target bun --outdir dist",
+    "build": "$npm_execpath build src/gst.ts src/gc.ts src/gb.ts src/gp.ts --target bun --outdir dist",
     "gst": "$npm_execpath src/gst.ts",
     "gc": "$npm_execpath src/gc.ts",
-    "gb": "$npm_execpath src/gb.ts"
+    "gb": "$npm_execpath src/gb.ts",
+    "gp": "$npm_execpath src/gp.ts"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"
