@@ -24,6 +24,7 @@ const SYMLINK_ARROW = ' -> '
 const HARDLINK_TO = / link to .*$/
 const LEADING_DOT = /^(?:\.\/)+/
 const TRAILING_SLASHES = /\/+$/
+const BACKSLASHES = /\\/g
 const ZIP_GLOB = /[*?[\]\\]/g
 
 export function formatOf(file: string): Format | undefined {
@@ -100,10 +101,10 @@ export function parseZip(output: string): Entry[] {
       continue
 
     const [, size, date, time, raw] = found as unknown as [string, string, string, string, string]
-    const path = clean(raw)
+    const path = clean(raw.replace(BACKSLASHES, '/'))
 
     if (path !== '')
-      entries.push({ path, raw, kind: raw.endsWith('/') ? 'dir' : 'file', size: Number(size), mode: '-', modified: `${date} ${time}` })
+      entries.push({ path, raw, kind: /[/\\]$/.test(raw) ? 'dir' : 'file', size: Number(size), mode: '-', modified: `${date} ${time}` })
   }
 
   return entries

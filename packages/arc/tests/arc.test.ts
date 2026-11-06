@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
+import { parseZip } from '../src/entries'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const temp = tempDirs()
@@ -213,6 +214,12 @@ describe.skipIf(!GNU)('arc ls, tree and cat', () => {
 
     expect(arc(['ls', '-r', zip]).out).toContain('src/a.txt')
     expect(arc(['cat', zip, 'src/a.txt']).out).toBe('alpha')
+  })
+
+  test('reads the backslashes of a zip made on Windows as folders', () => {
+    const entries = parseZip('        5  2026-06-23 05:06   mod\\src\\a.lua\n        0  2026-06-23 05:06   mod\\src\\\n')
+
+    expect(entries.map(entry => [entry.path, entry.kind, entry.raw])).toEqual([['mod/src/a.lua', 'file', 'mod\\src\\a.lua'], ['mod/src', 'dir', 'mod\\src\\']])
   })
 
   test('refuses what is not an archive', () => {
