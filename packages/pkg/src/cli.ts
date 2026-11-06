@@ -15,5 +15,6 @@ process.exitCode = await runCli({
     outdated: { summary: 'list the dependencies of this folder that have a newer version safe to take', run: async args => (await import('./commands/outdated')).outdatedCommand(args) },
     bump: { summary: 'wait for a release on the registry, then bun add it in every consumer', run: async args => (await import('./commands/bump')).bump(args) },
     consumers: { summary: 'list the folders depending on a package, with the version each asks for', run: async args => (await import('./commands/consumers')).consumers(args) },
+    manager: { summary: 'the command this folder\'s package manager runs to install, remove, update or exec', run: async args => Promise.resolve((await import('./commands/manager')).manager(args)) },
   },
 })

@@ -67,6 +67,16 @@ pkg bump @kaynooo/cli-kit 0.8.0 --dry-run
 
 The metadata comes from the registry the name is installed from. A `@scope/` name follows `@scope:registry=` in the nearest `.npmrc` or `[install.scopes]` in the nearest `bunfig.toml`, walking up from the current directory and ending at the home directory, and a scope key wins over a nearer plain `registry=`, as it does for npm; the token (`_authToken`, or `token` in bunfig, with `${VAR}` or `$VAR` expanded) is sent to that registry only, matched on a path boundary, over https (or http to localhost) only, and never printed. Environment variables are expanded in tokens only, never in a registry address. Every request has a 10 s deadline. Downloads come from the npmjs.org API, so they show `-` for any other registry. A registry that does not return publish times (Forgejo's does not) leaves the age unchecked, which `pkg` says in a warning.
 
+## The folder's package manager
+
+```sh
+pkg manager dev
+```
+
+`pkg manager <install|dev|remove|update|exec>` prints the command the manager of this folder runs for the action, such as `bun add -d`, `composer require --dev` or `pnpm dlx`. The manager is the one whose lockfile (`bun.lock`, `yarn.lock`, `pnpm-lock.yaml`, `package-lock.json`, `uv.lock`) or `composer.json` is nearest, here or in a parent folder, bun when none is found. `--json` prints `{manager, action, command}`.
+
+A shell abbreviation can call it, in fish `abbr -a nd --function 'pkg manager dev'`.
+
 ## Maintenance
 
 - `bun run popular` regenerates `src/popular.json`, the 500 most downloaded names from the [npm-high-impact](https://www.npmjs.com/package/npm-high-impact) list.
