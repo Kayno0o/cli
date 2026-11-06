@@ -159,3 +159,67 @@ describe('arc extract', () => {
     expect(arc(['extract', join(dest, 'x.weird')]).err).toContain('unknown extension')
   })
 })
+
+describe.skipIf(!GNU)('arc ls, tree and cat', () => {
+  function archived(): string {
+    const { folder, dest } = project()
+
+    symlinkSync('b.txt', join(folder, 'link'))
+    arc(['pack', '-k', folder, dest])
+
+    return join(dest, 'project.tar.zst')
+  }
+
+  test('ls lists the top level, a folder and everything with -r', () => {
+    const file = archived()
+
+    expect(arc(['ls', file]).out).toMatch(/project\/\n$/)
+    expect(arc(['ls', file, 'project']).out).toContain(' b.txt\n')
+    expect(arc(['ls', file, 'project']).out).toContain(' link -> b.txt\n')
+    expect(arc(['ls', file, 'project']).out).not.toContain('a.txt')
+    expect(arc(['ls', '-r', file]).out).toContain('project/src/a.txt')
+  })
+
+  test('ls --json gives the entries', () => {
+    const entries = JSON.parse(arc(['ls', '-r', '--json', archived()]).out) as { path: string, kind: string, size: number }[]
+
+    expect(entries.find(entry => entry.path === 'project/src/a.txt')).toMatchObject({ kind: 'file', size: 5 })
+    expect(entries.find(entry => entry.path === 'project/src')?.kind).toBe('dir')
+  })
+
+  test('tree draws the paths and honours -L', () => {
+    const file = archived()
+
+    expect(arc(['tree', file]).out).toContain('a.txt')
+    expect(arc(['tree', '-L', '1', file]).out).not.toContain('a.txt')
+  })
+
+  test('cat prints a file of the archive', () => {
+    const file = archived()
+
+    expect(arc(['cat', file, 'project/src/a.txt']).out).toBe('alpha')
+    expect(arc(['cat', file, 'project/nope']).code).toBe(1)
+    expect(arc(['cat', file, 'project/src']).err).toContain('folder')
+  })
+
+  test('reads a zip too', () => {
+    const { folder, dest } = project()
+    const zip = join(dest, 'p.zip')
+
+    if (Bun.which('zip') === null)
+      return
+
+    Bun.spawnSync(['zip', '-qr', zip, '.'], { cwd: folder })
+
+    expect(arc(['ls', '-r', zip]).out).toContain('src/a.txt')
+    expect(arc(['cat', zip, 'src/a.txt']).out).toBe('alpha')
+  })
+
+  test('refuses what is not an archive', () => {
+    const { dest } = project()
+
+    writeFileSync(join(dest, 'x.txt'), '')
+
+    expect(arc(['ls', join(dest, 'x.txt')]).code).toBe(1)
+  })
+})

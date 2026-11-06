@@ -2,7 +2,7 @@
   "name": "@kaynooo/cli-arc",
   "type": "module",
   "version": "0.2.0",
-  "description": "arc: packs a folder into a verified .tar.zst before deleting it, unpacks one without overwriting anything and checks it, and extracts any other archive.",
+  "description": "arc: browses an archive without extracting it, packs a folder into a verified .tar.zst before deleting it, unpacks one without overwriting anything and checks it, and extracts any other archive.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/arc#readme",

@@ -10,6 +10,8 @@ Instead of: tar czf then rm -rf on trust, tar xf over existing files, and rememb
 
 ```sh
 arc <command> [options]
+arc ls backup.tar.zst  # what is in an archive
+arc cat backup.tar.zst project/package.json  # one file out of it
 arc pack ~/old-project /mnt/backup  # archive, verify, then delete the folder
 arc unpack /mnt/backup/old-project.tar.zst ~/restored  # refuses to overwrite
 arc extract release.tar.gz  # any common archive

@@ -12,7 +12,12 @@ It needs `tar` and `zstd` on the machine (`findmnt`, `mountpoint` and `df` from 
 | --- | --- |
 | `arc pack [-k] <folder> <dest dir>` | packs the folder into `<dest dir>/<name>.tar.zst`, checks it, then deletes the folder; `-k` keeps it |
 | `arc unpack <archive.tar.zst> <dest dir>` | unpacks it into the folder, refusing to overwrite, then checks every file against the archive; the archive is kept |
+| `arc ls [-r] <archive> [path]` | lists what an archive holds without extracting it, as `ls -l` would: the top level, the folder `path`, or every level with `-r`; `--json` for the entries |
+| `arc tree [-L <depth>] <archive> [path]` | draws the archive's files as a tree |
+| `arc cat <archive> <file>` | prints a file of the archive on stdout |
 | `arc extract <file>` | extracts `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`, `.tar.zst`, `.gz`, `.bz2`, `.zip`, `.Z`, `.rar` or `.7z` into the current folder, checking nothing |
+
+`ls`, `tree` and `cat` read `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.tar.zst` and `.zip`. Folders an archive holds no entry for, as one made from a file list, are shown all the same.
 
 ## What `pack` checks before it deletes
 
