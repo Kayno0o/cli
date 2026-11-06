@@ -148,7 +148,8 @@ describe('slot', () => {
 
   test('a lock wanted inside a slotted script does not deadlock against a session that holds it and waits for a slot', async () => {
     const go = join(dir, 'go')
-    const script = `while [ ! -e ${go} ]; do sleep 0.05; done; ${process.execPath} ${CLI} --lock db -t 4s -- echo inner`
+    // The wait ends when the dir is gone or after about 10 s, so a killed run leaves no loop behind.
+    const script = `n=0; while [ ! -e ${go} ] && [ -d ${dir} ] && [ $n -lt 200 ]; do sleep 0.05; n=$((n+1)); done; [ -e ${go} ] || exit 1; ${process.execPath} ${CLI} --lock db -t 4s -- echo inner`
     const outer = slot(['-n', '1', '-t', '4s', '--', 'sh', '-c', script])
 
     await until(async () => (await listed()).busy === 1)

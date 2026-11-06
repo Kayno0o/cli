@@ -32,12 +32,18 @@ if (barrier !== undefined && raw.join(' ').includes(barrier.match) && (barrier.m
 // One call at a time reads and writes the state, as the server serialises its writes.
 const lock = file + '.lock'
 
-for (;;) {
+// Only a held lock is waited for, and not forever: a test that removed its temp dir meanwhile makes mkdirSync fail with ENOENT for good.
+for (let waited = 0; ; waited += 5) {
   try {
     mkdirSync(lock)
     break
   }
-  catch {
+  catch (error) {
+    if (error.code !== 'EEXIST' || waited >= 20000) {
+      console.error('fake tea: ' + error.message)
+      process.exit(1)
+    }
+
     await Bun.sleep(5)
   }
 }
