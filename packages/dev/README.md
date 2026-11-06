@@ -16,6 +16,7 @@ bun add -g @kaynooo/cli-dev
 | `dev b64 [-d] [--url] [text]` | base64 of the text, or with `-d` the text behind it (either alphabet, padding optional) |
 | `dev url [url]` | the parts of a URL and its decoded query |
 | `dev hash <sha256\|sha1\|md5\|sha512> [file]` | the hex digest of a file or of stdin |
+| `dev ip [-4\|-6]` | the public IP address of this host, over IPv4 or IPv6 only when asked (needs `curl`) |
 
 `--json` prints the structured result of every command. `jwt` and `ts` take `--zone <IANA zone>` for the local dates instead of the host's.
 

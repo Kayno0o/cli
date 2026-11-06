@@ -7,6 +7,7 @@ import { badUsage, copyText, fail, isStdinPiped, jsonOption, oneOf, paint, parse
 import { b64Decode, b64Encode } from './encode'
 import { ALGORITHMS, hashHex } from './hash'
 import { ulid, uuidV4, uuidV7 } from './ids'
+import { publicIp } from './ip'
 import { claimTimes, decodeJwt } from './jwt'
 import { bcryptHash, DEFAULT_LENGTH, FORMATS, generatePassword } from './password'
 import { convert } from './ts'
@@ -336,6 +337,42 @@ export async function hash(args: string[]): Promise<number> {
   return 0
 }
 
+const IP_USAGE = `dev ip [-4|-6]: the public IP address of this host, as a web service sees it
+
+-4 or -6 asks over that IP family only, which fails when the host has no route over it.
+Exits 0 when it printed the address, 1 when the service could not be reached, 2 on a usage error.`
+
+export async function ip(args: string[]): Promise<number> {
+  const { values } = parse(args, IP_USAGE, { 4: { type: 'boolean', short: '4', description: 'over IPv4 only' }, 6: { type: 'boolean', short: '6', description: 'over IPv6 only' }, json: jsonOption('{ip, family?}') }, {
+    replaces: 'curl https://ipecho.net/plain typed from memory',
+    examples: ['dev ip', ['dev ip -6', 'the IPv6 address']],
+  })
+
+  if (values[4] === true && values[6] === true)
+    badUsage('-4 and -6 cannot be combined')
+
+  let family: 4 | 6 | undefined
+
+  if (values[4] === true)
+    family = 4
+  else if (values[6] === true)
+    family = 6
+
+  try {
+    const address = await publicIp(family)
+
+    if (values.json === true)
+      printJson(family === undefined ? { ip: address } : { ip: address, family })
+    else
+      console.log(address)
+
+    return 0
+  }
+  catch (error) {
+    return fail(`could not read the public address: ${error instanceof Error ? error.message : String(error)}`, 1)
+  }
+}
+
 if (import.meta.main) {
   process.exitCode = await runCli({
     name: 'dev',
@@ -351,6 +388,7 @@ if (import.meta.main) {
       b64: { summary: 'base64 encode or decode, standard or URL-safe', run: b64 },
       url: { summary: 'the parts of a URL and its decoded query', run: url },
       hash: { summary: 'sha256, sha1, md5 or sha512 of a file or stdin', run: hash },
+      ip: { summary: 'the public IP address of this host, IPv4 or IPv6', run: ip },
     },
   })
 }
