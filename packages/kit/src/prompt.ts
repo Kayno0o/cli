@@ -299,18 +299,15 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
     fail(`cannot ask "${question}" off a terminal`, 2, hint)
 
   const colors = paint(stderr)
-  let drawn: string[] = []
   let current: State = 'asking'
   let outcome: Outcome | undefined
   // A terminal that does not say its size, as a pseudo-terminal may, answers 0.
   const columns = () => stderr.columns || 80
-  const draw = (state: State) => {
+  // The cursor rests at the start of the first line, so a terminal that rewraps the frame as it narrows cannot move it off that row, and one erase from there takes the frame however many rows it spans; the last frame ends on its last line instead.
+  const draw = (state: State, last = false) => {
     const frame = render(colors, state, { columns: columns(), rows: stderr.rows || 24 })
-    // The cursor ends the last line, so it climbs the rows the previous frame takes at the width now, which a resize may have changed.
-    const rows = drawn.reduce((sum, line) => sum + Math.max(1, Math.ceil(Bun.stringWidth(line) / columns())), 0)
 
-    stderr.write(`${rows > 1 ? `\x1B[${rows - 1}A` : ''}\r\x1B[0J${frame.join('\n')}`)
-    drawn = frame
+    stderr.write(`\r\x1B[0J${frame.join('\n')}${last || frame.length < 2 ? '' : `\x1B[${frame.length - 1}A`}${last ? '' : '\r'}`)
     current = state
   }
   const redraw = () => draw(current)
@@ -356,7 +353,7 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
   }
   finally {
     stderr.off?.('resize', redraw)
-    draw(outcome ?? 'cancel')
+    draw(outcome ?? 'cancel', true)
     stderr.write('\n\x1B[?25h\x1B[?2004l')
     stdin.setRawMode(false)
     stdin.pause()

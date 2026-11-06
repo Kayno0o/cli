@@ -58,7 +58,7 @@ describe('select', () => {
     expect(closed()).toBe(true)
   })
 
-  test('a resize climbs to the first row of the rewrapped line before clearing', async () => {
+  test('a resize clears from the first row, where the cursor rests whatever the terminal rewrapped', async () => {
     const { terminal, type, resize, written } = fake()
     const running = select(ROWS, settings(), terminal)
 
@@ -68,7 +68,8 @@ describe('select', () => {
 
     const frame = written.join('')
 
-    expect(frame).toContain('\x1B[2A\r\x1B[J')
+    expect(frame).toContain('\x1B[?25l\r\x1B[J')
+    expect(frame).not.toContain('\x1B[?25h')
 
     type('\x03')
     expect(await running).toBeUndefined()

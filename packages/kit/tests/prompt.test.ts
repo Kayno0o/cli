@@ -27,6 +27,8 @@ async function thrown(promise: Promise<unknown>): Promise<unknown> {
   return undefined
 }
 
+const TRAILING_RETURN = /\r$/
+
 // A raw-mode terminal that sends `keys` one chunk at a time once the prompt listens, and keeps what it draws as written and with colour and cursor codes stripped.
 function terminal(keys: string[], { columns = 80, rows = 24, tty = true } = {}) {
   const input = new EventEmitter()
@@ -45,7 +47,7 @@ function terminal(keys: string[], { columns = 80, rows = 24, tty = true } = {}) 
       },
       pause: () => undefined,
     }),
-    stderr: { isTTY: true, columns, rows, write: (text: string) => raw.push(text) && written.push(stripAnsi(text)) },
+    stderr: { isTTY: true, columns, rows, write: (text: string) => raw.push(text) && written.push(stripAnsi(text).replace(TRAILING_RETURN, '')) },
   } as unknown as Terminal
 
   return { fake, raw, written, modes, listeners: () => input.listenerCount('data') }
@@ -322,7 +324,7 @@ describe('editor', () => {
 })
 
 describe('a resize while asking', () => {
-  it('redraws, climbing the rows the frame now takes', async () => {
+  it('redraws from the first line, erasing down however many rows the frame now takes', async () => {
     const stdin = Object.assign(new EventEmitter(), { isTTY: true, setRawMode: () => undefined, resume: () => undefined, pause: () => undefined })
     const raw: string[] = []
     const stderr = Object.assign(new EventEmitter(), { isTTY: true, columns: 80, rows: 24, write: (text: string) => raw.push(text) })
@@ -332,7 +334,7 @@ describe('a resize while asking', () => {
     stderr.columns = 20
     stderr.emit('resize')
 
-    expect(raw.join('')).toContain('A\r\x1B[0J')
+    expect(raw.join('')).toContain('\r\x1B[0J')
 
     stdin.emit('data', Buffer.from('\x03'))
     await running

@@ -65,6 +65,7 @@ const ESCAPE_WAIT_MS = 30
 const OPEN: Key = { ctrl: 'open' }
 const HIDE_CURSOR = '\x1B[?25l'
 const SHOW_CURSOR = '\x1B[?25h'
+const CARET = '\x1B[7m \x1B[27m'
 const PASTE_ON = '\x1B[?2004h'
 const PASTE_OFF = '\x1B[?2004l'
 // Report the wheel, in the SGR form that carries any column.
@@ -152,8 +153,6 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
   let restored = false
   // A lone escape may be the start of a sequence the terminal sends in two reads, such as an Alt-key, so it waits a moment for the rest before it cancels.
   let escape: ReturnType<typeof setTimeout> | undefined
-  // Where the cursor stood after the last frame, to find the row it is on once the terminal has rewrapped the text above it.
-  let caret: number | undefined
 
   function draw(clear = false): void {
     if (restored)
@@ -162,15 +161,13 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     const layout = layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined, settings.previewPosition)
     let frame = HIDE_CURSOR
 
+    // The terminal's cursor stays hidden at the start of the first line, where a terminal rewrapping the frame as it narrows cannot move it off that row, so one erase from there takes the frame whatever rows it spans; the caret is drawn as a reversed cell instead.
     if (reserved !== layout.height || clear) {
-      // A resize rewraps the lines drawn before it, so the cursor may sit rows below the frame's first line, which a clear from there would leave behind.
-      frame += clear && caret !== undefined ? up(Math.floor((caret - 1) / terminal.columns)) : ''
       frame += CLEAR_BELOW + '\n'.repeat(layout.height - 1) + up(layout.height - 1)
       reserved = layout.height
     }
 
-    caret = caretColumn(state, layout)
-    frame += `\r${render(state, layout, theme, preview).map(line => `\x1B[2K${line}`).join('\n')}${up(layout.height - 1)}\r\x1B[${caret}G${SHOW_CURSOR}`
+    frame += `\r${render(state, layout, theme, preview).map(line => `\x1B[2K${line}`).join('\n')}${up(layout.height - 1)}\r\x1B[${caretColumn(state, layout)}G${CARET}\r`
     terminal.write(frame)
   }
 
