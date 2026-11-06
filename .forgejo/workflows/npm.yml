@@ -32,4 +32,4 @@ jobs:
           working-directory: ${{ steps.package.outputs.directory }}
           server: https://git.kaynooo.fr
           token: ${{ secrets.PACKAGE_TOKEN }}
-          npm-token: ${{ steps.package.outputs.directory != 'packages/changelog' && secrets.NPM_TOKEN || '' }}
+          npm-token: ${{ steps.package.outputs.directory != 'packages/changelog' && secrets.NPM_STAGE_TOKEN || '' }}
