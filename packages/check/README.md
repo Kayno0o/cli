@@ -11,6 +11,7 @@ check --timeout 5m   # end a step still running after 5 minutes, exit 2
 check --slot     # queue each step behind the machine-wide slots of `slot` (@kaynooo/cli-wait)
 check --in app   # run every step in this compose service, whatever is detected
 check --failed   # run again only the steps that failed in this folder's last run
+check --quiet    # print only the failing steps, nothing when all pass
 check --fix      # run the fixers instead, what `fix` does
 check --host     # run on the host even when a compose service mounts the folder
 check --json     # [{name, command, in?, ok, ms, log, failed?}] once every step ran

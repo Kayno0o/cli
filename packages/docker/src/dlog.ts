@@ -26,6 +26,7 @@ const options = {
   'level': { type: 'string', choices: ['error', 'warn'], default: 'error', description: 'lowest level of the lines kept: error (the default) or warn, warnings too' },
   'grep': { type: 'string', description: 'keep the lines matching this regex, case insensitive, instead of the --level words' },
   'fail-on': { type: 'string', multiple: true, choices: FAIL_ON, description: 'what makes the exit 1, repeatable: down, unhealthy or errors (all three)' },
+  'quiet': { type: 'boolean', short: 'q', description: 'print only the services --fail-on names, nothing when none needs a look' },
   'all': { type: 'boolean', short: 'a', description: 'the last log lines of a service with no error too' },
   'json': jsonOption('[{ key, state, health, status, errors: [{ line, count }], tail, down, unhealthy }]'),
 } as const
@@ -202,12 +203,12 @@ export async function dlog(args: string[]): Promise<number> {
     return { key: key(service), state: service.state, health, status: service.status, errors, tail, unreadable, fine, down: !isUp(service.state, container), unhealthy: isUp(service.state, container) && !fine }
   }))
 
+  const down = reports.filter(report => needsLook(report, failOn))
+
   if (parsed.values.json === true)
     printJson(reports)
   else
-    show(reports)
-
-  const down = reports.filter(report => needsLook(report, failOn))
+    show(parsed.values.quiet === true ? down : reports)
 
   if (parsed.values.json !== true && down.length > 0)
     console.error(paint(process.stderr).dim(`${down.length} of ${reports.length} services need a look: ${down.map(report => report.key).join(', ')}`))

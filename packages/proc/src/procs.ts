@@ -2,7 +2,7 @@ import type { Group } from './select'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import process from 'node:process'
-import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printJson, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printJson, problem, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { terminate } from './kill'
 import { maskArgs } from './mask'
 import { ancestry, snapshot } from './read'
@@ -21,6 +21,7 @@ const options = {
   'kill': { type: 'boolean', conflicts: ['watch'], description: 'stop the listed processes: a dry run without --yes' },
   'watch': watchOption('the processes'),
   'yes': { type: 'boolean', short: 'y', description: 'with --kill, really stop them, without asking' },
+  'quiet': { type: 'boolean', short: 'q', description: 'with --kill --yes, print nothing about what was stopped' },
   'min-mem': { type: 'string', description: 'heavy from this resident size (500M), and the least a left over process must use to be listed; a bare number counts megabytes' },
   'older': { type: 'string', description: 'only processes at least this old: 30m, 2h, 1d' },
   'grace': { type: 'string', description: 'how long SIGTERM gets before SIGKILL (5s)' },
@@ -107,13 +108,14 @@ export async function procs(args: string[]): Promise<number> {
 
   const outcome = await terminate(pids, { escalate: true, graceMs: duration(values.grace, 'grace', 5000) })
 
-  show({ stopped: [...outcome.terminated, ...outcome.killed], killed: outcome.killed, survived: outcome.survived })
+  if (values.quiet !== true || values.json === true)
+    show({ stopped: [...outcome.terminated, ...outcome.killed], killed: outcome.killed, survived: outcome.survived })
 
-  if (values.json !== true)
+  if (values.json !== true && values.quiet !== true)
     console.log(`stopped ${outcome.terminated.length + outcome.killed.length} of ${pids.length}${outcome.killed.length === 0 ? '' : `, ${outcome.killed.length} needed SIGKILL`}`)
 
   if (outcome.survived.length > 0)
-    console.error(`still running: ${outcome.survived.join(' ')}`)
+    problem(`still running: ${outcome.survived.join(' ')}`)
 
   return outcome.survived.length === 0 ? 0 : 1
 }

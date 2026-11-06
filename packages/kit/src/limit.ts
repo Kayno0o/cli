@@ -1,5 +1,6 @@
 import { badUsage, wholeNumber } from './args'
 
+// Short flags mean one thing across the bins: `-n` how many rows, lines or items to show (some bins keep `-n` for a count of their own, which their help words: `sub -n` matches expected, `proof -n` runs, `slot -n` slots), `-q` quiet, except where it is a query (`pick -q`, which has no quiet mode).
 // The `--limit` and `--full` flags every listing words alike, `fallback` being the rows shown without either.
 export function limitOptions(fallback: number) {
   return {

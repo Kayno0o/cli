@@ -117,6 +117,20 @@ describe('check', () => {
     expect(out.trimEnd().split('\n')).toHaveLength(2)
   })
 
+  test('--quiet prints nothing for passing steps and nothing at all when all pass', async () => {
+    const failing = await capture(async () => check(['--quiet'], repo('js')))
+
+    expect(failing.result).toBe(1)
+    expect(failing.out).not.toContain('ok ')
+    expect(failing.out).toContain('FAIL  lint')
+    expect(failing.out).toContain('1 failed')
+
+    const passing = await capture(async () => check(['-q', '--only', 'check,test'], repo('js')))
+
+    expect(passing.result).toBe(0)
+    expect(passing.out).toBe('')
+  })
+
   test('--slot runs each step through the slot bin, and fails when there is none', async () => {
     const bin = temp('check-slot-')
     const calls = join(bin, 'calls')

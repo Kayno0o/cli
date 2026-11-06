@@ -39,7 +39,7 @@ afterEach(() => {
 describe('gst', () => {
   test('prints its version and its help', () => {
     expect(gst('--version').out.trim()).toBe(version)
-    expect(gst('--help').out).toContain('gst [--log N]')
+    expect(gst('--help').out).toContain('gst [-n N]')
   })
 
   test('a repository without commits', () => {
@@ -83,6 +83,20 @@ describe('gst', () => {
     })
   })
 
+  test('-n and --limit add the last commits, --log and -l are the former spellings of it', () => {
+    file('a.ts')
+    git('add', 'a.ts')
+    git('commit', '-q', '-m', 'feat: first')
+
+    const sha = git('rev-parse', '--short', 'HEAD')
+    const shown = `commits:\n  ${sha} feat: first\n`
+
+    for (const flags of [['-n', '1'], ['--limit', '1'], ['--log', '1'], ['-l', '1']])
+      expect(gst(...flags).out).toContain(shown)
+
+    expect(gst('-n', '1', '--log', '1').code).toBe(2)
+  })
+
   test('outside a repository it says so', () => {
     rmSync(join(dir, '.git'), { recursive: true })
     const result = run([process.execPath, GST], { GIT_CEILING_DIRECTORIES: dirname(realpathSync(dir)) })
@@ -110,6 +124,15 @@ describe('gc', () => {
     expect(result.out).toBe(`${sha} feat(x): add a\n  A a.ts\n  M base.ts\n`)
     expect(git('log', '-1', '--format=%B')).toBe('feat(x): add a\n\nAdds a beside base.\n\n#12 - [UC3] Ajouter a')
     expect(git('status', '--porcelain')).toBe('?? b.ts')
+  })
+
+  test('--quiet commits and prints nothing', () => {
+    file('a.ts')
+
+    const result = gc('feat(x): add a', '-q', '--', 'a.ts')
+
+    expect(result).toMatchObject({ code: 0, out: '', err: '' })
+    expect(git('log', '-1', '--format=%s')).toBe('feat(x): add a')
   })
 
   test('--json prints the sha, subject and files of the commit, a rename with its old path', () => {

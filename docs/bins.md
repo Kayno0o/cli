@@ -45,7 +45,7 @@ runs the repo's check, typecheck, lint and test steps, from package.json scripts
 Instead of: chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail
 
 ```sh
-check [--only <steps>] [--changed] [--failed] [--timeout <duration>] [--slot] [--in <service> | --host] [--list]
+check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot] [--in <service> | --host] [--list]
 check
 check --only lint,test  # two of the steps
 check --in app  # every step inside the app service
@@ -247,9 +247,9 @@ the repository's branch, upstream, changed files and HEAD in one line, then the 
 Instead of: git status --short and git log --oneline
 
 ```sh
-gst [--log N]
+gst [-n N]
 gst
-gst --log 5  # with the last five commits
+gst -n 5  # with the last five commits
 ```
 
 ## guard

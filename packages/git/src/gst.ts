@@ -7,10 +7,11 @@ import { letter } from './colour'
 import { git } from './git'
 import { parseStatus, summary } from './status'
 
-const USAGE = 'gst [--log N]: the repository\'s branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked\n\nExits 0 when it printed the status, 2 outside a git repository or on a usage error.'
+const USAGE = 'gst [-n N]: the repository\'s branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked\n\nExits 0 when it printed the status, 2 outside a git repository or on a usage error.'
 
 const OPTIONS = {
-  log: { type: 'string', short: 'l', description: 'add the last N commits as <sha7> <title>' },
+  limit: { type: 'string', short: 'n', description: 'add the last N commits as <sha7> <title>' },
+  log: { type: 'string', short: 'l', description: 'the former spelling of --limit' },
   watch: watchOption('the status'),
   json: jsonOption('{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, commits}'),
 } as const
@@ -24,7 +25,7 @@ function staged({ index, from, path }: Change): string {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'git status --short and git log --oneline', examples: ['gst', ['gst --log 5', 'with the last five commits']] })
+  const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'git status --short and git log --oneline', examples: ['gst', ['gst -n 5', 'with the last five commits']] })
 
   if (parsed.positionals.length > 0)
     fail(`gst takes no paths\n\n${USAGE}`)
@@ -32,7 +33,11 @@ async function main(argv: string[]): Promise<number> {
   if (parsed.values.watch !== undefined)
     return watching(parsed.values.watch, async () => main(withoutWatch(argv)))
 
-  const count = parsed.values.log === undefined ? 0 : wholeNumber(parsed.values.log, 'log', 1)
+  if (parsed.values.limit !== undefined && parsed.values.log !== undefined)
+    fail('--limit and --log are the same flag, give one')
+
+  const asked = parsed.values.limit ?? parsed.values.log
+  const count = asked === undefined ? 0 : wholeNumber(asked, 'limit', 1)
   const [read, head, log] = await Promise.all([
     git(['status', '--porcelain=v2', '--branch']),
     git(['log', '-1', '--format=%h%x00%s']),
