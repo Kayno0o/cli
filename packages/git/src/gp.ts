@@ -4,6 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Repo } from './repos'
 import process from 'node:process'
 import { fail, jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
+import { progressLine } from '@kaynooo/cli-kit/progress'
 import { git } from './git'
 import { reposOf, repoState, toplevelOf } from './repos'
 
@@ -139,9 +140,16 @@ async function main(argv: string[]): Promise<number> {
   const repos = await Promise.all(dirs.map(repoState))
   const results: Result[] = []
 
+  // The count shows only with several repositories to push.
+  const progress = progressLine()
+
   // One push at a time, so a passphrase or a hook asks one question at a time.
-  for (const repo of repos)
+  for (const [at, repo] of repos.entries()) {
+    progress.update(repos.length > 1 ? { step: `pushing ${repo.path}`, done: at, total: repos.length, unit: 'repositories' } : { step: `pushing ${repo.path}` })
     results.push(await push(repo, { dryRun: values['dry-run'] === true, extra: rest }))
+  }
+
+  progress.stop()
 
   if (values.json === true)
     printJson(results)
