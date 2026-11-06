@@ -9,7 +9,7 @@ import { isIP } from 'node:net'
 import process from 'node:process'
 import { badUsage, duration, fail, jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { cdnHint, daysLeftLabel, httpRedirectOf, isRedirect, MAX_HOPS, nextUrl, offersOf, parseTarget, versionLabel, wantsHttpCheck, warningsOf, worthKnowing } from './analyze'
-import { corsVerdict } from './cors'
+import { corsVerdict, methodOf, originOf, requestedHeaders } from './cors'
 import { dnsReport, known, network } from './dns'
 import { addressesOf, curlHasHttp3, curlHop, curlPreflight, portOf, tlsInfo } from './net'
 
@@ -40,10 +40,6 @@ const OPTIONS = {
   'cors-headers': { type: 'string', description: 'with --cors, the headers it carries, comma separated, empty for none (content-type)' },
   'json': jsonOption('one object per target {target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, warnings}, an array of them for several targets (an unreachable one is {target, error}); with --dns {target, zone, answers, agree, warnings}, with --cors {target, url, status, request, allowed, reasons, warnings, headers}'),
 } as const
-
-const DNS_TIMEOUT_MS = 3000
-const LIST = /\s*,\s*/
-const TRAILING_SLASH = /\/$/
 
 const BRACKETS = /^\[|\]$/g
 const HEADER_LINE = /^[\w!#$%&'*+.^`|~-]+:/
@@ -281,7 +277,7 @@ async function dnsMain(inputs: string[], timeoutMs: number | undefined, json: bo
 
     return { input, host }
   })
-  const client = network(timeoutMs ?? DNS_TIMEOUT_MS)
+  const client = network(timeoutMs)
   const reports = await Promise.all(hosts.map(async ({ input, host }) => dnsReport(input, host, client)))
 
   if (json) {
@@ -321,19 +317,6 @@ function printCors(report: CorsReport): void {
 
   for (const warning of report.warnings)
     console.log(marked('warn', warning, process.stdout))
-}
-
-// The origin as a browser sends it: scheme, host and port, no path; `null` for an opaque one.
-function originOf(input: string): string {
-  if (input === 'null')
-    return input
-
-  if (!URL.canParse(input))
-    badUsage(`--cors takes an origin such as https://app.example.com, not ${input}`)
-
-  const { origin } = new URL(input)
-
-  return origin === 'null' ? input.replace(TRAILING_SLASH, '') : origin
 }
 
 async function corsMain(targets: { input: string, target: Target }[], request: CorsRequest, { insecure, wire }: Settings, json: boolean): Promise<number> {
@@ -399,7 +382,12 @@ async function main(args: string[]): Promise<number> {
   })
 
   if (values.cors !== undefined) {
-    const request = { origin: originOf(values.cors), method: (values.method ?? 'POST').toUpperCase(), headers: (values['cors-headers'] ?? 'content-type').split(LIST).filter(name => name !== '') }
+    const origin = originOf(values.cors)
+
+    if (origin === undefined)
+      badUsage(`--cors takes an origin such as https://app.example.com, not ${values.cors}`)
+
+    const request = { origin, method: methodOf(values.method ?? 'POST'), headers: requestedHeaders(values['cors-headers'] ?? 'content-type') }
 
     return corsMain(targets, request, { insecure: values.insecure === true, wire }, values.json === true)
   }

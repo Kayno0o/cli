@@ -157,10 +157,15 @@ describe('probe against a local http server', () => {
 
     expect((JSON.parse(header.out) as { reasons: string[] }).reasons).toEqual(['access-control-allow-headers does not cover x-trace'])
     expect((await probe(['http://127.0.0.1:1/', '--cors', 'https://app.test'])).code).toBe(1)
+
+    const bare = JSON.parse((await probe([`${base}/cors`, '--cors', 'https://app.test', '--method', 'get', '--cors-headers', '', '--json'])).out) as { request: unknown, allowed: boolean }
+
+    expect(bare).toMatchObject({ request: { origin: 'https://app.test', method: 'GET', headers: [] }, allowed: true })
   })
 
   test('--cors, --method and --dns refuse what they cannot go with', async () => {
     expect((await probe([base, '--cors', 'not an origin'])).code).toBe(2)
+    expect((await probe([base, '--cors', 'localhost:3000'])).err).toContain('--cors takes an origin such as https://app.example.com, not localhost:3000')
     expect((await probe([base, '--method', 'PUT'])).err).toContain('--method goes with --cors')
     expect((await probe([base, '--cors-headers', 'x'])).code).toBe(2)
     expect((await probe([base, '--dns', '-H', 'X: 1'])).err).toContain('--dns cannot be used with --header')

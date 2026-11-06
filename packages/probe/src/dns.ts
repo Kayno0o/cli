@@ -54,10 +54,8 @@ function resolverFor(server: DnsServer, timeoutMs: number): Resolver {
 function failureOf(error: unknown): string {
   const code = (error as { code?: string }).code
 
-  if (code === 'ETIMEOUT' || code === 'ECONNREFUSED')
-    return 'no answer'
-
-  return code === 'ENOTFOUND' || code === 'ENODATA' ? 'no such record' : String((error as Error).message ?? error)
+  // A name or record that does not exist is no failure: `settled` reads it as no records.
+  return code === 'ETIMEOUT' || code === 'ECONNREFUSED' ? 'no answer' : String((error as Error).message ?? error)
 }
 
 // The records of one type, empty when the name has none; any other failure is thrown on.
@@ -75,10 +73,8 @@ async function settled<T>(query: Promise<T[]>): Promise<T[]> {
   }
 }
 
-/** The client asking real servers, each query given up after `timeoutMs`. */
-export function network(timeoutMs = TIMEOUT_MS): DnsClient {
-  const upstream = PUBLIC_RESOLVERS[0]!
-
+/** The client asking real servers, each query given up after `timeoutMs` (whole seconds under Bun, at least one); `upstream` finds the zone's nameservers and their addresses. */
+export function network(timeoutMs = TIMEOUT_MS, upstream: DnsServer = PUBLIC_RESOLVERS[0]!): DnsClient {
   return {
     servers: server => server.address ?? resolverFor(server, timeoutMs).getServers().join(', '),
     async records(server, host) {
@@ -88,7 +84,7 @@ export function network(timeoutMs = TIMEOUT_MS): DnsClient {
         const [a, aaaa, cname] = await Promise.all([settled(resolver.resolve4(host, { ttl: true })), settled(resolver.resolve6(host, { ttl: true })), settled(resolver.resolveCname(host))])
         const ttls = [...a, ...aaaa].map(record => record.ttl)
 
-        return { a: a.map(record => record.address).sort(), aaaa: aaaa.map(record => record.address).sort(), cname, ttl: ttls.length === 0 ? null : Math.min(...ttls) }
+        return { a: a.map(record => record.address).sort(), aaaa: aaaa.map(record => record.address).sort(), cname: cname.map(target => target.toLowerCase()), ttl: ttls.length === 0 ? null : Math.min(...ttls) }
       }
       catch (error) {
         return { a: [], aaaa: [], cname: [], ttl: null, error: failureOf(error) }
@@ -107,19 +103,26 @@ export function network(timeoutMs = TIMEOUT_MS): DnsClient {
   }
 }
 
-// The zone holding the host and its nameservers: the host itself or the nearest parent that has NS records.
-async function zoneOf(host: string, client: DnsClient): Promise<{ zone: string, nameservers: string[] } | undefined> {
+const NO_ZONE = 'no zone with nameservers was found for this name'
+const ZONE_LOOKUP_FAILED = 'the zone of this name could not be looked up, so no nameserver was asked'
+
+// The zone holding the host and its nameservers: the host itself or the nearest parent that has NS records, a top-level domain never counting.
+// A lookup that fails stops the climb, a parent's nameservers being no reference for a zone delegated below it.
+async function zoneOf(host: string, client: DnsClient): Promise<{ zone: string, nameservers: string[] } | { problem: string }> {
   const labels = host.split('.')
 
   for (let at = 0; at < labels.length - 1; at++) {
     const zone = labels.slice(at).join('.')
     const nameservers = await failingToNothing(client.nameservers(zone))
 
-    if (nameservers !== undefined && nameservers.length > 0)
+    if (nameservers === undefined)
+      return { problem: ZONE_LOOKUP_FAILED }
+
+    if (nameservers.length > 0)
       return { zone, nameservers: nameservers.sort() }
   }
 
-  return undefined
+  return { problem: NO_ZONE }
 }
 
 // A lookup that times out or is refused counts as finding nothing: the report goes on with the other servers.
@@ -132,49 +135,57 @@ async function failingToNothing<T>(query: Promise<T>): Promise<T | undefined> {
   }
 }
 
+// One family's addresses agree when they share one, so a round robin rotating its records is no disagreement; a family one side has and the other lacks is one.
+function sameFamily(mine: string[], theirs: string[]): boolean {
+  if (mine.length === 0 || theirs.length === 0)
+    return mine.length === theirs.length
+
+  const other = new Set(theirs)
+
+  return mine.some(address => other.has(address))
+}
+
 /**
- * Whether two answers say the same: an alias compares by its target alone, since the zone's nameservers do not follow it out of the zone; addresses agree when they share one, so a round robin rotating its records is no disagreement.
- * A CDN answering by location can still show as one.
+ * Whether two answers say the same: an alias compares by its target alone, since the zone's nameservers do not follow it out of the zone; A and AAAA records each agree when they share an address.
+ * A CDN answering by location can still show as a disagreement.
  */
 export function sameAnswer(one: DnsAnswer, other: DnsAnswer): boolean {
   if (one.error !== undefined || other.error !== undefined)
     return one.error === other.error
 
   if (one.cname.length > 0 || other.cname.length > 0)
-    return one.cname.join() === other.cname.join()
+    return one.cname.join().toLowerCase() === other.cname.join().toLowerCase()
 
-  const mine = [...one.a, ...one.aaaa]
-  const theirs = new Set([...other.a, ...other.aaaa])
-
-  return mine.length === 0 ? theirs.size === 0 : mine.some(address => theirs.has(address))
+  return sameFamily(one.a, other.a) && sameFamily(one.aaaa, other.aaaa)
 }
+
+const TRAILING_DOT = /\.$/
 
 /** What each resolver answers for the host, then whether they agree, the authoritative nameservers being the reference. */
 export async function dnsReport(target: string, host: string, client: DnsClient = network()): Promise<DnsReport> {
-  const found = await zoneOf(host, client)
-  const authoritative = await Promise.all((found?.nameservers ?? []).map(async (name): Promise<DnsServer | undefined> => {
-    const address = await failingToNothing(client.addressOf(name))
+  const name = host.replace(TRAILING_DOT, '').toLowerCase()
+  const found = await zoneOf(name, client)
+  const authoritative = await Promise.all(('nameservers' in found ? found.nameservers : []).map(async (nameserver): Promise<DnsServer | undefined> => {
+    const address = await failingToNothing(client.addressOf(nameserver))
 
-    return address === undefined ? undefined : { name, address }
+    return address === undefined ? undefined : { name: nameserver, address }
   }))
   const asked = [
     ...[{ name: 'system' }, ...PUBLIC_RESOLVERS].map(server => ({ server, authoritative: false })),
     ...authoritative.filter(server => server !== undefined).map(server => ({ server, authoritative: true })),
   ]
-  const answers = await Promise.all(asked.map(async ({ server, authoritative }) => ({ resolver: server.name, server: client.servers(server), authoritative, ...await client.records(server, host) })))
+  const answers = await Promise.all(asked.map(async ({ server, authoritative }) => ({ resolver: server.name, server: client.servers(server), authoritative, ...await client.records(server, name) })))
 
-  return { target, zone: found?.zone ?? null, answers, ...verdictOf(answers, found !== undefined) }
+  return { target, zone: 'zone' in found ? found.zone : null, answers, ...verdictOf(answers, 'problem' in found ? found.problem : undefined) }
 }
 
-export function verdictOf(answers: DnsAnswer[], zoneFound: boolean): Pick<DnsReport, 'agree' | 'warnings'> {
-  const warnings: string[] = []
+/** Whether the answers agree and what warrants a warning; `zoneProblem` says why no nameserver could be asked, if none was. */
+export function verdictOf(answers: DnsAnswer[], zoneProblem?: string): Pick<DnsReport, 'agree' | 'warnings'> {
+  const warnings: string[] = zoneProblem === undefined ? [] : [zoneProblem]
   const answered = answers.filter(answer => answer.error !== 'no answer')
   const reference = answered.filter(answer => answer.authoritative)
   const truth = reference[0] ?? answered[0]
   const agree = truth === undefined || answered.every(answer => sameAnswer(answer, truth))
-
-  if (!zoneFound)
-    warnings.push('no zone with nameservers was found for this name')
 
   if (reference.some(answer => !sameAnswer(answer, reference[0]!)))
     warnings.push('the zone\'s own nameservers disagree: one of them has not taken the last change yet')
@@ -184,13 +195,21 @@ export function verdictOf(answers: DnsAnswer[], zoneFound: boolean): Pick<DnsRep
       warnings.push(`${answer.resolver} did not answer`)
   }
 
-  if (reference.length === 0 || agree)
+  if (agree)
     return { agree, warnings }
 
-  const stale = answered.filter(answer => !answer.authoritative && !sameAnswer(answer, truth))
+  if (reference.length === 0) {
+    warnings.push(`the resolvers disagree, with no nameserver of the zone to tell which is right: ${answered.filter(answer => !sameAnswer(answer, truth)).map(answer => answer.resolver).join(', ')} differ from ${truth.resolver}`)
+
+    return { agree, warnings }
+  }
+
+  // A resolver giving what any of the zone's nameservers gives is not behind, when they disagree among themselves.
+  const stale = answered.filter(answer => !answer.authoritative && !reference.some(ns => sameAnswer(answer, ns)))
 
   for (const answer of stale) {
-    const until = answer.ttl === null ? '' : `, cached for up to ${answer.ttl}s more`
+    // An alias is kept for its own TTL, which the records it leads to do not tell.
+    const until = answer.ttl === null || answer.cname.length > 0 ? '' : `, cached for up to ${answer.ttl}s more`
 
     warnings.push(answer.resolver === 'system'
       ? `the system resolver answers differently from the zone's nameservers${until}: \`sudo resolvectl flush-caches\` drops its copy`
