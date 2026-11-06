@@ -60,7 +60,11 @@ const PASTE_START = '\x1B[200~'
 const PASTE_END = '\x1B[201~'
 const LAST_WORD = /\S*\s*$/
 // eslint-disable-next-line no-control-regex -- escape sequences are what it splits
-const KEY_SEQUENCES = /\x1B\[[0-9;]*[A-Z~]|\x1BO[A-Z]|\x1B[\s\S]|[\s\S]/gu
+const KEY_SEQUENCES = /\x1B\[<[0-9;]*[A-Za-z]|\x1B\[[0-9;]*[A-Z~]|\x1BO[A-Z]|\x1B[\s\S]|[\s\S]/gu
+// An SGR mouse report: the button, then the column and row; 64 and 65 are the wheel up and down.
+// eslint-disable-next-line no-control-regex -- an escape sequence is what it recognizes
+const MOUSE = /^\x1B\[<(\d+);\d+;\d+[a-z]$/i
+const WHEEL_LINES = 3
 
 const KEYS: Record<string, Key> = {
   '\x1B[A': 'up',
@@ -94,8 +98,8 @@ const KEYS: Record<string, Key> = {
 /** The control keys a caller can ask for, `ctrl-a` to `ctrl-z` but those standing for tab, enter, backspace and cancel. */
 export const CTRL_KEY = /^ctrl-[abd-gkln-z]$/
 
-function repeat(value: string, count: number): string[] {
-  return Array.from<string>({ length: count }).fill(value)
+function repeat<T = string>(value: T, count: number): T[] {
+  return Array.from<T>({ length: count }).fill(value)
 }
 
 /** What a line looks like drawn and searched: no escapes, one space per tab or other control character. */
@@ -183,6 +187,11 @@ export function parseKeys(input: string, paste = { active: false }, ctrls: reado
   const codes = new Map(ctrls.map(name => [String.fromCharCode(name.codePointAt(name.length - 1)! - 96), name]))
 
   return (input.match(KEY_SEQUENCES) ?? []).flatMap((sequence) => {
+    const wheel = MOUSE.exec(sequence)?.[1]
+
+    if (wheel !== undefined)
+      return repeat<Key>(wheel === '64' ? 'up' : 'down', wheel === '64' || wheel === '65' ? WHEEL_LINES : 0)
+
     const named = codes.get(sequence)
     const key = named === undefined ? KEYS[sequence] : { ctrl: named }
 

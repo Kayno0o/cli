@@ -67,6 +67,9 @@ const HIDE_CURSOR = '\x1B[?25l'
 const SHOW_CURSOR = '\x1B[?25h'
 const PASTE_ON = '\x1B[?2004h'
 const PASTE_OFF = '\x1B[?2004l'
+// Report the wheel, in the SGR form that carries any column.
+const MOUSE_ON = '\x1B[?1000h\x1B[?1006h'
+const MOUSE_OFF = '\x1B[?1006l\x1B[?1000l'
 const CLEAR_BELOW = '\r\x1B[J'
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 
@@ -219,7 +222,7 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     clearTimeout(previewTimer)
     clearTimeout(escape)
     previewing.abort()
-    terminal.write(`${CLEAR_BELOW}${PASTE_OFF}${SHOW_CURSOR}`)
+    terminal.write(`${CLEAR_BELOW}${MOUSE_OFF}${PASTE_OFF}${SHOW_CURSOR}`)
     terminal.close()
   }
 
@@ -326,7 +329,7 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     process.once(signal, stop)
 
   try {
-    terminal.write(PASTE_ON)
+    terminal.write(`${PASTE_ON}${MOUSE_ON}`)
     terminal.listen(onChunk, () => draw(true))
     refreshPreview()
     draw(true)
