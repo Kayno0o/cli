@@ -25,6 +25,7 @@ const HARDLINK_TO = / link to .*$/
 const LEADING_DOT = /^(?:\.\/)+/
 const TRAILING_SLASHES = /\/+$/
 const BACKSLASHES = /\\/g
+const ZIP_FOLDER = /[/\\]$/
 const ZIP_GLOB = /[*?[\]\\]/g
 
 export function formatOf(file: string): Format | undefined {
@@ -104,7 +105,7 @@ export function parseZip(output: string): Entry[] {
     const path = clean(raw.replace(BACKSLASHES, '/'))
 
     if (path !== '')
-      entries.push({ path, raw, kind: /[/\\]$/.test(raw) ? 'dir' : 'file', size: Number(size), mode: '-', modified: `${date} ${time}` })
+      entries.push({ path, raw, kind: ZIP_FOLDER.test(raw) ? 'dir' : 'file', size: Number(size), mode: '-', modified: `${date} ${time}` })
   }
 
   return entries
