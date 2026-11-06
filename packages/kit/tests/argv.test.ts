@@ -28,14 +28,14 @@ describe('scriptArgs', () => {
     expect(scriptArgs()).toEqual(process.argv.slice(2))
   })
 
-  // A bin on PATH is a link to the script, which Bun resolves for process.argv[1] while the command line keeps the link.
+  // A bin on PATH is a link to the script, which Bun resolves for process.argv[1] while the command line keeps the link. The shebang names bun itself, busybox env (CI's alpine) having no -S.
   test.each([['by its path', false], ['through a link on PATH', true]])('a script run %s gets its -- back', (_, linked) => {
     const dir = temp()
     const script = join(dir, 'pkg', 'show.ts')
 
     mkdirSync(join(dir, 'pkg'))
     mkdirSync(join(dir, 'bin'))
-    writeFileSync(script, `#!/usr/bin/env -S ${process.execPath} --no-env-file\nimport { scriptArgs } from ${JSON.stringify(new URL('../src/argv.ts', import.meta.url).pathname)}\nconsole.log(JSON.stringify(scriptArgs()))\n`)
+    writeFileSync(script, `#!${process.execPath} --no-env-file\nimport { scriptArgs } from ${JSON.stringify(new URL('../src/argv.ts', import.meta.url).pathname)}\nconsole.log(JSON.stringify(scriptArgs()))\n`)
     chmodSync(script, 0o755)
     symlinkSync(script, join(dir, 'bin', 'show'))
 
