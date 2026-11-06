@@ -1,7 +1,7 @@
 import type { Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
-import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHeader, printHint, printJson, role, runHint, section, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHeader, printHint, printJson, problem, role, runHint, section, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
 import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
@@ -249,7 +249,7 @@ async function eachIssue(command: string, numbers: number[], step: (number: numb
       if (!(error instanceof Exit) || numbers.length === 1)
         throw error
 
-      console.error(`ft ${command}: ${error.message}`)
+      problem(`ft ${command}: ${error.message}`)
 
       if (error.hint !== undefined)
         printHint(error.hint)

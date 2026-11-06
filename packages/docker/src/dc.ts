@@ -1,6 +1,6 @@
 import type { Labels, Stack } from './stack'
 import process from 'node:process'
-import { isInteractive, paint } from '@kaynooo/cli-kit'
+import { isInteractive, paint, problem } from '@kaynooo/cli-kit'
 import { nearestStack, recordedNearby, stackAt, stackOf } from './stack'
 
 // The words a compose command starts with, which never name a stack, so the containers are not listed to check.
@@ -66,7 +66,7 @@ export async function dc(args: string[]): Promise<number> {
   const recorded = await choose(found.recorded)
 
   if (!recorded) {
-    console.error(`several stacks here, name one first: ${found.recorded.map(stack => stack.project).join(', ')}`)
+    problem(`several stacks here, name one first: ${found.recorded.map(stack => stack.project).join(', ')}`)
 
     return 1
   }

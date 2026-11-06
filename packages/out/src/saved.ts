@@ -1,6 +1,6 @@
 import { readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { badUsage, copyText, fail, fileLink, formatAge, formatFileSize, paint, role, table } from '@kaynooo/cli-kit'
+import { badUsage, copyText, fail, fileLink, formatAge, formatFileSize, paint, role, table, warn } from '@kaynooo/cli-kit'
 import { logDir } from './logs'
 
 export interface SavedLog {
@@ -48,7 +48,7 @@ export async function printLast(copy = false): Promise<number> {
   console.log(path)
 
   if (copy && !await copyText(path))
-    console.error('warning: no clipboard tool found (wl-copy, xclip, xsel, pbcopy)')
+    warn('no clipboard tool found (wl-copy, xclip, xsel, pbcopy)')
 
   return 0
 }

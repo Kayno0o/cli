@@ -2,7 +2,7 @@ import type { Service } from './compose'
 import type { Dialect } from './guard'
 import { isIP } from 'node:net'
 import process from 'node:process'
-import { fail } from '@kaynooo/cli-kit'
+import { fail, warn } from '@kaynooo/cli-kit'
 import { SQL } from 'bun'
 import { DEFAULT_ENV } from './args'
 import { composeServices, containerService, pickService, serviceUrl } from './compose'
@@ -350,6 +350,6 @@ async function closeQuietly(session: Session, url: string): Promise<void> {
     await session.close()
   }
   catch (error) {
-    console.error(messageOf(error, url))
+    warn(messageOf(error, url))
   }
 }

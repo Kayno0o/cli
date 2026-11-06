@@ -132,7 +132,7 @@ describe('ev audit', () => {
       await chmod(join(dir, name), 0o000)
     }
 
-    expect(ev(['audit']).err).toBe('could not read 4 folders, so they were not audited (--json lists them)\n')
+    expect(ev(['audit']).err).toBe('warning: could not read 4 folders, so they were not audited (--json lists them)\n')
 
     await chmod(join(dir, 'd'), 0o755)
 
