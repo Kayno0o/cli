@@ -2,7 +2,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { AnalyzeInput, Report } from '../analyze'
 import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher } from '../registry'
-import { fail, formatAge, isStdinPiped, jsonOption, parse, printJson, readInput, table, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, formatAge, isStdinPiped, jsonOption, parse, printJson, readInput, role, table, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor } from '../config'
@@ -68,9 +68,12 @@ function when(release: { published?: string | undefined } | undefined, now: numb
   return release?.published === undefined ? '' : `, published ${formatAge(release.published, now)} (${release.published.slice(0, 10)})`
 }
 
-export function render(report: Report, now = Date.now()): string {
+export function render(report: Report, now = Date.now(), stream: { isTTY?: boolean } = process.stdout): string {
+  const id = role('id', stream)
+  const warn = role('warn', stream)
+
   if (!report.exists)
-    return [report.name, ...report.warnings.map(warning => `  warning: ${warning}`)].join('\n')
+    return [id(report.name), ...report.warnings.map(warning => `  ${warn('warning:')} ${warning}`)].join('\n')
 
   const asked = report.requested === undefined ? '' : ` (asked for ${report.requested})`
   const rows = [
@@ -84,9 +87,9 @@ export function render(report: Report, now = Date.now()): string {
   ]
 
   return [
-    `${report.name}${report.description === undefined ? '' : `: ${report.description}`}`,
+    `${id(report.name)}${report.description === undefined ? '' : `: ${report.description}`}`,
     table(rows.map(([key, value]) => [`  ${key}`, value ?? ''])),
-    ...report.warnings.map(warning => `  warning: ${warning}`),
+    ...report.warnings.map(warning => `  ${warn('warning:')} ${warning}`),
   ].join('\n')
 }
 

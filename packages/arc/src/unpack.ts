@@ -1,6 +1,6 @@
 import { existsSync, lstatSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fail, parse } from '@kaynooo/cli-kit'
+import { fail, parse, role } from '@kaynooo/cli-kit'
 import { lines, need, pipeline, probe, TAR_FIDELITY, ZSTD_LONG } from './proc'
 
 const USAGE = `arc unpack <archive.tar.zst> <dest dir>: unpacks an archive made by arc pack into a folder, refusing to overwrite anything, then checks every file against it
@@ -11,7 +11,7 @@ Exits 0 when every extracted file matches the archive, 1 when anything was refus
 const WHITESPACE = /\s+/
 
 function say(message: string): void {
-  console.error(`arc unpack: ${message}`)
+  console.error(`${role('label', process.stderr)('arc unpack:')} ${message}`)
 }
 
 export async function unpack(args: string[]): Promise<number> {

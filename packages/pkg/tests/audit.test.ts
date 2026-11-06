@@ -240,6 +240,26 @@ describe('auditPackages', () => {
     expect(renderAudit(findings, audited.length)).toContain('GHSA-aaaa-bbbb-cccc high: Prototype pollution (fixed in 1.2.0)')
   })
 
+  test('renderAudit colours the package, the warnings and the severity on a terminal only', () => {
+    const findings = [{ name: 'lib', version: '1.0.0', blocked: true, warnings: ['too fresh'], advisories: [{ id: 1, ghsa: 'GHSA-a', severity: 'high', title: 'Bad', url: '' }] }] as Parameters<typeof renderAudit>[0]
+    const previous = process.env.KIT_MODE
+
+    process.env.KIT_MODE = 'terminal'
+
+    try {
+      const styled = renderAudit(findings, 3, { isTTY: true })
+
+      expect(styled).toContain('\x1B[')
+      expect(Bun.stripANSI(styled)).toBe(renderAudit(findings, 3, { isTTY: false }))
+    }
+    finally {
+      if (previous === undefined)
+        delete process.env.KIT_MODE
+      else
+        process.env.KIT_MODE = previous
+    }
+  })
+
   test('--level and --ignore narrow the advisories, an unblocked package stays clean', async () => {
     const { fetcher } = registry()
     const { audited } = await auditPackages(parseBunLock(LOCK), { ...base(fetcher), settings: {}, level: 'high', ignore: ['GHSA-aaaa-bbbb-cccc'] })

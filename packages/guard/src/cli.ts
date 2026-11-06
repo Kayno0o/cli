@@ -6,7 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, 
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, readInput, runCli, runCommand, stateHome } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, readInput, role, runCli, runCommand, stateHome } from '@kaynooo/cli-kit'
 import { checkCommand, checkPath } from './check'
 import { EVENTS, hook } from './hook'
 import { RULES } from './rules'
@@ -60,7 +60,7 @@ function readText(path: string): string | null {
 
 function report(violations: Violation[]) {
   for (const { rule, message } of violations)
-    console.log(`${rule}: ${message}`)
+    console.log(`${role('problem', process.stdout)(rule)}: ${message}`)
 }
 
 async function check(args: string[]): Promise<number> {
@@ -91,7 +91,7 @@ async function check(args: string[]): Promise<number> {
     report(verdict.violations)
 
   if (values.json !== true && verdict.command !== command)
-    console.log(`runs as: ${verdict.command}${verdict.notes.map(note => `\n${note}`).join('')}`)
+    console.log(`${role('label', process.stdout)('runs as:')} ${verdict.command}${verdict.notes.map(note => `\n${note}`).join('')}`)
 
   return verdict.violations.length > 0 ? 1 : 0
 }
@@ -132,7 +132,7 @@ function rules(args: string[]): number {
   }
 
   for (const rule of RULES)
-    console.log(`${rule.name.padEnd(16)} ${rule.refuses}\n${' '.repeat(16)} -> ${rule.route}${rule.runs === 'hook' ? ' (hook only)' : ''}`)
+    console.log(`${role('id', process.stdout)(rule.name)}${' '.repeat(Math.max(0, 16 - rule.name.length))} ${rule.refuses}\n${' '.repeat(16)} -> ${rule.route}${rule.runs === 'hook' ? ' (hook only)' : ''}`)
 
   return 0
 }

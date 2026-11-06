@@ -1,6 +1,6 @@
 import { existsSync, lstatSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { fail, parse } from '@kaynooo/cli-kit'
+import { fail, parse, role } from '@kaynooo/cli-kit'
 import { lines, need, pipeline, probe, run, TAR_FIDELITY, ZSTD_LONG } from './proc'
 
 const USAGE = `arc pack [-k] <folder> <dest dir>: packs a folder into <dest dir>/<name>.tar.zst, checks every file against the archive, then deletes the folder
@@ -11,7 +11,7 @@ Exits 0 when the archive is verified (and the folder deleted unless -k), 1 when 
 const TRAILING_SLASHES = /\/+$/
 
 function say(message: string): void {
-  console.error(`arc pack: ${message}`)
+  console.error(`${role('label', process.stderr)('arc pack:')} ${message}`)
 }
 
 export async function pack(args: string[]): Promise<number> {

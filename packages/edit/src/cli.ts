@@ -317,7 +317,7 @@ async function main(argv: string[]): Promise<number> {
     if (json)
       console.error(JSON.stringify({ error: 'nothing written', failures: problems }))
     else
-      console.error(`sub: nothing written\n${problems.map(({ path, problem }) => `${path}: ${problem}`).join('\n')}`)
+      console.error(`${role('problem', process.stderr)('sub: nothing written')}\n${problems.map(({ path, problem }) => `${path}: ${problem}`).join('\n')}`)
 
     return 1
   }
@@ -327,7 +327,7 @@ async function main(argv: string[]): Promise<number> {
       change.diff = await diffTexts(change.path, change.before, change.after)
   }
   catch (error) {
-    console.error(`sub: nothing written\n${error instanceof Error ? error.message : String(error)}`)
+    console.error(`${role('problem', process.stderr)('sub: nothing written')}\n${error instanceof Error ? error.message : String(error)}`)
 
     return 1
   }

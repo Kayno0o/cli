@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { fail, parse } from '@kaynooo/cli-kit'
+import { fail, parse, role } from '@kaynooo/cli-kit'
 import { checkout, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
 const USAGE = 'base [--ref <rev>] [--keep <path>...] [--no-link] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, the working tree untouched, exiting with its code\n\nExits with the code of the command, 127 when it cannot be started, 2 on a usage error, an unknown ref or a refused command.'
@@ -33,9 +33,9 @@ export async function base(argv: string[]): Promise<number> {
   const ran = await inWorktree({ root, prefix, sha, ref, kept, link: parsed.values['no-link'] !== true }, async (runDir, signals) => runIn(runDir, command, signals))
 
   if (!ran.started)
-    console.error(`base: ${ran.output}`)
+    console.error(`${role('problem', process.stderr)('base:')} ${ran.output}`)
 
-  console.error(`base: ran at ${ref} (${sha.slice(0, 7)}), exit ${ran.code}`)
+  console.error(`${role('label', process.stderr)('base:')} ran at ${ref} (${sha.slice(0, 7)}), exit ${ran.code}`)
 
   return ran.code
 }

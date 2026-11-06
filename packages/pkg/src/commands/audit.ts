@@ -5,7 +5,7 @@ import type { Locked } from '../lockfile'
 import type { Fetcher, Packument, Registry } from '../registry'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, pool, printJson, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, pool, printJson, role, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, isSeverity, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
@@ -111,14 +111,21 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
   return { audited, unavailable }
 }
 
-export function renderAudit(findings: Audited[], total: number): string {
+const HIGH_SEVERITIES = new Set<string>(['high', 'critical'])
+
+export function renderAudit(findings: Audited[], total: number, stream: { isTTY?: boolean } = process.stdout): string {
+  const id = role('id', stream)
+  const label = role('label', stream)
+  const warning = role('warn', stream)
+  const problem = role('problem', stream)
+  const blocking = findings.filter(each => each.blocked).length
   const blocks = findings.map(({ name, version, warnings, advisories }) => [
-    `${name}@${version}`,
-    ...warnings.map(warning => `  warning: ${warning}`),
-    ...advisories.map(each => `  ${each.ghsa ?? each.id} ${each.severity}: ${each.title}${each.fixed === undefined ? '' : ` (fixed in ${each.fixed})`}`),
+    id(`${name}@${version}`),
+    ...warnings.map(each => `  ${warning('warning:')} ${each}`),
+    ...advisories.map(each => `  ${label(String(each.ghsa ?? each.id))} ${(HIGH_SEVERITIES.has(each.severity) ? problem : warning)(each.severity)}: ${each.title}${each.fixed === undefined ? '' : ` ${label(`(fixed in ${each.fixed})`)}`}`),
   ].join('\n'))
 
-  return [...blocks, `${findings.length} of ${total} packages with a finding, ${findings.filter(each => each.blocked).length} blocking`].join('\n\n')
+  return [...blocks, `${findings.length} of ${total} packages with a finding, ${(blocking === 0 ? label : problem)(`${blocking} blocking`)}`].join('\n\n')
 }
 
 export async function audit(args: string[]): Promise<number> {

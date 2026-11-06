@@ -4,7 +4,7 @@ import type { Locked } from '../lockfile'
 import type { Fetcher } from '../registry'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { capped, fail, formatAge, jsonOption, limitOf, limitOptions, parse, pool, printJson, table, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { capped, fail, formatAge, jsonOption, limitOf, limitOptions, parse, pool, printJson, role, table, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { loadConfigs, loadSettings, registryFor } from '../config'
 import { registryDependencies } from '../consumers'
@@ -113,7 +113,7 @@ export async function outdatedCommand(args: string[]): Promise<number> {
   if (values.json === true)
     printJson(shown)
   else if (shown.length === 0)
-    console.log('nothing outdated: every dependency is on its safe version')
+    console.log(role('ok', process.stdout)('nothing outdated: every dependency is on its safe version'))
   else
     console.log([table([['PACKAGE', 'KIND', 'CURRENT', 'SAFE', 'CHANGE', 'PUBLISHED', 'LATEST'], ...shown.map(each => [each.name, each.kind, each.current, each.safe, each.change, each.published === undefined ? '-' : formatAge(each.published), each.latest ?? ''])], { header: true }), ...footer === undefined ? [] : [footer]].join('\n'))
 
