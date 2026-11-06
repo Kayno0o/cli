@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { checkBun, checkHooks, checkNeeds, checkTea, checkTool, checkWorkspace, runChecks, TOOLS } from '../src/checks'
+import { checkBun, checkHooks, checkNeeds, checkTea, checkTool, checkWakatime, checkWorkspace, runChecks, TOOLS } from '../src/checks'
 import { configReport } from '../src/config-report'
 import { main } from '../src/doctor'
 
@@ -41,6 +41,35 @@ const LATEST = { 'bun info @kaynooo/cli-forgejo version --no-cache': { stdout: '
 
 beforeEach(() => {
   home = temp('doctor-')
+})
+
+describe('checkWakatime', () => {
+  const RELEASE = 'curl -fsSL --max-time 15 https://api.github.com/repos/wakatime/wakatime-cli/releases/latest'
+
+  test('fails a missing binary and downloads the release through the fix', async () => {
+    const ran: string[] = []
+    const answering = fakeHost({ [RELEASE]: { stdout: '{"tag_name":"v2.28.0"}' } })
+    const host: Host = { ...answering, run: async (argv) => {
+      ran.push(argv[0] ?? '')
+
+      return argv[1] === '-fsSL' && argv[2] === '--max-time' ? answering.run(argv) : { code: 0, stdout: '', stderr: '' }
+    } }
+    const result = await checkWakatime(host)
+
+    expect(result).toMatchObject({ check: 'wakatime', ok: false })
+    expect(result.detail).toContain('is missing')
+    expect(await result.apply?.(host)).toBeUndefined()
+    expect(ran).toEqual(['curl', 'curl', 'unzip', 'chmod', 'ln'])
+  })
+
+  test('passes a binary as new as the release and skips a host with no config', async () => {
+    write(join(home, '.wakatime', 'wakatime-cli'), '')
+
+    const host = fakeHost({ [RELEASE]: { stdout: '{"tag_name":"v2.28.0"}' }, [`${join(home, '.wakatime', 'wakatime-cli')} --version`]: { stdout: 'v2.28.0\n' } })
+
+    expect(await checkWakatime(host)).toEqual({ check: 'wakatime', ok: true, detail: '2.28.0' })
+    expect((await runChecks(host, [])).map(each => each.check)).not.toContain('wakatime')
+  })
 })
 
 describe('checkTool', () => {
@@ -199,7 +228,7 @@ describe('doctor', () => {
     const { result, out } = await capture(async () => main([], host))
 
     expect(result).toBe(1)
-    expect(out.split('\n').filter(line => line.startsWith('FAIL')).map(line => line.split(/\s+/)[1])).toEqual(['cli-forgejo', 'cli-git', 'tea'])
+    expect(out.split('\n').filter(line => line.startsWith('error:')).map(line => line.split(/\s+/)[1])).toEqual(['cli-forgejo', 'cli-git', 'tea'])
     expect(out).toContain('fix them all: bun install -g @kaynooo/cli-forgejo@0.5.1 @kaynooo/cli-git@0.2.0')
     expect(out).toContain(`${Object.keys(TOOLS).length - 2} packages not installed: doctor --install`)
 
@@ -212,7 +241,7 @@ describe('doctor', () => {
     const { result, out } = await capture(async () => main([], fakeHost()))
 
     expect(result).toBe(0)
-    expect(out).not.toContain('FAIL')
+    expect(out).not.toContain('error:')
   })
 })
 
@@ -250,7 +279,7 @@ describe('doctor --only and --quiet', () => {
     const failing = await capture(async () => main(['-q', '--only', 'hooks', '--only', 'cli-forgejo'], fakeHost()))
 
     expect(passing).toMatchObject({ result: 0, out: '' })
-    expect(failing.out).toMatch(/^FAIL {2}cli-forgejo {2}not installed/)
+    expect(failing.out).toMatch(/^error: cli-forgejo {2}not installed/)
     expect(failing.out.split('\n').filter(Boolean)).toHaveLength(1)
   })
 })
@@ -292,7 +321,7 @@ describe('doctor --fix', () => {
     expect(result).toBe(0)
     expect(out).toContain('ran      bun install -g @kaynooo/cli-forgejo @kaynooo/cli-git')
     expect(out).toContain('after the fixes:')
-    expect(out.slice(out.indexOf('after the fixes:'))).toContain('ok    cli-forgejo')
+    expect(out.slice(out.indexOf('after the fixes:'))).toContain('ok: cli-forgejo')
   })
 
   test('--dry-run runs nothing, and a line that is no command is printed as not run', async () => {

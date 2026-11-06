@@ -2,7 +2,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Host, Result } from './checks'
 import type { Outcome } from './fix'
 import process from 'node:process'
-import { badUsage, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
+import { badUsage, jsonOption, marked, paint, parse, printJson } from '@kaynooo/cli-kit'
 import { CHECK_NAMES, isInstalled, runChecks, TOOLS } from './checks'
 import { applyFixes, planFixes } from './fix'
 import { hostHere } from './host'
@@ -34,11 +34,11 @@ function print(results: readonly Result[]): void {
   if (results.length === 0)
     return
 
-  const { green, red, dim } = paint(process.stdout)
+  const { dim } = paint(process.stdout)
   const width = Math.max(...results.map(result => result.check.length))
 
   for (const { check, ok, detail, fix } of results)
-    console.log(`${ok ? green('ok  ') : red('FAIL')}  ${check.padEnd(width)}  ${detail}${fix === undefined ? '' : `  ${dim('fix:')} ${fix}`}`)
+    console.log(marked(ok ? 'ok' : 'problem', `${check.padEnd(width)}  ${detail}${fix === undefined ? '' : `  ${dim('fix:')} ${fix}`}`, process.stdout))
 
   const installs = results.flatMap(result => result.fix?.startsWith(INSTALL) === true ? [result.fix.slice(INSTALL.length)] : [])
 

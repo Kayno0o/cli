@@ -5,6 +5,8 @@ export interface Step {
   // The line as it is printed, and as it runs when `argv` is set.
   command: string
   argv?: string[] | undefined
+  // Runs in place of `argv` for a fix that is several commands; an error message, undefined on success.
+  apply?: ((host: Host) => Promise<string | undefined>) | undefined
 }
 
 const INSTALL = /^bun install -g (\S+)$/
@@ -16,13 +18,15 @@ export function planFixes(results: readonly Result[]): Step[] {
   const steps: Step[] = []
   const installs: string[] = []
 
-  for (const { ok, fix } of results) {
+  for (const { ok, fix, apply } of results) {
     if (ok || fix === undefined)
       continue
 
     const install = INSTALL.exec(fix)
 
-    if (install !== null)
+    if (apply !== undefined)
+      steps.push({ command: fix, apply })
+    else if (install !== null)
       installs.push(install[1] ?? '')
     else
       steps.push({ command: fix, argv: RUNNABLE.test(fix) ? fix.split(' ') : undefined })
@@ -42,8 +46,8 @@ export interface Outcome { command: string, status: 'ran' | 'failed' | 'dry-run'
 export async function applyFixes(host: Host, steps: readonly Step[], dry: boolean): Promise<Outcome[]> {
   const outcomes: Outcome[] = []
 
-  for (const { command, argv } of steps) {
-    if (argv === undefined) {
+  for (const { command, argv, apply } of steps) {
+    if (argv === undefined && apply === undefined) {
       outcomes.push({ command, status: 'not run', detail: 'not a command doctor runs: do it by hand' })
 
       continue
@@ -55,7 +59,15 @@ export async function applyFixes(host: Host, steps: readonly Step[], dry: boolea
       continue
     }
 
-    const ran = await host.run(argv)
+    if (apply !== undefined) {
+      const error = await apply(host)
+
+      outcomes.push(error === undefined ? { command, status: 'ran' } : { command, status: 'failed', detail: error })
+
+      continue
+    }
+
+    const ran = await host.run(argv ?? [])
 
     outcomes.push(ran.code === 0 ? { command, status: 'ran' } : { command, status: 'failed', detail: `exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}` })
   }

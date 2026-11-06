@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
 import { HOOKS_REQUIRES, NEEDS } from './catalog'
@@ -10,6 +10,8 @@ export interface Result {
   detail: string
   // The command that resolves a failure.
   fix?: string
+  // What `--fix` runs for a fix that is no single command.
+  apply?: (host: Host) => Promise<string | undefined>
 }
 
 export interface Host {
@@ -229,8 +231,68 @@ export function checkNeeds(host: Host): Result {
   return { check: 'needs', ok: true, detail: 'every tool the installed packages need is on the PATH' }
 }
 
+const WAKATIME_RELEASE = 'https://api.github.com/repos/wakatime/wakatime-cli/releases/latest'
+const WAKATIME_ARCH: Record<string, string> = { x64: 'amd64', arm64: 'arm64' }
+const LEADING_V = /^v/
+
+// Downloads the linux release into ~/.wakatime and points the `wakatime-cli` symlink at it, the layout every official plugin uses; an error message, undefined on success.
+async function installWakatime(host: Host, tag: string, arch: string): Promise<string | undefined> {
+  const folder = join(host.home, '.wakatime')
+  const name = `wakatime-cli-linux-${arch}`
+  const zip = join(folder, `${name}.zip`)
+
+  mkdirSync(folder, { recursive: true })
+
+  const steps = [
+    ['curl', '-fsSL', '-o', zip, `https://github.com/wakatime/wakatime-cli/releases/download/${tag}/${name}.zip`],
+    ['unzip', '-o', '-d', folder, zip],
+    ['chmod', '+x', join(folder, name)],
+    ['ln', '-sfn', join(folder, name), join(folder, 'wakatime-cli')],
+  ]
+
+  for (const argv of steps) {
+    const ran = await host.run(argv)
+
+    if (ran.code !== 0)
+      return `${argv[0]} exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`
+  }
+
+  rmSync(zip, { force: true })
+
+  return undefined
+}
+
+// ~/.wakatime/wakatime-cli there and no older than the latest wakatime-cli release; left out on a host with no ~/.wakatime.cfg.
+export async function checkWakatime(host: Host): Promise<Result> {
+  const arch = WAKATIME_ARCH[process.arch]
+  const bin = join(host.home, '.wakatime', 'wakatime-cli')
+
+  if (arch === undefined)
+    return { check: 'wakatime', ok: true, detail: `no linux release for ${process.arch}` }
+
+  const release = await host.run(['curl', '-fsSL', '--max-time', '15', WAKATIME_RELEASE])
+  const latest = release.code === 0 ? readJsonText<{ tag_name?: string }>(release.stdout)?.tag_name : undefined
+  const installedVersion = existsSync(bin) ? (await host.run([bin, '--version'])).stdout.trim().replace(LEADING_V, '') : ''
+
+  if (latest === undefined)
+    return { check: 'wakatime', ok: true, detail: `${installedVersion || 'not installed'}, GitHub did not answer: ${firstLine(release.stderr) || 'no release'}` }
+
+  const wanted = latest.replace(LEADING_V, '')
+
+  if (installedVersion !== '' && VERSION.test(installedVersion) && Bun.semver.order(installedVersion, wanted) >= 0)
+    return { check: 'wakatime', ok: true, detail: installedVersion }
+
+  return {
+    check: 'wakatime',
+    ok: false,
+    detail: installedVersion === '' ? `${bin} is missing` : `${installedVersion}, ${wanted} released`,
+    fix: `download wakatime-cli ${latest} into ${join(host.home, '.wakatime')}`,
+    apply: async host => installWakatime(host, latest, arch),
+  }
+}
+
 const toolCheck = (name: string) => name.slice(name.indexOf('/') + 1)
-const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'workspace']
+const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'workspace', 'wakatime']
 const FORGEJO = '@kaynooo/cli-forgejo'
 const WORKSPACE = '@kaynooo/cli-workspace'
 
@@ -266,5 +328,6 @@ export async function runChecks(host: Host, only: readonly string[] = []): Promi
     ...wanted('bun') ? [checkBun(host)] : [],
     ...wanted('completions') ? [checkCompletions(host)] : [],
     ...wanted('workspace') && (only.length > 0 || isInstalled(host, WORKSPACE) || isInstalled(host, '@kaynooo/cli-pkg')) ? [checkWorkspace(host)] : [],
+    ...wanted('wakatime') && existsSync(join(host.home, '.wakatime.cfg')) ? [await checkWakatime(host)] : [],
   ]
 }
