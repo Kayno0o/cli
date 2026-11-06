@@ -38,7 +38,7 @@ async function stats(since: string | undefined, json: boolean): Promise<number> 
 }
 
 async function main(argv: string[]): Promise<number> {
-  // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
+  // A first word that is no option starts the command, a `--` before it or not.
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
   const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, exits: EXITS, replaces: 'piping a noisy command through tail or head', examples: ['out -- bun install', ['out -n 300 -- bun run build', 'up to 300 lines left untouched'], ['bun run build 2>&1 | out', 'what is piped in'], ['out --stats --since 7d', 'the tokens saved this week']] })
   const { values } = parsed

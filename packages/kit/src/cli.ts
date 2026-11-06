@@ -4,6 +4,7 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, replacesRows, UsageError, usageLine, wantsHelpJson } from './args'
+import { scriptArgs } from './argv'
 import { paint, takesControlCodes } from './style'
 import { closest } from './text'
 import { noteUsageError, recordUsage, usageEntry } from './usage'
@@ -449,7 +450,7 @@ export function packageVersion(entry = Bun.main): string {
 }
 
 // Runs the command argv names and returns the exit code: 0 for help and version, 2 for an unknown command.
-export async function runCli(cli: Cli, argv = process.argv.slice(2)): Promise<number> {
+export async function runCli(cli: Cli, argv = scriptArgs()): Promise<number> {
   const version = cli.version ?? packageVersion()
 
   if (argv[0] === COMPLETE)
@@ -500,7 +501,7 @@ export interface Main {
 }
 
 // Parses a module's own arguments through runMain's handling, for a script running at its top level: the parsed values come back, and the process ends itself on --help, --version, `__complete` or an error, with the exit code runMain gives.
-export async function mainArgs<T>(main: Omit<Main, 'run'>, parseArgv: (args: string[]) => T, argv = process.argv.slice(2)): Promise<T> {
+export async function mainArgs<T>(main: Omit<Main, 'run'>, parseArgv: (args: string[]) => T, argv = scriptArgs()): Promise<T> {
   let parsed: { value: T } | undefined
   // eslint-disable-next-line ts/require-await -- commands are async by contract
   const code = await runMain({ ...main, run: async (args) => {
@@ -516,7 +517,7 @@ export async function mainArgs<T>(main: Omit<Main, 'run'>, parseArgv: (args: str
 }
 
 // Runs a CLI that is a single command: `--version` or `-v` alone prints the version, an `Exit` or any error prints as `error: <name>: <message>`. Returns the exit code.
-export async function runMain({ name, version, run, redact, usage }: Main, argv = process.argv.slice(2)): Promise<number> {
+export async function runMain({ name, version, run, redact, usage }: Main, argv = scriptArgs()): Promise<number> {
   if (argv[0] === COMPLETE)
     return printCandidates(leafCandidates(run, argv.slice(1)))
 

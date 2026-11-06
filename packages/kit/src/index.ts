@@ -1,5 +1,6 @@
 export * from './advisory'
 export * from './args'
+export * from './argv'
 export * from './chart'
 export * from './ci'
 export * from './cli'
