@@ -16,6 +16,8 @@ interface ProgressStream {
   isTTY?: boolean
   columns?: number | undefined
   rows?: number | undefined
+  // The size the terminal has now, where `columns` still holds the one the last resize event read.
+  getWindowSize?: () => number[]
   write: (text: string) => unknown
   on?: (event: 'resize', listener: () => void) => unknown
   off?: (event: 'resize', listener: () => void) => unknown
@@ -85,7 +87,12 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
   let frame = 0
   // The visible width of each line drawn, since a terminal narrowed after the draw wraps them over more rows.
   let drawn: number[] = []
-  const columns = () => stream.columns === undefined || stream.columns === 0 ? 80 : stream.columns
+  // Asked of the terminal at every draw: one more column than it has wraps the line, and each frame then leaves a row behind.
+  const columns = () => {
+    const now = stream.getWindowSize?.()[0] ?? stream.columns
+
+    return now === undefined || now === 0 ? 80 : now
+  }
   const rowsDrawn = () => drawn.reduce((sum, width) => sum + Math.max(1, Math.ceil(width / columns())), 0)
   const clear = () => {
     if (drawn.length > 0)
