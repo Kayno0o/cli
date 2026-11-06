@@ -154,6 +154,7 @@
         "gst": "./dist/gst.js",
         "gc": "./dist/gc.js",
         "gb": "./dist/gb.js",
+        "gp": "./dist/gp.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -187,7 +188,7 @@
     },
     "packages/kit": {
       "name": "@kaynooo/cli-kit",
-      "version": "0.38.0",
+      "version": "0.38.1",
       "dependencies": {
         "@kaynooo/utils": "3.0.0",
       },
