@@ -45,6 +45,8 @@ describe('gitViolation', () => {
     ['git commit -a -m x', COMMIT_ALL],
     ['git push origin main', PUSH],
     ['git push --tags', PUSH],
+    ['gp', PUSH],
+    ['gp --repos --dry-run', PUSH],
     ['git -c alias.x=!sh status', CONFIG_OVERRIDE],
     ['git -c core.sshCommand=x fetch', CONFIG_OVERRIDE],
     ['git config alias.st status', CONFIG_OVERRIDE],
@@ -65,6 +67,13 @@ describe('gitViolation', () => {
   test('a push the user asked for goes ahead, its tags still go with the branch', () => {
     expect(gitViolation('git push origin main', true)).toBeNull()
     expect(gitViolation('git push --tags', true)).toBe(TAGS_APART)
+  })
+
+  test('gp is a push, what follows its -- being the push\'s flags', () => {
+    expect(gitViolation('gp --repos', true)).toBeNull()
+    expect(gitViolation('gp -- --tags', true)).toBe(TAGS_APART)
+    expect(gitViolation('gp -- --atomic --tags', true)).toBeNull()
+    expect(gitViolation('gp --tags', true)).toBeNull()
   })
 
   test('subcommandOf skips the options before the subcommand', () => {

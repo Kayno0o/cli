@@ -19,7 +19,7 @@ describe('destructive', () => {
   cases(RESET_HARD, ['git reset --hard', 'git reset --hard HEAD~1', 'git -C x reset --hard', 'bash -c "git reset --hard"', 'sudo git reset --hard'])
   cases(DISCARD_TREE, ['git checkout -- .', 'git checkout .', 'git checkout -f', 'git checkout --force main', 'git restore .', 'git restore --worktree :/', 'git restore --source=HEAD~1 .', 'git switch -f main', 'git switch --discard-changes main'])
   cases(CLEAN, ['git clean -fd', 'git clean -f', 'git clean -xdf', 'git clean --force -d'])
-  cases(FORCE_PUSH, ['git push --force', 'git push -f origin main', 'git push origin main --force', 'git push -fu origin main', 'git push origin +main', 'git push --mirror'])
+  cases(FORCE_PUSH, ['git push --force', 'git push -f origin main', 'git push origin main --force', 'git push -fu origin main', 'git push origin +main', 'git push --mirror', 'gp -- -f', 'gp --repos -- --force'])
   cases(BRANCH_DELETE, ['git branch -D topic', 'git branch -fd topic', 'git branch --delete --force topic'])
   cases(REBASE, ['git rebase main', 'git rebase -i HEAD~3', 'git pull --rebase=false && git rebase origin/main'])
   cases(REWRITE_HISTORY, ['git filter-branch --tree-filter x', 'git filter-repo --path a'])

@@ -1,6 +1,6 @@
 import type { Piece } from '@kaynooo/cli-kit/shell'
 import { parseCommand, SHELLS, splitCommand } from '@kaynooo/cli-kit/shell'
-import { isWholeTree, SHORT_CLUSTER, subcommandOf } from './git'
+import { gitCommandOf, isWholeTree, SHORT_CLUSTER } from './git'
 
 const FETCHERS = new Set(['curl', 'wget', 'fetch'])
 // Programs that run the text they are given as commands.
@@ -180,11 +180,12 @@ export function destructiveViolation(command: string): string | null {
     if (program === 'rm' && removesBroadly(args))
       return BROAD_RM
 
-    if (program !== 'git')
+    const git = gitCommandOf(program, args)
+
+    if (git === undefined)
       continue
 
-    const { name, rest } = subcommandOf(args)
-    const violation = gitDestructive(name, rest)
+    const violation = gitDestructive(git.name, git.rest)
 
     if (violation !== null)
       return violation

@@ -20,13 +20,13 @@ const OPTIONS = {
   log: { type: 'string', short: 'l', description: 'the former spelling of --limit' },
   repos: { type: 'boolean', short: 'r', description: 'one line for each repository nested below, the current one included', conflicts: ['limit', 'log'] },
   watch: watchOption('the status'),
-  json: jsonOption('{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, commits}; with --repos an array of them, each with its path'),
+  json: jsonOption('{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, commits}; with --repos an array of them, each with its path and no commits, a repository git cannot read being {path, error}'),
 } as const
 
 type Commit = string[]
 
-// The status as --json prints it.
-function jsonOf(status: Status, head: { sha: string, title: string } | null, commits: Commit[]) {
+// The status as --json prints it, `commits` left out when none were asked for.
+function jsonOf(status: Status, head: { sha: string, title: string } | null, commits?: Commit[]) {
   return {
     branch: status.branch,
     oid: status.oid,
@@ -38,7 +38,7 @@ function jsonOf(status: Status, head: { sha: string, title: string } | null, com
     unstaged: status.changes.filter(change => change.worktree !== '.').map(({ worktree, path }) => ({ status: worktree, path })),
     untracked: status.untracked,
     conflicted: status.conflicted,
-    commits: commits.map(([commitSha = '', commitTitle = '']) => ({ sha: commitSha, title: commitTitle })),
+    ...commits === undefined ? {} : { commits: commits.map(([commitSha = '', commitTitle = '']) => ({ sha: commitSha, title: commitTitle })) },
   }
 }
 
@@ -51,7 +51,7 @@ async function listRepos(roots: string[], json: boolean): Promise<number> {
   const repos = await Promise.all(dirs.map(repoState))
 
   if (json) {
-    printJson(repos.map(({ path, status, head }) => status === null ? { path, error: 'git could not read it' } : { path, ...jsonOf(status, head, []) }))
+    printJson(repos.map(({ path, status, head }) => status === null ? { path, error: 'git could not read it' } : { path, ...jsonOf(status, head) }))
 
     return 0
   }

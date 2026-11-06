@@ -64,7 +64,7 @@ async function push(repo: Repo, { dryRun, extra }: { dryRun: boolean, extra: str
   const skipped = (reason: string, branch: string | null = null): Result => ({ path, branch, remote: null, commits: null, outcome: 'skipped', reason })
 
   if (status === null)
-    return { ...skipped('git could not read it'), outcome: 'refused' }
+    return { path, branch: null, remote: null, commits: null, outcome: 'refused', reason: 'git could not read it' }
 
   const { branch, upstream, aheadBehind } = status
 

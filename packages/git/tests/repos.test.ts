@@ -101,6 +101,7 @@ describe('gst --repos', () => {
 
     expect(listed.map(one => one.path)).toEqual(['.', 'app', 'tools/lib'])
     expect(listed[0]).toMatchObject({ branch: 'main', upstream: null, ahead: null, untracked: [] })
+    expect(listed[0]).not.toHaveProperty('commits')
   })
 
   test('walks below the dirs given, paths staying relative to the current directory', () => {

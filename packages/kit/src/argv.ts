@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 
@@ -12,12 +12,23 @@ function commandLine(): string[] | undefined {
   }
 }
 
+// The file a word of the command line names, links followed as Bun follows them for process.argv[1]; none for a word naming no file.
+function realPath(word: string): string | undefined {
+  try {
+    return realpathSync(resolve(word))
+  }
+  catch {
+    return undefined
+  }
+}
+
 /**
  * The arguments after the script, with the `--` Bun drops when it comes right after the script put back: `gp -- --tags` reaches the script as `--tags` (Bun 1.4), which would read as one of its own options.
- * The command line the kernel kept tells; a compiled binary or a system without /proc gets Bun's arguments.
+ * The command line the kernel kept tells, a bin on PATH being the link to the script; a compiled binary or a system without /proc gets Bun's arguments.
  */
 export function scriptArgs(argv = process.argv.slice(2), cmdline = commandLine(), script = process.argv[1]): string[] {
-  const at = cmdline === undefined || script === undefined ? -1 : cmdline.findIndex((word, index) => index > 0 && resolve(word) === script)
+  const target = script === undefined ? undefined : realPath(script) ?? script
+  const at = cmdline === undefined || target === undefined ? -1 : cmdline.findIndex((word, index) => index > 0 && (resolve(word) === script || realPath(word) === target))
   const after = at === -1 ? [] : cmdline!.slice(at + 1)
 
   return after[0] === '--' && after.length === argv.length + 1 && argv.every((word, index) => word === after[index + 1]) ? after : argv
