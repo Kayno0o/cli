@@ -240,7 +240,7 @@
     },
     "packages/proc": {
       "name": "@kaynooo/cli-proc",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "bin": {
         "proc": "./dist/proc-cli.js",
         "pid": "./dist/pid-cli.js",
