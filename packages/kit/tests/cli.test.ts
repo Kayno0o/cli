@@ -598,6 +598,10 @@ describe('packageVersion', () => {
     expect(packageVersion(join(dir, 'src', 'cli.ts'))).toBe('1.2.3')
   })
 
+  test('is 0.0.0 for an entry that is no file, as a compiled binary\'s', () => {
+    expect(packageVersion('/$bunfs/root/demo')).toBe('0.0.0')
+  })
+
   test('runMain and runCli print it when no version is given', async () => {
     expect((await capture(async () => runMain({ name: 'demo', run: async () => 0 }, ['--version']))).out).toBe(`${packageVersion()}\n`)
     expect((await capture(async () => runCli({ name: 'demo', about: 'x', commands: {} }, ['--version']))).out).toBe(`${packageVersion()}\n`)

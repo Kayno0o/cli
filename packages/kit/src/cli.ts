@@ -433,9 +433,16 @@ async function printCandidates(found: Promise<string[]>): Promise<number> {
   return 0
 }
 
-// The version of the nearest package.json above the entry file (symlinks resolved) that holds one, `0.0.0` when none does.
+// The version of the nearest package.json above the entry file (symlinks resolved) that holds one, `0.0.0` when none does, an entry that is no file included, such as a `bun build --compile` binary's `/$bunfs/root/<name>`.
 export function packageVersion(entry = Bun.main): string {
-  for (let dir = dirname(realpathSync(entry)); ; dir = dirname(dir)) {
+  let resolved = entry
+
+  try {
+    resolved = realpathSync(entry)
+  }
+  catch {}
+
+  for (let dir = dirname(resolved); ; dir = dirname(dir)) {
     try {
       const { version } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { version?: unknown }
 
