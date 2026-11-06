@@ -149,7 +149,7 @@
     },
     "packages/git": {
       "name": "@kaynooo/cli-git",
-      "version": "0.13.1",
+      "version": "0.14.0",
       "bin": {
         "gst": "./dist/gst.js",
         "gc": "./dist/gc.js",
