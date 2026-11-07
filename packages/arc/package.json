@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-arc",
   "type": "module",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "arc: browses an archive without extracting it, packs a folder into a verified .tar.zst before deleting it, unpacks one without overwriting anything and checks it, and extracts any other archive.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
