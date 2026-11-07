@@ -58,7 +58,7 @@
     },
     "packages/code": {
       "name": "@kaynooo/cli-code",
-      "version": "0.14.2",
+      "version": "0.14.3",
       "bin": {
         "src": "./dist/cli.js",
         "peek": "./dist/peek-cli.js",
