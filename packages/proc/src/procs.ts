@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Group } from './select'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -12,9 +13,8 @@ const usage = `procs
 
 Lists the leftover or heavy processes of the calling user that are worth cleaning, grouped by origin: the project folder their working directory is in, a browser profile for a chromium and its helpers, else their command. Each group shows its process count, total resident memory and oldest age.
 A process is listed when it is a dev tool (bun, node, vite, nuxt, next, chromium and chrome, playwright and webview browsers and their helpers, language servers, test runners) and either an orphan, reparented to init or to the user's systemd, or heavy (500M resident by default). The processes below a listed one, and those sharing a browser profile with it, are listed too, so a chromium whose main process was killed groups with its leftover helpers.
-\`--kill\` is a dry run that names what it would stop unless --yes is given; it sends SIGTERM, then SIGKILL after --grace to what is still there. It never signals pid 1, shells, terminals, this command and its ancestors, or processes of other users.
-
-Exits 0 when it listed or stopped everything, 1 when a process survived SIGKILL, 2 on a usage error.`
+\`--kill\` is a dry run that names what it would stop unless --yes is given; it sends SIGTERM, then SIGKILL after --grace to what is still there. It never signals pid 1, shells, terminals, this command and its ancestors, or processes of other users.`
+const EXITS: ExitRow[] = [[0, 'it listed or stopped everything'], [1, 'a process survived SIGKILL'], [2, 'a usage error']]
 
 const options = {
   'json': jsonOption('{ groups: [{ origin, kind, count, rss, oldestSeconds, tools, orphans, pids, processes }], skipped }'),
@@ -62,6 +62,7 @@ function render(groups: Group[]): string {
 
 export async function procs(args: string[]): Promise<number> {
   const { values } = parse(args, usage, options, {
+    exits: EXITS,
     replaces: 'pkill -f and pgrep -f one-liners (which match their own shell), ps aux | grep for leftover chromium, bun or vite processes',
     examples: [
       ['procs', 'leftover and heavy dev processes, by origin'],

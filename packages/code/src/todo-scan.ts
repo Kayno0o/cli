@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Mark } from './todo'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -9,9 +10,8 @@ const USAGE = `todo-scan [options] [path...]: lists the TODO, FIXME and owner/re
 
 --stale keeps only the comments naming a closed issue, each issue's state looked up with ft, or gh for a GitHub repository, and exits 1 when it finds one.
 
-Lists at most 100 comments, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.
-
-Exits 0 when it listed the comments or found no stale one, 1 when --stale finds one, 2 on a usage error or when --stale could not look a repository up (ft and gh both failed), so a clean exit never hides an unchecked issue.`
+Lists at most 100 comments, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.`
+const EXITS: ExitRow[] = [[0, 'it listed the comments or found no stale one'], [1, '--stale finds one'], [2, 'a usage error or when --stale could not look a repository up (ft and gh both failed)']]
 
 const LIST_LIMIT = 100
 
@@ -29,7 +29,7 @@ function printLines(lines: string[], footer: string | undefined): void {
 }
 
 export async function todoScan(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[path...]'], replaces: 'grep -rn TODO, then opening each issue it names', examples: ['todo-scan src', ['todo-scan --stale', 'only the comments naming a closed issue']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[path...]'], replaces: 'grep -rn TODO, then opening each issue it names', examples: ['todo-scan src', ['todo-scan --stale', 'only the comments naming a closed issue']] })
   const cwd = process.cwd()
   const limit = limitOf(values, LIST_LIMIT)
   const marks: Mark[] = []

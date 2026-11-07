@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Issue } from '../issues'
 import type { Milestone } from '../milestones'
 import process from 'node:process'
@@ -54,9 +55,8 @@ async function printWithIssues(list: Milestone[], repo: string | undefined): Pro
 
 const listUsage = `ft milestones
 
-Lists the repository's milestones, the open ones unless --state says otherwise, with the issues open and closed in each, the progress and the due date; on a terminal the progress is a bar, and --issues lists the title of every issue under its milestone.
-
-Exits 0 when it listed them, 1 when Forgejo refuses, 2 on a usage error.`
+Lists the repository's milestones, the open ones unless --state says otherwise, with the issues open and closed in each, the progress and the due date; on a terminal the progress is a bar, and --issues lists the title of every issue under its milestone.`
+const listExits: ExitRow[] = [[0, 'it listed them'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 const listOptions = {
   state: { type: 'string', description: 'open (the default), closed or all' },
@@ -67,7 +67,7 @@ const listOptions = {
 } as const
 
 export async function milestones(args: string[]): Promise<number> {
-  const parsed = parse(args, listUsage, listOptions)
+  const parsed = parse(args, listUsage, listOptions, { exits: listExits })
 
   const { values } = parsed
   const state = values.state ?? 'open'
@@ -108,9 +108,8 @@ export async function milestones(args: string[]): Promise<number> {
 
 const newUsage = `ft milestone new <title> [-d <text>] [--due <YYYY-MM-DD>]
 
-Creates a milestone through the API and prints its id. Without --due it has no due date.
-
-Exits 0 when it created the milestone, 1 when Forgejo refuses, 2 on a usage error.`
+Creates a milestone through the API and prints its id. Without --due it has no due date.`
+const newExits: ExitRow[] = [[0, 'it created the milestone'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 const newOptions = {
   description: { type: 'string', short: 'd', description: 'the milestone description' },
@@ -119,7 +118,7 @@ const newOptions = {
 } as const
 
 async function create(args: string[]): Promise<number> {
-  const parsed = parse(args, newUsage, newOptions)
+  const parsed = parse(args, newUsage, newOptions, { exits: newExits })
 
   const { values, positionals } = parsed
   const title = positionals.join(' ').trim()
@@ -137,9 +136,8 @@ async function create(args: string[]): Promise<number> {
 
 const closeUsage = `ft milestone close <title|id> [--force]
 
-Closes a milestone, refused while issues are open in it, which it names. --force closes it with them left.
-
-Exits 0 when it closed the milestone, 1 when issues are open in it or Forgejo refuses, 2 on a usage error.`
+Closes a milestone, refused while issues are open in it, which it names. --force closes it with them left.`
+const closeExits: ExitRow[] = [[0, 'it closed the milestone'], [1, 'issues are open in it or Forgejo refuses'], [2, 'a usage error']]
 
 const closeOptions = {
   force: { type: 'boolean', description: 'close it with issues left open' },
@@ -147,7 +145,7 @@ const closeOptions = {
 } as const
 
 async function closeOne(args: string[]): Promise<number> {
-  const parsed = parse(args, closeUsage, closeOptions)
+  const parsed = parse(args, closeUsage, closeOptions, { exits: closeExits })
 
   const { values, positionals } = parsed
   const reference = positionals.join(' ').trim()
@@ -179,9 +177,8 @@ ft milestone new <title> [-d <text>] [--due <YYYY-MM-DD>]
 ft milestone close <title|id> [--force]
 
 Shows a milestone with its open issues as \`ft board\` does: available, taken by a session running here, or claimed by one gone, each with its boxes left, at most 30 of each kind (--full for all).
-\`ft milestone new\` and \`ft milestone close\` have their own --help; a milestone titled new or close is named by its id.
-
-Exits 0 when it showed the milestone, 1 when it cannot be read, 2 on a usage error or an unknown milestone.`
+\`ft milestone new\` and \`ft milestone close\` have their own --help; a milestone titled new or close is named by its id.`
+const showExits: ExitRow[] = [[0, 'it showed the milestone'], [1, 'it cannot be read'], [2, 'a usage error or an unknown milestone']]
 
 const showOptions = {
   ...limitOptions(LIST_LIMIT),
@@ -190,7 +187,7 @@ const showOptions = {
 } as const
 
 async function show(args: string[]): Promise<number> {
-  const parsed = parse(args, showUsage, showOptions)
+  const parsed = parse(args, showUsage, showOptions, { exits: showExits })
 
   const { values, positionals } = parsed
   const reference = positionals.join(' ').trim()

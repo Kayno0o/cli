@@ -3,7 +3,7 @@ import type { Colors } from './style'
 import { readFileSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, replacesRows, UsageError, usageLine, wantsHelpJson } from './args'
+import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, UsageError, usageLine, wantsHelpJson } from './args'
 import { scriptArgs } from './argv'
 import { paint, takesControlCodes } from './style'
 import { closest } from './text'
@@ -51,7 +51,7 @@ export interface Cli {
   usage?: false
   // Command lines shown under `Examples:` in `<cli> --help`; a command's own go to `parse`.
   examples?: Example[]
-  // What the CLI is reached for instead of, shown as `Instead of:` in `<cli> --help`.
+  // What the CLI is reached for instead of, listed by `cli list`.
   replaces?: string
 }
 
@@ -164,7 +164,6 @@ async function help({ path, header, summary: lazySummary, commands, defaultComma
     header(colors, summary),
     '',
     usageLine(`${prefix} ${defaultCommand === undefined ? colors.cyan('<command>') : `[${colors.cyan('<command>')}]`} [options]`, colors),
-    ...replacesRows(replaces, colors),
     '',
     ...await commandRows(commands, colors),
     ...own.length === 0 ? [] : ['', `${colors.bold(`Options of ${defaultCommand}:`)} ${colors.dim('the command run when none is named')}`, ...optionRows(Object.fromEntries(own), colors)],

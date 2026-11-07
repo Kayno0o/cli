@@ -24,7 +24,7 @@ process.exitCode = await runCli({
 
 ## Exit codes
 
-Every bin answers by one table, stated in each command's `--help` under `Exits:` (the `exits` setting of `parse`, a list of `[code, meaning]`).
+Every bin answers by one table, stated in each command's `--help` on its `Exit codes:` line (the `exits` setting of `parse`, a list of `[code, meaning]`).
 
 | Code | Meaning |
 | --- | --- |
@@ -32,7 +32,7 @@ Every bin answers by one table, stated in each command's `--help` under `Exits:`
 | 1 | a finding (`audit`, `doctor`, `guard`), nothing found (`peek`, `hotspots`, `todo-scan`, `ports`, `pick`, `view`), or an operation that ran and failed (Forgejo, GitLab or the database refused, a step failed: `fail(message, 1)` and any other error a command throws) |
 | 2 | a usage error (an unknown command or option, a bad value, a missing argument: what `parse` and `fail` throw by default), or could not check (a timeout, an unreachable registry, no lockfile): never reported as clean |
 
-Exceptions, each stated in the command's own `Exits:`:
+Exceptions, each stated in the command's own `Exit codes:`:
 
 - A bin running another command (`base`, `proof`, `out`, `slot`, `dc`, `dx`, `sf`, `gb`, `gc` on a signal) exits with that command's code: 126 when it cannot be run, 127 when it cannot be started, 128 plus the signal when interrupted.
 - `probe` exits 1 when the site could not be reached, that being its finding, and 0 when it answered, whatever it warns about.
@@ -55,7 +55,7 @@ On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, comma
 
 ## Who reads the output
 
-`outputMode(stream, env)` says who reads: `terminal`, `ci` (not a TTY, `CI` set), `agent` (`CLAUDECODE` or `AI_AGENT` set) or `pipe`. `KIT_MODE=terminal|ci|agent|pipe` overrides it for one run. Only a `terminal` draws: colour, glyphs, links, spinners. An `agent` pays for every token it reads, so it also gets tables as tab-separated rows with no padding, a bar chart as `label<TAB>30/42`, a `bar` as `50%`, a sparkline as its values, one-line JSON (`jsonText`, `printJson`) and help without `Examples:` and `Instead of:`. `isInteractive()` is the one gate for prompts: stdin and stderr both a terminal.
+`outputMode(stream, env)` says who reads: `terminal`, `ci` (not a TTY, `CI` set), `agent` (`CLAUDECODE` or `AI_AGENT` set) or `pipe`. `KIT_MODE=terminal|ci|agent|pipe` overrides it for one run. Only a `terminal` draws: colour, glyphs, links, spinners. An `agent` pays for every token it reads, so it also gets tables as tab-separated rows with no padding, a bar chart as `label<TAB>30/42`, a `bar` as `50%`, a sparkline as its values, one-line JSON (`jsonText`, `printJson`) and help without `Examples:`. `isInteractive()` is the one gate for prompts: stdin and stderr both a terminal.
 
 ## The workspace folder
 
@@ -93,10 +93,10 @@ On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, comma
 - `openUrl(target, env?)` opens a URL, or a file path made absolute, with the command `BROWSER` names or the platform's opener (`xdg-open`, `open`, `start`), without waiting; it returns `false` when that command cannot start.
 - Every command's `parse`, and `runCli` before the command name (`ft --plain runs`), takes `--color auto|always|never` and `--plain` (`--color never`), unless the command has its own option of that name. `always` sets `FORCE_COLOR=1` and `never` sets `NO_COLOR=1`, each dropping the other, so the kit's colours, marks and redrawn lines follow, and so do the processes the command starts; `always` colours a pipe but never redraws in one. `applyOutput(color, plain, env?)` is what they run.
 - `--help` lists the commands under `Commands:`, then a heading per `group` a command names (`{ summary, group: 'Admin', run }`), then the level's `Options:` and the `Examples:` the CLI or a group's `examples` give (`['ft ci', ['ft ci HEAD~1', 'the commit before']]`, a note shown dimmed after `#`); a command's own examples go to `parse(args, usage, options, { examples })`, shown under its options.
-- `exits: [[0, 'clean'], [1, 'a finding'], [2, 'a usage error']]` in `parse`'s settings prints an `Exits:` block after the options (a code may be a word, `['its own', 'the code of the command']`), and `KIT_HELP=json` carries it as `exits: [{code, meaning}]`.
+- `exits: [[0, 'clean'], [1, 'a finding'], [2, 'a usage error']]` in `parse`'s settings prints an `Exit codes:` line after the options (a code may be a word, `['its own', 'the code of the command']`), and `KIT_HELP=json` carries it as `exits: [{code, meaning}]`.
 - `aliases: ['limit']` on an option keeps an old long name working: it is read as the option, bare or with `=`, up to a `--`, and shown in neither the help nor `__complete`.
 - `compose(args, { flags, cwd, env })` runs `docker compose <flags> <args>` and returns `{ code, stdout, stderr }` whatever the exit code (it throws only when docker cannot start), `captureOutput(argv, { cwd, env })` is the same for any command, `composeError(output)` words a failure as the last line of stderr or `exit <code>`, and `jsonLines<T>(text)` reads `compose ps --format json`, one object per line or the older array.
-- `replaces` on the CLI or in `parse`'s settings (`'sed -n N,Mp, grep -n chains'`) adds an `Instead of:` line under the usage. With `KIT_HELP=json` in the environment, `--help` prints `{synopsis, summary, replaces?, examples}` instead, the usage's first line split at its first `: `, which is how `cli list` reads every bin.
+- `replaces` on the CLI or in `parse`'s settings (`'sed -n N,Mp, grep -n chains'`) is listed by `cli list` and the generated docs, not printed in the help. With `KIT_HELP=json` in the environment, `--help` prints `{synopsis, summary, replaces?, examples}` instead, the usage's first line split at its first `: `, which is how `cli list` reads every bin.
 - `runHint(command, effect?)` words the hint of a refusal that a command resolves, ``run `ft take 12 --take-stale` to take it over``, so every CLI writes it alike: `fail(message, 1, runHint('ft take 12 --take-stale', 'take it over'))`. `printHint(hint)` prints the `hint:` line under a refusal a command prints itself (one issue of several refused).
 - `limitOptions(fallback)` is the `--limit <n>` (`-n`) and `--full` flags of a listing, `limitOf(values, fallback)` the row count they ask for (Infinity with `--full`; with `json: true` in the values, Infinity unless `--limit` is given, so JSON is never cut on its own), and `capped(rows, limit)` the first rows plus the footer `N more, rerun with --full` when some are left out.
 - `jsonOption(holds?)` is the `--json` flag, worded `print JSON` or `print JSON: <holds>` alike in every CLI, and `printJson(value)` prints the value indented on stdout, bare, with no envelope. Under `--json` runMain and runCli print a thrown error as `{"error", "hint"?, "cause"?}` on stderr instead of the `error:` line, its exit code unchanged; `printJsonError(message, hint?, cause?)` prints one for a command reporting a failure itself.

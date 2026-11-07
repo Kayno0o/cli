@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import { existsSync, lstatSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { fail, parse, role } from '@kaynooo/cli-kit'
@@ -5,8 +6,9 @@ import { lines, need, pipeline, probe, run, TAR_FIDELITY, ZSTD_LONG } from './pr
 
 const USAGE = `arc pack [-k] <folder> <dest dir>: packs a folder into <dest dir>/<name>.tar.zst, checks every file against the archive, then deletes the folder
 
-The archive is written as <name>.tar.zst.partial and only renamed once complete; nothing is overwritten. The folder is deleted only after the archive passes zstd's checksum, holds as many entries as the folder and compares equal to it file by file (owners, ACLs and extended attributes included); -k keeps it. A symlink, a mount point, a folder with a file system mounted inside, a destination inside the folder and a destination with less free space than the folder holds are refused. A folder that is not readable or writable by you is packed and deleted through sudo.
-Exits 0 when the archive is verified (and the folder deleted unless -k), 1 when anything was refused or failed, with the folder kept, 2 on a usage error.`
+The archive is written as <name>.tar.zst.partial and only renamed once complete; nothing is overwritten. The folder is deleted only after the archive passes zstd's checksum, holds as many entries as the folder and compares equal to it file by file (owners, ACLs and extended attributes included); -k keeps it. A symlink, a mount point, a folder with a file system mounted inside, a destination inside the folder and a destination with less free space than the folder holds are refused. A folder that is not readable or writable by you is packed and deleted through sudo.`
+
+const EXITS: ExitRow[] = [[0, 'the archive is verified (and the folder deleted unless -k)'], [1, 'anything was refused or failed, with the folder kept'], [2, 'a usage error']]
 
 const TRAILING_SLASHES = /\/+$/
 
@@ -16,6 +18,7 @@ function say(message: string): void {
 
 export async function pack(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, { keep: { type: 'boolean', short: 'k', description: 'keep the folder once the archive is verified' } }, {
+    exits: EXITS,
     positionals: ['<folder>', '<dest dir>'],
     replaces: 'tar czf, then diff or tar --compare by hand, then rm -rf once it looks right',
     examples: ['arc pack ~/old-project /mnt/backup', ['arc pack -k ./data /mnt/backup', 'the folder stays']],

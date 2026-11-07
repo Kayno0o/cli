@@ -1,12 +1,12 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { jsonOption, oneOf, parse, printJson } from '@kaynooo/cli-kit'
 import { ACTIONS, commandFor, detectManager } from '../manager'
 
 const usage = `pkg manager <install|dev|remove|update|exec>
 
-Prints the command the package manager of this folder runs for the action: install is the add or install of a package, dev adds one as a dev dependency, remove drops one, update upgrades them and exec runs a package's bin without installing it. The manager is the one whose lockfile (bun.lock, bun.lockb, yarn.lock, pnpm-lock.yaml, package-lock.json, uv.lock) or composer.json is nearest, here or in a parent folder, bun when none is found.
-
-Exits 0 when it printed the command, 2 on a usage error.`
+Prints the command the package manager of this folder runs for the action: install is the add or install of a package, dev adds one as a dev dependency, remove drops one, update upgrades them and exec runs a package's bin without installing it. The manager is the one whose lockfile (bun.lock, bun.lockb, yarn.lock, pnpm-lock.yaml, package-lock.json, uv.lock) or composer.json is nearest, here or in a parent folder, bun when none is found.`
+const EXITS: ExitRow[] = [[0, 'it printed the command'], [2, 'a usage error']]
 
 const options = {
   json: jsonOption('{manager, action, command}'),
@@ -14,6 +14,7 @@ const options = {
 
 export function manager(args: string[]): number {
   const { values, positionals } = parse(args, usage, options, {
+    exits: EXITS,
     positionals: ['<action>'],
     candidates: { '<action>': () => [...ACTIONS] },
     replaces: 'telling bun, yarn, pnpm, npm, composer and uv apart by their lockfile before typing an add, remove or dlx',

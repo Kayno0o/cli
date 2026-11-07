@@ -1,5 +1,6 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { badUsage, fail, jsonOption, parse, printJson, runMain } from '@kaynooo/cli-kit'
 import { choose, DEFAULT_HEIGHT, parseHeight } from '@kaynooo/cli-kit/picker'
@@ -10,9 +11,8 @@ Type to filter: the query matches as a subsequence, best matches first (a word s
 The keys are read from the terminal and the selector is drawn on stderr, so \`pick\` in a pipe or a command substitution prints only the choice. With --multi, tab marks the highlighted line and enter prints the marked lines in input order (the highlighted one when none is marked).
 --preview runs a command for the highlighted line, \`{}\` standing for it shell-quoted, in a pane on the right when the terminal is at least 80 columns wide; its output is cut at 64 KiB and 200 lines.
 
-Without a terminal on stderr there is nobody to choose: it prints the first line containing the query (case-insensitive), every one with --multi.
-
-Exits 0 when it printed a choice, 1 when cancelled, nothing matches or there are no lines, 2 on a usage error.`
+Without a terminal on stderr there is nobody to choose: it prints the first line containing the query (case-insensitive), every one with --multi.`
+const EXITS: ExitRow[] = [[0, 'it printed a choice'], [1, 'cancelled, nothing matches or there are no lines'], [2, 'a usage error']]
 
 const OPTIONS = {
   multi: { type: 'boolean', short: 'm', description: 'tab marks several lines, enter prints them' },
@@ -32,7 +32,7 @@ function print(chosen: string[], json: boolean): void {
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { replaces: 'fzf for a quick choice in a pipe, select in a shell script', examples: ['git branch --format=\'%(refname:short)\' | pick', 'ls | pick --multi --preview \'head -20 {}\''] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, replaces: 'fzf for a quick choice in a pipe, select in a shell script', examples: ['git branch --format=\'%(refname:short)\' | pick', 'ls | pick --multi --preview \'head -20 {}\''] })
 
   if (positionals.length > 0)
     badUsage('pick takes its lines on stdin, not as arguments')

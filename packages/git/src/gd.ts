@@ -2,7 +2,7 @@
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
-import { fail, jsonOption, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
+import { badUsage, fail, jsonOption, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { git } from './git'
 import { toplevelOf } from './repos'
 
@@ -15,7 +15,7 @@ const EXITS: ExitRow[] = [[0, 'it printed the changes, or there were none'], [1,
 
 const OPTIONS = {
   staged: { type: 'boolean', short: 's', description: 'only what is staged' },
-  ref: { type: 'string', short: 'r', description: 'compare to this commit, branch or tag, or a..b, instead of the index' },
+  ref: { type: 'string', description: 'compare to this commit, branch or tag, or a..b, instead of the index' },
   patch: { type: 'boolean', short: 'p', description: 'print the patch of every file listed, not just of the paths given' },
   json: jsonOption('[{title, files: [{path, added, removed}]}] per section, added and removed being null for a binary file'),
 } as const
@@ -32,11 +32,17 @@ function parseNumstat(text: string): File[] {
   const files: File[] = []
 
   for (let at = 0; at < fields.length; at++) {
-    const [added, removed, path] = (fields[at] ?? '').split('\t')
+    const field = fields[at] ?? ''
+    const first = field.indexOf('\t')
+    const second = field.indexOf('\t', first + 1)
 
-    if (added === undefined || removed === undefined || path === undefined)
+    if (first < 0 || second < 0)
       continue
 
+    // A path may hold a tab, so only the first two split the field.
+    const added = field.slice(0, first)
+    const removed = field.slice(first + 1, second)
+    const path = field.slice(second + 1)
     const count = (value: string): number | null => value === '-' ? null : Number(value)
 
     if (path === '') {
@@ -52,7 +58,7 @@ function parseNumstat(text: string): File[] {
 }
 
 async function diff(args: string[], paths: string[]): Promise<string> {
-  const ran = await git(['diff', ...args, ...paths.length > 0 ? ['--', ...paths] : []], LITERAL)
+  const ran = await git(['diff', ...args, '--', ...paths], LITERAL)
 
   if (ran.code !== 0)
     fail(`git diff failed:\n${ran.stderr.trim()}`, NOT_A_REPOSITORY.test(ran.stderr) ? 2 : 1)
@@ -87,6 +93,12 @@ function sections(values: { staged?: boolean | undefined, ref?: string | undefin
 
 async function main(argv: string[]): Promise<number> {
   const { values, positionals } = parse(argv, USAGE, OPTIONS, { positionals: ['[path]...'], exits: EXITS, replaces: 'git diff --stat, git diff --cached --stat and then git diff <path>', examples: ['gd', ['gd src/a.ts', 'the patch of one file'], ['gd --staged -p', 'the patch of everything staged'], ['gd --ref main', 'the working tree against main']] })
+
+  if (values.ref?.startsWith('-') === true)
+    badUsage(`--ref takes a commit, branch or tag, not ${values.ref}`)
+
+  if (values.ref !== undefined && values.staged === true)
+    badUsage('--ref and --staged exclude each other: --ref compares the working tree')
 
   if (await toplevelOf('.') === undefined)
     fail('not inside a git repository', 2)

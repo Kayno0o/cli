@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Placement } from './compose'
 import type { Outcome, StepSettings } from './run'
 import type { Step } from './steps'
@@ -20,8 +21,9 @@ It looks at the folder itself only, so each package of a monorepo gets its own r
 A script or php-cs-fixer runs inside the docker compose service that bind-mounts the folder (found in compose.yml, compose.yaml or docker-compose.yml, up to the repository root), at the matching path; a service that is down is never started, the fixer fails naming it. The formatters run on the host. --in picks the service, --host forces the host.
 Prints one line per fixer, what a failing one said, then the files the run changed. Each fixer's full output is saved to the file whose path ends its line.
 A fixer still running after --timeout is ended with everything it started, but not what it started inside a container.
-Exits 0 when every fixer ran or was skipped for a missing binary, 1 when one failed, 2 on bad usage, when nothing applies or when a fixer timed out.
 --json prints {fixers: [{name, command, in?, ok, ms, log, failed?} or {name, command, skipped}], changed} once every fixer ran, changed null outside a git repository.`
+
+const EXITS: ExitRow[] = [[0, 'every fixer ran or was skipped for a missing binary'], [1, 'one failed'], [2, 'bad usage, nothing applies or a fixer timed out']]
 
 export interface FixValues { list?: boolean | undefined, only?: string | undefined, timeout?: string | undefined, in?: string | undefined, host?: boolean | undefined, json?: boolean | undefined }
 
@@ -146,7 +148,7 @@ function printChanged(changed: string[]): void {
 }
 
 export async function fix(args: string[], cwd = process.cwd()): Promise<number> {
-  const parsed = parse(args, fixUsage, fixOptions, { replaces: 'running each fixer and formatter by hand, or docker compose exec <service> bun run lint:fix', examples: ['fix', ['fix --list', 'the fixers it would run']] })
+  const parsed = parse(args, fixUsage, fixOptions, { exits: EXITS, replaces: 'running each fixer and formatter by hand, or docker compose exec <service> bun run lint:fix', examples: ['fix', ['fix --list', 'the fixers it would run']] })
 
   return runFixers(parsed.values, cwd)
 }

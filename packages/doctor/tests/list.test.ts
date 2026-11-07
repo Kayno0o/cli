@@ -90,3 +90,22 @@ describe('filterBins', () => {
     expect(filterBins(listed, 'zzz')).toEqual([])
   })
 })
+
+describe('the cli bin', () => {
+  const CLI = new URL('../src/cli-bin.ts', import.meta.url).pathname
+  const run = (...args: string[]) => Bun.spawnSync([process.execPath, CLI, ...args], { stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', env: { ...process.env, NO_COLOR: '1' } })
+
+  test('a bare cli lists the bins when there is no terminal', () => {
+    const bare = run()
+
+    expect(bare.exitCode).toBe(0)
+    expect(bare.stdout.toString()).toBe(run('list').stdout.toString())
+  })
+
+  test('cli list with a word nothing matches is a usage error', () => {
+    const none = run('list', 'zzzz-no-such-bin')
+
+    expect(none.exitCode).toBe(2)
+    expect(none.stderr.toString()).toContain('no bin matches')
+  })
+})

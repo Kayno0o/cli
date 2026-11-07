@@ -1,4 +1,4 @@
-import type { Command } from '@kaynooo/cli-kit'
+import type { Command, ExitRow } from '@kaynooo/cli-kit'
 import { fail, parse } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
 import { good } from '../good'
@@ -9,17 +9,15 @@ const addUsage = `ft plan add <plan> <n>... [--section "Bugs:"]
 
 Lists each issue <n> as \`- [ ] #<n> <title>\` in the checklist of issue <plan>, skipping those already listed.
 Lines go under --section, created at the end of the body when missing, or else after the checklist's last box.
-The body is read again just before it is written, so an edit made meanwhile is kept.
-
-Exits 0 when it listed the issues, 1 when Forgejo refuses, 2 on a usage error.`
+The body is read again just before it is written, so an edit made meanwhile is kept.`
+const addExits: ExitRow[] = [[0, 'it listed the issues'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 const carryUsage = `ft plan carry <from> <to> [--section "Carried from 1.71.0:"]
 
 Copies the unticked \`#<n>\` lines of issue <from> into issue <to>, skipping those <to> already lists.
 Lines go under --section, created at the end of the body when missing, or else after the checklist's last box.
-The body is read again just before it is written, so an edit made meanwhile is kept.
-
-Exits 0 when it copied the lines, 1 when Forgejo refuses, 2 on a usage error.`
+The body is read again just before it is written, so an edit made meanwhile is kept.`
+const carryExits: ExitRow[] = [[0, 'it copied the lines'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 const options = {
   section: { type: 'string', short: 's', description: 'the heading the lines go under, e.g. "Bugs:"' },
@@ -35,7 +33,7 @@ export const plan: Command = {
 }
 
 async function add(args: string[]): Promise<number> {
-  const parsed = parse(args, addUsage, options)
+  const parsed = parse(args, addUsage, options, { exits: addExits })
 
   const { section, repo } = parsed.values
   const [target, ...listed] = parsed.positionals
@@ -63,7 +61,7 @@ async function add(args: string[]): Promise<number> {
 }
 
 async function carry(args: string[]): Promise<number> {
-  const parsed = parse(args, carryUsage, options)
+  const parsed = parse(args, carryUsage, options, { exits: carryExits })
 
   const { section, repo } = parsed.values
   const from = issueNumber(parsed.positionals[0], carryUsage)

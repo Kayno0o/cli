@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
 import { entries } from '../dotenv'
@@ -7,17 +8,17 @@ const diffUsage = `ev diff <a> <b>
 
 Names the keys set in one file and not the other, never their values.
 
---json prints {a, b, onlyA, onlyB}.
+--json prints {a, b, onlyA, onlyB}.`
 
-Exits 0 when both set the same keys, 1 when they differ, 2 on a usage error.`
+const DIFF_EXITS: ExitRow[] = [[0, 'both set the same keys'], [1, 'they differ'], [2, 'a usage error']]
 
 const missingUsage = `ev missing [file]
 
 Names the keys the reference file sets that the file (.env by default) does not.
 
---json prints {a, b, onlyA, onlyB} with the reference as a, so onlyA is what is missing.
+--json prints {a, b, onlyA, onlyB} with the reference as a, so onlyA is what is missing.`
 
-Exits 0 when none is missing, 1 when some are, 2 on a usage error.`
+const MISSING_EXITS: ExitRow[] = [[0, 'none is missing'], [1, 'some are'], [2, 'a usage error']]
 
 const jsonFlag = { json: jsonOption() } as const
 
@@ -26,7 +27,7 @@ async function keys(path: string): Promise<Set<string>> {
 }
 
 export async function diff(args: string[]): Promise<number> {
-  const parsed = parse(args, diffUsage, jsonFlag)
+  const parsed = parse(args, diffUsage, jsonFlag, { exits: DIFF_EXITS })
 
   const [a, b] = parsed.positionals
 
@@ -57,7 +58,7 @@ export async function diff(args: string[]): Promise<number> {
 }
 
 export async function missing(args: string[]): Promise<number> {
-  const parsed = parse(args, missingUsage, { against: { type: 'string', description: 'the reference file (.env.example by default)' }, ...jsonFlag })
+  const parsed = parse(args, missingUsage, { against: { type: 'string', description: 'the reference file (.env.example by default)' }, ...jsonFlag }, { exits: MISSING_EXITS })
 
   const [file = '.env'] = parsed.positionals
   const against = parsed.values.against ?? '.env.example'

@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Span } from './source'
 import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -17,9 +18,8 @@ peek --around <regex> [-C 3] [path...] the lines around each match, overlapping 
 <output> | peek [-C 3]                 the lines around each path:line the output opens a line with (errs, rg -n, grep -n, tsc, linters)
 The paths default to the files git keeps here (.gitignore holds).
 --refs lists at most 100 lines and --around prints at most 20 spans, the count of the rest after them (--limit <n>, --full for all).
---json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}] ({definitions, references} with --defs-first), --outline as [{path, line, depth, text}], the lines never cut and the rows never counted off unless --limit is given.
-
-Exits 0 when it printed something, 1 when nothing is found, a file cannot be read or a span starts past the end, 2 on a usage error or a path outside the repository.`
+--json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}] ({definitions, references} with --defs-first), --outline as [{path, line, depth, text}], the lines never cut and the rows never counted off unless --limit is given.`
+const EXITS: ExitRow[] = [[0, 'it printed something'], [1, 'nothing is found, a file cannot be read or a span starts past the end'], [2, 'a usage error or a path outside the repository']]
 
 const REFS_LIMIT = 100
 const AROUND_LIMIT = 20
@@ -199,7 +199,7 @@ async function definitionsOf(symbols: readonly string[], paths: readonly string[
 }
 
 export async function peek(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[target...]'], replaces: 'sed -n N,Mp, grep -n chains and whole-file reads', examples: [['peek src/a.ts:120-140 src/b.ts:1-40', 'two spans in one call'], ['peek --def parseArgs src', 'a whole declaration']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[target...]'], replaces: 'sed -n N,Mp, grep -n chains and whole-file reads', examples: [['peek src/a.ts:120-140 src/b.ts:1-40', 'two spans in one call'], ['peek --def parseArgs src', 'a whole declaration']] })
   const modes = [values.def?.length === 0 ? undefined : values.def, values.refs, values.outline, values.around].filter(mode => mode !== undefined && mode !== false)
   const json = values.json === true
 

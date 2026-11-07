@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import { existsSync, lstatSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fail, parse, role } from '@kaynooo/cli-kit'
@@ -5,8 +6,9 @@ import { lines, need, pipeline, probe, TAR_FIDELITY, ZSTD_LONG } from './proc'
 
 const USAGE = `arc unpack <archive.tar.zst> <dest dir>: unpacks an archive made by arc pack into a folder, refusing to overwrite anything, then checks every file against it
 
-The archive's checksum is tested first, and nothing is extracted when a top-level entry already exists in the destination. Files owned by someone else get their owner back only as root, so sudo is used when the destination is not writable or the archive holds other owners. The archive is kept.
-Exits 0 when every extracted file matches the archive, 1 when anything was refused or failed, 2 on a usage error.`
+The archive's checksum is tested first, and nothing is extracted when a top-level entry already exists in the destination. Files owned by someone else get their owner back only as root, so sudo is used when the destination is not writable or the archive holds other owners. The archive is kept.`
+
+const EXITS: ExitRow[] = [[0, 'every extracted file matches the archive'], [1, 'anything was refused or failed'], [2, 'a usage error']]
 
 const WHITESPACE = /\s+/
 
@@ -16,6 +18,7 @@ function say(message: string): void {
 
 export async function unpack(args: string[]): Promise<number> {
   const { positionals } = parse(args, USAGE, {}, {
+    exits: EXITS,
     positionals: ['<archive>', '<dest dir>'],
     replaces: 'tar xf into a folder that may already hold files, then a tar --compare by hand',
     examples: ['arc unpack /mnt/backup/old-project.tar.zst ~/restored'],

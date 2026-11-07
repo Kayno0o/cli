@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Limit, Socket } from './parse'
 import type { ProcInfo } from './read'
 import process from 'node:process'
@@ -9,9 +10,8 @@ import { bootMs, fdCount, readProc, readSockets, readText, socketsOf, userName }
 const usage = `pid <pid>
 
 Shows what a process is: its executable, working directory, command line, parent chain up to init, user, start time and age, memory, open files and limits, the TCP and UDP ports it listens on and its cgroup. Everything is read from /proc; what the calling user cannot read of another user's process is left out and named at the end.
-The environment is not shown unless --env is given, with every value that looks like a secret masked.
-
-Exits 0 when it showed the process, 1 when no process has this pid, 2 on a usage error.`
+The environment is not shown unless --env is given, with every value that looks like a secret masked.`
+const EXITS: ExitRow[] = [[0, 'it showed the process'], [1, 'no process has this pid'], [2, 'a usage error']]
 
 const DIGITS = /^\d+$/
 
@@ -166,6 +166,7 @@ function render(info: Report, showEnv: boolean): string {
 
 export async function pid(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, usage, options, {
+    exits: EXITS,
     positionals: ['<pid>'],
     replaces: 'cat /proc/<pid>/{cmdline,environ,limits}, readlink /proc/<pid>/{exe,cwd}, the fish pid function',
     examples: [

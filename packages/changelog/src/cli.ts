@@ -1,5 +1,6 @@
 #!/usr/bin/env -S bun --config=/dev/null
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { ResolvedChangelogOptions } from './types'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,12 +55,12 @@ async function printManualRelease(config: ResolvedChangelogOptions, md: string, 
   console.log()
 }
 
+const RELEASE_EXITS: ExitRow[] = [[0, 'it released, wrote --output or showed --dry-run'], [1, 'the release could not be made (no token, the tag not on Forgejo, a shallow clone, an API error), an asset upload or the Discord post failed'], [2, 'a usage error']]
+
 async function release(argv: string[], report: (value: Report) => unknown) {
   const parsed = parse(argv, `usage: changelog release [options]
 
-Exits 0 once released, written to --output or shown by --dry-run, 1 when the release could not be made (no token, the tag not on Forgejo, a shallow clone, an API error), an asset upload or the Discord post failed, 2 on a usage error.
-
---json prints {command, status (released, dry-run or saved), from, to, commits, notes, url, output, assetsFailed, discord (posted, failed or null)} on stdout and the progress on stderr; a failure is {error} on stderr.`, shared, { allowNegative: true, positionals: [] })
+--json prints {command, status (released, dry-run or saved), from, to, commits, notes, url, output, assetsFailed, discord (posted, failed or null)} on stdout and the progress on stderr; a failure is {error} on stderr.`, shared, { allowNegative: true, positionals: [], exits: RELEASE_EXITS })
 
   const options = withToken(toOptions(parsed.values))
   let generated: { config: ResolvedChangelogOptions, md: string } | undefined
@@ -146,12 +147,12 @@ Exits 0 once released, written to --output or shown by --dry-run, 1 when the rel
   }
 }
 
+const UNDO_EXITS: ExitRow[] = [[0, 'it undid it, had nothing to undo, ran --dry-run or the question was declined'], [1, 'a step fails'], [2, 'a usage error']]
+
 async function undo(argv: string[], report: (value: Report) => unknown) {
   const { values: args, positionals } = parse(argv, `usage: changelog undo [tag] [options]
 
-Exits 0 once undone, with nothing to undo, on --dry-run or when the question is declined, 1 when a step fails, 2 on a usage error.
-
---json prints {command, status (undone, nothing, dry-run or declined), tag, releaseNote, remoteTag, localTag, commitReset: {hash, subject} or null} on stdout and the progress on stderr, each flag true when that step is (or, on a dry run, would be) taken. It asks no question: the release note is deleted with --note only, and anything to remove needs --yes or --dry-run (exit 2 otherwise).`, undoFlags, { positionals: ['[tag]'] })
+--json prints {command, status (undone, nothing, dry-run or declined), tag, releaseNote, remoteTag, localTag, commitReset: {hash, subject} or null} on stdout and the progress on stderr, each flag true when that step is (or, on a dry run, would be) taken. It asks no question: the release note is deleted with --note only, and anything to remove needs --yes or --dry-run (exit 2 otherwise).`, undoFlags, { positionals: ['[tag]'], exits: UNDO_EXITS })
   const json = args.json === true
   let tag = positionals[0]
   const options = withToken(toOptions(args))

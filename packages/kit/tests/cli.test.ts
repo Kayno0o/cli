@@ -422,15 +422,15 @@ describe('the help screen', () => {
     expect((await capture(async () => runMain({ name: 'demo', version: '1', run: example }, ['--help']))).out).toEndWith('show this help\n\nExamples:\n  demo a\n')
   })
 
-  test('names what a command and a CLI replace under their usage', async () => {
+  test('keeps what a command and a CLI replace out of the help', async () => {
     const replacing = async (args: string[]) => {
       parse(args, 'demo [file]: prints a file', {}, { replaces: 'cat' })
 
       return 0
     }
 
-    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: replacing }, ['--help']))).out).toStartWith('Usage: demo [file]: prints a file\n\nInstead of: cat\n\nOptions:')
-    expect((await capture(async () => runCli({ ...cli, replaces: 'echo' }, ['--help']))).out).toContain('Usage: demo <command> [options]\n\nInstead of: echo\n\nCommands:')
+    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: replacing }, ['--help']))).out).toStartWith('Usage: demo [file]: prints a file\n\nOptions:')
+    expect((await capture(async () => runCli({ ...cli, replaces: 'echo' }, ['--help']))).out).toContain('Usage: demo <command> [options]\n\nCommands:')
   })
 
   test('prints the description as JSON under KIT_HELP=json', async () => {

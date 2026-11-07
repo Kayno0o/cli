@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { jsonText } from '../src/format'
-import { exampleRows, replacesRows } from '../src/help'
+import { exampleRows } from '../src/help'
 import { isInteractive, outputMode } from '../src/mode'
 import { takesControlCodes } from '../src/style'
 
@@ -47,7 +47,6 @@ describe('help for an agent', () => {
 
     try {
       expect(exampleRows(['a --b'])).toEqual([])
-      expect(replacesRows('grep')).toEqual([])
     }
     finally {
       if (before === undefined)

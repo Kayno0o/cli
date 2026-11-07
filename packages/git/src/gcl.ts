@@ -1,7 +1,8 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import type { ExitRow } from '@kaynooo/cli-kit'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson, readUserConfig, runMain, workspaceRoot } from '@kaynooo/cli-kit'
@@ -31,7 +32,10 @@ const LAST_SEGMENT = /[/:]/
 
 /** The address git clones from: a URL, scp address or local path as given, owner/name on the forge. */
 export function urlOf(repo: string, forge: string): string {
-  if (SCHEME.test(repo) || SCP.test(repo) || repo.startsWith('/') || repo.startsWith('.') || repo.startsWith('~'))
+  if (repo.startsWith('~/'))
+    return join(homedir(), repo.slice(2))
+
+  if (SCHEME.test(repo) || SCP.test(repo) || repo.startsWith('/') || repo.startsWith('.'))
     return repo
 
   if (OWNER_NAME.test(repo))
@@ -43,6 +47,11 @@ export function urlOf(repo: string, forge: string): string {
 /** The folder name a clone of the address gets: its last segment without .git. */
 export function nameOf(url: string): string {
   return basename(url.replace(TRAILING_SLASH, '').split(LAST_SEGMENT).at(-1) ?? '').replace(GIT_SUFFIX, '')
+}
+
+// An address with the spellings that do not tell two clones apart taken out.
+function same(url: string): string {
+  return url.replace(TRAILING_SLASH, '').replace(GIT_SUFFIX, '').toLowerCase()
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -62,9 +71,14 @@ async function main(argv: string[]): Promise<number> {
   const path = given === undefined ? join(workspaceRoot(), name) : resolve(given)
   let outcome: 'cloned' | 'existing' = 'cloned'
 
-  if (existsSync(path) && readdirSync(path).length > 0) {
-    if (await toplevelOf(path) !== path)
+  if (existsSync(path) && (!statSync(path).isDirectory() || readdirSync(path).length > 0)) {
+    if (!statSync(path).isDirectory() || await toplevelOf(path) !== realpathSync(path))
       fail(`${path} exists and is not a repository, nothing cloned`, 1)
+
+    const origin = (await git(['-C', path, 'remote', 'get-url', 'origin'])).stdout.trim()
+
+    if (same(origin) !== same(url))
+      fail(`${path} is a clone of ${origin === '' ? 'nothing (no origin)' : origin}, not ${url}, nothing cloned`, 1)
 
     const synced = await sync(await repoState(path), { pull: true })
 

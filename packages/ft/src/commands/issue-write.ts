@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import { fail, parse } from '@kaynooo/cli-kit'
 import { issueNumber, repoOption } from '../args'
 import { appendBoxes, boxes } from '../checklist'
@@ -9,9 +10,8 @@ import { checkLabels } from './triage'
 
 const newUsage = `ft new -t <title> [-F <file>] [-L a,b] [-m <milestone>]
 
-Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it. A label or milestone the repository lacks is refused before anything is created.
-
-Exits 0 when it created the issue, 1 when Forgejo refuses, 2 on a usage error or a label or milestone the repository lacks.`
+Creates an issue and prints its number and url. The description is read from -F <file>, or from stdin with -F -, and is empty without it. A label or milestone the repository lacks is refused before anything is created.`
+const newExits: ExitRow[] = [[0, 'it created the issue'], [1, 'Forgejo refuses'], [2, 'a usage error or a label or milestone the repository lacks']]
 
 const newOptions = {
   title: { type: 'string', short: 't', description: 'the issue title' },
@@ -30,7 +30,7 @@ async function milestoneTitle(reference: string | undefined, repo: string | unde
 }
 
 export async function newIssue(args: string[]): Promise<number> {
-  const parsed = parse(args, newUsage, newOptions)
+  const parsed = parse(args, newUsage, newOptions, { exits: newExits })
 
   const { values } = parsed
 
@@ -54,9 +54,8 @@ const editUsage = `ft edit <n> [-t <title>] [-F <file> [--append]] [--add-box <t
 Replaces the title and/or the description of issue <n>, the description from -F <file> or from stdin with -F -.
 -m moves it to a milestone given by title or id, and \`-m ''\` takes it out of its milestone.
 --append adds the -F text after the description instead, and each --add-box an unticked box after the last one, the rest of the description untouched.
-\`ft issue <n> --body\` prints the description to edit.
-
-Exits 0 when it edited the issue, 1 when Forgejo refuses, 2 on a usage error.`
+\`ft issue <n> --body\` prints the description to edit.`
+const editExits: ExitRow[] = [[0, 'it edited the issue'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 const editOptions = {
   'title': { type: 'string', short: 't', description: 'the new title' },
@@ -68,7 +67,7 @@ const editOptions = {
 } as const
 
 export async function edit(args: string[]): Promise<number> {
-  const parsed = parse(args, editUsage, editOptions)
+  const parsed = parse(args, editUsage, editOptions, { exits: editExits })
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], editUsage)
@@ -118,9 +117,8 @@ export async function edit(args: string[]): Promise<number> {
 const commentUsage = `ft comment [<n>] [text]
 
 Posts a comment on issue <n>: the text given, -F <file>, or stdin when neither is, so a heredoc needs no escaping.
-Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several, saying which issue it used. A first argument that is a number is always the issue, so boxes named by number need it.
-
-Exits 0 when it posted the comment, 1 when Forgejo refuses, 2 on a usage error.`
+Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several, saying which issue it used. A first argument that is a number is always the issue, so boxes named by number need it.`
+const commentExits: ExitRow[] = [[0, 'it posted the comment'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 const commentOptions = {
   file: noteOptions.file,
@@ -128,7 +126,7 @@ const commentOptions = {
 } as const
 
 export async function commentOn(args: string[]): Promise<number> {
-  const parsed = parse(args, commentUsage, commentOptions)
+  const parsed = parse(args, commentUsage, commentOptions, { exits: commentExits })
 
   const { values, positionals } = parsed
   const { number, rest } = await targetIssue(positionals, values.repo, commentUsage)

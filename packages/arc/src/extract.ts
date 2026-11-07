@@ -1,11 +1,13 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import { existsSync, statSync } from 'node:fs'
 import { fail, parse } from '@kaynooo/cli-kit'
 import { interactive } from './proc'
 
 const USAGE = `arc extract <file>: extracts an archive of any common kind into the current folder, by its extension
 
-Understands .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .tar.zst, .gz, .bz2, .zip, .Z, .rar and .7z. Unlike arc unpack it checks nothing and may overwrite what is there.
-Exits 0 when the extractor succeeded, 1 for a missing file, an extension it does not know or a failing extractor, 2 on a usage error.`
+Understands .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .tar.zst, .gz, .bz2, .zip, .Z, .rar and .7z. Unlike arc unpack it checks nothing and may overwrite what is there.`
+
+const EXITS: ExitRow[] = [[0, 'the extractor succeeded'], [1, 'a missing file, an extension it does not know or a failing extractor'], [2, 'a usage error']]
 
 // The command per extension, the longest suffix first so .tar.gz is not read as .gz.
 const EXTRACTORS: [suffix: string, argv: (file: string) => string[]][] = [
@@ -26,6 +28,7 @@ const EXTRACTORS: [suffix: string, argv: (file: string) => string[]][] = [
 
 export async function extract(args: string[]): Promise<number> {
   const { positionals: [file] } = parse(args, USAGE, {}, {
+    exits: EXITS,
     positionals: ['<file>'],
     replaces: 'remembering whether it is tar xzf, tar xjf, unzip, unrar x or 7z x',
     examples: ['arc extract release.tar.gz', 'arc extract photos.zip'],

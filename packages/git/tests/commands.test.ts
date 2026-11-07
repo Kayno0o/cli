@@ -134,6 +134,13 @@ describe('gcl', () => {
     expect(existsSync(join(work, 'b.txt'))).toBe(true)
   })
 
+  test('refuses a folder that is a clone of another repository', () => {
+    const done = bin('gcl', root, join(root, 'elsewhere'), work)
+
+    expect(done.code).toBe(1)
+    expect(done.err).toContain('not')
+  })
+
   test('refuses a folder holding something else', () => {
     const taken = join(root, 'taken')
 
@@ -176,6 +183,12 @@ describe('gd', () => {
     expect(bin('gd', work, 'a.txt').out).toContain('+two')
   })
 
+  test('--ref takes no option-looking value and not --staged', () => {
+    expect(bin('gd', work, '--ref=--output=x').code).toBe(2)
+    expect(bin('gd', work, '--ref', 'HEAD', '--staged').code).toBe(2)
+    expect(existsSync(join(work, 'x'))).toBe(false)
+  })
+
   test('--ref compares the working tree to a commit', () => {
     commit(work, 'b.txt', 'two\n')
 
@@ -208,6 +221,17 @@ describe('gu', () => {
   test('needs a path and refuses one with no change', () => {
     expect(bin('gu', work).code).toBe(2)
     expect(bin('gu', work, 'a.txt').code).toBe(1)
+  })
+
+  test('a path with no change next to a real one discards nothing', () => {
+    writeFileSync(join(work, 'a.txt'), 'one\nkept\n')
+
+    const done = bin('gu', work, 'a.txt', 'typo.txt')
+
+    expect(done.code).toBe(1)
+    expect(done.err).toContain('typo.txt')
+    expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\nkept\n')
+    expect(existsSync(join(work, '.git', 'gu'))).toBe(false)
   })
 
   test('--commit undoes an unpushed commit keeping its changes staged', () => {

@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Placement } from './compose'
 import type { Project, Step } from './steps'
 import { writeFile } from 'node:fs/promises'
@@ -24,8 +25,9 @@ With --quiet, passing steps print nothing, and a fully passing run prints nothin
 A step still running after --timeout is ended with everything it started, but not what it started inside a container.
 With --failed, only the steps that failed in the last run of this folder run again, read from that run's folder of logs; when no last run failed, it says so and exits 2.
 With --fix, the folder's fixers and formatters run instead of the steps, exactly as the \`fix\` bin does (it is the alias of \`check --fix\`): its own scripts, php-cs-fixer, just --fmt, go fmt, cargo fmt, ruff and the Makefile's .PHONY targets, then the files the run changed are listed. --only then names fixers, as --list prints them; --changed, --failed and --slot do not apply.
-Exits 0 when every step passed, 1 when one failed, 2 on bad usage, when no step is found or when a step timed out.
 --json prints [{name, command, in?, ok, ms, log, failed?}] once every step ran, --list --json [{name, command, source, in?}], in the compose service the step ran in; with --fix the shape \`fix --json\` prints.`
+
+const EXITS: ExitRow[] = [[0, 'every step passed'], [1, 'one failed'], [2, 'bad usage, no step is found or a step timed out']]
 
 // A step with the folder it runs in, its subfolder's name and the compose service it runs inside, if any.
 interface Planned extends Step {
@@ -91,7 +93,7 @@ export function summaryLine(outcomes: ReturnType<typeof outcomeJson>[]): string 
 
 // Runs the repo's steps in order and prints one line each, with what failed under a failing one; returns 0 only when every step passed.
 export async function check(args: string[], cwd = process.cwd()): Promise<number> {
-  const parsed = parse(args, usage, options, { replaces: 'chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail', examples: ['check', ['check --only lint,test', 'two of the steps'], ['check --in app', 'every step inside the app service']] })
+  const parsed = parse(args, usage, options, { exits: EXITS, replaces: 'chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail', examples: ['check', ['check --only lint,test', 'two of the steps'], ['check --in app', 'every step inside the app service']] })
   const settings = placeSettings(parsed.values)
 
   if (parsed.values.fix === true) {

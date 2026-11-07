@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import { fail, parse } from '@kaynooo/cli-kit'
 import { issueNumber, issueNumbers, repoOption } from '../args'
 import { good } from '../good'
@@ -20,8 +21,8 @@ const stateOptions = {
   ...repoOption,
 } as const
 
-async function setState(args: string[], usage: string, wanted: 'open' | 'closed'): Promise<number> {
-  const parsed = parse(args, usage, stateOptions)
+async function setState(args: string[], usage: string, exits: ExitRow[], wanted: 'open' | 'closed'): Promise<number> {
+  const parsed = parse(args, usage, stateOptions, { exits })
 
   const { values, positionals } = parsed
 
@@ -48,22 +49,20 @@ async function setState(args: string[], usage: string, wanted: 'open' | 'closed'
 
 const closeUsage = `ft close <n>... [-m <reason>]
 
-Closes issues without a fix, a duplicate or one dropped, posting the -m reason first. \`ft fixed\` closes one a commit fixed.
-
-Exits 0 when every issue is closed, 1 when Forgejo refuses, 2 on a usage error.`
+Closes issues without a fix, a duplicate or one dropped, posting the -m reason first. \`ft fixed\` closes one a commit fixed.`
+const closeExits: ExitRow[] = [[0, 'every issue is closed'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 export async function closeIssues(args: string[]): Promise<number> {
-  return setState(args, closeUsage, 'closed')
+  return setState(args, closeUsage, closeExits, 'closed')
 }
 
 const reopenUsage = `ft reopen <n>... [-m <reason>]
 
-Reopens closed issues, posting the -m reason first.
-
-Exits 0 when every issue is open, 1 when Forgejo refuses, 2 on a usage error.`
+Reopens closed issues, posting the -m reason first.`
+const reopenExits: ExitRow[] = [[0, 'every issue is open'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 export async function reopenIssues(args: string[]): Promise<number> {
-  return setState(args, reopenUsage, 'open')
+  return setState(args, reopenUsage, reopenExits, 'open')
 }
 
 const LABEL_FLAGS = new Set(['-h', '--help'])
@@ -93,13 +92,12 @@ function labelChanges(args: string[]): { rest: string[], add: string[], remove: 
 
 const labelUsage = `ft label <n> [+]<label>... -<label>...
 
-Adds the labels named bare or with +, removes those named with -, then prints the issue's labels. A label the repository lacks is refused.
-
-Exits 0 when it changed the labels, 1 when Forgejo refuses, 2 on a usage error or a label the repository lacks.`
+Adds the labels named bare or with +, removes those named with -, then prints the issue's labels. A label the repository lacks is refused.`
+const labelExits: ExitRow[] = [[0, 'it changed the labels'], [1, 'Forgejo refuses'], [2, 'a usage error or a label the repository lacks']]
 
 export async function label(args: string[]): Promise<number> {
   const changes = labelChanges(args)
-  const parsed = parse(changes.rest, labelUsage, repoOption)
+  const parsed = parse(changes.rest, labelUsage, repoOption, { exits: labelExits })
 
   const { values, positionals } = parsed
   const number = issueNumber(positionals[0], labelUsage)

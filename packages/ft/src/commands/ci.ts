@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { FailedJob, Run } from '../runs'
 import process from 'node:process'
 import { ciHeader, duration, fail, jsonOption, parse, printJson, runHint, takesControlCodes, waitForCi } from '@kaynooo/cli-kit'
@@ -9,8 +10,8 @@ const usage = `ft ci [ref]
 
 Waits for the push runs covering a commit on the branch, by default origin's tip, and prints what each failed job's log says.
 A push's run tests every commit since the previous push, so a commit whose own run was cancelled, or whose --job was skipped, is covered by the next commit's runs.
---json prints {status, runs, failedJobs, url} on stdout, the progress going to stderr; --quiet prints only the announcement, the failures and the result.
-Exits 0 when they pass, 1 when one fails, 2 on a timeout, a stalled queue or a commit not on the branch.`
+--json prints {status, runs, failedJobs, url} on stdout, the progress going to stderr; --quiet prints only the announcement, the failures and the result.`
+const EXITS: ExitRow[] = [[0, 'they pass'], [1, 'one fails'], [2, 'a timeout, a stalled queue or a commit not on the branch']]
 
 const options = {
   branch: { type: 'string', short: 'b', description: 'branch the commit is on, by default the one origin/HEAD names' },
@@ -59,7 +60,7 @@ export function settled(latest: Run[] | undefined): Run[] | undefined {
 }
 
 export async function ci(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { exits: EXITS })
 
   const { values, positionals } = parsed
   const branch = values.branch ?? await defaultBranch()

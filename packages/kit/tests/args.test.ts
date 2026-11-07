@@ -290,13 +290,13 @@ describe('exits', () => {
   const OPTIONS = { json: jsonOption() } as const
   const exits: [number, string][] = [[0, 'clean'], [1, 'a finding'], [12, 'a usage error']]
 
-  test('the help lists each code under Exits:', async () => {
+  test('the help lists the codes on one Exit codes: line', async () => {
     const { out } = await capture(async () => {
       expect(() => parse(['--help'], 'x', OPTIONS, { exits })).toThrow(HelpShown)
     })
 
-    expect(out).toContain('Exits:\n  0   clean\n  1   a finding\n  12  a usage error')
-    expect(out.indexOf('Options:')).toBeLessThan(out.indexOf('Exits:'))
+    expect(out).toContain('Exit codes: 0 clean, 1 a finding, 12 a usage error')
+    expect(out.indexOf('Options:')).toBeLessThan(out.indexOf('Exit codes:'))
   })
 
   test('the description lists the options', () => {

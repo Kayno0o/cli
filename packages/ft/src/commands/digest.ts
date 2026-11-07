@@ -1,4 +1,4 @@
-import type { Session } from '@kaynooo/cli-kit'
+import type { ExitRow, Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue } from '../issues'
 import type { Run } from '../runs'
@@ -155,9 +155,8 @@ export function renderDigest(digest: Digest, now = Date.now()): string {
 const usage = `ft digest
 
 Summarises the repository for a session starting cold: the issues this session holds with their boxes left, the claims no live session here answers to, red or running CI on the default branch, unpushed commits, dirty files and TODO comments naming a closed issue.
-A section with nothing in it is left out, and the stale TODO comments need todo-scan on the PATH.
-
-Exits 0 when it summarised the repository, 1 when Forgejo cannot be read, 2 on a usage error.`
+A section with nothing in it is left out, and the stale TODO comments need todo-scan on the PATH.`
+const EXITS: ExitRow[] = [[0, 'it summarised the repository'], [1, 'Forgejo cannot be read'], [2, 'a usage error']]
 
 const options = {
   json: jsonOption('held and away (number, title, holder, since, boxesLeft, boxesTotal), ci (id, status, workflow, started, title), unpushed, dirty (status, path) and stale (issue, comments: path, line)'),
@@ -166,7 +165,7 @@ const options = {
 } as const
 
 export async function digest(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { exits: EXITS })
 
   const { values } = parsed
 

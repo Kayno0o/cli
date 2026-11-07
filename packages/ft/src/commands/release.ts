@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Manifest } from './release-version'
 import type { Followed } from './watch'
 import { basename, join } from 'node:path'
@@ -27,8 +28,8 @@ Cuts a release from the default branch: first the commit it sits on is pushed an
 A refused or interrupted push drops the bump commits and their tags, so a retry starts clean; with --tagged the commit and tag are yours and stay.
 Once released, an open milestone titled like the version (\`1.2.0\`, \`v1.2.0\` or the tag) has its closed issues listed and is closed; a failure there only warns.
 --dry-run checks the same and prints the plan: the version bump, the tag, the pushes and the runs and registry it would wait for, changing nothing.
---json prints {released, tag, package, version, status, runs, failedJobs, url} on stdout and the progress on stderr, an array of them with --package a,b or --all; it does not take --dry-run.
-Exits 0 once released or planned, 1 when a run fails, origin refuses a push or the registry never serves the version, 2 on a timeout, a stalled queue, a refusal before anything ran (another branch, uncommitted changes, origin ahead) or a usage error.`
+--json prints {released, tag, package, version, status, runs, failedJobs, url} on stdout and the progress on stderr, an array of them with --package a,b or --all; it does not take --dry-run.`
+const EXITS: ExitRow[] = [[0, 'released or planned'], [1, 'a run fails, origin refuses a push or the registry never serves the version'], [2, 'a timeout, a stalled queue, a refusal before anything ran (another branch, uncommitted changes, origin ahead) or a usage error']]
 
 const options = {
   'tagged': { type: 'boolean', description: 'push the version commit and tag already at HEAD instead of bumping' },
@@ -51,7 +52,7 @@ interface Bumped {
 }
 
 export async function release(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { exits: EXITS })
 
   const { values, positionals } = parsed
   const json = values.json === true

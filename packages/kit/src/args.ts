@@ -105,9 +105,9 @@ export interface ParseSettings<Names extends readonly string[] = string[]> {
   candidates?: Partial<Record<Names[number], Candidates>>
   // Command lines shown under `Examples:` in the help, each with an optional dimmed note: `['ft ci HEAD~1', 'wait for the commit before the last']`.
   examples?: Example[]
-  // What the command is reached for instead of, shown as `Instead of:` in the help and listed by `cli list`: 'sed -n N,Mp, grep -n chains and whole-file reads'.
+  // What the command is reached for instead of, listed by `cli list`: 'sed -n N,Mp, grep -n chains and whole-file reads'.
   replaces?: string
-  // What each exit code means, shown as an `Exits:` block in the help and listed by `cli list`: `[[0, 'clean'], [1, 'a finding'], [2, 'a usage error']]`.
+  // What each exit code means, shown as an `Exit codes:` line after the options in the help and listed by `cli list`: `[[0, 'clean'], [1, 'a finding'], [2, 'a usage error']]`.
   exits?: ExitRow[]
 }
 

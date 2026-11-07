@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Hotspot } from './churn'
 import { basename, join } from 'node:path'
 import process from 'node:process'
@@ -17,9 +18,8 @@ const USAGE = `hotspots [options] [dir]: ranks the source files under dir (here 
 
 Complexity is the count of decision points in the file (branches, loops, cases, catches, boolean operators, ternaries) plus one, churn the commits touching it since --since (${DEFAULT_SINCE}), score their product. A commit counts for less the older it is (half as much every --half-life, 0 for all alike) and a commit touching more than --bulk files, a format or rename sweep, is left out. Each file also shows its most complex declaration, found by indentation. Test files and generated or built files are left out unless --all.
 
-Lists at most ${DEFAULT_COUNT} files, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.
-
-Exits 0 when it ranked the files, 1 when no file has commits in the window, 2 on a usage error or outside a git repository.`
+Lists at most ${DEFAULT_COUNT} files, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.`
+const EXITS: ExitRow[] = [[0, 'it ranked the files'], [1, 'no file has commits in the window'], [2, 'a usage error or outside a git repository']]
 
 const OPTIONS = {
   'since': { type: 'string', short: 's', description: `only count the commits since this date, as git reads it (${DEFAULT_SINCE})` },
@@ -34,7 +34,7 @@ const HOT = 0.66
 const WARM = 0.33
 
 export async function hotspots(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'hotspots src --since "3 months ago" --limit 10'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'hotspots src --since "3 months ago" --limit 10'] })
 
   if (positionals.length > 1)
     badUsage('give one folder')

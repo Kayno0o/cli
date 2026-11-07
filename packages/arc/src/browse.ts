@@ -1,4 +1,4 @@
-import type { TreeNode } from '@kaynooo/cli-kit'
+import type { ExitRow, TreeNode } from '@kaynooo/cli-kit'
 import type { Entry } from './entries'
 import process from 'node:process'
 import { fail, jsonOption, paint, parse, printJson, tree, wholeNumber } from '@kaynooo/cli-kit'
@@ -27,11 +27,13 @@ function label(entry: Entry, shown: string): string {
 
 const LS_USAGE = `arc ls [-r] [--json] <archive> [path]: lists what an archive holds, the way ls -l would, without extracting it
 
-Reads .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz, .tar.zst and .zip. Without a path it lists the top level; with a folder in the archive, what is directly in it; -r lists every level below. Folders that only their files' paths imply are listed too.
-Exits 0 when it listed them, 1 when the archive or the path in it cannot be read, 2 on a usage error.`
+Reads .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz, .tar.zst and .zip. Without a path it lists the top level; with a folder in the archive, what is directly in it; -r lists every level below. Folders that only their files' paths imply are listed too.`
+
+const LS_EXITS: ExitRow[] = [[0, 'it listed them'], [1, 'the archive or the path in it cannot be read'], [2, 'a usage error']]
 
 export async function ls(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, LS_USAGE, { recursive: { type: 'boolean', short: 'r', description: 'every level below the path' }, json: jsonOption('[{path, kind, size, mode, modified, target?}]') }, {
+    exits: LS_EXITS,
     positionals: ['<archive>', '[path]'],
     replaces: 'tar -tvf and unzip -l, whose listings are the whole archive in their own format',
     examples: ['arc ls backup.tar.zst', ['arc ls -r backup.tar.zst src', 'everything under src'], ['arc ls site.zip --json', 'for a script']],
@@ -64,8 +66,9 @@ export async function ls(args: string[]): Promise<number> {
 
 const TREE_USAGE = `arc tree [-L <depth>] <archive> [path]: the files of an archive as a tree, without extracting it
 
-Without a path it draws the whole archive; with a folder in the archive, what is under it. -L limits how many levels are drawn.
-Exits 0 when it drew the tree, 1 when the archive or the path in it cannot be read, 2 on a usage error.`
+Without a path it draws the whole archive; with a folder in the archive, what is under it. -L limits how many levels are drawn.`
+
+const TREE_EXITS: ExitRow[] = [[0, 'it drew the tree'], [1, 'the archive or the path in it cannot be read'], [2, 'a usage error']]
 
 function nodesOf(entries: Entry[], base: string, depth: number): TreeNode[] {
   const direct = entries.filter(entry => (base === '' ? !entry.path.includes('/') : entry.path.startsWith(`${base}/`) && !entry.path.slice(base.length + 1).includes('/')))
@@ -80,6 +83,7 @@ function nodesOf(entries: Entry[], base: string, depth: number): TreeNode[] {
 
 export async function treeCommand(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, TREE_USAGE, { level: { type: 'string', short: 'L', description: 'how many levels to draw (default all)' } }, {
+    exits: TREE_EXITS,
     positionals: ['<archive>', '[path]'],
     replaces: 'listing an archive with tar -tf and reading the paths by eye',
     examples: ['arc tree backup.tar.zst', ['arc tree -L 2 site.zip', 'two levels deep']],
@@ -100,11 +104,13 @@ export async function treeCommand(args: string[]): Promise<number> {
 
 const CAT_USAGE = `arc cat <archive> <file>: prints a file of an archive on stdout, without extracting it
 
-The file is named as arc ls shows it. Its bytes go to stdout as they are, so it can be piped or redirected.
-Exits 0 when it printed the file, 1 when the archive cannot be read, the file is not in it or is a folder, 2 on a usage error.`
+The file is named as arc ls shows it. Its bytes go to stdout as they are, so it can be piped or redirected.`
+
+const CAT_EXITS: ExitRow[] = [[0, 'it printed the file'], [1, 'the archive cannot be read, the file is not in it or is a folder'], [2, 'a usage error']]
 
 export async function cat(args: string[]): Promise<number> {
   const { positionals } = parse(args, CAT_USAGE, {}, {
+    exits: CAT_EXITS,
     positionals: ['<archive>', '<file>'],
     replaces: 'tar -xOf and unzip -p, which each want the archive\'s own spelling of the path',
     examples: ['arc cat backup.tar.zst project/package.json', ['arc cat site.zip index.html | head', 'the start of a file']],

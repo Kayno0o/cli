@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Ticked } from '../checklist'
 import type { Named } from '../git'
 import { fail, parse, runHint } from '@kaynooo/cli-kit'
@@ -13,9 +14,8 @@ const tickUsage = `ft tick [<n>] <box>...
 Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box, then posts the -m or -F comment.
 With --closed, ticks instead every box opening with \`#<issue>\` whose issue is closed, as a release plan lists them.
 
-Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several, saying which issue it used. A first argument that is a number is always the issue, so boxes named by number need it.
-
-Exits 0 when it ticked the boxes, 1 when Forgejo refuses, 2 on a usage error or a box matching none or several.`
+Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several, saying which issue it used. A first argument that is a number is always the issue, so boxes named by number need it.`
+const tickExits: ExitRow[] = [[0, 'it ticked the boxes'], [1, 'Forgejo refuses'], [2, 'a usage error or a box matching none or several']]
 
 const tickOptions = {
   undo: { type: 'boolean', short: 'u', description: 'untick them instead' },
@@ -34,7 +34,7 @@ function tickedOrFail(number: number, run: () => Ticked): Ticked {
 }
 
 export async function tick(args: string[]): Promise<number> {
-  const parsed = parse(args, tickUsage, tickOptions)
+  const parsed = parse(args, tickUsage, tickOptions, { exits: tickExits })
 
   const { values, positionals } = parsed
   const { number, rest: picks } = await targetIssue(positionals, values.repo, tickUsage)
@@ -80,9 +80,8 @@ const fixedUsage = `ft fixed [<n>] [commit]...
 
 Comments "Fixed in <sha>: <message>" on issue <n> and closes it, naming each commit given as "Fixed in <a>, <b> and <c>".
 Without a commit it takes those on origin's default branch whose message names #<n>, and says which, or HEAD when none does.
-Without <n> it takes the one open issue this session holds (\`ft take\`). The message defaults to the subject of the first commit. Every open issue listing \`- [ ] #<n>\` in its checklist gets that line ticked. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.
-
-Exits 0 when it closed the issue, 1 when the issue is already closed, has boxes left or Forgejo refuses, 2 on a usage error.`
+Without <n> it takes the one open issue this session holds (\`ft take\`). The message defaults to the subject of the first commit. Every open issue listing \`- [ ] #<n>\` in its checklist gets that line ticked. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.`
+const fixedExits: ExitRow[] = [[0, 'it closed the issue'], [1, 'the issue is already closed, has boxes left or Forgejo refuses'], [2, 'a usage error']]
 
 const fixedOptions = {
   message: { type: 'string', short: 'm', description: 'the line after "Fixed in <sha>:"' },
@@ -140,7 +139,7 @@ async function tickListings(closed: number, repo: string | undefined): Promise<v
 }
 
 export async function fixed(args: string[]): Promise<number> {
-  const parsed = parse(args, fixedUsage, fixedOptions)
+  const parsed = parse(args, fixedUsage, fixedOptions, { exits: fixedExits })
 
   const { values, positionals } = parsed
   const { number, rest } = await targetIssue(positionals, values.repo, fixedUsage)

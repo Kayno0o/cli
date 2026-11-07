@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import { badUsage, fail, parse, readInput } from '@kaynooo/cli-kit'
 import { entries, lastLine, removeKey, setLine } from '../dotenv'
 import { loadKnown, readEnv, withLocks, writeEnv } from '../files'
@@ -11,27 +12,27 @@ const QUIET = { quiet: { type: 'boolean', short: 'q', description: 'print nothin
 
 const setUsage = `ev set KEY [file] [--quiet]
 
-Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; --empty sets it to an empty value.
+Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; --empty sets it to an empty value.`
 
-Exits 0 when it wrote the key, 1 when it could not, 2 on a usage error.`
+const SET_EXITS: ExitRow[] = [[0, 'it wrote the key'], [1, 'it could not'], [2, 'a usage error']]
 
 const unsetUsage = `ev unset KEY [file] [--quiet]
 
-Removes every line setting KEY from the file (.env by default), leaving comments and other lines as they are.
+Removes every line setting KEY from the file (.env by default), leaving comments and other lines as they are.`
 
-Exits 0 when it removed the key, 1 when the file does not set it, 2 on a usage error.`
+const UNSET_EXITS: ExitRow[] = [[0, 'it removed the key'], [1, 'the file does not set it'], [2, 'a usage error']]
 
 const mvUsage = `ev mv KEY --from <file> --to <file> [--quiet]
 
-Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force.
+Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force.`
 
-Exits 0 when it moved the key, 1 when the source lacks it or the target already sets it, 2 on a usage error.`
+const MV_EXITS: ExitRow[] = [[0, 'it moved the key'], [1, 'the source lacks it or the target already sets it'], [2, 'a usage error']]
 
 const cpUsage = `ev cp KEY --from <file> --to <file> [--as NEWKEY] [--quiet]
 
-Copies KEY's value from one file to another without printing it, replacing the key's line in the target in place or appending one, and prints the masked result as ev set does. --as stores the copy under another key.
+Copies KEY's value from one file to another without printing it, replacing the key's line in the target in place or appending one, and prints the masked result as ev set does. --as stores the copy under another key.`
 
-Exits 0 when it copied the key, 1 when the source lacks it, 2 on a usage error.`
+const CP_EXITS: ExitRow[] = [[0, 'it copied the key'], [1, 'the source lacks it'], [2, 'a usage error']]
 
 async function readValue(from: string | undefined): Promise<string> {
   const input = await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
@@ -57,7 +58,7 @@ export async function set(args: string[]): Promise<number> {
     file: { type: 'string', short: 'F', description: 'read the value from this file instead of stdin' },
     empty: { type: 'boolean', description: 'set an empty value, reading nothing' },
     ...QUIET,
-  })
+  }, { exits: SET_EXITS })
 
   const [key, target = DEFAULT_FILE] = parsed.positionals
 
@@ -87,7 +88,7 @@ export async function set(args: string[]): Promise<number> {
 }
 
 export async function unset(args: string[]): Promise<number> {
-  const parsed = parse(args, unsetUsage, QUIET)
+  const parsed = parse(args, unsetUsage, QUIET, { exits: UNSET_EXITS })
 
   const [key, target = DEFAULT_FILE] = parsed.positionals
 
@@ -145,7 +146,7 @@ export async function mv(args: string[]): Promise<number> {
     to: { type: 'string', description: 'the file to put KEY in, created when missing' },
     force: { type: 'boolean', description: 'replace KEY when the target already sets it' },
     ...QUIET,
-  })
+  }, { exits: MV_EXITS })
 
   const [key] = parsed.positionals
   const { from, to, force } = parsed.values
@@ -172,7 +173,7 @@ export async function cp(args: string[]): Promise<number> {
     to: { type: 'string', description: 'the file to put the copy in, created when missing' },
     as: { type: 'string', description: 'store the copy under this key instead' },
     ...QUIET,
-  })
+  }, { exits: CP_EXITS })
 
   const [key] = parsed.positionals
   const { from, to, as } = parsed.values

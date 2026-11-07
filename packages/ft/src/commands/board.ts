@@ -1,4 +1,4 @@
-import type { Session } from '@kaynooo/cli-kit'
+import type { ExitRow, Session } from '@kaynooo/cli-kit'
 import type { Claim } from '../claims'
 import type { Issue, IssueComment } from '../issues'
 import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHeader, printHint, printJson, problem, role, runHint, section, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
@@ -135,9 +135,8 @@ const boardUsage = `ft board
 
 Lists open issues, at most 30 of each kind (--full for all), as available, taken by a session running here, or claimed by a session no session here answers to, from their latest "Taken by session <name>." comment.
 A claim shows its boxes left, and one no live session holds also the latest comment that is not a claim.
-A lane's claim (lane-<n>-<issue>) is held while the session whose name ends in -<n> runs.
-
-Exits 0 when it listed them, 1 when the issues cannot be read, 2 on a usage error.`
+A lane's claim (lane-<n>-<issue>) is held while the session whose name ends in -<n> runs.`
+const boardExits: ExitRow[] = [[0, 'it listed them'], [1, 'the issues cannot be read'], [2, 'a usage error']]
 
 const BOARD_LIMIT = 30
 
@@ -153,7 +152,7 @@ const boardOptions = {
 } as const
 
 export async function board(args: string[]): Promise<number> {
-  const parsed = parse(args, boardUsage, boardOptions)
+  const parsed = parse(args, boardUsage, boardOptions, { exits: boardExits })
 
   const { values } = parsed
 
@@ -207,9 +206,8 @@ async function me(as: string | undefined, sessions: Session[]): Promise<string> 
 const takeUsage = `ft take <n>...
 
 Claims each issue for this Claude Code session with a "Taken by session <name>." comment.
-An issue another live session holds is refused, one this session or its lanes hold passes to the new name, and one claimed by a session no session here answers to needs --take-stale; a refusal leaves the other issues taken.
-
-Exits 0 when every issue is taken, 1 when one is refused, 2 on a usage error.`
+An issue another live session holds is refused, one this session or its lanes hold passes to the new name, and one claimed by a session no session here answers to needs --take-stale; a refusal leaves the other issues taken.`
+const takeExits: ExitRow[] = [[0, 'every issue is taken'], [1, 'one is refused'], [2, 'a usage error']]
 
 const laneOption = {
   lane: { type: 'boolean', description: 'claim each as lane-<s>-<n>, <s> ending this session\'s name, so the claim stays live while it runs' },
@@ -262,7 +260,7 @@ async function eachIssue(command: string, numbers: number[], step: (number: numb
 }
 
 export async function take(args: string[]): Promise<number> {
-  const parsed = parse(args, takeUsage, takeOptions)
+  const parsed = parse(args, takeUsage, takeOptions, { exits: takeExits })
 
   const { values, positionals } = parsed
   const numbers = issueNumbers(positionals, takeUsage)
@@ -308,9 +306,8 @@ export async function take(args: string[]): Promise<number> {
 const dropUsage = `ft drop <n>... [--stale] | --all-stale [--dry-run]
 
 Gives each issue back with a "Released by session <name>." comment, when this session holds it.
-With --stale, a claim no session here answers to is released too, in the name of its holder, followed by a comment saying this session released it as stale; a claim a live session holds is still refused. --all-stale does that for every such claim on the board, and with --dry-run only lists them.
-
-Exits 0 when every issue is given back, 1 when one is not held by this session or, with --stale, by a live one, 2 on a usage error.`
+With --stale, a claim no session here answers to is released too, in the name of its holder, followed by a comment saying this session released it as stale; a claim a live session holds is still refused. --all-stale does that for every such claim on the board, and with --dry-run only lists them.`
+const dropExits: ExitRow[] = [[0, 'every issue is given back'], [1, 'one is not held by this session or, with --stale, by a live one'], [2, 'a usage error']]
 
 const dropOptions = {
   'as': { type: 'string', description: 'the name it was taken as, instead of this session\'s' },
@@ -339,7 +336,7 @@ async function releaseStale(number: number, me: string, author: string | undefin
 }
 
 export async function drop(args: string[]): Promise<number> {
-  const parsed = parse(args, dropUsage, dropOptions)
+  const parsed = parse(args, dropUsage, dropOptions, { exits: dropExits })
 
   const { values, positionals } = parsed
   const sessions = await liveSessions()

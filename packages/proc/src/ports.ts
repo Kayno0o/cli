@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Container, Protocol, Socket } from './parse'
 import type { ProcInfo } from './read'
 import { basename } from 'node:path'
@@ -13,9 +14,8 @@ const usage = `ports [port]
 
 Lists what listens on this machine, TCP and UDP over IPv4 and IPv6, one row per port with its bound address, the owning process, its command and its working directory. A port Docker publishes is held by docker-proxy, and shows as its compose project and service when docker is installed; the owner of a socket of another user cannot be read and shows as -.
 \`ports <port>\` keeps that port alone and exits 1 when nothing listens on it.
-\`ports <port> --kill\` stops its owner with SIGTERM, and with --force SIGKILL once --grace has passed, after asking on a terminal unless --yes is given. It refuses processes of other users, pid 1, this command and its ancestors, and docker-proxy, for which it names the container to stop instead.
-
-Exits 0 when it listed or stopped, 1 when nothing listens on the given port or the owner could not be stopped, 2 on a usage error.`
+\`ports <port> --kill\` stops its owner with SIGTERM, and with --force SIGKILL once --grace has passed, after asking on a terminal unless --yes is given. It refuses processes of other users, pid 1, this command and its ancestors, and docker-proxy, for which it names the container to stop instead.`
+const EXITS: ExitRow[] = [[0, 'it listed or stopped'], [1, 'nothing listens on the given port or the owner could not be stopped'], [2, 'a usage error']]
 
 const options = {
   json: jsonOption('[{ port, protocol, addresses, pid, command, cwd, container }]'),
@@ -143,6 +143,7 @@ async function stop(port: number, rows: PortRow[], procs: Map<number, ProcInfo>,
 
 export async function ports(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, usage, options, {
+    exits: EXITS,
     positionals: ['[port]'],
     replaces: 'ss -ltnp | grep, lsof -i, fuser -k and lookups of docker-proxy by hand',
     examples: [

@@ -13,26 +13,19 @@ export function usageLine(usage: string, colors = paint(process.stdout)): string
   return `${colors.bold('Usage:')} ${usage.replace(USAGE_PREFIX, '').replaceAll(OPTIONAL, part => colors.dim(part))}`
 }
 
-export function helpText(usage: string, options: Options, colors = paint(process.stdout), { examples = [], replaces, exits = [] }: Described = {}): string {
-  return [usageLine(usage, colors), ...replacesRows(replaces, colors), '', colors.bold('Options:'), ...optionRows(options, colors), ...exitRows(exits, colors), ...exampleRows(examples, colors)].join('\n')
+export function helpText(usage: string, options: Options, colors = paint(process.stdout), { examples = [], exits = [] }: Described = {}): string {
+  return [usageLine(usage, colors), '', colors.bold('Options:'), ...optionRows(options, colors), ...exitRows(exits, colors), ...exampleRows(examples, colors)].join('\n')
 }
 
 // An exit code and what it means.
 export type ExitRow = [code: number | string, meaning: string]
 
-// An `Exits:` block, after a blank line, a line per code with the codes aligned; nothing without one.
+// An `Exit codes:` line after the options, `0 clean, 1 a finding`; nothing without one.
 export function exitRows(exits: ExitRow[], colors = paint(process.stdout)): string[] {
   if (exits.length === 0)
     return []
 
-  const width = Math.max(...exits.map(([code]) => String(code).length))
-
-  return ['', colors.bold('Exits:'), ...exits.map(([code, meaning]) => `  ${colors.cyan(String(code).padEnd(width))}  ${meaning}`)]
-}
-
-// An `Instead of:` line, after a blank line; nothing without one, and nothing for an agent, which has picked the command already.
-export function replacesRows(replaces: string | undefined, colors = paint(process.stdout)): string[] {
-  return replaces === undefined || outputMode() === 'agent' ? [] : ['', `${colors.bold('Instead of:')} ${replaces}`]
+  return ['', `${colors.bold('Exit codes:')} ${exits.map(([code, meaning]) => `${colors.cyan(String(code))} ${meaning}`).join(', ')}`]
 }
 
 // What a bin's --help prints under KIT_HELP=json, for `cli list` to read without parsing the text.

@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Dotenv } from '../dotenv'
 import type { KnownSecrets } from '../mask'
 import { fail, jsonOption, parse, printJson, role, table } from '@kaynooo/cli-kit'
@@ -10,17 +11,17 @@ const listUsage = `ev list [file]
 
 Prints every key of the folder's .env* files, or of one file, with secret values masked: a few leading characters and the length under a key named like TOKEN, SECRET, PASSWORD, PASS, PWD, KEY, PRIVATE, DSN, AUTH, SALT or COOKIE, any value equal to a secret of the folder's .env* files, and the password and tokens of any URL.
 
---json prints [{file, key, value, secret}], value masked and secret true when a value was.
+--json prints [{file, key, value, secret}], value masked and secret true when a value was.`
 
-Exits 0 when it printed them, 1 when there is no .env* file, 2 on a usage error.`
+const LIST_EXITS: ExitRow[] = [[0, 'it printed them'], [1, 'there is no .env* file'], [2, 'a usage error']]
 
 const getUsage = `ev get KEY [file]
 
 Prints the masked value of one key, from every .env* file that sets it or from one file.
 
---json prints [{file, key, value, secret}] for each file that sets it.
+--json prints [{file, key, value, secret}] for each file that sets it.`
 
-Exits 0 when the key is set, 1 when it is not set anywhere, 2 on a usage error.`
+const GET_EXITS: ExitRow[] = [[0, 'the key is set'], [1, 'it is not set anywhere'], [2, 'a usage error']]
 
 function display(key: string, value: string, known: KnownSecrets): string {
   return maskValue(key, value, known).replaceAll('\n', '\\n').replaceAll('\r', '\\r')
@@ -69,7 +70,7 @@ async function readAll(names: string[]): Promise<{ files: [name: string, file: D
 }
 
 export async function list(args: string[]): Promise<number> {
-  const parsed = parse(args, listUsage, jsonFlag)
+  const parsed = parse(args, listUsage, jsonFlag, { exits: LIST_EXITS })
 
   const [file] = parsed.positionals
   const names = file === undefined ? await envFiles() : [file]
@@ -95,7 +96,7 @@ export async function list(args: string[]): Promise<number> {
 }
 
 export async function get(args: string[]): Promise<number> {
-  const parsed = parse(args, getUsage, jsonFlag)
+  const parsed = parse(args, getUsage, jsonFlag, { exits: GET_EXITS })
 
   const [key, file] = parsed.positionals
 
@@ -126,22 +127,22 @@ const grepUsage = `ev grep [-i] <regex> [file...]
 
 Prints the keys matching the regular expression, from the folder's .env* files or the files given, with their values masked as ev list does. The regex is matched against the key only, never the value: \`ev grep '^DATABASE_'\` instead of \`grep ^DATABASE_ .env\`.
 
---json prints [{file, key, value, secret}].
+--json prints [{file, key, value, secret}].`
 
-Exits 0 when a key matches, 1 when none does, 2 on a usage error.`
+const GREP_EXITS: ExitRow[] = [[0, 'a key matches'], [1, 'none does'], [2, 'a usage error']]
 
 const showUsage = `ev show <rev>:<file>
 
 Prints every key of an env file as a git revision holds it, values masked as ev list does: \`ev show HEAD~1:api/.env\` instead of \`git show HEAD~1:api/.env\`.
 
---json prints [{file, key, value, secret}].
+--json prints [{file, key, value, secret}].`
 
-Exits 0 when it printed them, 1 when git cannot show the file, 2 on a usage error.`
+const SHOW_EXITS: ExitRow[] = [[0, 'it printed them'], [1, 'git cannot show the file'], [2, 'a usage error']]
 
 const REVISION = /^([^:]+):(.+)$/
 
 export async function grep(args: string[]): Promise<number> {
-  const parsed = parse(args, grepUsage, { 'ignore-case': { type: 'boolean', short: 'i', description: 'match the key whatever its case' }, ...jsonFlag })
+  const parsed = parse(args, grepUsage, { 'ignore-case': { type: 'boolean', short: 'i', description: 'match the key whatever its case' }, ...jsonFlag }, { exits: GREP_EXITS })
 
   const [source, ...given] = parsed.positionals
 
@@ -178,7 +179,7 @@ export async function grep(args: string[]): Promise<number> {
 }
 
 export async function show(args: string[]): Promise<number> {
-  const parsed = parse(args, showUsage, jsonFlag)
+  const parsed = parse(args, showUsage, jsonFlag, { exits: SHOW_EXITS })
 
   const [target] = parsed.positionals
   const [, revision, path] = REVISION.exec(target ?? '') ?? []

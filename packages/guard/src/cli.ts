@@ -1,5 +1,6 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Context, Verdict, Violation } from './check'
 import type { Event, HookInput, Machine } from './hook'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -15,9 +16,9 @@ const checkUsage = `guard check [options] [<command> | -]
 
 Checks a shell command against the rules: remote machines, git (stash, whole-tree add and commit, push, tags), destructive commands (reset --hard, force push, rebase, broad rm), commit messages, SQL writes, env files, package managers and in-place edits (sed -i and replace scripts, pointed at sub).
 Prints each broken rule with the route to take instead and exits 1, prints nothing and exits 0 when the command is clean.
-The command is read from stdin with - or when none is given; a rule may rewrite it instead (the pinned package manager, a noisy run through out), printed as \`runs as: <command>\`.
+The command is read from stdin with - or when none is given; a rule may rewrite it instead (the pinned package manager, a noisy run through out), printed as \`runs as: <command>\`.`
 
-Exits 0 when the command is clean, 1 when a rule is broken, 2 on a usage error.`
+const CHECK_EXITS: ExitRow[] = [[0, 'the command is clean'], [1, 'a rule is broken'], [2, 'a usage error']]
 
 const checkOptions = {
   'json': jsonOption('{violations, command, notes, packages} for a hook'),
@@ -28,9 +29,9 @@ const checkOptions = {
 
 const pathUsage = `guard path [--json] <path>...
 
-Checks the paths a file tool would read, edit or write: env files are refused.
+Checks the paths a file tool would read, edit or write: env files are refused.`
 
-Exits 0 when every path is clean, 1 when one is refused, 2 on a usage error.`
+const PATH_EXITS: ExitRow[] = [[0, 'every path is clean'], [1, 'one is refused'], [2, 'a usage error']]
 
 const pathOptions = {
   json: jsonOption('{violations} for a hook'),
@@ -40,9 +41,9 @@ const hookUsage = `guard hook <${EVENTS.join('|')}>
 
 Answers a Claude Code hook: reads the event JSON on stdin and prints the reply JSON, nothing when the call goes ahead untouched.
 pre-tool-use refuses a Bash call breaking a rule, an install pkg refuses (or fails to check), and a file tool (Read, Edit, MultiEdit, Write, NotebookEdit, Grep, Glob) reaching an env file; user-prompt-submit remembers whether the prompt asked for a push; session-start lists the installed @kaynooo/cli-* bins.
-A failure exits 1, which Claude Code reports without blocking the call.
+A failure exits 1, which Claude Code reports without blocking the call.`
 
-Exits 0 when it answered, 1 on a failure or an unknown event (never 2, which would block the call).`
+const HOOK_EXITS: ExitRow[] = [[0, 'it answered'], [1, 'a failure or an unknown event (never 2, which would block the call)']]
 
 const MAX_READ = 1_000_000
 
@@ -64,7 +65,7 @@ function report(violations: Violation[]) {
 }
 
 async function check(args: string[]): Promise<number> {
-  const parsed = parse(args, checkUsage, checkOptions)
+  const parsed = parse(args, checkUsage, checkOptions, { exits: CHECK_EXITS })
 
   const { values, positionals } = parsed
 
@@ -97,7 +98,7 @@ async function check(args: string[]): Promise<number> {
 }
 
 function path(args: string[]): number {
-  const parsed = parse(args, pathUsage, pathOptions)
+  const parsed = parse(args, pathUsage, pathOptions, { exits: PATH_EXITS })
 
   if (parsed.positionals.length === 0)
     fail(`give at least one path\n\n${pathUsage}`)
@@ -114,16 +115,16 @@ function path(args: string[]): number {
 
 const rulesUsage = `guard rules [--json]
 
-Lists every rule \`guard check\` and \`guard hook\` apply: its name as a violation carries it, what it refuses, the route its refusal points at and where it runs.
+Lists every rule \`guard check\` and \`guard hook\` apply: its name as a violation carries it, what it refuses, the route its refusal points at and where it runs.`
 
-Exits 0 once it listed them.`
+const RULES_EXITS: ExitRow[] = [[0, 'it listed them']]
 
 const rulesOptions = {
   json: jsonOption('[{name, refuses, route, runs}]'),
 } as const
 
 function rules(args: string[]): number {
-  const parsed = parse(args, rulesUsage, rulesOptions)
+  const parsed = parse(args, rulesUsage, rulesOptions, { exits: RULES_EXITS })
 
   if (parsed.values.json === true) {
     console.log(JSON.stringify(RULES))
@@ -167,7 +168,7 @@ function machine(): Machine {
 }
 
 async function hookCommand(args: string[]): Promise<number> {
-  const parsed = parse(args, hookUsage, {})
+  const parsed = parse(args, hookUsage, {}, { exits: HOOK_EXITS })
 
   const event = parsed.positionals[0] ?? ''
 

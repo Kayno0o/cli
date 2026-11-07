@@ -1,4 +1,4 @@
-import type { Ran } from '@kaynooo/cli-kit'
+import type { ExitRow, Ran } from '@kaynooo/cli-kit'
 import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher, Packument, Registry } from '../registry'
 import { existsSync } from 'node:fs'
@@ -21,9 +21,8 @@ A version the vetting blocks is refused before any folder is touched, unless --f
 A dependency declared through an alias of the package (\`"kay": "npm:@kaynooo/kayjs@~1.77.0"\`) is bumped under its own key, keeping the \`~\` or \`^\` of its range; --only and --except narrow the folders by name or glob (\`app\`, \`kay-*\`, a path relative to --root).
 A dependency that is not a registry version (workspace:, link:, file:, git, a URL, an npm: alias of another package, catalog:), a peer range, a folder already on the version and one whose lockfile pins another manager are left as they are, each said so.
 On a terminal with no --only or --except, a checklist asks which consumers to bump (those left out last time are unchecked, and what is unchecked is remembered in ~/.config/kaynooo-cli/pkg-excluded.json), then the plan is printed and confirmed; --yes skips both, as a pipe or --dry-run does.
-With --all-consumers a folder whose package.json or lockfile already has uncommitted changes is left alone, and each folder whose install went through then runs its own \`check\` (the check bin) and is committed with \`gc 'chore(deps): bump <name> to <version>' -- package.json <lockfile>\` only when that passes; a failing one is left uncommitted and listed in the summary with the skipped ones, and nothing is ever pushed.
-
-Exits 0 when every install ran or was left as it is (with --all-consumers, and every check passed and every commit landed), 1 when the vetting refuses the version, an install, a check or a commit fails or the registry has no such package, 2 when the version never shows within the timeout (a registry that cannot be reached is retried until then) or on a usage error.`
+With --all-consumers a folder whose package.json or lockfile already has uncommitted changes is left alone, and each folder whose install went through then runs its own \`check\` (the check bin) and is committed with \`gc 'chore(deps): bump <name> to <version>' -- package.json <lockfile>\` only when that passes; a failing one is left uncommitted and listed in the summary with the skipped ones, and nothing is ever pushed.`
+const EXITS: ExitRow[] = [[0, 'every install ran or was left as it is (with --all-consumers, and every check passed and every commit landed)'], [1, 'the vetting refuses the version, an install, a check or a commit fails or the registry has no such package'], [2, 'the version never shows within the timeout (a registry that cannot be reached is retried until then) or a usage error']]
 
 export const ROOT_OPTION = { type: 'string', description: 'the folder holding the repositories (the workspace of the user config or KAYNOOO_WORKSPACE, ~/Workspace by default)' } as const
 
@@ -329,7 +328,7 @@ export async function choosePlan(name: string, version: string, settings: BumpSe
 }
 
 export async function bump(args: string[]): Promise<number> {
-  const { values, positionals: [name, asked] } = parse(args, usage, options, { positionals: ['<name>', '[version]'] })
+  const { values, positionals: [name, asked] } = parse(args, usage, options, { exits: EXITS, positionals: ['<name>', '[version]'] })
   const settings: BumpSettings = {
     root: workspaceRoot({ given: values.root }),
     configs: await loadConfigs(),

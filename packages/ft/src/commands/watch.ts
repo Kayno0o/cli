@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { FailedJob, Run } from '../runs'
 import { ciHeader, duration, Exit, fail, formatDuration, isPermanentFailure, jsonOption, parse, printJson, takesControlCodes, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
@@ -7,8 +8,8 @@ import { ciJson, failedJobsOf, failureText, FINISHED, overall, recentRuns, runBy
 const usage = `ft watch [--after <id>]
 
 Waits for runs to finish: those newer than run <id>, or else the ones in progress now.
-Prints nothing but failures and each run's final status with --quiet, and a JSON result with --json.
-Exits 0 when every one passed or was skipped, 1 when one failed or was cancelled, 2 on a timeout or a stalled queue.`
+Prints nothing but failures and each run's final status with --quiet, and a JSON result with --json.`
+const EXITS: ExitRow[] = [[0, 'every one passed or was skipped'], [1, 'one failed or was cancelled'], [2, 'a timeout or a stalled queue']]
 
 const options = {
   after: { type: 'string', short: 'a', description: 'watch the runs newer than this run id, as `ft runs --json` gives it' },
@@ -161,7 +162,7 @@ export async function followRuns(pick: (runs: Run[]) => Run[], timeout: number, 
 }
 
 export async function watch(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options)
+  const parsed = parse(args, usage, options, { exits: EXITS })
 
   const { values } = parsed
   const timeout = duration(values.timeout, 'timeout', 15 * 60_000, 'm')

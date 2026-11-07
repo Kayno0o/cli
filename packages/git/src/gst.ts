@@ -1,5 +1,6 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Repo } from './repos'
 import type { Change, Status } from './status'
 import process from 'node:process'
@@ -11,9 +12,8 @@ import { parseStatus, summary } from './status'
 
 const USAGE = `gst [-n N]: the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked
 
-gst --repos [dir]... lists every repository at and below the current one's toplevel (or below each dir given, the current directory outside a repository), four levels down, past node_modules, vendor, dist and hidden folders: one line each with its path, branch, how it stands against its upstream as of the last fetch, and the files left to commit.
-
-Exits 0 when it printed the status, 2 outside a git repository or on a usage error.`
+gst --repos [dir]... lists every repository at and below the current one's toplevel (or below each dir given, the current directory outside a repository), four levels down, past node_modules, vendor, dist and hidden folders: one line each with its path, branch, how it stands against its upstream as of the last fetch, and the files left to commit.`
+const EXITS: ExitRow[] = [[0, 'it printed the status'], [2, 'outside a git repository or a usage error']]
 
 const OPTIONS = {
   limit: { type: 'string', short: 'n', description: 'add the last N commits as <sha7> <title>' },
@@ -80,7 +80,7 @@ function staged({ index, from, path }: Change): string {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS, { positionals: ['[dir]...'], replaces: 'git status --short, git log --oneline and a git -C <repo> status per nested repository', examples: ['gst', ['gst -n 5', 'with the last five commits'], ['gst --repos', 'the repositories nested in this one']] })
+  const parsed = parse(argv, USAGE, OPTIONS, { exits: EXITS, positionals: ['[dir]...'], replaces: 'git status --short, git log --oneline and a git -C <repo> status per nested repository', examples: ['gst', ['gst -n 5', 'with the last five commits'], ['gst --repos', 'the repositories nested in this one']] })
 
   if (parsed.positionals.length > 0 && parsed.values.repos !== true)
     fail(`gst takes dirs with --repos alone\n\n${USAGE}`)

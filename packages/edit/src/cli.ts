@@ -1,5 +1,6 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Diff } from './diff'
 import type { Pair } from './replace'
 import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -23,9 +24,8 @@ new lines
 >>>>>>> REPLACE
 EOF
 
-A line naming a file before a block makes it apply to that file alone, so one call edits several files (no file argument needed when every block names one). An empty REPLACE deletes the SEARCH text; to drop whole lines, put the neighbouring line in both. When the text holds a marker line itself (a Markdown '=======' underline), open with more characters, '<<<<<<<<<< SEARCH', and divide and close with as many '=' and '>' too.
-
-Exits 0 when it wrote every replacement, 1 when one did not match or a file cannot be written (nothing is written), 2 on a usage error.`
+A line naming a file before a block makes it apply to that file alone, so one call edits several files (no file argument needed when every block names one). An empty REPLACE deletes the SEARCH text; to drop whole lines, put the neighbouring line in both. When the text holds a marker line itself (a Markdown '=======' underline), open with more characters, '<<<<<<<<<< SEARCH', and divide and close with as many '=' and '>' too.`
+const EXITS: ExitRow[] = [[0, 'it wrote every replacement'], [1, 'one did not match or a file cannot be written (nothing is written)'], [2, 'a usage error']]
 
 const OPTIONS = {
   'from': { type: 'string', short: 'f', description: 'text to find, taken literally' },
@@ -273,7 +273,7 @@ async function plan(values: { from?: string, to?: string, pairs?: string }, file
 }
 
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS, { replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub src/a.php <<\'EOF\' (SEARCH/REPLACE blocks, see above)', 'multi-line text, no escaping'], ['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
+  const parsed = parse(argv, USAGE, OPTIONS, { exits: EXITS, replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub src/a.php <<\'EOF\' (SEARCH/REPLACE blocks, see above)', 'multi-line text, no escaping'], ['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
 
   const { values, positionals } = parsed
   const files = dedupe(positionals.map(path => normalize(path)))

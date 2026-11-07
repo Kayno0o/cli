@@ -81,10 +81,14 @@ async function main(argv: string[]): Promise<number> {
     badUsage('gu needs the paths to undo: gu src/a.ts (--commit undoes the last commit)')
 
   const staged = values.staged === true
-  const paths = await changed(positionals, staged)
+  // Every path must have a change, so a typo next to a real path discards nothing.
+  const each = await Promise.all(positionals.map(async path => changed([path], staged)))
+  const unchanged = positionals.filter((_, at) => each[at]?.length === 0)
 
-  if (paths.length === 0)
-    fail(`no ${staged ? 'staged' : 'unstaged'} change in ${positionals.join(', ')}, nothing undone`, 1)
+  if (unchanged.length > 0)
+    fail(`no ${staged ? 'staged' : 'unstaged'} change in ${unchanged.join(', ')}, nothing undone`, 1)
+
+  const paths = [...new Set(each.flat())]
 
   if (staged) {
     await checked(['restore', '--staged', '--', ...positionals])

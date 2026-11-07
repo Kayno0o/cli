@@ -1,3 +1,4 @@
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Arg } from '@kaynooo/cli-kit/picker'
 import type { Entry, Kind } from './jobs'
 import process from 'node:process'
@@ -13,9 +14,9 @@ j -
 Without a name, picks a recipe, target, script or task of this folder, its parents and its child folders when a terminal is attached, and runs it. The ones run last come first, per folder. Without a terminal it lists them instead.
 \`j -\` runs the last one again with the same arguments, \`j <name> [args...]\` runs without the picker, the words after the name filling the parameters in order and the required ones left being asked for.
 The sources are a Justfile, a Makefile, the scripts of a package.json (through its package manager), composer.json scripts, deno tasks, a Taskfile, mise tasks and a pyproject (poe tasks and entry points).
-A name is the key behind the folder it runs from, \`api/test\`, bare for this folder. A name several entries share offers them, unless it comes qualified by its runner: \`just:check\`, \`bun:api/test\`.
+A name is the key behind the folder it runs from, \`api/test\`, bare for this folder. A name several entries share offers them, unless it comes qualified by its runner: \`just:check\`, \`bun:api/test\`.`
 
-Exits with the code of the command it ran, 1 when there is nothing to run here or nothing by that name.`
+const EXITS: ExitRow[] = [['its own', 'the code of the command it ran'], [1, 'there is nothing to run here or nothing by that name']]
 
 const options = {
   json: jsonOption('[{ id, key, runner, dir, name, doc, parameters }]'),
@@ -131,6 +132,7 @@ export async function j(argv: string[]): Promise<number> {
   const parsed = last
     ? { values: {} as { json?: boolean }, positionals: ['-'], rest: args.slice(1) }
     : parse(args, usage, options, {
+      exits: EXITS,
       positionals: ['[name]'],
       candidates: { '[name]': completions },
       trailing: true,

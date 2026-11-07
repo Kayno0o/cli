@@ -1,5 +1,6 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
+import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Algorithm } from './hash'
 import type { Format } from './password'
 import process from 'node:process'
@@ -68,8 +69,9 @@ function printRows(rows: [label: string, value: string][]): void {
 
 const PASSWORD_USAGE = `dev password [length] [format] [-b|--bcrypt [password]]: a random password of <length> bytes (default ${DEFAULT_LENGTH}) as hex, base64 (default) or base64url
 
-Printed on stdout and copied to the clipboard when a tool for it (wl-copy, xclip, xsel, pbcopy) exists (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given, or of a generated one, which then prints on stderr and is the one copied. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.
-Exits 0 when it printed the password or hash, 2 on a usage error.`
+Printed on stdout and copied to the clipboard when a tool for it (wl-copy, xclip, xsel, pbcopy) exists (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given, or of a generated one, which then prints on stderr and is the one copied. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.`
+
+const PASSWORD_EXITS: ExitRow[] = [[0, 'it printed the password or hash'], [2, 'a usage error']]
 
 const PASSWORD_OPTIONS = {
   'bcrypt': { type: 'string', short: 'b', optional: { bare: '' }, description: 'print the bcrypt hash of the password given, or of a generated one' },
@@ -81,6 +83,7 @@ const FORMAT_NOTES: Record<Format, string> = { hex: 'hexadecimal', base64: 'base
 
 export async function password(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, PASSWORD_USAGE, PASSWORD_OPTIONS, {
+    exits: PASSWORD_EXITS,
     positionals: ['[length]', '[format]'],
     candidates: { '[length]': () => ['16', '24', '32', '48', '64'], '[format]': () => FORMATS.map((format): [string, string] => [format, FORMAT_NOTES[format]]) },
     replaces: 'openssl rand -base64 32 and htpasswd -bnBC 10 "" <password>',
@@ -116,8 +119,9 @@ export async function password(args: string[]): Promise<number> {
 
 const JWT_USAGE = `dev jwt [token]: the header and payload of a JWT, with iat, nbf and exp as local and UTC dates and how far from now
 
-The token is the argument or what is piped on stdin, a leading "Bearer " is ignored. The signature is not verified.
-Exits 0 when it decoded the token, 1 when it is not a JWT, 2 on a usage error.`
+The token is the argument or what is piped on stdin, a leading "Bearer " is ignored. The signature is not verified.`
+
+const JWT_EXITS: ExitRow[] = [[0, 'it decoded the token'], [1, 'it is not a JWT'], [2, 'a usage error']]
 
 const JWT_OPTIONS = {
   zone: ZONE_OPTION,
@@ -126,6 +130,7 @@ const JWT_OPTIONS = {
 
 export async function jwt(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, JWT_USAGE, JWT_OPTIONS, {
+    exits: JWT_EXITS,
     positionals: ['[token]'],
     replaces: 'pasting a token into jwt.io or decoding its segments with base64 and jq',
     examples: ['dev jwt eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3MDAwMDAwMDB9.c2ln', ['pbpaste | dev jwt --json', 'for a script']],
@@ -155,8 +160,9 @@ export async function jwt(args: string[]): Promise<number> {
 
 const TS_USAGE = `dev ts [value]: a time as local and UTC dates, whatever it is written as
 
-The value is epoch seconds or milliseconds (told apart by size: from 1e11 up it is milliseconds), an ISO date or date-time (read in the local zone when it gives none), or a duration such as 90m or 2h30m, shown with the date that far from now. Without a value it is now; "-" reads the value on stdin.
-Exits 0 when it converted the value, 1 when it is none of those, 2 on a usage error.`
+The value is epoch seconds or milliseconds (told apart by size: from 1e11 up it is milliseconds), an ISO date or date-time (read in the local zone when it gives none), or a duration such as 90m or 2h30m, shown with the date that far from now. Without a value it is now; "-" reads the value on stdin.`
+
+const TS_EXITS: ExitRow[] = [[0, 'it converted the value'], [1, 'it is none of those'], [2, 'a usage error']]
 
 const TS_OPTIONS = {
   zone: ZONE_OPTION,
@@ -165,6 +171,7 @@ const TS_OPTIONS = {
 
 export async function ts(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, TS_USAGE, TS_OPTIONS, {
+    exits: TS_EXITS,
     positionals: ['[value]'],
     replaces: 'date -d @<seconds> and date -u, and doing the milliseconds division by hand',
     examples: ['dev ts 1700000000', ['dev ts 2h30m', 'the date 2h30m from now'], ['dev ts 2024-05-06T08:09:10Z --zone Europe/Paris', 'that instant in Paris']],
@@ -190,14 +197,15 @@ export async function ts(args: string[]): Promise<number> {
   return 0
 }
 
-const UUID_USAGE = `dev uuid [-n <count>] [--v7]: random UUIDs, version 4 or, with --v7, version 7 (time-ordered)
+const UUID_USAGE = `dev uuid [-n <count>] [--v7]: random UUIDs, version 4 or, with --v7, version 7 (time-ordered)`
 
-Exits 0 when it printed them, 2 on a usage error.`
+const UUID_EXITS: ExitRow[] = [[0, 'it printed them'], [2, 'a usage error']]
 
 const COUNT_OPTION = { type: 'string', short: 'n', description: 'how many to print (default 1)' } as const
 
 export function uuid(args: string[]): number {
   const { values } = parse(args, UUID_USAGE, { n: COUNT_OPTION, v7: { type: 'boolean', description: 'a version 7 UUID, which sorts by creation time' }, json: jsonOption('["uuid"]') }, {
+    exits: UUID_EXITS,
     positionals: [],
     replaces: 'uuidgen and python -c "import uuid"',
     examples: ['dev uuid', ['dev uuid -n 5 --v7', 'five time-ordered UUIDs']],
@@ -209,12 +217,13 @@ export function uuid(args: string[]): number {
   return 0
 }
 
-const ULID_USAGE = `dev ulid [-n <count>]: random ULIDs, 26 sortable characters of time and randomness
+const ULID_USAGE = `dev ulid [-n <count>]: random ULIDs, 26 sortable characters of time and randomness`
 
-Exits 0 when it printed them, 2 on a usage error.`
+const ULID_EXITS: ExitRow[] = [[0, 'it printed them'], [2, 'a usage error']]
 
 export function ulidCommand(args: string[]): number {
   const { values } = parse(args, ULID_USAGE, { n: COUNT_OPTION, json: jsonOption('["ulid"]') }, {
+    exits: ULID_EXITS,
     positionals: [],
     replaces: 'installing a ulid package to mint one',
     examples: ['dev ulid', ['dev ulid -n 3', 'three ULIDs']],
@@ -234,8 +243,9 @@ function printIds(ids: string[], json: boolean): void {
 
 const B64_USAGE = `dev b64 [-d] [--url] [text]: base64 of the text, or with -d the text behind a base64 one
 
-The text is the argument or what is piped on stdin, taken as is (a piped trailing newline is encoded, as base64 does). With --url the output is URL-safe and unpadded. Decoding takes either alphabet, padded or not, and writes the raw bytes.
-Exits 0 when it printed the result, 1 when -d is given text that is not base64, 2 on a usage error.`
+The text is the argument or what is piped on stdin, taken as is (a piped trailing newline is encoded, as base64 does). With --url the output is URL-safe and unpadded. Decoding takes either alphabet, padded or not, and writes the raw bytes.`
+
+const B64_EXITS: ExitRow[] = [[0, 'it printed the result'], [1, '-d is given text that is not base64'], [2, 'a usage error']]
 
 const B64_OPTIONS = {
   decode: { type: 'boolean', short: 'd', description: 'decode instead of encode' },
@@ -245,6 +255,7 @@ const B64_OPTIONS = {
 
 export async function b64(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, B64_USAGE, B64_OPTIONS, {
+    exits: B64_EXITS,
     positionals: ['[text]'],
     replaces: 'base64 and base64 -d, which leave the URL-safe alphabet to tr',
     examples: ['dev b64 hello', ['echo aGVsbG8 | dev b64 -d', 'decoded, padding optional']],
@@ -274,11 +285,13 @@ export async function b64(args: string[]): Promise<number> {
 
 const URL_USAGE = `dev url [url]: the parts of a URL and its query decoded, one per line
 
-The URL is the argument or what is piped on stdin, and has to include its scheme.
-Exits 0 when it printed the parts, 1 when the text is not a URL, 2 on a usage error.`
+The URL is the argument or what is piped on stdin, and has to include its scheme.`
+
+const URL_EXITS: ExitRow[] = [[0, 'it printed the parts'], [1, 'the text is not a URL'], [2, 'a usage error']]
 
 export async function url(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, URL_USAGE, { json: jsonOption('{href, protocol, username, password, host, hostname, port, pathname, query: [{key, value}], hash}') }, {
+    exits: URL_EXITS,
     positionals: ['[url]'],
     replaces: 'reading a long query string by eye or decoding it with python urllib',
     examples: ['dev url "https://example.com:8443/a%20b?q=x%26y&page=2#top"', ['dev url "https://example.com/?a=1" --json', 'for a script']],
@@ -300,12 +313,13 @@ export async function url(args: string[]): Promise<number> {
   return 0
 }
 
-const HASH_USAGE = `dev hash <sha256|sha1|md5|sha512> [file]: the hex digest of a file, or of what is piped on stdin
+const HASH_USAGE = `dev hash <sha256|sha1|md5|sha512> [file]: the hex digest of a file, or of what is piped on stdin`
 
-Exits 0 when it printed the digest, 1 when the file does not exist, 2 on a usage error.`
+const HASH_EXITS: ExitRow[] = [[0, 'it printed the digest'], [1, 'the file does not exist'], [2, 'a usage error']]
 
 export async function hash(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, HASH_USAGE, { json: jsonOption('{algorithm, hash, bytes}') }, {
+    exits: HASH_EXITS,
     positionals: ['<algorithm>', '[file]'],
     candidates: { '<algorithm>': () => [...ALGORITHMS] },
     replaces: 'sha256sum, sha1sum and md5sum, which print the file name beside the digest',
@@ -339,11 +353,13 @@ export async function hash(args: string[]): Promise<number> {
 
 const IP_USAGE = `dev ip [-4|-6]: the public IP address of this host, as a web service sees it
 
--4 or -6 asks over that IP family only, which fails when the host has no route over it.
-Exits 0 when it printed the address, 1 when the service could not be reached, 2 on a usage error.`
+-4 or -6 asks over that IP family only, which fails when the host has no route over it.`
+
+const IP_EXITS: ExitRow[] = [[0, 'it printed the address'], [1, 'the service could not be reached'], [2, 'a usage error']]
 
 export async function ip(args: string[]): Promise<number> {
   const { values } = parse(args, IP_USAGE, { 4: { type: 'boolean', short: '4', description: 'over IPv4 only' }, 6: { type: 'boolean', short: '6', description: 'over IPv6 only' }, json: jsonOption('{ip, family?}') }, {
+    exits: IP_EXITS,
     replaces: 'curl https://ipecho.net/plain typed from memory',
     examples: ['dev ip', ['dev ip -6', 'the IPv6 address']],
   })
