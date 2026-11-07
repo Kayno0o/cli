@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { list } from '../src/cli-bin'
-import { describeBin } from '../src/list'
+import { describeBin, filterBins } from '../src/list'
 
 const temp = tempDirs()
 
@@ -69,5 +69,24 @@ describe('cli list', () => {
     expect(result).toBe(0)
     expect(lines).toContain('gst the repository in one line; instead of git status --short')
     expect(lines).toContain('gc not installed: bun install -g @kaynooo/cli-git')
+  })
+})
+
+describe('filterBins', () => {
+  const listed = [
+    { bin: 'gst', package: '@kaynooo/cli-git', installed: true, summary: 'the repository in one line', replaces: 'git status --short' },
+    { bin: 'gl', package: '@kaynooo/cli-gitlab', installed: true, summary: 'waits for a pipeline' },
+    { bin: 'db', package: '@kaynooo/cli-db', installed: true, summary: 'read-only SQL', replaces: 'psql' },
+  ]
+
+  test('keeps everything without a word', () => {
+    expect(filterBins(listed, undefined)).toEqual(listed)
+  })
+
+  test('matches the name\'s start, the package, the summary and the "instead of" in any case', () => {
+    expect(filterBins(listed, 'GIT').map(each => each.bin)).toEqual(['gst', 'gl'])
+    expect(filterBins(listed, 'sql').map(each => each.bin)).toEqual(['db'])
+    expect(filterBins(listed, 'psql').map(each => each.bin)).toEqual(['db'])
+    expect(filterBins(listed, 'zzz')).toEqual([])
   })
 })

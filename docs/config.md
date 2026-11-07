@@ -6,7 +6,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 
 | File | Read by | Keys |
 |---|---|---|
-| `~/.config/kaynooo-cli/config.json` | `doctor`, `pkg`, `repos`, `sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it) |
+| `~/.config/kaynooo-cli/config.json` | `doctor`, `gcl`, `pkg`, `repos`, `sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: the host `gcl owner/name` clones from, git.kaynooo.fr by default |
 | `~/.config/kaynooo-cli/theme.json` | every bin | `preset` (`default`, `ascii`, `mono`), `colors`, `glyphs`, `accents`, `bins`: see the kit README |
 | `.kaynooo/theme.json` | every bin | the same, found upward from the current folder to the repository root, laid over the user file |
 | `~/.config/kaynooo-cli/ft.json` | `ft` | `remoteHost`: the ssh host `ft remote` switches alias origins to (the older `~/.config/ft/config.json` is read when this one is missing) |

@@ -1,6 +1,6 @@
 # doctor
 
-`doctor` checks a host's @kaynooo/cli-* install in one call: one line per check, the command that fixes a failing one beside it. The package also ships a second bin, `cli` (`cli stats`, `cli list`, below), which is not `doctor`.
+`doctor` checks a host's @kaynooo/cli-* install in one call: one line per check, the command that fixes a failing one beside it. The package also ships a second bin, `cli` (`cli stats`, `cli list`, `cli find`, below), which is not `doctor`.
 
 ```sh
 bun install -g @kaynooo/cli-doctor
@@ -62,7 +62,11 @@ Every bin records each run in `~/.local/state/kaynooo-cli/usage.jsonl`: the bin,
 
 ```sh
 cli list         # every bin in one line: what it does; instead of what
+cli list git     # the bins whose name starts with the word, or whose package, summary or "instead of" holds it
 cli list --json  # [{bin, package, installed, synopsis?, summary?, replaces?, examples?}]
+cli              # on a terminal, a picker over the installed bins: the preview is the highlighted bin's --help, enter prints it
 ```
+
+A bare `cli` is `cli find [word]`: the picker on a terminal, the same list as `cli list` anywhere else.
 
 Each line is read from the bin's own `--help`, run with `KIT_HELP=json` (see the kit README), so it cannot drift from the usage and follows the installed version. A bin installed from before that prints its text help, whose first line is kept; one not installed is listed with the command installing it. The repo's `tests/describe.test.ts` holds every bin to a summary, a `replaces` and two examples naming it.

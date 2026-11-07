@@ -28,3 +28,13 @@ export async function describeBin(host: Host, bin: string, name: string): Promis
 export async function listBins(host: Host): Promise<Listed[]> {
   return Promise.all(Object.entries(TOOLS).flatMap(([name, bins]) => bins.map(async bin => describeBin(host, bin, name))))
 }
+
+/** The bins a word narrows the list to: those whose name starts with it, or whose package, summary or "instead of" holds it, in any case. */
+export function filterBins(listed: readonly Listed[], word: string | undefined): Listed[] {
+  if (word === undefined || word === '')
+    return [...listed]
+
+  const wanted = word.toLowerCase()
+
+  return listed.filter(each => each.bin.startsWith(wanted) || [each.package, each.summary, each.replaces].some(text => text?.toLowerCase().includes(wanted) === true))
+}
