@@ -1,5 +1,6 @@
 import type { Note } from './match'
 import type { Operator, Redirect, Word } from './shell'
+import { loadHelp } from './help'
 import { loadPage } from './man'
 import { explain } from './match'
 import { parseLine } from './shell'
@@ -9,6 +10,7 @@ export interface Gloss {
   // The page the options came from (`git-commit` for `git commit`), or undefined when there is none.
   page: string | undefined
   summary: string | undefined
+  source: 'man' | 'help' | undefined
   assigns: string[]
   notes: Note[]
   redirects: { token: string, text: string }[]
@@ -61,27 +63,44 @@ function describeSubcommand(name: string, word: Word | undefined, env: Record<st
   return page === undefined ? undefined : { page, used: `${name}-${word.text}` }
 }
 
-export function analyze(line: string, env: Record<string, string | undefined> = process.env, depth = 0): Line {
+function sourceOf(page: unknown, fromHelp: boolean): Gloss['source'] {
+  if (page === undefined)
+    return undefined
+
+  return fromHelp ? 'help' : 'man'
+}
+
+export interface AnalyzeSettings {
+  env?: Record<string, string | undefined>
+  // Reads the options of a command with no man page from its --help output, which runs the command.
+  runHelp?: boolean
+}
+
+export function analyze(line: string, settings: AnalyzeSettings = {}, depth = 0): Line {
+  const { env = process.env, runHelp = false } = settings
   const commands: Gloss[] = []
 
   for (const { command, next } of parseLine(line)) {
     const [head, second] = command.words
     const name = head?.text ?? ''
     const sub = head === undefined ? undefined : describeSubcommand(name, second, env)
-    const page = sub?.page ?? (head === undefined ? undefined : loadPage(name, env))
-    const words = command.words.slice(sub === undefined ? 1 : 2)
+    const manual = sub?.page ?? (head === undefined ? undefined : loadPage(name, env))
+    const page = manual ?? (runHelp && head !== undefined ? loadHelp(name, second?.text, env) : undefined)
+    const fromHelp = manual === undefined && page !== undefined
+    const words = command.words.slice(sub === undefined && !(fromHelp && page?.name.includes(' ')) ? 1 : 2)
     const notes: Note[] = []
 
     notes.push(...explain(words, page?.options ?? []))
 
     commands.push({
-      name: sub === undefined ? name : `${name} ${second?.text}`,
-      page: sub?.used ?? (page === undefined ? undefined : name),
+      name: sub === undefined && !(fromHelp && page?.name.includes(' ')) ? name : `${name} ${second?.text}`,
+      page: sub?.used ?? (page === undefined ? undefined : page.name),
+      source: sourceOf(page, fromHelp),
       summary: page?.summary,
       assigns: command.assigns.map(word => word.text),
       notes,
       redirects: command.redirects.map(describeRedirect),
-      substitutions: depth >= MAX_DEPTH ? [] : command.substitutions.map(inner => analyze(inner, env, depth + 1)),
+      substitutions: depth >= MAX_DEPTH ? [] : command.substitutions.map(inner => analyze(inner, settings, depth + 1)),
       next,
     })
   }

@@ -85,8 +85,9 @@ function block(gloss: Gloss, stream: Stream, depth: number): string[] {
   const margin = INDENT.repeat(depth)
   const out: string[] = []
   const summary = gloss.summary ?? (gloss.page === undefined ? 'no man page found' : undefined)
+  const origin = gloss.source === 'help' ? '  (from --help)' : ''
 
-  out.push(`${margin}${role('accent', stream)(colors.bold(gloss.name))}${summary === undefined ? '' : colors.dim(`  ${summary}`)}`)
+  out.push(`${margin}${role('accent', stream)(colors.bold(gloss.name))}${summary === undefined ? '' : colors.dim(`  ${summary}`)}${colors.dim(origin)}`)
 
   const entries = [
     ...gloss.assigns.map(assign => ({ token: assign, paintToken: role('id', stream), text: 'sets this variable for the command only' })),

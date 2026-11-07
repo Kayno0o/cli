@@ -153,7 +153,8 @@ export function parseOptions(text: string): OptionDoc[] {
 
     const indent = indentOf(line)
 
-    if (indent === 0) {
+    // A help text may start its option lines at the margin; a man page never does.
+    if (indent === 0 && !trimmed.startsWith('-')) {
       close()
 
       continue

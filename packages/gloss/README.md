@@ -11,6 +11,7 @@ bun add -g @kaynooo/cli-gloss
 | `gloss 'tar -xzvf a.tgz -C /tmp'` | the command, then one row per option with its description, and the value each option takes |
 | `gloss -- git commit -am fix` | the words after `--` are the command line, so no quoting is needed |
 | `echo 'ls -la \| wc -l' \| gloss` | without arguments the command line is read from stdin |
+| `gloss --run-help 'rg -i foo'` | for a command with no man page, runs `rg --help` and reads its options. It runs the command, so only for ones you trust: a bare name found on `PATH`, no stdin, 3 seconds |
 | `gloss --json 'grep -in foo file'` | `{line, commands: [{name, page, summary, notes, redirects, substitutions, next}]}` |
 
 Pipes, `&&`, `||`, `;` and `&` split the line into commands and say what joins them. Redirects (`> out`, `2>&1`), leading variable assignments and `$(...)` substitutions are explained too, a substitution as a block of its own under the word that holds it.
