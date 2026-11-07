@@ -165,6 +165,10 @@
         "gc": "./dist/gc.js",
         "gb": "./dist/gb.js",
         "gp": "./dist/gp.js",
+        "gf": "./dist/gf.js",
+        "gcl": "./dist/gcl.js",
+        "gd": "./dist/gd.js",
+        "gu": "./dist/gu.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -175,6 +179,16 @@
       "version": "0.10.0",
       "bin": {
         "gl": "./dist/cli.js",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
+    "packages/gloss": {
+      "name": "@kaynooo/cli-gloss",
+      "version": "0.0.0",
+      "bin": {
+        "gloss": "./dist/gloss.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -390,6 +404,8 @@
     "@kaynooo/cli-git": ["@kaynooo/cli-git@workspace:packages/git"],
 
     "@kaynooo/cli-gitlab": ["@kaynooo/cli-gitlab@workspace:packages/gitlab"],
+
+    "@kaynooo/cli-gloss": ["@kaynooo/cli-gloss@workspace:packages/gloss"],
 
     "@kaynooo/cli-guard": ["@kaynooo/cli-guard@workspace:packages/guard"],
 

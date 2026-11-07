@@ -22,6 +22,7 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 | [`@kaynooo/cli-changelog`](packages/changelog) | `changelog` | a release's notes generated from its conventional commits and published as a Forgejo release, posted to Discord too; a release undone |
 | [`@kaynooo/cli-arc`](packages/arc) | `arc` | a folder packed into a `.tar.zst` verified file by file before it is deleted, unpacked without overwriting anything, any other archive extracted |
 | [`@kaynooo/cli-dev`](packages/dev) | `dev` | small developer utilities: random passwords and bcrypt hashes, JWT decoding, timestamps, UUIDs and ULIDs, base64, URL parts, file hashes |
+| [`@kaynooo/cli-gloss`](packages/gloss) | `gloss` | explains a shell command line, each option matched to its man page |
 | [`@kaynooo/cli-pick`](packages/pick) | `pick` | a themed fuzzy selector, lines on stdin and the chosen one on stdout |
 | [`@kaynooo/cli-probe`](packages/probe) | `probe` | a site's HTTP version, redirects, timings, TLS certificate and notable headers in one call |
 | [`@kaynooo/cli-proc`](packages/proc) | `proc`, `pid`, `ports`, `procs` | a process inspected from /proc (executable, parents, memory, limits, listening ports, masked environment); who listens on a port, Docker-published ports resolved to their compose service, with a safe `--kill`; leftover or heavy dev processes grouped by origin and cleaned dry-run first |

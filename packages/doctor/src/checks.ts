@@ -39,6 +39,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-forgejo': ['ft'],
   '@kaynooo/cli-git': ['gst', 'gc', 'gb', 'gp', 'gf', 'gcl', 'gd', 'gu'],
   '@kaynooo/cli-gitlab': ['gl'],
+  '@kaynooo/cli-gloss': ['gloss'],
   '@kaynooo/cli-guard': ['guard'],
   '@kaynooo/cli-out': ['out'],
   '@kaynooo/cli-dev': ['dev'],

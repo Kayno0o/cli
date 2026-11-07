@@ -25,6 +25,7 @@ export const ABOUT: Record<string, string> = {
   '@kaynooo/cli-forgejo': 'Forgejo CI runs, logs, releases and issue checklists',
   '@kaynooo/cli-git': 'repository state in one line, commits of exact paths, a branch picker',
   '@kaynooo/cli-gitlab': 'GitLab pipelines and their failed tests',
+  '@kaynooo/cli-gloss': 'explains a shell command line from its man pages',
   '@kaynooo/cli-guard': 'the safety rules a Claude Code Bash call is held to',
   '@kaynooo/cli-out': 'shortens a noisy command\'s output, keeping the errors',
   '@kaynooo/cli-pick': 'a fuzzy selector for pipes',

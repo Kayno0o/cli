@@ -243,6 +243,46 @@ gc "fix(api): retry a timed-out fetch" -- src/api.ts
 gc "feat(ui): a dark theme" -m "The toggle sits in the header." --ticket "#12 - Dark theme" -- src/theme.ts src/header.ts  # a body line and a ticket
 ```
 
+## gcl
+
+clones a repository into the workspace folder and prints where it landed. Package `git`.
+
+Instead of: git clone with the url and the folder typed out, then a cd
+
+```sh
+gcl <repo> [dir]
+gcl kaynooo/cli
+gcl git@github.com:oven-sh/bun.git  # an scp address
+gcl kaynooo/cli ~/tmp/cli  # a folder of your own
+```
+
+## gd
+
+what changed in the tracked files, per file with its added and removed lines, then the patch of the paths given. Package `git`.
+
+Instead of: git diff --stat, git diff --cached --stat and then git diff <path>
+
+```sh
+gd [path]...
+gd
+gd src/a.ts  # the patch of one file
+gd --staged -p  # the patch of everything staged
+gd --ref main  # the working tree against main
+```
+
+## gf
+
+fetches with prune and fast-forwards the current branch onto its upstream, saying what came in. Package `git`.
+
+Instead of: git fetch --prune, git pull --ff-only and a git -C <repo> pull per nested repository
+
+```sh
+gf [dir]...
+gf
+gf --repos  # every repository nested in this one
+gf --no-pull  # fetch and say how far behind the branch is
+```
+
 ## gl
 
 GitLab pipelines over glab, run from a repository whose remote is on GitLab. Package `gitlab`.
@@ -253,6 +293,18 @@ Instead of: glab ci and glab api .../pipelines/<id>/jobs polled in a sleep loop
 gl <command> [options]
 gl ci  # wait for the pipeline of origin's tip, failed tests printed
 gl logs 1234 -j test  # one job's failed tests
+```
+
+## gloss
+
+explains a shell command line, each option matched to what its man page says. Package `gloss`.
+
+Instead of: explainshell in a browser, reading man pages for each flag
+
+```sh
+gloss [options] <command line>
+gloss 'tar -xzvf a.tgz -C /tmp'
+gloss -- git commit -am fix
 ```
 
 ## gp
@@ -281,6 +333,19 @@ gst [-n N]
 gst
 gst -n 5  # with the last five commits
 gst --repos  # the repositories nested in this one
+```
+
+## gu
+
+undoes changes to the paths given, keeping what it takes away. Package `git`.
+
+Instead of: git restore, git restore --staged and git reset --soft HEAD~1 typed blind
+
+```sh
+gu <path>...
+gu src/a.ts  # discard its unstaged changes, saved as a patch
+gu --staged src/a.ts  # unstage it
+gu --commit  # undo the last commit, changes staged
 ```
 
 ## guard

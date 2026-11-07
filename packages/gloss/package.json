@@ -1,0 +1,40 @@
+{
+  "name": "@kaynooo/cli-gloss",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "gloss: explains a shell command line, each word matched to what its man page says.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/gloss#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/gloss"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "explainshell",
+    "man",
+    "shell"
+  ],
+  "bin": {
+    "gloss": "./dist/gloss.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/gloss.ts --target bun --outdir dist",
+    "gloss": "$npm_execpath src/gloss.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
