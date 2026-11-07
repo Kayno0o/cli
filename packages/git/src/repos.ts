@@ -3,6 +3,7 @@ import type { Status } from './status'
 import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
+import { fail } from '@kaynooo/cli-kit'
 import { git } from './git'
 import { parseStatus } from './status'
 
@@ -93,4 +94,27 @@ export function changesOf(status: Status): string {
 
 export function branchOf(status: Status): string {
   return status.branch === '(detached)' ? `detached at ${status.oid.slice(0, 7)}` : status.branch
+}
+
+/** The repositories a command works on: those below the dirs with `all`, else the toplevel of each dir (the current one by default); ends the command outside a repository. */
+export async function dirsOf(positionals: string[], all: boolean): Promise<string[]> {
+  const asked = positionals.length > 0 ? positionals : ['.']
+  let dirs: string[]
+
+  if (all) {
+    dirs = await reposOf(positionals)
+  }
+  else {
+    const found = await Promise.all(asked.map(async dir => toplevelOf(dir)))
+
+    if (found.includes(undefined))
+      fail(`not inside a git repository: ${asked.filter((_, at) => found[at] === undefined).join(', ')}`)
+
+    dirs = [...new Set(found as string[])]
+  }
+
+  if (dirs.length === 0)
+    fail(`no git repository at or below ${positionals.length === 0 ? 'the current directory' : positionals.join(', ')}`)
+
+  return dirs
 }

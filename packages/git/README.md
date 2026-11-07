@@ -1,4 +1,4 @@
-# gst, gc, gb and gp
+# gst, gc, gb, gp, gf, gcl, gd and gu
 
 Git for Claude Code, where a session would otherwise chain `git status --short` and `git log --oneline` to read the state, or `git add <paths> && git status && git commit -m ...` to commit and have the commit bounced over its message.
 
@@ -41,6 +41,39 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 - A branch checked out in another worktree needs a `cd`, which a command cannot do for its shell: `gb` prints the worktree's path on stdout and a hint on stderr.
 - Hidden flags for wrappers: `--emit` (with any of the above) prints the command as lines for a shell function to run, `--list` the rows as JSON for term, `--names` the branches with their last commit for shell completions, `--show <branch>` the preview and `--fetch` what ctrl-r runs.
 - Exit codes: the git command's, 1 when no branch is picked or found, 2 outside a repository.
+
+## gf
+
+`gf [dir]...` fetches with prune, then fast-forwards the current branch onto its upstream, and prints what came in (`main <- origin/main, 2 commits`). `--repos` (`-r`) does every repository `gst --repos` lists; `--no-pull` fetches only and says how far behind the branch is.
+
+- It never merges or rebases: a branch that has diverged, or a working tree the fast-forward would overwrite, is refused and left as it was, with git's reason.
+- A detached HEAD, a branch with no upstream and one whose upstream is gone are fetched only, saying so.
+- `--json` prints `{path, branch, upstream, commits, outcome, reason?}` per repository, `outcome` being `updated`, `current`, `fetched`, `skipped` or `refused`.
+- Exit codes: 0 every repository was fetched, and fast-forwarded when it could be, 1 a fetch failed, a branch diverged or a fast-forward was refused, 2 outside a repository or a usage error.
+
+## gcl
+
+`gcl <repo> [dir]` clones into `<workspace>/<name>` (the workspace `cli config` reports) or into `dir`, and prints the path on stdout, so `cd (gcl kaynooo/cli)` lands in it. `<repo>` is a URL, an scp-style address, a local path or `owner/name`, read as `https://git.kaynooo.fr/owner/name.git`; the `forge` key of `~/.config/kaynooo-cli/config.json` names another host.
+
+- A folder that already holds the repository is not cloned again: it is fetched and fast-forwarded as `gf` does. A folder holding anything else is refused, exit 1.
+- `--json` prints `{url, path, branch, head, outcome}`, `outcome` being `cloned` or `existing`.
+
+## gd
+
+`gd [path]...` lists the tracked files that changed with their added and removed lines, staged apart from unstaged; untracked files are `gst`'s. With paths, or `--patch` (`-p`), it prints the patch instead, through `view --diff` on a terminal when `view` is installed.
+
+- `--staged` (`-s`) keeps what is staged; `--ref <rev>` (`-r`) compares the working tree to a commit, branch or tag, and `--ref a..b` two commits.
+- `--json` prints `[{title, files: [{path, added, removed}]}]`, the counts being null for a binary file.
+- Exit codes: 0, 1 git refused (an unknown ref), 2 outside a repository or a usage error.
+
+## gu
+
+`gu <path>...` undoes changes and keeps what it takes away.
+
+- By default it discards the unstaged changes of the paths, after saving them as a patch in the git folder (`gu/<time>.patch`); `git apply` puts them back. Without a path it is a usage error, never "everything".
+- `--staged` unstages the paths, the working tree untouched.
+- `--commit` undoes the last commit, its changes left staged (the commit stays in the reflog). It refuses a commit the upstream already holds, a merge and the first commit.
+- Exit codes: 0, 1 a path with no change or a commit refused, 2 a usage error or outside a repository.
 
 ## Library
 

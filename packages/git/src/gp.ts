@@ -3,10 +3,10 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Repo } from './repos'
 import process from 'node:process'
-import { fail, jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
+import { jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { git } from './git'
-import { reposOf, repoState, toplevelOf } from './repos'
+import { dirsOf, repoState } from './repos'
 
 const USAGE = `gp [dir]...: pushes the current branch of the repository, or of each dir's, when it is ahead of its upstream as of the last fetch or has none yet, the latter with -u to origin (the only remote when there is no origin)
 
@@ -120,23 +120,7 @@ function line(result: Result): string[] {
 
 async function main(argv: string[]): Promise<number> {
   const { values, positionals, rest = [] } = parse(argv, USAGE, OPTIONS, { positionals: ['[dir]...'], rest: true, exits: EXITS, replaces: 'git push, git push -u origin <branch> and a git -C <repo> push per nested repository', examples: ['gp', ['gp --repos', 'every repository nested in this one'], ['gp --repos --dry-run', 'what would go out'], ['gp . ../other', 'this repository and a sibling'], ['gp -- --force-with-lease', 'flags for git push']] })
-  let dirs: string[]
-
-  if (values.repos === true) {
-    dirs = await reposOf(positionals)
-  }
-  else {
-    const found = await Promise.all((positionals.length > 0 ? positionals : ['.']).map(async dir => toplevelOf(dir)))
-
-    if (found.includes(undefined))
-      fail(`not inside a git repository: ${(positionals.length > 0 ? positionals : ['.']).filter((_, at) => found[at] === undefined).join(', ')}`)
-
-    dirs = [...new Set(found as string[])]
-  }
-
-  if (dirs.length === 0)
-    fail(`no git repository at or below ${positionals.length === 0 ? 'the current directory' : positionals.join(', ')}`)
-
+  const dirs = await dirsOf(positionals, values.repos === true)
   const repos = await Promise.all(dirs.map(repoState))
   const results: Result[] = []
 
