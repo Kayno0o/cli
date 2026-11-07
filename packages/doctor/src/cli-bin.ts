@@ -60,7 +60,7 @@ async function find(args: string[], host: Host = hostHere()): Promise<number> {
   const { positionals } = parse(args, FIND_USAGE, {}, { positionals: ['[word]'], exits: FIND_EXITS, examples: ['cli', ['cli find git', 'pick among the git family']] })
 
   if (process.stdin.isTTY !== true || process.stderr.isTTY !== true)
-    return list(positionals, host)
+    return list(positionals.filter(word => word !== undefined), host)
 
   const { cyan, dim } = paint(process.stderr)
   const listed = filterBins(await listBins(host), positionals[0]).filter(each => each.installed)
