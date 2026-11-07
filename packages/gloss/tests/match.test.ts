@@ -62,6 +62,20 @@ describe('parseOptions', () => {
   })
 })
 
+describe('parseOptions on a help text', () => {
+  test('starts an entry for a long-only option indented past the short flag above it', () => {
+    const help = [
+      'Flags:',
+      '  -v, --version                       Print version and exit',
+      '      --revision                      Print version with revision and exit',
+      '  -F, --filter=<val>                  Run a script',
+      '',
+    ].join('\n')
+
+    expect(parseOptions(help).map(option => [option.flags, option.text])).toEqual([[['-v', '--version'], 'Print version and exit'], [['--revision'], 'Print version with revision and exit'], [['-F', '--filter'], 'Run a script']])
+  })
+})
+
 describe('explain', () => {
   test('bundles short flags and takes the next word as a value', () => {
     expect(notes('demo -axf a.tar b')).toEqual([['option', '-a'], ['option', '-x'], ['option', '-f'], ['value', 'a.tar'], ['argument', 'b']])

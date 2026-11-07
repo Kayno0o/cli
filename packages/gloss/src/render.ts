@@ -65,7 +65,7 @@ function rows(entries: { token: string, paintToken: (text: string) => string, te
 }
 
 function painter(kind: NoteKind, stream: Stream): (text: string) => string {
-  const roles: Record<NoteKind, Parameters<typeof role>[0]> = { option: 'label', value: 'value', argument: 'path', unknown: 'warn' }
+  const roles: Record<NoteKind, Parameters<typeof role>[0]> = { option: 'id', value: 'value', argument: 'path', unknown: 'warn' }
 
   return role(roles[kind], stream)
 }
@@ -90,7 +90,7 @@ function block(gloss: Gloss, stream: Stream, depth: number): string[] {
   out.push(`${margin}${role('accent', stream)(colors.bold(gloss.name))}${summary === undefined ? '' : colors.dim(`  ${summary}`)}${colors.dim(origin)}`)
 
   const entries = [
-    ...gloss.assigns.map(assign => ({ token: assign, paintToken: role('id', stream), text: 'sets this variable for the command only' })),
+    ...gloss.assigns.map(assign => ({ token: assign, paintToken: role('value', stream), text: 'sets this variable for the command only' })),
     ...gloss.notes.map(note => ({ token: note.token, paintToken: painter(note.kind, stream), text: noteText(note) })),
     ...gloss.redirects.map(redirect => ({ ...redirect, paintToken: role('path', stream) })),
   ]

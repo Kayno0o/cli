@@ -135,7 +135,8 @@ function indentOf(line: string): number {
 
 export function parseOptions(text: string): OptionDoc[] {
   const options: OptionDoc[] = []
-  let current: { doc: OptionDoc, indent: number, lines: string[] } | undefined
+  // `inline` marks a help-style entry, whose description follows its flags on the same line.
+  let current: { doc: OptionDoc, indent: number, inline: boolean, lines: string[] } | undefined
 
   const close = (): void => {
     if (current !== undefined) {
@@ -160,13 +161,15 @@ export function parseOptions(text: string): OptionDoc[] {
       continue
     }
 
-    if (trimmed.startsWith('-') && (current === undefined || indent <= current.indent)) {
+    if (trimmed.startsWith('-')) {
       const [head = '', ...rest] = trimmed.split(HEAD_SPLIT)
       const parsed = parseHead(head)
+      // In a help text a long-only option is indented past the `-v, ` of the one above it, so a deeper line with its own description still starts an entry.
+      const starts = current === undefined || indent <= current.indent || (current.inline && rest.length > 0)
 
-      if (parsed !== undefined) {
+      if (parsed !== undefined && starts) {
         close()
-        current = { doc: { ...parsed, text: '' }, indent, lines: rest }
+        current = { doc: { ...parsed, text: '' }, indent, inline: rest.length > 0, lines: rest }
 
         continue
       }
