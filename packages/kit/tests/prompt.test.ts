@@ -334,10 +334,34 @@ describe('a resize while asking', () => {
     stderr.columns = 20
     stderr.emit('resize')
 
-    expect(raw.join('')).toContain('\r\x1B[0J')
+    expect(raw.join('')).toStartWith('\x1B[?2026h\r')
+    expect(raw.join('')).toContain('\x1B[0J')
 
     stdin.emit('data', Buffer.from('\x03'))
     await running
+  })
+})
+
+describe('a redraw', () => {
+  it('overwrites each row and erases only past it, so the frame never shows blank', async () => {
+    const { fake, raw } = terminal([DOWN, '\r'])
+
+    await select('pick', CHOICES, { terminal: fake })
+
+    const moved = raw[2]!
+
+    expect(moved).toStartWith('\x1B[?2026h\r')
+    expect(moved).toEndWith('\x1B[?2026l')
+    expect(moved.indexOf('\x1B[0J')).toBeGreaterThan(moved.lastIndexOf('\n'))
+    expect(moved.split('\n').every(line => line.includes('\x1B[K'))).toBe(true)
+  })
+
+  it('erases a row a line fills exactly before writing it, as an erase after would take its last cell', async () => {
+    const { fake, raw } = terminal(['\r'], { columns: 16 })
+
+    await input('twelve chars', { terminal: fake })
+
+    expect(raw[1]).toContain('\x1B[2K')
   })
 })
 

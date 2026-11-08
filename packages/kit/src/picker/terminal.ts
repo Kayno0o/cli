@@ -4,6 +4,7 @@ import { openSync } from 'node:fs'
 import process from 'node:process'
 import tty from 'node:tty'
 import { fail } from '../args'
+import { overwrite, SYNC_END, SYNC_START } from '../redraw'
 import { paint, role } from '../style'
 import { previewLines, runPreview } from './preview'
 import { chosen, createState, highlighted, parseKeys, press, withRows } from './state'
@@ -159,7 +160,7 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
       return
 
     const layout = layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined, settings.previewPosition)
-    let frame = HIDE_CURSOR
+    let frame = SYNC_START + HIDE_CURSOR
 
     // The terminal's cursor stays hidden at the start of the first line, where a terminal rewrapping the frame as it narrows cannot move it off that row, so one erase from there takes the frame whatever rows it spans; the caret is drawn as a reversed cell instead.
     if (reserved !== layout.height || clear) {
@@ -167,7 +168,7 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
       reserved = layout.height
     }
 
-    frame += `\r${render(state, layout, theme, preview).map(line => `\x1B[2K${line}`).join('\n')}${up(layout.height - 1)}\r\x1B[${caretColumn(state, layout)}G${CARET}\r`
+    frame += `\r${overwrite(render(state, layout, theme, preview), terminal.columns)}${up(layout.height - 1)}\r\x1B[${caretColumn(state, layout)}G${CARET}\r${SYNC_END}`
     terminal.write(frame)
   }
 

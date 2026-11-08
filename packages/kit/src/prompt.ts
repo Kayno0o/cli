@@ -7,6 +7,7 @@ import { fail } from './args'
 import { truncate } from './format'
 import { isInteractive } from './mode'
 import { parseKeys } from './picker/state'
+import { overwrite, SYNC_END, SYNC_START } from './redraw'
 import { paint } from './style'
 
 const WORDS = /\s+/
@@ -303,11 +304,12 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
   let outcome: Outcome | undefined
   // A terminal that does not say its size, as a pseudo-terminal may, answers 0.
   const columns = () => stderr.columns || 80
-  // The cursor rests at the start of the first line, so a terminal that rewraps the frame as it narrows cannot move it off that row, and one erase from there takes the frame however many rows it spans; the last frame ends on its last line instead.
+  // The cursor rests at the start of the first line, so a terminal that rewraps the frame as it narrows cannot move it off that row; the last frame ends on its last line instead.
+  // What lies below the frame's last line is erased after it, for a frame shorter than the one before.
   const draw = (state: State, last = false) => {
     const frame = render(colors, state, { columns: columns(), rows: stderr.rows || 24 })
 
-    stderr.write(`\r\x1B[0J${frame.join('\n')}${last || frame.length < 2 ? '' : `\x1B[${frame.length - 1}A`}${last ? '' : '\r'}`)
+    stderr.write(`${SYNC_START}\r${overwrite(frame, columns())}\x1B[0J${last || frame.length < 2 ? '' : `\x1B[${frame.length - 1}A`}${last ? '' : '\r'}${SYNC_END}`)
     current = state
   }
   const redraw = () => draw(current)
