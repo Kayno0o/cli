@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-changelog",
   "type": "module",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "description": "Generates a release's changelog from its conventional commits and publishes it as a Forgejo release.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
