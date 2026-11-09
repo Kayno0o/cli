@@ -168,14 +168,89 @@ async function closeWhenConnected(attempt: ReturnType<typeof Bun.connect>): Prom
   }
 }
 
-// The status once the URL answers 2xx, else what it answered or why it could not.
-export async function urlCheck(url: string, timeout: number): Promise<{ status: number } | { problem: string, isTimeout?: boolean }> {
+const STATUS_CLASS = /^([1-5])xx$/i
+const STATUS_RANGE = /^(\d{3})(?:-(\d{3}))?$/
+// About how much of a response body --body reads.
+const BODY_BYTES = 1024 * 1024
+
+export type StatusTest = (status: number) => boolean
+
+// `2xx`, `200-299`, `301` or a comma-separated list of them; undefined when the text is none of those.
+export function parseStatus(spec: string): StatusTest | undefined {
+  const tests: StatusTest[] = []
+
+  for (const part of spec.split(',').map(item => item.trim())) {
+    const klass = STATUS_CLASS.exec(part)
+    const range = STATUS_RANGE.exec(part)
+
+    if (klass !== null) {
+      const hundred = Number(klass[1])
+
+      tests.push(status => Math.floor(status / 100) === hundred)
+    }
+    else if (range !== null) {
+      const low = Number(range[1])
+      const high = Number(range[2] ?? range[1])
+
+      tests.push(status => status >= low && status <= high)
+    }
+    else {
+      return undefined
+    }
+  }
+
+  return (status: number) => tests.some(test => test(status))
+}
+
+export interface UrlExpect {
+  // The statuses that count; any 2xx without it.
+  status?: { test: StatusTest, spec: string }
+  // A pattern the first megabyte of the body must match.
+  body?: RegExp
+}
+
+async function readBody(response: Response): Promise<string> {
+  const reader = response.body?.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  let bytes = 0
+
+  while (reader !== undefined && bytes < BODY_BYTES) {
+    const { done, value } = await reader.read()
+
+    if (done)
+      break
+
+    bytes += value.length
+    text += decoder.decode(value, { stream: true })
+  }
+
+  await reader?.cancel()
+
+  return text
+}
+
+// The status once the URL answers what is expected (2xx unless told), else what it answered or why it could not.
+export async function urlCheck(url: string, timeout: number, expect: UrlExpect = {}): Promise<{ status: number } | { problem: string, isTimeout?: boolean }> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(timeout) })
+    // A 3xx expected is the answer itself, so redirects are left unfollowed then.
+    const wantsRedirect = expect.status !== undefined && Array.from({ length: 100 }, (_, index) => 300 + index).some(expect.status.test)
+    const response = await fetch(url, { signal: AbortSignal.timeout(timeout), redirect: wantsRedirect ? 'manual' : 'follow' })
+    const ok = expect.status === undefined ? response.ok : expect.status.test(response.status)
 
-    await response.body?.cancel()
+    if (!ok) {
+      await response.body?.cancel()
 
-    return response.ok ? { status: response.status } : { problem: `answered ${response.status}` }
+      return { problem: expect.status === undefined ? `answered ${response.status}` : `answered ${response.status}, expected ${expect.status.spec}` }
+    }
+
+    if (expect.body === undefined) {
+      await response.body?.cancel()
+
+      return { status: response.status }
+    }
+
+    return expect.body.test(await readBody(response)) ? { status: response.status } : { problem: `answered ${response.status} but the body does not match ${expect.body}` }
   }
   catch (error) {
     return { problem: error instanceof Error ? error.message : String(error), isTimeout: error instanceof Error && error.name === 'TimeoutError' }

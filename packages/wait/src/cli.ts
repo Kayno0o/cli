@@ -1,19 +1,19 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import type { ExitRow } from '@kaynooo/cli-kit'
-import type { Line } from './conditions'
+import type { Line, UrlExpect } from './conditions'
 import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, problem, runCommand, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
-import { FileWatch, portProblem, urlCheck } from './conditions'
+import { FileWatch, parseStatus, portProblem, urlCheck } from './conditions'
 import { exitCode, isTranscript, pidAlive, taskEnd, taskFile } from './task'
 
 const USAGE = `waitfor [options]: waits until a file shows a line, a port listens, a URL answers 2xx, a process exits or a command exits 0
 waitfor task <task id | file>: waits for a Claude Code background task to end (waitfor task --help)
 
-Every condition given must be met, or with --any the first of them to be. A --fail line in --file ends the wait at once. A timeout or a --fail line comes with an excerpt of what it saw last.
---json prints {met, ms, line} once met or on a --fail line, line being the last --until line or the --fail one as {number, text} (null when none), and the progress lines go to stderr.`
+Every condition given must be met, or with --any the first of them to be; --port and --url may be repeated, and --status and --body then apply to every --url. A --fail line in --file ends the wait at once. A timeout or a --fail line comes with an excerpt of what it saw last.
+--json prints {met, ms, line, conditions} once met or on a --fail line, conditions naming each one met as {name, ms}, line being the last --until line or the --fail one as {number, text} (null when none), and the progress lines go to stderr.`
 
 const TASK_USAGE = `waitfor task [options] <task id | file>: waits for a Claude Code background task to end, then prints its exit code, its last lines and the (fail) and error: lines above them
 
@@ -36,9 +36,11 @@ const OPTIONS = {
   file: { type: 'string', short: 'f', description: 'a log file to read, from its start, waiting for it to exist' },
   until: { type: 'string', short: 'u', description: 'a regular expression a line of --file must match' },
   fail: { type: 'string', short: 'e', description: 'a regular expression whose first matching line of --file is a failure' },
-  port: { type: 'string', short: 'p', description: 'a TCP port that must accept connections' },
+  port: { type: 'string', short: 'p', multiple: true, description: 'a TCP port that must accept connections, repeatable' },
   host: { type: 'string', short: 'H', description: 'the host of --port (127.0.0.1 and ::1)' },
-  url: { type: 'string', description: 'a URL that must answer 2xx' },
+  url: { type: 'string', multiple: true, description: 'a URL that must answer 2xx (or --status), repeatable' },
+  status: { type: 'string', description: 'the status a --url must answer instead of 2xx: 301, 200-299, 2xx or a comma list, for every --url' },
+  body: { type: 'string', description: 'a regular expression the first MiB of a --url body must match, for every --url' },
   pid: { type: 'string', description: 'a process id that must exit' },
   cmd: { type: 'string', short: 'c', description: 'a shell command that must exit 0, re-run every --interval' },
   interval: { type: 'string', description: 'how long between two runs of --cmd (1s)' },
@@ -47,6 +49,13 @@ const OPTIONS = {
   json: jsonOption('{met, ms, line}'),
   quiet: { type: 'boolean', short: 'q', description: 'no live progress line: only what was met and the failure' },
 } as const
+
+// A --port or --url being awaited: `left` is what it last saw, undefined once met.
+interface Probe {
+  name: string
+  port?: number
+  left: string | undefined
+}
 
 const POLL = 250
 const URL_TIMEOUT = 5000
@@ -153,16 +162,22 @@ async function main(args: string[]): Promise<number> {
   if (positionals.length > 0)
     fail(`unexpected argument ${positionals[0]}\n\n${USAGE}`)
 
-  if (values.until === undefined && values.port === undefined && values.url === undefined && values.pid === undefined && values.cmd === undefined)
+  const portTexts = values.port ?? []
+  const urlTexts = values.url ?? []
+
+  if (values.until === undefined && portTexts.length === 0 && urlTexts.length === 0 && values.pid === undefined && values.cmd === undefined)
     fail(`give --until with --file, --port, --url, --pid or --cmd\n\n${USAGE}`)
 
   if ((values.until !== undefined || values.fail !== undefined) !== (values.file !== undefined))
     fail('--until and --fail read the --file lines, and --file needs one of them')
 
-  if (values.host !== undefined && values.port === undefined)
+  if (values.host !== undefined && portTexts.length === 0)
     fail('--host goes with --port')
 
-  const conditions = [values.until, values.port, values.url, values.pid, values.cmd].filter(condition => condition !== undefined).length
+  if ((values.status !== undefined || values.body !== undefined) && urlTexts.length === 0)
+    fail('--status and --body go with --url')
+
+  const conditions = [values.until, ...portTexts, ...urlTexts, values.pid, values.cmd].filter(condition => condition !== undefined).length
 
   if (values.any === true && conditions < 2)
     fail('--any needs two or more of --until, --port, --url, --pid and --cmd')
@@ -170,18 +185,43 @@ async function main(args: string[]): Promise<number> {
   if (values.interval !== undefined && values.cmd === undefined)
     fail('--interval goes with --cmd')
 
-  const port = values.port === undefined ? undefined : wholeNumber(values.port, 'port', 0)
+  const ports = portTexts.map((text): Probe => {
+    const port = wholeNumber(text, 'port', 0)
 
-  if (port !== undefined && port > 65_535)
-    fail(`--port takes a port up to 65535, not ${port}`)
+    if (port > 65_535)
+      fail(`--port takes a port up to 65535, not ${port}`)
 
-  if (values.url !== undefined && !URL.canParse(values.url))
-    fail(`--url ${values.url} is no URL`)
+    return { name: String(port), port, left: 'not checked yet' }
+  })
+
+  for (const url of urlTexts) {
+    if (!URL.canParse(url))
+      fail(`--url ${url} is no URL`)
+  }
+
+  const statusTest = values.status === undefined ? undefined : parseStatus(values.status)
+
+  if (values.status !== undefined && statusTest === undefined)
+    fail(`--status takes a code, a range or a class such as 301, 200-299 or 2xx, not ${values.status}`)
+
+  const expect: UrlExpect = {}
+
+  if (values.status !== undefined && statusTest !== undefined)
+    expect.status = { test: statusTest, spec: values.status }
+
+  const body = regex(values.body, 'body')
+
+  if (body !== undefined)
+    expect.body = body
+
+  const urls = urlTexts.map((url): Probe => ({ name: url, left: 'not checked yet' }))
+  // Each condition met and when, for --json.
+  const metAt: { name: string, ms: number }[] = []
 
   const pid = values.pid === undefined ? undefined : wholeNumber(values.pid, 'pid', 0)
   // Without --host a server bound to ::1 only (`localhost` in vite or nuxt) counts as well.
   const hosts = values.host === undefined ? ['127.0.0.1', '::1'] : [values.host]
-  let host = hosts[0] ?? '127.0.0.1'
+
   const interval = duration(values.interval, 'interval', 1000)
   const isAny = values.any === true
   const timeout = duration(values.timeout, 'timeout', 5 * 60_000)
@@ -190,8 +230,7 @@ async function main(args: string[]): Promise<number> {
   const json = values.json === true
   const say = json ? console.error : console.log
   let matched: { number: number, text: string } | undefined
-  let portLeft = port === undefined ? undefined : 'not checked yet'
-  let urlLeft = values.url === undefined ? undefined : 'not checked yet'
+
   let isPidLeft = pid !== undefined
   let cmdLeft = values.cmd === undefined ? undefined : 'not run yet'
   let cmdRanAt = 0
@@ -203,8 +242,8 @@ async function main(args: string[]): Promise<number> {
       const waited = dim(formatElapsed(Date.now() - started))
       const left = [
         watch === undefined || watch.done ? undefined : `${watch.path}: ${watch.exists ? 'no --until line yet' : 'does not exist yet'}`,
-        portLeft === undefined ? undefined : `${host}:${port}: ${portLeft}`,
-        urlLeft === undefined ? undefined : `${values.url}: ${urlLeft}`,
+        ...ports.filter(probe => probe.left !== undefined).map(probe => `${hosts[0]}:${probe.port}: ${probe.left}`),
+        ...urls.filter(probe => probe.left !== undefined).map(probe => `${probe.name}: ${probe.left}`),
         isPidLeft ? `pid ${pid}: still running` : undefined,
         cmdLeft === undefined ? undefined : `\`${values.cmd}\`: ${cmdLeft}`,
       ]
@@ -232,41 +271,54 @@ async function main(args: string[]): Promise<number> {
         }
       }
 
-      if (port !== undefined && portLeft !== undefined) {
+      for (const probe of ports) {
+        if (probe.left === undefined)
+          continue
+
         for (const candidate of hosts) {
-          const problem = await portProblem(candidate, port)
+          const problem = await portProblem(candidate, probe.port ?? 0)
 
           if (candidate === hosts[0])
-            portLeft = problem
+            probe.left = problem
 
           if (problem === undefined) {
-            portLeft = undefined
-            host = candidate
-            say(`${host.includes(':') ? `[${host}]` : host}:${port} listening after ${formatDuration(Date.now() - started)}`)
+            const name = `${candidate.includes(':') ? `[${candidate}]` : candidate}:${probe.port}`
+
+            probe.left = undefined
+            probe.name = name
+            metAt.push({ name, ms: Date.now() - started })
+            say(`${name} listening after ${formatDuration(Date.now() - started)}`)
 
             break
           }
         }
       }
 
-      if (values.url !== undefined && urlLeft !== undefined) {
+      for (const probe of urls) {
+        if (probe.left === undefined)
+          continue
+
         const budget = Math.max(1, Math.min(URL_TIMEOUT, started + timeout - Date.now()))
-        const check = await urlCheck(values.url, budget)
+        const check = await urlCheck(probe.name, budget, expect)
         // a probe the deadline cut short says less than the answer before it
-        const isCutShort = 'problem' in check && check.isTimeout === true && budget < URL_TIMEOUT && urlLeft !== 'not checked yet'
+        const isCutShort = 'problem' in check && check.isTimeout === true && budget < URL_TIMEOUT && probe.left !== 'not checked yet'
 
         if (!isCutShort)
-          urlLeft = 'problem' in check ? check.problem : undefined
+          probe.left = 'problem' in check ? check.problem : undefined
 
-        if ('status' in check)
-          say(`${values.url} answered ${check.status} after ${formatDuration(Date.now() - started)}`)
+        if ('status' in check) {
+          metAt.push({ name: probe.name, ms: Date.now() - started })
+          say(`${probe.name} answered ${check.status} after ${formatDuration(Date.now() - started)}`)
+        }
       }
 
       if (pid !== undefined && isPidLeft) {
         isPidLeft = pidAlive(pid)
 
-        if (!isPidLeft)
+        if (!isPidLeft) {
+          metAt.push({ name: `pid ${pid}`, ms: Date.now() - started })
           say(`pid ${pid} exited after ${formatDuration(Date.now() - started)}`)
+        }
       }
 
       if (values.cmd !== undefined && cmdLeft !== undefined && Date.now() - cmdRanAt >= interval) {
@@ -280,21 +332,23 @@ async function main(args: string[]): Promise<number> {
 
         cmdRanAt = Date.now()
 
-        if (cmdLeft === undefined)
+        if (cmdLeft === undefined) {
+          metAt.push({ name: `\`${values.cmd}\``, ms: Date.now() - started })
           say(`\`${values.cmd}\` exited 0 after ${formatDuration(Date.now() - started)}`)
+        }
       }
 
       const isMet = [
         values.until !== undefined && (watch?.done ?? false),
-        port !== undefined && portLeft === undefined,
-        values.url !== undefined && urlLeft === undefined,
+        ports.some(probe => probe.left === undefined),
+        urls.some(probe => probe.left === undefined),
         pid !== undefined && !isPidLeft,
         values.cmd !== undefined && cmdLeft === undefined,
       ]
 
-      if (isAny ? isMet.includes(true) : (watch?.done ?? true) && portLeft === undefined && urlLeft === undefined && !isPidLeft && cmdLeft === undefined) {
+      if (isAny ? isMet.includes(true) : (watch?.done ?? true) && ports.every(probe => probe.left === undefined) && urls.every(probe => probe.left === undefined) && !isPidLeft && cmdLeft === undefined) {
         if (json)
-          printJson({ met: true, ms: Date.now() - started, line: matched ?? null })
+          printJson({ met: true, ms: Date.now() - started, line: matched ?? null, conditions: metAt })
 
         return 0
       }
@@ -314,11 +368,15 @@ async function main(args: string[]): Promise<number> {
   if (watch !== undefined && !watch.done)
     missing.push(watch.exists ? `no line of ${watch.path} matched --until` : `${watch.path} does not exist`)
 
-  if (portLeft !== undefined)
-    missing.push(`${host}:${port} is not listening (${portLeft})`)
+  for (const probe of ports) {
+    if (probe.left !== undefined)
+      missing.push(`${hosts[0]}:${probe.port} is not listening (${probe.left})`)
+  }
 
-  if (urlLeft !== undefined)
-    missing.push(`${values.url} ${urlLeft}`)
+  for (const probe of urls) {
+    if (probe.left !== undefined)
+      missing.push(`${probe.name} ${probe.left}`)
+  }
 
   if (isPidLeft)
     missing.push(`pid ${pid} is still running`)
