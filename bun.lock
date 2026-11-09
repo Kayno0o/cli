@@ -299,7 +299,7 @@
     },
     "packages/wait": {
       "name": "@kaynooo/cli-wait",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "bin": {
         "waitfor": "./dist/cli.js",
         "slot": "./dist/slot-cli.js",
