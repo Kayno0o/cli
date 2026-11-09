@@ -41,6 +41,27 @@ async function stagedElsewhere(paths: string[]): Promise<string[]> {
   return all.split('\0').filter(path => path !== '' && !ours.has(path))
 }
 
+// The old side of each staged rename whose new side is among the given paths: a rename is one change, which a pathspec on the new side alone would split.
+async function renameSources(paths: string[]): Promise<string[]> {
+  const fields = (await checked(['diff', '--cached', '-M', '--name-status', '-z'])).split('\0')
+  const sources: string[] = []
+
+  for (let i = 0; i < fields.length; i++) {
+    if (!RENAME.test(fields[i] ?? ''))
+      continue
+
+    const from = fields[i + 1] ?? ''
+    const to = fields[i + 2] ?? ''
+
+    if (paths.includes(to) && !paths.includes(from))
+      sources.push(from)
+
+    i += 2
+  }
+
+  return sources
+}
+
 // Puts the index back as it was for the given paths after a refused commit.
 async function unstage(paths: string[]): Promise<void> {
   const hasHead = (await git(['rev-parse', '--verify', '-q', 'HEAD'], LITERAL)).code === 0
@@ -58,12 +79,12 @@ async function main(argv: string[]): Promise<number> {
   const parsed = parse(argv, USAGE, OPTIONS, { rest: true, replaces: 'git add, git status and git commit chained', examples: ['gc "fix(api): retry a timed-out fetch" -- src/api.ts', ['gc "feat(ui): a dark theme" -m "The toggle sits in the header." --ticket "#12 - Dark theme" -- src/theme.ts src/header.ts', 'a body line and a ticket']] })
 
   const { values, positionals, rest = [] } = parsed
-  const paths = [...new Set(rest)]
+  const given = [...new Set(rest)]
 
   if (positionals.length !== 1)
     fail(`give the title as one quoted argument and the paths after --\n\n${USAGE}`)
 
-  if (paths.length === 0)
+  if (given.length === 0)
     fail(`give the paths to commit after --\n\n${USAGE}`)
 
   const title = positionals[0]?.trim() ?? ''
@@ -82,14 +103,16 @@ async function main(argv: string[]): Promise<number> {
   if (violation !== null)
     fail(`nothing staged: ${violation}`, 1)
 
-  const statuses = await Promise.all(paths.map(async path => checked(['status', '--porcelain', '--untracked-files=all', '--', path])))
-  const unchanged = paths.filter((_, i) => statuses[i] === '')
+  const statuses = await Promise.all(given.map(async path => checked(['status', '--porcelain', '--untracked-files=all', '--', path])))
+  const unchanged = given.filter((_, i) => statuses[i] === '')
   // A path whose only change is a staged deletion (a git rm, the old side of a git mv) is in neither the tree nor the index, so git add refuses it, while commit --only still takes it.
-  const addable = paths.filter((_, i) => !(statuses[i] ?? '').trimEnd().split('\n').every(line => line.startsWith('D ')))
+  const addable = given.filter((_, i) => !(statuses[i] ?? '').trimEnd().split('\n').every(line => line.startsWith('D ')))
 
   if (unchanged.length > 0)
     fail(`nothing staged: no change to commit in ${unchanged.join(', ')} (unchanged, ignored or missing)`, 1, runHint('gst', 'see what changed'))
 
+  const sources = await renameSources(given)
+  const paths = [...given, ...sources]
   const others = await stagedElsewhere(paths)
 
   if (others.length > 0)
@@ -136,7 +159,7 @@ async function main(argv: string[]): Promise<number> {
       printJson({ sha: (await checked(['rev-parse', 'HEAD'])).trim(), subject: head.slice(head.indexOf(' ') + 1), files: changes })
     }
     else if (values.quiet !== true) {
-      console.log([head, ...lines.filter(Boolean).map(fileLine)].join('\n'))
+      console.log([head, ...lines.filter(Boolean).map(fileLine), ...sources.map(from => `also committed ${from}, the other side of a staged rename`)].join('\n'))
     }
 
     return signals.signal === undefined ? 0 : exitCodeOf(null, signals.signal)

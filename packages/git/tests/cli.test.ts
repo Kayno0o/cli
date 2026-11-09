@@ -206,6 +206,16 @@ describe('gc', () => {
     expect(git('status', '--porcelain')).toBe('')
   })
 
+  test('given only the new side of a git mv, commits the old side with it', () => {
+    git('mv', 'base.ts', 'moved.ts')
+    const result = gc('refactor: move base', '--', 'moved.ts')
+
+    expect(result).toMatchObject({ code: 0, err: '' })
+    expect(result.out).toContain('  R base.ts -> moved.ts\n')
+    expect(result.out).toContain('also committed base.ts')
+    expect(git('status', '--porcelain')).toBe('')
+  })
+
   test('commits a path that was already staged on its own', () => {
     file('a.ts')
     git('add', 'a.ts')
