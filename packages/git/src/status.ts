@@ -36,7 +36,6 @@ export function stashOf(text: string): number {
   return Number(STASH.exec(text)?.[1] ?? 0)
 }
 
-
 // A path as git prints it, unquoted when it holds a quote, a backslash, a control character or, with core.quotePath, a non-ASCII byte written in octal.
 export function unquote(path: string): string {
   if (!path.startsWith('"') || !path.endsWith('"'))

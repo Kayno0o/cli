@@ -10,7 +10,7 @@ function packument(versions: NonNullable<Packument['versions']>): Packument {
   return { 'name': 'demo', 'dist-tags': { latest: names.at(-1)! }, 'time': Object.fromEntries(names.map(name => [name, OLD])), versions }
 }
 
-function warningsOf(versions: Packument['versions'], request = '2.0.0'): string[] {
+function warningsOf(versions: NonNullable<Packument['versions']>, request = '2.0.0'): string[] {
   return analyze({ spec: { name: 'demo', request }, packument: packument(versions), registry: 'registry.npmjs.org' }).warnings
 }
 

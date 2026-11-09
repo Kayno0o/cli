@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const MODS = join(homedir(), 'zshrc/dotfiles/claude/mods')
-const IMPORT = /^(?:import|export)\b[^'"\n]*?from '([^']+)'/gm
+const IMPORT = /^(?:import|export)\s[^'"\n]*from '([^']+)'/gm
 
 // The Claude Code mods carry copies of these sources, a first comment line naming the original; the manifest holds each source's sha256 as of the last sync.
 const manifest = await Bun.file(join(ROOT, 'tests/vendored.json')).json() as Record<string, { copy: string, sha256: string }>

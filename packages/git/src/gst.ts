@@ -7,8 +7,8 @@ import process from 'node:process'
 import { fail, jsonOption, paint, parse, printJson, role, runMain, table, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
 import { letter } from './colour'
 import { git } from './git'
-import { branchOf, changesOf, reposOf, repoState, trackingOf } from './repos'
 import { operationOf } from './operation'
+import { branchOf, changesOf, reposOf, repoState, trackingOf } from './repos'
 import { parseStatus, stashOf, summary } from './status'
 
 const USAGE = `gst [-n N]: the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked
