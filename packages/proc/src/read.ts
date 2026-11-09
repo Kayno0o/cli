@@ -143,13 +143,29 @@ export async function socketsOf(pid: number, root = '/proc'): Promise<Set<number
   return inodes
 }
 
-// Which pid holds each socket inode, for the processes whose fd directory can be read.
+// Which pid holds each socket inode, for the processes whose fd directory can be read. Forked workers share the listen socket of their master: the holder whose parent holds it too is passed over.
 export async function socketOwners(root = '/proc'): Promise<Map<number, number>> {
-  const owners = new Map<number, number>()
+  const holders = new Map<number, number[]>()
 
   for (const pid of await listPids(root)) {
     for (const inode of await socketsOf(pid, root))
-      owners.set(inode, pid)
+      holders.set(inode, [...holders.get(inode) ?? [], pid])
+  }
+
+  const owners = new Map<number, number>()
+  const parents = new Map<number, number | undefined>()
+
+  for (const [inode, pids] of holders) {
+    const [first = 0] = pids
+
+    if (pids.length > 1) {
+      for (const pid of pids) {
+        if (!parents.has(pid))
+          parents.set(pid, parseStat(await text(`${root}/${pid}/stat`) ?? '')?.ppid)
+      }
+    }
+
+    owners.set(inode, pids.find(pid => !pids.includes(parents.get(pid) ?? -1)) ?? first)
   }
 
   return owners
