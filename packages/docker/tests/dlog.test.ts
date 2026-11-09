@@ -122,3 +122,15 @@ describe('healthOf for a finished service', () => {
     expect(healthOf('running', { Service: 'a', State: 'running', Status: 'Up', Health: 'starting' }).fine).toBe(false)
   })
 })
+
+describe('errorLines with the wider error words', () => {
+  test('finds exception classes, errno names, counts and crashes', () => {
+    for (const line of ['java.lang.NullPointerException at Main', 'RuntimeException: boom', 'connect ECONNREFUSED 10.0.0.2:5432', 'listen EADDRINUSE: :::80', 'container OOMKilled', 'net::ERR_CONNECTION_RESET', '3 errors found', 'Segmentation fault (core dumped)', 'unhandled rejection', 'uncaught TypeError'])
+      expect(errorLines(line, 5).map(each => each.line), line).toEqual([line])
+  })
+
+  test('leaves counts of zero and config keys alone', () => {
+    for (const line of ['0 errors', 'no errors found', 'error_reporting = E_ALL', 'enabled eager mode'])
+      expect(errorLines(line, 5), line).toEqual([])
+  })
+})

@@ -31,7 +31,8 @@ const options = {
   'json': jsonOption('[{ key, state, health, status, errors: [{ line, count }], tail, down, unhealthy }]'),
 } as const
 
-const ERROR = /\b(?:error|err|fatal|exception|panic|critical|crit|traceback|failed|failure|refused|denied|timeout|timed out|oom|killed)\b/i
+// The count forms "0 errors" and "no errors" are left out, and an underscore keeps a config key such as error_reporting out too.
+const ERROR = /(?<!\b(?:0|no) )\berrors?\b|\b(?:err|fatal|panic|critical|crit|traceback|failed|failure|refused|denied|timeout|timed out|oom|killed|oomkilled|segfault|segmentation fault|unhandled|uncaught)\b|\w*exception\b|\bERR_\w+|\bE(?:CONN|ADDR|NOENT|ACCES|PIPE|TIMEDOUT|HOSTUNREACH|NETUNREACH|MFILE|NOMEM|NOSPC)\w*/i
 const WARNING = /\b(?:warn|warning|deprecated|deprecation)\b/i
 const LEVELS = { error: ERROR, warn: new RegExp(`${ERROR.source}|${WARNING.source}`, 'i') }
 const TAIL = configuredNumber('dlog', 'tail', 500)
