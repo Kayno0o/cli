@@ -11,6 +11,8 @@ export type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'ente
 export interface Row {
   hidden: string[]
   cells: string[]
+  /** The text the query is matched against, in place of the first `searched` cells. */
+  search?: string
 }
 
 export interface State {
@@ -180,7 +182,7 @@ function lay(rows: readonly Row[], searched: number): Laid[] {
   const parsed = rows.map(row => row.cells.map(styled))
   const widths = (parsed[0] ?? []).map((_, column) => Math.max(...parsed.map(cells => Bun.stringWidth(cells[column]?.text ?? ''))))
 
-  return parsed.map((cells) => {
+  return parsed.map((cells, at) => {
     let text = ''
     const styles: string[] = []
     let colored = false
@@ -206,7 +208,7 @@ function lay(rows: readonly Row[], searched: number): Laid[] {
       }
     }
 
-    return { text, styles: colored ? styles : undefined, searchable: text.slice(0, searchEnd) }
+    return { text, styles: colored ? styles : undefined, searchable: rows[at]!.search ?? text.slice(0, searchEnd) }
   })
 }
 

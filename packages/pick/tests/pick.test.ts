@@ -28,3 +28,29 @@ describe('pick', () => {
     expect(pick(['--height', 'tall'], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('--height') })
   })
 })
+
+describe('pick fzf options', () => {
+  test('--filter prints every match best first and exits 1 with none', () => {
+    expect(pick(['--filter', 'b'], 'xxbz\nabc\nq\n')).toMatchObject({ code: 0, out: 'abc\nxxbz\n' })
+    expect(pick(['--filter', 'zzz'], 'a\n')).toMatchObject({ code: 1, out: '' })
+  })
+
+  test('--select-1 and --exit-0 take a lone match or none without a selector', () => {
+    expect(pick(['--select-1', '--query', 'b'], 'a\nb\n')).toMatchObject({ code: 0, out: 'b\n' })
+    expect(pick(['--exit-0', '--query', 'zzz'], 'a\n')).toMatchObject({ code: 1, out: '' })
+  })
+
+  test('--nth searches the named fields, the whole line is printed', () => {
+    expect(pick(['--delimiter', ':', '--nth', '2', '--filter', 'b'], 'b:x\na:b\n')).toMatchObject({ code: 0, out: 'a:b\n' })
+    expect(pick(['--nth', '1', '--filter', 'zz'], 'a zz\n')).toMatchObject({ code: 1 })
+    expect(pick(['--nth', 'x'], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('--nth') })
+  })
+
+  test('--read0 and --print0 use NUL between lines', () => {
+    expect(pick(['--read0', '--print0', '--multi', '--filter', 'a'], 'a b\0xa\0c\0')).toMatchObject({ code: 0, out: 'a b\0xa\0' })
+  })
+
+  test('--header and --with-nth are accepted', () => {
+    expect(pick(['--header', 'Pick one', '--with-nth', '2', '--filter', 'b'], 'a b\n')).toMatchObject({ code: 0, out: 'a b\n' })
+  })
+})

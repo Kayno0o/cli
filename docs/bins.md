@@ -19,7 +19,7 @@ arc extract release.tar.gz  # any common archive
 
 ## audit
 
-the known vulnerabilities of the Bun repositories under root (the current folder by default), one table per repository. Package `workspace`.
+the known vulnerabilities of the Bun, Composer, Cargo and uv repositories under root (the current folder by default), one table per repository. Package `workspace`.
 
 Instead of: a bun audit run in each repository and a read of every advisory to find what is worth fixing
 
@@ -162,7 +162,7 @@ Instead of: docker compose exec <service> bash, logs -f and restart typed per se
 dx [service] [action]
 dx
 dx php  # a shell in php, or php brought up when stopped
-dx php logs  # follow its logs
+dx php logs  # follow its logs on a terminal, print them once without one
 dx php logs --tail 50 --no-follow  # the last 50 lines, then exit
 dx -  # the last action again
 ```
@@ -423,6 +423,8 @@ Instead of: fzf for a quick choice in a pipe, select in a shell script
 pick [options]
 git branch --format='%(refname:short)' | pick
 ls | pick --multi --preview 'head -20 {}'
+git branch | pick --filter main  # every match, best first, no terminal
+ps aux | pick --with-nth 2,11.. --nth 11..  # show some fields, search others
 ```
 
 ## pid
