@@ -36,6 +36,7 @@ Exceptions, each stated in the command's own `Exit codes:`:
 
 - A bin running another command (`base`, `proof`, `out`, `slot`, `dc`, `dx`, `sf`, `gb`, `gc` on a signal) exits with that command's code: 126 when it cannot be run, 127 when it cannot be started, 128 plus the signal when interrupted.
 - `probe` exits 1 when the site could not be reached, that being its finding, and 0 when it answered, whatever it warns about.
+- A cancelled picker or prompt (`pick`, `ev set`, `dev password --bcrypt -`, `dev jwt`) exits 130, as Ctrl+C would.
 - `guard hook` never exits 2, which would block the tool call it vets.
 - `waitfor` and `ft watch`/`ft ci` exit 2 on a timeout, 1 on the failure they waited for.
 

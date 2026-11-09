@@ -56,7 +56,7 @@ async function textInput(argument: string | undefined, what: string): Promise<st
 // A secret kept out of the command line: asked for masked on a terminal, read from stdin otherwise.
 async function secretInput(what: string): Promise<string> {
   if (isInteractive())
-    return await input(what, { mask: true }) ?? fail('cancelled', 1)
+    return await input(what, { mask: true }) ?? fail('cancelled', 130)
 
   return (await textInput(undefined, what)).replace(TRAILING_NEWLINE, '')
 }
@@ -83,7 +83,7 @@ const PASSWORD_USAGE = `dev password [length] [format] [-b|--bcrypt [password]]:
 
 Printed on stdout and copied to the clipboard when a tool for it (wl-copy, xclip, xsel, pbcopy) exists (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given (- asks for it masked on a terminal, or reads it from stdin, keeping it out of the shell history), or of a generated one, which then prints on stderr and is the one copied. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.`
 
-const PASSWORD_EXITS: ExitRow[] = [[0, 'it printed the password or hash'], [2, 'a usage error']]
+const PASSWORD_EXITS: ExitRow[] = [[0, 'it printed the password or hash'], [2, 'a usage error'], [130, 'the prompt was cancelled']]
 
 const PASSWORD_OPTIONS = {
   'bcrypt': { type: 'string', short: 'b', optional: { bare: '', accepts: STDIN_OR_VALUE }, description: 'print the bcrypt hash of the password given, or of a generated one' },
@@ -134,7 +134,7 @@ const JWT_USAGE = `dev jwt [token]: the header and payload of a JWT, with iat, n
 
 The token is the argument, what is piped on stdin, or asked for masked on a terminal; a leading "Bearer " is ignored. The signature is not verified.`
 
-const JWT_EXITS: ExitRow[] = [[0, 'it decoded the token'], [1, 'it is not a JWT'], [2, 'a usage error']]
+const JWT_EXITS: ExitRow[] = [[0, 'it decoded the token'], [1, 'it is not a JWT'], [2, 'a usage error'], [130, 'the prompt was cancelled']]
 
 const JWT_OPTIONS = {
   zone: ZONE_OPTION,

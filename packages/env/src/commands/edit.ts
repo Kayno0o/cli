@@ -15,7 +15,7 @@ const setUsage = `ev set KEY [file] [--quiet]
 
 Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; on a terminal with nothing piped it is asked for, masked as it is typed. --empty sets it to an empty value.`
 
-const SET_EXITS: ExitRow[] = [[0, 'it wrote the key'], [1, 'it could not, or the prompt was cancelled'], [2, 'a usage error']]
+const SET_EXITS: ExitRow[] = [[0, 'it wrote the key'], [1, 'it could not'], [2, 'a usage error'], [130, 'the prompt was cancelled']]
 
 const unsetUsage = `ev unset KEY [file] [--quiet]
 
@@ -37,7 +37,7 @@ const CP_EXITS: ExitRow[] = [[0, 'it copied the key'], [1, 'the source lacks it'
 
 async function readValue(key: string, from: string | undefined): Promise<string> {
   const value = from === undefined && isInteractive()
-    ? await input(`value of ${key}`, { mask: true }) ?? fail('cancelled, nothing was written', 1)
+    ? await input(`value of ${key}`, { mask: true }) ?? fail('cancelled, nothing was written', 130)
     : await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
 
   if (value === '')

@@ -23,6 +23,30 @@ function ev(args: string[], stdin = '') {
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
 
+// Runs `ev set TOKEN` under a pseudo-terminal, typing `keys` once it asks, answering the exit code and everything the terminal showed.
+async function setOnTerminal(keys: string): Promise<{ code: number, screen: string }> {
+  const decoder = new TextDecoder()
+  let screen = ''
+  const proc = Bun.spawn([process.execPath, CLI, 'set', 'TOKEN'], { cwd: dir, terminal: { cols: 80, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+
+  try {
+    for (let tries = 0; !screen.includes('value of TOKEN'); tries++) {
+      if (tries === 100)
+        throw new Error(`no prompt: ${screen}`)
+
+      await Bun.sleep(20)
+    }
+
+    proc.terminal?.write(keys)
+
+    return { code: await proc.exited, screen }
+  }
+  finally {
+    proc.kill()
+    proc.terminal?.close()
+  }
+}
+
 async function write(name: string, text: string) {
   await writeFile(join(dir, name), text)
 }
@@ -121,28 +145,16 @@ describe('ev', () => {
   })
 
   test('set on a terminal asks for the value and never shows it', async () => {
-    const decoder = new TextDecoder()
-    let screen = ''
-    const proc = Bun.spawn([process.execPath, CLI, 'set', 'TOKEN'], { cwd: dir, terminal: { cols: 80, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+    const { code, screen } = await setOnTerminal('typed_secret_42\r')
 
-    try {
-      for (let tries = 0; !screen.includes('value of TOKEN'); tries++) {
-        if (tries === 100)
-          throw new Error(`no prompt: ${screen}`)
+    expect(code).toBe(0)
+    expect(await read('.env')).toBe('TOKEN=typed_secret_42\n')
+    expect(screen).not.toContain('typed_secret_42')
+  })
 
-        await Bun.sleep(20)
-      }
-
-      proc.terminal?.write('typed_secret_42\r')
-
-      expect(await proc.exited).toBe(0)
-      expect(await read('.env')).toBe('TOKEN=typed_secret_42\n')
-      expect(screen).not.toContain('typed_secret_42')
-    }
-    finally {
-      proc.kill()
-      proc.terminal?.close()
-    }
+  test('set on a terminal exits 130 and writes nothing when the prompt is cancelled', async () => {
+    expect((await setOnTerminal('\x1B')).code).toBe(130)
+    expect(await Bun.file(join(dir, '.env')).exists()).toBe(false)
   })
 
   test('--quiet prints nothing when set, unset, cp and mv succeed', async () => {
