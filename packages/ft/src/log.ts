@@ -1,3 +1,5 @@
+import { toolExcerpt } from '@kaynooo/cli-kit'
+
 // A line bun test writes between one test's output and the next: a result, or a file's header, as a parallel run prints it locally and CI groups it.
 const BOUNDARY = /^(?:\((?:pass|fail|skip|todo)\) |::(?:end)?group::|\S+\.test\.[jt]sx?:$)/
 const DURATION = / \[[\d.]+m?s\]$/
@@ -10,6 +12,8 @@ const FAILED_STEP = /❌\s+Failure - Main /
 // Lines of a failed step shown above its failure, which name its error and, for tests, list the failed ones.
 const STEP_TAIL = 30
 const TAIL = 40
+// How far above its failure line a step's own output is looked for a tool's errors.
+const TOOL_WINDOW = 200
 
 export function logLines(log: string): string[] {
   return log.split('\n').map(line => line.replace(STAMP, ''))
@@ -38,14 +42,14 @@ export function failedTests(lines: string[]): string[] {
   return blocks
 }
 
-// What a failed job's log says: each failed test's output, then the end of each failed step with passing tests left out, else the log's last lines.
+// What a failed job's log says: each failed test's output, then the end of each failed step, cut to a recognised tool's errors or with passing tests left out, else the log's last lines.
 export function excerpt(log: string): string {
   const lines = logLines(log)
   const parts = failedTests(lines)
 
   for (const [index, line] of lines.entries()) {
     if (FAILED_STEP.test(line))
-      parts.push(lines.slice(Math.max(0, index - STEP_TAIL), index + 1).filter(text => text.trim() !== '' && !text.startsWith(PASS) && !text.startsWith('::')).join('\n'))
+      parts.push(toolExcerpt(lines.slice(Math.max(0, index - TOOL_WINDOW), index)) ?? lines.slice(Math.max(0, index - STEP_TAIL), index + 1).filter(text => text.trim() !== '' && !text.startsWith(PASS) && !text.startsWith('::')).join('\n'))
   }
 
   return parts.length === 0 ? lines.slice(-TAIL).join('\n').trim() : parts.join('\n\n')

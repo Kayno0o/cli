@@ -7,7 +7,7 @@ import { ciJson, jobLog, jobsOf, runById } from '../runs'
 
 const usage = `ft logs <run id>
 
-Prints what the failed jobs of a run say went wrong: each failed bun test's output and the end of each failed step.
+Prints what the failed jobs of a run say went wrong: each failed bun test's output and the end of each failed step, cut to the errors when it is a tsc, eslint, vitest, playwright, phpstan or php-cs-fixer step.
 With no failed job it prints every job's last lines; --full prints whole logs.`
 const EXITS: ExitRow[] = [[0, 'it printed the logs'], [1, 'Forgejo cannot be read'], [2, 'a usage error or a job the run lacks']]
 

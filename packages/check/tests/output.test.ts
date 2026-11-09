@@ -1,5 +1,5 @@
+import { failureExcerpt } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
-import { failureExcerpt } from '../src/output'
 
 async function fixture(name: string): Promise<string> {
   return Bun.file(new URL(`fixtures/${name}`, import.meta.url)).text()

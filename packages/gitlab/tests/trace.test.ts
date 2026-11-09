@@ -93,3 +93,20 @@ describe('excerpt', () => {
     expect(excerpt(trace(`section_start:1:prepare_executor\r${ESC}[0K`, 'pull access denied', 'ERROR: Job failed: image pull failed'))).toBe('pull access denied\n\nERROR: Job failed: image pull failed')
   })
 })
+
+describe('excerpt of a failed tool step', () => {
+  const fixture = async (name: string) => (await Bun.file(new URL(`../../check/tests/fixtures/${name}`, import.meta.url)).text()).trimEnd().split('\n')
+  const failed = (lines: string[]) => trace(`section_start:1:step_script\r${ESC}[0K`, ...Array.from({ length: 80 }, (_, index) => `setup line ${index}`), ...lines, `section_end:2:step_script\r${ESC}[0K`, 'ERROR: Job failed: exit code 1')
+
+  test('keeps the errors of tsc, eslint and vitest, then the verdict', async () => {
+    const tsc = excerpt(failed(['$ tsc --noEmit', ...await fixture('tsc-plain.txt')]))
+    const eslint = excerpt(failed(['$ eslint .', ...await fixture('eslint.txt')]))
+    const vitest = excerpt(failed(await fixture('errs/vitest.txt')))
+
+    expect(tsc).toStartWith('src/a.ts(1,7): error TS2322')
+    expect(tsc).not.toContain('setup line')
+    expect(tsc).toEndWith('ERROR: Job failed: exit code 1')
+    expect(eslint).toStartWith('/repo/src/a.ts')
+    expect(vitest).toStartWith(' FAIL  e2e/flow.spec.ts')
+  })
+})

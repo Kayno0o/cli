@@ -1,204 +1,8 @@
-import { stripAnsi } from '@kaynooo/cli-kit'
+import { bunCheckFields, LOG_PATTERNS, stripAnsi } from '@kaynooo/cli-kit'
 import { collectPlaywright, collectVitest, E2E_NOISE } from './e2e'
 import { collectCsFixer, collectPhpstan, collectPhpunit, PHP_NOISE } from './php'
 
-const BASH_ECHO = /^\$ /
-const DURATION = / \[[\d.]+m?s\]$/
-const BOUNDARY = /^(?:\((?:pass|fail|skip|todo)\) |\S+\.test\.[jt]sx?:$)/
-const BUN_TEST_SUMMARY = /^\s*\d+ (?:pass|fail|skip|todo)$|^Ran \d+ tests?/
-const BUN_CHECK_BLOCK = /<error file=[\s\S]*?<\/error>/g
-const BUN_CHECK_SOURCE = /<source>[\s\S]*?<\/source>\n?/g
-const BUN_CHECK_ATTRIBUTE = /(\w+)="([^"]*)"/g
-const BUN_CHECK_SUMMARY = /^Found \d+ errors?/
-const TSC_ERROR = /\berror TS\d+/
-const TSC_CONTINUATION = /^\s{2,}\S/
-const TSC_FRAME = /^\s*[~^|]/
-const TSC_SUMMARY = /^Found \d+ errors?/
-const ESLINT_PROBLEM = /^\s+\d+:\d+\s+(?:error|warning)\s/
-const ESLINT_SUMMARY = /^(?:✖ )?\d+ problems? \(/
-const PHPSTAN_TABLE = /^\s*-{3,} -{3,}/
-const PHPSTAN_NOISE = /^\s*\[OK\]/
-const PHP_FAILURES = /^(?:There w(?:as|ere) \d+ (?:failure|error|risky|warning)|\s+(?:FAIL|FAILED)\s+\S|In \S+\.php line \d+:$)/
-const VITEST_FAIL_LINE = /^ FAIL {2}\S/
-const PLAYWRIGHT_FAIL_LINE = /^ {2}1\) .+:\d+:\d+ › .+ ─+$/
-const CS_FIXER_LINE = /^\s+\d+\) \S.*\.php(?: \(.+\))?$/
-const CS_FIXER_TOTAL = /^Found \d+ of \d+ files/
-const MAX_TESTS = 10
-const MAX_LINES = 100
-const TAIL = 30
-
-export type Parser = (lines: string[]) => string[] | undefined
-
-// Each failed bun test's own output, from the line after the previous boundary down to its `(fail)` line, once per test as bun test lists them again by name at the end.
-export const bunTest: Parser = (lines) => {
-  const seen = new Set<string>()
-  const blocks: string[] = []
-
-  for (const [index, line] of lines.entries()) {
-    const name = line.replace(DURATION, '')
-
-    if (!line.startsWith('(fail) ') || seen.has(name))
-      continue
-
-    seen.add(name)
-
-    if (blocks.length < MAX_TESTS)
-      blocks.push(lines.slice(lines.findLastIndex((text, at) => at < index && BOUNDARY.test(text)) + 1, index + 1).join('\n').trim())
-  }
-
-  if (blocks.length === 0)
-    return undefined
-
-  if (seen.size > MAX_TESTS)
-    blocks.push(`and ${seen.size - MAX_TESTS} more failed tests`)
-
-  return [...blocks.join('\n\n').split('\n'), '', ...lines.filter(line => BUN_TEST_SUMMARY.test(line)).map(line => line.trim())]
-}
-
-// Bun's type checker prints <error file= line= column= code=> blocks with a source frame, which go down to one `file:line:column CODE: message` line each.
-export const bunCheck: Parser = (lines) => {
-  const text = lines.join('\n')
-  const blocks = text.match(BUN_CHECK_BLOCK)
-
-  if (blocks === null)
-    return undefined
-
-  const errors = blocks.map((block) => {
-    const { file, line, column, code, message } = bunCheckFields(block)
-
-    return `${file}:${line}:${column} ${code}: ${message}`
-  })
-
-  return [...errors, ...lines.filter(line => BUN_CHECK_SUMMARY.test(line))]
-}
-
-function bunCheckFields(block: string): { file: string, line: string, column: string, code: string, message: string } {
-  const attributes = Object.fromEntries([...block.slice(0, block.indexOf('\n')).matchAll(BUN_CHECK_ATTRIBUTE)].map(match => [match[1] ?? '', match[2] ?? '']))
-
-  return {
-    file: attributes.file ?? '',
-    line: attributes.line ?? '',
-    column: attributes.column ?? '',
-    code: attributes.code ?? '',
-    message: block.replace(BUN_CHECK_SOURCE, '').split('\n').slice(1, -1).join('\n').trim(),
-  }
-}
-
-// tsc, tsgo and vue-tsc, plain (`file(1,2): error TS1`) or pretty (`file:1:2 - error TS1`), with the indented lines continuing a message and without the pretty code frames.
-export const tsc: Parser = (lines) => {
-  const kept: string[] = []
-  let inError = false
-
-  for (const line of lines) {
-    if (TSC_ERROR.test(line)) {
-      inError = true
-      kept.push(line)
-    }
-    else if (TSC_SUMMARY.test(line)) {
-      inError = false
-      kept.push(line)
-    }
-    else if (inError && TSC_CONTINUATION.test(line) && !TSC_FRAME.test(line)) {
-      kept.push(line)
-    }
-    else {
-      inError = false
-    }
-  }
-
-  return kept.some(line => TSC_ERROR.test(line)) ? kept : undefined
-}
-
-// ESLint's stylish format as eslint and keslint print it: each file's path with its problem lines, then the totals.
-export const eslint: Parser = (lines) => {
-  const kept: string[] = []
-  let file = ''
-  let shown = ''
-
-  for (const line of lines) {
-    if (ESLINT_PROBLEM.test(line)) {
-      if (file !== shown) {
-        kept.push(file)
-        shown = file
-      }
-
-      kept.push(line)
-    }
-    else if (ESLINT_SUMMARY.test(line)) {
-      kept.push(line)
-    }
-    else if (line.trim() !== '') {
-      file = line
-    }
-  }
-
-  return kept.some(line => ESLINT_PROBLEM.test(line)) ? kept : undefined
-}
-
-// PHPStan's table format, from the first table's rule line to the end.
-export const phpstan: Parser = (lines) => {
-  const start = lines.findIndex(line => PHPSTAN_TABLE.test(line))
-
-  return start === -1 ? undefined : lines.slice(start).filter(line => !PHPSTAN_NOISE.test(line))
-}
-
-// PHPUnit's and ParaTest's failure listing, Pest's FAIL blocks and a Symfony console exception (how ParaTest reports a crashed worker), to the end of the output.
-export const php: Parser = (lines) => {
-  const start = lines.findIndex(line => PHP_FAILURES.test(line))
-
-  return start === -1 ? undefined : lines.slice(start)
-}
-
-// Vitest's failure blocks, from the first ` FAIL ` line to the end.
-export const vitest: Parser = (lines) => {
-  const start = lines.findIndex(line => VITEST_FAIL_LINE.test(line))
-
-  return start === -1 ? undefined : lines.slice(start)
-}
-
-// Playwright's numbered failures, from the first one to the end.
-export const playwright: Parser = (lines) => {
-  const start = lines.findIndex(line => PLAYWRIGHT_FAIL_LINE.test(line))
-
-  return start === -1 ? undefined : lines.slice(start)
-}
-
-// PHP CS Fixer's dry-run listing, one line per file with its fixers, without the diffs.
-export const phpCsFixer: Parser = (lines) => {
-  const files = lines.filter(line => CS_FIXER_LINE.test(line) || CS_FIXER_TOTAL.test(line))
-
-  return files.some(line => CS_FIXER_LINE.test(line)) ? files : undefined
-}
-
-const PARSERS: Parser[] = [bunTest, bunCheck, tsc, eslint, vitest, playwright, phpCsFixer, phpstan, php]
-
-function squeeze(lines: string[]): string[] {
-  const out: string[] = []
-
-  for (const line of lines.map(text => text.trimEnd())) {
-    if (line !== '' || out.at(-1) !== '')
-      out.push(line)
-  }
-
-  while (out.at(-1) === '')
-    out.pop()
-
-  return out
-}
-
-// What a failed step's output says went wrong, in the first format that recognises it, else its last lines.
-export function failureExcerpt(output: string): string {
-  const lines = stripAnsi(output).split('\n')
-
-  // `bun run` echoes the script's command first.
-  if (BASH_ECHO.test(lines[0] ?? ''))
-    lines.shift()
-
-  const parsed = PARSERS.map(parser => parser(lines)).find(result => result !== undefined && result.some(line => line.trim() !== ''))
-  const shown = squeeze(parsed ?? lines.slice(-TAIL))
-
-  return shown.length > MAX_LINES ? [...shown.slice(0, MAX_LINES), `... ${shown.length - MAX_LINES} more lines`].join('\n') : shown.join('\n')
-}
+const { BASH_ECHO, DURATION, BOUNDARY, BUN_TEST_SUMMARY, BUN_CHECK_SUMMARY, TSC_CONTINUATION, TSC_FRAME, TSC_SUMMARY, ESLINT_PROBLEM, ESLINT_SUMMARY } = LOG_PATTERNS
 
 export interface ToolError {
   tool: 'tsc' | 'eslint' | 'bun check' | 'kay check' | 'bun test' | 'phpunit' | 'phpstan' | 'php-cs-fixer' | 'playwright' | 'vitest' | 'go' | 'cargo' | 'ruff' | 'pytest' | 'generic'
@@ -245,8 +49,8 @@ const PYTEST_SECTION = /^_{3,} .* _{3,}$/
 const PYTEST_EXCEPTION_END = /[\s:]/
 const PYTEST_NOISE = /^(?:platform |rootdir: |collected |plugins: |configfile: |cachedir: |\S+\.pyi? [.FEsxXR]+ +\[ *\d+%\]$|\S+\.py:\d+: $)/
 // The `file:line[:col]: error|warning|note: message` line gcc, clang, mypy, `shellcheck -f gcc` and golangci-lint print, as editors' problem matchers read it.
-const GENERIC_LINE = /^(\S[^:]*?):(\d+)(?::(\d+))?: (?:fatal )?(error|warning|note): (.*)$/
-const GENERIC_RULE = /^(.*?)\s+(?:\[([\w-]+)\]|\(([a-z][\w-]*)\))$/
+const GENERIC_LINE = /^(\S[^:]*):(\d+)(?::(\d+))?: (?:fatal )?(error|warning|note): (.*)$/
+const GENERIC_RULE = /^(.*\S)\s+(?:\[([\w-]+)\]|\(([a-z][\w-]*)\))$/
 const NOISE = /^(?:bun test v|Errors {2}Files$|Ran \d+ tests?|note: |\s*\d+ expect\(\) calls|\s+\d+\s+\S+:\d+$|\s*\d+ errors? and \d+ warnings? potentially fixable)/
 
 export type Collector = (lines: string[], used: Set<number>) => ToolError[]
@@ -571,7 +375,12 @@ export function parseErrors(output: string): ParsedErrors {
   const errors = COLLECTORS.flatMap(collect => collect(lines, used)).filter((error) => {
     const key = [error.file, error.line, error.column, error.message, error.test].join('\0')
 
-    return !seen.has(key) && seen.add(key)
+    if (seen.has(key))
+      return false
+
+    seen.add(key)
+
+    return true
   })
   const unrecognised = lines.filter((line, index) => !used.has(index) && !isNoise(line)).length
 

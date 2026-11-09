@@ -41,3 +41,20 @@ describe('excerpt', () => {
     expect(text).toEndWith('line 59')
   })
 })
+
+describe('excerpt of a failed tool step', () => {
+  const fixture = async (name: string) => (await Bun.file(new URL(`../../check/tests/fixtures/${name}`, import.meta.url)).text()).trimEnd().split('\n')
+  const act = (lines: string[]) => [...Array.from({ length: 80 }, (_, index) => `setup line ${index}`), ...lines, '  ❌  Failure - Main Lint'].map(line => `2026-10-22T19:59:34.0764509Z ${line}`).join('\n')
+
+  test('keeps the errors of tsc, eslint and vitest, not the lines around them', async () => {
+    const tsc = excerpt(act(['> tsc --noEmit', ...await fixture('tsc-plain.txt')]))
+    const eslint = excerpt(act(['> eslint .', ...await fixture('eslint.txt')]))
+    const vitest = excerpt(act(await fixture('errs/vitest.txt')))
+
+    expect(tsc).toStartWith('src/a.ts(1,7): error TS2322')
+    expect(tsc).not.toContain('setup line')
+    expect(eslint).toStartWith('/repo/src/a.ts')
+    expect(eslint).not.toContain('> eslint')
+    expect(vitest).toStartWith(' FAIL  e2e/flow.spec.ts')
+  })
+})

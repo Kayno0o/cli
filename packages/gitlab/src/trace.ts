@@ -1,4 +1,4 @@
-import { stripAnsi } from '@kaynooo/cli-kit'
+import { stripAnsi, toolExcerpt } from '@kaynooo/cli-kit'
 
 export interface TraceLine { text: string, section: string }
 
@@ -99,14 +99,15 @@ export function failedTests(texts: string[]): string[] {
   return verdict === undefined ? parts : [...parts, verdict]
 }
 
-// What a failed job's trace says: each failed test, else the last lines of the script that failed, then the runner's verdict.
+// What a failed job's trace says: the errors of a recognised tool, else each failed test, else the last lines of the script that failed, then the runner's verdict.
 export function excerpt(trace: string): string {
   const lines = traceLines(trace)
   const verdict = lines.findLast(line => JOB_FAILED.test(line.text))?.text
   const script = lines.findLast(line => line.section.startsWith('step_'))?.section
   const ran = lines.filter(line => line.text !== verdict && (script === undefined ? !line.section.startsWith('cleanup') : line.section === script)).map(line => line.text)
-  const tests = failedTests(ran)
-  const body = tests.length > 0 ? tests.join('\n\n') : trimBlank(ran.slice(-TAIL)).join('\n')
+  const tool = toolExcerpt(ran)
+  const tests = tool === undefined ? failedTests(ran) : []
+  const body = tool ?? (tests.length > 0 ? tests.join('\n\n') : trimBlank(ran.slice(-TAIL)).join('\n'))
 
   return verdict === undefined ? body : `${body}\n\n${verdict}`
 }

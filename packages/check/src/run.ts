@@ -2,8 +2,7 @@ import type { HeldSignals } from '@kaynooo/cli-kit'
 import { mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import process from 'node:process'
-import { formatDuration, paint, privateLogDirectory, role, runCommand, stripAnsi, sweepLogs } from '@kaynooo/cli-kit'
-import { failureExcerpt } from './output'
+import { failureExcerpt, formatDuration, paint, privateLogDirectory, role, runCommand, stripAnsi, sweepLogs } from '@kaynooo/cli-kit'
 
 export interface Outcome { ok: boolean, ms: number, output: string, timedOut?: boolean }
 
