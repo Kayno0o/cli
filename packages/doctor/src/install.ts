@@ -80,7 +80,7 @@ export function plan(host: Host, picked: readonly Candidate[], force: boolean): 
   const packages: string[] = []
 
   for (const name of new Set(picked.flatMap(each => each.packages))) {
-    const lacking = (NEEDS[name] ?? []).filter(need => host.which(need.bin) === null)
+    const lacking = (NEEDS[name] ?? []).filter(need => host.which(need.bin) === null && (need.alternative === undefined || host.which(need.alternative) === null))
 
     if (lacking.length > 0 && !force) {
       for (const need of lacking)

@@ -411,3 +411,40 @@ describe('configReport', () => {
     expect(by('EDITOR')).toMatchObject({ status: 'absent' })
   })
 })
+
+describe('checkTea with gt in place of tea', () => {
+  const onlyGt = ['ft', 'gt']
+  const version = { stdout: '{"version":"16.0.6"}' }
+
+  function teaConfig(): void {
+    mkdirSync(join(home, '.config', 'tea'), { recursive: true })
+    writeFileSync(join(home, '.config', 'tea', 'config.yml'), 'logins:\n    - name: forge\n      url: https://git.kaynooo.fr\n      token: secret-token\n')
+  }
+
+  test('passes when gt answers with its own login', async () => {
+    expect(await checkTea(fakeHost({ 'gt api version': version }, onlyGt))).toMatchObject({ ok: true, detail: expect.stringContaining('its own login') })
+  })
+
+  test('passes with the token of tea\'s config and never prints it', async () => {
+    teaConfig()
+
+    const sent: Record<string, string>[] = []
+    const host = fakeHost({}, onlyGt)
+    const result = await checkTea({ ...host, run: async (_argv, env) => {
+      if (env === undefined)
+        return { code: 1, stdout: '', stderr: 'Error: no instance selected' }
+
+      sent.push(env)
+
+      return { code: 0, stdout: version.stdout, stderr: '' }
+    } })
+
+    expect(sent).toEqual([{ GITEA_TOKEN: 'secret-token', GITEA_CLI_HOST: 'https://git.kaynooo.fr' }])
+    expect(result).toMatchObject({ ok: true, detail: expect.stringContaining('git.kaynooo.fr') })
+    expect(JSON.stringify(result)).not.toContain('secret-token')
+  })
+
+  test('fails with no gt login and no tea config, naming gt auth login', async () => {
+    expect(await checkTea(fakeHost({ 'gt api version': { code: 1, stderr: 'Error: no instance selected\n' } }, onlyGt))).toMatchObject({ ok: false, fix: expect.stringContaining('gt auth login') })
+  })
+})

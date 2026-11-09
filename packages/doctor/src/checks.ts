@@ -146,10 +146,41 @@ function extraForgeHosts(home: string): string[] {
   }
 }
 
+const TEA_URL = /^\s*url:\s*["']?([^\s"']+)/m
+const TEA_TOKEN = /^\s*token:\s*["']?([^\s"']+)/m
+
+// gt standing in for tea: it answers with its own login, else with the token ft passes it from tea's config.
+async function checkGt(host: Host): Promise<Result> {
+  const own = await host.run(['gt', 'api', 'version'])
+  const ownServed = own.code === 0 ? readJsonText<{ version?: string }>(own.stdout)?.version : undefined
+
+  if (ownServed !== undefined)
+    return { check: 'tea', ok: true, detail: `tea is not installed; gt reaches Forgejo ${ownServed} with its own login` }
+
+  const path = join(host.home, '.config', 'tea', 'config.yml')
+  const config = existsSync(path) ? readFileSync(path, 'utf8') : ''
+  const url = TEA_URL.exec(config)?.[1]
+  const token = TEA_TOKEN.exec(config)?.[1]
+
+  if (url === undefined || token === undefined)
+    return { check: 'tea', ok: false, detail: `tea is not installed and gt has no login: ${firstLine(own.stderr || own.stdout)}`, fix: `gt auth login --host https://${FORGE}` }
+
+  const injected = await host.run(['gt', 'api', 'version'], { GITEA_TOKEN: token, GITEA_CLI_HOST: url })
+  const served = injected.code === 0 ? readJsonText<{ version?: string }>(injected.stdout)?.version : undefined
+
+  if (served === undefined)
+    return { check: 'tea', ok: false, detail: `gt did not reach ${new URL(url).host} with tea's token: ${firstLine(injected.stderr || injected.stdout)}`, fix: `gt auth login --host ${url}` }
+
+  return { check: 'tea', ok: true, detail: `tea is not installed; gt reaches ${new URL(url).host} with tea's token, Forgejo ${served}` }
+}
+
 // tea installed, logged in to the forge and reaching it, since ft goes through it.
 export async function checkTea(host: Host): Promise<Result> {
+  if (host.which('tea') === null && host.which('gt') !== null)
+    return checkGt(host)
+
   if (host.which('tea') === null)
-    return { check: 'tea', ok: false, detail: 'not installed, and ft goes through it', fix: 'install tea from https://gitea.com/gitea/tea/releases' }
+    return { check: 'tea', ok: false, detail: 'not installed, and ft goes through it', fix: 'install tea from https://gitea.com/gitea/tea/releases, or gt (gitea-cli)' }
 
   const logins = await host.run(['tea', 'login', 'list', '-o', 'json'])
   const parsed = logins.code === 0 ? readJsonText<{ name: string, url: string }[]>(logins.stdout) : undefined
