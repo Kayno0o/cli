@@ -1,5 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
-import { badUsage, fail, parse, readInput } from '@kaynooo/cli-kit'
+import { badUsage, fail, isInteractive, parse, readInput } from '@kaynooo/cli-kit'
+import { input } from '@kaynooo/cli-kit/prompt'
 import { entries, lastLine, removeKey, setLine } from '../dotenv'
 import { loadKnown, readEnv, withLocks, writeEnv } from '../files'
 import { maskValue } from '../mask'
@@ -12,9 +13,9 @@ const QUIET = { quiet: { type: 'boolean', short: 'q', description: 'print nothin
 
 const setUsage = `ev set KEY [file] [--quiet]
 
-Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; --empty sets it to an empty value.`
+Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; on a terminal with nothing piped it is asked for, masked as it is typed. --empty sets it to an empty value.`
 
-const SET_EXITS: ExitRow[] = [[0, 'it wrote the key'], [1, 'it could not'], [2, 'a usage error']]
+const SET_EXITS: ExitRow[] = [[0, 'it wrote the key'], [1, 'it could not, or the prompt was cancelled'], [2, 'a usage error']]
 
 const unsetUsage = `ev unset KEY [file] [--quiet]
 
@@ -34,13 +35,15 @@ Copies KEY's value from one file to another without printing it, replacing the k
 
 const CP_EXITS: ExitRow[] = [[0, 'it copied the key'], [1, 'the source lacks it'], [2, 'a usage error']]
 
-async function readValue(from: string | undefined): Promise<string> {
-  const input = await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
+async function readValue(key: string, from: string | undefined): Promise<string> {
+  const value = from === undefined && isInteractive()
+    ? await input(`value of ${key}`, { mask: true }) ?? fail('cancelled, nothing was written', 1)
+    : await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
 
-  if (input === '')
+  if (value === '')
     fail('the value is empty, nothing was written: --empty sets an empty value')
 
-  return input.replace(TRAILING_NEWLINE, '')
+  return value.replace(TRAILING_NEWLINE, '')
 }
 
 // A key that is not a plain name could carry a line break or an `=` and write more than one line.
@@ -70,7 +73,7 @@ export async function set(args: string[]): Promise<number> {
 
   checkKey(key)
 
-  const value = parsed.values.empty === true ? '' : await readValue(parsed.values.file)
+  const value = parsed.values.empty === true ? '' : await readValue(key, parsed.values.file)
 
   const file = await withLocks([target], async () => {
     const current = await readOrEmpty(target)

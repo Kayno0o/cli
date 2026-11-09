@@ -120,6 +120,31 @@ describe('ev', () => {
     expect(await read('.env.new')).toBe('A="two words"\nB=b\n')
   })
 
+  test('set on a terminal asks for the value and never shows it', async () => {
+    const decoder = new TextDecoder()
+    let screen = ''
+    const proc = Bun.spawn([process.execPath, CLI, 'set', 'TOKEN'], { cwd: dir, terminal: { cols: 80, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+
+    try {
+      for (let tries = 0; !screen.includes('value of TOKEN'); tries++) {
+        if (tries === 100)
+          throw new Error(`no prompt: ${screen}`)
+
+        await Bun.sleep(20)
+      }
+
+      proc.terminal?.write('typed_secret_42\r')
+
+      expect(await proc.exited).toBe(0)
+      expect(await read('.env')).toBe('TOKEN=typed_secret_42\n')
+      expect(screen).not.toContain('typed_secret_42')
+    }
+    finally {
+      proc.kill()
+      proc.terminal?.close()
+    }
+  })
+
   test('--quiet prints nothing when set, unset, cp and mv succeed', async () => {
     await write('.env', 'A=1\nB=2\n')
 
