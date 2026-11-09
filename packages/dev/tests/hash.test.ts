@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { hashHex } from '../src/hash'
+import { hashHex, hashStream } from '../src/hash'
 
 const abc = new TextEncoder().encode('abc')
 
@@ -13,5 +13,14 @@ describe('hashHex', () => {
 
   test('the empty input', () => {
     expect(hashHex('sha256', new Uint8Array())).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
+  })
+})
+
+describe('hashStream', () => {
+  test('hashes the chunks one after the other like the whole input', async () => {
+    const chunks = ['a', 'b', 'c'].map(text => new TextEncoder().encode(text))
+    const stream = new ReadableStream<Uint8Array>({ start(controller) { chunks.forEach(chunk => controller.enqueue(chunk)); controller.close() } })
+
+    expect(await hashStream('sha256', stream)).toEqual({ digest: hashHex('sha256', new TextEncoder().encode('abc')), bytes: 3 })
   })
 })

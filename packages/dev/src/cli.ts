@@ -6,7 +6,7 @@ import type { Format } from './password'
 import process from 'node:process'
 import { badUsage, copyText, fail, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
 import { b64Decode, b64Encode } from './encode'
-import { ALGORITHMS, hashHex } from './hash'
+import { ALGORITHMS, hashHex, hashStream } from './hash'
 import { ulid, uuidV4, uuidV7 } from './ids'
 import { publicIp } from './ip'
 import { claimTimes, decodeJwt } from './jwt'
@@ -327,10 +327,12 @@ export async function hash(args: string[]): Promise<number> {
   })
   const algorithm: Algorithm = oneOf(positionals[0] ?? '', '<algorithm>', ALGORITHMS)
   const file = positionals[1]
-  let bytes: Uint8Array
+  let result: { digest: string, bytes: number }
 
   if (file === undefined) {
-    bytes = await bytesInput(undefined, 'a file')
+    const input = await bytesInput(undefined, 'a file')
+
+    result = { digest: hashHex(algorithm, input), bytes: input.length }
   }
   else {
     const source = Bun.file(file)
@@ -338,13 +340,13 @@ export async function hash(args: string[]): Promise<number> {
     if (!await source.exists())
       return fail(`no file ${file}`, 1)
 
-    bytes = new Uint8Array(await source.arrayBuffer())
+    result = await hashStream(algorithm, source.stream())
   }
 
-  const digest = hashHex(algorithm, bytes)
+  const digest = result.digest
 
   if (values.json === true)
-    printJson({ algorithm, hash: digest, bytes: bytes.length })
+    printJson({ algorithm, hash: digest, bytes: result.bytes })
   else
     console.log(digest)
 
