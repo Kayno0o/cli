@@ -190,3 +190,30 @@ describe('peek', () => {
     expect(peek('--def', 'nothing', '--json')).toEqual({ code: 1, out: '', err: '{"error":"no declaration of nothing found"}\n' })
   })
 })
+
+describe('declarations in other languages', () => {
+  const find = (source: string, path: string, name: string) => definitions(source, path, name).map(span => span.from)
+
+  test('reads a PHP method and a Rust item with their visibility', () => {
+    const php = '<?php\nclass A\n{\n    public function hello()\n    {\n        return 1;\n    }\n}\n'
+    const rust = 'pub struct S {\n    a: u8,\n}\n\npub fn run() {\n}\n\npub(crate) fn inner() {\n}\n'
+
+    expect(find(php, 'a.php', 'hello')).toEqual([4])
+    expect(outline(php, 'a.php').map(entry => entry.text)).toEqual(['class A', 'public function hello()'])
+    expect(find(rust, 'a.rs', 'S')).toEqual([1])
+    expect(find(rust, 'a.rs', 'run')).toEqual([5])
+    expect(find(rust, 'a.rs', 'inner')).toEqual([8])
+  })
+
+  test('reads Kotlin and Java modifiers', () => {
+    const kotlin = 'fun main() {\n}\n\ninternal suspend fun load() {\n}\n\nsealed class Shape {\n    open fun area() {\n    }\n}\n\nfinal class Done\n'
+
+    expect(find(kotlin, 'a.kt', 'main')).toEqual([1])
+    expect(find(kotlin, 'a.kt', 'load')).toEqual([4])
+    expect(find(kotlin, 'a.kt', 'Shape')).toEqual([7])
+    expect(find(kotlin, 'a.kt', 'area')).toEqual([8])
+    expect(find(kotlin, 'a.kt', 'Done')).toEqual([12])
+    expect(outline(kotlin, 'a.kt').map(entry => entry.text)).toContain('final class Done')
+    expect(find('class A {\n    static helper() {\n    }\n}\n', 'A.java', 'helper')).toEqual([2])
+  })
+})

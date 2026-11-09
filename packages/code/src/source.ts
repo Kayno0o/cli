@@ -7,11 +7,11 @@ export interface Span {
 
 // A location opening a line of tool output: `path:line`, `path:line:col` or tsc's `path(line,col)`, as errs, grep -n, rg -n and linters print them.
 const LOCATION = /^(?:\.\/)?([^\s:()]+)(?::(\d+)(?::\d+)?|\((\d+),\d+\))(?=[:\s)]|$)/
-// The keywords a declaration opens with, in TS, JS, Python, Go, Rust and PHP.
-const DECLARATION = /^(?:export\s+)?(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function\*?|class|interface|type|enum|const|let|var|namespace|module|def|func|fn|struct|trait|impl)\s/
+// The keywords a declaration opens with, in TS, JS, Python, Go, Rust, PHP, Java and Kotlin.
+const DECLARATION = /^(?:(?:export|default|declare|abstract|async|pub(?:\([^)]*\))?|public|private|protected|internal|final|open|sealed|static|suspend)\s+)*(?:function\*?|class|interface|type|enum|const|let|var|namespace|module|def|func|fun|fn|struct|trait|impl)\s/
 // A member of a class or an object: modifiers, the name, maybe type parameters, then its parameters.
-const MODIFIERS = /^(?:(?:public|private|protected|static|async|override|readonly|abstract|get|set|pub|fn|def|func)\s+)*/
-const MEMBER = /^(?:(?:public|private|protected|static|async|override|readonly|abstract|get|set|pub|fn|def|func)\s+)*[#\w$]+\s*(?:<[^>]*>\s*)?\(/
+const MODIFIERS = /^(?:(?:public|private|protected|internal|final|open|sealed|static|async|suspend|override|readonly|abstract|get|set|pub(?:\([^)]*\))?|function|fn|def|func|fun)\s+)*/
+const MEMBER = /^(?:(?:public|private|protected|internal|final|open|sealed|static|async|suspend|override|readonly|abstract|get|set|pub(?:\([^)]*\))?|function|fn|def|func|fun)\s+)*[#\w$]+\s*(?:<[^>]*>\s*)?\(/
 // A Go method's receiver, `func (r *T) name`, and a generator's star.
 const RECEIVER = /^(?:\([^)]*\)\s*)?/
 const STAR = /^\*?\s*/
@@ -197,7 +197,7 @@ export function outline(text: string, path: string): OutlineEntry[] {
       entries.push({ line: i + 1, depth: 0, text: signature(line) })
       memberIndent = HOLDS_MEMBERS.test(text) ? -1 : undefined
     }
-    else if (indent === 0 && text !== '' && !text.startsWith('}') && !LEADING.test(text)) {
+    else if (indent === 0 && text !== '' && !text.startsWith('{') && !text.startsWith('}') && !LEADING.test(text)) {
       memberIndent = undefined
     }
     else if (memberIndent !== undefined && indent > 0 && (memberIndent === -1 || indent === memberIndent) && MEMBER.test(text) && !CALL_KEYWORDS.test(text)) {
