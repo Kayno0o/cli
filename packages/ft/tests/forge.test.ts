@@ -49,11 +49,11 @@ describe('loginHosts', () => {
 })
 
 describe('a call that leaves the repository to tea', () => {
-  test('exits 2 naming the origin when it is not on a Forgejo tea is logged in to', () => {
+  test('exits 2 naming the origin when it is not on a Forgejo you are logged in to', () => {
     const result = ftIn('git@gitlab.com:x/y.git', 'board')
 
     expect(result.code).toBe(2)
-    expect(result.err).toContain('origin git@gitlab.com:x/y.git is not on a Forgejo tea is logged in to (git.kaynooo.fr)')
+    expect(result.err).toContain('origin git@gitlab.com:x/y.git is not on a Forgejo you are logged in to (git.kaynooo.fr)')
   })
 
   test('keeps a token in the origin out of the message', () => {

@@ -6,7 +6,7 @@ Forgejo tools for the terminal: CI runs and their failures, releases, issue chec
 bun install -g @kaynooo/cli-forgejo
 ```
 
-Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea login add`). Every call goes through `tea api`, so ft has no token of its own: tea owns the login and finds the repository from origin. Run ft from the repository, or pass `--repo owner/name` to the commands that take it.
+Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea login add`), or [gt](https://gitea.com/gitea/gitea-cli) (gitea-cli) when tea is not installed: ft then hands gt the token and host of the matching login in `~/.config/tea/config.yml` through `GITEA_TOKEN` and `GITEA_CLI_HOST` (a `GITEA_TOKEN` already set wins), so no second login is needed, and issues are written through the API. Every call goes through `tea api` (`gt api`), so ft has no token of its own: the client owns the login and finds the repository from origin. Run ft from the repository, or pass `--repo owner/name` to the commands that take it.
 
 ## Commands
 

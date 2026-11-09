@@ -1,7 +1,8 @@
 import type { Comment } from './claims'
 import { pool } from '@kaynooo/cli-kit'
 import { concurrencyOf } from './config'
-import { api, repoApi, repoWrite, tea } from './tea'
+import { findMilestone } from './milestones'
+import { api, repoApi, repoSend, repoWrite, tea, usesGt } from './tea'
 
 export interface Issue { number: number, title: string, body: string, state: string, html_url: string, comments: number, labels: { name: string }[], milestone?: { id: number, title: string } | null }
 export interface IssueComment extends Comment { user: { login: string } }
@@ -50,6 +51,12 @@ export async function commentsOfAll(issues: Issue[], repo?: string): Promise<Map
 
 // `tea api` cannot write issues with an OAuth login, so writes go through tea's own commands, with `-d` as tea 0.15 has no description file; an empty milestone clears it.
 export async function editIssue(number: number, change: { title?: string, body?: string, milestone?: string }, repo?: string): Promise<void> {
+  if (usesGt()) {
+    await repoWrite('PATCH', `issues/${number}`, { ...change.title === undefined ? {} : { title: change.title }, ...change.body === undefined ? {} : { body: change.body }, ...change.milestone === undefined ? {} : { milestone: await milestoneId(change.milestone, repo) } }, repo)
+
+    return
+  }
+
   const args = [String(number)]
 
   if (change.title !== undefined)
@@ -70,6 +77,10 @@ export async function setBody(number: number, body: string, repo?: string): Prom
 
 // tea prints the new issue in a boxed view no script can read, so it is found again among the open issues with that title and body that were not there before; two sessions creating the same issue at once fail rather than swap.
 export async function createIssue(title: string, body: string, labels: string | undefined, milestone: string | undefined, repo?: string): Promise<Issue> {
+  if (usesGt()) {
+    return repoWrite<Issue>('POST', 'issues', { title, body, ...labels === undefined ? {} : { labels: await labelIds(labels.split(','), repo) }, ...milestone === undefined ? {} : { milestone: await milestoneId(milestone, repo) } }, repo)
+  }
+
   const args = ['-t', title, '-d', body]
   const same = (found: Issue) => found.title === title && sameText(found.body, body)
   const known = new Set((await openIssues(undefined, repo)).filter(same).map(found => found.number))
@@ -144,10 +155,16 @@ export async function comment(number: number, body: string, repo?: string): Prom
 }
 
 export async function close(number: number, repo?: string): Promise<void> {
+  if (usesGt())
+    return void await repoWrite('PATCH', `issues/${number}`, { state: 'closed' }, repo)
+
   await tea(['issues', 'close'], [String(number)], repo)
 }
 
 export async function reopen(number: number, repo?: string): Promise<void> {
+  if (usesGt())
+    return void await repoWrite('PATCH', `issues/${number}`, { state: 'open' }, repo)
+
   await tea(['issues', 'reopen'], [String(number)], repo)
 }
 
@@ -165,6 +182,16 @@ export async function repoLabels(repo?: string): Promise<string[]> {
 }
 
 export async function editLabels(number: number, add: string[], remove: string[], repo?: string): Promise<void> {
+  if (usesGt()) {
+    if (add.length > 0)
+      await repoSend('POST', `issues/${number}/labels`, { labels: await labelIds(add, repo) }, repo)
+
+    for (const id of await labelIds(remove, repo))
+      await repoSend('DELETE', `issues/${number}/labels/${id}`, {}, repo)
+
+    return
+  }
+
   const args = [String(number)]
 
   if (add.length > 0)
@@ -174,4 +201,32 @@ export async function editLabels(number: number, add: string[], remove: string[]
     args.push('--remove-labels', remove.join(','))
 
   await tea(['issues', 'edit'], args, repo)
+}
+
+// The ids of labels given by name, which the API takes where tea's commands take names.
+async function labelIds(names: string[], repo?: string): Promise<number[]> {
+  const all: { id: number, name: string }[] = []
+
+  for (let page = 1; ; page++) {
+    const batch = await repoApi<{ id: number, name: string }[]>(`labels?page=${page}&limit=${PAGE}`, repo)
+
+    all.push(...batch)
+
+    if (batch.length < PAGE)
+      break
+  }
+
+  return names.map(name => name.trim()).filter(name => name !== '').map((name) => {
+    const found = all.find(each => each.name === name)
+
+    if (found === undefined)
+      throw new Error(`no label ${name}, the repository has: ${all.map(each => each.name).join(', ')}`)
+
+    return found.id
+  })
+}
+
+// A milestone's id from its title; an empty one is 0, which clears it.
+async function milestoneId(title: string, repo?: string): Promise<number> {
+  return title === '' ? 0 : (await findMilestone(title, repo)).id
 }

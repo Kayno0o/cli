@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { chmod, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +11,7 @@ export interface FakeMilestone { id: number, title: string, state: string, descr
 export interface FakeFailure { match: string, message: string, times?: number, exit?: number }
 // Calls whose arguments contain `match` (and `method`) wait until `parties` of them arrived, so two sessions reach that step together.
 export interface FakeBarrier { match: string, method?: string, parties: number }
-export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], clobber?: Record<number, string>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -18,6 +19,9 @@ import { appendFileSync, mkdirSync, readFileSync, renameSync, rmdirSync, writeFi
 
 const file = process.env.FAKE_TEA_STATE
 const raw = process.argv.slice(2)
+const gt = process.argv[1].endsWith('/gt')
+// gt prints an error body and exits non-zero where tea exits 0.
+const reject = body => { console.log(JSON.stringify(body)); if (gt) process.exit(1) }
 const repoAt = raw.indexOf('--repo')
 const barrier = JSON.parse(readFileSync(file, 'utf8')).barrier
 
@@ -102,6 +106,15 @@ const view = found => ({ labels: [], comments: state.comments?.[found.number]?.l
 
 state.calls = [...(state.calls ?? []), args]
 
+if (gt) {
+  state.seen = [...(state.seen ?? []), { token: process.env.GITEA_TOKEN, host: process.env.GITEA_CLI_HOST }]
+
+  if (args[0] !== 'api') {
+    console.error('gt: unknown command ' + args[0])
+    process.exit(1)
+  }
+}
+
 if (args.includes('--description-file')) {
   console.error('Error: flag provided but not defined: -description-file')
   process.exit(1)
@@ -122,7 +135,7 @@ if (failing !== undefined) {
   writeFileSync(file, JSON.stringify(state))
 
   if (failing.exit === undefined) {
-    console.log(JSON.stringify({ message: failing.message, url: 'https://forge/api/swagger' }))
+    reject({ message: failing.message, url: 'https://forge/api/swagger' })
     process.exit(0)
   }
 
@@ -133,21 +146,48 @@ if (failing !== undefined) {
 if (command === 'api') {
   const path = args.at(-1).replace('repos/{owner}/{repo}/', '')
   const method = flag('-X') ?? 'GET'
-  const fields = Object.fromEntries(args.flatMap((arg, at) => arg === '-f' ? [args[at + 1].split(/=(.*)/s).slice(0, 2)] : []))
+  const fields = Object.fromEntries(args.flatMap((arg, at) => arg === '-f' ? [args[at + 1].split(/=(.*)/s).slice(0, 2)] : arg === '-F' ? [[args[at + 1].split('=')[0], JSON.parse(args[at + 1].slice(args[at + 1].indexOf('=') + 1))]] : []))
+
   const milestone = /^milestones\\/(\\d+)$/.exec(path)
   const query = new URLSearchParams(path.split('?')[1] ?? '')
   const run = /^actions\\/runs\\/(\\d+)$/.exec(path)
   const one = /^issues\\/(\\d+)(\\/comments)?$/.exec(path)
+  const labelsOf = /^issues\\/(\\d+)\\/labels(?:\\/(\\d+))?$/.exec(path)
   const found = one === null ? undefined : issue(one[1])
+  const labelName = id => (state.labels ?? [])[Number(id) - 1]
 
   if (path === 'user')
     console.log(JSON.stringify({ login: 'kaynooo' }))
+  else if (labelsOf !== null && method === 'POST') {
+    const target = issue(labelsOf[1])
+
+    target.labels = [...(target.labels ?? []), ...fields.labels.map(id => ({ name: labelName(id) }))]
+    console.log(JSON.stringify(target.labels))
+  }
+  else if (labelsOf !== null && method === 'DELETE') {
+    const target = issue(labelsOf[1])
+
+    target.labels = (target.labels ?? []).filter(each => each.name !== labelName(labelsOf[2]))
+  }
+  else if (path === 'issues' && method === 'POST') {
+    const created = { number: Math.max(0, ...state.issues.map(each => each.number)) + 1, title: fields.title, body: fields.body ?? '', state: 'open', labels: (fields.labels ?? []).map(id => ({ name: labelName(id) })), milestone: fields.milestone ? state.milestones.find(each => each.id === fields.milestone) : null }
+
+    state.issues.push(created)
+    console.log(JSON.stringify(view(created)))
+  }
+  else if (one !== null && one[2] === undefined && method === 'PATCH' && found !== undefined) {
+    if (fields.title !== undefined) found.title = fields.title
+    if (fields.body !== undefined) found.body = fields.body
+    if (fields.state !== undefined) found.state = fields.state
+    if (fields.milestone !== undefined) found.milestone = fields.milestone === 0 ? null : state.milestones.find(each => each.id === fields.milestone)
+    console.log(JSON.stringify(view(found)))
+  }
   else if (one !== null && one[2] !== undefined && method === 'POST') {
     state.comments = { ...state.comments, [one[1]]: [...(state.comments?.[one[1]] ?? []), fields.body, ...(state.afterComment?.[one[1]] ?? [])] }
     console.log(JSON.stringify({ id: 1, body: fields.body }))
   }
   else if (run !== null)
-    console.log(JSON.stringify(state.runs?.find(each => each.id === Number(run[1])) ?? { message: 'not found', url: '' }))
+    { const found = state.runs?.find(each => each.id === Number(run[1])); if (found === undefined) reject({ message: 'not found', url: '' }); else console.log(JSON.stringify(found)) }
   else if (RUN_JOBS.test(path))
     console.log(JSON.stringify(state.jobs?.[path.split('/')[2]] ?? []))
   else if (JOB_LOGS.test(path) && state.logs?.[path.split('/')[2]] !== undefined)
@@ -158,7 +198,7 @@ if (command === 'api') {
     console.log(JSON.stringify({ workflow_runs: paged(matching, query), total_count: matching.length }))
   }
   else if (path.startsWith('labels?'))
-    console.log(JSON.stringify(paged((state.labels ?? []).map(name => ({ name })), query)))
+    console.log(JSON.stringify(paged((state.labels ?? []).map((name, at) => ({ id: at + 1, name })), query)))
   else if (path.startsWith('milestones?'))
     console.log(JSON.stringify(paged((state.milestones ?? []).filter(each => query.get('state') === 'all' || each.state === query.get('state')).map(milestoneView), query)))
   else if (path === 'milestones' && method === 'POST') {
@@ -179,7 +219,7 @@ if (command === 'api') {
     console.log(JSON.stringify(query.has('page') || query.has('limit') ? paged(matching, query) : matching))
   }
   else if (found === undefined)
-    console.log(JSON.stringify({ message: 'not found', url: '' }))
+    reject({ message: 'not found', url: '' })
   else if (one[2] === undefined)
     console.log(JSON.stringify(view(found)))
   else
@@ -259,10 +299,10 @@ function restore(name: string, value: string | undefined): void {
 }
 
 // Runs the callback with the fake `tea` first on the PATH, then returns the state it left.
-export async function withFakeTea(initial: FakeState, run: () => Promise<unknown>): Promise<FakeState> {
+export async function withFakeTea(initial: FakeState, run: () => Promise<unknown>, binary = 'tea'): Promise<FakeState> {
   const dir = await mkdtemp(join(tmpdir(), 'ft-fake-tea-'))
   const state = join(dir, 'state.json')
-  const bin = join(dir, 'tea')
+  const bin = join(dir, binary)
   const saved = { path: process.env.PATH, state: process.env.FAKE_TEA_STATE }
 
   try {
@@ -279,5 +319,20 @@ export async function withFakeTea(initial: FakeState, run: () => Promise<unknown
     restore('PATH', saved.path)
     restore('FAKE_TEA_STATE', saved.state)
     await rm(dir, { recursive: true, force: true })
+  }
+}
+
+// The same fake as the `gt` binary, which has no tea subcommands and fails on an error answer; tea is left out of the PATH it runs under.
+export async function withFakeGt(initial: FakeState, run: () => Promise<unknown>): Promise<FakeState> {
+  const saved = process.env.PATH
+  const withoutTea = (saved ?? '').split(':').filter(dir => !existsSync(join(dir, 'tea'))).join(':')
+
+  try {
+    process.env.PATH = withoutTea
+
+    return await withFakeTea(initial, run, 'gt')
+  }
+  finally {
+    restore('PATH', saved)
   }
 }
