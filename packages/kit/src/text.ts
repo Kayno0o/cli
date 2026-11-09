@@ -6,20 +6,30 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI, '')
 }
 
-// Edit distance between two names, for pointing a mistyped name at the one meant.
+// Edit distance between two names, for pointing a mistyped name at the one meant; two neighbours typed swapped count as one edit.
 export function distance(a: string, b: string): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, index) => index)
+  const left = [...a]
+  const right = [...b]
+  let before: number[] = []
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index)
 
-  for (const [i, left] of [...a].entries()) {
+  for (const [i, x] of left.entries()) {
     const current = [i + 1]
 
-    for (const [j, right] of [...b].entries())
-      current.push(Math.min((previous[j + 1] ?? 0) + 1, (current[j] ?? 0) + 1, (previous[j] ?? 0) + (left === right ? 0 : 1)))
+    for (const [j, y] of right.entries()) {
+      let cost = Math.min((previous[j + 1] ?? 0) + 1, (current[j] ?? 0) + 1, (previous[j] ?? 0) + (x === y ? 0 : 1))
 
+      if (i > 0 && j > 0 && x === right[j - 1] && left[i - 1] === y)
+        cost = Math.min(cost, (before[j - 1] ?? 0) + 1)
+
+      current.push(cost)
+    }
+
+    before = previous
     previous = current
   }
 
-  return previous[b.length] ?? 0
+  return previous[right.length] ?? 0
 }
 
 // A name the typed one starts, else one within two edits (one for a name under four letters).

@@ -391,6 +391,7 @@ describe('bad advisory answers are not read as none', () => {
 describe('nearMisses', () => {
   test('flags a typo, other separators and another scope of a popular name', () => {
     expect(nearMisses('lodasch')).toEqual(['lodash, 1 edit away'])
+    expect(nearMisses('raect')).toEqual(['react, 1 edit away'])
     expect(nearMisses('react_dom')[0]).toContain('react-dom')
     expect(nearMisses('@evil/lodash')).toContain('lodash under another scope')
   })

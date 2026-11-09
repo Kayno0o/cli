@@ -214,5 +214,7 @@ describe('text', () => {
   test('distance counts edits', () => {
     expect(distance('kitten', 'sitting')).toBe(3)
     expect(distance('same', 'same')).toBe(0)
+    expect(distance('raect', 'react')).toBe(1)
+    expect(distance('axois', 'axios')).toBe(1)
   })
 })

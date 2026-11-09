@@ -160,6 +160,12 @@ describe('choices', () => {
     expect(optionRows(bump, paint({ isTTY: false }))).toEqual(['      --bump <patch|minor|major>  the bump'])
   })
 
+  test('lists a long set of choices after the description, the flag column staying narrow', () => {
+    const only = { only: { type: 'string', description: 'one check', choices: ['bun-version', 'tea-login', 'claude-hooks', 'registry'] }, json: { type: 'boolean', description: 'json' } } as const
+
+    expect(optionRows(only, paint({ isTTY: false }))).toEqual(['      --only <value>  one check; one of bun-version, tea-login, claude-hooks, registry', '      --json          json'])
+  })
+
   test('checks a positional against a set the same way', () => {
     expect(oneOf('minor', '<bump>', ['patch', 'minor'])).toBe('minor')
     expect(() => oneOf('big', '<bump>', ['patch', 'minor'])).toThrow('<bump> takes one of patch, minor, not big')

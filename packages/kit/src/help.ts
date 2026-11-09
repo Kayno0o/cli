@@ -70,15 +70,21 @@ export function exampleRows(examples: Example[], colors = paint(process.stdout))
   return ['', colors.bold('Examples:'), ...examples.map(example => typeof example === 'string' ? `  ${example}` : `  ${example[0]}  ${colors.dim(`# ${example[1]}`)}`)]
 }
 
+// Choices longer than this are listed after the description, so one option does not push every description off the screen.
+const MAX_INLINE_CHOICES = 24
+
 // A line per option, `-n, --times <value>  how many`, aligned on the visible text.
 export function optionRows(options: Options, colors = paint(process.stdout)): string[] {
   const rows = Object.entries(options).map(([name, option]) => {
     const short = option.short === undefined ? '    ' : `${colors.cyan(`-${option.short}`)}, `
-    const named = option.choices === undefined ? '<value>' : `<${option.choices.join('|')}>`
+    const choices = option.choices?.join('|')
+    const inline = choices !== undefined && choices.length <= MAX_INLINE_CHOICES
+    const named = inline ? `<${choices}>` : '<value>'
     const placeholder = option.optional === undefined ? named : `[${named}]`
     const value = option.type === 'string' ? ` ${colors.dim(placeholder)}` : ''
+    const described = choices === undefined || inline ? option.description ?? '' : [option.description, `one of ${option.choices!.join(', ')}`].filter(Boolean).join('; ')
 
-    return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? placeholder.length + 1 : 0), description: option.description ?? '' }
+    return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? placeholder.length + 1 : 0), description: described }
   })
   const width = Math.max(0, ...rows.map(row => row.width))
 
