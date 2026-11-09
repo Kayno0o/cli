@@ -220,12 +220,12 @@ async function readBody(response: Response): Promise<string> {
   let bytes = 0
 
   while (bytes < BODY_BYTES) {
-    const { done, value } = await reader.read()
+    const { done, value } = (await reader.read()) as { done: boolean, value?: Uint8Array }
 
     if (done)
       break
 
-    bytes += value.length
+    bytes += value?.length ?? 0
     text += decoder.decode(value, { stream: true })
   }
 
