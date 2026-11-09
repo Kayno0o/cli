@@ -55,6 +55,17 @@ describe('complexityOf', () => {
     expect(complexityOf('// if (a && b) for\nconst s = "if while &&"\n')).toBe(1)
   })
 
+  test('counts a ternary and not an optional parameter or property', () => {
+    expect(complexityOf('function f(a?, b?) { return a }\n')).toBe(1)
+    expect(complexityOf('function f(a?: number) { return a?.b }\n')).toBe(1)
+    expect(complexityOf('const x = a ? 1 : 2\n')).toBe(2)
+  })
+
+  test('blanks a string before a comment, so a url in a string eats nothing', () => {
+    expect(complexityOf('const u = "http://x"; if (a) {}\n')).toBe(2)
+    expect(complexityOf("// don't\nif (a) { b = 'x' }\n")).toBe(2)
+  })
+
   test('leaves tests and generated paths out', () => {
     expect(['src/a.ts', 'lib/b.py', 'src/c.kay', 'app/d.vue', 'src/E.php'].map(isCandidate)).toEqual([true, true, true, true, true])
     expect(['tests/a.ts', 'src/a.test.ts', 'dist/a.js', 'src/a.d.ts', 'README.md', 'bun.lock'].map(isCandidate)).toEqual([false, false, false, false, false, false])
@@ -80,6 +91,15 @@ describe('hotspots', () => {
 
     expect(sweep.map(row => [row.path, row.churn])).toEqual([['src/plain.ts', 2]])
     expect(hotspots(['--bulk', 'x']).code).toBe(2)
+  })
+
+  test('counts the files of a commit over the whole repository, not only under the current folder', () => {
+    commit('2026-10-06T00:00:00Z', 'src/plain.ts', 'other/a.ts', 'other/b.ts', 'other/c.ts')
+
+    const result = Bun.spawnSync([process.execPath, CLI, '--json', '--since', '2026-01-01', '--half-life', '0', '--bulk', '3'], { cwd: join(dir, 'src'), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+    const rows = JSON.parse(result.stdout.toString()) as { path: string, churn: number }[]
+
+    expect(rows.find(row => row.path === 'plain.ts')?.churn).toBe(4)
   })
 
   test('names the most complex declaration of a file', () => {
