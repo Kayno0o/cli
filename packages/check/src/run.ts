@@ -35,8 +35,8 @@ export async function logDirectory(cwd: string): Promise<string> {
   return path
 }
 
-// The names of the steps that failed in the folder's latest finished run, undefined when it has none.
-export async function lastFailed(cwd: string): Promise<string[] | undefined> {
+// The results of the folder's latest finished run, undefined when it has none.
+export async function lastResults(cwd: string): Promise<{ name: string, ok: boolean }[] | undefined> {
   const root = await privateLogDirectory('check')
   const prefix = runPrefix(cwd)
   let latest: { time: number, file: string } | undefined
@@ -61,9 +61,12 @@ export async function lastFailed(cwd: string): Promise<string[] | undefined> {
   if (latest === undefined)
     return undefined
 
-  const results = JSON.parse(await Bun.file(latest.file).text()) as { name: string, ok: boolean }[]
+  return JSON.parse(await Bun.file(latest.file).text()) as { name: string, ok: boolean }[]
+}
 
-  return results.filter(result => !result.ok).map(result => result.name)
+// The names of the steps that failed in the folder's latest finished run, undefined when it has none.
+export async function lastFailed(cwd: string): Promise<string[] | undefined> {
+  return (await lastResults(cwd))?.filter(result => !result.ok).map(result => result.name)
 }
 
 // Saves a command's output in a log of the user's own, returning its path.

@@ -254,6 +254,15 @@ describe('check --failed', () => {
     expect(out).not.toContain('ok    test')
   })
 
+  test('still knows what failed after a partial run that passed', async () => {
+    await capture(async () => check([], repo('js')))
+    await capture(async () => check(['--only', 'test'], repo('js')))
+
+    const { out } = await capture(async () => check(['--failed'], repo('js')))
+
+    expect(out).toContain('FAIL  lint')
+  })
+
   test('fails with usage when no run failed', async () => {
     const dir = temp('check-failed-')
 

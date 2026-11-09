@@ -10,7 +10,7 @@ import { place, placeSettings, programOf, shellIn, Stack } from './compose'
 import { runFixers } from './fix'
 import { changedPaths, narrow } from './narrow'
 import { options, pick } from './options'
-import { lastFailed, logDirectory, outcomeJson, printOutcome, refusedStep, RESULTS_FILE, runStep } from './run'
+import { lastFailed, lastResults, logDirectory, outcomeJson, printOutcome, refusedStep, RESULTS_FILE, runStep } from './run'
 import { discoverProjects, STEP_NAMES } from './steps'
 
 const usage = `check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot] [--in <service> | --host] [--list]
@@ -174,7 +174,11 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
     held.release()
   }
 
-  await writeFile(join(directory, RESULTS_FILE), JSON.stringify(outcomes.map(({ name, ok }) => ({ name, ok }))), { mode: 0o600 })
+  // A partial run replaces the entries of the steps it ran and keeps the others', so --failed still knows what failed before.
+  const ran = outcomes.map(({ name, ok }) => ({ name, ok }))
+  const kept = (await lastResults(cwd) ?? []).filter(({ name }) => !ran.some(each => each.name === name))
+
+  await writeFile(join(directory, RESULTS_FILE), JSON.stringify([...kept, ...ran]), { mode: 0o600 })
 
   if (json)
     printJson(outcomes)
