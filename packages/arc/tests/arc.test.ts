@@ -152,6 +152,28 @@ describe('arc extract', () => {
     expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('beta')
   })
 
+  test('keeps the source of a lone compressed file and matches the suffix in any case', () => {
+    const out = temp()
+    const source = join(out, 'note.txt.GZ')
+
+    writeFileSync(source, Bun.gzipSync('hello'))
+
+    expect(arc(['extract', source], out).code).toBe(0)
+    expect(existsSync(source)).toBe(true)
+    expect(readFileSync(join(out, 'note.txt'), 'utf8')).toBe('hello')
+  })
+
+  test('extracts a .txz', () => {
+    const { folder, dest } = project()
+
+    Bun.spawnSync(['tar', 'cJf', join(dest, 'p.TXZ'), '-C', folder, '.'])
+
+    const out = temp()
+
+    expect(arc(['extract', join(dest, 'p.TXZ')], out).code).toBe(0)
+    expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('beta')
+  })
+
   test('says so for an unknown extension', () => {
     const { dest } = project()
 
