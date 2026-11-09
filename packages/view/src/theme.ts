@@ -20,6 +20,8 @@ export interface Theme {
   number: (text: string) => string
   link: (text: string, url: string) => string
   // The text in the shade the kit's gradient has at `ratio`, 0 its first end and 1 its second, the accent where the theme has no gradient.
+  // The text in reverse video, the changed words of a line.
+  changed: (text: string) => string
   shade: (text: string, ratio: number) => string
 }
 
@@ -39,6 +41,7 @@ export function themeFor(stream: Stream = process.stdout, env: Record<string, st
     bold: colors.bold,
     italic: colors.italic,
     strike: colors.strikethrough,
+    changed: colors.inverse,
     added: colors.green,
     removed: colors.red,
     accent,

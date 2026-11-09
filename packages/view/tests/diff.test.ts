@@ -48,3 +48,33 @@ describe('a miscounted hunk', () => {
     expect(out).toContain('diff x')
   })
 })
+
+describe('renderDiff emphasis and highlighting', () => {
+  const EDIT = 'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-const total = price + tax\n+const total = price + fee\n'
+  const plain = themeFor({ isTTY: false }, {})
+
+  test('reverses the changed words of a paired -/+ line, keeping the line colour around them', () => {
+    const [removed, added] = renderDiff(EDIT, colour).split('\n').slice(4)
+
+    expect(removed).toContain('\u001B[7m\u001B[31mtax\u001B[39m\u001B[27m')
+    expect(added).toContain('\u001B[7m\u001B[32mfee\u001B[39m\u001B[27m')
+    expect(Bun.stripANSI(removed!)).toBe('-const total = price + tax')
+  })
+
+  test('leaves unrelated lines and a lone removal without emphasis', () => {
+    expect(renderDiff('@@ -1 +1 @@\n-alpha\n+beta\n', colour)).not.toContain('\u001B[7m')
+    expect(renderDiff('@@ -1,2 +1 @@\n-gone\n-more\n x\n', colour)).not.toContain('\u001B[7m')
+  })
+
+  test('highlights the code by the file extension and keeps the line colour on the rest', () => {
+    const removed = renderDiff(EDIT, colour).split('\n')[4]!
+
+    expect(removed).toContain('\u001B[35mconst\u001B[0m')
+    expect(removed).toContain('\u001B[31m total = price + ')
+    expect(renderDiff(EDIT.replaceAll('a.ts', 'a.txt'), colour)).not.toContain('\u001B[35m')
+  })
+
+  test('draws the same text without colour', () => {
+    expect(renderDiff(EDIT, plain)).toBe(EDIT.replace('diff --git a/a.ts b/a.ts', 'diff a.ts'))
+  })
+})

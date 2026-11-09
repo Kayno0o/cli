@@ -15,7 +15,7 @@ const DIFF_FILE = /\.(?:diff|patch)$/i
 
 const USAGE = `view [options] [file]: shows a markdown file, a source file or a git diff in the colours of the other @kaynooo CLIs
 
-A file, or what is piped on stdin (or - for stdin). A source file (ts, js, json, yaml, toml, py, sh, css, sql, rs, go and more) is highlighted behind line numbers, by its extension or --lang. A diff, a \`git log -p\` or a \`git show\` is recognised by its first line or a .diff or .patch name, anything else is markdown; --diff and --markdown force one. Code blocks in markdown are highlighted by their language.
+A file, or what is piped on stdin (or - for stdin). A source file (ts, js, json, yaml, toml, py, sh, css, sql, rs, go and more) is highlighted behind line numbers, by its extension or --lang. A diff, a \`git log -p\` or a \`git show\` is recognised by its first line or a .diff or .patch name, in a diff the code is highlighted by the file's extension and the changed words of a paired removed and added line are reversed; anything else is markdown; --diff and --markdown force one. Code blocks in markdown are highlighted by their language.
 Lines wrap to the terminal width (COLUMNS or 80 when it is not a terminal) and a long output on a terminal goes through $PAGER, or \`less -FRX\` when it is unset or less, unless --no-pager. No colour with NO_COLOR, a pipe or --plain.`
 const EXITS: ExitRow[] = [[0, 'it showed the text'], [1, 'there is nothing to show'], [2, 'a usage error or a file that is missing']]
 
