@@ -28,8 +28,8 @@ const ESCAPE = /[.*+?^${}()|[\]\\]/g
 interface TokenFormat {
   kind: string
   pattern: RegExp
-  // Skips a candidate that is a placeholder or a plain word.
-  skip?: (value: string) => boolean
+  // Skips a candidate that is a placeholder or a plain word. `before` is the line text ahead of it.
+  skip?: (value: string, before: string) => boolean
 }
 
 // A secret value starting like this is a reference or a placeholder, not the secret.
@@ -37,10 +37,38 @@ function isPlaceholder(value: string): boolean {
   return PLACEHOLDER.test(value) || PLAIN_VALUE.test(value)
 }
 
+// Names that are secrets whatever they are followed by, and names that also open prose (`token: expired`, `auth: failed`).
+const STRONG_NAME = 'password|passwd|secret|api[_-]?key|access[_-]?key|private[_-]?key|account[_-]?key|shared[_-]?access[_-]?key'
+const WEAK_NAME = 'token|credentials?|auth'
+const PLAIN_WORD = /^[a-z]+$/i
+const AFTER_COLON = /:\s*$/
+const KEY_VALUE_GAP = '\\s*[:=]\\s*'
+
+// A strong name before a colon, so likely prose, holding only a word is left alone.
+function isProse(value: string, before: string): boolean {
+  return isPlaceholder(value) || (AFTER_COLON.test(before) && PLAIN_WORD.test(value))
+}
+
+// A value under a weak name is a secret only when it holds a digit or is long, which a word of prose never does.
+function isWeak(value: string, before: string): boolean {
+  return isProse(value, before) || !(/\d/.test(value) || value.length >= 16)
+}
+
+// A key name holding one of the words: `AWS_SECRET_ACCESS_KEY`, `X-Api-Key`, `access_token`.
+function keyed(names: string, value: string): RegExp {
+  return new RegExp(`(?<![\\w-])["']?(?:[\\w-]{0,30}[_-])?(?:${names})(?:[_-][\\w-]{0,30})?["']?${KEY_VALUE_GAP}${value}`, 'dgi')
+}
+
 // A pattern with a group masks that group only, else the whole match.
 const TOKEN_FORMATS: TokenFormat[] = [
   { kind: 'GitHub token', pattern: /\b(?:gh[pousr]_|github_pat_)\w{20,}/dg },
-  { kind: 'GitLab token', pattern: /\bglpat-[\w-]{20,}/dg },
+  { kind: 'GitLab token', pattern: /\bgl(?:pat|rt|dt|ptt)-[\w-]{20,}/dg },
+  { kind: 'Hugging Face token', pattern: /\bhf_[A-Za-z]{30,}/dg },
+  { kind: 'webhook secret', pattern: /\bwhsec_\w{20,}/dg },
+  { kind: 'DigitalOcean token', pattern: /\bdop_v1_\w{20,}/dg },
+  { kind: 'Shopify token', pattern: /\bshp(?:at|ca|pa|ss)_\w{20,}/dg },
+  { kind: 'password', pattern: /\bmysql(?:dump|admin)?\s+(?:\S+\s+)*?-p([^\s"'|;&-]\S{3,})/dg },
+  { kind: 'password', pattern: /\bsshpass\s+(?:-[a-oq-z]\s+)*-p\s*([^\s"'|;&]{4,})/dg },
   { kind: 'API key', pattern: /\bsk-[\w-]{20,}/dg },
   { kind: 'Slack token', pattern: /\bx(?:ox[abprs]|app)-[\w-]{10,}/dg },
   { kind: 'JWT', pattern: /\beyJ[\w-]+\.[\w-]+\.[\w-]+/dg },
@@ -51,8 +79,10 @@ const TOKEN_FORMATS: TokenFormat[] = [
   { kind: 'SendGrid key', pattern: /\bSG\.[\w-]{16,}\.[\w-]{16,}/dg },
   { kind: 'Authorization header', pattern: /\bAuthorization["']?\s*[:=]\s*["']?(?:Bearer|Basic|Token|Digest)\s+([^\s"',;]{8,})/dgi, skip: isPlaceholder },
   { kind: 'Bearer token', pattern: /\bBearer\s+((?=[\w.~+/=-]*\d)[\w.~+/=-]{20,})/dg },
-  { kind: 'password', pattern: /(?<![\w-])(?:[\w-]{0,30}[_-])?(?:password|passwd|secret|api[_-]?key)(?:[_-][\w-]{0,30})?=([^\s"'&;,]{4,})/dgi, skip: isPlaceholder },
-  { kind: 'password', pattern: /(?<![\w-])["']?(?:[\w-]{0,30}[_-])?(?:password|passwd|secret|api[_-]?key)(?:[_-][\w-]{0,30})?["']?\s*[:=]\s*(["'])((?:\\.|(?!\1)[^\\\n]){4,})\1/dgi, skip: isPlaceholder },
+  { kind: 'password', pattern: keyed(STRONG_NAME, '([^\\s"\'&;,]{4,})'), skip: isProse },
+  { kind: 'password', pattern: keyed(WEAK_NAME, '([^\\s"\'&;,]{4,})'), skip: isWeak },
+  { kind: 'password', pattern: keyed(STRONG_NAME, '(["\'])((?:\\\\.|(?!\\1)[^\\\\\\n]){4,})\\1'), skip: isPlaceholder },
+  { kind: 'password', pattern: keyed(WEAK_NAME, '(["\'])((?:\\\\.|(?!\\1)[^\\\\\\n]){4,})\\1'), skip: isWeak },
 ]
 
 // A private key block (PEM, PGP). Its body is masked from just after the BEGIN marker to the END marker or the end of the line, so one line may hold the whole key escaped as JSON.
@@ -207,7 +237,7 @@ export function findSecrets(line: string, known?: KnownSecrets): Match[] {
 
       const value = line.slice(start, end)
 
-      if (!skip?.(value))
+      if (!skip?.(value, line.slice(0, start)))
         found.push({ start, end, kind, mask: hint(value) })
     }
   }

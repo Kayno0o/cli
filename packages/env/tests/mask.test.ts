@@ -125,3 +125,52 @@ describe('URL tokens', () => {
     expect(maskLine(`${base}${'aBc'.repeat(7).slice(0, 20)}`)).toBe(`${base}${'aBc'.repeat(7).slice(0, 20)}`)
   })
 })
+
+describe('maskLine keyword values', () => {
+  const secret = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
+
+  test('masks the value after a secret keyword, keeping the key', () => {
+    for (const [line, key] of [
+      ['password: hunter22', 'password: '],
+      ['password = hunter22', 'password = '],
+      ['aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', 'aws_secret_access_key = '],
+      ['export GITHUB_TOKEN=abcd1234efgh', 'export GITHUB_TOKEN='],
+      ['AUTH_TOKEN=abcd1234efgh', 'AUTH_TOKEN='],
+      ['{"access_token":"abcd1234efgh"}', '{"access_token":"'],
+      ['X-Api-Key: abcd1234efgh', 'X-Api-Key: '],
+      ['Server=x;AccountKey=abcd1234efgh==;EndpointSuffix=core', 'Server=x;AccountKey='],
+      ['SharedAccessKey=abcd1234efgh', 'SharedAccessKey='],
+      ['private_key: "abcd1234efgh"', 'private_key: "'],
+    ] as const) {
+      const masked = maskLine(line)
+
+      expect(masked).toStartWith(key)
+      expect(masked).not.toContain('abcd1234efgh')
+      expect(masked).not.toContain('hunter22')
+      expect(masked).not.toContain(secret)
+    }
+  })
+
+  test('masks a password given on a command line', () => {
+    expect(maskLine('mysql -u root -phunter22 db')).toBe('mysql -u root -phu***(8) db')
+    expect(maskLine('sshpass -p hunter22 ssh host')).toBe('sshpass -p hu***(8) ssh host')
+  })
+
+  test('masks prefixed tokens', () => {
+    for (const token of [
+      `hf_${'a'.repeat(34)}`,
+      `whsec_${'a1'.repeat(15)}`,
+      `dop_v1_${'a1'.repeat(30)}`,
+      `shpat_${'a1'.repeat(16)}`,
+      `glrt-${'a1'.repeat(12)}`,
+      `gldt-${'a1'.repeat(12)}`,
+      `glptt-${'a1'.repeat(12)}`,
+    ])
+      expect(maskLine(`value ${token} end`)).not.toContain(token)
+  })
+
+  test('leaves prose, short values and settings alone', () => {
+    for (const line of ['token: 5', 'auth: true', 'token: expired', 'auth: failed for user', 'password: required', 'author: Bob', 'the password policy: strict', 'credential: invalid', 'mysql -u root db', 'hf_short whsec_x', 'tokens: 1234'])
+      expect(maskLine(line)).toBe(line)
+  })
+})
