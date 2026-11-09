@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, UsageError, usageLine, wantsHelpJson } from './args'
 import { scriptArgs } from './argv'
+import { notifyEnd } from './notify'
 import { paint, takesControlCodes } from './style'
 import { closest } from './text'
 import { noteUsageError, recordUsage, usageEntry } from './usage'
@@ -462,11 +463,15 @@ export async function runCli(cli: Cli, argv = scriptArgs()): Promise<number> {
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(scopeOf(cli.commands, cli.extraCommands, cli.aliases), cli.defaultCommand, argv.slice(1)))
 
+  const started = performance.now()
   const code = await dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version, redact: cli.redact })
+  const command = commandPath(scopeOf(cli.commands, cli.extraCommands, cli.aliases), argv)
+
+  notifyEnd(command === undefined ? cli.name : `${cli.name} ${command}`, code, performance.now() - started)
 
   if (cli.usage !== false) {
     try {
-      recordUsage(usageEntry(cli.name, commandPath(scopeOf(cli.commands, cli.extraCommands, cli.aliases), argv), argv, code))
+      recordUsage(usageEntry(cli.name, command, argv, code))
     }
     catch {}
   }
@@ -534,6 +539,7 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
   }
 
   let code: number
+  const started = performance.now()
 
   try {
     code = await run(argv)
@@ -541,6 +547,8 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
   catch (error) {
     code = reportThrown(name, error, redact, wantsJson(argv))
   }
+
+  notifyEnd(name, code, performance.now() - started)
 
   if (usage !== false) {
     try {
