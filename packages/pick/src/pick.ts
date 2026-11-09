@@ -3,7 +3,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { badUsage, fail, jsonOption, parse, printJson, runMain } from '@kaynooo/cli-kit'
-import { choose, DEFAULT_HEIGHT, parseHeight } from '@kaynooo/cli-kit/picker'
+import { choose, DEFAULT_HEIGHT, parseHeight, rank } from '@kaynooo/cli-kit/picker'
 
 const USAGE = `pick [options]: a fuzzy selector, the lines on stdin in, the chosen one on stdout out
 
@@ -11,8 +11,8 @@ Type to filter: the query matches as a subsequence, best matches first (a word s
 The keys are read from the terminal and the selector is drawn on stderr, so \`pick\` in a pipe or a command substitution prints only the choice. With --multi, tab marks the highlighted line and enter prints the marked lines in input order (the highlighted one when none is marked).
 --preview runs a command for the highlighted line, \`{}\` standing for it shell-quoted, in a pane on the right when the terminal is at least 80 columns wide; its output is cut at 64 KiB and 200 lines.
 
-Without a terminal on stderr there is nobody to choose: it prints the first line containing the query (case-insensitive), every one with --multi.`
-const EXITS: ExitRow[] = [[0, 'it printed a choice'], [1, 'cancelled, nothing matches or there are no lines'], [2, 'a usage error']]
+Without a terminal on stderr there is nobody to choose: it prints the best line the query matches, as the selector would rank it, or every match best first with --multi.`
+const EXITS: ExitRow[] = [[0, 'it printed a choice'], [1, 'nothing matches or there are no lines'], [2, 'a usage error'], [130, 'cancelled']]
 
 const OPTIONS = {
   multi: { type: 'boolean', short: 'm', description: 'tab marks several lines, enter prints them' },
@@ -52,8 +52,7 @@ async function main(args: string[]): Promise<number> {
 
   // Nobody to choose, so the lines the query matches are the choice: all of them with --multi, else the first.
   if (!process.stderr.isTTY) {
-    const query = (values.query ?? '').toLowerCase()
-    const matching = lines.filter(line => line.toLowerCase().includes(query))
+    const matching = rank(values.query ?? '', lines).map(({ index }) => lines[index]!)
 
     if (matching.length === 0)
       return 1
@@ -66,7 +65,7 @@ async function main(args: string[]): Promise<number> {
   const picked = await choose(lines, { multi: values.multi === true, prompt: values.prompt ?? '> ', query: values.query ?? '', height, preview: values.preview })
 
   if (picked === undefined)
-    return 1
+    return 130
 
   print(picked, values.json === true)
 

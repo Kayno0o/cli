@@ -8,6 +8,8 @@ import { CTRL_KEY } from './picker/state'
 import { select } from './picker/terminal'
 import { parseHeight } from './picker/view'
 
+export { rank } from './picker/score'
+export type { Ranked } from './picker/score'
 export type { Row } from './picker/state'
 export { choose } from './picker/terminal'
 export type { PickSettings, PreviewFn, Reload, Reloaded, Selection, Terminal } from './picker/terminal'
