@@ -216,4 +216,15 @@ describe('declarations in other languages', () => {
     expect(outline(kotlin, 'a.kt').map(entry => entry.text)).toContain('final class Done')
     expect(find('class A {\n    static helper() {\n    }\n}\n', 'A.java', 'helper')).toEqual([2])
   })
+
+  test('reads Java and C# members with a return type', () => {
+    const java = 'public class Main {\n    public static void main(String[] a) {\n    }\n\n    private final List<String> names() {\n    }\n\n    int count;\n}\n'
+    const csharp = 'class A {\n    public async Task<int> RunAsync(string x) {\n    }\n}\n'
+
+    expect(find(java, 'Main.java', 'main')).toEqual([2])
+    expect(find(java, 'Main.java', 'names')).toEqual([5])
+    expect(outline(java, 'Main.java').map(entry => entry.text)).toEqual(['public class Main', 'public static void main(String[] a)', 'private final List<String> names()'])
+    expect(find(csharp, 'A.cs', 'RunAsync')).toEqual([2])
+    expect(outline('class A {\n    void f() {\n        return g(1);\n        else h(2);\n    }\n}\n', 'A.java').map(entry => entry.text)).toEqual(['class A'])
+  })
 })

@@ -10,8 +10,11 @@ const LOCATION = /^(?:\.\/)?([^\s:()]+)(?::(\d+)(?::\d+)?|\((\d+),\d+\))(?=[:\s)
 // The keywords a declaration opens with, in TS, JS, Python, Go, Rust, PHP, Java and Kotlin.
 const DECLARATION = /^(?:(?:export|default|declare|abstract|async|pub(?:\([^)]*\))?|public|private|protected|internal|final|open|sealed|static|suspend)\s+)*(?:function\*?|class|interface|type|enum|const|let|var|namespace|module|def|func|fun|fn|struct|trait|impl)\s/
 // A member of a class or an object: modifiers, the name, maybe type parameters, then its parameters.
-const MODIFIERS = /^(?:(?:public|private|protected|internal|final|open|sealed|static|async|suspend|override|readonly|abstract|get|set|pub(?:\([^)]*\))?|function|fn|def|func|fun)\s+)*/
-const MEMBER = /^(?:(?:public|private|protected|internal|final|open|sealed|static|async|suspend|override|readonly|abstract|get|set|pub(?:\([^)]*\))?|function|fn|def|func|fun)\s+)*[#\w$]+\s*(?:<[^>]*>\s*)?\(/
+const MODIFIER_WORDS = String.raw`(?:public|private|protected|internal|final|open|sealed|static|async|suspend|override|readonly|abstract|get|set|pub(?:\([^)]*\))?|function|fn|def|func|fun)\s+`
+// A return type, as Java and C# put one between the modifiers and the name; only after a modifier, so `return x(` and `else y(` are no member.
+const RETURN_TYPE = String.raw`(?:(?<=\s)[\w$.]+(?:<[^>]*>)?(?:\[\])*\??\s+(?=[#\w$]+\s*(?:<[^>]*>\s*)?\())?`
+const MODIFIERS = new RegExp(String.raw`^(?:${MODIFIER_WORDS})*${RETURN_TYPE}`)
+const MEMBER = new RegExp(String.raw`^(?:${MODIFIER_WORDS})*${RETURN_TYPE}[#\w$]+\s*(?:<[^>]*>\s*)?\(`)
 // A Go method's receiver, `func (r *T) name`, and a generator's star.
 const RECEIVER = /^(?:\([^)]*\)\s*)?/
 const STAR = /^\*?\s*/
