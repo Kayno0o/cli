@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -45,7 +45,7 @@ describe('sub', () => {
 
     expect(result).toMatchObject({ code: 0, out: 'a.ts: 2 replacements on lines 1, 1, +1 -1\nskipped 1 file with no match: b.ts\n' })
     expect(read('b.ts')).toBe('bar\n')
-    expect(JSON.parse(sub(['--from', 'baz', '--to', 'q', '--all', '--skip-missing', '--json', 'a.ts', 'b.ts']).out).skipped).toEqual(['b.ts'])
+    expect(JSON.parse(sub(['--from', 'baz', '--to', 'q', '--all', '--skip-missing', '--json', 'a.ts', 'b.ts']).out)).toMatchObject({ skipped: ['b.ts'] })
     expect(sub(['--from', 'nothing', '--to', 'x', '--all', '--skip-missing', 'a.ts', 'b.ts']).code).toBe(1)
     expect(sub(['--from', 'a', '--to', 'x', '--skip-missing', 'a.ts']).code).toBe(2)
     expect(sub(['--from', 'nothing', '--to', 'x', '--all', 'a.ts', 'b.ts']).code).toBe(1)
@@ -61,6 +61,28 @@ describe('sub', () => {
     file('b.ts', 'Foo\n')
     expect(sub(['--pairs', '[{"from":"foo","to":"y","regex":true,"ignoreCase":true}]', 'b.ts']).code).toBe(0)
     expect(read('b.ts')).toBe('y\n')
+  })
+
+  test('walks a folder given as a path, .gitignore respected, binary and unmatched files skipped', () => {
+    Bun.spawnSync(['git', 'init', '-q'], { cwd: dir })
+    mkdirSync(join(dir, 'src/deep'), { recursive: true })
+    mkdirSync(join(dir, 'build'))
+    writeFileSync(join(dir, '.gitignore'), 'build/\n')
+    file('src/a.ts', 'foo\n')
+    file('src/deep/b.ts', 'foo\n')
+    file('src/c.ts', 'bar\n')
+    file('build/d.ts', 'foo\n')
+    writeFileSync(join(dir, 'src/bin.dat'), Buffer.from([102, 111, 111, 0, 1]))
+
+    const result = sub(['--from', 'foo', '--to', 'baz', 'src', 'build'])
+
+    expect(result).toMatchObject({ code: 0 })
+    expect(result.out).toContain('skipped 1 file with no match: src/c.ts')
+    expect(read('src/a.ts')).toBe('baz\n')
+    expect(read('src/deep/b.ts')).toBe('baz\n')
+    expect(read('build/d.ts')).toBe('foo\n')
+    expect(readFileSync(join(dir, 'src/bin.dat')).includes(0)).toBe(true)
+    expect(sub(['--from', 'foo', '--to', 'x', 'src']).code).toBe(1)
   })
 
   test('replaces one literal match and reports its line and diff stat', () => {

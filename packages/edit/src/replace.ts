@@ -78,7 +78,12 @@ export function compile(source: string, { ignoreCase, dotAll }: Pick<Pair, 'igno
 }
 
 function escapes(to: string): string {
-  return to.replace(ESCAPE, (whole, letter: string | undefined) => letter === undefined ? whole : letter === 'n' ? '\n' : '\t')
+  return to.replace(ESCAPE, (whole, letter: string | undefined) => {
+    if (letter === undefined)
+      return whole
+
+    return letter === 'n' ? '\n' : '\t'
+  })
 }
 
 // String.replace leaves ${1} and ${name} as they are, so they become $01 and $<name>: the two-digit form keeps digits typed after the group out of its number; ${0} is the whole match.

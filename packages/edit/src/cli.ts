@@ -11,8 +11,11 @@ import { counted, plural } from '@kaynooo/utils/text'
 import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
 import { applyPairs, compile, listLines } from './replace'
+import { filesIn } from './walk'
 
 const USAGE = `sub [options] <file>...: replaces text in files, writing nothing unless every replacement matches as often as expected
+
+A folder given as a file is walked, .gitignore respected and binary files left out; a file in it where nothing matches is skipped and listed, the count checks holding for the others.
 
 Multi-line text: give no --from, --to or --pairs and pipe SEARCH/REPLACE blocks on stdin from a quoted heredoc, which needs no escaping; a producer silent for 3 s is taken for no heredoc at all, so write a slow one to a file first. The blocks apply in order to the files on the command line, each matching exactly once unless --count or --all says otherwise:
 
@@ -284,7 +287,19 @@ async function main(argv: string[]): Promise<number> {
   const parsed = parse(argv, USAGE, OPTIONS, { exits: EXITS, replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub src/a.php <<\'EOF\' (SEARCH/REPLACE blocks, see above)', 'multi-line text, no escaping'], ['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
 
   const { values, positionals } = parsed
-  const files = dedupe(positionals.map(path => normalize(path)))
+  const walked = new Set<string>()
+  const given = await Promise.all(positionals.map(async (path) => {
+    if (statSync(path, { throwIfNoEntry: false })?.isDirectory() !== true)
+      return [normalize(path)]
+
+    const inside = (await filesIn(path)).map(normalize)
+
+    for (const file of inside)
+      walked.add(file)
+
+    return inside
+  }))
+  const files = dedupe(given.flat())
 
   if (values.count !== undefined && values.all === true)
     fail('--count and --all exclude each other')
@@ -310,6 +325,9 @@ async function main(argv: string[]): Promise<number> {
 
     const before = readUtf8(path)
 
+    if (before === undefined && walked.has(path))
+      continue
+
     if (before === undefined) {
       problems.push({ path, problem: 'not valid UTF-8, left alone' })
 
@@ -318,7 +336,7 @@ async function main(argv: string[]): Promise<number> {
 
     const applied = applyPairs(before, pairs)
 
-    if (values['skip-missing'] === true && applied.matched === 0) {
+    if ((values['skip-missing'] === true || walked.has(path)) && applied.matched === 0) {
       skipped.push(path)
 
       continue
