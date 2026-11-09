@@ -201,7 +201,7 @@ export function failureExcerpt(output: string): string {
 }
 
 export interface ToolError {
-  tool: 'tsc' | 'eslint' | 'bun check' | 'kay check' | 'bun test' | 'phpunit' | 'phpstan' | 'php-cs-fixer' | 'playwright' | 'vitest' | 'go' | 'cargo' | 'ruff' | 'pytest'
+  tool: 'tsc' | 'eslint' | 'bun check' | 'kay check' | 'bun test' | 'phpunit' | 'phpstan' | 'php-cs-fixer' | 'playwright' | 'vitest' | 'go' | 'cargo' | 'ruff' | 'pytest' | 'generic'
   file: string
   line: number
   column: number
@@ -223,6 +223,7 @@ const BUN_TEST_RECEIVED = /^Received: (.*)$/
 const BUN_TEST_FRAME = /^\s+at (?:.*? \()?(.+?):(\d+):(\d+)\)?$/
 const BUN_TEST_FILE = /^\S+\.test\.[jt]sx?:$/
 const GO_ERROR = /^\s*(?:vet: )?(\S+\.go):(\d+):(?:(\d+):)? (.+)$/
+const GO_LINTER = /^(.*\S)\s+\(([a-z][\w-]*)\)$/
 const GO_NOISE = /^# \S+(?: \[\S+\])?$/
 const ARROW = /^\s*--> (.+?):(\d+):(\d+)$/
 const CARGO_HEADER = /^(error|warning)(?:\[([\w-]+)\])?: (.*)$/
@@ -243,6 +244,9 @@ const PYTEST_FRAME = /^in \S/
 const PYTEST_SECTION = /^_{3,} .* _{3,}$/
 const PYTEST_EXCEPTION_END = /[\s:]/
 const PYTEST_NOISE = /^(?:platform |rootdir: |collected |plugins: |configfile: |cachedir: |\S+\.pyi? [.FEsxXR]+ +\[ *\d+%\]$|\S+\.py:\d+: $)/
+// The `file:line[:col]: error|warning|note: message` line gcc, clang, mypy, `shellcheck -f gcc` and golangci-lint print, as editors' problem matchers read it.
+const GENERIC_LINE = /^(\S[^:]*?):(\d+)(?::(\d+))?: (?:fatal )?(error|warning|note): (.*)$/
+const GENERIC_RULE = /^(.*?)\s+(?:\[([\w-]+)\]|\(([a-z][\w-]*)\))$/
 const NOISE = /^(?:bun test v|Errors {2}Files$|Ran \d+ tests?|note: |\s*\d+ expect\(\) calls|\s+\d+\s+\S+:\d+$|\s*\d+ errors? and \d+ warnings? potentially fixable)/
 
 export type Collector = (lines: string[], used: Set<number>) => ToolError[]
@@ -394,7 +398,10 @@ const collectGo: Collector = (lines, used) => {
     if (match === null)
       continue
 
-    errors.push({ tool: 'go', file: match[1] ?? '', line: Number(match[2]), column: Number(match[3] ?? 0), severity: 'error', message: match[4] ?? '' })
+    // golangci-lint prints the same shape with its linter in parentheses at the end
+    const linter = GO_LINTER.exec(match[4] ?? '')
+
+    errors.push({ tool: 'go', file: match[1] ?? '', line: Number(match[2]), column: Number(match[3] ?? 0), ...(linter === null ? {} : { rule: linter[2] }), severity: 'error', message: linter === null ? match[4] ?? '' : linter[1] ?? '' })
     used.add(index)
   }
 
@@ -526,7 +533,31 @@ const collectPytest: Collector = (lines, used) => {
   return errors
 }
 
-const COLLECTORS: Collector[] = [collectBunCheck, collectBunTest, collectVitest, collectPlaywright, collectPhpunit, collectPhpstan, collectCsFixer, collectPytest, collectArrowed, collectRuff, collectGo, collectTsc, collectEslint]
+// Any line of the `file:line[:col]: severity: message` shape no format above took. Notes only add context to the error before them, so they are counted as read and not listed.
+const collectGeneric: Collector = (lines, used) => {
+  const errors: ToolError[] = []
+
+  for (const [index, line] of lines.entries()) {
+    const match = used.has(index) ? null : GENERIC_LINE.exec(line)
+
+    if (match === null)
+      continue
+
+    used.add(index)
+
+    if (match[4] === 'note')
+      continue
+
+    const ruled = GENERIC_RULE.exec(match[5] ?? '')
+    const rule = ruled?.[2] ?? ruled?.[3]
+
+    errors.push({ tool: 'generic', file: match[1] ?? '', line: Number(match[2]), column: Number(match[3] ?? 0), rule, severity: match[4] === 'warning' ? 'warning' : 'error', message: rule === undefined ? match[5] ?? '' : ruled?.[1] ?? '' })
+  }
+
+  return errors
+}
+
+const COLLECTORS: Collector[] = [collectBunCheck, collectBunTest, collectVitest, collectPlaywright, collectPhpunit, collectPhpstan, collectCsFixer, collectPytest, collectArrowed, collectRuff, collectGo, collectTsc, collectEslint, collectGeneric]
 
 // Every error the known formats report, each format's in its own order, and how many non-blank lines none of them accounted for.
 export function parseErrors(output: string): ParsedErrors {
@@ -536,7 +567,12 @@ export function parseErrors(output: string): ParsedErrors {
     lines.shift()
 
   const used = new Set<number>()
-  const errors = COLLECTORS.flatMap(collect => collect(lines, used))
+  const seen = new Set<string>()
+  const errors = COLLECTORS.flatMap(collect => collect(lines, used)).filter((error) => {
+    const key = [error.file, error.line, error.column, error.message, error.test].join('\0')
+
+    return !seen.has(key) && seen.add(key)
+  })
   const unrecognised = lines.filter((line, index) => !used.has(index) && !isNoise(line)).length
 
   return { errors, unrecognised }

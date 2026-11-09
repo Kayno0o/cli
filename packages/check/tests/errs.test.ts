@@ -352,3 +352,53 @@ describe('parseErrors: pytest frames', () => {
     expect(collection.errors).toEqual([{ tool: 'pytest', file: 'tests/test_calc.py', line: 1, column: 0, severity: 'error', message: 'ModuleNotFoundError: No module named \'calc\'' }])
   })
 })
+
+describe('parseErrors: the generic file:line:col matcher', () => {
+  test('mypy: no column, the bracketed code as the rule, notes read but not listed', () => {
+    const { errors, unrecognised } = parseErrors([
+      'app/models.py:12: error: Incompatible types in assignment (expression has type "str", variable has type "int")  [assignment]',
+      'app/models.py:12: note: Consider using a cast',
+      'app/views.py:40: error: Name "missing" is not defined  [name-defined]',
+      'Found 2 errors in 2 files (checked 5 source files)',
+    ].join('\n'))
+
+    expect(errors).toEqual([
+      { tool: 'generic', file: 'app/models.py', line: 12, column: 0, rule: 'assignment', severity: 'error', message: 'Incompatible types in assignment (expression has type "str", variable has type "int")' },
+      { tool: 'generic', file: 'app/views.py', line: 40, column: 0, rule: 'name-defined', severity: 'error', message: 'Name "missing" is not defined' },
+    ])
+    expect(unrecognised).toBe(0)
+  })
+
+  test('gcc and clang: a column, a warning severity, the warning flag as the rule and a fatal error', () => {
+    const { errors } = parseErrors([
+      'src/main.c: In function \'main\':',
+      'src/main.c:5:9: warning: unused variable \'x\' [-Wunused-variable]',
+      'src/main.c:9:3: error: expected \';\' before \'return\'',
+      'src/util.h:1:10: fatal error: missing.h: No such file or directory',
+    ].join('\n'))
+
+    expect(errors.map(error => [error.file, error.line, error.column, error.severity, error.rule, error.message])).toEqual([
+      ['src/main.c', 5, 9, 'warning', '-Wunused-variable', 'unused variable \'x\''],
+      ['src/main.c', 9, 3, 'error', undefined, 'expected \';\' before \'return\''],
+      ['src/util.h', 1, 10, 'error', undefined, 'missing.h: No such file or directory'],
+    ])
+  })
+
+  test('shellcheck -f gcc: the SC code as the rule', () => {
+    const { errors } = parseErrors('deploy.sh:7:8: warning: Double quote to prevent globbing and word splitting. [SC2086]')
+
+    expect(errors).toEqual([{ tool: 'generic', file: 'deploy.sh', line: 7, column: 8, rule: 'SC2086', severity: 'warning', message: 'Double quote to prevent globbing and word splitting.' }])
+  })
+
+  test('golangci-lint: the linter in parentheses as the rule, on go\'s own line shape', () => {
+    const { errors } = parseErrors('cmd/main.go:21:2: Error return value of `f.Close` is not checked (errcheck)')
+
+    expect(errors).toEqual([{ tool: 'go', file: 'cmd/main.go', line: 21, column: 2, rule: 'errcheck', severity: 'error', message: 'Error return value of `f.Close` is not checked' }])
+  })
+
+  test('a line a specific parser took is not read again, and identical errors print once', () => {
+    const { errors } = parseErrors(['a.py:1:1: E501 line too long', 'b.c:2:3: error: bad', 'b.c:2:3: error: bad', 'b.c:2:4: error: bad'].join('\n'))
+
+    expect(errors.map(error => [error.tool, error.file, error.column])).toEqual([['ruff', 'a.py', 1], ['generic', 'b.c', 3], ['generic', 'b.c', 4]])
+  })
+})
