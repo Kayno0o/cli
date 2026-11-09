@@ -10,7 +10,7 @@ import { fail } from './args'
 import { textWidth, truncate } from './format'
 import { stopJob } from './job'
 import { isInteractive } from './mode'
-import { editLine, isEditKey, visible } from './picker/line'
+import { editLine, endsKills, isEditKey, visible } from './picker/line'
 import { parseKeys } from './picker/state'
 import { overwrite, rowsTaken, SYNC_END, SYNC_START } from './redraw'
 import { paint } from './style'
@@ -207,10 +207,11 @@ export function completePath(before: string, cwd = process.cwd(), home = homedir
   const slash = before.lastIndexOf('/') + 1
   const folder = before.slice(0, slash)
   const start = before.slice(slash)
-  const read = folder === '~/' || folder.startsWith('~/') ? join(home, folder.slice(2)) : resolve(cwd, folder === '' ? '.' : folder)
 
   if (before === '~')
     return ['~/']
+
+  const read = folder.startsWith('~/') ? join(home, folder.slice(2)) : resolve(cwd, folder === '' ? '.' : folder)
 
   try {
     return readdirSync(read, { withFileTypes: true })
@@ -270,6 +271,9 @@ export async function input(question: string, { default: fallback, mask = false,
     invalid = undefined
     completions = []
 
+    if (line.chained === true && endsKills(key))
+      line = { ...line, chained: false }
+
     if (key === 'tab') {
       const chars = [...line.text]
       const before = chars.slice(0, line.caret).join('')
@@ -297,7 +301,10 @@ export async function input(question: string, { default: fallback, mask = false,
         draft = line
 
       recalled = to
-      line = to === -1 ? draft : { text: earlier[to]!, caret: [...earlier[to]!].length }
+      // What a kill took stays for Ctrl+Y whichever line is shown.
+      const shown = to === -1 ? draft : { text: earlier[to]!, caret: [...earlier[to]!].length }
+
+      line = { ...shown, killed: line.killed ?? '' }
 
       return undefined
     }
@@ -339,7 +346,7 @@ class List<T> {
   }
 
   press(key: Key): void {
-    if (this.line.chained === true && typeof key !== 'object' && !isEditKey(key))
+    if (this.line.chained === true && endsKills(key))
       this.line = { ...this.line, chained: false }
 
     if (key === 'up' || key === 'down') {

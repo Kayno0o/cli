@@ -1,7 +1,7 @@
 import type { EditKey } from './line'
 import type { Ranked } from './score'
 import { ANSI } from '../text'
-import { editLine, isEditKey } from './line'
+import { editLine, endsKills, isEditKey } from './line'
 import { rank } from './score'
 
 /** `ctrl` is a control key the caller asked for, named as `ctrl-d`. */
@@ -289,7 +289,7 @@ export function press(state: State, key: Key): State {
   if (state.done !== undefined)
     return state
 
-  if (state.chained && typeof key !== 'object' && !isEditKey(key))
+  if (state.chained && endsKills(key))
     state = { ...state, chained: false }
 
   // The legend covers the list, so the key that reads it is the one that closes it.

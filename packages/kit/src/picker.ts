@@ -1,9 +1,9 @@
 import type { Row } from './picker/state'
 import type { PreviewFn, Reload } from './picker/terminal'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
+import { cacheFolder } from './folders'
 import { CTRL_KEY } from './picker/state'
 import { select } from './picker/terminal'
 import { parseHeight } from './picker/view'
@@ -108,7 +108,7 @@ export function heightFor(count: number): string {
 }
 
 function historyFile(name: string): string {
-  return join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), name, 'history.json')
+  return join(cacheFolder(), name, 'history.json')
 }
 
 // Keyed by folder, a broken or missing file reading as nothing run yet.

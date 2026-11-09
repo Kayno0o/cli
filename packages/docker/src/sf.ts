@@ -1,10 +1,9 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Arg, Row } from '@kaynooo/cli-kit/picker'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, isInteractive, paint, parse, printJson } from '@kaynooo/cli-kit'
+import { cacheFolder, fail, isInteractive, paint, parse, printJson } from '@kaynooo/cli-kit'
 import { byRecency, emit, list, pick, record, runs, table } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { spawnText } from '@kaynooo/utils/cli'
@@ -100,7 +99,7 @@ async function consoles(): Promise<Console[]> {
 }
 
 function cached(dir: string): string {
-  return join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'sf', `${resolve(dir).replaceAll('/', '%')}.json`)
+  return join(cacheFolder(), 'sf', `${resolve(dir).replaceAll('/', '%')}.json`)
 }
 
 function fromCache(dir: string): Command[] | undefined {

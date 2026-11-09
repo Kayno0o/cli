@@ -11,6 +11,11 @@ export function isEditKey(key: unknown): key is EditKey {
   return EDIT_KEYS.has(key)
 }
 
+// Whether a key ends a run of kills, the next kill keeping only what it takes: any key that neither edits the line nor types in it.
+export function endsKills(key: unknown): boolean {
+  return typeof key !== 'object' && !isEditKey(key)
+}
+
 // The text and the caret's index among its characters, a character of several code units counting as one; `killed` is what the last kills took, for Ctrl+Y, and `chained` says the key before was one of them.
 export interface Line {
   text: string

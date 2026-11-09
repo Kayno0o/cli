@@ -1,19 +1,23 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import process from 'node:process'
+import { cacheFolder } from './folders'
 
 // Answers kept per prompt, the oldest dropped past this.
 const KEPT = 50
 
 function answersFile(): string {
-  return join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'kaynooo-cli', 'answers.json')
+  return join(cacheFolder(), 'kaynooo-cli', 'answers.json')
 }
 
-// Every prompt's answers by key, a broken or missing file reading as none given yet.
+// Every prompt's answers by key, a broken or missing file, or a key holding anything but a list of texts, reading as none given yet.
 function stored(): Record<string, string[]> {
   try {
-    return JSON.parse(readFileSync(answersFile(), 'utf-8')) as Record<string, string[]>
+    const parsed: unknown = JSON.parse(readFileSync(answersFile(), 'utf-8'))
+
+    if (typeof parsed !== 'object' || parsed === null)
+      return {}
+
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string[]] => Array.isArray(entry[1]) && entry[1].every(answer => typeof answer === 'string')))
   }
   catch {
     return {}

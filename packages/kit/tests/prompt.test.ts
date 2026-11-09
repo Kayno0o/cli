@@ -317,6 +317,7 @@ describe('input', () => {
 
   describe('with a history', () => {
     let cache: string
+    const before = process.env.XDG_CACHE_HOME
 
     beforeEach(async () => {
       cache = await mkdtemp(join(tmpdir(), 'kit-answers-'))
@@ -324,8 +325,26 @@ describe('input', () => {
     })
 
     afterEach(async () => {
-      delete process.env.XDG_CACHE_HOME
+      if (before === undefined)
+        delete process.env.XDG_CACHE_HOME
+      else
+        process.env.XDG_CACHE_HOME = before
+
       await rm(cache, { recursive: true, force: true })
+    })
+
+    it('keeps what a kill took while Up and Down change the line', async () => {
+      await input('host', { history: 'host', terminal: terminal(['alpha\r']).fake })
+
+      expect(await input('host', { history: 'host', terminal: terminal(['beta', '\x15', UP, DOWN, '\x19\r']).fake })).toBe('beta')
+    })
+
+    it('reads a cache holding something else than lists of answers as empty', async () => {
+      await mkdir(join(cache, 'kaynooo-cli'))
+      await writeFile(join(cache, 'kaynooo-cli/answers.json'), JSON.stringify({ host: 'alpha', port: ['80', 3] }))
+
+      expect(earlierAnswers('host')).toEqual([])
+      expect(earlierAnswers('port')).toEqual([])
     })
 
     it('brings the earlier answers back with Up, newest first, and the line being typed with Down', async () => {
@@ -416,6 +435,10 @@ describe('input', () => {
       expect(completePath('~/.c', '/', root)).toEqual(['~/.cache/'])
       expect(completePath('nowhere/x', root)).toEqual([])
     })
+  })
+
+  it('ends a run of kills on Tab, the next kill keeping only what it takes', async () => {
+    expect(await input('words', { complete: () => [], terminal: terminal(['one two', '\x17', '\t', '\x17', '\x19\r']).fake })).toBe('one ')
   })
 
   it('puts back with Ctrl+Y what Ctrl+W took', async () => {
