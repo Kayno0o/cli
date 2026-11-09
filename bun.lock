@@ -94,7 +94,7 @@
     },
     "packages/docker": {
       "name": "@kaynooo/cli-docker",
-      "version": "0.9.4",
+      "version": "0.10.0",
       "bin": {
         "dc": "./dist/dc-cli.js",
         "dlog": "./dist/dlog-cli.js",
