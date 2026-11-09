@@ -81,6 +81,12 @@ describe('out', () => {
     expect(result.code).toBe(0)
   })
 
+  test('keeps a character or an escape code split over two writes whole', () => {
+    const result = out('--', 'sh', '-c', 'printf "\\342\\202"; sleep 0.2; printf "\\254 \\033[3"; sleep 0.2; printf "1mred\\033[0m\\n"')
+
+    expect(result.out).toBe('€ red\n')
+  })
+
   test('exits with the wrapped command\'s code, short or long', () => {
     expect(out('--', 'sh', '-c', 'echo hi; exit 7').code).toBe(7)
     expect(out('--', 'sh', '-c', 'seq 1 500; exit 3').code).toBe(3)

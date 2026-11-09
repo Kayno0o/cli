@@ -110,16 +110,32 @@ export class Recorder {
   }
 }
 
-// Writes the chunks tidied, and answers how many bytes that came to.
+// Writes the chunks tidied, and answers how many bytes that came to. Each stream is decoded as a stream and tidied by whole lines, so a character or an escape code split over two writes stays whole.
 function replay(chunks: Chunk[]): number {
+  const decoders = { stdout: new TextDecoder(), stderr: new TextDecoder() }
+  const pending = { stdout: '', stderr: '' }
   let written = 0
 
-  for (const { stream, data } of chunks) {
-    const tidied = Buffer.from(tidy(Buffer.from(data).toString()))
+  const emit = (stream: Chunk['stream'], text: string) => {
+    if (text === '')
+      return
+
+    const tidied = Buffer.from(tidy(text))
 
     written += tidied.length
     process[stream].write(tidied)
   }
+
+  for (const { stream, data } of chunks) {
+    const text = pending[stream] + decoders[stream].decode(data, { stream: true })
+    const end = text.lastIndexOf('\n') + 1
+
+    pending[stream] = text.slice(end)
+    emit(stream, text.slice(0, end))
+  }
+
+  for (const stream of ['stdout', 'stderr'] as const)
+    emit(stream, pending[stream] + decoders[stream].decode())
 
   return written
 }
