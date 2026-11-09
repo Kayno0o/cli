@@ -2,7 +2,7 @@ import type { Choice } from '@kaynooo/cli-kit/prompt'
 import type { Host } from './checks'
 import process from 'node:process'
 import { badUsage, isInteractive, paint, saveWorkspace, userConfigPath, workspaceChosen } from '@kaynooo/cli-kit'
-import { checklist, confirm, input } from '@kaynooo/cli-kit/prompt'
+import { checklist, completePath, confirm, input } from '@kaynooo/cli-kit/prompt'
 import { ABOUT, HOOKS_REQUIRES, NEEDS } from './catalog'
 import { firstLine, FORGE, hooksWiring, isInstalled, TOOLS } from './checks'
 
@@ -137,7 +137,7 @@ async function askWorkspace(host: Host): Promise<void> {
   if (!isInteractive() || workspaceChosen({ home: host.home }))
     return
 
-  const folder = await input('folder holding your repositories (repos, sweep and pkg bump look there)', { default: '~/Workspace' })
+  const folder = await input('folder holding your repositories (repos, sweep and pkg bump look there)', { default: '~/Workspace', complete: before => completePath(before, process.cwd(), host.home).filter(path => path.endsWith('/')) })
 
   if (folder !== undefined && folder !== '' && !saveWorkspace(folder, { home: host.home }))
     console.error(`could not write the workspace into ${userConfigPath('config', { home: host.home })}: it does not parse, fix it by hand`)

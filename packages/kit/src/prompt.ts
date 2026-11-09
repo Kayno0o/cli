@@ -1,9 +1,11 @@
 import type { EditKey, Line } from './picker/line'
 import type { Colors } from './style'
+import { readdirSync, statSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import process from 'node:process'
+import { earlierAnswers, rememberAnswer } from './answers'
 import { fail } from './args'
 import { textWidth, truncate } from './format'
 import { stopJob } from './job'
@@ -17,8 +19,10 @@ const WORDS = /\s+/
 // Choices drawn at once at most, the rest scrolled to.
 const MAX_ROWS = 10
 
-type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'suspend' | EditKey | { text: string }
-const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel', 'suspend'])
+type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'suspend' | 'tab' | EditKey | { text: string }
+const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel', 'suspend', 'tab'])
+// Completions listed under the line at most, the rest counted.
+const MAX_LISTED = 12
 
 type Outcome = 'enter' | 'cancel'
 type State = 'asking' | Outcome
@@ -178,12 +182,77 @@ export interface InputPromptSettings extends PromptSettings {
   mask?: boolean
   // What is wrong with the answer, shown under it until Enter is pressed on one it takes; undefined takes it.
   validate?: (value: string) => string | undefined
+  // Keeps the answers under this key in the cache folder, Up and Down bringing them back the next times it is asked, as a shell's history does; a masked prompt keeps none.
+  history?: string
+  // The completions of the text before the caret, each the whole text it would become; Tab fills in what they share, and lists them when that adds nothing.
+  complete?: (before: string) => string[]
+}
+
+// The longest start every text shares, a character of several code units counting as one.
+function sharedStart(texts: readonly string[]): string {
+  const [first = [], ...rest] = texts.map(text => [...text])
+  let length = first.length
+
+  for (const chars of rest) {
+    const differs = chars.findIndex((char, index) => char !== first[index])
+
+    length = Math.min(length, differs === -1 ? chars.length : differs)
+  }
+
+  return first.slice(0, length).join('')
+}
+
+// What `before` completes to as a path: the entries of its folder starting with its last part, a folder ending in `/`, dot entries only once a dot is typed; `~` stands for the home folder and stays as typed.
+export function completePath(before: string, cwd = process.cwd(), home = homedir()): string[] {
+  const slash = before.lastIndexOf('/') + 1
+  const folder = before.slice(0, slash)
+  const start = before.slice(slash)
+  const read = folder === '~/' || folder.startsWith('~/') ? join(home, folder.slice(2)) : resolve(cwd, folder === '' ? '.' : folder)
+
+  if (before === '~')
+    return ['~/']
+
+  try {
+    return readdirSync(read, { withFileTypes: true })
+      .filter(entry => entry.name.startsWith(start) && (start.startsWith('.') || !entry.name.startsWith('.')))
+      .map(entry => `${folder}${entry.name}${entry.isDirectory() || (entry.isSymbolicLink() && isFolder(join(read, entry.name))) ? '/' : ''}`)
+      .sort()
+  }
+  catch {
+    return []
+  }
+}
+
+function isFolder(path: string): boolean {
+  try {
+    return statSync(path, { throwIfNoEntry: false })?.isDirectory() === true
+  }
+  catch {
+    return false
+  }
+}
+
+// The completions as listed, less the start they share up to its last space or slash, so a folder's entries show as their names.
+function listed(colors: Colors, found: readonly string[], columns: number): string {
+  const shared = sharedStart(found)
+  const cut = Math.max(shared.lastIndexOf('/'), shared.lastIndexOf(' ')) + 1
+  const names = found.slice(0, MAX_LISTED).map(each => each.slice(cut))
+  const more = found.length > MAX_LISTED ? `  … ${found.length - MAX_LISTED} more` : ''
+
+  return `  ${colors.dim(truncate(names.join('  ') + more, Math.max(columns - 3, 1)))}`
 }
 
 // A line of text, Enter taking it once `validate` does; undefined once cancelled.
-export async function input(question: string, { default: fallback, mask = false, validate, ...settings }: InputPromptSettings = {}): Promise<string | undefined> {
+export async function input(question: string, { default: fallback, mask = false, validate, history, complete, ...settings }: InputPromptSettings = {}): Promise<string | undefined> {
   let line: Line = { text: '', caret: 0 }
   let invalid: string | undefined
+  // What the last Tab found when it could fill nothing in, listed under the line until the next key.
+  let completions: string[] = []
+  const remembered = history === undefined || mask ? undefined : history
+  const earlier = remembered === undefined ? [] : earlierAnswers(remembered)
+  // Which earlier answer is shown, -1 for the line being typed, kept in `draft` while Up walks back.
+  let recalled = -1
+  let draft = line
   const taken = () => line.text === '' ? fallback ?? '' : line.text
   const shown = () => mask ? '*'.repeat([...taken()].length) : taken()
   const accepted = await ask(question, settings, (colors, state, { columns }) => {
@@ -193,17 +262,44 @@ export async function input(question: string, { default: fallback, mask = false,
     // The default stands dimmed until something is typed, the caret after it.
     const typed = line.text === '' ? { text: shown(), caret: [...shown()].length } : { text: shown(), caret: line.caret }
 
-    return [`${colors.cyan('?')} ${question} ${withCaret(colors, typed, roomAfter(question, columns), line.text === '')}`, ...invalid === undefined ? [] : [`  ${colors.red(invalid)}`]]
+    return [`${colors.cyan('?')} ${question} ${withCaret(colors, typed, roomAfter(question, columns), line.text === '')}`, ...invalid === undefined ? [] : [`  ${colors.red(invalid)}`], ...completions.length > 1 ? [listed(colors, completions, columns)] : []]
   }, (key) => {
     if (key === 'cancel')
       return 'cancel'
 
     invalid = undefined
+    completions = []
+
+    if (key === 'tab') {
+      const chars = [...line.text]
+      const before = chars.slice(0, line.caret).join('')
+      const found = complete?.(before) ?? []
+      const filled = sharedStart(found)
+
+      if ([...filled].length > [...before].length)
+        line = { ...line, text: filled + chars.slice(line.caret).join(''), caret: [...filled].length }
+      else
+        completions = found
+
+      return undefined
+    }
 
     if (key === 'enter') {
       invalid = validate?.(taken())
 
       return invalid === undefined ? 'enter' : undefined
+    }
+
+    if (key === 'up' || key === 'down') {
+      const to = Math.min(Math.max(recalled + (key === 'up' ? 1 : -1), -1), earlier.length - 1)
+
+      if (recalled === -1)
+        draft = line
+
+      recalled = to
+      line = to === -1 ? draft : { text: earlier[to]!, caret: [...earlier[to]!].length }
+
+      return undefined
     }
 
     // Home and End move the caret here, as there is no list for them to move in.
@@ -215,7 +311,13 @@ export async function input(question: string, { default: fallback, mask = false,
     return undefined
   })
 
-  return accepted ? taken() : undefined
+  if (!accepted)
+    return undefined
+
+  if (remembered !== undefined && taken() !== '')
+    rememberAnswer(remembered, taken())
+
+  return taken()
 }
 
 // The choices a filter leaves, the cursor on one of them and the window of rows drawn around it.

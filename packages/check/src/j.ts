@@ -207,7 +207,7 @@ export async function j(argv: string[]): Promise<number> {
   const answers: string[] = []
 
   for (const ask of asks) {
-    const answer = await input(ask)
+    const answer = await input(ask, { history: `j ${id(entry)} ${ask}` })
 
     if (answer === undefined)
       return 1

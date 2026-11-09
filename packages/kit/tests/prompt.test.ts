@@ -1,8 +1,13 @@
 import type { Terminal } from '../src/prompt'
 import { EventEmitter } from 'node:events'
-import { describe, expect, it } from 'bun:test'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { earlierAnswers, rememberAnswer } from '../src/answers'
 import { Exit } from '../src/args'
-import { checklist, confirm, editor, input, select } from '../src/prompt'
+import { checklist, completePath, confirm, editor, input, select } from '../src/prompt'
 import { stripAnsi } from '../src/text'
 
 const CHOICES = [
@@ -308,6 +313,109 @@ describe('input', () => {
 
     expect(await input('url', { terminal: terminal(['https://ex.fr/rest', LEFT, 'e', '\x1B[F', '/1', '\x1B[H', '\x1B[3~', 'H\r']).fake })).toBe('Https://ex.fr/reset/1')
     expect(await input('name', { terminal: terminal(['ada byron', '\x1B[1;5D', '\x0B', 'lovelace\r']).fake })).toBe('ada lovelace')
+  })
+
+  describe('with a history', () => {
+    let cache: string
+
+    beforeEach(async () => {
+      cache = await mkdtemp(join(tmpdir(), 'kit-answers-'))
+      process.env.XDG_CACHE_HOME = cache
+    })
+
+    afterEach(async () => {
+      delete process.env.XDG_CACHE_HOME
+      await rm(cache, { recursive: true, force: true })
+    })
+
+    it('brings the earlier answers back with Up, newest first, and the line being typed with Down', async () => {
+      const ask = async (keys: string[]) => input('host', { history: 'host', terminal: terminal(keys).fake })
+
+      await ask(['alpha\r'])
+      await ask(['beta\r'])
+
+      expect(await ask([UP, '\r'])).toBe('beta')
+      expect(await ask([UP, UP, '\r'])).toBe('alpha')
+      // Up stops at the oldest, beta now that alpha was given again.
+      expect(await ask([UP, UP, UP, DOWN, '\r'])).toBe('alpha')
+      expect(await ask(['gam', UP, DOWN, 'ma\r'])).toBe('gamma')
+      expect(await ask([UP, '-2\r'])).toBe('gamma-2')
+      expect(earlierAnswers('host')).toEqual(['gamma-2', 'gamma', 'alpha', 'beta'])
+    })
+
+    it('keeps an answer given again once, at the top, and the latest fifty', async () => {
+      for (let count = 0; count < 55; count++)
+        rememberAnswer('n', String(count))
+
+      rememberAnswer('n', '40')
+
+      expect(earlierAnswers('n')).toHaveLength(50)
+      expect(earlierAnswers('n').slice(0, 3)).toEqual(['40', '54', '53'])
+      expect(earlierAnswers('other')).toEqual([])
+    })
+
+    it('keeps nothing a masked prompt is given, nor an empty answer', async () => {
+      await input('token', { history: 'token', mask: true, terminal: terminal(['secret\r']).fake })
+      await input('host', { history: 'host', default: 'here', terminal: terminal(['\r']).fake })
+      await input('host', { history: 'host', terminal: terminal(['\r']).fake })
+
+      expect(earlierAnswers('token')).toEqual([])
+      expect(earlierAnswers('host')).toEqual(['here'])
+    })
+  })
+
+  describe('completing with Tab', () => {
+    const fruits = (before: string) => ['apple', 'apricot', 'banana'].filter(fruit => fruit.startsWith(before))
+
+    it('fills in what the completions share, keeping what follows the caret', async () => {
+      expect(await input('fruit', { complete: fruits, terminal: terminal(['b\t\r']).fake })).toBe('banana')
+      expect(await input('fruit', { complete: fruits, terminal: terminal(['a\t', 'r\t\r']).fake })).toBe('apricot')
+      expect(await input('fruit', { complete: fruits, terminal: terminal(['b pie', '\x01\x1B[C\t\r']).fake })).toBe('banana pie')
+    })
+
+    it('lists them under the line when Tab can fill in nothing more, until the next key', async () => {
+      const { fake, written } = terminal(['ap\t', 'r', '\r'])
+
+      expect(await input('fruit', { complete: fruits, terminal: fake })).toBe('apr')
+      expect(written[2]).toBe('\r? fruit ap█\n  apple  apricot')
+      expect(written[3]).toBe('\r? fruit apr█')
+    })
+
+    it('does nothing without a completer, nor where nothing completes', async () => {
+      expect(await input('fruit', { terminal: terminal(['x\t\r']).fake })).toBe('x')
+      expect(await input('fruit', { complete: fruits, terminal: terminal(['x\t\r']).fake })).toBe('x')
+    })
+  })
+
+  describe('completePath', () => {
+    let root: string
+
+    beforeEach(async () => {
+      root = await mkdtemp(join(tmpdir(), 'kit-paths-'))
+      await mkdir(join(root, 'repos/kit'), { recursive: true })
+      await mkdir(join(root, 'repos/kayjs'), { recursive: true })
+      await mkdir(join(root, '.cache'))
+      await writeFile(join(root, 'readme.md'), '')
+      await symlink(join(root, 'repos'), join(root, 'linked'))
+    })
+
+    afterEach(async () => {
+      await rm(root, { recursive: true, force: true })
+    })
+
+    it('completes the entries of the folder typed, folders and links to one ending in a slash', () => {
+      expect(completePath('re', root)).toEqual(['readme.md', 'repos/'])
+      expect(completePath('repos/k', root)).toEqual(['repos/kayjs/', 'repos/kit/'])
+      expect(completePath('l', root)).toEqual(['linked/'])
+      expect(completePath(`${root}/repos/ka`)).toEqual([`${root}/repos/kayjs/`])
+    })
+
+    it('reads ~ as the home folder and keeps it as typed, dot entries showing once a dot is typed', () => {
+      expect(completePath('~', '/', root)).toEqual(['~/'])
+      expect(completePath('~/', '/', root)).toEqual(['~/linked/', '~/readme.md', '~/repos/'])
+      expect(completePath('~/.c', '/', root)).toEqual(['~/.cache/'])
+      expect(completePath('nowhere/x', root)).toEqual([])
+    })
   })
 
   it('puts back with Ctrl+Y what Ctrl+W took', async () => {
