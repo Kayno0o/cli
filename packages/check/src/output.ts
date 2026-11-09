@@ -201,7 +201,7 @@ export function failureExcerpt(output: string): string {
 }
 
 export interface ToolError {
-  tool: 'tsc' | 'eslint' | 'bun check' | 'bun test' | 'phpunit' | 'phpstan' | 'php-cs-fixer' | 'playwright' | 'vitest' | 'go' | 'cargo' | 'ruff' | 'pytest'
+  tool: 'tsc' | 'eslint' | 'bun check' | 'kay check' | 'bun test' | 'phpunit' | 'phpstan' | 'php-cs-fixer' | 'playwright' | 'vitest' | 'go' | 'cargo' | 'ruff' | 'pytest'
   file: string
   line: number
   column: number
@@ -225,7 +225,11 @@ const BUN_TEST_FILE = /^\S+\.test\.[jt]sx?:$/
 const GO_ERROR = /^\s*(?:vet: )?(\S+\.go):(\d+):(?:(\d+):)? (.+)$/
 const GO_NOISE = /^# \S+(?: \[\S+\])?$/
 const ARROW = /^\s*--> (.+?):(\d+):(\d+)$/
-const CARGO_HEADER = /^(error|warning)(?:\[(\w+)\])?: (.*)$/
+const CARGO_HEADER = /^(error|warning)(?:\[([\w-]+)\])?: (.*)$/
+// The lines a message runs on under its header, indented, as kay check prints a TypeScript message chain.
+const CONTINUATION = /^\s+\S/
+const MAX_CONTINUATION = 20
+const KAY_SUMMARY = /^(?:\d+ errors?(?:, \d+ warnings?)?|\d+ warnings?)(?:, failing under --deny-warnings)?$|^checked with /
 const CARGO_NOISE = /^(?:\s+(?:Compiling|Finished|Checking|Fresh|Running|Blocking) |error: (?:aborting due to|could not compile)|warning: .* generated \d+ warnings?|Some errors have detailed explanations|For more information about (?:this|an) error|To learn more, run the command again)/
 const RUFF_CONCISE = /^(\S+\.pyi?):(\d+):(\d+): ([A-Z]+\d+) (?:\[\*\] )?(.*)$/
 const RUFF_HEADER = /^([A-Z]{1,5}\d{1,4}) (?:\[\*\] )?(.+)$/
@@ -245,7 +249,7 @@ export type Collector = (lines: string[], used: Set<number>) => ToolError[]
 
 // Blank lines and the headers and totals the tools print around their errors.
 function isNoise(line: string): boolean {
-  return line.trim() === '' || [NOISE, BUN_TEST_SUMMARY, BUN_CHECK_SUMMARY, TSC_SUMMARY, ESLINT_SUMMARY, BOUNDARY, BASH_ECHO, GO_NOISE, CARGO_NOISE, RUFF_NOISE, PYTEST_NOISE, PYTEST_BANNER, ...PHP_NOISE, ...E2E_NOISE].some(pattern => pattern.test(line))
+  return line.trim() === '' || [NOISE, BUN_TEST_SUMMARY, BUN_CHECK_SUMMARY, TSC_SUMMARY, ESLINT_SUMMARY, BOUNDARY, BASH_ECHO, GO_NOISE, CARGO_NOISE, KAY_SUMMARY, RUFF_NOISE, PYTEST_NOISE, PYTEST_BANNER, ...PHP_NOISE, ...E2E_NOISE].some(pattern => pattern.test(line))
 }
 
 const collectBunCheck: Collector = (lines, used) => {
@@ -397,27 +401,39 @@ const collectGo: Collector = (lines, used) => {
   return errors
 }
 
-// A diagnostic whose header line is followed by ` --> file:line:col` and a code frame, as rustc and recent ruff print it.
+// Where the header of the diagnostic whose arrow is at `arrow` sits: the line above, or above the indented lines its message runs on.
+function headerAbove(lines: string[], arrow: number, used: Set<number>): number {
+  let at = arrow - 1
+
+  while (at > 0 && arrow - at <= MAX_CONTINUATION && !used.has(at) && CONTINUATION.test(lines[at] ?? '') && !ARROW.test(lines[at] ?? ''))
+    at--
+
+  return at
+}
+
+// A diagnostic whose header line is followed by ` --> file:line:col` and a code frame, as rustc, kay check and recent ruff print it; kay check's message may run on indented lines between the two.
 const collectArrowed: Collector = (lines, used) => {
   const errors: ToolError[] = []
 
   for (const [index, line] of lines.entries()) {
     const arrow = used.has(index) || index === 0 ? null : ARROW.exec(line)
-    const header = arrow === null ? null : lines[index - 1] ?? ''
+    const at = arrow === null ? -1 : headerAbove(lines, index, used)
+    const header = at === -1 ? null : lines[at] ?? ''
     const cargo = header === null ? null : CARGO_HEADER.exec(header)
     const ruff = header === null || cargo !== null ? null : RUFF_HEADER.exec(header)
 
-    if (arrow === null || (cargo === null && ruff === null) || used.has(index - 1))
+    if (arrow === null || (cargo === null && ruff === null) || used.has(at))
       continue
 
-    const [, file, row, column] = arrow
-    const fields = { file: file ?? '', line: Number(row), column: Number(column) }
+    const [, file = '', row, column] = arrow
+    const fields = { file, line: Number(row), column: Number(column) }
 
     errors.push(cargo === null
       ? { tool: 'ruff', ...fields, rule: ruff?.[1], severity: 'error', message: ruff?.[2] ?? '' }
-      : { tool: 'cargo', ...fields, rule: cargo[2], severity: cargo[1] === 'warning' ? 'warning' : 'error', message: cargo[3] ?? '' })
-    used.add(index - 1)
-    used.add(index)
+      : { tool: file.endsWith('.rs') ? 'cargo' : 'kay check', ...fields, rule: cargo[2], severity: cargo[1] === 'warning' ? 'warning' : 'error', message: cargo[3] ?? '' })
+
+    for (let taken = at; taken <= index; taken++)
+      used.add(taken)
 
     // The code frame and the notes under the arrow, up to the blank line ending the diagnostic.
     for (let frame = index + 1; frame < lines.length && (lines[frame] ?? '').trim() !== ''; frame++) {

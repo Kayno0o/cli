@@ -306,6 +306,18 @@ describe('parseErrors: go, cargo, ruff and pytest', () => {
     expect(warned.errors).toEqual([{ tool: 'cargo', file: 'src/main.rs', line: 2, column: 9, rule: undefined, severity: 'warning', message: 'unused variable: `unused`' }])
   })
 
+  // Printed by kay's own formatReport (kayjs src/compiler/frame.ts), as kay check prints each problem.
+  test('kay check: a message running on under its header, kebab-case lint codes, the frame and summary skipped', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('kay-check.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors).toEqual([
+      { tool: 'kay check', file: 'src/lib/recommend.ts', line: 5, column: 27, rule: 'TS2345', severity: 'error', message: 'Argument of type \'number | undefined\' is not assignable to parameter of type \'number\'.' },
+      { tool: 'kay check', file: 'src/routes/_actions.kay', line: 2, column: 9, rule: 'unread-name', severity: 'warning', message: '`HP` is never read' },
+      { tool: 'kay check', file: 'src/routes/index.kay', line: 1, column: 1, rule: undefined, severity: 'error', message: 'a page needs one root element' },
+    ])
+  })
+
   // Hand-written from ruff's documented output, as ruff is not installed here.
   test('ruff: concise and full formats carry the same errors', async () => {
     const concise = parseErrors(await fixture('ruff-concise.txt'))

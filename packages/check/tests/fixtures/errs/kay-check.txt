@@ -1,0 +1,22 @@
+error[TS2345]: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+ --> src/lib/recommend.ts:5:27
+  |
+3 |   return value
+4 | }
+5 | export const best = score(picks.find(pick => pick > 1))
+  |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning[unread-name]: `HP` is never read
+ --> src/routes/_actions.kay:2:9
+  |
+1 | <script>
+2 |   const HP = 3
+  |         ^^ declared here
+  |
+  = help: remove it, or prefix it with `_`
+
+error: a page needs one root element
+ --> src/routes/index.kay:1:1
+
+2 errors, 1 warning

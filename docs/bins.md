@@ -169,7 +169,7 @@ dx -  # the last action again
 
 ## errs
 
-prints one `file:line:col: message (rule)` line per error found in a tsc, tsgo, vue-tsc, bun check, eslint, keslint, bun test, vitest, playwright (list and line reporters), phpunit, paratest, phpstan (table, raw and json), php-cs-fixer, go (build, vet), cargo (rustc), ruff (concise and full) or pytest log, read from the file given, from stdin (no argument or -), or from the output of the command run after --. Package `check`.
+prints one `file:line:col: message (rule)` line per error found in a tsc, tsgo, vue-tsc, bun check, kay check, eslint, keslint, bun test, vitest, playwright (list and line reporters), phpunit, paratest, phpstan (table, raw and json), php-cs-fixer, go (build, vet), cargo (rustc), ruff (concise and full) or pytest log, read from the file given, from stdin (no argument or -), or from the output of the command run after --. Package `check`.
 
 Instead of: reading raw tsc, eslint, phpunit, phpstan or playwright logs, or grepping a test summary out of them
 
