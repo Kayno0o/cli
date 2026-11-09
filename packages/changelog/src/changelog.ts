@@ -58,13 +58,16 @@ export interface GitCommit extends RawGitCommit {
   references: Reference[]
   authors: GitCommitAuthor[]
   isBreaking: boolean
+  // The migration note of a BREAKING CHANGE footer, when it has one.
+  breakingNote?: string
 }
 
 const ConventionalCommitRegex = /^(?::.+:|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDE4F\uDE80-\uDEFF]|[\u2600-\u2B55])? *(?<type>[a-z]+)(?:\((?<scope>[^()\n]+)\))?(?<breaking>!)?: (?<description>.+)/i
 const CoAuthoredByRegex = /co-authored-by:\s*(?<name>\S[^<]*)<(?<email>[^>]+)>/gi
 const PullRequestRE = /\([ a-z]*(#\d+)\s*\)/g
 const IssueRE = /(#\d+)/g
-const BreakingBodyRE = /^BREAKING[ -]CHANGE:/im
+// The footer is uppercase by the Conventional Commits spec; its note runs on over the lines up to a blank one or the next trailer.
+const BreakingBodyRE = /^BREAKING[ -]CHANGE:[ \t]*(.*(?:\n(?![ \t]*$|[\w-]+(?:: | #)).+)*)/m
 const TicketLineRE = /^(#\d+) - (.+)$/gm
 
 export async function getGitDiff(from: string | undefined, to = 'HEAD', firstParent = false): Promise<RawGitCommit[]> {
@@ -95,10 +98,11 @@ export function parseGitCommit(commit: RawGitCommit, config: ChangelogConfig): G
     return null
 
   const type = match.groups.type ?? ''
-  const hasBreakingBody = BreakingBodyRE.test(commit.body)
+  const breakingBody = BreakingBodyRE.exec(commit.body)
+  const breakingNote = breakingBody?.[1]?.replaceAll(/\s+/g, ' ').trim()
   const rawScope = match.groups.scope ?? ''
   const scope = config.scopeMap[rawScope] ?? rawScope
-  const isBreaking = match.groups.breaking !== undefined || hasBreakingBody
+  const isBreaking = match.groups.breaking !== undefined || breakingBody !== null
   let description = match.groups.description ?? ''
   const references: Reference[] = []
 
@@ -139,5 +143,6 @@ export function parseGitCommit(commit: RawGitCommit, config: ChangelogConfig): G
     scope,
     references,
     isBreaking,
+    ...(breakingNote === undefined || breakingNote === '' ? {} : { breakingNote }),
   }
 }

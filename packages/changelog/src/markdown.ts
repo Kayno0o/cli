@@ -138,8 +138,12 @@ function formatSection(section: Section, options: ResolvedChangelogOptions) {
     if (nested)
       lines.push(`- ${scopeText}:`)
 
-    for (const commit of commits.toReversed())
+    for (const commit of commits.toReversed()) {
       lines.push(`${padding}- ${formatLine(commit, options, prefix)}`)
+
+      if (commit.breakingNote !== undefined)
+        lines.push(`${padding}  - ${commit.breakingNote}`)
+    }
   }
 
   return lines

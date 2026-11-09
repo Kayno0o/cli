@@ -72,4 +72,11 @@ it('reads a breaking change from a BREAKING CHANGE or BREAKING-CHANGE footer lin
   expect(parsed('feat: x', 'BREAKING CHANGE: gone')?.isBreaking).toBe(true)
   expect(parsed('feat: x', 'text\nBREAKING-CHANGE: gone')?.isBreaking).toBe(true)
   expect(parsed('feat: x', 'this is not a breaking change: really')?.isBreaking).toBe(false)
+  expect(parsed('feat: x', 'breaking change: only prose')?.isBreaking).toBe(false)
+})
+
+it('keeps the note of a breaking footer, to the next blank line or trailer', () => {
+  expect(parsed('feat: x', 'BREAKING CHANGE: rename `a` to `b`,\nthen rebuild\n\nmore text')?.breakingNote).toBe('rename `a` to `b`, then rebuild')
+  expect(parsed('feat: x', 'BREAKING CHANGE: gone\nCo-authored-by: Bo <bo@example.com>')?.breakingNote).toBe('gone')
+  expect(parsed('feat!: x')?.breakingNote).toBeUndefined()
 })

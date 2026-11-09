@@ -50,6 +50,13 @@ describe('ticket lines', () => {
 })
 
 describe('forgejo markdown', () => {
+  it('lists the note of a breaking footer under its entry', async () => {
+    const md = generateMarkdown([commit('feat: new api', 'BREAKING CHANGE: call `run` instead of `exec`')], await options(), [ada])
+
+    expect(md).toContain('- New api · [`aaaaaa')
+    expect(md).toMatch(/\n {2}- call `run` instead of `exec`\n/)
+  })
+
   it('leads with a summary, puts breaking first and folds maintenance types', async () => {
     const md = generateMarkdown([
       commit('feat: undo command'),
