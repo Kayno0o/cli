@@ -163,7 +163,21 @@ describe('arc extract', () => {
     expect(readFileSync(join(out, 'note.txt'), 'utf8')).toBe('hello')
   })
 
-  test('extracts a .txz', () => {
+  test('writes a lone compressed file into the current folder, wherever it sits', () => {
+    const { dest } = project()
+    const source = join(dest, 'note.txt.bz2')
+
+    writeFileSync(source, Bun.spawnSync(['bzip2', '-c'], { stdin: Buffer.from('hello') }).stdout)
+
+    const out = temp()
+
+    expect(arc(['extract', source], out).code).toBe(0)
+    expect(existsSync(source)).toBe(true)
+    expect(readFileSync(join(out, 'note.txt'), 'utf8')).toBe('hello')
+  })
+
+  // Making one takes the xz binary, which busybox's tar calls and the CI image lacks.
+  test.skipIf(Bun.which('xz') === null)('extracts a .txz', () => {
     const { folder, dest } = project()
 
     Bun.spawnSync(['tar', 'cJf', join(dest, 'p.TXZ'), '-C', folder, '.'])

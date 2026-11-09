@@ -1,5 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, rmSync, statSync } from 'node:fs'
+import { basename } from 'node:path'
 import { fail, parse } from '@kaynooo/cli-kit'
 import { interactive } from './proc'
 
@@ -9,7 +10,7 @@ Understands .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tbz, .tar.xz, .txz, .tar.zst,
 
 const EXITS: ExitRow[] = [[0, 'the extractor succeeded'], [1, 'a missing file, an extension it does not know or a failing extractor'], [2, 'a usage error']]
 
-// The command per extension, lower case and matched without regard to case, the longest suffix first so .tar.gz is not read as .gz. A single compressed file keeps its source.
+// The command per extension, lower case and matched without regard to case, the longest suffix first so .tar.gz is not read as .gz.
 const EXTRACTORS: [suffix: string, argv: (file: string) => string[]][] = [
   ['.tar.bz2', file => ['tar', 'xjf', file]],
   ['.tar.gz', file => ['tar', 'xzf', file]],
@@ -21,15 +22,18 @@ const EXTRACTORS: [suffix: string, argv: (file: string) => string[]][] = [
   ['.tbz', file => ['tar', 'xjf', file]],
   ['.txz', file => ['tar', 'xJf', file]],
   ['.tzst', file => ['tar', '--zstd', '-xf', file]],
-  ['.bz2', file => ['bunzip2', '-k', file]],
-  ['.gz', file => ['gunzip', '-k', file]],
-  ['.xz', file => ['xz', '-dk', file]],
-  ['.zst', file => ['zstd', '-dk', file]],
+  ['.bz2', file => ['bunzip2', '-c', file]],
+  ['.gz', file => ['gunzip', '-c', file]],
+  ['.xz', file => ['xz', '-dc', file]],
+  ['.zst', file => ['zstd', '-dc', file]],
   ['.zip', file => ['unzip', file]],
-  ['.z', file => ['gzip', '-dk', file]],
+  ['.z', file => ['gzip', '-dc', file]],
   ['.rar', file => ['unrar', 'x', file]],
   ['.7z', file => ['7z', 'x', file]],
 ]
+
+// A single compressed file decompresses to stdout, arc naming the output itself: busybox's gunzip refuses a suffix in another case.
+const LONE = new Set(['.bz2', '.gz', '.xz', '.zst', '.z'])
 
 export async function extract(args: string[]): Promise<number> {
   const { positionals: [file] } = parse(args, USAGE, {}, {
@@ -47,10 +51,24 @@ export async function extract(args: string[]): Promise<number> {
   if (extractor === undefined)
     return fail(`'${file}' cannot be extracted: unknown extension`, 1)
 
-  const argv = extractor[1](file)
+  const [suffix, argvOf] = extractor
+  const argv = argvOf(file)
 
   if (Bun.which(argv[0] ?? '') === null)
     return fail(`${argv[0]} is not on PATH`, 1)
 
-  return await interactive(argv) === 0 ? 0 : 1
+  if (!LONE.has(suffix))
+    return await interactive(argv) === 0 ? 0 : 1
+
+  const target = basename(file).slice(0, -suffix.length)
+
+  if (target === '')
+    return fail(`'${file}' has no name left once ${suffix} is taken off`, 1)
+
+  if (await Bun.spawn(argv, { stdin: 'ignore', stdout: Bun.file(target), stderr: 'inherit' }).exited === 0)
+    return 0
+
+  rmSync(target, { force: true })
+
+  return 1
 }
