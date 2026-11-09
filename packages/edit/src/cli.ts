@@ -71,6 +71,10 @@ function checkPattern(pair: Pair, label: string) {
   }
 }
 
+function isFlag(value: unknown): value is boolean | undefined {
+  return value === undefined || typeof value === 'boolean'
+}
+
 function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   const label = `pair ${i + 1}: `
 
@@ -89,7 +93,7 @@ function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   if (count !== undefined && (typeof count !== 'number' || !Number.isInteger(count) || count < 1))
     fail(`${label}count takes a whole number from 1`)
 
-  if ([all, regex, ignoreCase, dotAll].some(flag => flag !== undefined && typeof flag !== 'boolean'))
+  if (!isFlag(all) || !isFlag(regex) || !isFlag(ignoreCase) || !isFlag(dotAll))
     fail(`${label}all, regex, ignoreCase and dotAll take true or false`)
 
   const pair: Pair = { from, to, count: count ?? defaults.count ?? 1, all: all ?? defaults.all, regex: regex ?? defaults.regex, ignoreCase: ignoreCase ?? defaults.ignoreCase, dotAll: dotAll ?? defaults.dotAll }

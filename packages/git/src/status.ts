@@ -30,8 +30,8 @@ export interface Status {
 // A long operation left half done, with its step of a rebase when git records one.
 export interface Operation {
   kind: 'rebase' | 'merge' | 'cherry-pick' | 'revert' | 'bisect'
-  step?: number
-  total?: number
+  step?: number | undefined
+  total?: number | undefined
 }
 
 // The stash count `git status --show-stash` puts in its header, 0 without one.
