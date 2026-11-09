@@ -8,7 +8,8 @@ import { fail, jsonOption, paint, parse, printJson, role, runMain, table, watchi
 import { letter } from './colour'
 import { git } from './git'
 import { branchOf, changesOf, reposOf, repoState, trackingOf } from './repos'
-import { operationOf, parseStatus, stashOf, summary } from './status'
+import { operationOf } from './operation'
+import { parseStatus, stashOf, summary } from './status'
 
 const USAGE = `gst [-n N]: the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked
 
