@@ -102,6 +102,26 @@ describe('hotspots', () => {
     expect(rows.find(row => row.path === 'plain.ts')?.churn).toBe(4)
   })
 
+  test('shows the lines changed and the authors, and --by-lines scores the lines', () => {
+    write('src/plain.ts', `// other\n${PLAIN}more\nmore\n`)
+    Bun.spawnSync(['git', 'add', '-A'], { cwd: dir })
+    Bun.spawnSync(['git', '-c', 'user.name=u', '-c', 'user.email=u@u', 'commit', '-q', '-m', 'other'], { cwd: dir, env: { ...process.env, GIT_AUTHOR_DATE: '2026-10-07T00:00:00Z', GIT_COMMITTER_DATE: '2026-10-07T00:00:00Z' } })
+
+    const args = ['--json', '--since', '2026-01-01', '--half-life', '0']
+    const rows = JSON.parse(hotspots(args).out) as { path: string, changed: number, authors: number, solo: boolean, score: number, complexity: number }[]
+    const plain = rows.find(row => row.path === 'src/plain.ts')
+    const branchy = rows.find(row => row.path === 'src/branchy.ts')
+
+    expect(plain).toMatchObject({ authors: 2, solo: false })
+    expect(plain?.changed).toBeGreaterThan(5)
+    expect(branchy).toMatchObject({ authors: 1, solo: true })
+
+    const byLines = JSON.parse(hotspots([...args, '--by-lines']).out) as { path: string, score: number, changed: number }[]
+
+    expect(byLines.find(row => row.path === 'src/branchy.ts')?.score).toBe((branchy?.changed ?? 0) * (branchy?.complexity ?? 0))
+    expect(hotspots(['--since', '2026-01-01']).out).toContain('1 solo')
+  })
+
   test('names the most complex declaration of a file', () => {
     const rows = JSON.parse(hotspots(['--json', '--since', '2026-01-01']).out) as { path: string, worst?: { name: string, line: number, complexity: number } }[]
 

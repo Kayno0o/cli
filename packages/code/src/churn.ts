@@ -8,6 +8,10 @@ export interface Hotspot {
   lines: number
   // Commits counted by how recent they are.
   recent: number
+  // Lines added and deleted in the window, and the number of authors who made those changes.
+  changed: number
+  authors: number
+  solo: boolean
   // The most complex declaration of the file.
   worst: { name: string, line: number, complexity: number } | undefined
 }
@@ -40,6 +44,11 @@ export interface Churn {
   commits: number
   // The commits counted by how recent they are, a bulk one left out.
   weight: number
+  // Lines added and deleted by the counted commits, and the same weighted by how recent each commit is.
+  lines: number
+  linesWeight: number
+  // Distinct commit authors, by email.
+  authors: number
 }
 
 export interface ChurnOptions {
@@ -52,7 +61,7 @@ export interface ChurnOptions {
 
 // Commits touching each file (paths relative to cwd) since the date, from one git log; undefined outside a repository.
 export async function churnSince(cwd: string, since: string, { bulk, halfLifeMs, now = Date.now() }: ChurnOptions): Promise<Map<string, Churn> | undefined> {
-  const [log, top] = await Promise.all([runCommand(['git', 'log', `--since=${since}`, '--no-renames', '--name-only', '--format=%x01%ct', '-z'], { cwd }), runCommand(['git', 'rev-parse', '--show-prefix'], { cwd })])
+  const [log, top] = await Promise.all([runCommand(['git', 'log', `--since=${since}`, '--no-renames', '--numstat', '--format=%x01%ct%x02%ae', '-z'], { cwd }), runCommand(['git', 'rev-parse', '--show-prefix'], { cwd })])
 
   if (log.code !== 0 || top.code !== 0)
     return undefined
@@ -60,25 +69,36 @@ export async function churnSince(cwd: string, since: string, { bulk, halfLifeMs,
   const prefix = top.text.trim()
 
   const churn = new Map<string, Churn>()
+  const authors = new Map<string, Set<string>>()
 
   for (const commit of log.text.split('\x01').slice(1)) {
-    const [stamp = '', ...names] = commit.split('\0')
-    const all = names.map(name => name.replace(LEADING_NEWLINE, '')).filter(name => name !== '')
+    const [head = '', ...entries] = commit.split('\0')
+    const [stamp = '', author = ''] = head.split('\x02')
+    // Each entry is `added<TAB>deleted<TAB>path`, a binary file's counts being `-`.
+    const all = entries.map(entry => entry.replace(LEADING_NEWLINE, '')).filter(entry => entry !== '').map((entry) => {
+      const [added = '', deleted = '', ...path] = entry.split('\t')
+
+      return { path: path.join('\t'), lines: (Number(added) || 0) + (Number(deleted) || 0) }
+    })
 
     if (all.length > bulk)
       continue
 
-    const paths = all.filter(name => name.startsWith(prefix)).map(name => name.slice(prefix.length))
+    const paths = all.filter(({ path }) => path.startsWith(prefix)).map(({ path, lines }) => ({ path: path.slice(prefix.length), lines }))
 
     const age = Math.max(0, now - Number(stamp) * 1000)
     const weight = halfLifeMs === 0 ? 1 : 0.5 ** (age / halfLifeMs)
 
-    for (const path of paths) {
-      const seen = churn.get(path) ?? { commits: 0, weight: 0 }
+    for (const { path, lines } of paths) {
+      const seen = churn.get(path) ?? { commits: 0, weight: 0, lines: 0, linesWeight: 0, authors: 0 }
 
-      churn.set(path, { commits: seen.commits + 1, weight: seen.weight + weight })
+      churn.set(path, { commits: seen.commits + 1, weight: seen.weight + weight, lines: seen.lines + lines, linesWeight: seen.linesWeight + lines * weight, authors: 0 })
+      authors.set(path, (authors.get(path) ?? new Set<string>()).add(author))
     }
   }
+
+  for (const [path, seen] of churn)
+    seen.authors = authors.get(path)?.size ?? 0
 
   return churn
 }
