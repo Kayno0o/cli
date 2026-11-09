@@ -14,6 +14,6 @@ process.exitCode = await runCli({
   commands: {
     repos: { summary: 'the git repositories that need attention: dirty, ahead or behind, worktrees, unreleased commits', run: repos },
     sweep: { summary: 'the regenerable folders, caches and clean worktrees, largest first, deleted only on --apply', run: sweep },
-    audit: { summary: 'the known vulnerabilities of the Bun repositories, one table per repository', run: audit },
+    audit: { summary: 'the known vulnerabilities of the Bun, Composer, Cargo and uv repositories, one table per repository', run: audit },
   },
 })

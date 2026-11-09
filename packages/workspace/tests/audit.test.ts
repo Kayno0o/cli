@@ -30,6 +30,18 @@ describe('audit', () => {
     expect(empty.err).toContain('no bun.lock')
   })
 
+  test('a repository holding only a composer.lock without packages is audited, asking osv.dev nothing', () => {
+    const repo = join(dir, 'php')
+
+    mkdirSync(repo, { recursive: true })
+    writeFileSync(join(repo, 'composer.lock'), '{"packages":[],"packages-dev":[]}')
+
+    const ran = audit(repo)
+
+    expect(ran.code).toBe(0)
+    expect(ran.out).toContain('no advisory in 1 repository')
+  })
+
   test('an unknown level is a usage error', () => {
     expect(audit('--level', 'severe', dir).code).toBe(2)
   })

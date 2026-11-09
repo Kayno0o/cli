@@ -5,16 +5,17 @@ import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
+import { holdsOsvLock, osvAudit } from './osv'
 import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEVERITIES, workspaceFolders } from './report'
 
-const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun repositories under root (the current folder by default), one table per repository
+const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun, Composer, Cargo and uv repositories under root (the current folder by default), one table per repository
 
 Each package with an advisory is one row: its worst severity, how many advisories, whether a production dependency needs it (prod) or only a development one (dev), whether the repository asks for it itself (direct) or a dependency does (the row then says via and the direct dependencies leading to it, upgrading one of which is what fixes it), and the version that fixes every advisory at once, "-" when an advisory names none. The worst and the production ones come first.
-Advisories under --level (moderate by default) are counted under the table, and what \`bun audit\` warned about, such as a private registry that would not audit its packages, is repeated there. It runs \`bun audit --json\` in each repository holding a bun.lock, which reaches the registry; the walk goes three levels deep, stops at a bun.lock and skips node_modules and hidden folders.
+Advisories under --level (moderate by default) are counted under the table, and what \`bun audit\` warned about, such as a private registry that would not audit its packages, is repeated there. It runs \`bun audit --json\` in each repository holding a bun.lock, which reaches the registry, and asks osv.dev about the packages of a composer.lock, Cargo.lock or uv.lock (a severity the source leaves out reads as moderate, and only composer's manifest tells direct from pulled in); the walk goes three levels deep, stops at a lockfile and skips node_modules and hidden folders.
 
 Reach for it to sweep many repositories at once; \`pkg audit\` vets the one repository in a folder (package age, install scripts, licences) as well as its advisories, and shares --level, --prod and --ignore.`
 
-const EXITS: ExitRow[] = [[0, 'no repository has an advisory at the level asked'], [1, 'one has'], [2, 'a repository\'s audit failed, no bun.lock sits under root, a usage error or a root that is no folder']]
+const EXITS: ExitRow[] = [[0, 'no repository has an advisory at the level asked'], [1, 'one has'], [2, 'a repository\'s audit failed, no lockfile sits under root, a usage error or a root that is no folder']]
 
 const OPTIONS = {
   level: { type: 'string', choices: SEVERITIES, default: 'moderate', description: 'only the advisories at least this severe: low, moderate, high or critical' },
@@ -45,8 +46,12 @@ function countAdvisories(findings: Finding[]): number {
   return findings.reduce((sum, found) => sum + found.advisories.length, 0)
 }
 
-function holdsLock(dir: string): boolean {
+function holdsBunLock(dir: string): boolean {
   return existsSync(join(dir, 'bun.lock')) || existsSync(join(dir, 'bun.lockb'))
+}
+
+function holdsLock(dir: string): boolean {
+  return holdsBunLock(dir) || holdsOsvLock(dir)
 }
 
 async function findRepos(root: string): Promise<string[]> {
@@ -95,6 +100,22 @@ function children(root: string): (folder: string) => string[] {
 }
 
 async function audited(path: string, shown: string, level: Severity, ignore: readonly string[]): Promise<RepoAudit> {
+  const bun = holdsBunLock(path) ? await bunAudited(path, shown, level, ignore) : { repo: shown, path, findings: [], below: 0, warnings: [], error: undefined }
+
+  if (bun.error !== undefined || !holdsOsvLock(path))
+    return bun
+
+  try {
+    const osv = await osvAudit(path, level, ignore)
+
+    return { ...bun, findings: [...bun.findings, ...osv.findings], below: bun.below + osv.below }
+  }
+  catch (error) {
+    return { ...bun, error: `osv.dev: ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
+async function bunAudited(path: string, shown: string, level: Severity, ignore: readonly string[]): Promise<RepoAudit> {
   const [all, production] = await Promise.all([
     runCommand(['bun', 'audit', '--json'], { cwd: path, timeoutMs: AUDIT_MS }),
     runCommand(['bun', 'audit', '--json', '--prod'], { cwd: path, timeoutMs: AUDIT_MS }),
@@ -172,7 +193,7 @@ export async function audit(args: string[]): Promise<number> {
   const paths = await findRepos(root)
 
   if (paths.length === 0)
-    fail(`no bun.lock under ${root}`)
+    fail(`no bun.lock, composer.lock, Cargo.lock or uv.lock under ${root}`)
 
   const audits = await pool(paths, configuredNumber('audit', 'concurrency', CONCURRENCY), async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []))
   const kept = audits.map(each => ({ ...each, findings: values.prod === true ? each.findings.filter(found => found.scope === 'prod') : each.findings }))
