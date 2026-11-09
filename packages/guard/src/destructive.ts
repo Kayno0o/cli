@@ -11,6 +11,11 @@ const RECURSIVE_LETTER = /r/i
 const HOME_PREFIX = /^(?:~|\$HOME|\$\{HOME(?::?[-?=+][^}]*)?\}?)(?=\/|$)/
 // The current directory by name, as `rm -rf $PWD` spells it; the closing of `$(pwd)` may already be trimmed off.
 const CURRENT_DIRECTORY = /^(?:\$PWD|\$\{PWD\}?|\$\(pwd\)?|`pwd`?)(?=\/|$)/
+// A path under /home/<user> or /root, as the first part of the path inside it.
+const ABSOLUTE_HOME = /^(?:home\/[^/]+|root)\/([^/]+)$/
+const EXEC_FLAGS = new Set(['-exec', '-execdir', '-ok', '-okdir'])
+const REMOVER = /(?:^|\/)rm$/
+const TRAILING_SLASH = /\/$/
 const SAFE_REBASE = new Set(['--abort', '--continue', '--quit', '--show-current-patch', '--skip', '--edit-todo'])
 // Programs reading the script they are piped, which a download must not feed.
 const INTERPRETERS = new Set(['python', 'node', 'bun', 'perl', 'ruby'])
@@ -31,6 +36,10 @@ export const BRANCH_DELETE = 'Never `git branch -D`: it drops commits no other b
 export const REBASE = `Never start a \`git rebase\`: it rewrites history and stops halfway on conflicts in a tree others edit. ${COMMIT_FIRST} \`git cherry-pick\` or \`git merge\` keep history, and \`git worktree add\` gives a clean tree to do it in. \`--continue\` and \`--abort\` stay allowed.`
 export const REWRITE_HISTORY = 'Never `git filter-branch` or `git filter-repo`: they rewrite every commit of the repository. Ask the user to run it themselves.'
 export const BROAD_RM = 'Never `rm -r` on `/`, `~`, `$HOME`, `.`, `..`, `*` or a top-level directory: it deletes far more than the task. Name the exact directory, such as `dist` or `node_modules`.'
+export const PROTECTED_RM = 'Never `rm -r` on a `.git` directory, on `~/Workspace` itself or on a dot-directory of the home (`~/.ssh`, `$HOME/.claude`, `~/.config`): it deletes a repository\'s whole history, every project, or the credentials and settings of the machine. Remove the named files inside, or ask the user to run it.'
+export const FIND_DELETE_HOME = 'Never `find ~ -delete` or `find / -exec rm` (also `$HOME`): it deletes matches across the whole home or disk. Start `find` in the project folder or `.` and name the pattern, such as `find . -name "*.tmp" -delete`.'
+export const REFLOG_EXPIRE = 'Never `git reflog expire`, `git gc --prune=now` or `git update-ref -d`: they drop the reflog, unreachable commits or a ref, the only way back from a bad reset or rebase. Let git prune on its own schedule, and ask the user to run one when it is really wanted.'
+export const DOCKER_PRUNE_ALL = 'Never `docker system prune -a` (`--all`): it removes every image not used by a running container, volumes of other projects\' stacks included with --volumes. `docker system prune` without -a drops only dangling data; remove named images with `docker rmi`.'
 export const PIPE_TO_SHELL = 'Never run what `curl`/`wget` fetches straight in a shell (`| sh`, `bash <(curl ...)`, `eval "$(curl ...)"`): it runs code nobody read. Download it to a file, read it, then run it, or hand the command to the user.'
 
 // Whether a short or long option is among the arguments before a `--`.
@@ -71,19 +80,43 @@ export function isBroadPath(path: string): boolean {
   return isAbsolute ? parts.length <= 1 : parts.every(part => part === '..')
 }
 
-function removesBroadly(args: readonly string[]): boolean {
-  if (args.includes('--no-preserve-root'))
-    return true
-
+// The paths a recursive removal names, none when it is not recursive.
+function recursiveTargets(args: readonly string[]): string[] {
   const options = args.slice(0, args.includes('--') ? args.indexOf('--') : args.length)
   const isRecursive = options.some(arg => arg === '--recursive' || (SHORT_CLUSTER.test(arg) && RECURSIVE_LETTER.test(arg)))
 
-  if (!isRecursive)
-    return false
+  return isRecursive ? args.filter((arg, i) => !arg.startsWith('-') || (args.includes('--') && i > args.indexOf('--'))) : []
+}
 
-  const targets = args.filter((arg, i) => !arg.startsWith('-') || (args.includes('--') && i > args.indexOf('--')))
+// Whether a path is a `.git` directory, `~/Workspace` itself or a dot-directory directly under the home, which a recursive removal must never take.
+function isProtectedPath(path: string): boolean {
+  const home = HOME_PREFIX.exec(path)
+  const parts = (home === null ? path : path.slice(home[0].length)).split('/').filter(part => part !== '' && part !== '.')
+  const last = parts.at(-1) ?? ''
+  const absolute = path.startsWith('/') ? ABSOLUTE_HOME.exec(parts.join('/')) : null
+  const child = home === null ? absolute?.[1] : parts.length === 1 ? last : undefined
 
-  return targets.some(isBroadPath)
+  return last === '.git' || (child !== undefined && (child === 'Workspace' || (child.startsWith('.') && child !== '..')))
+}
+
+// Whether a `find` starts at the home or the root and deletes what it matches.
+function deletesFromHome(args: readonly string[]): boolean {
+  const firstOption = args.findIndex(arg => arg.startsWith('-') || arg === '(' || arg === '!')
+  const starts = firstOption === -1 ? args : args.slice(0, firstOption)
+  const deletes = args.includes('-delete') || args.some((arg, i) => EXEC_FLAGS.has(arg) && REMOVER.test(args[i + 1] ?? ''))
+
+  return deletes && starts.some(start => start === '/' || start.replace(TRAILING_SLASH, '') === HOME_PREFIX.exec(start)?.[0])
+}
+
+// Whether the command is `docker system prune` with `-a` or `--all`.
+function dockerPrunesAll(args: readonly string[]): boolean {
+  const system = args.indexOf('system')
+
+  return system !== -1 && args[system + 1] === 'prune' && hasOption(args.slice(system + 2), ['--all'], 'a')
+}
+
+function removesBroadly(args: readonly string[]): boolean {
+  return args.includes('--no-preserve-root') || recursiveTargets(args).some(isBroadPath)
 }
 
 // Whether a checkout restores the whole tree from its pathspecs: after a `--`, or past the first operand, which is the tree-ish, or alone.
@@ -129,6 +162,15 @@ function gitDestructive(name: string, rest: readonly string[]): string | null {
 
   if (name === 'branch')
     return hasOption(rest, [], 'D') || (hasOption(rest, ['--delete'], 'd') && hasOption(rest, ['--force'], 'f')) ? BRANCH_DELETE : null
+
+  if (name === 'reflog')
+    return rest[0] === 'expire' ? REFLOG_EXPIRE : null
+
+  if (name === 'gc')
+    return rest.some(arg => arg === '--prune=now' || arg === '--prune=all') ? REFLOG_EXPIRE : null
+
+  if (name === 'update-ref')
+    return hasOption(rest, ['--delete'], 'd') ? REFLOG_EXPIRE : null
 
   if (name === 'rebase')
     return rest.some(arg => SAFE_REBASE.has(arg)) ? null : REBASE
@@ -179,6 +221,15 @@ export function destructiveViolation(command: string): string | null {
 
     if (program === 'rm' && removesBroadly(args))
       return BROAD_RM
+
+    if (program === 'rm' && recursiveTargets(args).some(isProtectedPath))
+      return PROTECTED_RM
+
+    if (program === 'find' && deletesFromHome(args))
+      return FIND_DELETE_HOME
+
+    if (program === 'docker' && dockerPrunesAll(args))
+      return DOCKER_PRUNE_ALL
 
     const git = gitCommandOf(program, args)
 
