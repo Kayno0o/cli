@@ -94,7 +94,8 @@ function isProtectedPath(path: string): boolean {
   const parts = (home === null ? path : path.slice(home[0].length)).split('/').filter(part => part !== '' && part !== '.')
   const last = parts.at(-1) ?? ''
   const absolute = path.startsWith('/') ? ABSOLUTE_HOME.exec(parts.join('/')) : null
-  const child = home === null ? absolute?.[1] : parts.length === 1 ? last : undefined
+  const homeChild = parts.length === 1 ? last : undefined
+  const child = home === null ? absolute?.[1] : homeChild
 
   return last === '.git' || (child !== undefined && (child === 'Workspace' || (child.startsWith('.') && child !== '..')))
 }

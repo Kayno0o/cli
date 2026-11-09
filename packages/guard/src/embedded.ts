@@ -2,22 +2,25 @@ import { parseCommand, SHELLS, splitCommand } from '@kaynooo/cli-kit/shell'
 
 const PRINTERS = new Set(['echo', 'printf'])
 const ECHO_FLAGS = /^-[neE]+$/
-const SHELL_STRING_FLAG = /^-[a-z]*c[a-z]*$/i
+const SHELL_STRING_FLAG = /^-[ABD-Z]*C[A-Z]*$/i
 const PRINTF_SPEC = /%[sb]/g
 const ESCAPE = /\\(.)/gs
 const VERSION_SUFFIX = /[\d.]+$/
 // The flags after which an interpreter takes its code from the next word.
 const CODE_FLAGS = new Map([['python', ['-c']], ['perl', ['-e', '-E']], ['ruby', ['-e']], ['node', ['-e', '--eval', '-p', '--print']], ['bun', ['-e', '--eval', '-p', '--print']]])
-const QUOTED = String.raw`'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\`(?:[^\`\\]|\\.)*\``
+const BACKTICK = String.fromCharCode(96)
+const QUOTED = String.raw`'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|${BACKTICK}(?:[^${BACKTICK}\\]|\\.)*${BACKTICK}`
 // A bracketed or parenthesised list of at least two string literals, the argv of a spawn.
-const ARGV = new RegExp(String.raw`[\[(]\s*((?:(?:${QUOTED})\s*,\s*)+(?:${QUOTED}))\s*,?\s*[\])]`, 'gs')
+const ARGV = new RegExp(String.raw`[[(]\s*((?:(?:${QUOTED})\s*,\s*)+(?:${QUOTED}))\s*(?:,\s*)?[\])]`, 'gs')
 const LITERAL = new RegExp(QUOTED, 'gs')
 // What precedes a literal that is run as a command line: a call that spawns a shell, or the tag of Bun's `$` template.
-const RUNS_SHELL = /(?:\b(?:system|exec\w*|spawn\w*|popen|run|call|check_\w+|Popen|getoutput|qx)|\$)\s*\(?\s*$/
+const RUNS_SHELL = /(?:\b(?:system|exec\w*|spawn\w*|popen|run|call|check_\w+|Popen|getoutput|qx)|\$)\s*(?:\(\s*)?$/
 const SHELL_BACKTICKS = new Set(['perl', 'ruby'])
 
+const ESCAPED = new Map([['n', '\n'], ['t', ' ']])
+
 function decode(text: string): string {
-  return text.replaceAll(ESCAPE, (_, char: string) => char === 'n' ? '\n' : char === 't' ? ' ' : char)
+  return text.replaceAll(ESCAPE, (_, char: string) => ESCAPED.get(char) ?? char)
 }
 
 function literalValue(literal: string): string {
