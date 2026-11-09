@@ -1,4 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 const AHEAD_BEHIND = /\+(\d+) -(\d+)/
+const STASH = /^# stash (\d+)$/m
 const OCTAL = /[0-7]/
 const ESCAPES: Record<string, number> = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13 }
 const ENCODER = new TextEncoder()
@@ -21,6 +25,47 @@ export interface Status {
   changes: Change[]
   conflicted: string[]
   untracked: string[]
+}
+
+// A long operation left half done, with its step of a rebase when git records one.
+export interface Operation {
+  kind: 'rebase' | 'merge' | 'cherry-pick' | 'revert' | 'bisect'
+  step?: number
+  total?: number
+}
+
+// The stash count `git status --show-stash` puts in its header, 0 without one.
+export function stashOf(text: string): number {
+  return Number(STASH.exec(text)?.[1] ?? 0)
+}
+
+function numberIn(path: string): number | undefined {
+  try {
+    const value = Number.parseInt(readFileSync(path, 'utf8'), 10)
+
+    return Number.isNaN(value) ? undefined : value
+  }
+  catch {
+    return undefined
+  }
+}
+
+// The operation in progress, read from the files git keeps in its git dir.
+export function operationOf(gitDir: string): Operation | null {
+  const has = (name: string) => existsSync(join(gitDir, name))
+
+  if (has('rebase-merge'))
+    return { kind: 'rebase', step: numberIn(join(gitDir, 'rebase-merge/msgnum')), total: numberIn(join(gitDir, 'rebase-merge/end')) }
+
+  if (has('rebase-apply'))
+    return { kind: 'rebase', step: numberIn(join(gitDir, 'rebase-apply/next')), total: numberIn(join(gitDir, 'rebase-apply/last')) }
+
+  for (const [file, kind] of [['MERGE_HEAD', 'merge'], ['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert'], ['BISECT_LOG', 'bisect']] as const) {
+    if (has(file))
+      return { kind }
+  }
+
+  return null
 }
 
 // A path as git prints it, unquoted when it holds a quote, a backslash, a control character or, with core.quotePath, a non-ASCII byte written in octal.
@@ -102,9 +147,11 @@ export function parseStatus(text: string): Status | null {
 }
 
 // The branch, its upstream, the counts of changed files and HEAD in one line, from the parsed status and what `git log -1 --format=%h%x00%s` prints.
-export function summary(status: Status, head: string): string {
+export function summary(status: Status, head: string, { operation = null, stash = 0 }: { operation?: Operation | null, stash?: number } = {}): string {
   const { branch, oid, upstream, aheadBehind, changes, conflicted, untracked } = status
-  const on = branch === '(detached)' ? `detached at ${oid.slice(0, 7)}` : `branch \`${branch}\``
+  const steps = operation?.step !== undefined && operation.total !== undefined ? ` ${operation.step}/${operation.total}` : ''
+  const during = operation === null ? '' : ` (${operation.kind}${steps} in progress)`
+  const on = (branch === '(detached)' ? `detached at ${oid.slice(0, 7)}` : `branch \`${branch}\``) + during
   let tracking = 'no upstream'
 
   // git leaves the counts out when the upstream branch is gone or was never fetched
@@ -115,5 +162,5 @@ export function summary(status: Status, head: string): string {
   const [sha, title] = head.trim().split('\0')
   const last = sha === undefined || sha === '' ? '; no commit yet' : `; HEAD ${sha} ${title ?? ''}`.trimEnd()
 
-  return `${on}, ${tracking}; ${files} files${last}`
+  return `${on}, ${tracking}; ${files} files${stash > 0 ? `; ${stash} stashed` : ''}${last}`
 }

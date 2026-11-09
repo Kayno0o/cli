@@ -2,13 +2,13 @@
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Repo } from './repos'
-import type { Change, Status } from './status'
+import type { Change, Operation, Status } from './status'
 import process from 'node:process'
 import { fail, jsonOption, paint, parse, printJson, role, runMain, table, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
 import { letter } from './colour'
 import { git } from './git'
 import { branchOf, changesOf, reposOf, repoState, trackingOf } from './repos'
-import { parseStatus, summary } from './status'
+import { operationOf, parseStatus, stashOf, summary } from './status'
 
 const USAGE = `gst [-n N]: the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked
 
@@ -20,13 +20,17 @@ const OPTIONS = {
   log: { type: 'string', short: 'l', description: 'the former spelling of --limit' },
   repos: { type: 'boolean', short: 'r', description: 'one line for each repository nested below, the current one included', conflicts: ['limit', 'log'] },
   watch: watchOption('the status'),
-  json: jsonOption('{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, commits}; with --repos an array of them, each with its path and no commits, a repository git cannot read being {path, error}'),
+  json: jsonOption('{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, operation, stash, commits}, operation being {kind, step?, total?} while a rebase, merge, cherry-pick, revert or bisect is in progress and null otherwise; with --repos an array of them, each with its path and no commits, a repository git cannot read being {path, error}'),
 } as const
 
 type Commit = string[]
+interface Extra {
+  operation: Operation | null
+  stash: number
+}
 
 // The status as --json prints it, `commits` left out when none were asked for.
-function jsonOf(status: Status, head: { sha: string, title: string } | null, commits?: Commit[]) {
+function jsonOf(status: Status, head: { sha: string, title: string } | null, commits?: Commit[], extra?: Extra) {
   return {
     branch: status.branch,
     oid: status.oid,
@@ -38,6 +42,7 @@ function jsonOf(status: Status, head: { sha: string, title: string } | null, com
     unstaged: status.changes.filter(change => change.worktree !== '.').map(({ worktree, path }) => ({ status: worktree, path })),
     untracked: status.untracked,
     conflicted: status.conflicted,
+    ...extra === undefined ? {} : { operation: extra.operation, stash: extra.stash },
     ...commits === undefined ? {} : { commits: commits.map(([commitSha = '', commitTitle = '']) => ({ sha: commitSha, title: commitTitle })) },
   }
 }
@@ -96,28 +101,30 @@ async function main(argv: string[]): Promise<number> {
 
   const asked = parsed.values.limit ?? parsed.values.log
   const count = asked === undefined ? 0 : wholeNumber(asked, 'limit', 1)
-  const [read, head, log] = await Promise.all([
-    git(['status', '--porcelain=v2', '--branch']),
+  const [read, head, log, gitDir] = await Promise.all([
+    git(['status', '--porcelain=v2', '--branch', '--show-stash']),
     git(['log', '-1', '--format=%h%x00%s']),
     count === 0 ? undefined : git(['log', `-${count}`, '--format=%h%x00%s']),
+    git(['rev-parse', '--absolute-git-dir']),
   ])
   const status = read.code === 0 ? parseStatus(read.stdout) : null
 
   if (status === null)
     fail(read.stderr.trim() || 'not inside a git repository')
 
+  const extra = { operation: gitDir.code === 0 ? operationOf(gitDir.stdout.trim()) : null, stash: stashOf(read.stdout) }
   const commits = log?.code === 0 ? log.stdout.trimEnd().split('\n').filter(Boolean).map(line => line.split('\0')) : []
 
   if (parsed.values.json === true) {
     const [sha, title] = head.code === 0 && head.stdout.trim() !== '' ? head.stdout.trim().split('\0') : []
 
-    printJson(jsonOf(status, sha === undefined ? null : { sha, title: title ?? '' }, commits))
+    printJson(jsonOf(status, sha === undefined ? null : { sha, title: title ?? '' }, commits, extra))
 
     return 0
   }
 
   const lines = [
-    summary(status, head.code === 0 ? head.stdout : ''),
+    summary(status, head.code === 0 ? head.stdout : '', extra),
     ...group('staged', status.changes.filter(change => change.index !== '.').map(staged)),
     ...group('unstaged', status.changes.filter(change => change.worktree !== '.').map(change => `${letter(change.worktree)} ${change.path}`)),
     ...group('untracked', status.untracked.map(file => paint(process.stdout).dim(file))),

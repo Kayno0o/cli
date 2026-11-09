@@ -81,8 +81,41 @@ describe('gst', () => {
       unstaged: [{ status: 'M', path: 'b.ts' }],
       untracked: ['new.ts'],
       conflicted: [],
+      operation: null,
+      stash: 0,
       commits: [{ sha, title: 'feat: first' }],
     })
+  })
+
+  test('counts the stash and says which operation is in progress', () => {
+    file('a.ts', 'base\n')
+    git('add', 'a.ts')
+    git('commit', '-q', '-m', 'feat: base')
+    git('checkout', '-q', '-b', 'topic')
+    file('a.ts', 'topic\n')
+    git('commit', '-q', '-am', 'feat: topic')
+    git('checkout', '-q', 'main')
+    file('a.ts', 'main\n')
+    git('commit', '-q', '-am', 'feat: main')
+    file('b.ts')
+    git('add', 'b.ts')
+    git('stash', '-q')
+
+    expect(gst().out).toContain('files; 1 stashed; HEAD')
+    expect(JSON.parse(gst('--json').out)).toMatchObject({ operation: null, stash: 1 })
+
+    git('checkout', '-q', 'topic')
+    git('rebase', 'main')
+
+    expect(gst().out).toStartWith('detached at')
+    expect(gst().out).toContain('(rebase 1/1 in progress)')
+    expect(JSON.parse(gst('--json').out)).toMatchObject({ operation: { kind: 'rebase', step: 1, total: 1 } })
+
+    git('rebase', '--abort')
+    git('merge', 'main')
+
+    expect(gst().out).toContain('branch `topic` (merge in progress)')
+    expect(JSON.parse(gst('--json').out)).toMatchObject({ operation: { kind: 'merge' } })
   })
 
   test('-n and --limit add the last commits, --log and -l are the former spellings of it', () => {
