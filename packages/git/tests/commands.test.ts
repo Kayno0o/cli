@@ -209,6 +209,36 @@ describe('gu', () => {
     expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\nlost?\n')
   })
 
+  test('saves a patch git apply takes whatever the diff config says', () => {
+    for (const [key, value] of Object.entries({ 'diff.external': 'echo side by side view', 'color.diff': 'always', 'diff.noprefix': 'true', 'diff.relative': 'true', 'diff.view.textconv': 'tr a-z A-Z' }))
+      git(work, 'config', key, value)
+
+    writeFileSync(join(work, '.gitattributes'), 'a.txt diff=view\n')
+    writeFileSync(join(work, 'a.txt'), 'one\nlost?\n')
+
+    const { saved } = json<{ saved: string }>(bin('gu', work, 'a.txt', '--json').out)
+
+    expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\n')
+    expect(run(['git', 'apply', saved], work).code).toBe(0)
+    expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\nlost?\n')
+  })
+
+  // A git whose apply refuses stands in for a patch that does not hold the change, which the flags above leave no config to cause.
+  test('discards nothing when the saved patch would not put the change back', () => {
+    const stubs = join(root, 'stubs')
+    const real = Bun.which('git')!
+
+    mkdirSync(stubs)
+    writeFileSync(join(stubs, 'git'), `#!/bin/sh\nfor arg; do [ "$arg" = apply ] && { echo 'error: corrupt patch' >&2; exit 1; }; done\nexec ${real} "$@"\n`, { mode: 0o755 })
+    writeFileSync(join(work, 'a.txt'), 'one\nkept\n')
+
+    const done = run([process.execPath, BINS.gu!, 'a.txt'], work, { PATH: `${stubs}:${process.env.PATH}` })
+
+    expect(done.code).toBe(1)
+    expect(done.err).toContain('would not put the change back')
+    expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\nkept\n')
+  })
+
   test('--staged unstages and keeps the working tree', () => {
     writeFileSync(join(work, 'a.txt'), 'one\nmore\n')
     git(work, 'add', 'a.txt')

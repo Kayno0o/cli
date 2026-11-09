@@ -21,6 +21,8 @@ const OPTIONS = {
 } as const
 
 const LITERAL = { ...process.env, GIT_LITERAL_PATHSPECS: '1' }
+// A patch `git apply` takes whatever the config says: no external diff tool or textconv view, no colour, the a/ and b/ prefixes, paths from the top.
+const PLAIN_PATCH = ['--binary', '--no-ext-diff', '--no-textconv', '--no-color', '--no-relative', '--submodule=short', '--src-prefix=a/', '--dst-prefix=b/']
 const NOT_A_REPOSITORY = /not a git repository/i
 
 async function checked(args: string[]): Promise<string> {
@@ -101,12 +103,20 @@ async function main(argv: string[]): Promise<number> {
     return 0
   }
 
-  const patch = await checked(['diff', '--binary', '--', ...positionals])
+  const patch = await checked(['diff', ...PLAIN_PATCH, '--', ...positionals])
   const folder = join(resolve((await checked(['rev-parse', '--git-dir'])).trim()), 'gu')
   const saved = join(folder, `${new Date().toISOString().replaceAll(':', '-')}.patch`)
+  const top = (await checked(['rev-parse', '--show-toplevel'])).trim()
 
   mkdirSync(folder, { recursive: true })
   writeFileSync(saved, patch)
+
+  // Taking the patch back out of the working tree as it stands proves it holds the change before anything is lost.
+  const reverts = await git(['-C', top, 'apply', '--check', '--reverse', '--whitespace=nowarn', saved])
+
+  if (reverts.code !== 0)
+    fail(`the patch saved to ${saved} would not put the change back, nothing discarded:\n${reverts.stderr.trim()}`, 1)
+
   await checked(['restore', '--', ...positionals])
 
   if (values.json === true)
