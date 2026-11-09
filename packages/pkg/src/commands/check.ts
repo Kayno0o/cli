@@ -11,7 +11,7 @@ import { fetchDownloads, fetchPackument, isPublic, unreachable } from '../regist
 
 const usage = `pkg [check] <name>[@version]... | --from <package.json> | -
 
-Checks npm packages before they are added: whether the name exists, the latest and the newest version at least two weeks old, weekly downloads, licence, repository, install scripts and a near miss of a popular name.
+Checks npm packages before they are added: whether the name exists, the latest and the newest version at least two weeks old, weekly downloads, licence, repository, install scripts, a near miss of a popular name, and a warning when the version's publisher differs from the previous release's or its provenance attestation is gone.
 
 Names come from the arguments, from the dependencies of a package.json with --from (each checked as \`name@range\`, so it resolves what an install would; dev and optional ones included, peer ranges and local or remote sources left out), or from stdin, separated by spaces or lines, when \`-\` is given or nothing else is and stdin is piped.
 

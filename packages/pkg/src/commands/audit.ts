@@ -14,7 +14,7 @@ import { fetchPackument } from '../registry'
 
 const usage = `pkg audit [dir]
 
-Reads the bun.lock in the folder (the current one by default) and runs on every registry package it pins the checks \`pkg check\` runs before an add: age, install scripts, a deprecated version, a near miss of a popular name, and the licence allowlist of the pkg config. It also lists the known advisories of each version, with the GHSA, the severity and the fixed version, from the registry's bulk advisory endpoint, the one \`bun audit\` reads.
+Reads the bun.lock in the folder (the current one by default) and runs on every registry package it pins the checks \`pkg check\` runs before an add: age, install scripts, a deprecated version, a changed publisher or lost attestation, a near miss of a popular name, and the licence allowlist of the pkg config. It also lists the known advisories of each version, with the GHSA, the severity and the fixed version, from the registry's bulk advisory endpoint, the one \`bun audit\` reads.
 Findings are grouped per package, each registry package looked up once per run.
 Reach for it to vet one repository in depth; \`audit\` sweeps many repositories for advisories only, and shares --level, --prod and --ignore.`
 

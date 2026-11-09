@@ -111,6 +111,33 @@ function safeRelease(packument: Packument, now: number, minAgeDays: number): Rel
   return version === undefined ? undefined : { version, published: packument.time?.[version] }
 }
 
+// The stable release just below the version, or the one just below it when it is a prerelease itself.
+function previousRelease(packument: Packument, version: string): Version | undefined {
+  const below = Object.keys(packument.versions ?? {}).filter(each => (isStable(each) || !isStable(version)) && Bun.semver.order(each, version) < 0).sort(Bun.semver.order).at(-1)
+
+  return below === undefined ? undefined : packument.versions?.[below]
+}
+
+function publisherWarnings(packument: Packument, version: string): string[] {
+  const current = packument.versions?.[version]
+  const previous = previousRelease(packument, version)
+  const warnings: string[] = []
+
+  if (current === undefined || previous === undefined)
+    return warnings
+
+  const by = current._npmUser?.name
+  const before = previous._npmUser?.name
+
+  if (by !== undefined && before !== undefined && by !== before)
+    warnings.push(`${version} was published by ${by}, ${previous.version} by ${before}`)
+
+  if (previous.dist?.attestations !== undefined && current.dist?.attestations === undefined)
+    warnings.push(`${version} has no provenance attestation, ${previous.version} had one`)
+
+  return warnings
+}
+
 export interface AnalyzeInput {
   spec: Spec
   packument: Packument | undefined
@@ -189,6 +216,8 @@ export function analyze(input: AnalyzeInput): Report {
 
   if (report.deprecated !== undefined)
     report.warnings.push(`${version} is deprecated: ${report.deprecated}`)
+
+  report.warnings.push(...publisherWarnings(packument, version))
 
   if (input.licenses !== undefined) {
     const isMissing = report.license === undefined || report.license === ''

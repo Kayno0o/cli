@@ -17,6 +17,8 @@ export interface Version {
   scripts?: Record<string, string>
   deprecated?: string
   license?: string | { type?: string }
+  _npmUser?: { name?: string }
+  dist?: { attestations?: unknown }
 }
 
 export interface Packument {
