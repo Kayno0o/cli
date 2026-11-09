@@ -60,7 +60,7 @@ runs the repo's check, typecheck, lint and test steps, from package.json scripts
 Instead of: chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail
 
 ```sh
-check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot] [--parallel] [--in <service> | --host] [--list]
+check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot | --no-slot] [--parallel] [--in <service> | --host] [--list]
 check
 check --only lint,test  # two of the steps
 check --in app  # every step inside the app service

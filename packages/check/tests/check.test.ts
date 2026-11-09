@@ -1,4 +1,4 @@
-import { statSync, writeFileSync } from 'node:fs'
+import { statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Exit } from '@kaynooo/cli-kit'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
@@ -159,6 +159,35 @@ describe('check', () => {
 
       process.env.PATH = '/nonexistent'
       expect(await failure(check(['--slot'], repo('js')))).toContain('--slot needs the slot bin')
+    }
+    finally {
+      process.env.PATH = path
+    }
+  })
+
+  test('steps go through slot by default when the bin is there, and --no-slot skips it', async () => {
+    const bin = temp('check-slot-default-')
+    const calls = join(bin, 'calls')
+    const path = process.env.PATH
+
+    writeFileSync(join(bin, 'slot'), `#!/bin/sh\necho "$@" >> ${calls}\nshift\nexec "$@"\n`, { mode: 0o755 })
+
+    try {
+      process.env.PATH = `${bin}:${path}`
+
+      expect((await capture(async () => check(['--only', 'check,test'], repo('js')))).result).toBe(0)
+      expect((await Bun.file(calls).text()).trim().split('\n')).toEqual(['-- sh -c bun run check', '-- sh -c bun run test'])
+
+      writeFileSync(calls, '')
+      expect((await capture(async () => check(['--no-slot', '--only', 'check'], repo('js')))).result).toBe(0)
+      expect(await Bun.file(calls).text()).toBe('')
+      expect(await failure(check(['--slot', '--no-slot'], repo('js')))).toContain('exclude each other')
+
+      const bare = temp('check-no-slot-bin-')
+
+      symlinkSync(process.execPath, join(bare, 'bun'))
+      process.env.PATH = `${bare}:/usr/bin:/bin`
+      expect((await capture(async () => check(['--only', 'check'], repo('js')))).result).toBe(0)
     }
     finally {
       process.env.PATH = path
