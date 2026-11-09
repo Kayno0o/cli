@@ -1,9 +1,9 @@
 import type { Report } from '../src/dlog'
 import { knownSecrets } from '@kaynooo/cli-env/mask'
 import { describe, expect, test } from 'bun:test'
-import { dlog, errorLines, healthOf, isUp, needsLook, withoutKeys } from '../src/dlog'
+import { dlog, errorLines, healthOf, isUp, needsLook, windowOf, withoutKeys } from '../src/dlog'
 
-const report = (over: Partial<Report>): Report => ({ key: 'php', state: 'running', health: '', status: 'Up', errors: [], tail: [], unreadable: undefined, fine: true, down: false, unhealthy: false, ...over })
+const report = (over: Partial<Report>): Report => ({ key: 'php', state: 'running', health: '', status: 'Up', errors: [], tail: [], windowFull: false, windowFrom: undefined, unreadable: undefined, fine: true, down: false, unhealthy: false, ...over })
 
 describe('errorLines', () => {
   test('keeps the error lines only, a repeated message once with its count and its latest wording', () => {
@@ -132,5 +132,13 @@ describe('errorLines with the wider error words', () => {
   test('leaves counts of zero and config keys alone', () => {
     for (const line of ['0 errors', 'no errors found', 'error_reporting = E_ALL', 'enabled eager mode'])
       expect(errorLines(line, 5), line).toEqual([])
+  })
+})
+
+describe('windowOf', () => {
+  test('is full once the log has as many lines as the tail limit, from the first timestamp', () => {
+    expect(windowOf('2026-11-03T10:00:01Z a\nb\nc\n', 3)).toEqual({ full: true, from: '2026-11-03T10:00:01Z' })
+    expect(windowOf('b\nc\n', 3)).toEqual({ full: false, from: undefined })
+    expect(windowOf('a\nb\nc', 3).from).toBeUndefined()
   })
 })

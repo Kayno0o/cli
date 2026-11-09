@@ -99,6 +99,10 @@ export interface Report {
   status: string
   errors: ErrorLine[]
   tail: string[]
+  /** The log came back as long as the tail limit, so older lines, errors among them, may have been cut. */
+  windowFull: boolean
+  /** The timestamp of the first line of a full window, when the log carries timestamps. */
+  windowFrom: string | undefined
   /** Why compose could not list the service or read its logs. */
   unreadable: string | undefined
   fine: boolean
@@ -125,6 +129,16 @@ function matcherOf(level: keyof typeof LEVELS, grep: string | undefined): RegExp
   catch {
     return badUsage(`--grep takes a regex, ${grep} is not one`)
   }
+}
+
+/** Whether the log fills the tail limit, and the timestamp its first line starts at. */
+export function windowOf(log: string, limit: number = TAIL): { full: boolean, from: string | undefined } {
+  const lines = log.split('\n').filter(text => text.trim() !== '')
+
+  if (lines.length < limit)
+    return { full: false, from: undefined }
+
+  return { full: true, from: lines[0]?.match(TIMESTAMP)?.[0] }
 }
 
 async function read(service: Service, since: string): Promise<{ log: string, container: Container | undefined, unreadable: string | undefined }> {
@@ -172,6 +186,9 @@ function show(reports: Report[]): void {
 
     for (const text of report.tail)
       console.log(`  ${colors.dim(text)}`)
+
+    if (report.windowFull)
+      console.log(`  ${colors.yellow(`log window full: only the last ${TAIL} lines${report.windowFrom === undefined ? '' : `, from ${report.windowFrom}`}, were read; older errors may be missing`)}`)
   }
 }
 
@@ -197,11 +214,12 @@ export async function dlog(args: string[]): Promise<number> {
   const reports: Report[] = await Promise.all(chosen.map(async (service) => {
     const { log, container, unreadable } = await read(service, parsed.values.since)
     const { health, fine } = healthOf(service.state, container)
+    const window = windowOf(log)
     const lines = withoutKeys(log.split('\n'))
     const errors = errorLines(lines.join('\n'), limit, known, matches)
     const tail = parsed.values.all === true && errors.length === 0 ? lines.map(text => truncate(maskLine(stripAnsi(text).trim(), known), MAX_WIDTH, { suffix: '…', includeSuffix: true })).filter(Boolean).slice(-limit) : []
 
-    return { key: key(service), state: service.state, health, status: service.status, errors, tail, unreadable, fine, down: !isUp(service.state, container), unhealthy: isUp(service.state, container) && !fine }
+    return { key: key(service), state: service.state, health, status: service.status, errors, tail, windowFull: window.full, windowFrom: window.from, unreadable, fine, down: !isUp(service.state, container), unhealthy: isUp(service.state, container) && !fine }
   }))
 
   const down = reports.filter(report => needsLook(report, failOn))
