@@ -63,7 +63,7 @@ describe('complexityOf', () => {
 
   test('blanks a string before a comment, so a url in a string eats nothing', () => {
     expect(complexityOf('const u = "http://x"; if (a) {}\n')).toBe(2)
-    expect(complexityOf("// don't\nif (a) { b = 'x' }\n")).toBe(2)
+    expect(complexityOf('// don\'t\nif (a) { b = \'x\' }\n')).toBe(2)
   })
 
   test('leaves tests and generated paths out', () => {
