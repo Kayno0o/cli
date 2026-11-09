@@ -17,14 +17,15 @@ async function withClone(messages: string[], run: (shas: string[]) => Promise<vo
   try {
     await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${clone}`.quiet()
     process.chdir(clone)
-    await $`git config user.name t && git config user.email t@t`.quiet()
+    // Each git call names the clone, so a timed-out test chdir-ing back under this one cannot send them to the real checkout.
+    await $`git config user.name t && git config user.email t@t`.cwd(clone).quiet()
 
     for (const message of messages) {
-      await $`git commit -q --allow-empty -m ${message}`.quiet()
-      shas.push((await $`git rev-parse HEAD`.text()).trim())
+      await $`git commit -q --allow-empty -m ${message}`.cwd(clone).quiet()
+      shas.push((await $`git rev-parse HEAD`.cwd(clone).text()).trim())
     }
 
-    await $`git push -q origin main && git remote set-head origin -a`.quiet()
+    await $`git push -q origin main && git remote set-head origin -a`.cwd(clone).quiet()
     await run(shas)
   }
   finally {

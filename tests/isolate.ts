@@ -22,3 +22,16 @@ delete process.env.CLAUDECODE
 delete process.env.AI_AGENT
 delete process.env.CI
 delete process.env.KIT_MODE
+
+// A test that times out keeps running while the next one starts, so its `finally` can chdir back here under the next test's feet and that test's git then runs in this checkout. No git a test starts through `$` or node:child_process may push to this checkout's remotes: each push URL is rewritten to a path that does not exist, after the entries the shell already passes. Bun.spawn without an env sees none of this.
+const remotes = Bun.spawnSync(['git', '-C', new URL('..', import.meta.url).pathname, 'remote', '-v'], { stdout: 'pipe', stderr: 'ignore' }).stdout.toString()
+const pushUrls = new Set(remotes.split('\n').filter(line => line.endsWith('(push)')).map(line => line.split(/\s+/)[1] ?? '').filter(url => url !== ''))
+let configs = Number(process.env.GIT_CONFIG_COUNT ?? 0)
+
+for (const url of pushUrls) {
+  process.env[`GIT_CONFIG_KEY_${configs}`] = 'url./nonexistent/push-refused-in-tests/.pushInsteadOf'
+  process.env[`GIT_CONFIG_VALUE_${configs}`] = url
+  configs += 1
+}
+
+process.env.GIT_CONFIG_COUNT = String(configs)

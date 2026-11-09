@@ -110,15 +110,17 @@ describe('proveOrigin', () => {
     const root = temp('ft-remote-')
     const home = process.cwd()
     const before = limits.lsRemoteMs
-    const env = { GIT_CONFIG_COUNT: process.env.GIT_CONFIG_COUNT, GIT_CONFIG_KEY_0: process.env.GIT_CONFIG_KEY_0, GIT_CONFIG_VALUE_0: process.env.GIT_CONFIG_VALUE_0 }
+    // Added after the entries the preload sets, which keep this checkout's remotes unpushable.
+    const index = Number(process.env.GIT_CONFIG_COUNT ?? 0)
+    const env = { GIT_CONFIG_COUNT: process.env.GIT_CONFIG_COUNT, [`GIT_CONFIG_KEY_${index}`]: undefined, [`GIT_CONFIG_VALUE_${index}`]: undefined }
 
     try {
       await $`git init -q ${root} && git remote add origin ${'ext::sleep 30'}`.cwd(root).quiet()
       process.chdir(root)
       limits.lsRemoteMs = 300
-      process.env.GIT_CONFIG_COUNT = '1'
-      process.env.GIT_CONFIG_KEY_0 = 'protocol.ext.allow'
-      process.env.GIT_CONFIG_VALUE_0 = 'always'
+      process.env.GIT_CONFIG_COUNT = String(index + 1)
+      process.env[`GIT_CONFIG_KEY_${index}`] = 'protocol.ext.allow'
+      process.env[`GIT_CONFIG_VALUE_${index}`] = 'always'
 
       // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
       await expect(proveOrigin()).rejects.toThrow('no answer')
