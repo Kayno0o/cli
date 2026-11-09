@@ -66,8 +66,14 @@ describe('parse', () => {
     expect(rows[1]).toBe('      --said <value>  said')
   })
 
-  test('throws HelpShown after printing the help, so the command goes no further', () => {
-    expect(() => parse(['--help'], 'u', options)).toThrow(HelpShown)
+  test('throws HelpShown after printing the help, so the command goes no further', async () => {
+    const { out } = await capture(async () => {
+      expect(() => parse(['--help'], 'u', options)).toThrow(HelpShown)
+
+      return 0
+    })
+
+    expect(out).toStartWith('Usage: u')
   })
 
   test('takes the positionals named, a missing or an extra one a usage error', () => {
@@ -233,10 +239,14 @@ describe('trailing', () => {
     expect(parse(['--all', '-p', 'p1', 'x', 'up', '--all'], 'u', compose, settings)).toMatchObject({ values: { all: true, project: 'p1' }, positionals: ['x'], rest: ['up', '--all'] })
   })
 
-  test('has no rest until a positional is given, and an empty one when nothing follows', () => {
+  test('has no rest until a positional is given, and an empty one when nothing follows', async () => {
     expect(() => parse([], 'u', compose, settings)).toThrow('missing <project>')
     expect(parse(['x'], 'u', compose, settings).rest).toEqual([])
-    expect(() => parse(['--help'], 'u', compose, settings)).toThrow(HelpShown)
+    await capture(async () => {
+      expect(() => parse(['--help'], 'u', compose, settings)).toThrow(HelpShown)
+
+      return 0
+    })
   })
 })
 
