@@ -89,14 +89,14 @@ function paintContent({ mark, text, language }: Content, theme: Theme, changed: 
   let from = 0
 
   for (const escape of source.matchAll(ESCAPE)) {
-    for (const char of source.slice(from, escape.index).split(/(?:)/))
+    for (const char of source.slice(from, escape.index).split(''))
       cells.push({ char, style, changed: changed?.[cells.length - 1] ?? false })
 
     style = CLOSING.has(escape[1]!) ? '' : style + escape[0]
     from = escape.index + escape[0].length
   }
 
-  for (const char of source.slice(from).split(/(?:)/))
+  for (const char of source.slice(from).split(''))
     cells.push({ char, style, changed: changed?.[cells.length - 1] ?? false })
 
   let out = ''

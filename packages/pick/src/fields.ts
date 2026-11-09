@@ -1,4 +1,4 @@
-const SPAN = /^(-?\d+)?(\.\.)?(-?\d+)?$/
+const INDEX = /^-?\d+$/
 
 // A field keeps the delimiter that ends it, as fzf does, so joined fields read as the line did.
 export function splitFields(line: string, delimiter: RegExp | undefined): string[] {
@@ -26,17 +26,18 @@ export function parseFields(expression: string): ((count: number) => number[]) |
   const spans: ((count: number) => number[])[] = []
 
   for (const part of expression.split(',')) {
-    const span = SPAN.exec(part)
+    const dots = part.indexOf('..')
+    const from = dots === -1 ? part : part.slice(0, dots)
+    const to = dots === -1 ? from : part.slice(dots + 2)
 
-    if (span === null || part === '' || part === '0')
+    if (part === '0' || part === '' || (from !== '' && !INDEX.test(from)) || (to !== '' && !INDEX.test(to)))
       return undefined
 
-    const [, from, dots, to] = span
     const resolve = (n: number, count: number): number => n < 0 ? count + n : n - 1
 
     spans.push((count) => {
-      const first = from === undefined ? 0 : resolve(Number(from), count)
-      const last = dots === undefined ? first : to === undefined ? count - 1 : resolve(Number(to), count)
+      const first = from === '' ? 0 : resolve(Number(from), count)
+      const last = to === '' ? count - 1 : resolve(Number(to), count)
 
       return Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => first + i).filter(i => i >= 0 && i < count)
     })

@@ -19,22 +19,22 @@ Without a terminal on stderr there is nobody to choose: it prints the best line 
 const EXITS: ExitRow[] = [[0, 'it printed a choice'], [1, 'nothing matches or there are no lines'], [2, 'a usage error'], [130, 'cancelled']]
 
 const OPTIONS = {
-  multi: { type: 'boolean', short: 'm', description: 'tab marks several lines, enter prints them' },
-  prompt: { type: 'string', short: 'p', description: 'the prompt before the query (> )' },
+  'multi': { type: 'boolean', short: 'm', description: 'tab marks several lines, enter prints them' },
+  'prompt': { type: 'string', short: 'p', description: 'the prompt before the query (> )' },
   // -q is the query here, not quiet: it predates the convention and pick has nothing to silence.
-  query: { type: 'string', short: 'q', description: 'the query to start with' },
-  preview: { type: 'string', description: 'a command shown for the highlighted line, {} standing for it' },
-  header: { type: 'string', description: 'a line of text shown above the list' },
-  filter: { type: 'string', short: 'f', description: 'print every line the query matches, best first, with no terminal' },
+  'query': { type: 'string', short: 'q', description: 'the query to start with' },
+  'preview': { type: 'string', description: 'a command shown for the highlighted line, {} standing for it' },
+  'header': { type: 'string', description: 'a line of text shown above the list' },
+  'filter': { type: 'string', short: 'f', description: 'print every line the query matches, best first, with no terminal' },
   'select-1': { type: 'boolean', short: '1', description: 'print the only match without opening the selector' },
   'exit-0': { type: 'boolean', short: '0', description: 'exit 1 at once when nothing matches' },
-  delimiter: { type: 'string', short: 'd', description: 'a regex splitting a line into fields (whitespace)' },
-  nth: { type: 'string', description: 'the fields the query is matched against, 2, -1, 2.., 1..3, 1,3' },
+  'delimiter': { type: 'string', short: 'd', description: 'a regex splitting a line into fields (whitespace)' },
+  'nth': { type: 'string', description: 'the fields the query is matched against, 2, -1, 2.., 1..3, 1,3' },
   'with-nth': { type: 'string', description: 'the fields shown, the printed line stays whole' },
-  read0: { type: 'boolean', description: 'lines on stdin end with NUL' },
-  print0: { type: 'boolean', description: 'end each printed line with NUL' },
-  height: { type: 'string', description: 'lines or a percentage of the terminal to draw in (100%)' },
-  json: jsonOption('{picked: [lines]}, the choice or the marked lines in input order'),
+  'read0': { type: 'boolean', description: 'lines on stdin end with NUL' },
+  'print0': { type: 'boolean', description: 'end each printed line with NUL' },
+  'height': { type: 'string', description: 'lines or a percentage of the terminal to draw in (100%)' },
+  'json': jsonOption('{picked: [lines]}, the choice or the marked lines in input order'),
 } as const
 
 function print(chosen: string[], json: boolean, end: string): void {

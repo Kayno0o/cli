@@ -92,7 +92,6 @@ db describe users  # the columns, indexes and foreign keys of a table
 db search email  # where a field lives
 db explain "select * from users where email = 'a'"  # the plan, nothing executed
 db --format csv "select id, email from users"  # RFC 4180 CSV, or tsv or vertical
-db --format csv "select id, email from users"  # RFC 4180 CSV, or tsv or vertical
 ```
 
 ## dc
