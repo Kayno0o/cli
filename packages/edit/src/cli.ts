@@ -32,12 +32,13 @@ const OPTIONS = {
   'to': { type: 'string', short: 't', description: 'text to put in its place, empty to delete it' },
   'count': { type: 'string', short: 'n', description: 'matches expected in each file (default 1)' },
   'all': { type: 'boolean', short: 'a', description: 'replace every match, expecting at least one in each file' },
+  'skip-missing': { type: 'boolean', description: 'with --all, leave a file where no pair matches alone and list it, instead of failing; the counts still hold for the files that match' },
   'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1, ${1}, $<name> and ${name}' }, // eslint-disable-line no-template-curly-in-string
   'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?} applied in order: inline when it starts with [, else a file or - for stdin' },
   'diff': { type: 'boolean', short: 'd', description: 'print each file\'s unified diff' },
   'dry-run': { type: 'boolean', description: 'show what would change without writing' },
   'quiet': { type: 'boolean', short: 'q', description: 'print nothing on success, the diff aside' },
-  'json': jsonOption('{dryRun, files: [{path, replacements, lines, added, removed, diff?}]}, or {error, failures: [{path, problem}]} on stderr when nothing is written'),
+  'json': jsonOption('{dryRun, files: [{path, replacements, lines, added, removed, diff?}], skipped? (the files --skip-missing left alone)}, or {error, failures: [{path, problem}]} on stderr when nothing is written'),
 } as const
 
 interface Defaults {
@@ -281,10 +282,14 @@ async function main(argv: string[]): Promise<number> {
   if (values.count !== undefined && values.all === true)
     fail('--count and --all exclude each other')
 
+  if (values['skip-missing'] === true && values.all !== true)
+    fail('--skip-missing needs --all')
+
   const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true, regex: values.regex === true }
   const edits = await plan(values, files, defaults)
   const changes: { path: string, before: string, after: string, lines: number[], diff?: Diff }[] = []
   const problems: { path: string, problem: string }[] = []
+  const skipped: string[] = []
 
   for (const [path, pairs] of edits) {
     if (!existsSync(path)) {
@@ -303,6 +308,12 @@ async function main(argv: string[]): Promise<number> {
 
     const applied = applyPairs(before, pairs)
 
+    if (values['skip-missing'] === true && applied.matched === 0) {
+      skipped.push(path)
+
+      continue
+    }
+
     problems.push(...applied.problems.map(problem => ({ path, problem })))
 
     if (applied.problems.length === 0 && values['dry-run'] !== true && !writable(path))
@@ -312,6 +323,9 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const json = values.json === true
+
+  if (skipped.length > 0 && changes.length === 0 && problems.length === 0)
+    problems.push({ path: skipped.join(', '), problem: 'no match in any file' })
 
   if (problems.length > 0) {
     if (json)
@@ -355,8 +369,11 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (json)
-    printJson({ dryRun: values['dry-run'] === true, files: done })
-  else if (values['dry-run'] === true && values.quiet !== true)
+    printJson({ dryRun: values['dry-run'] === true, files: done, ...values['skip-missing'] === true ? { skipped } : {} })
+  else if (values.quiet !== true && skipped.length > 0)
+    console.log(`skipped ${counted(skipped.length, 'file')} with no match: ${skipped.join(', ')}`)
+
+  if (!json && values['dry-run'] === true && values.quiet !== true)
     console.log('dry run: nothing written')
 
   return 0

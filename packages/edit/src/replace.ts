@@ -14,6 +14,8 @@ export interface Applied {
   // The line of each match, counted in the text its pair ran on.
   lines: number[]
   problems: string[]
+  // Matches over all the pairs, 0 for a file none of them touches.
+  matched: number
 }
 
 const CRLF = /\r?\n/g
@@ -88,6 +90,7 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
   const crlf = original.includes('\r\n')
   const lines: number[] = []
   const problems: string[] = []
+  let matched = 0
   let text = original
 
   for (const [i, pair] of pairs.entries()) {
@@ -98,6 +101,9 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
     const pattern = pair.regex === true ? compile(from) : undefined
     const indexes = pattern === undefined ? literalIndexes(text, from) : [...text.matchAll(pattern)].map(match => match.index)
     const found = linesOf(text, indexes)
+
+    matched += indexes.length
+
     const expected = pair.count ?? 1
 
     if (pair.all === true ? indexes.length === 0 : indexes.length !== expected) {
@@ -116,5 +122,5 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
     text = pattern === undefined ? text.split(from).join(to) : text.replace(pattern, bracedGroups(to))
   }
 
-  return { text, lines, problems }
+  return { text, lines, problems, matched }
 }

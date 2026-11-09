@@ -34,7 +34,7 @@ describe('parseBlocks', () => {
 
 describe('applyPairs', () => {
   test('replaces one match and reports its line', () => {
-    expect(applyPairs('a\nb\nc', [{ from: 'b', to: 'B' }])).toEqual({ text: 'a\nB\nc', lines: [2], problems: [] })
+    expect(applyPairs('a\nb\nc', [{ from: 'b', to: 'B' }])).toEqual({ text: 'a\nB\nc', lines: [2], problems: [], matched: 1 })
   })
 
   test('refuses a count that is not the expected one, listing the lines', () => {

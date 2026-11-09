@@ -38,6 +38,19 @@ describe('sub', () => {
     expect(sub(['--help']).out).toContain('sub [options] <file>...')
   })
 
+  test('--skip-missing leaves a file with no match alone, lists it, and keeps the count checks on the others', () => {
+    file('a.ts', 'foo foo\n')
+    file('b.ts', 'bar\n')
+    const result = sub(['--from', 'foo', '--to', 'baz', '--all', '--skip-missing', 'a.ts', 'b.ts'])
+
+    expect(result).toMatchObject({ code: 0, out: 'a.ts: 2 replacements on lines 1, 1, +1 -1\nskipped 1 file with no match: b.ts\n' })
+    expect(read('b.ts')).toBe('bar\n')
+    expect(JSON.parse(sub(['--from', 'baz', '--to', 'q', '--all', '--skip-missing', '--json', 'a.ts', 'b.ts']).out).skipped).toEqual(['b.ts'])
+    expect(sub(['--from', 'nothing', '--to', 'x', '--all', '--skip-missing', 'a.ts', 'b.ts']).code).toBe(1)
+    expect(sub(['--from', 'a', '--to', 'x', '--skip-missing', 'a.ts']).code).toBe(2)
+    expect(sub(['--from', 'nothing', '--to', 'x', '--all', 'a.ts', 'b.ts']).code).toBe(1)
+  })
+
   test('replaces one literal match and reports its line and diff stat', () => {
     file('a.ts', 'const a = 1\nconst b = a.b(1)\n')
     const result = sub(['--from', 'a.b(1)', '--to', 'a.c(2)', 'a.ts'])
