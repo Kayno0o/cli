@@ -10,7 +10,7 @@ const BATCH = 1000
 const DETAIL_CONCURRENCY = 8
 const TIMEOUT_MS = 20_000
 const PACKAGE_BLOCK = /^\[\[package\]\]\s*$/m
-const FIELD = /^(name|version|source)\s*=\s*(.+)$/gm
+const FIELD = /^(name|version|source) = (.+)$/gm
 const QUOTED = /^"([^"]*)"$/
 const LEADING_V = /^v/
 
@@ -114,12 +114,12 @@ export async function osvFindings(locked: Locked[], ecosystem: string, direct: R
     const queries = chunk.map(each => ({ package: { name: each.name, ecosystem }, version: each.version }))
     const answer = await ok(await fetcher(`${OSV}/querybatch`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ queries }), signal: AbortSignal.timeout(TIMEOUT_MS) })) as { results: { vulns?: { id: string }[] }[] }
 
-    chunk.forEach((each, index) => {
+    for (const [index, each] of chunk.entries()) {
       const ids = (answer.results[index]?.vulns ?? []).map(vuln => vuln.id).filter(id => !ignore.includes(id))
 
       if (ids.length > 0)
         hits.set(each, ids)
-    })
+    }
   }
 
   const details = new Map<string, OsvVuln>()

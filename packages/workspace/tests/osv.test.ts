@@ -107,6 +107,15 @@ describe('osvAudit', () => {
   })
 
   test('an osv.dev error rejects instead of reading as clean', async () => {
-    await expect(osvAudit(repo(), 'low', [], async () => new Response('', { status: 503 }))).rejects.toThrow('503')
+    let message = ''
+
+    try {
+      await osvAudit(repo(), 'low', [], async () => new Response('', { status: 503 }))
+    }
+    catch (error) {
+      message = (error as Error).message
+    }
+
+    expect(message).toContain('503')
   })
 })
