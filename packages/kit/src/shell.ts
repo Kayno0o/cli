@@ -26,8 +26,11 @@ const ANSI_QUOTE = '$\''
 const ANSI_ESCAPES: Record<string, string> = { 'n': '\n', 't': '\t', 'r': '\r', 'a': '\x07', 'b': '\b', 'f': '\f', 'v': '\v', 'e': '\x1B', 'E': '\x1B', '\\': '\\', '\'': '\'', '"': '"', '?': '?' }
 const ANSI_DIGITS: Record<string, number> = { x: 2, u: 4, U: 8 }
 const OCTAL = /^[0-7]{1,3}/
+
 // Keywords opening a command of a compound statement, which the command following them is the one that counts.
-const KEYWORDS = new Set(['then', 'do', 'else', 'if', 'elif', 'while', 'until', '!', '{', '}'])
+export const KEYWORDS = new Set(['then', 'do', 'else', 'if', 'elif', 'while', 'until', '!', '{', '}'])
+// `<` or `0<` reading a file, not a heredoc, a duplication, a process substitution or a read-write open.
+const INPUT_REDIRECT = /^\d*<(?![<&(>])/
 const MAX_DEPTH = 8
 const MAX_BRACES = 256
 
@@ -624,6 +627,10 @@ export function parseCommand(text: string): Invocation {
     else if (tokens.length > 1 && CASE_LABEL.test(first)) {
       isWrapped = true
       tokens.shift()
+    }
+    // An input redirection may come before the program: `< in.txt cat` runs cat, the `} < /dev/null` closing a group runs nothing.
+    else if (INPUT_REDIRECT.test(first)) {
+      tokens.splice(0, first.replace(INPUT_REDIRECT, '') === '' ? 2 : 1)
     }
     else if (spec !== undefined) {
       isWrapped = true

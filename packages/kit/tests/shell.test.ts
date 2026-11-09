@@ -104,6 +104,14 @@ describe('parseCommand wrappers', () => {
       expect(parseCommand(text)).toMatchObject({ program: 'git', args: ['stash'], isWrapped: true })
   })
 
+  test('skips an input redirection before the program, its file joined or apart', () => {
+    for (const text of ['< in.txt cat -n', '<in.txt cat -n', '0< in.txt cat -n', '0<in.txt cat -n'])
+      expect(parseCommand(text)).toMatchObject({ program: 'cat', args: ['-n'] })
+
+    expect(parseCommand('} < /dev/null').program).toBe('')
+    expect(parseCommand('<<EOF cat').program).toBe('<<EOF')
+  })
+
   test('leaves what is no wrapper alone', () => {
     expect(parseCommand('echo sudo git')).toMatchObject({ program: 'echo', args: ['sudo', 'git'] })
     expect(parseCommand('env A=1 git stash')).toMatchObject({ program: 'git', assignments: ['A=1'] })
