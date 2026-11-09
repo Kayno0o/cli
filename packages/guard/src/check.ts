@@ -8,6 +8,7 @@ import { addedPackages } from '@kaynooo/cli-pkg/src/added.ts'
 import { installRequests, LOCKFILES, mismatchFor } from '@kaynooo/cli-pkg/src/pin.ts'
 import { commitSources, inlineMessage, isStdin } from './commit'
 import { destructiveViolation } from './destructive'
+import { fedCommands, scriptedCommands } from './embedded'
 import { gitViolation } from './git'
 import { remoteViolation } from './remote'
 import { replaceViolation } from './replace'
@@ -119,7 +120,10 @@ export async function checkCommand(command: string, context: Context): Promise<V
       violations.push({ rule, message })
   }
 
-  const run = commandsRun(command)
+  const shown = commandsRun(command)
+  const run = [...shown, ...shown.flatMap(fedCommands).flatMap(each => commandsRun(each))]
+  // what interpreters' inline code runs is only held to the git and destructive rules, as it is read loosely
+  const scripted = run.flatMap(scriptedCommands).flatMap(each => commandsRun(each))
   const first = (messages: (string | null)[]) => messages.find(message => message !== null) ?? null
   // a rule that throws refuses the command: a crash must not let it through
   const guarded = async (rule: string, check: () => Promise<string | null> | string | null): Promise<string | null> => {
@@ -135,8 +139,8 @@ export async function checkCommand(command: string, context: Context): Promise<V
   const readSql = async (path: string) => Promise.resolve(context.read(absolute(path, context.cwd)))
 
   add('remote', await guarded('remote', () => first(run.map(remoteViolation))))
-  add('git', await guarded('git', () => first(run.map(each => gitViolation(each, context.isPushAsked)))))
-  add('destructive', await guarded('destructive', () => first(run.map(destructiveViolation))))
+  add('git', await guarded('git', () => first([...run, ...scripted].map(each => gitViolation(each, context.isPushAsked)))))
+  add('destructive', await guarded('destructive', () => first([...run, ...scripted].map(destructiveViolation))))
 
   const commit = await guarded('commit', () => first(run.map(each => commitViolation(each, context))))
 
