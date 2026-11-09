@@ -29,6 +29,13 @@ const OPTIONS = {
   json: jsonOption('{kind: code, diff or markdown, language, text}, the text rendered without colour'),
 } as const
 
+// The width COLUMNS sets off a terminal, when it holds a usable one.
+function columnsOf(variable: string | undefined): number {
+  const columns = Number(variable)
+
+  return Number.isInteger(columns) && columns >= 20 ? columns : DEFAULT_WIDTH
+}
+
 // $PAGER through the shell, except a bare less, which needs -R for the colours and -F to quit on a short text.
 function pagerCommand(pager = process.env.PAGER): string[] {
   return pager === undefined || pager.trim() === '' || pager.trim() === 'less' ? ['less', '-FRX'] : ['sh', '-c', pager]
@@ -69,8 +76,7 @@ async function main(args: string[]): Promise<number> {
   if (text.trim() === '')
     fail('nothing to show', 1)
 
-  const columns = Number(process.env.COLUMNS)
-  const width = wholeNumber(values.width, 'width', process.stdout.isTTY === true ? process.stdout.columns || DEFAULT_WIDTH : Number.isInteger(columns) && columns >= 20 ? columns : DEFAULT_WIDTH, 20)
+  const width = wholeNumber(values.width, 'width', process.stdout.isTTY === true ? process.stdout.columns || DEFAULT_WIDTH : columnsOf(process.env.COLUMNS), 20)
   const theme = themeFor(process.stdout)
   const language = values.lang === undefined ? languageOf(path) : languageOf(values.lang)
 

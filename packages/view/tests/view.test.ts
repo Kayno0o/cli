@@ -7,8 +7,7 @@ const CLI = new URL('../src/view.ts', import.meta.url).pathname
 const temp = tempDirs()
 
 function view(args: string[], stdin?: string, env: Record<string, string> = {}) {
-  const { COLUMNS: _, ...inherited } = process.env
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe', env: { ...inherited, NO_COLOR: '1', ...env } })
+  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, COLUMNS: '', NO_COLOR: '1', ...env } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
