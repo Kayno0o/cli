@@ -8,7 +8,7 @@ import { overwrite, SYNC_END, SYNC_START } from '../redraw'
 import { paint, role } from '../style'
 import { previewLines, runPreview } from './preview'
 import { chosen, createState, highlighted, parseKeys, press, withRows } from './state'
-import { caretColumn, layoutFor, render } from './view'
+import { caretCell, layoutFor, render } from './view'
 
 /** What the preview shows for the highlighted row, from its hidden fields; `signal` aborts when another row is highlighted. */
 export type PreviewFn = (hidden: string[], signal: AbortSignal) => string | Promise<string>
@@ -66,7 +66,9 @@ const ESCAPE_WAIT_MS = 30
 const OPEN: Key = { ctrl: 'open' }
 const HIDE_CURSOR = '\x1B[?25l'
 const SHOW_CURSOR = '\x1B[?25h'
-const CARET = '\x1B[7m \x1B[27m'
+// The caret is the cell under it drawn reversed.
+const REVERSE = '\x1B[7m'
+const REVERSE_END = '\x1B[27m'
 const PASTE_ON = '\x1B[?2004h'
 const PASTE_OFF = '\x1B[?2004l'
 // Report the wheel, in the SGR form that carries any column.
@@ -168,7 +170,9 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
       reserved = layout.height
     }
 
-    frame += `\r${overwrite(render(state, layout, theme, preview), terminal.columns)}${up(layout.height - 1)}\r\x1B[${caretColumn(state, layout)}G${CARET}\r${SYNC_END}`
+    const caret = caretCell(state, layout)
+
+    frame += `\r${overwrite(render(state, layout, theme, preview), terminal.columns)}${up(layout.height - 1)}\r\x1B[${caret.column}G${REVERSE}${caret.char}${REVERSE_END}\r${SYNC_END}`
     terminal.write(frame)
   }
 

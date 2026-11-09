@@ -1,4 +1,5 @@
 import type { State } from './state'
+import { visible } from './line'
 import { styled } from './state'
 
 /** How a part of the picker is drawn: the kit's roles, or plain text. */
@@ -111,16 +112,25 @@ function fitStyled(line: string, width: number, plain: (text: string) => string 
   return fit(text, width, plain, plain, new Set(), styles)
 }
 
-/** The column the query's caret sits at, one-based, on the first line. */
-export function caretColumn(state: State, layout: Layout): number {
-  return Math.min(layout.listWidth, Bun.stringWidth(state.prompt) + Bun.stringWidth(state.query) + 1)
+/** The part of the query drawn after the prompt, cut around the caret. */
+function queryShown(state: State, layout: Layout): ReturnType<typeof visible> {
+  return visible({ text: state.query, caret: state.caret }, Math.max(1, layout.listWidth - Bun.stringWidth(state.prompt)))
+}
+
+/** Where the query's caret is drawn on the first line, the column one-based, and the character it covers, a space at the end. */
+export function caretCell(state: State, layout: Layout): { column: number, char: string } {
+  const shown = queryShown(state, layout)
+
+  return { column: Math.min(layout.listWidth, Bun.stringWidth(state.prompt) + shown.column + 1), char: shown.at ?? ' ' }
 }
 
 /** The keys the picker answers to, drawn in place of the list while help is open, short enough for the smallest box. */
 function helpLines(state: State, layout: Layout, theme: Theme): Fitted[] {
   const lines = [
     'type to filter, up, down, ctrl-p, ctrl-n, pgup, pgdn, home, end, the wheel move',
-    `enter picks${state.multi ? ', tab marks' : ''}, ctrl-u clears the query, ctrl-w a word, esc or ctrl-c cancels`,
+    'left, right, ctrl-a, ctrl-e move in the query, ctrl or alt with left or right by a word',
+    'ctrl-w or ctrl-backspace erase a word, ctrl-u back to the start, ctrl-k to the end, del ahead',
+    `enter picks${state.multi ? ', tab marks' : ''}, esc or ctrl-c cancels`,
     ...state.expect.length > 0 ? [`${state.expect.join(', ')} end the pick as this command asks`] : [],
   ]
   const title = 'keys, any key closes this help'
@@ -138,7 +148,9 @@ function listLines(state: State, layout: Layout, theme: Theme): Fitted[] {
   const top = Math.max(0, Math.min(state.cursor - Math.floor(rows / 2), state.matches.length - rows))
   const marks = (state.marked.size > 0 ? ` (${state.marked.size} marked)` : '') + (state.status === '' ? '' : ` ${state.status}`)
   const promptWidth = Bun.stringWidth(state.prompt)
-  const query = fit(state.query, Math.max(1, layout.listWidth - promptWidth), identity)
+  const shown = queryShown(state, layout)
+  const text = `${shown.before}${shown.at ?? ''}${shown.after}`
+  const query = { text, width: Bun.stringWidth(text) }
   // Where the highlight stands when the list is longer than the box, as there is no scrollbar to show it.
   const place = state.matches.length > rows ? ` (${state.cursor + 1} of ${state.matches.length})` : ''
   const count = fit(`  ${state.matches.length}/${state.items.length}${place}${marks}  ctrl-/ keys`, layout.listWidth, theme.label)

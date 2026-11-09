@@ -1,8 +1,10 @@
+import type { EditKey } from './line'
 import type { Ranked } from './score'
+import { editLine, isEditKey } from './line'
 import { rank } from './score'
 
 /** `ctrl` is a control key the caller asked for, named as `ctrl-d`. */
-export type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | 'clear' | 'word' | 'tab' | 'help' | { text: string } | { ctrl: string }
+export type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'tab' | 'help' | EditKey | { text: string } | { ctrl: string }
 
 /** A choice: the cells are drawn in columns and the first `searched` of them searched; the hidden fields are neither, and come back with the choice. */
 export interface Row {
@@ -29,6 +31,8 @@ export interface State {
   /** A note shown beside the counts, such as a reload in progress. */
   status: string
   query: string
+  /** Where the caret stands among the query's characters. */
+  caret: number
   /** The rows the query matches, best first. */
   matches: Ranked[]
   /** Where the highlighted match stands in `matches`. */
@@ -58,7 +62,7 @@ const RESET = /^\x1B\[0?m$/
 const COLUMN_GAP = 2
 const PASTE_START = '\x1B[200~'
 const PASTE_END = '\x1B[201~'
-const LAST_WORD = /\S*\s*$/
+
 // eslint-disable-next-line no-control-regex -- escape sequences are what it splits
 const KEY_SEQUENCES = /\x1B\[<[0-9;]*[A-Za-z]|\x1B\[[0-9;]*[A-Z~]|\x1BO[A-Z]|\x1B[\s\S]|[\s\S]/gu
 // An SGR mouse report: the button, then the column and row; 64 and 65 are the wheel up and down.
@@ -85,21 +89,34 @@ const KEYS: Record<string, Key> = {
   '\n': 'enter',
   '\x03': 'cancel',
   '\x1B': 'cancel',
+  '\x1B[D': 'left',
+  '\x1BOD': 'left',
+  '\x1B[C': 'right',
+  '\x1BOC': 'right',
+  // Ctrl or Alt with an arrow, and Alt+B and Alt+F as readline has them.
+  '\x1B[1;5D': 'wordleft',
+  '\x1B[1;3D': 'wordleft',
+  '\x1Bb': 'wordleft',
+  '\x1B[1;5C': 'wordright',
+  '\x1B[1;3C': 'wordright',
+  '\x1Bf': 'wordright',
+  '\x01': 'linestart',
+  '\x05': 'lineend',
   '\x7F': 'erase',
+  '\x1B[3~': 'delete',
   // Ctrl+Backspace, as kitty, xterm and tmux send it, and Alt+Backspace.
-  '\b': 'word',
-  '\x1B\x7F': 'word',
+  '\b': 'killword',
+  '\x1B\x7F': 'killword',
+  // Ctrl+Delete and Alt+D.
+  '\x1B[3;5~': 'killnext',
+  '\x1Bd': 'killnext',
   '\x15': 'clear',
+  '\x0B': 'killend',
   '\x17': 'word',
   '\t': 'tab',
   '\x1F': 'help',
   '\x1BOP': 'help',
   '\x1B[11~': 'help',
-}
-
-/** The text with its last word and the spaces after it erased, as Ctrl+W does. */
-export function eraseWord(text: string): string {
-  return text.replace(LAST_WORD, '')
 }
 
 /** The control keys a caller can ask for, `ctrl-a` to `ctrl-z` but those standing for tab, enter, backspace and cancel. */
@@ -230,7 +247,7 @@ export interface StateSettings {
 
 /** A line is a row of one cell with nothing hidden. */
 export function createState(rows: readonly (string | Row)[], { multi = false, prompt = '> ', query = '', header = '', expect = [], searched = Number.POSITIVE_INFINITY }: StateSettings = {}): State {
-  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, matches: [], cursor: 0, help: false, page: 10, marked: new Set(), multi, prompt, done: undefined }
+  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, caret: [...query].length, matches: [], cursor: 0, help: false, page: 10, marked: new Set(), multi, prompt, done: undefined }
 
   return withRows(state, rows)
 }
@@ -245,8 +262,11 @@ export function withRows(state: State, rows: readonly (string | Row)[], header =
   return { ...state, rows: cells, items: laid.map(row => row.text), styles: laid.map(row => row.styles), searchable, header, matches, cursor: Math.max(0, Math.min(matches.length - 1, state.cursor)), marked: new Set() }
 }
 
-function withQuery(state: State, query: string): State {
-  return { ...state, query, matches: rank(query, state.searchable), cursor: 0 }
+// The query once a key edits it, the matches ranked again only when its text changed.
+function withQuery(state: State, key: EditKey | { text: string }): State {
+  const { text, caret } = editLine({ text: state.query, caret: state.caret }, key)
+
+  return text === state.query ? { ...state, caret } : { ...state, query: text, caret, matches: rank(text, state.searchable), cursor: 0 }
 }
 
 function move(state: State, by: number): State {
@@ -269,10 +289,13 @@ export function press(state: State, key: Key): State {
 
   if (typeof key === 'object') {
     if ('text' in key)
-      return withQuery(state, state.query + key.text)
+      return withQuery(state, key)
 
     return state.expect.includes(key.ctrl) ? { ...state, done: 'accept', key: key.ctrl } : state
   }
+
+  if (isEditKey(key))
+    return withQuery(state, key)
 
   switch (key) {
     case 'up': return move(state, -1)
@@ -283,9 +306,7 @@ export function press(state: State, key: Key): State {
     case 'end': return move(state, state.matches.length)
     case 'cancel': return { ...state, done: 'cancel' }
     case 'help': return { ...state, help: true }
-    case 'erase': return withQuery(state, [...state.query].slice(0, -1).join(''))
-    case 'clear': return withQuery(state, '')
-    case 'word': return withQuery(state, eraseWord(state.query))
+
     case 'enter': return state.matches.length === 0 && state.marked.size === 0 ? state : { ...state, done: 'accept' }
     case 'tab': {
       const at = highlighted(state)

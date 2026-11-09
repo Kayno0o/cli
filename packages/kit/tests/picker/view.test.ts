@@ -1,7 +1,7 @@
 import type { Theme } from '../../src/picker/view'
 import { describe, expect, test } from 'bun:test'
 import { createState, press } from '../../src/picker/state'
-import { caretColumn, layoutFor, parseHeight, render } from '../../src/picker/view'
+import { caretCell, layoutFor, parseHeight, render } from '../../src/picker/view'
 
 const plain: Theme = { accent: text => text, label: text => text, value: text => text, id: text => text }
 const tagged: Theme = { accent: text => `<${text}>`, label: text => `~${text}~`, value: text => `*${text}*`, id: text => `#${text}#` }
@@ -109,8 +109,20 @@ describe('render', () => {
     expect(lines[3]).toBe(`${' '.repeat(40)} │ `)
   })
 
-  test('the caret sits after the query', () => {
-    expect(caretColumn(createState(['a'], { query: 'ab' }), layout)).toBe(5)
+  test('the caret sits after the query, or on the character it was moved to', () => {
+    const state = createState(['a'], { query: 'ab' })
+
+    expect(caretCell(state, layout)).toEqual({ column: 5, char: ' ' })
+    expect(caretCell({ ...state, caret: 1 }, layout)).toEqual({ column: 4, char: 'b' })
+  })
+
+  test('a query wider than the box shows the part around the caret', () => {
+    const state = createState(['a'], { query: `${'x'.repeat(60)}abc` })
+    const [line] = render({ ...state, caret: 61 }, layout, plain)
+
+    expect(line).toStartWith('> …xxx')
+    expect(line).toContain('abc')
+    expect(caretCell({ ...state, caret: 61 }, layout).char).toBe('b')
   })
 })
 

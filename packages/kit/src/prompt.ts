@@ -1,3 +1,4 @@
+import type { EditKey, Line } from './picker/line'
 import type { Colors } from './style'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,7 +7,8 @@ import process from 'node:process'
 import { fail } from './args'
 import { textWidth, truncate } from './format'
 import { isInteractive } from './mode'
-import { eraseWord, parseKeys } from './picker/state'
+import { editLine, isEditKey, visible } from './picker/line'
+import { parseKeys } from './picker/state'
 import { overwrite, rowsTaken, SYNC_END, SYNC_START } from './redraw'
 import { paint } from './style'
 
@@ -14,8 +16,8 @@ const WORDS = /\s+/
 // Choices drawn at once at most, the rest scrolled to.
 const MAX_ROWS = 10
 
-type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | 'word' | 'clear' | { text: string }
-const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel', 'erase', 'word', 'clear'])
+type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | EditKey | { text: string }
+const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel'])
 
 type Outcome = 'enter' | 'cancel'
 type State = 'asking' | Outcome
@@ -40,21 +42,20 @@ export interface PromptSettings {
 
 // The keys a chunk of terminal input holds that prompts read, through the picker's parser: what it has for filtering and marking rows is left out.
 function readKeys(input: string, paste = { active: false }): Key[] {
-  return parseKeys(input, paste).filter((key): key is Key => typeof key === 'object' ? 'text' in key : PROMPT_KEYS.has(key))
+  return parseKeys(input, paste).filter((key): key is Key => typeof key === 'object' ? 'text' in key : PROMPT_KEYS.has(key) || isEditKey(key))
 }
 
-// The text typed once a key edits it: Backspace erasing a character, Ctrl+W or Ctrl+Backspace a word, Ctrl+U it all.
-function edit(text: string, key: Key): string {
-  if (key === 'erase')
-    return [...text].slice(0, -1).join('')
+// The columns left after `? question ` on the row it ends on, wrapped when wider than the terminal, the last column kept free.
+function roomAfter(question: string, columns: number): number {
+  return Math.max(columns - textWidth(`? ${question} `) % columns - 1, 1)
+}
 
-  if (key === 'word')
-    return eraseWord(text)
+// A line typed, cut around its caret to the room given, the caret drawn as the character under it reversed, or a dimmed block at the end.
+function withCaret(colors: Colors, line: Line, room: number, dim = false): string {
+  const { before, at, after } = visible(line, room)
+  const tone = dim ? colors.dim : (text: string) => text
 
-  if (key === 'clear')
-    return ''
-
-  return typeof key === 'object' ? text + key.text : text
+  return `${tone(before)}${at === undefined ? colors.dim('█') : colors.inverse(at)}${tone(after)}`
 }
 
 export interface SelectSettings<T> extends PromptSettings {
@@ -69,7 +70,7 @@ export async function select<T>(question: string, choices: Choice<T>[], { initia
   const named = choices.findIndex(choice => choice.value === fallback)
   const list = new List(choices, fallback === undefined || named === -1 ? initial : named)
   const picked = await ask(question, settings, (colors, state, rows) => state === 'asking'
-    ? [asking(colors, question, list.query, 'type to filter, enter picks'), ...list.rows(colors, rows, () => '')]
+    ? [asking(colors, question, list.typed(colors, rows.columns, question), 'type to filter, enter picks'), ...list.rows(colors, rows, () => '')]
     : [answer(colors, question, state, list.current()?.label ?? '')], (key) => {
     if (key === 'enter')
       return list.current() === undefined ? undefined : 'enter'
@@ -108,7 +109,7 @@ export async function checklist<T>(question: string, choices: Choice<T>[], { ini
   let checked = initial
   let invalid: string | undefined
   const accepted = await ask(question, settings, (colors, state, rows) => state === 'asking'
-    ? [asking(colors, question, list.query, 'type to filter, space toggles, enter accepts'), ...list.rows(colors, rows, choice => checked.has(choice.value) ? `${colors.cyan('◉')} ` : `${colors.dim('◯')} `), ...invalid === undefined ? [] : [`  ${colors.red(invalid)}`]]
+    ? [asking(colors, question, list.typed(colors, rows.columns, question), 'type to filter, space toggles, enter accepts'), ...list.rows(colors, rows, choice => checked.has(choice.value) ? `${colors.cyan('◉')} ` : `${colors.dim('◯')} `), ...invalid === undefined ? [] : [`  ${colors.red(invalid)}`]]
     : [answer(colors, question, state, choices.filter(choice => checked.has(choice.value)).map(choice => choice.label).join(', ') || 'none')], (key) => {
     if (key === 'cancel')
       return key
@@ -178,21 +179,18 @@ export interface InputPromptSettings extends PromptSettings {
 
 // A line of text, Enter taking it once `validate` does; undefined once cancelled.
 export async function input(question: string, { default: fallback, mask = false, validate, ...settings }: InputPromptSettings = {}): Promise<string | undefined> {
-  let value = ''
+  let line: Line = { text: '', caret: 0 }
   let invalid: string | undefined
-  const taken = () => value === '' ? fallback ?? '' : value
+  const taken = () => line.text === '' ? fallback ?? '' : line.text
   const shown = () => mask ? '*'.repeat([...taken()].length) : taken()
   const accepted = await ask(question, settings, (colors, state, { columns }) => {
     if (state !== 'asking')
       return [answer(colors, question, state, shown())]
 
-    // Its end alone where it would wrap: what is left of the row the question ends on (`? `, the question and a space, wrapped when wider than the terminal), less the caret and the last column kept free.
-    const characters = [...shown()]
-    const room = Math.max(columns - textWidth(`? ${question} `) % columns - 2, 1)
-    const tail = characters.length > room ? `…${characters.slice(characters.length - room + 1).join('')}` : shown()
-    const typed = value === '' ? colors.dim(tail) : tail
+    // The default stands dimmed until something is typed, the caret after it.
+    const typed = line.text === '' ? { text: shown(), caret: [...shown()].length } : { text: shown(), caret: line.caret }
 
-    return [`${colors.cyan('?')} ${question} ${typed}${colors.dim('█')}`, ...invalid === undefined ? [] : [`  ${colors.red(invalid)}`]]
+    return [`${colors.cyan('?')} ${question} ${withCaret(colors, typed, roomAfter(question, columns), line.text === '')}`, ...invalid === undefined ? [] : [`  ${colors.red(invalid)}`]]
   }, (key) => {
     if (key === 'cancel')
       return 'cancel'
@@ -205,7 +203,11 @@ export async function input(question: string, { default: fallback, mask = false,
       return invalid === undefined ? 'enter' : undefined
     }
 
-    value = edit(value, key)
+    // Home and End move the caret here, as there is no list for them to move in.
+    const edit = { home: 'linestart', end: 'lineend' }[key as string] ?? key
+
+    if (typeof edit === 'object' || isEditKey(edit))
+      line = editLine(line, edit)
 
     return undefined
   })
@@ -215,7 +217,7 @@ export async function input(question: string, { default: fallback, mask = false,
 
 // The choices a filter leaves, the cursor on one of them and the window of rows drawn around it.
 class List<T> {
-  query = ''
+  private line: Line = { text: '', caret: 0 }
   private matches: Choice<T>[]
   private cursor: number
   private top = 0
@@ -249,10 +251,20 @@ class List<T> {
       return
     }
 
-    const query = edit(this.query, key)
+    if (typeof key !== 'object' && !isEditKey(key))
+      return
 
-    if (query !== this.query)
-      this.filter(query)
+    const edited = editLine(this.line, key)
+
+    if (edited.text !== this.line.text)
+      this.filter(edited.text)
+
+    this.line = edited
+  }
+
+  // The filter as typed after the question, with its caret; empty while nothing is typed.
+  typed(colors: Colors, columns: number, question: string): string {
+    return this.line.text === '' ? '' : withCaret(colors, this.line, roomAfter(question, columns))
   }
 
   // Every word typed is in the label or the hint, case ignored; the cursor stays on its choice while it still matches, else goes to the first.
@@ -260,7 +272,6 @@ class List<T> {
     const words = query.toLowerCase().split(WORDS).filter(word => word !== '')
     const current = this.current()
 
-    this.query = query
     this.matches = this.choices.filter(({ label, hint }) => words.every(word => `${label} ${hint}`.toLowerCase().includes(word)))
     this.cursor = current === undefined ? 0 : Math.max(this.matches.indexOf(current), 0)
     this.top = 0

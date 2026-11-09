@@ -7,7 +7,7 @@ import { choose, DEFAULT_HEIGHT, parseHeight } from '@kaynooo/cli-kit/picker'
 
 const USAGE = `pick [options]: a fuzzy selector, the lines on stdin in, the chosen one on stdout out
 
-Type to filter: the query matches as a subsequence, best matches first (a word start, a run of characters or a prefix scores higher; a lowercase query ignores case, an uppercase letter makes it exact). Up and down or ctrl-p and ctrl-n move, enter picks, esc and ctrl-c cancel, ctrl-u clears the query, ctrl-/ or f1 shows the keys.
+Type to filter: the query matches as a subsequence, best matches first (a word start, a run of characters or a prefix scores higher; a lowercase query ignores case, an uppercase letter makes it exact). Up and down or ctrl-p and ctrl-n move, enter picks, esc and ctrl-c cancel, left, right, ctrl-a and ctrl-e move in the query (ctrl or alt for a word), ctrl-u and ctrl-k erase back to its start and on to its end, ctrl-/ or f1 shows the keys.
 The keys are read from the terminal and the selector is drawn on stderr, so \`pick\` in a pipe or a command substitution prints only the choice. With --multi, tab marks the highlighted line and enter prints the marked lines in input order (the highlighted one when none is marked).
 --preview runs a command for the highlighted line, \`{}\` standing for it shell-quoted, in a pane on the right when the terminal is at least 80 columns wide; its output is cut at 64 KiB and 200 lines.
 

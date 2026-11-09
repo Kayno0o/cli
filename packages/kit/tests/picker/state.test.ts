@@ -23,18 +23,25 @@ describe('parseKeys', () => {
     expect(parseKeys('\x1B[A\x1B[B\x10\x0E\r\x03\x7F\t\x15\x17')).toEqual(['up', 'down', 'up', 'down', 'enter', 'cancel', 'erase', 'tab', 'clear', 'word'])
   })
 
-  test('reads Ctrl+Backspace and Alt+Backspace as erasing a word', () => {
-    expect(parseKeys('\b\x1B\x7F')).toEqual(['word', 'word'])
+  test('reads the keys moving the caret and editing around it, as terminals and readline send them', () => {
+    expect(parseKeys('\x1B[D\x1BOD\x1B[C\x1BOC')).toEqual(['left', 'left', 'right', 'right'])
+    expect(parseKeys('\x1B[1;5D\x1B[1;3D\x1Bb\x1B[1;5C\x1B[1;3C\x1Bf')).toEqual(['wordleft', 'wordleft', 'wordleft', 'wordright', 'wordright', 'wordright'])
+    expect(parseKeys('\x01\x05\x1B[3~\x0B')).toEqual(['linestart', 'lineend', 'delete', 'killend'])
+    expect(parseKeys('\b\x1B\x7F\x1B[3;5~\x1Bd')).toEqual(['killword', 'killword', 'killnext', 'killnext'])
+  })
+
+  test('a control key the caller claims wins over its editing', () => {
+    expect(parseKeys('\x01\x0B', { active: false }, ['ctrl-a'])).toEqual([{ ctrl: 'ctrl-a' }, 'killend'])
   })
 
   test('a lone escape cancels while a sequence it starts does not', () => {
     expect(parseKeys('\x1B')).toEqual(['cancel'])
-    expect(parseKeys('\x1B[1;5C')).toEqual([])
+    expect(parseKeys('\x1B[15~')).toEqual([])
   })
 
   test('an Alt+key (escape then a letter) is dropped instead of cancelling', () => {
-    expect(parseKeys('\x1Bb')).toEqual([])
-    expect(parseKeys('\x1Bba')).toEqual([{ text: 'a' }])
+    expect(parseKeys('\x1Bx')).toEqual([])
+    expect(parseKeys('\x1Bxa')).toEqual([{ text: 'a' }])
   })
 
   test('a newline inside bracketed pasted text is no enter', () => {
@@ -55,7 +62,7 @@ describe('parseKeys', () => {
   })
 
   test('keeps printable text, pasted or typed, and drops unknown control keys', () => {
-    expect(parseKeys('ab é\x01')).toEqual([{ text: 'a' }, { text: 'b' }, { text: ' ' }, { text: 'é' }])
+    expect(parseKeys('ab é\x07')).toEqual([{ text: 'a' }, { text: 'b' }, { text: ' ' }, { text: 'é' }])
   })
 })
 
@@ -82,6 +89,14 @@ describe('press', () => {
     expect(press(press(state, 'word'), 'word').query).toBe('')
     expect(press(state, 'clear').query).toBe('')
     expect(press(createState(LINES), 'erase').query).toBe('')
+  })
+
+  test('typing and erasing happen at the caret, home and end still moving in the list', () => {
+    const state = typed(createState(LINES, { query: 'apcot' }), 'left', 'left', 'left', { text: 'ri' }, 'end')
+
+    expect(state).toMatchObject({ query: 'apricot', caret: 4, cursor: 0 })
+    expect(LINES[state.matches[0]!.index]).toBe('apricot')
+    expect(typed(state, 'linestart', 'delete')).toMatchObject({ query: 'pricot', caret: 0 })
   })
 
   test('the cursor stays inside the matches', () => {

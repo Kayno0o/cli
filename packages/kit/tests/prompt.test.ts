@@ -93,6 +93,7 @@ describe('select', () => {
 
   it('erases a word of the filter with Ctrl+W or Ctrl+Backspace, and all of it with Ctrl+U', async () => {
     expect(await select('pick', CHOICES, { terminal: terminal(['the third', '\x17', '\b', 'gam\r']).fake })).toBe('c')
+    expect(await select('pick', CHOICES, { terminal: terminal(['bta', '\x1B[D', '\x1B[D', 'e\r']).fake })).toBe('b')
     expect(await select('pick', CHOICES, { terminal: terminal(['zz', '\x15', 'beta\r']).fake })).toBe('b')
   })
 
@@ -300,6 +301,22 @@ describe('input', () => {
   it('erases a word with Ctrl+W, Ctrl+Backspace or Alt+Backspace, and the line with Ctrl+U', async () => {
     expect(await input('name', { terminal: terminal(['ada king lovelace', '\x17', '\b', 'byron', '\r']).fake })).toBe('ada byron')
     expect(await input('name', { terminal: terminal(['ada king ', '\x1B\x7F', 'x', '\x15', 'ada\r']).fake })).toBe('ada')
+  })
+
+  it('moves the caret with the arrows, Home and End, typing and deleting where it stands', async () => {
+    const LEFT = '\x1B[D'
+
+    expect(await input('url', { terminal: terminal(['https://ex.fr/rest', LEFT, 'e', '\x1B[F', '/1', '\x1B[H', '\x1B[3~', 'H\r']).fake })).toBe('Https://ex.fr/reset/1')
+    expect(await input('name', { terminal: terminal(['ada byron', '\x1B[1;5D', '\x0B', 'lovelace\r']).fake })).toBe('ada lovelace')
+  })
+
+  it('draws the character under the caret reversed, cut around it when the line is long', async () => {
+    const { fake, raw, written } = terminal(['abcdefghijklmnopqrstuvwxyz', '\x01', '\r'], { columns: 20 })
+
+    await input('name', { terminal: fake })
+
+    expect(written.at(-3)).toBe('\r? name abcdefghijk…')
+    expect(raw.at(-3)).toContain('\x1B[7ma\x1B[27m')
   })
 
   it('climbs back the rows a question wider than the terminal wraps to, so a key redraws it in place', async () => {
