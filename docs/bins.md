@@ -628,7 +628,7 @@ sweep --only worktrees --apply
 
 ## todo-scan
 
-lists the TODO, FIXME and owner/repo#N comments under the paths (here by default), each as <file>:<line>: <comment>, honouring .gitignore. Package `code`.
+lists the TODO, FIXME, HACK, XXX and owner/repo#N comments under the paths (here by default), each as <file>:<line>: <comment>, honouring .gitignore. Package `code`.
 
 Instead of: grep -rn TODO, then opening each issue it names
 

@@ -31,6 +31,32 @@ beforeEach(() => {
   write('script.sh', '#!/bin/sh\n# owner/repo#4 waits on this\n')
 })
 
+describe('HACK, XXX and age', () => {
+  test('lists HACK and XXX comments next to TODO and FIXME', () => {
+    expect(marksIn('// HACK: temporary\nx() // XXX revisit\n// the HACK word\n', 'a.ts').map(mark => [mark.line, mark.kind])).toEqual([[1, 'HACK'], [2, 'XXX']])
+  })
+
+  test('--older keeps the comments whose line changed longer ago, and --json gives the age', () => {
+    write('old.ts', '// HACK: old\n// XXX: older\n')
+
+    const env = { ...process.env, GIT_AUTHOR_DATE: '2020-01-01T00:00:00Z', GIT_COMMITTER_DATE: '2020-01-01T00:00:00Z' }
+
+    Bun.spawnSync(['git', 'add', 'old.ts'], { cwd: dir, env })
+    Bun.spawnSync(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'old'], { cwd: dir, env })
+
+    const old = scan(['--older', '30d'])
+
+    expect(old.code).toBe(0)
+    expect(old.out).toMatch(/^old\.ts:1: HACK: old \[\d+d\]\nold\.ts:2: XXX: older \[\d+d\]\n$/)
+
+    const rows = JSON.parse(scan(['--json']).out) as { path: string, age?: number }[]
+
+    expect(rows.find(row => row.path === 'old.ts')?.age).toBeGreaterThan(2000)
+    expect(rows.find(row => row.path === 'src/a.ts')?.age).toBeUndefined()
+    expect(scan(['--older', 'soon']).code).toBe(2)
+  })
+})
+
 describe('marksIn', () => {
   test('reads the markers and references of comments only', () => {
     expect(marksIn('x = 1 # TODO(me): later\n * FIXME: block line\nlet y = a // b\n', 'a.py').map(mark => [mark.line, mark.kind, mark.text])).toEqual([[1, 'TODO', 'TODO(me): later'], [2, 'FIXME', 'FIXME: block line']])

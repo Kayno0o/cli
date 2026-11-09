@@ -9,10 +9,12 @@ export interface Ref {
 export interface Mark {
   path: string
   line: number
-  // TODO or FIXME when the comment carries one, else ref for a comment naming an issue.
-  kind: 'TODO' | 'FIXME' | 'ref'
+  // The tag the comment opens with, else ref for a comment naming an issue.
+  kind: 'TODO' | 'FIXME' | 'HACK' | 'XXX' | 'ref'
   text: string
   refs: Ref[]
+  // Whole days since git blame says the line last changed, set by `addAges`.
+  age?: number
 }
 
 // Where a comment opens: `//` (not a URL's), `/*`, `<!--`, a `#` or `--` standing alone, or the `*` leading a block comment's line.
@@ -22,7 +24,7 @@ const MARKUP = /\.(?:md|mdx|markdown|html?|xml)$/i
 const MARKUP_COMMENT = /<!--/
 const CLOSERS = /\s*(?:\*\/|-->)\s*$/
 // A marker opens the comment, so one naming the word in prose is no TODO.
-const MARKER = /^(?:@|\[)?(TODO|FIXME)\b/
+const MARKER = /^(?:@|\[)?(TODO|FIXME|HACK|XXX)\b/
 const QUOTES = ['\'', '"', '`']
 const ESCAPE = /\\./g
 const AFTER_FIRST_LINE = /\n[\s\S]*/
@@ -36,7 +38,54 @@ function isQuoted(line: string, index: number): boolean {
   return QUOTES.some(quote => before.split(quote).length % 2 === 0)
 }
 
-// The TODO, FIXME and owner/repo#N comments of a file's text, one mark per comment line.
+const BLAME_HEADER = /^[0-9a-f]{40} \d+ (\d+)/
+const DAY_S = 86_400
+
+// The commit time of each line of a file by git blame, empty for a file git cannot blame (untracked, outside a repository).
+async function commitTimes(path: string, cwd: string): Promise<Map<number, number>> {
+  const blamed = await runCommand(['git', 'blame', '--porcelain', '--', path], { cwd })
+  const times = new Map<number, number>()
+
+  if (blamed.code !== 0)
+    return times
+
+  const bySha = new Map<string, number>()
+  let sha = ''
+  let line = 0
+
+  for (const row of stdoutOf(blamed.chunks).split('\n')) {
+    const header = BLAME_HEADER.exec(row)
+
+    if (header !== null) {
+      sha = row.slice(0, 40)
+      line = Number(header[1])
+    }
+    else if (row.startsWith('committer-time ')) {
+      bySha.set(sha, Number(row.slice('committer-time '.length)))
+    }
+    else if (row.startsWith('\t')) {
+      times.set(line, bySha.get(sha) ?? 0)
+    }
+  }
+
+  return times
+}
+
+// Sets each mark's age in days from one git blame per file; a mark git cannot date is left without one.
+export async function addAges(marks: readonly Mark[], cwd: string, now = Date.now() / 1000): Promise<void> {
+  await Promise.all([...Map.groupBy(marks, mark => mark.path)].map(async ([path, ofFile]) => {
+    const times = await commitTimes(path, cwd)
+
+    for (const mark of ofFile) {
+      const time = times.get(mark.line)
+
+      if (time !== undefined)
+        mark.age = Math.max(0, Math.floor((now - time) / DAY_S))
+    }
+  }))
+}
+
+// The TODO, FIXME, HACK, XXX and owner/repo#N comments of a file's text, one mark per comment line.
 export function marksIn(text: string, path: string): Mark[] {
   const marks: Mark[] = []
   const comment = MARKUP.test(path) ? MARKUP_COMMENT : COMMENT
