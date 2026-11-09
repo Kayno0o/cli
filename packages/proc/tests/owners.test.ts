@@ -1,7 +1,7 @@
-import { expect, test } from 'bun:test'
 import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { expect, test } from 'bun:test'
 import { socketOwners } from '../src/read'
 
 async function fakeProc(procs: Record<number, { ppid: number, inodes: number[] }>): Promise<string> {

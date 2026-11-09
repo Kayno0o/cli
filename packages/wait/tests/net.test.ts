@@ -59,17 +59,22 @@ describe('waitfor --port and --url', () => {
   })
 })
 
+function listenOnLoopback6() {
+  try {
+    return Bun.listen({ hostname: '::1', port: 0, socket: { data: socket => void socket.end() } })
+  }
+  catch {
+    return undefined
+  }
+}
+
 describe('waitfor --port without --host', () => {
   // A host with IPv6 loopback disabled cannot run this.
   test('counts a server bound to ::1 only', async () => {
-    let server: ReturnType<typeof Bun.listen> | undefined
+    const server = listenOnLoopback6()
 
-    try {
-      server = Bun.listen({ hostname: '::1', port: 0, socket: { data: socket => void socket.end() } })
-    }
-    catch {
+    if (server === undefined)
       return
-    }
 
     const result = await waitfor(['-p', String(server.port), '-t', '5s'])
 

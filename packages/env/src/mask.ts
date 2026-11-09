@@ -42,6 +42,7 @@ const STRONG_NAME = 'password|passwd|secret|api[_-]?key|access[_-]?key|private[_
 const WEAK_NAME = 'token|credentials?|auth'
 const PLAIN_WORD = /^[a-z]+$/i
 const AFTER_COLON = /:\s*$/
+const DIGIT = /\d/
 const KEY_VALUE_GAP = '\\s*[:=]\\s*'
 
 // A strong name before a colon, so likely prose, holding only a word is left alone.
@@ -51,7 +52,7 @@ function isProse(value: string, before: string): boolean {
 
 // A value under a weak name is a secret only when it holds a digit or is long, which a word of prose never does.
 function isWeak(value: string, before: string): boolean {
-  return isProse(value, before) || !(/\d/.test(value) || value.length >= 16)
+  return isProse(value, before) || !(DIGIT.test(value) || value.length >= 16)
 }
 
 // A key name holding one of the words: `AWS_SECRET_ACCESS_KEY`, `X-Api-Key`, `access_token`.
