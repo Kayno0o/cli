@@ -78,3 +78,23 @@ describe('editing', () => {
     expect(serializeDotenv(file)).toBe('# c\nB=2\n')
   })
 })
+
+describe('unterminated quote', () => {
+  test('ends at its own line when an assignment follows, as Bun reads it', () => {
+    const file = parseDotenv('A=1\nKEY="oops\nB=2\nC=3\n')
+    const map = entries(file)
+
+    expect(map.get('KEY')).toBe('"oops')
+    expect(map.get('B')).toBe('2')
+    expect(map.get('C')).toBe('3')
+    expect(file.lines[1]?.unterminated).toBe(true)
+    expect(serializeDotenv(file)).toBe('A=1\nKEY="oops\nB=2\nC=3\n')
+  })
+
+  test('still spans lines up to the closing quote', () => {
+    const map = entries(parseDotenv('PEM="a\nb\nc"\nB=2\n'))
+
+    expect(map.get('PEM')).toBe('a\nb\nc')
+    expect(map.get('B')).toBe('2')
+  })
+})

@@ -3,6 +3,8 @@ export interface DotenvLine {
   raw: string
   key?: string
   value?: string
+  // The value opens a quote that no line closes before the next assignment: it is read as the rest of its own line, as Bun does.
+  unterminated?: boolean
 }
 
 export interface Dotenv {
@@ -83,11 +85,20 @@ export function parseDotenv(text: string): Dotenv {
     let raw = line
     let end = closingQuote(body, quote)
 
-    while (end === -1 && index + 1 < physical.length) {
+    const first = index
+
+    while (end === -1 && index + 1 < physical.length && !ASSIGNMENT.test(physical[index + 1] ?? '')) {
       index++
       body += `\n${(physical[index] ?? '').replace(CARRIAGE_RETURN, '')}`
       raw += `\n${physical[index] ?? ''}`
       end = closingQuote(body, quote)
+    }
+
+    if (end === -1 && index + 1 < physical.length) {
+      index = first
+      lines.push({ raw: line, key, value: unescapeDollar(start.replace(INLINE_COMMENT, '').trim()), unterminated: true })
+
+      continue
     }
 
     const inner = end === -1 ? body : body.slice(0, end)
