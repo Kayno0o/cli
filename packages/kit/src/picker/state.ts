@@ -1,10 +1,11 @@
 import type { EditKey } from './line'
 import type { Ranked } from './score'
+import { ANSI } from '../text'
 import { editLine, isEditKey } from './line'
 import { rank } from './score'
 
 /** `ctrl` is a control key the caller asked for, named as `ctrl-d`. */
-export type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'tab' | 'help' | EditKey | { text: string } | { ctrl: string }
+export type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'tab' | 'help' | 'suspend' | EditKey | { text: string } | { ctrl: string }
 
 /** A choice: the cells are drawn in columns and the first `searched` of them searched; the hidden fields are neither, and come back with the choice. */
 export interface Row {
@@ -33,6 +34,9 @@ export interface State {
   query: string
   /** Where the caret stands among the query's characters. */
   caret: number
+  /** What the last kills took from the query, which ctrl-y puts back, and whether the key before was one of them. */
+  killed: string
+  chained: boolean
   /** The rows the query matches, best first. */
   matches: Ranked[]
   /** Where the highlighted match stands in `matches`. */
@@ -48,8 +52,6 @@ export interface State {
   done: 'accept' | 'cancel' | undefined
 }
 
-// eslint-disable-next-line no-control-regex -- escape sequences are what it strips
-const ANSI = /\x1B(?:\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]|\][^\x07\x1B]*(?:\x07|\x1B\\)|[\x40-\x5A\x5C-\x5F])/g
 // eslint-disable-next-line no-control-regex -- control characters are what it flattens
 const CONTROL = /[\x00-\x1F\x7F-\x9F]/g
 // eslint-disable-next-line no-control-regex -- control characters are what it tells apart
@@ -113,6 +115,8 @@ const KEYS: Record<string, Key> = {
   '\x15': 'clear',
   '\x0B': 'killend',
   '\x17': 'word',
+  '\x19': 'yank',
+  '\x1A': 'suspend',
   '\t': 'tab',
   '\x1F': 'help',
   '\x1BOP': 'help',
@@ -247,7 +251,7 @@ export interface StateSettings {
 
 /** A line is a row of one cell with nothing hidden. */
 export function createState(rows: readonly (string | Row)[], { multi = false, prompt = '> ', query = '', header = '', expect = [], searched = Number.POSITIVE_INFINITY }: StateSettings = {}): State {
-  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, caret: [...query].length, matches: [], cursor: 0, help: false, page: 10, marked: new Set(), multi, prompt, done: undefined }
+  const state: State = { rows: [], items: [], styles: [], searchable: [], searched, header, expect, key: '', status: '', query, caret: [...query].length, killed: '', chained: false, matches: [], cursor: 0, help: false, page: 10, marked: new Set(), multi, prompt, done: undefined }
 
   return withRows(state, rows)
 }
@@ -264,9 +268,9 @@ export function withRows(state: State, rows: readonly (string | Row)[], header =
 
 // The query once a key edits it, the matches ranked again only when its text changed.
 function withQuery(state: State, key: EditKey | { text: string }): State {
-  const { text, caret } = editLine({ text: state.query, caret: state.caret }, key)
+  const { text, caret, killed = '', chained = false } = editLine({ text: state.query, caret: state.caret, killed: state.killed, chained: state.chained }, key)
 
-  return text === state.query ? { ...state, caret } : { ...state, query: text, caret, matches: rank(text, state.searchable), cursor: 0 }
+  return text === state.query ? { ...state, caret, killed, chained } : { ...state, query: text, caret, killed, chained, matches: rank(text, state.searchable), cursor: 0 }
 }
 
 function move(state: State, by: number): State {
@@ -282,6 +286,9 @@ export function highlighted(state: State): number | undefined {
 export function press(state: State, key: Key): State {
   if (state.done !== undefined)
     return state
+
+  if (state.chained && typeof key !== 'object' && !isEditKey(key))
+    state = { ...state, chained: false }
 
   // The legend covers the list, so the key that reads it is the one that closes it.
   if (state.help)
@@ -306,6 +313,8 @@ export function press(state: State, key: Key): State {
     case 'end': return move(state, state.matches.length)
     case 'cancel': return { ...state, done: 'cancel' }
     case 'help': return { ...state, help: true }
+    // The terminal stops the process for it, the state staying as it was.
+    case 'suspend': return state
 
     case 'enter': return state.matches.length === 0 && state.marked.size === 0 ? state : { ...state, done: 'accept' }
     case 'tab': {

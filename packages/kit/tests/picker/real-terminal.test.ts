@@ -72,4 +72,12 @@ describe('select on a real terminal', () => {
     expect(screen).toContain('next key y')
     expect(code).toBe(0)
   })
+
+  // The fixture leads its own session, where no shell could resume a stopped job, so the kernel drops the stop and ctrl-z hands the keys straight back.
+  test('ctrl-z where nothing could resume the process goes on picking', async () => {
+    const { code, screen } = await run('\x1A\r', 'y')
+
+    expect(screen).toContain('picked id-1')
+    expect(code).toBe(0)
+  })
 })

@@ -1,17 +1,22 @@
 // A line of text being typed, with a caret among its characters, edited as a shell's readline does.
 
-export type EditKey = 'left' | 'right' | 'wordleft' | 'wordright' | 'linestart' | 'lineend' | 'erase' | 'delete' | 'word' | 'killword' | 'killnext' | 'clear' | 'killend'
+export type EditKey = 'left' | 'right' | 'wordleft' | 'wordright' | 'linestart' | 'lineend' | 'erase' | 'delete' | 'word' | 'killword' | 'killnext' | 'clear' | 'killend' | 'yank'
 
-const EDIT_KEYS: ReadonlySet<unknown> = new Set<EditKey>(['left', 'right', 'wordleft', 'wordright', 'linestart', 'lineend', 'erase', 'delete', 'word', 'killword', 'killnext', 'clear', 'killend'])
+const EDIT_KEYS: ReadonlySet<unknown> = new Set<EditKey>(['left', 'right', 'wordleft', 'wordright', 'linestart', 'lineend', 'erase', 'delete', 'word', 'killword', 'killnext', 'clear', 'killend', 'yank'])
+// The kills that take what is before the caret, which a kill right after them adds behind.
+const BACKWARD_KILLS: ReadonlySet<EditKey> = new Set(['word', 'killword', 'clear'])
+const FORWARD_KILLS: ReadonlySet<EditKey> = new Set(['killnext', 'killend'])
 
 export function isEditKey(key: unknown): key is EditKey {
   return EDIT_KEYS.has(key)
 }
 
-// The text and the caret's index among its characters, a character of several code units counting as one.
+// The text and the caret's index among its characters, a character of several code units counting as one; `killed` is what the last kills took, for Ctrl+Y, and `chained` says the key before was one of them.
 export interface Line {
   text: string
   caret: number
+  killed?: string
+  chained?: boolean
 }
 
 const WORD_CHARACTER = /[\p{L}\p{N}_]/u
@@ -64,16 +69,39 @@ function cut(chars: readonly string[], from: number, to: number): Line {
   return { text: [...chars.slice(0, from), ...chars.slice(to)].join(''), caret: from }
 }
 
+function insert(chars: readonly string[], at: number, text: string): Line {
+  const typed = [...text]
+
+  return { text: [...chars.slice(0, at), ...typed, ...chars.slice(at)].join(''), caret: at + typed.length }
+}
+
 // The line once a key is pressed, typed text going in at the caret; Ctrl+U and Ctrl+K take what is before and after it.
-export function editLine({ text, caret }: Line, key: EditKey | { text: string }): Line {
-  const chars = [...text]
-  const at = Math.min(Math.max(caret, 0), chars.length)
+// What a kill takes is kept for Ctrl+Y to put back, kills in a row adding up as readline's do: Ctrl+W twice puts both words back.
+export function editLine(line: Line, key: EditKey | { text: string }): Line {
+  const { killed = '', chained = false } = line
+  const chars = [...line.text]
+  const at = Math.min(Math.max(line.caret, 0), chars.length)
+  const edited = edit(chars, at, key, killed)
 
-  if (typeof key === 'object') {
-    const typed = [...key.text]
+  if (typeof key === 'object' || (!BACKWARD_KILLS.has(key) && !FORWARD_KILLS.has(key)))
+    return line.killed === undefined ? edited : { ...edited, killed }
 
-    return { text: [...chars.slice(0, at), ...typed, ...chars.slice(at)].join(''), caret: at + typed.length }
-  }
+  const taken = chars.slice(edited.caret, edited.caret + chars.length - [...edited.text].length).join('')
+
+  if (taken === '')
+    return { ...edited, killed, chained }
+
+  if (!chained)
+    return { ...edited, killed: taken, chained: true }
+
+  return { ...edited, killed: BACKWARD_KILLS.has(key) ? taken + killed : killed + taken, chained: true }
+}
+
+function edit(chars: readonly string[], at: number, key: EditKey | { text: string }, killed: string): Line {
+  const text = chars.join('')
+
+  if (typeof key === 'object')
+    return insert(chars, at, key.text)
 
   switch (key) {
     case 'left': return { text, caret: Math.max(at - 1, 0) }
@@ -89,6 +117,7 @@ export function editLine({ text, caret }: Line, key: EditKey | { text: string })
     case 'killnext': return cut(chars, at, wordEnd(chars, at))
     case 'clear': return cut(chars, 0, at)
     case 'killend': return cut(chars, at, chars.length)
+    case 'yank': return insert(chars, at, killed)
   }
 }
 

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { fail } from './args'
 import { textWidth, truncate } from './format'
+import { stopJob } from './job'
 import { isInteractive } from './mode'
 import { editLine, isEditKey, visible } from './picker/line'
 import { parseKeys } from './picker/state'
@@ -16,8 +17,8 @@ const WORDS = /\s+/
 // Choices drawn at once at most, the rest scrolled to.
 const MAX_ROWS = 10
 
-type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | EditKey | { text: string }
-const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel'])
+type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'suspend' | EditKey | { text: string }
+const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel', 'suspend'])
 
 type Outcome = 'enter' | 'cancel'
 type State = 'asking' | Outcome
@@ -32,6 +33,8 @@ export interface Choice<T> {
 export interface Terminal {
   stdin: Pick<NodeJS.ReadStream, 'setRawMode' | 'resume' | 'pause' | 'on' | 'off'> & { isTTY?: boolean }
   stderr: Pick<NodeJS.WriteStream, 'write' | 'columns' | 'rows'> & { isTTY?: boolean, on?: NodeJS.WriteStream['on'], off?: NodeJS.WriteStream['off'] }
+  // Stops the process until the shell resumes it, what Ctrl+Z does; the process's own job by default, nothing on another terminal.
+  stop?: () => void
 }
 
 export interface PromptSettings {
@@ -234,6 +237,9 @@ class List<T> {
   }
 
   press(key: Key): void {
+    if (this.line.chained === true && typeof key !== 'object' && !isEditKey(key))
+      this.line = { ...this.line, chained: false }
+
     if (key === 'up' || key === 'down') {
       if (this.matches.length > 0)
         this.cursor = (this.cursor + (key === 'up' ? this.matches.length - 1 : 1)) % this.matches.length
@@ -337,6 +343,18 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
   }
   const redraw = () => draw(current)
   const paste = { active: false }
+  const stop = terminal.stop ?? (terminal === process ? stopJob : undefined)
+  // The prompt goes while the shell has the terminal, and is drawn again where the cursor is once resumed.
+  const suspend = () => {
+    if (stop === undefined)
+      return
+
+    stderr.write('\x1B[0J\x1B[?25h\x1B[?2004l')
+    stdin.setRawMode(false)
+    stop()
+    stdin.setRawMode(true)
+    stderr.write('\x1B[?25l\x1B[?2004h')
+  }
 
   try {
     stderr.on?.('resize', redraw)
@@ -348,6 +366,12 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
     return await new Promise<boolean>((resolve) => {
       function onData(data: Buffer) {
         for (const key of readKeys(data.toString(), paste)) {
+          if (key === 'suspend') {
+            suspend()
+
+            continue
+          }
+
           const pressed = press(key)
 
           if (pressed !== undefined) {

@@ -130,6 +130,7 @@ function helpLines(state: State, layout: Layout, theme: Theme): Fitted[] {
     'type to filter, up, down, ctrl-p, ctrl-n, pgup, pgdn, home, end, the wheel move',
     'left, right, ctrl-a, ctrl-e move in the query, ctrl or alt with left or right by a word',
     'ctrl-w or ctrl-backspace erase a word, ctrl-u back to the start, ctrl-k to the end, del ahead',
+    'ctrl-y puts back what they erased, ctrl-z suspends to the shell',
     `enter picks${state.multi ? ', tab marks' : ''}, esc or ctrl-c cancels`,
     ...state.expect.length > 0 ? [`${state.expect.join(', ')} end the pick as this command asks`] : [],
   ]

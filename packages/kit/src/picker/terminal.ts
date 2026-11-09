@@ -4,6 +4,7 @@ import { openSync } from 'node:fs'
 import process from 'node:process'
 import tty from 'node:tty'
 import { fail } from '../args'
+import { stopJob } from '../job'
 import { overwrite, SYNC_END, SYNC_START } from '../redraw'
 import { paint, role } from '../style'
 import { previewLines, runPreview } from './preview'
@@ -57,6 +58,8 @@ export interface Terminal {
   write: (text: string) => void
   /** Starts reading raw input, calling back with each chunk of it and when the screen is resized. */
   listen: (onChunk: (chunk: string) => void, onResize: () => void) => void
+  /** Gives the terminal back and stops the process, as ctrl-z does outside raw mode, returning once the shell resumes it. */
+  suspend?: () => void
   close: () => void
 }
 
@@ -124,6 +127,11 @@ export function openTerminal(): Terminal {
       mode.setRawMode(true)
       out.on('resize', onResize)
       void read(onChunk)
+    },
+    suspend() {
+      mode.setRawMode(false)
+      stopJob()
+      mode.setRawMode(true)
     },
     close() {
       if (resize !== undefined)
@@ -228,6 +236,17 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
     terminal.close()
   }
 
+  // The frame goes while the shell has the terminal, and comes back whole once it is resumed.
+  function suspend(): void {
+    if (terminal.suspend === undefined)
+      return
+
+    terminal.write(`${CLEAR_BELOW}${MOUSE_OFF}${PASTE_OFF}${SHOW_CURSOR}`)
+    terminal.suspend()
+    terminal.write(`${PASTE_ON}${MOUSE_ON}`)
+    draw(true)
+  }
+
   const stop = (): void => {
     state = { ...state, done: 'cancel' }
     finish?.()
@@ -272,6 +291,8 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
       for (let key = pending.shift(); key !== undefined && state.done === undefined; key = pending.shift()) {
         if (key === OPEN || (typeof key === 'object' && 'ctrl' in key && key.ctrl === reload?.key))
           await reloadRows()
+        else if (key === 'suspend')
+          suspend()
         else
           state = press({ ...state, page: pageSize() }, key)
       }

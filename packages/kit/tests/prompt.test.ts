@@ -310,6 +310,28 @@ describe('input', () => {
     expect(await input('name', { terminal: terminal(['ada byron', '\x1B[1;5D', '\x0B', 'lovelace\r']).fake })).toBe('ada lovelace')
   })
 
+  it('puts back with Ctrl+Y what Ctrl+W took', async () => {
+    expect(await input('host', { terminal: terminal(['user@host', '\x17', 'ssh ', '\x19\r']).fake })).toBe('ssh user@host')
+  })
+
+  it('gives the terminal back on Ctrl+Z, stopping the process, and takes it again once resumed', async () => {
+    const { fake, raw, modes } = terminal(['ab', '\x1A', 'c\r'])
+    const stopped: boolean[][] = []
+    const answer = await input('name', { terminal: { ...fake, stop: () => void stopped.push([...modes]) } })
+
+    expect(answer).toBe('abc')
+    expect(stopped).toEqual([[true, false]])
+    expect(modes).toEqual([true, false, true, false])
+    expect(raw.join('')).toContain('\x1B[0J\x1B[?25h\x1B[?2004l')
+  })
+
+  it('leaves Ctrl+Z alone on a terminal that cannot stop the process', async () => {
+    const { fake, modes } = terminal(['ab', '\x1A', 'c\r'])
+
+    expect(await input('name', { terminal: fake })).toBe('abc')
+    expect(modes).toEqual([true, false])
+  })
+
   it('draws the character under the caret reversed, cut around it when the line is long', async () => {
     const { fake, raw, written } = terminal(['abcdefghijklmnopqrstuvwxyz', '\x01', '\r'], { columns: 20 })
 

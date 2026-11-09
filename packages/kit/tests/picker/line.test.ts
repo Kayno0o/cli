@@ -26,11 +26,36 @@ describe('editLine', () => {
   })
 
   test('Ctrl+W takes back to a space, Ctrl+Backspace and Alt+D a word, Ctrl+U and Ctrl+K a side', () => {
-    expect(editLine(at('open https://ex.fr/a ', 21), 'word')).toEqual(at('open ', 5))
-    expect(editLine(at('https://ex.fr/reset', 19), 'killword')).toEqual(at('https://ex.fr/', 14))
-    expect(editLine(at('one two three', 3), 'killnext')).toEqual(at('one three', 3))
-    expect(editLine(at('one two', 4), 'clear')).toEqual(at('two', 0))
-    expect(editLine(at('one two', 3), 'killend')).toEqual(at('one', 3))
+    expect(editLine(at('open https://ex.fr/a ', 21), 'word')).toMatchObject(at('open ', 5))
+    expect(editLine(at('https://ex.fr/reset', 19), 'killword')).toMatchObject(at('https://ex.fr/', 14))
+    expect(editLine(at('one two three', 3), 'killnext')).toMatchObject(at('one three', 3))
+    expect(editLine(at('one two', 4), 'clear')).toMatchObject(at('two', 0))
+    expect(editLine(at('one two', 3), 'killend')).toMatchObject(at('one', 3))
+  })
+
+  test('Ctrl+Y puts back at the caret what the last kill took', () => {
+    const killed = editLine(at('ssh user@host', 13), 'word')
+
+    expect(killed).toEqual({ text: 'ssh ', caret: 4, killed: 'user@host', chained: true })
+    expect(editLine(editLine({ ...killed, chained: false }, 'linestart'), 'yank')).toMatchObject(at('user@hostssh ', 9))
+    expect(editLine(at('abc', 1), 'yank')).toEqual(at('abc', 1))
+  })
+
+  test('kills in a row add up, those taking what is before the caret in front, the others behind', () => {
+    const backward = editLine(editLine(at('a b c', 5), 'killword'), 'killword')
+    const forward = editLine(editLine(at('a b c', 0), 'killnext'), 'killnext')
+
+    expect(backward).toMatchObject({ text: 'a ', killed: 'b c' })
+    expect(forward).toMatchObject({ text: ' c', killed: 'a b' })
+  })
+
+  test('another key ends the run of kills, the next one starting afresh', () => {
+    const moved = editLine(editLine(at('a b c', 5), 'killword'), 'left')
+    const again = editLine(moved, 'killword')
+
+    expect(moved).toEqual({ text: 'a b ', caret: 3, killed: 'c' })
+    expect(again).toMatchObject({ text: 'a  ', killed: 'b' })
+    expect(editLine(again, 'yank')).toMatchObject({ text: 'a b ', caret: 3 })
   })
 })
 

@@ -47,6 +47,25 @@ function settings(more: object = {}) {
 }
 
 describe('select', () => {
+  test('ctrl-z clears the picker and gives the terminal back, then draws it whole once resumed', async () => {
+    const { terminal, type, written } = fake()
+    const events: string[] = []
+
+    terminal.suspend = () => void events.push(`suspended after ${written.at(-1)}`)
+    const running = select(ROWS, settings(), terminal)
+
+    type('doc')
+    written.length = 0
+    type('\x1A')
+    events.push(`then ${written.slice(1).join('')}`)
+    type('\r')
+
+    expect(events[0]).toBe('suspended after \r\x1B[J\x1B[?1006l\x1B[?1000l\x1B[?2004l\x1B[?25h')
+    expect(events[1]).toContain('\x1B[?2004h\x1B[?1000h\x1B[?1006h')
+    expect(events[1]).toContain('> doc')
+    expect(await running).toEqual({ rows: [ROWS[2]!], key: '', query: 'doc' })
+  })
+
   test('enter returns the highlighted row with its hidden fields and the query', async () => {
     const { terminal, type, closed } = fake()
     const running = select(ROWS, settings(), terminal)

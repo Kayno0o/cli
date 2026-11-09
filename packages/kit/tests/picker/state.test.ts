@@ -28,10 +28,12 @@ describe('parseKeys', () => {
     expect(parseKeys('\x1B[1;5D\x1B[1;3D\x1Bb\x1B[1;5C\x1B[1;3C\x1Bf')).toEqual(['wordleft', 'wordleft', 'wordleft', 'wordright', 'wordright', 'wordright'])
     expect(parseKeys('\x01\x05\x1B[3~\x0B')).toEqual(['linestart', 'lineend', 'delete', 'killend'])
     expect(parseKeys('\b\x1B\x7F\x1B[3;5~\x1Bd')).toEqual(['killword', 'killword', 'killnext', 'killnext'])
+    expect(parseKeys('\x19\x1A')).toEqual(['yank', 'suspend'])
   })
 
   test('a control key the caller claims wins over its editing', () => {
     expect(parseKeys('\x01\x0B', { active: false }, ['ctrl-a'])).toEqual([{ ctrl: 'ctrl-a' }, 'killend'])
+    expect(parseKeys('\x19\x1A', { active: false }, ['ctrl-y', 'ctrl-z'])).toEqual([{ ctrl: 'ctrl-y' }, { ctrl: 'ctrl-z' }])
   })
 
   test('a lone escape cancels while a sequence it starts does not', () => {
@@ -89,6 +91,14 @@ describe('press', () => {
     expect(press(press(state, 'word'), 'word').query).toBe('')
     expect(press(state, 'clear').query).toBe('')
     expect(press(createState(LINES), 'erase').query).toBe('')
+  })
+
+  test('ctrl-y puts the killed words back, a move in the list ending the run of kills', () => {
+    const killed = typed(createState(LINES, { query: 'foo bar baz' }), 'killword', 'killword')
+
+    expect(killed).toMatchObject({ query: 'foo ', killed: 'bar baz' })
+    expect(typed(killed, 'linestart', 'yank')).toMatchObject({ query: 'bar bazfoo ', caret: 7 })
+    expect(typed(killed, 'down', 'killword').killed).toBe('foo ')
   })
 
   test('typing and erasing happen at the caret, home and end still moving in the list', () => {
