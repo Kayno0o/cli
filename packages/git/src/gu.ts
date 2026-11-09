@@ -93,7 +93,10 @@ async function main(argv: string[]): Promise<number> {
   const paths = [...new Set(each.flat())]
 
   if (staged) {
-    await checked(['restore', '--staged', '--', ...positionals])
+    // Before the first commit there is no HEAD to restore from, so the paths just leave the index.
+    const hasHead = (await git(['rev-parse', '--verify', '-q', 'HEAD'], LITERAL)).code === 0
+
+    await checked(hasHead ? ['restore', '--staged', '--', ...positionals] : ['rm', '--cached', '-r', '--quiet', '--', ...positionals])
 
     if (values.json === true)
       printJson({ action: 'unstage', paths })

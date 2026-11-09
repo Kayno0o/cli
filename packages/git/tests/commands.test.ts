@@ -239,6 +239,19 @@ describe('gu', () => {
     expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\nkept\n')
   })
 
+  test('--staged works before the first commit', () => {
+    const fresh = join(root, 'fresh')
+
+    mkdirSync(fresh)
+    git(fresh, 'init', '-q', '-b', 'main')
+    writeFileSync(join(fresh, 'n.txt'), 'new\n')
+    git(fresh, 'add', 'n.txt')
+
+    expect(bin('gu', fresh, '--staged', 'n.txt').out).toBe('unstaged n.txt\n')
+    expect(git(fresh, 'diff', '--cached', '--name-only')).toBe('')
+    expect(readFileSync(join(fresh, 'n.txt'), 'utf8')).toBe('new\n')
+  })
+
   test('--staged unstages and keeps the working tree', () => {
     writeFileSync(join(work, 'a.txt'), 'one\nmore\n')
     git(work, 'add', 'a.txt')
