@@ -21,7 +21,7 @@ waitfor task b92stimuo
 - `--file` is read from its start, line by line as each is completed, colours stripped; it may not exist yet. A file that shrinks (rotated, truncated) is read again from its start.
 - `--until <regex>` waits for a line of `--file` to match and prints it as `<file>:<line>: <text>`.
 - `--fail <regex>` ends the wait on the first matching line of `--file`, printing the five lines on each side of it on stderr, as long as some condition is still unmet: a `--until` line before it in the same read wins.
-- `--port <n>` waits for a TCP connection to `--host` (127.0.0.1) to be accepted, `--url <url>` for a 2xx answer, redirects followed. Each prints how long it took.
+- `--port <n>` waits for a TCP connection to `--host` (127.0.0.1 or ::1) to be accepted, `--url <url>` for a 2xx answer, redirects followed. Each prints how long it took.
 - `--pid <n>` waits for the process to exit, checked with signal 0, so it never matches its own shell the way a `while pgrep -f` loop does. A zombie counts as exited. A `--port` connection attempt is given up after 3 seconds and retried, so dropped packets do not hold a poll for minutes.
 - `--cmd <command>` runs the command through `sh -c` and waits for it to exit 0, re-running it every `--interval` (1s, `-t` bounds each run to the time left, 30s at most); a timeout names its last exit code and last output line.
 - `--any` is met by the first condition that is, not all of them: it takes two or more of `--until`, `--port`, `--url`, `--pid` and `--cmd`, prints the one that was met, and a timeout says none was and lists them all. A `--fail` line still ends the wait with 1.

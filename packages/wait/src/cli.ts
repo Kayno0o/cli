@@ -37,7 +37,7 @@ const OPTIONS = {
   until: { type: 'string', short: 'u', description: 'a regular expression a line of --file must match' },
   fail: { type: 'string', short: 'e', description: 'a regular expression whose first matching line of --file is a failure' },
   port: { type: 'string', short: 'p', description: 'a TCP port that must accept connections' },
-  host: { type: 'string', short: 'H', description: 'the host of --port (127.0.0.1)' },
+  host: { type: 'string', short: 'H', description: 'the host of --port (127.0.0.1 and ::1)' },
   url: { type: 'string', description: 'a URL that must answer 2xx' },
   pid: { type: 'string', description: 'a process id that must exit' },
   cmd: { type: 'string', short: 'c', description: 'a shell command that must exit 0, re-run every --interval' },
@@ -179,7 +179,9 @@ async function main(args: string[]): Promise<number> {
     fail(`--url ${values.url} is no URL`)
 
   const pid = values.pid === undefined ? undefined : wholeNumber(values.pid, 'pid', 0)
-  const host = values.host ?? '127.0.0.1'
+  // Without --host a server bound to ::1 only (`localhost` in vite or nuxt) counts as well.
+  const hosts = values.host === undefined ? ['127.0.0.1', '::1'] : [values.host]
+  let host = hosts[0] ?? '127.0.0.1'
   const interval = duration(values.interval, 'interval', 1000)
   const isAny = values.any === true
   const timeout = duration(values.timeout, 'timeout', 5 * 60_000)
@@ -231,10 +233,20 @@ async function main(args: string[]): Promise<number> {
       }
 
       if (port !== undefined && portLeft !== undefined) {
-        portLeft = await portProblem(host, port)
+        for (const candidate of hosts) {
+          const problem = await portProblem(candidate, port)
 
-        if (portLeft === undefined)
-          say(`${host}:${port} listening after ${formatDuration(Date.now() - started)}`)
+          if (candidate === hosts[0])
+            portLeft = problem
+
+          if (problem === undefined) {
+            portLeft = undefined
+            host = candidate
+            say(`${host.includes(':') ? `[${host}]` : host}:${port} listening after ${formatDuration(Date.now() - started)}`)
+
+            break
+          }
+        }
       }
 
       if (values.url !== undefined && urlLeft !== undefined) {
