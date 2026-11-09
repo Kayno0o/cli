@@ -16,7 +16,7 @@ const home = process.cwd()
 beforeAll(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'ft-ci-json-')))
   clone = join(root, 'clone')
-  await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${clone}`.quiet()
+  await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${clone}`.cwd(root).quiet()
   await $`git -c user.name=t -c user.email=t@t commit -q --allow-empty -m one && git push -q origin main && git remote set-head origin -a`.cwd(clone).quiet()
   sha = (await $`git rev-parse HEAD`.cwd(clone).text()).trim()
 })

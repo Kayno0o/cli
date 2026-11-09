@@ -13,9 +13,9 @@ async function inClone(run: (root: string) => Promise<void>): Promise<void> {
   const home = process.cwd()
 
   try {
-    await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${clone}`.quiet()
+    await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${clone}`.cwd(root).quiet()
     process.chdir(clone)
-    await $`git config user.name t && git config user.email t@t && git commit -q --allow-empty -m one && git push -q origin main`.quiet()
+    await $`git config user.name t && git config user.email t@t && git commit -q --allow-empty -m one && git push -q origin main`.cwd(clone).quiet()
     await run(root)
   }
   finally {

@@ -66,7 +66,7 @@ describe('release --json', () => {
     const root = temp('ft-release-json-')
     const work = join(root, 'work')
 
-    await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${work}`.quiet()
+    await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${work}`.cwd(root).quiet()
     await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'r', private: true, workspaces: ['packages/*'] }))
     await Bun.write(join(work, 'packages', 'a', 'package.json'), JSON.stringify({ name: 'ft-json-a', version: '1.0.0' }))
     await Bun.write(join(work, 'packages', 'b', 'package.json'), JSON.stringify({ name: 'ft-json-b', version: '2.0.0' }))

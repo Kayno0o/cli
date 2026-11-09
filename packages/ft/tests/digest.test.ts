@@ -69,12 +69,12 @@ describe('digest', () => {
     const savedPath = process.env.PATH
 
     try {
-      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.quiet()
+      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.cwd(root).quiet()
       process.chdir(work)
       await Bun.write(join(work, 'a.ts'), 'export {}\n')
-      await $`git config user.name t && git config user.email t@t && git add a.ts && git commit -q -m init && git push -q origin main`.quiet()
+      await $`git config user.name t && git config user.email t@t && git add a.ts && git commit -q -m init && git push -q origin main`.cwd(work).quiet()
       await Bun.write(join(work, 'a.ts'), 'export const a = 1\n')
-      await $`git commit -q -am second`.quiet()
+      await $`git commit -q -am second`.cwd(work).quiet()
       await Bun.write(join(work, 'scratch.ts'), '\n')
 
       const bin = join(root, 'bin')
@@ -124,7 +124,7 @@ describe('digest', () => {
     const home = process.cwd()
 
     try {
-      await $`git init -q -b main ${root}`.quiet()
+      await $`git init -q -b main ${root}`.cwd(root).quiet()
       process.chdir(root)
 
       await withFakeTea({ issues: [], runs: [] }, async () => {

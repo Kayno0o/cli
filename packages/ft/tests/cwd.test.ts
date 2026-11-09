@@ -17,7 +17,7 @@ describe('a wait whose working directory is deleted', () => {
     const home = process.cwd()
 
     try {
-      await $`git init -q -b main ${main} && git -C ${main} -c user.name=t -c user.email=t@t commit -q --allow-empty -m init && git -C ${main} worktree add -q ${linked}`.quiet()
+      await $`git init -q -b main ${main} && git -C ${main} -c user.name=t -c user.email=t@t commit -q --allow-empty -m init && git -C ${main} worktree add -q ${linked}`.cwd(root).quiet()
       process.chdir(linked)
       await leaveWorktree()
       expect(process.cwd()).toBe(main)
@@ -55,7 +55,7 @@ describe('ft ci on a commit origin lacks', () => {
     const home = process.cwd()
 
     try {
-      await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${root}/clone 2>/dev/null && git -C ${root}/clone -c user.name=t -c user.email=t@t commit -q --allow-empty -m one && git -C ${root}/clone push -q origin main && git -C ${root}/clone -c user.name=t -c user.email=t@t commit -q --allow-empty -m two`.quiet()
+      await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${root}/clone 2>/dev/null && git -C ${root}/clone -c user.name=t -c user.email=t@t commit -q --allow-empty -m one && git -C ${root}/clone push -q origin main && git -C ${root}/clone -c user.name=t -c user.email=t@t commit -q --allow-empty -m two`.cwd(root).quiet()
       process.chdir(`${root}/clone`)
 
       const started = Date.now()

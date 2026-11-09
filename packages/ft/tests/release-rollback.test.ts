@@ -10,7 +10,7 @@ import { timing } from '../src/commands/watch'
 import { withFakeTea } from './fake-tea'
 
 // A clone whose origin refuses every tag (or runs `hookScript` on each pushed ref), with an unpushed `feat` commit.
-async function refusingTags(run: (sha: string) => Promise<void>, hookScript = 'while read old new ref; do case "$ref" in refs/tags/*) echo "no tags here" >&2; exit 1;; esac; done'): Promise<void> {
+async function refusingTags(run: (sha: string, work: string) => Promise<void>, hookScript = 'while read old new ref; do case "$ref" in refs/tags/*) echo "no tags here" >&2; exit 1;; esac; done'): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
   const origin = join(root, 'origin.git')
   const work = join(root, 'work')
@@ -19,16 +19,16 @@ async function refusingTags(run: (sha: string) => Promise<void>, hookScript = 'w
   const poll = timing.poll
 
   try {
-    await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.quiet()
+    await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.cwd(root).quiet()
     process.chdir(work)
     await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
-    await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.quiet()
+    await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.cwd(work).quiet()
     await Bun.write(hook, `#!/bin/sh\n${hookScript}\n`)
     await chmod(hook, 0o755)
     await Bun.write(join(work, 'a.ts'), 'export {}\n')
-    await $`git add a.ts && git commit -q -m feat`.quiet()
+    await $`git add a.ts && git commit -q -m feat`.cwd(work).quiet()
     timing.poll = 1
-    await run((await $`git rev-parse HEAD`.text()).trim())
+    await run((await $`git rev-parse HEAD`.cwd(work).text()).trim(), work)
   }
   finally {
     timing.poll = poll
@@ -41,31 +41,31 @@ const passing = (sha: string) => [{ id: 7, commit_sha: sha, event: 'push', statu
 
 describe('release rollback', () => {
   test('a refused push drops the bump commit and its tag, back to the commit it started on', async () => {
-    await refusingTags(async (sha) => {
+    await refusingTags(async (sha, work) => {
       await withFakeTea({ issues: [], runs: passing(sha) }, async () => {
         // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
         await expect(capture(async () => release(['patch']))).rejects.toThrow('origin refused the push')
       })
 
-      expect((await $`git rev-parse HEAD`.text()).trim()).toBe(sha)
-      expect((await $`git tag`.text()).trim()).toBe('')
+      expect((await $`git rev-parse HEAD`.cwd(work).text()).trim()).toBe(sha)
+      expect((await $`git tag`.cwd(work).text()).trim()).toBe('')
       expect(((await Bun.file('package.json').json()) as { version: string }).version).toBe('1.0.0')
     })
   })
 
   test('--tagged keeps the user\'s own version commit and tag when the push is refused', async () => {
-    await refusingTags(async (sha) => {
-      await $`git commit -q --allow-empty -m v1.0.1 && git tag -a v1.0.1 -m v1.0.1`.quiet()
+    await refusingTags(async (sha, work) => {
+      await $`git commit -q --allow-empty -m v1.0.1 && git tag -a v1.0.1 -m v1.0.1`.cwd(work).quiet()
 
-      const own = (await $`git rev-parse HEAD`.text()).trim()
+      const own = (await $`git rev-parse HEAD`.cwd(work).text()).trim()
 
       await withFakeTea({ issues: [], runs: passing(sha) }, async () => {
         // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
         await expect(capture(async () => release(['--tagged']))).rejects.toThrow('origin refused the push')
       })
 
-      expect((await $`git rev-parse HEAD`.text()).trim()).toBe(own)
-      expect((await $`git tag`.text()).trim()).toBe('v1.0.1')
+      expect((await $`git rev-parse HEAD`.cwd(work).text()).trim()).toBe(own)
+      expect((await $`git tag`.cwd(work).text()).trim()).toBe('v1.0.1')
     })
   })
 
@@ -76,13 +76,13 @@ describe('release rollback', () => {
     const poll = timing.poll
 
     try {
-      await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${work}`.quiet()
+      await $`git init -q --bare -b main ${join(root, 'origin.git')} && git clone -q ${join(root, 'origin.git')} ${work}`.cwd(root).quiet()
       process.chdir(work)
       await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'r', private: true, workspaces: ['packages/*'] }))
       await Bun.write(join(work, 'packages', 'a', 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
-      await $`bun install && git config user.name t && git config user.email t@t && git add package.json packages bun.lock && git commit -q -m init && git push -q origin main`.quiet()
+      await $`bun install && git config user.name t && git config user.email t@t && git add package.json packages bun.lock && git commit -q -m init && git push -q origin main`.cwd(work).quiet()
 
-      const sha = (await $`git rev-parse HEAD`.text()).trim()
+      const sha = (await $`git rev-parse HEAD`.cwd(work).text()).trim()
       const lock = await Bun.file('bun.lock').text()
 
       await Bun.write(join(work, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\necho nope >&2\nexit 1\n')
@@ -94,7 +94,7 @@ describe('release rollback', () => {
         await expect(capture(async () => release(['patch', '-p', 'a']))).rejects.toThrow()
       })
 
-      expect((await $`git status --porcelain`.text()).trim()).toBe('')
+      expect((await $`git status --porcelain`.cwd(work).text()).trim()).toBe('')
       expect(await Bun.file('bun.lock').text()).toBe(lock)
       expect(((await Bun.file('packages/a/package.json').json()) as { version: string }).version).toBe('1.0.0')
     }
@@ -106,15 +106,15 @@ describe('release rollback', () => {
   })
 
   test('the tag is pushed as a tag even when a branch has the same name', async () => {
-    await refusingTags(async (sha) => {
-      await $`git branch v1.0.1 && git push -q origin v1.0.1`.quiet()
+    await refusingTags(async (sha, work) => {
+      await $`git branch v1.0.1 && git push -q origin v1.0.1`.cwd(work).quiet()
 
       try {
         await withFakeTea({ issues: [], runs: passing(sha) }, async () => capture(async () => release(['patch', '-t', '1s'])))
       }
       catch {}
 
-      expect((await $`git ls-remote --tags origin`.text())).toContain('refs/tags/v1.0.1')
+      expect((await $`git ls-remote --tags origin`.cwd(work).text())).toContain('refs/tags/v1.0.1')
     }, 'true')
   })
 
@@ -124,13 +124,13 @@ describe('release rollback', () => {
     limits.pushMs = 1000
 
     try {
-      await refusingTags(async (sha) => {
+      await refusingTags(async (sha, work) => {
         await withFakeTea({ issues: [], runs: passing(sha) }, async () => {
           // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
           await expect(capture(async () => release(['patch']))).rejects.toThrow('the push may have landed')
         })
 
-        expect((await $`git tag`.text()).trim()).toBe('v1.0.1')
+        expect((await $`git tag`.cwd(work).text()).trim()).toBe('v1.0.1')
         expect(((await Bun.file('package.json').json()) as { version: string }).version).toBe('1.0.1')
       }, 'while read old new ref; do case "$ref" in refs/tags/*) sleep 5;; esac; done')
     }

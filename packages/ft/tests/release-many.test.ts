@@ -22,7 +22,7 @@ describe('release of several packages', () => {
   async function workspace(): Promise<string> {
     const root = temp('ft-release-many-')
 
-    await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${root}/work`.quiet()
+    await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${root}/work`.cwd(root).quiet()
 
     const work = join(root, 'work')
 

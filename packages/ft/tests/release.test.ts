@@ -24,7 +24,7 @@ describe('testsPass on a commit origin has', () => {
   async function pushedRepo(): Promise<string> {
     const root = temp('ft-tests-pass-')
 
-    await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${root}/work`.quiet()
+    await $`git init -q --bare -b main ${root}/origin.git && git clone -q ${root}/origin.git ${root}/work`.cwd(root).quiet()
     await $`git -C ${root}/work -c user.name=t -c user.email=t@t commit -q --allow-empty -m init && git -C ${root}/work push -q origin main`.quiet()
 
     return join(root, 'work')
@@ -104,12 +104,12 @@ describe('commitPackageBump', () => {
       await $`bun install && git init -q -b main && git add package.json packages bun.lock && git -c user.name=t -c user.email=t@t commit -q -m init`.cwd(root).quiet()
       await $`bun pm version patch --no-git-tag-version`.cwd(dir).quiet()
       process.chdir(root)
-      await $`git config user.name t && git config user.email t@t`.quiet()
+      await $`git config user.name t && git config user.email t@t`.cwd(root).quiet()
       await commitPackageBump(dir, 'a-v')
 
-      expect((await $`git tag --points-at HEAD`.text()).trim()).toBe('a-v1.0.1')
-      expect((await $`git log -1 --format=%s`.text()).trim()).toBe('a-v1.0.1')
-      expect((await $`git status --porcelain`.text()).trim()).toBe('')
+      expect((await $`git tag --points-at HEAD`.cwd(root).text()).trim()).toBe('a-v1.0.1')
+      expect((await $`git log -1 --format=%s`.cwd(root).text()).trim()).toBe('a-v1.0.1')
+      expect((await $`git status --porcelain`.cwd(root).text()).trim()).toBe('')
       expect(await Bun.file(join(root, 'bun.lock')).text()).toContain('"version": "1.0.1"')
     }
     finally {
@@ -127,32 +127,32 @@ describe('release', () => {
     const home = process.cwd()
 
     try {
-      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.quiet()
+      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.cwd(root).quiet()
       process.chdir(work)
       await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
-      await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.quiet()
+      await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.cwd(work).quiet()
       await Bun.write(join(work, 'a.ts'), 'export {}\n')
-      await $`git add a.ts && git commit -q -m feat`.quiet()
+      await $`git add a.ts && git commit -q -m feat`.cwd(work).quiet()
 
-      const sha = (await $`git rev-parse HEAD`.text()).trim()
-      const pushed = (await $`git rev-parse origin/main`.text()).trim()
+      const sha = (await $`git rev-parse HEAD`.cwd(work).text()).trim()
+      const pushed = (await $`git rev-parse origin/main`.cwd(work).text()).trim()
       const { result, out } = await capture(async () => release(['minor', '--dry-run']))
 
       expect(result).toBe(0)
       expect(out).toBe(`would release a 1.0.0 -> 1.1.0, tagged v1.1.0\n  1. push main at ${sha.slice(0, 7)}, which origin lacks, then wait for its runs\n  2. bun pm version minor, which commits and tags v1.1.0\n  3. push main and v1.1.0 in one atomic push, then wait for the runs it starts (15m at most)\n  4. wait for the registry to serve a@1.1.0\ndry run: nothing was pushed, committed or tagged\n`)
-      expect((await $`git tag`.text()).trim()).toBe('')
-      expect((await $`git ls-remote --tags origin`.text()).trim()).toBe('')
-      expect((await $`git rev-parse origin/main HEAD`.text()).trim().split('\n')).toEqual([pushed, sha])
-      expect((await $`git status --porcelain`.text()).trim()).toBe('')
+      expect((await $`git tag`.cwd(work).text()).trim()).toBe('')
+      expect((await $`git ls-remote --tags origin`.cwd(work).text()).trim()).toBe('')
+      expect((await $`git rev-parse origin/main HEAD`.cwd(work).text()).trim().split('\n')).toEqual([pushed, sha])
+      expect((await $`git status --porcelain`.cwd(work).text()).trim()).toBe('')
 
-      await $`git tag -a v1.0.1 -m v1.0.1`.quiet()
+      await $`git tag -a v1.0.1 -m v1.0.1`.cwd(work).quiet()
       expect((await capture(async () => release(['--tagged', '--dry-run', '--no-registry']))).out).toStartWith('would release a 1.0.1, tagged v1.0.1\n')
-      await $`git tag -d v1.0.1`.quiet()
+      await $`git tag -d v1.0.1`.cwd(work).quiet()
       // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
       await expect(capture(async () => release(['--tagged', '--dry-run']))).rejects.toThrow('HEAD carries no v* tag')
 
       await Bun.write(join(work, 'b.ts'), 'export {}\n')
-      await $`git add b.ts`.quiet()
+      await $`git add b.ts`.cwd(work).quiet()
       // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
       await expect(capture(async () => release(['patch', '--dry-run']))).rejects.toThrow('the tree has uncommitted changes')
     }
@@ -170,14 +170,14 @@ describe('release', () => {
     const poll = timing.poll
 
     try {
-      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.quiet()
+      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.cwd(root).quiet()
       process.chdir(work)
       await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
-      await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.quiet()
+      await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.cwd(work).quiet()
       await Bun.write(join(work, 'a.ts'), 'export {}\n')
-      await $`git add a.ts && git commit -q -m feat`.quiet()
+      await $`git add a.ts && git commit -q -m feat`.cwd(work).quiet()
 
-      const sha = (await $`git rev-parse HEAD`.text()).trim()
+      const sha = (await $`git rev-parse HEAD`.cwd(work).text()).trim()
       const runs = [{ id: 7, commit_sha: sha, event: 'push', status: 'failure', workflow_id: 'test.yml', prettyref: 'main', html_url: 'https://forge/runs/7', title: 'feat' }]
 
       timing.poll = 1
@@ -186,9 +186,9 @@ describe('release', () => {
         await expect(capture(async () => release(['patch']))).rejects.toThrow('nothing was bumped or tagged')
       })
 
-      expect((await $`git tag`.text()).trim()).toBe('')
-      expect((await $`git ls-remote --tags origin`.text()).trim()).toBe('')
-      expect((await $`git rev-parse origin/main`.text()).trim()).toBe(sha)
+      expect((await $`git tag`.cwd(work).text()).trim()).toBe('')
+      expect((await $`git ls-remote --tags origin`.cwd(work).text()).trim()).toBe('')
+      expect((await $`git rev-parse origin/main`.cwd(work).text()).trim()).toBe(sha)
       expect(((await Bun.file(join(work, 'package.json')).json()) as { version: string }).version).toBe('1.0.0')
     }
     finally {
