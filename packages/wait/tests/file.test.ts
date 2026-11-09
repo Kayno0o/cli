@@ -29,7 +29,7 @@ describe('waitfor --file', () => {
     const result = await waitfor(['--file', path, '--until', 'listening', '--json'])
 
     expect(result.code).toBe(0)
-    expect(JSON.parse(result.out)).toEqual({ met: true, ms: expect.any(Number), line: { number: 2, text: 'Server listening' } })
+    expect(JSON.parse(result.out)).toEqual({ met: true, ms: expect.any(Number), line: { number: 2, text: 'Server listening' }, conditions: [{ name: `${path} --until`, ms: expect.any(Number) }] })
     expect(result.err).toBe(`${path}:2: Server listening\n`)
   })
 

@@ -258,6 +258,7 @@ async function main(args: string[]): Promise<number> {
           if (event.kind === 'until') {
             say(`${watch.path}:${event.line.number}: ${truncate(event.line.text, WIDTH)}`)
             matched = { number: event.line.number, text: event.line.text }
+            metAt.push({ name: `${watch.path} --until`, ms: Date.now() - started })
 
             continue
           }

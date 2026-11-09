@@ -211,11 +211,15 @@ export interface UrlExpect {
 
 async function readBody(response: Response): Promise<string> {
   const reader = response.body?.getReader()
+
+  if (reader === undefined)
+    return ''
+
   const decoder = new TextDecoder()
   let text = ''
   let bytes = 0
 
-  while (reader !== undefined && bytes < BODY_BYTES) {
+  while (bytes < BODY_BYTES) {
     const { done, value } = await reader.read()
 
     if (done)
@@ -225,7 +229,7 @@ async function readBody(response: Response): Promise<string> {
     text += decoder.decode(value, { stream: true })
   }
 
-  await reader?.cancel()
+  await reader.cancel()
 
   return text
 }
