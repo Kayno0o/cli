@@ -208,6 +208,7 @@ describe('exitCodeOf', () => {
 describe('text', () => {
   test('stripAnsi removes colour and cursor codes', () => {
     expect(stripAnsi('\u001B[31mred\u001B[0m \u001B[2K ok')).toBe('red  ok')
+    expect(stripAnsi('\u001B]8;;https://x.test\u001B\\link\u001B]8;;\u001B\\ \u001B]0;title\u0007\u001B[>4;1m.')).toBe('link .')
   })
 
   test('distance counts edits', () => {

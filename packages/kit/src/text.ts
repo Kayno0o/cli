@@ -1,4 +1,6 @@
-const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[\\d;?]*[a-z]`, 'gi')
+// A CSI sequence (colours, cursor moves), an OSC one ended by BEL or ST (hyperlinks, titles) or a two-byte escape.
+// eslint-disable-next-line no-control-regex -- escape sequences are what it matches
+export const ANSI = /\x1B(?:\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]|\][^\x07\x1B]*(?:\x07|\x1B\\)|[\x40-\x5A\x5C-\x5F])/g
 
 export function stripAnsi(text: string): string {
   return text.replace(ANSI, '')
