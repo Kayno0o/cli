@@ -99,7 +99,7 @@ export async function curlHop(url: string, options: HopOptions): Promise<CurlRes
   if (result.hop === undefined && options.http3)
     result = await runCurl(url, { ...options, http3: false })
 
-  if (result.hop !== undefined && !options.get && result.hop.status >= 400)
+  if (result.hop !== undefined && !options.get && options.method === undefined && result.hop.status >= 400)
     result = await runCurl(url, { ...options, get: true })
 
   return result

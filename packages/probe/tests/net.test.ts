@@ -8,6 +8,9 @@ const server = Bun.serve({
     seen.push(request.method)
     const { pathname } = new URL(request.url)
 
+    if (pathname === '/forbidden-delete' && request.method === 'DELETE')
+      return new Response(null, { status: 403 })
+
     if (pathname === '/no-head' && request.method === 'HEAD')
       return new Response(null, { status: 405 })
 
@@ -58,6 +61,12 @@ describe('curlHop', () => {
     seen.length = 0
     expect((await curlHop(`${base}/forbidden-head`, hop)).hop?.status).toBe(200)
     expect(seen).toEqual(['HEAD', 'GET'])
+  })
+
+  test('never sends a method the caller chose a second time', async () => {
+    seen.length = 0
+    expect((await curlHop(`${base}/forbidden-delete`, { ...hop, method: 'DELETE' })).hop?.status).toBe(403)
+    expect(seen).toEqual(['DELETE'])
   })
 
   test('does not retry when GET was asked from the start', async () => {
