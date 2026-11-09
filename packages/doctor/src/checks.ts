@@ -37,7 +37,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-edit': ['sub'],
   '@kaynooo/cli-env': ['ev', 'redact'],
   '@kaynooo/cli-forgejo': ['ft'],
-  '@kaynooo/cli-git': ['gst', 'gc', 'gb', 'gp', 'gf', 'gcl', 'gd', 'gu'],
+  '@kaynooo/cli-git': ['gst', 'gc', 'gb', 'gp', 'gf', 'gm', 'gcl', 'gd', 'gu'],
   '@kaynooo/cli-gitlab': ['gl'],
   '@kaynooo/cli-gloss': ['gloss'],
   '@kaynooo/cli-guard': ['guard'],

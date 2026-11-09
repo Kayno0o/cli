@@ -1,4 +1,4 @@
-# gst, gc, gb, gp, gf, gcl, gd and gu
+# gst, gc, gb, gp, gf, gm, gcl, gd and gu
 
 Git for Claude Code, where a session would otherwise chain `git status --short` and `git log --oneline` to read the state, or `git add <paths> && git status && git commit -m ...` to commit and have the commit bounced over its message.
 
@@ -50,6 +50,16 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 - A detached HEAD, a branch with no upstream and one whose upstream is gone are fetched only, saying so.
 - `--json` prints `{path, branch, upstream, commits, outcome, reason?}` per repository, `outcome` being `updated`, `current`, `fetched`, `skipped` or `refused`.
 - Exit codes: 0 every repository was fetched, and fast-forwarded when it could be, 1 a fetch failed, a branch diverged or a fast-forward was refused, 2 outside a repository or a usage error.
+
+## gm
+
+`gm <branch>` merges the branch into the current one with `git merge --no-edit` and prints what came in: fast-forward or merge commit, the commits and the files changed. A working tree with uncommitted changes is refused.
+
+- On a conflict every conflicted file is listed with its conflict regions (the markers and two lines around them, line numbers included) and the exit is 1; `gm --continue` commits once the markers are gone, refusing while one remains, and `gm --abort` gives the merge up.
+- `gm --dry-run <branch>` says whether the merge would conflict, and in which files, with `git merge-tree` and nothing touched.
+- `--squash` stages the branch's changes without committing them, to commit with `gc`.
+- With no branch, a terminal gets a picker of the other branches (ahead and behind the current one, a preview of the commits, files and verdict; enter merges, ctrl-s squashes); without a terminal the branches are listed with their verdict, `--json` giving `[{name, ahead, behind, outcome, conflicts}]`.
+- Exit codes: 0 merged, already merged or no conflict in a dry run, 1 a conflict, a dirty tree or a refusal, 2 outside a repository or a usage error.
 
 ## gcl
 

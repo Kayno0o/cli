@@ -2,7 +2,7 @@
   "name": "@kaynooo/cli-git",
   "type": "module",
   "version": "0.15.3",
-  "description": "gst, gc, gb, gp, gf, gcl, gd and gu: a repository's state in one call, a commit of exactly the paths given, its message checked before anything is staged, a branch picked, nested repositories pushed or fetched, a clone into the workspace, the changes per file and an undo that keeps what it takes away.",
+  "description": "gst, gc, gb, gp, gf, gm, gcl, gd and gu: a repository's state in one call, a commit of exactly the paths given, its message checked before anything is staged, a branch picked, nested repositories pushed or fetched, a branch merged with its conflicts listed, a clone into the workspace, the changes per file and an undo that keeps what it takes away.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/git#readme",
@@ -28,6 +28,7 @@
     "gb": "./dist/gb.js",
     "gp": "./dist/gp.js",
     "gf": "./dist/gf.js",
+    "gm": "./dist/gm.js",
     "gcl": "./dist/gcl.js",
     "gd": "./dist/gd.js",
     "gu": "./dist/gu.js"
@@ -43,12 +44,13 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/gst.ts src/gc.ts src/gb.ts src/gp.ts src/gf.ts src/gcl.ts src/gd.ts src/gu.ts --target bun --outdir dist",
+    "build": "$npm_execpath build src/gst.ts src/gc.ts src/gb.ts src/gp.ts src/gf.ts src/gm.ts src/gcl.ts src/gd.ts src/gu.ts --root src --target bun --outdir dist",
     "gst": "$npm_execpath src/gst.ts",
     "gc": "$npm_execpath src/gc.ts",
     "gb": "$npm_execpath src/gb.ts",
     "gp": "$npm_execpath src/gp.ts",
     "gf": "$npm_execpath src/gf.ts",
+    "gm": "$npm_execpath src/gm.ts",
     "gcl": "$npm_execpath src/gcl.ts",
     "gd": "$npm_execpath src/gd.ts",
     "gu": "$npm_execpath src/gu.ts"

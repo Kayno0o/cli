@@ -308,6 +308,20 @@ gloss 'tar -xzvf a.tgz -C /tmp'
 gloss -- git commit -am fix
 ```
 
+## gm
+
+merges the branch into the current one with git merge --no-edit, saying what came in. Package `git`.
+
+Instead of: git merge and then git diff --name-only --diff-filter=U and reading each file for markers
+
+```sh
+gm [branch]
+gm feature
+gm --dry-run feature  # whether it would conflict, and where
+gm --continue  # commit once the conflicts are resolved
+gm --abort  # give the merge up
+```
+
 ## gp
 
 pushes the current branch of the repository, or of each dir's, when it is ahead of its upstream as of the last fetch or has none yet, the latter with -u to origin (the only remote when there is no origin). Package `git`.

@@ -19,7 +19,7 @@ describe('every bin describes itself', () => {
   }
 })
 
-// Built as the build scripts do, every bin of a package in one call: there an entry importing another entry runs that one's `import.meta.main` block too, which no run from source shows.
+// Built as the build scripts do (with the entries' folder as root, since Bun nests the output under it from nine entries on), every bin of a package in one call: there an entry importing another entry runs that one's `import.meta.main` block too, which no run from source shows.
 describe('every built bin answers as itself', () => {
   const outdir = mkdtempSync(join(tmpdir(), 'built-bins-'))
 
@@ -29,7 +29,7 @@ describe('every built bin answers as itself', () => {
 
   for (const [dir, packageBins] of byPackage) {
     test(packageBins.map(({ bin }) => bin).join(', '), async () => {
-      const built = await Bun.build({ entrypoints: packageBins.map(({ source }) => source), target: 'bun', outdir: join(outdir, basename(dirname(dir))) })
+      const built = await Bun.build({ entrypoints: packageBins.map(({ source }) => source), target: 'bun', root: dir, outdir: join(outdir, basename(dirname(dir))) })
 
       expect(built.success).toBe(true)
 

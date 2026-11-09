@@ -166,6 +166,7 @@
         "gb": "./dist/gb.js",
         "gp": "./dist/gp.js",
         "gf": "./dist/gf.js",
+        "gm": "./dist/gm.js",
         "gcl": "./dist/gcl.js",
         "gd": "./dist/gd.js",
         "gu": "./dist/gu.js",

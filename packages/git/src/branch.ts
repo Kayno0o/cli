@@ -203,7 +203,7 @@ function preview(name: string): string {
 }
 
 // Every branch as git has it now, the current one apart, and the ones to pick among in order.
-function load(): { found: Branch[], current: string, all: Branch[] } {
+export function load(): { found: Branch[], current: string, all: Branch[] } {
   const found = branches(base())
   const current = read(['branch', '--show-current'])
 
