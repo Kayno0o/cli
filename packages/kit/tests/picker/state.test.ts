@@ -23,6 +23,10 @@ describe('parseKeys', () => {
     expect(parseKeys('\x1B[A\x1B[B\x10\x0E\r\x03\x7F\t\x15\x17')).toEqual(['up', 'down', 'up', 'down', 'enter', 'cancel', 'erase', 'tab', 'clear', 'word'])
   })
 
+  test('reads Ctrl+Backspace and Alt+Backspace as erasing a word', () => {
+    expect(parseKeys('\b\x1B\x7F')).toEqual(['word', 'word'])
+  })
+
   test('a lone escape cancels while a sequence it starts does not', () => {
     expect(parseKeys('\x1B')).toEqual(['cancel'])
     expect(parseKeys('\x1B[1;5C')).toEqual([])

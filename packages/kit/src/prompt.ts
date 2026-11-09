@@ -4,18 +4,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { fail } from './args'
-import { truncate } from './format'
+import { textWidth, truncate } from './format'
 import { isInteractive } from './mode'
-import { parseKeys } from './picker/state'
-import { overwrite, SYNC_END, SYNC_START } from './redraw'
+import { eraseWord, parseKeys } from './picker/state'
+import { overwrite, rowsTaken, SYNC_END, SYNC_START } from './redraw'
 import { paint } from './style'
 
 const WORDS = /\s+/
 // Choices drawn at once at most, the rest scrolled to.
 const MAX_ROWS = 10
 
-type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | { text: string }
-const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel', 'erase'])
+type Key = 'up' | 'down' | 'pageup' | 'pagedown' | 'home' | 'end' | 'enter' | 'cancel' | 'erase' | 'word' | 'clear' | { text: string }
+const PROMPT_KEYS: ReadonlySet<unknown> = new Set(['up', 'down', 'pageup', 'pagedown', 'home', 'end', 'enter', 'cancel', 'erase', 'word', 'clear'])
 
 type Outcome = 'enter' | 'cancel'
 type State = 'asking' | Outcome
@@ -41,6 +41,20 @@ export interface PromptSettings {
 // The keys a chunk of terminal input holds that prompts read, through the picker's parser: what it has for filtering and marking rows is left out.
 function readKeys(input: string, paste = { active: false }): Key[] {
   return parseKeys(input, paste).filter((key): key is Key => typeof key === 'object' ? 'text' in key : PROMPT_KEYS.has(key))
+}
+
+// The text typed once a key edits it: Backspace erasing a character, Ctrl+W or Ctrl+Backspace a word, Ctrl+U it all.
+function edit(text: string, key: Key): string {
+  if (key === 'erase')
+    return [...text].slice(0, -1).join('')
+
+  if (key === 'word')
+    return eraseWord(text)
+
+  if (key === 'clear')
+    return ''
+
+  return typeof key === 'object' ? text + key.text : text
 }
 
 export interface SelectSettings<T> extends PromptSettings {
@@ -172,10 +186,10 @@ export async function input(question: string, { default: fallback, mask = false,
     if (state !== 'asking')
       return [answer(colors, question, state, shown())]
 
-    // Its end alone where it would wrap: `? `, the question, a space, the caret, and the last column kept free.
+    // Its end alone where it would wrap: what is left of the row the question ends on (`? `, the question and a space, wrapped when wider than the terminal), less the caret and the last column kept free.
     const characters = [...shown()]
-    const room = Math.max(columns - question.length - 5, 1)
-    const tail = characters.length > room ? `…${characters.slice(1 - room).join('')}` : shown()
+    const room = Math.max(columns - textWidth(`? ${question} `) % columns - 2, 1)
+    const tail = characters.length > room ? `…${characters.slice(characters.length - room + 1).join('')}` : shown()
     const typed = value === '' ? colors.dim(tail) : tail
 
     return [`${colors.cyan('?')} ${question} ${typed}${colors.dim('█')}`, ...invalid === undefined ? [] : [`  ${colors.red(invalid)}`]]
@@ -191,10 +205,7 @@ export async function input(question: string, { default: fallback, mask = false,
       return invalid === undefined ? 'enter' : undefined
     }
 
-    if (key === 'erase')
-      value = [...value].slice(0, -1).join('')
-    else if (typeof key === 'object')
-      value += key.text
+    value = edit(value, key)
 
     return undefined
   })
@@ -238,10 +249,10 @@ class List<T> {
       return
     }
 
-    if (key === 'erase')
-      this.filter([...this.query].slice(0, -1).join(''))
-    else if (typeof key === 'object')
-      this.filter(this.query + key.text)
+    const query = edit(this.query, key)
+
+    if (query !== this.query)
+      this.filter(query)
   }
 
   // Every word typed is in the label or the hint, case ignored; the cursor stays on its choice while it still matches, else goes to the first.
@@ -305,11 +316,12 @@ async function ask(question: string, { hint, terminal = process }: PromptSetting
   // A terminal that does not say its size, as a pseudo-terminal may, answers 0.
   const columns = () => stderr.columns || 80
   // The cursor rests at the start of the first line, so a terminal that rewraps the frame as it narrows cannot move it off that row; the last frame ends on its last line instead.
-  // What lies below the frame's last line is erased after it, for a frame shorter than the one before.
+  // What lies below the frame's last line is erased after it, for a frame shorter than the one before. A line wider than the terminal wraps, so the cursor climbs back the rows the frame takes, not its lines.
   const draw = (state: State, last = false) => {
     const frame = render(colors, state, { columns: columns(), rows: stderr.rows || 24 })
+    const rows = rowsTaken(frame, columns())
 
-    stderr.write(`${SYNC_START}\r${overwrite(frame, columns())}\x1B[0J${last || frame.length < 2 ? '' : `\x1B[${frame.length - 1}A`}${last ? '' : '\r'}${SYNC_END}`)
+    stderr.write(`${SYNC_START}\r${overwrite(frame, columns())}\x1B[0J${last || rows < 2 ? '' : `\x1B[${rows - 1}A`}${last ? '' : '\r'}${SYNC_END}`)
     current = state
   }
   const redraw = () => draw(current)

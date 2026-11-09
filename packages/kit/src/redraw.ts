@@ -4,7 +4,12 @@ import { textWidth } from './format'
 export const SYNC_START = '\x1B[?2026h'
 export const SYNC_END = '\x1B[?2026l'
 
-// Lines drawn over the rows they land on, each erasing only what is left of its row, so a terminal painting mid-write never shows the frame blank. A line filling its row leaves the cursor on the last cell, which an erase after it would take, so that one erases its row first.
+// Lines drawn over the rows they land on, each erasing only what is left of its last row, so a terminal painting mid-write never shows the frame blank. A line filling its last row leaves the cursor on the last cell, which an erase after it would take, so that one erases its first row before, the rows after being written whole.
 export function overwrite(lines: readonly string[], columns: number): string {
-  return lines.map(line => textWidth(line) < columns ? `${line}\x1B[K` : `\x1B[2K${line}`).join('\n')
+  return lines.map(line => textWidth(line) % columns === 0 ? `\x1B[2K${line}` : `${line}\x1B[K`).join('\n')
+}
+
+// The terminal rows the lines take once those wider than the terminal wrap.
+export function rowsTaken(lines: readonly string[], columns: number): number {
+  return lines.reduce((rows, line) => rows + Math.max(1, Math.ceil(textWidth(line) / columns)), 0)
 }

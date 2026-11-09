@@ -91,6 +91,11 @@ describe('select', () => {
     expect(written.some(frame => frame.includes('no match'))).toBe(true)
   })
 
+  it('erases a word of the filter with Ctrl+W or Ctrl+Backspace, and all of it with Ctrl+U', async () => {
+    expect(await select('pick', CHOICES, { terminal: terminal(['the third', '\x17', '\b', 'gam\r']).fake })).toBe('c')
+    expect(await select('pick', CHOICES, { terminal: terminal(['zz', '\x15', 'beta\r']).fake })).toBe('b')
+  })
+
   it('takes a character of several bytes as one, and erases it whole', async () => {
     const choices = [{ value: 1, label: 'café', hint: '' }, { value: 2, label: 'cafe', hint: '' }]
 
@@ -292,6 +297,29 @@ describe('input', () => {
     expect(written.at(-3)).toBe('\r? name …qrstuvwxyz█')
   })
 
+  it('erases a word with Ctrl+W, Ctrl+Backspace or Alt+Backspace, and the line with Ctrl+U', async () => {
+    expect(await input('name', { terminal: terminal(['ada king lovelace', '\x17', '\b', 'byron', '\r']).fake })).toBe('ada byron')
+    expect(await input('name', { terminal: terminal(['ada king ', '\x1B\x7F', 'x', '\x15', 'ada\r']).fake })).toBe('ada')
+  })
+
+  it('climbs back the rows a question wider than the terminal wraps to, so a key redraws it in place', async () => {
+    const question = 'a question of forty characters, or more'
+    const { fake, raw, written } = terminal(['abc', '\r'], { columns: 20 })
+
+    await input(question, { terminal: fake })
+
+    expect(raw[2]).toContain('\x1B[2A')
+    expect(written.at(-3)).toBe(`\r? ${question} abc█`)
+  })
+
+  it('shows the end of what is typed in the room the wrapped question leaves on its last row', async () => {
+    const { fake, written } = terminal(['abcdefghijklmnopqrstuvwxyz', '\r'], { columns: 20 })
+
+    await input('a question of thirty chars ok', { terminal: fake })
+
+    expect(written.at(-3)).toBe('\r? a question of thirty chars ok …vwxyz█')
+  })
+
   it('answers undefined once cancelled', async () => {
     expect(await input('name', { terminal: terminal(['ada', '\x1B']).fake })).toBeUndefined()
   })
@@ -354,6 +382,15 @@ describe('a redraw', () => {
     expect(moved).toEndWith('\x1B[?2026l')
     expect(moved.indexOf('\x1B[0J')).toBeGreaterThan(moved.lastIndexOf('\n'))
     expect(moved.split('\n').every(line => line.includes('\x1B[K'))).toBe(true)
+  })
+
+  it('erases what a wrapped line leaves of its last row after it', async () => {
+    const { fake, raw } = terminal(['\r'], { columns: 16 })
+
+    await input('a question longer than one row', { terminal: fake })
+
+    expect(raw[1]).not.toContain('\x1B[2K')
+    expect(raw[1]).toContain('\x1B[K\x1B[0J')
   })
 
   it('erases a row a line fills exactly before writing it, as an erase after would take its last cell', async () => {

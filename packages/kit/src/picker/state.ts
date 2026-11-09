@@ -86,13 +86,20 @@ const KEYS: Record<string, Key> = {
   '\x03': 'cancel',
   '\x1B': 'cancel',
   '\x7F': 'erase',
-  '\b': 'erase',
+  // Ctrl+Backspace, as kitty, xterm and tmux send it, and Alt+Backspace.
+  '\b': 'word',
+  '\x1B\x7F': 'word',
   '\x15': 'clear',
   '\x17': 'word',
   '\t': 'tab',
   '\x1F': 'help',
   '\x1BOP': 'help',
   '\x1B[11~': 'help',
+}
+
+/** The text with its last word and the spaces after it erased, as Ctrl+W does. */
+export function eraseWord(text: string): string {
+  return text.replace(LAST_WORD, '')
 }
 
 /** The control keys a caller can ask for, `ctrl-a` to `ctrl-z` but those standing for tab, enter, backspace and cancel. */
@@ -278,7 +285,7 @@ export function press(state: State, key: Key): State {
     case 'help': return { ...state, help: true }
     case 'erase': return withQuery(state, [...state.query].slice(0, -1).join(''))
     case 'clear': return withQuery(state, '')
-    case 'word': return withQuery(state, state.query.replace(LAST_WORD, ''))
+    case 'word': return withQuery(state, eraseWord(state.query))
     case 'enter': return state.matches.length === 0 && state.marked.size === 0 ? state : { ...state, done: 'accept' }
     case 'tab': {
       const at = highlighted(state)
