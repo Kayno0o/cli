@@ -33,8 +33,10 @@ const OPTIONS = {
   'count': { type: 'string', short: 'n', description: 'matches expected in each file (default 1)' },
   'all': { type: 'boolean', short: 'a', description: 'replace every match, expecting at least one in each file' },
   'skip-missing': { type: 'boolean', description: 'with --all, leave a file where no pair matches alone and list it, instead of failing; the counts still hold for the files that match' },
-  'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1, ${1}, $<name> and ${name}' }, // eslint-disable-line no-template-curly-in-string
-  'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?} applied in order: inline when it starts with [, else a file or - for stdin' },
+  'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1, ${1}, $<name> and ${name}, and a \n or \t in it is a newline or a tab' }, // eslint-disable-line no-template-curly-in-string
+  'ignore-case': { type: 'boolean', short: 'i', description: 'with --regex, match without regard to case' },
+  'dotall': { type: 'boolean', short: 's', description: 'with --regex, let . match a newline too' },
+  'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?, ignoreCase?, dotAll?} applied in order: inline when it starts with [, else a file or - for stdin' },
   'diff': { type: 'boolean', short: 'd', description: 'print each file\'s unified diff' },
   'dry-run': { type: 'boolean', description: 'show what would change without writing' },
   'quiet': { type: 'boolean', short: 'q', description: 'print nothing on success, the diff aside' },
@@ -45,9 +47,11 @@ interface Defaults {
   count: number | undefined
   all: boolean
   regex: boolean
+  ignoreCase: boolean
+  dotAll: boolean
 }
 
-const PAIR_KEYS = ['from', 'to', 'count', 'all', 'regex']
+const PAIR_KEYS = ['from', 'to', 'count', 'all', 'regex', 'ignoreCase', 'dotAll']
 
 function checkPattern(pair: Pair, label: string) {
   if (pair.from === '')
@@ -57,7 +61,7 @@ function checkPattern(pair: Pair, label: string) {
     return
 
   try {
-    compile(pair.from)
+    compile(pair.from, pair)
   }
   catch (error) {
     fail(`${label}--from is no valid regular expression: ${error instanceof Error ? error.message : String(error)}`)
@@ -70,7 +74,7 @@ function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   if (typeof item !== 'object' || item === null || Array.isArray(item))
     fail(`${label}give an object {from, to}`)
 
-  const { from, to, count, all, regex, ...rest } = item as Record<string, unknown>
+  const { from, to, count, all, regex, ignoreCase, dotAll, ...rest } = item as Record<string, unknown>
   const unknown = Object.keys(rest)
 
   if (unknown.length > 0)
@@ -82,10 +86,13 @@ function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   if (count !== undefined && (typeof count !== 'number' || !Number.isInteger(count) || count < 1))
     fail(`${label}count takes a whole number from 1`)
 
-  if ((all !== undefined && typeof all !== 'boolean') || (regex !== undefined && typeof regex !== 'boolean'))
-    fail(`${label}all and regex take true or false`)
+  if ([all, regex, ignoreCase, dotAll].some(flag => flag !== undefined && typeof flag !== 'boolean'))
+    fail(`${label}all, regex, ignoreCase and dotAll take true or false`)
 
-  const pair: Pair = { from, to, count: count ?? defaults.count ?? 1, all: all ?? defaults.all, regex: regex ?? defaults.regex }
+  const pair: Pair = { from, to, count: count ?? defaults.count ?? 1, all: all ?? defaults.all, regex: regex ?? defaults.regex, ignoreCase: ignoreCase ?? defaults.ignoreCase, dotAll: dotAll ?? defaults.dotAll }
+
+  if ((pair.ignoreCase === true || pair.dotAll === true) && pair.regex !== true)
+    fail(`${label}ignoreCase and dotAll need regex`)
 
   checkPattern(pair, label)
 
@@ -233,7 +240,7 @@ async function plan(values: { from?: string, to?: string, pairs?: string }, file
       if (values.from === undefined || values.to === undefined)
         fail(`give --from and --to (--to '' deletes), or --pairs\n\n${USAGE}`)
 
-      pairs = [{ from: values.from, to: values.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex }]
+      pairs = [{ from: values.from, to: values.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex, ignoreCase: defaults.ignoreCase, dotAll: defaults.dotAll }]
       checkPattern(pairs[0] as Pair, '')
     }
 
@@ -249,7 +256,7 @@ async function plan(values: { from?: string, to?: string, pairs?: string }, file
     fail(`blocks: ${blocks}`)
 
   for (const [i, block] of blocks.entries()) {
-    const pair: Pair = { from: block.from, to: block.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex }
+    const pair: Pair = { from: block.from, to: block.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex, ignoreCase: defaults.ignoreCase, dotAll: defaults.dotAll }
     const named = block.file === undefined ? undefined : normalize(block.file)
     const targets = named === undefined ? files : [spellings.get(canonical(named)) ?? named]
 
@@ -285,7 +292,10 @@ async function main(argv: string[]): Promise<number> {
   if (values['skip-missing'] === true && values.all !== true)
     fail('--skip-missing needs --all')
 
-  const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true, regex: values.regex === true }
+  if ((values['ignore-case'] === true || values.dotall === true) && values.regex !== true)
+    fail('--ignore-case and --dotall need --regex')
+
+  const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true, regex: values.regex === true, ignoreCase: values['ignore-case'] === true, dotAll: values.dotall === true }
   const edits = await plan(values, files, defaults)
   const changes: { path: string, before: string, after: string, lines: number[], diff?: Diff }[] = []
   const problems: { path: string, problem: string }[] = []

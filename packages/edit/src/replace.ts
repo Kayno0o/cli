@@ -7,6 +7,9 @@ export interface Pair {
   count?: number
   all?: boolean
   regex?: boolean
+  // Regex flags: case-insensitive, and the dot matching a newline.
+  ignoreCase?: boolean
+  dotAll?: boolean
 }
 
 export interface Applied {
@@ -22,6 +25,8 @@ const CRLF = /\r?\n/g
 // A ${1} or ${name} reference in a regex --to, an escaped $$ matched first so it stays literal.
 const BRACED_GROUP = /\$\$|\$\{(\w+)\}/g
 const DIGITS = /^\d+$/
+// A \n or \t typed in a regex --to, an escaped backslash matched first so \\n stays literal.
+const ESCAPE = /\\\\|\\([nt])/g
 const LONGEST_LIST = 8
 
 function linesOf(text: string, indexes: number[]): number[] {
@@ -68,8 +73,12 @@ function firstLineHint(text: string, from: string): string {
   return lines.length === 0 ? '' : ` (its first line is on ${plural('line', lines.length)} ${listLines(lines)})`
 }
 
-export function compile(source: string): RegExp {
-  return new RegExp(source, 'gm')
+export function compile(source: string, { ignoreCase, dotAll }: Pick<Pair, 'ignoreCase' | 'dotAll'> = {}): RegExp {
+  return new RegExp(source, `gm${ignoreCase === true ? 'i' : ''}${dotAll === true ? 's' : ''}`)
+}
+
+function escapes(to: string): string {
+  return to.replace(ESCAPE, (whole, letter: string | undefined) => letter === undefined ? whole : letter === 'n' ? '\n' : '\t')
 }
 
 // String.replace leaves ${1} and ${name} as they are, so they become $01 and $<name>: the two-digit form keeps digits typed after the group out of its number; ${0} is the whole match.
@@ -97,8 +106,9 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
     const label = pairs.length > 1 ? `pair ${i + 1}: ` : ''
     // A file with CRLF endings still matches a --from typed with plain newlines.
     const from = crlf && pair.regex !== true ? pair.from.replace(CRLF, '\r\n') : pair.from
-    const to = crlf ? pair.to.replace(CRLF, '\r\n') : pair.to
-    const pattern = pair.regex === true ? compile(from) : undefined
+    const typed = pair.regex === true ? escapes(pair.to) : pair.to
+    const to = crlf ? typed.replace(CRLF, '\r\n') : typed
+    const pattern = pair.regex === true ? compile(from, pair) : undefined
     const indexes = pattern === undefined ? literalIndexes(text, from) : [...text.matchAll(pattern)].map(match => match.index)
     const found = linesOf(text, indexes)
 

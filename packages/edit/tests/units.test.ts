@@ -71,6 +71,15 @@ describe('applyPairs', () => {
     expect(applyPairs('a\r\nb\r\n', [{ from: 'a\nb', to: 'c\nd' }]).text).toBe('c\r\nd\r\n')
   })
 
+  test('regex flags: case-insensitive and dot matching a newline, \\n and \\t in --to', () => {
+    expect(applyPairs('Foo\nfoo', [{ from: 'foo', to: 'x', regex: true, all: true, ignoreCase: true }]).text).toBe('x\nx')
+    expect(applyPairs('Foo\nfoo', [{ from: 'foo', to: 'x', regex: true, all: true }]).text).toBe('Foo\nx')
+    expect(applyPairs('a\nb', [{ from: 'a.b', to: 'x', regex: true }]).problems).toHaveLength(1)
+    expect(applyPairs('a\nb', [{ from: 'a.b', to: 'x', regex: true, dotAll: true }]).text).toBe('x')
+    expect(applyPairs('a,b', [{ from: ',', to: '\\n\\t\\\\n', regex: true }]).text).toBe('a\n\t\\\\nb')
+    expect(applyPairs('a,b', [{ from: ',', to: '\\n', regex: false }]).text).toBe('a\\nb')
+  })
+
   test('a plain newline in a regex --to keeps CRLF too', () => {
     expect(applyPairs('a\r\nb\r\n', [{ from: '^a', to: 'x\ny', regex: true }]).text).toBe('x\r\ny\r\nb\r\n')
   })

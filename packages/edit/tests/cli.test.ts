@@ -51,6 +51,18 @@ describe('sub', () => {
     expect(sub(['--from', 'nothing', '--to', 'x', '--all', 'a.ts', 'b.ts']).code).toBe(1)
   })
 
+  test('--ignore-case and --dotall need --regex, and a pair takes ignoreCase and dotAll', () => {
+    file('a.ts', 'Foo\nbar\n')
+
+    expect(sub(['--from', 'foo', '--to', 'x', '--ignore-case', 'a.ts']).code).toBe(2)
+    expect(sub(['--regex', '--ignore-case', '--dotall', '--from', 'foo.bar', '--to', 'x', 'a.ts']).code).toBe(0)
+    expect(read('a.ts')).toBe('x\n')
+
+    file('b.ts', 'Foo\n')
+    expect(sub(['--pairs', '[{"from":"foo","to":"y","regex":true,"ignoreCase":true}]', 'b.ts']).code).toBe(0)
+    expect(read('b.ts')).toBe('y\n')
+  })
+
   test('replaces one literal match and reports its line and diff stat', () => {
     file('a.ts', 'const a = 1\nconst b = a.b(1)\n')
     const result = sub(['--from', 'a.b(1)', '--to', 'a.c(2)', 'a.ts'])
