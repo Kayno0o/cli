@@ -19,7 +19,14 @@ describe('hashHex', () => {
 describe('hashStream', () => {
   test('hashes the chunks one after the other like the whole input', async () => {
     const chunks = ['a', 'b', 'c'].map(text => new TextEncoder().encode(text))
-    const stream = new ReadableStream<Uint8Array>({ start(controller) { chunks.forEach(chunk => controller.enqueue(chunk)); controller.close() } })
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks)
+          controller.enqueue(chunk)
+
+        controller.close()
+      },
+    })
 
     expect(await hashStream('sha256', stream)).toEqual({ digest: hashHex('sha256', new TextEncoder().encode('abc')), bytes: 3 })
   })

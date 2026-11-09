@@ -50,7 +50,7 @@ const PYTEST_EXCEPTION_END = /[\s:]/
 const PYTEST_NOISE = /^(?:platform |rootdir: |collected |plugins: |configfile: |cachedir: |\S+\.pyi? [.FEsxXR]+ +\[ *\d+%\]$|\S+\.py:\d+: $)/
 // The `file:line[:col]: error|warning|note: message` line gcc, clang, mypy, `shellcheck -f gcc` and golangci-lint print, as editors' problem matchers read it.
 const GENERIC_LINE = /^(\S[^:]*):(\d+)(?::(\d+))?: (?:fatal )?(error|warning|note): (.*)$/
-const GENERIC_RULE = /^(.*\S)\s+(?:\[([\w-]+)\]|\(([a-z][\w-]*)\))$/
+const GENERIC_RULE = /\s(?:\[([\w-]+)\]|\(([a-z][\w-]*)\))$/
 const NOISE = /^(?:bun test v|Errors {2}Files$|Ran \d+ tests?|note: |\s*\d+ expect\(\) calls|\s+\d+\s+\S+:\d+$|\s*\d+ errors? and \d+ warnings? potentially fixable)/
 
 export type Collector = (lines: string[], used: Set<number>) => ToolError[]
@@ -352,10 +352,11 @@ const collectGeneric: Collector = (lines, used) => {
     if (match[4] === 'note')
       continue
 
-    const ruled = GENERIC_RULE.exec(match[5] ?? '')
-    const rule = ruled?.[2] ?? ruled?.[3]
+    const text = match[5] ?? ''
+    const ruled = GENERIC_RULE.exec(text)
+    const rule = ruled?.[1] ?? ruled?.[2]
 
-    errors.push({ tool: 'generic', file: match[1] ?? '', line: Number(match[2]), column: Number(match[3] ?? 0), rule, severity: match[4] === 'warning' ? 'warning' : 'error', message: rule === undefined ? match[5] ?? '' : ruled?.[1] ?? '' })
+    errors.push({ tool: 'generic', file: match[1] ?? '', line: Number(match[2]), column: Number(match[3] ?? 0), rule, severity: match[4] === 'warning' ? 'warning' : 'error', message: ruled === null ? text : text.slice(0, ruled.index).trimEnd() })
   }
 
   return errors

@@ -9,6 +9,7 @@ import { sizeOf } from './size'
 export const FOLDER_NAMES = new Set(['node_modules', '.nuxt', '.next', '.output', 'dist', 'build', '.turbo', '.svelte-kit', 'target', 'vendor', '.venv', '__pycache__', '.gradle'])
 // Folders whose name alone is too common: removable only beside one of these files.
 const NEEDS_BESIDE: Record<string, string[]> = { target: ['Cargo.toml'], vendor: ['composer.json', 'composer.lock'] }
+
 export const MAX_DEPTH = 3
 export const PROJECT_CACHE_NAMES = new Set(['.turbo', '.nuxt', '.next', '.svelte-kit', '__pycache__', '.gradle'])
 // Exact paths under HOME, the only places outside the root that sweep reads or deletes.

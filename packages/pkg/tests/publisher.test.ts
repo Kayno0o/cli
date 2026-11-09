@@ -4,8 +4,8 @@ import { analyze } from '../src/analyze'
 
 const OLD = '2020-01-01T00:00:00.000Z'
 
-function packument(versions: Packument['versions']): Packument {
-  const names = Object.keys(versions ?? {})
+function packument(versions: NonNullable<Packument['versions']>): Packument {
+  const names = Object.keys(versions)
 
   return { 'name': 'demo', 'dist-tags': { latest: names.at(-1)! }, 'time': Object.fromEntries(names.map(name => [name, OLD])), versions }
 }

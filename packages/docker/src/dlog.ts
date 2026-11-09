@@ -135,10 +135,7 @@ function matcherOf(level: keyof typeof LEVELS, grep: string | undefined): RegExp
 export function windowOf(log: string, limit: number = TAIL): { full: boolean, from: string | undefined } {
   const lines = log.split('\n').filter(text => text.trim() !== '')
 
-  if (lines.length < limit)
-    return { full: false, from: undefined }
-
-  return { full: true, from: lines[0]?.match(TIMESTAMP)?.[0] }
+  return lines.length < limit ? { full: false, from: undefined } : { full: true, from: lines[0]?.match(TIMESTAMP)?.[0] }
 }
 
 async function read(service: Service, since: string): Promise<{ log: string, container: Container | undefined, unreadable: string | undefined }> {
