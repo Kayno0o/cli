@@ -3,6 +3,7 @@ import { helpText, parse } from '../src/args'
 import { bar } from '../src/chart'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
+import { usageLine } from '../src/help'
 import { badge, fileLink, header, hyperlink, link, marked, paint, printHeader, role, section, statusOf } from '../src/style'
 import { capture } from '../src/test'
 import { stripAnsi } from '../src/text'
@@ -36,6 +37,13 @@ describe('helpText', () => {
     expect(coloured).toContain('\x1B[1mUsage:\x1B[22m')
     expect(coloured).toContain('\x1B[36m--loud\x1B[39m')
     expect(stripAnsi(coloured)).toBe('Usage: demo greet [options]\n\nOptions:\n  -n, --times <value>  how many\n      --loud           shout')
+  })
+
+  it('leaves the escape codes of a coloured part alone when dimming the optional ones', () => {
+    const colors = paint(TERMINAL, {})
+    const line = usageLine(`ft ${colors.cyan('<command>')} [options]`, colors)
+
+    expect(line).toBe(`\x1B[1mUsage:\x1B[22m ft \x1B[36m<command>\x1B[39m \x1B[2m[options]\x1B[22m`)
   })
 
   it('names a bad option in a short message, the help left to --help', () => {

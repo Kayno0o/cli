@@ -4,7 +4,8 @@ import { outputMode } from './mode'
 import { paint } from './style'
 
 // Optional parts of a usage line, `[options]` or `[tag]`, dimmed in the help.
-const OPTIONAL = /\[[^\]]+\]/g
+// eslint-disable-next-line no-control-regex -- an escape code's bracket is what it skips
+const OPTIONAL = /(?<!\x1B)\[[^\]]+\]/g
 const USAGE_PREFIX = /^usage:\s*/i
 const FULL_STOP = /\.$/
 
