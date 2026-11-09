@@ -263,6 +263,8 @@ export interface Run {
   output: string
   // False when the command could not be started.
   started: boolean
+  // True when it was killed for running past its timeout.
+  timedOut?: boolean
 }
 
 // One argument holding spaces is a shell line, `base -- 'bun test a | tail'`.
@@ -272,8 +274,10 @@ export function shellCommand(given: string[]): string[] {
   return given.length === 1 && only !== undefined && WHITESPACE.test(only) ? ['sh', '-c', only] : given
 }
 
+const TIMEOUT_DRAIN_MS = 500
+
 // Runs the command in a folder, inheriting the terminal or capturing both streams, the held signals passed on to it.
-export async function runIn(dir: string, command: string[], signals: HeldSignals, capture = false): Promise<Run> {
+export async function runIn(dir: string, command: string[], signals: HeldSignals, capture = false, timeoutMs?: number): Promise<Run> {
   if (signals.signal !== undefined)
     return { code: exitCodeOf(null, signals.signal), output: '', started: true }
 
@@ -289,13 +293,22 @@ export async function runIn(dir: string, command: string[], signals: HeldSignals
   signals.forward(child)
 
   const chunks: Uint8Array[] = []
-
-  if (capture)
-    await Promise.all([collect(child.stdout as ReadableStream<Uint8Array>, chunks), collect(child.stderr as ReadableStream<Uint8Array>, chunks)])
+  let timedOut = false
+  const timer = timeoutMs === undefined
+    ? undefined
+    : setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+    }, timeoutMs)
+  const collected = capture ? Promise.all([collect(child.stdout as ReadableStream<Uint8Array>, chunks), collect(child.stderr as ReadableStream<Uint8Array>, chunks)]) : Promise.resolve([])
 
   await child.exited
+  clearTimeout(timer)
 
-  return { code: exitCodeOf(child.exitCode, child.signalCode ?? null), output: Buffer.concat(chunks).toString(), started: true }
+  // A grandchild the kill missed may hold the pipes open, so a timed out run waits a moment for the output, not for it to end.
+  await (timedOut ? Promise.race([collected, Bun.sleep(TIMEOUT_DRAIN_MS)]) : collected)
+
+  return { code: exitCodeOf(child.exitCode, child.signalCode ?? null), output: Buffer.concat(chunks).toString(), started: true, ...timedOut ? { timedOut } : {} }
 }
 
 // Keeps the chunks of both streams in the order they arrive.

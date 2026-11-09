@@ -106,6 +106,21 @@ describe('proof', () => {
     expect(proof(['--', 'sh', '-c', 'kill -9 $$']).err).toContain('did not run properly')
   })
 
+  test('exit 125 is no test result either', () => {
+    expect(proof(['--', 'sh', '-c', 'exit 125']).err).toContain('did not run properly')
+  })
+
+  test('--timeout kills a hung run and says so: exit 2', () => {
+    const started = Date.now()
+    const result = proof(['--timeout', '1s', '--', 'sh', '-c', 'echo before; sleep 30'])
+
+    expect(result.code).toBe(2)
+    expect(result.err).toContain('ran past --timeout 1s')
+    expect(result.err).toContain('before')
+    expect(Date.now() - started).toBeLessThan(15_000)
+    expect(proof(['--timeout', 'soon', '--', 'true']).code).toBe(2)
+  })
+
   test('folds a long output of the failing side', () => {
     file('a.txt', 'fixed\n')
     const result = proof(['--', 'sh', '-c', 'grep -q fixed a.txt || { seq 1 500; exit 1; }'])

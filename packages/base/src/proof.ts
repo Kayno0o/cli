@@ -1,24 +1,25 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Run } from './worktree'
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, wholeNumber } from '@kaynooo/cli-kit'
 import { checkout, defaultProofRef, folded, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
-const USAGE = 'proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with the default branch of origin (origin/main unless origin/HEAD names another) when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass.'
+const USAGE = 'proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with the default branch of origin (origin/main unless origin/HEAD names another) when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass. --timeout kills a run that lasts longer (a hung test), which says nothing about the change and ends with exit 2.'
 
-const EXITS: ExitRow[] = [[0, 'the command fails before and passes in every run now'], [1, 'it passes before too, fails in any run now, or passes before and fails now'], [2, 'a usage error, an unknown ref, a command that cannot start or ends with exit 126, 127 or a signal'], [130, 'interrupted (128 plus the signal)']]
+const EXITS: ExitRow[] = [[0, 'the command fails before and passes in every run now'], [1, 'it passes before too, fails in any run now, or passes before and fails now'], [2, 'a usage error, an unknown ref, a command that cannot start, ends with exit 125, 126, 127 or a signal, or runs past --timeout'], [130, 'interrupted (128 plus the signal)']]
 
 const OPTIONS = {
   'ref': { type: 'string', short: 'r', description: 'the commit to run before at (default: the merge base with the default branch of origin on a branch ahead of it, else HEAD)' },
   'runs': { type: 'string', short: 'n', description: 'run the command this many times now, every run must pass (1)' },
   'keep': { type: 'string', short: 'k', multiple: true, description: 'a working-tree file or folder copied over to the ref, such as the new test, repeatable' },
+  'timeout': { type: 'string', short: 't', description: 'kill each run lasting longer than this (30s, 5m, 1h), a result of neither side' },
   'no-link': { type: 'boolean', description: 'do not link the ignored env files, node_modules, vendor and .venv of the checkout' },
   'json': jsonOption('{outcome, proved, ref, sha, before: {code, output}, now: {code, output}}'),
 } as const
 
-// A shell's "not executable", "not found" and killed-by-signal codes say the command did not run, which no test result does.
+// A shell's "not executable", "not found" and killed-by-signal codes say the command did not run, which no test result does; 125 is what git bisect run calls "cannot test".
 function abnormal(code: number): boolean {
-  return code === 126 || code === 127 || (code > 128 && code < 160)
+  return code === 125 || code === 126 || code === 127 || (code > 128 && code < 160)
 }
 
 type Outcome = 'proved' | 'passes-before' | 'fails-both' | 'regressed' | 'flaky'
@@ -69,16 +70,17 @@ export async function proof(argv: string[]): Promise<number> {
   const ref = parsed.values.ref ?? await defaultProofRef(root)
   const sha = await resolveRef(root, ref)
   const kept = keptPaths(root, cwd, parsed.values.keep ?? [])
+  const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
 
   const signals = holdSignals()
   let before: Run
   const nowRuns: Run[] = []
 
   try {
-    before = await inWorktree({ root, prefix, sha, ref, kept, link: parsed.values['no-link'] !== true, signals }, async (runDir, held) => runIn(runDir, command, held, true))
+    before = await inWorktree({ root, prefix, sha, ref, kept, link: parsed.values['no-link'] !== true, signals }, async (runDir, held) => runIn(runDir, command, held, true, timeoutMs))
 
     for (let i = 0; i < runs && signals.signal === undefined; i++)
-      nowRuns.push(await runIn(cwd, command, signals, true))
+      nowRuns.push(await runIn(cwd, command, signals, true, timeoutMs))
   }
   finally {
     signals.release()
@@ -90,6 +92,9 @@ export async function proof(argv: string[]): Promise<number> {
   for (const [run, where] of [[before, `at ${sha.slice(0, 7)}`], ...nowRuns.map((each, i) => [each, runs > 1 ? `now (run ${i + 1})` : 'now'] as const)] as const) {
     if (!run.started)
       fail(run.output)
+
+    if (run.timedOut === true)
+      fail(`the command ran past --timeout ${parsed.values.timeout} ${where} and was killed, which says nothing about the change${run.output.trim() === '' ? '' : `\n\n${folded(run.output)}`}`)
 
     if (abnormal(run.code))
       fail(`the command did not run properly ${where}: exit ${run.code}, a missing command or a kill, not a test result${run.output.trim() === '' ? '' : `\n\n${folded(run.output)}`}`)

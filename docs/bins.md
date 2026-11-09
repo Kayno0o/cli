@@ -517,7 +517,7 @@ runs the command at HEAD or another ref in a temporary worktree, then in the wor
 Instead of: running a test, stashing the change and running it again
 
 ```sh
-proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--no-link] [--json] -- <command> [args...]
+proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]
 proof --keep tests/fix.test.ts -- bun test tests/fix.test.ts  # the new test fails at HEAD and passes now
 proof --ref v1.2.0 --keep tests/fix.test.ts -- bun test tests/fix.test.ts  # the same against a release
 ```
