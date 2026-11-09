@@ -612,7 +612,7 @@ sub --regex --from "v(\d+)" --to "v$1.0" --dry-run --diff README.md  # the diff,
 
 ## sweep
 
-lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, 3 levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind. Package `workspace`.
+lists the regenerable folders (node_modules, .output, dist, build, .venv, target beside a Cargo.toml, vendor beside a composer.json or composer.lock), the caches (.nuxt, .next, .turbo, .svelte-kit, __pycache__, .gradle and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, 3 levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind. Package `workspace`.
 
 Instead of: find ~/Workspace -name node_modules, du -sh and rm -rf by hand
 

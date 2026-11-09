@@ -11,7 +11,7 @@ import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
 const LARGE = 100 * 1024 ** 2
 const BIG = 1024 ** 3
 
-const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, target beside a Cargo.toml), the caches (.nuxt, .next, .turbo, .svelte-kit and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
+const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, .venv, target beside a Cargo.toml, vendor beside a composer.json or composer.lock), the caches (.nuxt, .next, .turbo, .svelte-kit, __pycache__, .gradle and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
 
 Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. With --docker the Docker usage comes after the list, left to dclean.`
 const EXITS: ExitRow[] = [[0, 'it listed, or removed every entry it was allowed to'], [1, 'a removal failed or the confirm was declined'], [2, 'a usage error, a missing root, or --apply off a terminal without --yes']]
@@ -23,7 +23,7 @@ const OPTIONS = {
   yes: { type: 'boolean', short: 'y', description: 'with --apply, skip the confirm' },
   older: { type: 'string', description: 'only the entries whose repo last committed longer ago than this (30d, 12h)' },
   min: { type: 'string', description: 'only the entries of at least this size (500K, 10M, 1G)' },
-  only: { type: 'string', description: 'worktrees, folders or caches: leave the other kinds out (.nuxt, .next, .turbo and .svelte-kit are caches; the global caches are listed with no root or with caches)' },
+  only: { type: 'string', description: 'worktrees, folders or caches: leave the other kinds out (.nuxt, .next, .turbo, .svelte-kit, __pycache__ and .gradle are caches; the global caches are listed with no root or with caches)' },
   docker: { type: 'boolean', description: 'add the docker system df output, which alone takes about ten seconds' },
   json: jsonOption('{root, entries: [{path, kind (folder, worktree or cache), bytes, committedAt, action (remove or keep), reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
 } as const

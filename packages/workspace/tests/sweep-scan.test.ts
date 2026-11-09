@@ -37,6 +37,20 @@ describe('findCandidates', () => {
     expect(found.candidates.find(candidate => candidate.path.endsWith('node_modules/.cache'))).toMatchObject({ kind: 'cache', inside: join(root, 'app', 'node_modules') })
   })
 
+  test('vendor needs a composer file beside it, and .venv, __pycache__ and .gradle are found anywhere', async () => {
+    const root = temp('scan-')
+
+    for (const folder of ['php/vendor', 'go/vendor', 'py/.venv', 'py/__pycache__', 'jvm/.gradle'])
+      mkdirSync(join(root, folder), { recursive: true })
+
+    writeFileSync(join(root, 'php', 'composer.lock'), '')
+
+    const found = await findCandidates(root, join(root, 'nohome'), false)
+
+    expect(paths(found, root)).toEqual(['jvm/.gradle', 'php/vendor', 'py/.venv', 'py/__pycache__'])
+    expect(found.candidates.find(candidate => candidate.path.endsWith('__pycache__'))?.kind).toBe('cache')
+  })
+
   test('a target folder needs a Cargo.toml beside it', async () => {
     const root = temp('scan-')
 

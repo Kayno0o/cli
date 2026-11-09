@@ -6,9 +6,11 @@ import { basename, dirname, join } from 'node:path'
 import { pool, runTool } from '@kaynooo/cli-kit'
 import { sizeOf } from './size'
 
-export const FOLDER_NAMES = new Set(['node_modules', '.nuxt', '.next', '.output', 'dist', 'build', '.turbo', '.svelte-kit', 'target'])
+export const FOLDER_NAMES = new Set(['node_modules', '.nuxt', '.next', '.output', 'dist', 'build', '.turbo', '.svelte-kit', 'target', 'vendor', '.venv', '__pycache__', '.gradle'])
+// Folders whose name alone is too common: removable only beside one of these files.
+const NEEDS_BESIDE: Record<string, string[]> = { target: ['Cargo.toml'], vendor: ['composer.json', 'composer.lock'] }
 export const MAX_DEPTH = 3
-export const PROJECT_CACHE_NAMES = new Set(['.turbo', '.nuxt', '.next', '.svelte-kit'])
+export const PROJECT_CACHE_NAMES = new Set(['.turbo', '.nuxt', '.next', '.svelte-kit', '__pycache__', '.gradle'])
 // Exact paths under HOME, the only places outside the root that sweep reads or deletes.
 export const GLOBAL_CACHES = ['.bun/install/cache', '.npm/_cacache', '.cache/pip', '.cache/uv', '.cache/ms-playwright', '.cache/puppeteer', '.cache/go-build', '.cache/typescript', '.cargo/registry']
 
@@ -102,7 +104,7 @@ export async function findCandidates(root: string, home = homedir(), withGlobal 
         continue
       }
 
-      if (FOLDER_NAMES.has(entry.name) && (entry.name !== 'target' || existsSync(join(dir, 'Cargo.toml')))) {
+      if (FOLDER_NAMES.has(entry.name) && (NEEDS_BESIDE[entry.name]?.some(file => existsSync(join(dir, file))) ?? true)) {
         if (entry.isSymbolicLink()) {
           found.skipped.push({ path, reason: 'symlink' })
         }
