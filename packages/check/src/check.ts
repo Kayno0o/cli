@@ -174,9 +174,15 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
     if (parsed.values.parallel === true) {
       // every step's child gets the signal, where held forwards to one
       const children = new Set<Parameters<HeldSignals['forward']>[0]>()
-      const shared: HeldSignals = { get signal() { return held.signal }, forward: child => children.add(child), release: held.release }
+      const shared: HeldSignals = { get signal() {
+        return held.signal
+      }, forward: child => children.add(child), release: held.release }
 
-      held.forward({ kill: signal => [...children].forEach(child => child.kill(signal)) })
+      held.forward({ kill: (signal) => {
+        for (const child of children) {
+          child.kill(signal)
+        }
+      } })
 
       for (const run of steps.map(async step => execute(step, shared)))
         report(await run)
