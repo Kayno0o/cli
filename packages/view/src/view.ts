@@ -16,7 +16,7 @@ const DIFF_FILE = /\.(?:diff|patch)$/i
 const USAGE = `view [options] [file]: shows a markdown file, a source file or a git diff in the colours of the other @kaynooo CLIs
 
 A file, or what is piped on stdin (or - for stdin). A source file (ts, js, json, yaml, toml, py, sh, css, sql, rs, go and more) is highlighted behind line numbers, by its extension or --lang. A diff, a \`git log -p\` or a \`git show\` is recognised by its first line or a .diff or .patch name, anything else is markdown; --diff and --markdown force one. Code blocks in markdown are highlighted by their language.
-Lines wrap to the terminal width (80 when it is not a terminal) and a long output on a terminal goes through \`less -FRX\` unless --no-pager. No colour with NO_COLOR, a pipe or --plain.`
+Lines wrap to the terminal width (COLUMNS or 80 when it is not a terminal) and a long output on a terminal goes through $PAGER, or \`less -FRX\` when it is unset or less, unless --no-pager. No colour with NO_COLOR, a pipe or --plain.`
 const EXITS: ExitRow[] = [[0, 'it showed the text'], [1, 'there is nothing to show'], [2, 'a usage error or a file that is missing']]
 
 const OPTIONS = {
@@ -29,10 +29,15 @@ const OPTIONS = {
   json: jsonOption('{kind: code, diff or markdown, language, text}, the text rendered without colour'),
 } as const
 
+// $PAGER through the shell, except a bare less, which needs -R for the colours and -F to quit on a short text.
+function pagerCommand(pager = process.env.PAGER): string[] {
+  return pager === undefined || pager.trim() === '' || pager.trim() === 'less' ? ['less', '-FRX'] : ['sh', '-c', pager]
+}
+
 // The text through the pager; a missing pager or one the reader quit leaves the text printed or dropped rather than failing.
 async function page(text: string): Promise<void> {
   try {
-    const pager = Bun.spawn(['less', '-FRX'], { stdin: 'pipe', stdout: 'inherit', stderr: 'inherit' })
+    const pager = Bun.spawn(pagerCommand(), { stdin: 'pipe', stdout: 'inherit', stderr: 'inherit' })
 
     try {
       void pager.stdin.write(text)
@@ -64,7 +69,8 @@ async function main(args: string[]): Promise<number> {
   if (text.trim() === '')
     fail('nothing to show', 1)
 
-  const width = wholeNumber(values.width, 'width', process.stdout.isTTY === true ? process.stdout.columns || DEFAULT_WIDTH : DEFAULT_WIDTH, 20)
+  const columns = Number(process.env.COLUMNS)
+  const width = wholeNumber(values.width, 'width', process.stdout.isTTY === true ? process.stdout.columns || DEFAULT_WIDTH : Number.isInteger(columns) && columns >= 20 ? columns : DEFAULT_WIDTH, 20)
   const theme = themeFor(process.stdout)
   const language = values.lang === undefined ? languageOf(path) : languageOf(values.lang)
 

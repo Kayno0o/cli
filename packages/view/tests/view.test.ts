@@ -6,8 +6,9 @@ import { describe, expect, test } from 'bun:test'
 const CLI = new URL('../src/view.ts', import.meta.url).pathname
 const temp = tempDirs()
 
-function view(args: string[], stdin?: string) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+function view(args: string[], stdin?: string, env: Record<string, string> = {}) {
+  const { COLUMNS: _, ...inherited } = process.env
+  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe', env: { ...inherited, NO_COLOR: '1', ...env } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -35,6 +36,14 @@ describe('view', () => {
 
   test('wraps to --width', () => {
     expect(view(['--width', '20'], 'one two three four five six seven\n').out).toBe('one two three four\nfive six seven\n')
+  })
+
+  test('wraps to COLUMNS off a terminal', () => {
+    expect(view([], 'one two three four five six seven\n', { COLUMNS: '20' }).out).toBe('one two three four\nfive six seven\n')
+  })
+
+  test('drops an OSC 8 hyperlink rather than printing it as text', () => {
+    expect(view(['--markdown'], 'see \u001B]8;;https://x.test\u001B\\the link\u001B]8;;\u001B\\ here\n').out).toBe('see the link here\n')
   })
 
   test('exits 1 on nothing to show, 2 on a missing file or a usage error', () => {
