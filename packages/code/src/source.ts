@@ -12,9 +12,9 @@ const DECLARATION = /^(?:(?:export|default|declare|abstract|async|pub(?:\([^)]*\
 // A member of a class or an object: modifiers, the name, maybe type parameters, then its parameters.
 const MODIFIER_WORDS = String.raw`(?:public|private|protected|internal|final|open|sealed|static|async|suspend|override|readonly|abstract|get|set|pub(?:\([^)]*\))?|function|fn|def|func|fun)\s+`
 // A return type, as Java and C# put one between the modifiers and the name; only after a modifier, so `return x(` and `else y(` are no member.
-const RETURN_TYPE = String.raw`(?:(?<=\s)[\w$.]+(?:<[^>]*>)?(?:\[\])*\??\s+(?=[#\w$]+\s*(?:<[^>]*>\s*)?\())?`
-const MODIFIERS = new RegExp(String.raw`^(?:${MODIFIER_WORDS})*${RETURN_TYPE}`)
-const MEMBER = new RegExp(String.raw`^(?:${MODIFIER_WORDS})*${RETURN_TYPE}[#\w$]+\s*(?:<[^>]*>\s*)?\(`)
+const RETURN_TYPE = String.raw`(?:[\w$.]+(?:<[^>]*>)?(?:\[\])*\??\s+(?=[#\w$]+\s*(?:<[^>]*>\s*)?\())?`
+const MODIFIERS = new RegExp(String.raw`^(?:(?:${MODIFIER_WORDS})+${RETURN_TYPE})?`)
+const MEMBER = new RegExp(String.raw`^(?:(?:${MODIFIER_WORDS})+${RETURN_TYPE})?[#\w$]+\s*(?:<[^>]*>\s*)?\(`)
 // A Go method's receiver, `func (r *T) name`, and a generator's star.
 const RECEIVER = /^(?:\([^)]*\)\s*)?/
 const STAR = /^\*?\s*/
