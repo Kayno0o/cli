@@ -7,6 +7,30 @@ const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const temp = tempDirs()
 const SAMPLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
 
+// Runs dev under a pseudo-terminal, typing `typed` and Enter once `prompt` shows, answering the exit code and everything the terminal showed.
+async function onTerminal(args: string[], prompt: string, typed: string): Promise<{ code: number, screen: string }> {
+  const decoder = new TextDecoder()
+  let screen = ''
+  const proc = Bun.spawn([process.execPath, CLI, ...args], { env: { ...process.env, NO_COLOR: '1', TZ: 'UTC' }, terminal: { cols: 120, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+
+  try {
+    for (let tries = 0; !screen.includes(prompt); tries++) {
+      if (tries === 100)
+        throw new Error(`no prompt: ${screen}`)
+
+      await Bun.sleep(20)
+    }
+
+    proc.terminal?.write(`${typed}\r`)
+
+    return { code: await proc.exited, screen }
+  }
+  finally {
+    proc.kill()
+    proc.terminal?.close()
+  }
+}
+
 function dev(args: string[], stdin?: string) {
   const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: stdin === undefined ? 'ignore' : new Blob([stdin]), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1', TZ: 'UTC' } })
 
@@ -42,6 +66,19 @@ describe('dev password', () => {
     expect(await Bun.password.verify(err.trim(), out.trim().replace('$2y$', '$2b$'))).toBe(true)
   })
 
+  test('--bcrypt - reads the password from stdin, or asks for it masked on a terminal', async () => {
+    const piped = dev(['password', '--bcrypt', '-', '--no-copy'], 'hunter2\n').out.trim()
+
+    expect(await Bun.password.verify('hunter2', piped.replace('$2y$', '$2b$'))).toBe(true)
+
+    const { code, screen } = await onTerminal(['password', '--bcrypt', '-', '--no-copy'], 'the password', 'typed_pw_42')
+    const hash = (/\$2y\$10\$\S+/).exec(screen)?.[0] ?? ''
+
+    expect(code).toBe(0)
+    expect(screen).not.toContain('typed_pw_42')
+    expect(await Bun.password.verify('typed_pw_42', hash.replace('$2y$', '$2b$'))).toBe(true)
+  })
+
   test('--json', () => {
     expect(JSON.parse(dev(['password', '4', 'hex', '--no-copy', '--json']).out)).toMatchObject({ format: 'hex', bytes: 4, copied: false, password: expect.stringMatching(/^[0-9a-f]{8}$/) })
     expect(JSON.parse(dev(['password', '--bcrypt', 'x', '--no-copy', '--json']).out)).toMatchObject({ hash: expect.stringMatching(/^\$2y\$/) })
@@ -69,6 +106,14 @@ describe('dev jwt', () => {
 
     expect(json.header).toEqual({ alg: 'HS256', typ: 'JWT' })
     expect(json.claims[0]).toMatchObject({ claim: 'iat', local: '2018-01-18 02:30:22 +01:00' })
+  })
+
+  test('asks for the token masked on a terminal', async () => {
+    const { code, screen } = await onTerminal(['jwt'], 'the token', SAMPLE)
+
+    expect(code).toBe(0)
+    expect(screen).toContain('John Doe')
+    expect(screen).not.toContain(SAMPLE.split('.')[2])
   })
 
   test('exit 1 on a bad token, 2 with nothing given or a bad zone', () => {

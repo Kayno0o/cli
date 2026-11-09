@@ -4,7 +4,8 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Algorithm } from './hash'
 import type { Format } from './password'
 import process from 'node:process'
-import { badUsage, copyText, fail, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, copyText, fail, isInteractive, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
+import { input } from '@kaynooo/cli-kit/prompt'
 import { b64Decode, b64Encode } from './encode'
 import { ALGORITHMS, hashHex, hashStream } from './hash'
 import { ulid, uuidV4, uuidV7 } from './ids'
@@ -15,6 +16,9 @@ import { convert } from './ts'
 import { urlParts } from './url'
 
 const MAX_PASSWORD_BYTES = 65_536
+const TRAILING_NEWLINE = /\r?\n$/
+// What --bcrypt takes as its value: - or anything that is not another option.
+const STDIN_OR_VALUE = /^(?!-.)/
 
 const ZONE_OPTION = { type: 'string', description: 'the IANA zone of the local dates, such as Europe/Paris (default: this host\'s)' } as const
 
@@ -49,6 +53,14 @@ async function textInput(argument: string | undefined, what: string): Promise<st
   return !isStdinPiped() ? fail(`give ${what} as an argument or pipe it on stdin`, 2) : Bun.stdin.text()
 }
 
+// A secret kept out of the command line: asked for masked on a terminal, read from stdin otherwise.
+async function secretInput(what: string): Promise<string> {
+  if (isInteractive())
+    return await input(what, { mask: true }) ?? fail('cancelled', 1)
+
+  return (await textInput(undefined, what)).replace(TRAILING_NEWLINE, '')
+}
+
 async function bytesInput(argument: string | undefined, what: string): Promise<Uint8Array> {
   if (argument !== undefined)
     return new TextEncoder().encode(argument)
@@ -69,12 +81,12 @@ function printRows(rows: [label: string, value: string][]): void {
 
 const PASSWORD_USAGE = `dev password [length] [format] [-b|--bcrypt [password]]: a random password of <length> bytes (default ${DEFAULT_LENGTH}) as hex, base64 (default) or base64url
 
-Printed on stdout and copied to the clipboard when a tool for it (wl-copy, xclip, xsel, pbcopy) exists (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given, or of a generated one, which then prints on stderr and is the one copied. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.`
+Printed on stdout and copied to the clipboard when a tool for it (wl-copy, xclip, xsel, pbcopy) exists (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given (- asks for it masked on a terminal, or reads it from stdin, keeping it out of the shell history), or of a generated one, which then prints on stderr and is the one copied. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.`
 
 const PASSWORD_EXITS: ExitRow[] = [[0, 'it printed the password or hash'], [2, 'a usage error']]
 
 const PASSWORD_OPTIONS = {
-  'bcrypt': { type: 'string', short: 'b', optional: { bare: '' }, description: 'print the bcrypt hash of the password given, or of a generated one' },
+  'bcrypt': { type: 'string', short: 'b', optional: { bare: '', accepts: STDIN_OR_VALUE }, description: 'print the bcrypt hash of the password given, or of a generated one' },
   'no-copy': { type: 'boolean', description: 'leave the clipboard alone' },
   'json': jsonOption('{password?, hash?, format, bytes, copied}'),
 } as const
@@ -87,7 +99,7 @@ export async function password(args: string[]): Promise<number> {
     positionals: ['[length]', '[format]'],
     candidates: { '[length]': () => ['16', '24', '32', '48', '64'], '[format]': () => FORMATS.map((format): [string, string] => [format, FORMAT_NOTES[format]]) },
     replaces: 'openssl rand -base64 32 and htpasswd -bnBC 10 "" <password>',
-    examples: ['dev password', ['dev password 16 hex', '16 random bytes as 32 hex characters'], ['dev password --bcrypt hunter2', 'the hash to paste into a basic auth file']],
+    examples: ['dev password', ['dev password 16 hex', '16 random bytes as 32 hex characters'], ['dev password --bcrypt -', 'asks for a password and prints the hash to paste into a basic auth file']],
   })
   const bytes = wholeNumber(positionals[0], '<length>', DEFAULT_LENGTH)
   const format = oneOf(positionals[1] ?? 'base64', '<format>', FORMATS)
@@ -95,7 +107,8 @@ export async function password(args: string[]): Promise<number> {
   if (bytes > MAX_PASSWORD_BYTES)
     badUsage(`<length> takes at most ${MAX_PASSWORD_BYTES}, not ${bytes}`)
 
-  const given = values.bcrypt === undefined || values.bcrypt === '' ? undefined : values.bcrypt
+  const bcrypt = values.bcrypt === '' ? undefined : values.bcrypt
+  const given = bcrypt === '-' ? await secretInput('the password') : bcrypt
   const secret = given ?? generatePassword(bytes, format)
   const hash = values.bcrypt === undefined ? undefined : await bcryptHash(secret)
   const copied = values['no-copy'] === true ? false : await copyText(given === undefined ? secret : hash ?? secret)
@@ -119,7 +132,7 @@ export async function password(args: string[]): Promise<number> {
 
 const JWT_USAGE = `dev jwt [token]: the header and payload of a JWT, with iat, nbf and exp as local and UTC dates and how far from now
 
-The token is the argument or what is piped on stdin, a leading "Bearer " is ignored. The signature is not verified.`
+The token is the argument, what is piped on stdin, or asked for masked on a terminal; a leading "Bearer " is ignored. The signature is not verified.`
 
 const JWT_EXITS: ExitRow[] = [[0, 'it decoded the token'], [1, 'it is not a JWT'], [2, 'a usage error']]
 
@@ -136,7 +149,7 @@ export async function jwt(args: string[]): Promise<number> {
     examples: ['dev jwt eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3MDAwMDAwMDB9.c2ln', ['pbpaste | dev jwt --json', 'for a script']],
   })
   const zone = zoneOf(values.zone)
-  const token = await textInput(positionals[0], 'the token')
+  const token = positionals[0] ?? await secretInput('the token')
   const decoded = reading(() => decodeJwt(token))
   const claims = claimTimes(decoded.payload, Date.now(), zone)
 
