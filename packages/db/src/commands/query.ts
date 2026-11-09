@@ -1,5 +1,5 @@
 import { Exit, fail, jsonText, parse, problem, readInput } from '@kaynooo/cli-kit'
-import { connectionOptions, DEFAULT_LIMIT, EXITS, HOSTS_NOTE, outputOptions, rowLimit, WRITE_EXIT, WRITE_NOTE } from '../args'
+import { connectionOptions, DEFAULT_LIMIT, EXITS, HOSTS_NOTE, outputOptions, rowLimit, statementTimeout, WRITE_EXIT, WRITE_NOTE } from '../args'
 import { inspect } from '../guard'
 import { jsonValue, render, shape } from '../output'
 import { connectionUrl, databaseOfUrl, dialectOf, readRows, TEST_SUFFIX, writeRows } from '../run'
@@ -9,7 +9,7 @@ const usage = `db query "<sql>"
 Runs one read-only statement (the SQL as an argument, or on stdin) in a READ ONLY transaction that is rolled back, on Postgres, MySQL or MariaDB. A statement that would write is printed for you to run instead, and exits 1 without running.
 
 The SQL is tokenized the way its engine reads it and refused unless it starts with SELECT, WITH, VALUES, TABLE, SHOW, EXPLAIN, DESCRIBE or DESC and uses no INSERT, UPDATE, DELETE, MERGE, INTO, SET or FOR UPDATE anywhere (a write hidden in a CTE is caught), nor a function with side effects (nextval, setval, set_config, pg_terminate_backend, pg_sleep, dblink, sleep, load_file...). Several statements are refused (exit 2) even when each reads.
-Statements time out after 30 seconds and show at most -n rows (${DEFAULT_LIMIT}, --all for 100), a Postgres select being read through a cursor that stops one row past it. Columns named like emails, phones, tokens, secrets, passwords or hashes show *** unless --raw, and every message is scrubbed of the URL and password.
+Statements time out after 30 seconds (--timeout changes it) and show at most -n rows (${DEFAULT_LIMIT}, --all for 100), a Postgres select being read through a cursor that stops one row past it. Columns named like emails, phones, tokens, secrets, passwords or hashes show *** unless --raw, and every message is scrubbed of the URL and password.
 
 ${WRITE_NOTE}
 
@@ -72,7 +72,7 @@ export async function query(args: string[]): Promise<number> {
     if (values.json === true)
       console.log(jsonText({ database: written.database, affected: written.affected, columns: shown.columns, rows: shown.rows, truncated: shown.truncated, masked: shown.masked }, jsonValue))
     else
-      console.log(`ran on ${written.database}, ${written.affected} ${written.affected === 1 ? 'row' : 'rows'} affected${written.rows.length === 0 ? '' : `\n${render(shown, false)}`}`)
+      console.log(`ran on ${written.database}, ${written.affected} ${written.affected === 1 ? 'row' : 'rows'} affected${written.rows.length === 0 ? '' : `\n${render(shown, false, values.format)}`}`)
 
     return 0
   }
@@ -80,9 +80,9 @@ export async function query(args: string[]): Promise<number> {
   if (verdict.statements > 1)
     fail('one statement at a time')
 
-  const rows = await readRows(url, sql, [], limit)
+  const rows = await readRows(url, sql, [], limit, undefined, statementTimeout(values))
 
-  console.log(render(shape(rows, limit, values.raw === true, false), values.json === true))
+  console.log(render(shape(rows, limit, values.raw === true, false), values.json === true, values.format))
 
   return 0
 }

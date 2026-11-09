@@ -1,5 +1,5 @@
 import type { Row } from './run'
-import { jsonText, table } from '@kaynooo/cli-kit'
+import { jsonText, table, warn } from '@kaynooo/cli-kit'
 import { maskRows } from './mask'
 
 export interface Shown {
@@ -43,17 +43,30 @@ export function shape(rows: Row[], limit: number, raw: boolean, exact = true): S
   return { columns: Object.keys(rows[0] ?? {}), rows: masked, total: rows.length, omitted: Math.max(0, rows.length - limit), exact, truncated: rows.length > limit, masked: columns }
 }
 
-export function render(shown: Shown, json: boolean): string {
-  if (json)
-    return jsonText({ columns: shown.columns, rows: shown.rows, ...(shown.exact ? { total: shown.total, omitted: shown.omitted } : {}), truncated: shown.truncated, masked: shown.masked }, jsonValue)
+export type Format = 'tsv' | 'csv' | 'vertical'
 
-  if (shown.total === 0)
-    return 'no rows'
+const TSV_ESCAPES: Record<string, string> = { '\\': '\\\\', '\t': '\\t', '\n': '\\n', '\r': '\\r' }
+const TSV_SPECIALS = /[\\\t\n\r]/g
+const CSV_SPECIALS = /["\r\n,]/
 
-  const lines = [table([
-    shown.columns,
-    ...shown.rows.map(row => shown.columns.map(column => cell(row[column]))),
-  ], { cellWidth: CELL_WIDTH })]
+const tsvCell = (value: unknown) => cell(value).replace(TSV_SPECIALS, char => TSV_ESCAPES[char] ?? char)
+
+// RFC 4180: a cell holding a comma, a quote or a line break is quoted, its quotes doubled.
+function csvCell(value: unknown): string {
+  const text = cell(value)
+
+  return CSV_SPECIALS.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+}
+
+// One `column | value` block per row, as psql's \x does, names padded to the widest.
+function vertical(shown: Shown): string {
+  const width = Math.max(...shown.columns.map(column => column.length))
+
+  return shown.rows.map((row, index) => [`-[ RECORD ${index + 1} ]`, ...shown.columns.map(column => `${column.padEnd(width)} | ${cell(row[column])}`)].join('\n')).join('\n')
+}
+
+function notes(shown: Shown): string[] {
+  const lines: string[] = []
 
   if (shown.truncated && !shown.exact)
     lines.push('... more rows not shown (-n raises the cap)')
@@ -63,5 +76,34 @@ export function render(shown: Shown, json: boolean): string {
   if (shown.masked.length > 0)
     lines.push(`masked: ${shown.masked.join(', ')} (--raw shows them)`)
 
-  return lines.join('\n')
+  return lines
+}
+
+// tsv and csv are data for another tool, so their cells are whole and the notes go to stderr.
+function delimited(shown: Shown, format: 'tsv' | 'csv'): string {
+  const [separator, escape] = format === 'tsv' ? ['\t', tsvCell] as const : [',', csvCell] as const
+
+  for (const note of notes(shown))
+    warn(note)
+
+  return [shown.columns, ...shown.rows.map(row => shown.columns.map(column => row[column]))].map(line => line.map(escape).join(separator)).join('\n')
+}
+
+export function render(shown: Shown, json: boolean, format?: Format): string {
+  if (json)
+    return jsonText({ columns: shown.columns, rows: shown.rows, ...(shown.exact ? { total: shown.total, omitted: shown.omitted } : {}), truncated: shown.truncated, masked: shown.masked }, jsonValue)
+
+  if (shown.total === 0)
+    return format === 'tsv' || format === 'csv' ? '' : 'no rows'
+
+  if (format === 'tsv' || format === 'csv')
+    return delimited(shown, format)
+
+  if (format === 'vertical')
+    return [vertical(shown), ...notes(shown)].join('\n')
+
+  return [table([
+    shown.columns,
+    ...shown.rows.map(row => shown.columns.map(column => cell(row[column]))),
+  ], { cellWidth: CELL_WIDTH }), ...notes(shown)].join('\n')
 }

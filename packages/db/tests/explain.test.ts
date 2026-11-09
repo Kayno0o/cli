@@ -1,7 +1,7 @@
 import { parse } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
-import { catalogOptions, outputOptions, rowLimit } from '../src/args'
-import { explainSql } from '../src/commands/explain'
+import { catalogOptions, outputOptions, rowLimit, statementTimeout } from '../src/args'
+import { analyzePrefix, explainSql } from '../src/commands/explain'
 import { containing, describePlans } from '../src/commands/schema'
 
 describe('explainSql', () => {
@@ -54,5 +54,31 @@ describe('search and describe', () => {
     expect(scoped.foreignKeys.postgres.params).toEqual(['users', 'shop'])
     expect(scoped.indexes.mysql.params).toEqual(['users', 'shop'])
     expect(bare.foreignKeys.mysql.sql).toContain('coalesce(database()')
+  })
+})
+
+describe('explain --analyze', () => {
+  test('prefixes a plain read with the given EXPLAIN and still refuses a write', () => {
+    expect(explainSql('select 1;', 'postgres', 'EXPLAIN ANALYZE')).toBe('EXPLAIN ANALYZE select 1')
+    expect(() => explainSql('delete from users', 'postgres', 'EXPLAIN ANALYZE')).toThrow()
+    expect(() => explainSql('with d as (delete from t returning *) select * from d', 'postgres', 'EXPLAIN ANALYZE')).toThrow()
+  })
+
+  test('MySQL 8.0.18 and later, and MariaDB, can analyze; older servers are refused', () => {
+    expect(analyzePrefix('8.0.34')).toBe('EXPLAIN ANALYZE')
+    expect(analyzePrefix('8.0.18')).toBe('EXPLAIN ANALYZE')
+    expect(analyzePrefix('9.1.0')).toBe('EXPLAIN ANALYZE')
+    expect(analyzePrefix('10.11.2-MariaDB-1:10.11.2')).toBe('ANALYZE')
+    expect(() => analyzePrefix('8.0.17')).toThrow()
+    expect(() => analyzePrefix('5.7.44')).toThrow()
+  })
+})
+
+describe('--timeout', () => {
+  test('is a duration, 30s by default', () => {
+    expect(statementTimeout({})).toBe(30_000)
+    expect(statementTimeout({ timeout: '2m' })).toBe(120_000)
+    expect(statementTimeout({ timeout: '500ms' })).toBe(500)
+    expect(() => statementTimeout({ timeout: 'soon' })).toThrow()
   })
 })

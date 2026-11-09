@@ -4,7 +4,7 @@ import { isIP } from 'node:net'
 import process from 'node:process'
 import { fail, warn } from '@kaynooo/cli-kit'
 import { SQL } from 'bun'
-import { DEFAULT_ENV } from './args'
+import { DEFAULT_ENV, DEFAULT_TIMEOUT_MS } from './args'
 import { composeServices, containerService, pickService, serviceUrl } from './compose'
 import { testWriteBlockers } from './guard'
 import { scrub } from './mask'
@@ -12,7 +12,6 @@ import { loadSettings, settingsPath } from './settings'
 
 export type Row = Record<string, unknown>
 
-const STATEMENT_TIMEOUT = '30s'
 // Sent at connect, so the session is bounded (and read-only for a read) before the transaction starts.
 const SESSION_SETTINGS = { lock_timeout: '5s', idle_in_transaction_session_timeout: '60s' }
 const CURSOR = 'db_rows'
@@ -27,7 +26,8 @@ const POSTGRES_SCHEMES = new Set(['postgres:', 'postgresql:'])
 const MYSQL_SCHEMES = new Set(['mysql:', 'mysql2:', 'mariadb:'])
 // ER_PARSE_ERROR and ER_DUP_FIELDNAME: what a statement wrapped in a derived table can raise without having raised it bare.
 const WRAP_ERRNOS = new Set([1064, 1060])
-const MYSQL_TIMEOUTS = ['SET SESSION max_execution_time = 30000', 'SET SESSION max_statement_time = 30']
+// MySQL counts max_execution_time in milliseconds, MariaDB max_statement_time in seconds.
+const mysqlTimeouts = (ms: number) => [`SET SESSION max_execution_time = ${ms}`, `SET SESSION max_statement_time = ${ms / 1000}`]
 
 // A write only runs on a database whose name ends so.
 export const TEST_SUFFIX = '_test'
@@ -53,7 +53,7 @@ export interface Session {
 }
 
 // Opens a session on a server; stubbed in tests.
-export type Connect = (url: string, dialect: Dialect, readOnly: boolean) => Session
+export type Connect = (url: string, dialect: Dialect, readOnly: boolean, timeoutMs?: number) => Session
 
 // Thrown inside the transaction so that Bun rolls it back instead of committing.
 class Rollback extends Error {}
@@ -182,14 +182,14 @@ function toResult(rows: Row[] & { count?: number, affectedRows?: number }): Resu
 }
 
 // The Bun SQL client, which speaks Postgres and MySQL alike. A read session is read-only from the start: Postgres by `default_transaction_read_only` at connect and a READ ONLY transaction, MySQL by `START TRANSACTION READ ONLY` on a reserved connection.
-export const bunConnect: Connect = (url, dialect, readOnly) => {
+export const bunConnect: Connect = (url, dialect, readOnly, timeoutMs = DEFAULT_TIMEOUT_MS) => {
   const sql = new SQL({ url, max: 1, connectionTimeout: 10, ...dialect === 'postgres' ? { connection: { ...SESSION_SETTINGS, ...readOnly ? { default_transaction_read_only: 'on' } : {} } } : { allowPublicKeyRetrieval: allowsKeyRetrieval(url) } })
 
   return {
     async transaction(work, isReadOnly) {
       if (dialect === 'postgres') {
         const body = async (tx: SQL) => {
-          await tx.unsafe(`SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT}'`)
+          await tx.unsafe(`SET LOCAL statement_timeout = '${timeoutMs}ms'`)
           await work({ unsafe: async (statement, params) => toResult(await tx.unsafe<Row[]>(statement, params)) })
         }
 
@@ -202,7 +202,7 @@ export const bunConnect: Connect = (url, dialect, readOnly) => {
       const connection = await sql.reserve()
 
       try {
-        await mysqlTransaction({ unsafe: async (statement, params) => connection.unsafe<Row[]>(statement, params) }, work, isReadOnly)
+        await mysqlTransaction({ unsafe: async (statement, params) => connection.unsafe<Row[]>(statement, params) }, work, isReadOnly, timeoutMs)
       }
       finally {
         await connection.release()
@@ -215,8 +215,8 @@ export const bunConnect: Connect = (url, dialect, readOnly) => {
 }
 
 // Runs the work in a transaction on one MySQL connection: `START TRANSACTION READ ONLY` is the read-only mode itself, sent on the very connection that runs the statement.
-export async function mysqlTransaction(connection: { unsafe: (statement: string, params?: unknown[]) => Promise<Row[]> }, work: (tx: Tx) => Promise<void>, readOnly: boolean): Promise<void> {
-  for (const timeout of MYSQL_TIMEOUTS) {
+export async function mysqlTransaction(connection: { unsafe: (statement: string, params?: unknown[]) => Promise<Row[]> }, work: (tx: Tx) => Promise<void>, readOnly: boolean, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
+  for (const timeout of mysqlTimeouts(timeoutMs)) {
     try {
       await connection.unsafe(timeout)
     }
@@ -273,9 +273,9 @@ function messageOf(error: unknown, url: string): string {
 }
 
 // Runs one statement in a READ ONLY transaction that is always rolled back, with every error scrubbed of the URL. With a limit, a select is read through a cursor that stops at limit + 1 rows, enough to tell that more were left.
-export async function readRows(url: string, statement: string, params: unknown[] = [], limit?: number, connect: Connect = bunConnect): Promise<Row[]> {
+export async function readRows(url: string, statement: string, params: unknown[] = [], limit?: number, connect: Connect = bunConnect, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Row[]> {
   const dialect = dialectOf(new URL(url))
-  const session = connect(url, dialect, true)
+  const session = connect(url, dialect, true, timeoutMs)
   let rows: Row[] = []
 
   try {

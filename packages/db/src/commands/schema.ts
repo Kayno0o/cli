@@ -1,6 +1,6 @@
 import type { Dialect } from '../guard'
 import { fail, jsonText, parse } from '@kaynooo/cli-kit'
-import { catalogOptions, connectionOptions, EXITS, HOSTS_NOTE, rowLimit } from '../args'
+import { catalogOptions, connectionOptions, EXITS, HOSTS_NOTE, rowLimit, statementTimeout } from '../args'
 import { jsonValue, render, shape } from '../output'
 import { connectionUrl, dialectOf, readRows } from '../run'
 
@@ -122,9 +122,9 @@ async function show(args: string[], usage: string, work: (positionals: string[])
   const limit = rowLimit(values)
   const url = await connectionUrl(values)
   const { sql, params } = plans[dialectOf(new URL(url))]
-  const rows = await readRows(url, sql, params, limit)
+  const rows = await readRows(url, sql, params, limit, undefined, statementTimeout(values))
 
-  console.log(render(shape(rows, limit, true, false), values.json === true))
+  console.log(render(shape(rows, limit, true, false), values.json === true, values.format))
 
   return 0
 }
@@ -181,7 +181,7 @@ export async function describe(args: string[]): Promise<number> {
   const limit = rowLimit(values)
   const url = await connectionUrl(values)
   const dialect = dialectOf(new URL(url))
-  const ask = async (plan: Plans, cap?: number) => readRows(url, plan[dialect].sql, plan[dialect].params, cap)
+  const ask = async (plan: Plans, cap?: number) => readRows(url, plan[dialect].sql, plan[dialect].params, cap, undefined, statementTimeout(values))
   const columns = shape(await ask(plans.columns, limit), limit, true, false)
   const indexes = await ask(plans.indexes)
   const foreignKeys = await ask(plans.foreignKeys)
@@ -189,7 +189,7 @@ export async function describe(args: string[]): Promise<number> {
   if (values.json === true)
     console.log(jsonText({ columns: columns.columns, rows: columns.rows, truncated: columns.truncated, masked: columns.masked, indexes, foreignKeys }, jsonValue))
   else
-    console.log(`${render(columns, false)}\n\nindexes\n${render(shape(indexes, indexes.length, true), false)}\n\nforeign keys\n${render(shape(foreignKeys, foreignKeys.length, true), false)}`)
+    console.log(`${render(columns, false, values.format)}\n\nindexes\n${render(shape(indexes, indexes.length, true), false, values.format)}\n\nforeign keys\n${render(shape(foreignKeys, foreignKeys.length, true), false, values.format)}`)
 
   return 0
 }

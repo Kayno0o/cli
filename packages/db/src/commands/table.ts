@@ -1,6 +1,7 @@
 import type { Dialect } from '../guard'
+import type { Format } from '../output'
 import { fail, parse } from '@kaynooo/cli-kit'
-import { connectionOptions, EXITS, HOSTS_NOTE, outputOptions, rowLimit } from '../args'
+import { connectionOptions, EXITS, HOSTS_NOTE, outputOptions, rowLimit, statementTimeout } from '../args'
 import { inspect } from '../guard'
 import { render, shape } from '../output'
 import { connectionUrl, dialectOf, readRows } from '../run'
@@ -30,7 +31,7 @@ export function countSql(target: string, dialect: Dialect, where: string | undef
 
 const where = { type: 'string', short: 'w', description: 'only the rows matching this SQL condition' } as const
 const sampleOptions = { ...connectionOptions, ...outputOptions, where } as const
-const countOptions = { ...connectionOptions, json: outputOptions.json, where } as const
+const countOptions = { ...connectionOptions, json: outputOptions.json, format: outputOptions.format, where } as const
 
 async function run(args: string[], usage: string, options: typeof sampleOptions | typeof countOptions, build: (target: string, dialect: Dialect, values: { limit: number, where: string | undefined }) => string): Promise<number> {
   const parsed = parse(args, usage, options, { exits: EXITS })
@@ -50,7 +51,7 @@ async function run(args: string[], usage: string, options: typeof sampleOptions 
   if (verdict.reasons.length > 0 || verdict.statements > 1)
     fail(`not a plain read: ${verdict.reasons.join('; ') || 'one statement at a time'}`)
 
-  console.log(render(shape(await readRows(url, sql, [], limit), limit, (values as { raw?: boolean }).raw === true, false), values.json === true))
+  console.log(render(shape(await readRows(url, sql, [], limit, undefined, statementTimeout(values)), limit, (values as { raw?: boolean }).raw === true, false), values.json === true, (values as { format?: Format }).format))
 
   return 0
 }

@@ -385,3 +385,28 @@ describe('allowsKeyRetrieval, MySQL 8 logging in without TLS', () => {
       expect(allowsKeyRetrieval(url)).toBe(false)
   })
 })
+
+describe('the statement timeout', () => {
+  test('mysqlTransaction sets both settings from the given milliseconds', async () => {
+    const calls: string[] = []
+
+    await mysqlTransaction({ unsafe: async (statement) => {
+      calls.push(statement)
+
+      return []
+    } }, async () => Promise.resolve(), true, 2500)
+    expect(calls.slice(0, 2)).toEqual(['SET SESSION max_execution_time = 2500', 'SET SESSION max_statement_time = 2.5'])
+  })
+
+  test('readRows hands the timeout to the connection', async () => {
+    const seen: (number | undefined)[] = []
+    const { connect } = stub()
+
+    await readRows(POSTGRES_URL, 'select 1', [], undefined, (url, dialect, readOnly, timeoutMs) => {
+      seen.push(timeoutMs)
+
+      return connect(url, dialect, readOnly)
+    }, 1500)
+    expect(seen).toEqual([1500])
+  })
+})
