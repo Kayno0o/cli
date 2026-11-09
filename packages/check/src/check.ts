@@ -1,4 +1,4 @@
-import type { ExitRow } from '@kaynooo/cli-kit'
+import type { ExitRow, HeldSignals } from '@kaynooo/cli-kit'
 import type { Placement } from './compose'
 import type { Project, Step } from './steps'
 import { writeFile } from 'node:fs/promises'
@@ -13,7 +13,7 @@ import { options, pick } from './options'
 import { lastFailed, lastResults, logDirectory, outcomeJson, printOutcome, refusedStep, RESULTS_FILE, runStep } from './run'
 import { discoverProjects, STEP_NAMES } from './steps'
 
-const usage = `check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot] [--in <service> | --host] [--list]
+const usage = `check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot] [--parallel] [--in <service> | --host] [--list]
 check --fix [--only <fixers>] [--timeout <duration>] [--in <service> | --host] [--list]
 
 Runs the repo's check, typecheck, lint and test steps, from package.json scripts (through bun run), composer.json, a Justfile or a Makefile, and for PHP from phpstan.neon (typecheck), .php-cs-fixer.dist.php (lint, dry-run) and phpunit.xml.dist (test) when composer.json has no such script.
@@ -21,10 +21,11 @@ A folder without steps but with subfolders that have some (api/ and client/) run
 A step runs inside the docker compose service that bind-mounts its folder (found in compose.yml, compose.yaml or docker-compose.yml, up to the repository root), at the matching path; a service that is down is never started, the step fails naming it. --in picks the service, --host forces the host.
 A passing step is one line, a failing one shows only what failed, and each step's full output is saved to the file whose path ends its line.
 With --changed, lint and test run on the files changed against HEAD (staged, unstaged and untracked) when their script is a bare linter (keslint, eslint, oxlint) or a bare \`bun test\`: lint on the changed source files, test on the changed test files and the tests next to the changed sources. Every other step, and a test step finding no test for the diff, runs in full and the line says so.
+With --parallel, the steps run at the same time, each one's output held and printed in step order as the earlier ones finish; with --slot each step still queues for its own slot. Steps writing the same files may trip over each other.
 With --quiet, passing steps print nothing, and a fully passing run prints nothing at all: only the failing steps and the closing summary of a run that failed.
 A step still running after --timeout is ended with everything it started, but not what it started inside a container.
 With --failed, only the steps that failed in the last run of this folder run again, read from that run's folder of logs; when no last run failed, it says so and exits 2.
-With --fix, the folder's fixers and formatters run instead of the steps, exactly as the \`fix\` bin does (it is the alias of \`check --fix\`): its own scripts, php-cs-fixer, just --fmt, go fmt, cargo fmt, ruff and the Makefile's .PHONY targets, then the files the run changed are listed. --only then names fixers, as --list prints them; --changed, --failed and --slot do not apply.
+With --fix, the folder's fixers and formatters run instead of the steps, exactly as the \`fix\` bin does (it is the alias of \`check --fix\`): its own scripts, php-cs-fixer, just --fmt, go fmt, cargo fmt, ruff and the Makefile's .PHONY targets, then the files the run changed are listed. --only then names fixers, as --list prints them; --changed, --failed, --slot and --parallel do not apply.
 --json prints [{name, command, in?, ok, ms, log, failed?}] once every step ran, --list --json [{name, command, source, in?}], in the compose service the step ran in; with --fix the shape \`fix --json\` prints.`
 
 const EXITS: ExitRow[] = [[0, 'every step passed'], [1, 'one failed'], [2, 'bad usage, no step is found or a step timed out']]
@@ -97,7 +98,7 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   const settings = placeSettings(parsed.values)
 
   if (parsed.values.fix === true) {
-    for (const flag of ['changed', 'failed', 'slot'] as const) {
+    for (const flag of ['changed', 'failed', 'slot', 'parallel'] as const) {
       if (parsed.values[flag] === true)
         fail(`--${flag} does not apply to --fix`)
     }
@@ -154,20 +155,39 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
   if (heading !== '')
     console.log(heading)
 
+  const execute = async (step: (typeof steps)[number], signals: HeldSignals) => {
+    const logFile = join(directory, `${step.label.replaceAll('/', '-')}.log`)
+    const down = step.placement === undefined ? undefined : await stack.problem(step.placement)
+    const command = parsed.values.slot === true ? slotted(launch(step)) : launch(step)
+    const outcome = down === undefined ? await runStep(command, step.dir, logFile, { ...(timeoutMs === undefined ? {} : { timeoutMs }), held: signals }) : await refusedStep(down, logFile)
+
+    return { step, logFile, outcome }
+  }
+  const report = ({ step, logFile, outcome }: Awaited<ReturnType<typeof execute>>) => {
+    if (!json && !(quiet && outcome.ok))
+      printOutcome(step.label, width, `${step.command}${step.note === undefined ? '' : ` (${step.note})`}${step.placement === undefined ? '' : ` (in ${step.placement.service})`}`, logFile, outcome)
+
+    outcomes.push(outcomeJson(step.label, step.command, logFile, outcome, step.placement?.service))
+  }
+
   try {
-    for (const step of steps) {
-      const logFile = join(directory, `${step.label.replaceAll('/', '-')}.log`)
-      const down = step.placement === undefined ? undefined : await stack.problem(step.placement)
-      const command = parsed.values.slot === true ? slotted(launch(step)) : launch(step)
-      const outcome = down === undefined ? await runStep(command, step.dir, logFile, { ...(timeoutMs === undefined ? {} : { timeoutMs }), held }) : await refusedStep(down, logFile)
+    if (parsed.values.parallel === true) {
+      // every step's child gets the signal, where held forwards to one
+      const children = new Set<Parameters<HeldSignals['forward']>[0]>()
+      const shared: HeldSignals = { get signal() { return held.signal }, forward: child => children.add(child), release: held.release }
 
-      if (!json && !(quiet && outcome.ok))
-        printOutcome(step.label, width, `${step.command}${step.note === undefined ? '' : ` (${step.note})`}${step.placement === undefined ? '' : ` (in ${step.placement.service})`}`, logFile, outcome)
+      held.forward({ kill: signal => [...children].forEach(child => child.kill(signal)) })
 
-      outcomes.push(outcomeJson(step.label, step.command, logFile, outcome, step.placement?.service))
+      for (const run of steps.map(async step => execute(step, shared)))
+        report(await run)
+    }
+    else {
+      for (const step of steps) {
+        report(await execute(step, held))
 
-      if (held.signal !== undefined)
-        break
+        if (held.signal !== undefined)
+          break
+      }
     }
   }
   finally {

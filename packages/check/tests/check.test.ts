@@ -165,6 +165,21 @@ describe('check', () => {
     }
   })
 
+  test('--parallel runs the steps at once and prints them in step order', async () => {
+    const dir = temp('check-parallel-')
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { check: 'sleep 1.5; echo slow', lint: 'echo bad; exit 1', test: 'sleep 1.5; echo also slow' } }))
+
+    const started = Date.now()
+    const { result, out } = await capture(async () => check(['--parallel'], dir))
+
+    expect(Date.now() - started).toBeLessThan(2800)
+    expect(result).toBe(1)
+    expect(out.indexOf('check')).toBeLessThan(out.indexOf('FAIL  lint'))
+    expect(out.indexOf('FAIL  lint')).toBeLessThan(out.indexOf('test', out.indexOf('FAIL  lint')))
+    expect(await failure(check(['--fix', '--parallel'], dir))).toContain('--parallel does not apply to --fix')
+  })
+
   test('--only with a step the repo lacks fails with the steps found', async () => {
     expect(await failure(check(['--only', 'test,nope'], repo('make')))).toContain('no nope step here, found test')
   })

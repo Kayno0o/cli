@@ -19,6 +19,7 @@ export const options = {
   failed: { type: 'boolean', description: 'run only the steps that failed in the last run of this folder, read from the run folder' },
   changed: { type: 'boolean', short: 'c', description: 'narrow lint and test to the files changed against HEAD (a bare linter script, a bare bun test script), every other step runs in full and says so' },
   slot: { type: 'boolean', description: 'run each step through slot, queued behind the machine-wide slots of the other sessions (needs the slot bin)' },
+  parallel: { type: 'boolean', description: 'run the steps at the same time, printing each one\'s output in step order' },
 } as const
 
 const COMMA = /\s*,\s*/
