@@ -11,6 +11,9 @@ const server = Bun.serve({
     if (pathname === '/no-head' && request.method === 'HEAD')
       return new Response(null, { status: 405 })
 
+    if (pathname === '/forbidden-head' && request.method === 'HEAD')
+      return new Response(null, { status: 403 })
+
     if (pathname === '/not-implemented' && request.method === 'HEAD')
       return new Response(null, { status: 501 })
 
@@ -49,6 +52,12 @@ describe('curlHop', () => {
     expect((await curlHop(`${base}/no-head`, hop)).hop?.status).toBe(200)
     expect((await curlHop(`${base}/not-implemented`, hop)).hop?.status).toBe(200)
     expect(seen).toEqual(['HEAD', 'GET', 'HEAD', 'GET'])
+  })
+
+  test('asks again with GET when HEAD is answered with any error status', async () => {
+    seen.length = 0
+    expect((await curlHop(`${base}/forbidden-head`, hop)).hop?.status).toBe(200)
+    expect(seen).toEqual(['HEAD', 'GET'])
   })
 
   test('does not retry when GET was asked from the start', async () => {

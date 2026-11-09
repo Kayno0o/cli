@@ -92,14 +92,14 @@ async function runCurl(url: string, { http3: wantsH3, insecure, get, method, hea
   }
 }
 
-// One request, redirects not followed. A server refusing HEAD is asked again with GET, and an HTTP/3 attempt that fails is retried without it.
+// One request, redirects not followed. A server answering HEAD with an error status is asked again with GET, as many answer HEAD wrongly, and an HTTP/3 attempt that fails is retried without it.
 export async function curlHop(url: string, options: HopOptions): Promise<CurlResult> {
   let result = await runCurl(url, options)
 
   if (result.hop === undefined && options.http3)
     result = await runCurl(url, { ...options, http3: false })
 
-  if (result.hop !== undefined && !options.get && (result.hop.status === 405 || result.hop.status === 501))
+  if (result.hop !== undefined && !options.get && result.hop.status >= 400)
     result = await runCurl(url, { ...options, get: true })
 
   return result
