@@ -14,6 +14,8 @@ process.env.GLAB_CONFIG_DIR = join(config, 'glab-cli')
 process.env.GH_CONFIG_DIR = join(config, 'gh')
 // check queues its steps in slot by default: a test's runs take the slots of an empty queue, not the real ones of the sessions on this machine.
 process.env.SLOT_DIR = join(config, 'slots')
+// Nor do they hold the one check runs them in: slot hands its child SLOT_HOLDING, and a slot started under it skips the queue the tests wait on.
+delete process.env.SLOT_HOLDING
 // Every tool's state too, such as out's stats, so no test adds to the real ones.
 process.env.XDG_STATE_HOME = join(config, 'state')
 // Tests of colour pass their own streams and expect colour on them, so a NO_COLOR or FORCE_COLOR of the shell running them, `check` sets the first, is not theirs to see.
