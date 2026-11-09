@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { bins } from './bins'
 
-// The exit table of packages/kit/README.md: 0 clean, 1 a finding / nothing found / an operation that ran and failed, 2 a usage error or could not check; a bin running another command may also answer with its code (126, 127, 128 + a signal).
-const TABLE = new Set([0, 1, 2, 126, 127])
+// The exit table of packages/kit/README.md: 0 clean, 1 a finding / nothing found / an operation that ran and failed, 2 a usage error or could not check; a bin running another command may also answer with its code (125, 126, 127, 128 + a signal), 125 being git bisect run's "cannot test".
+const TABLE = new Set([0, 1, 2, 125, 126, 127])
 const STATES_EXITS = /^(?:Exits(?::| (?:0 |with ))|Exit codes:)/m
 const EXITS_TEXT = /^(?:Exits(?::| )|Exit codes: ).*(?:\n.+)*/m
 const CODE = /(?<![\w-])(\d{1,3})(?= [a-z]|,| {2})/g

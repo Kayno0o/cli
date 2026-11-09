@@ -6,7 +6,7 @@ import { checkout, defaultProofRef, folded, inWorktree, keptPaths, resolveRef, r
 
 const USAGE = 'proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with the default branch of origin (origin/main unless origin/HEAD names another) when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass. --timeout kills a run that lasts longer (a hung test), which says nothing about the change and ends with exit 2.'
 
-const EXITS: ExitRow[] = [[0, 'the command fails before and passes in every run now'], [1, 'it passes before too, fails in any run now, or passes before and fails now'], [2, 'a usage error, an unknown ref, a command that cannot start, ends with exit 125, 126, 127 or a signal, or runs past --timeout'], [130, 'interrupted (128 plus the signal)']]
+const EXITS: ExitRow[] = [[0, 'the command fails before and passes in every run now'], [1, 'it passes before too, fails in any run now, or passes before and fails now'], [2, 'a usage error, an unknown ref, a command that cannot start, ends with exit 126, 127, 125 or a signal, or runs past --timeout'], [130, 'interrupted (128 plus the signal)']]
 
 const OPTIONS = {
   'ref': { type: 'string', short: 'r', description: 'the commit to run before at (default: the merge base with the default branch of origin on a branch ahead of it, else HEAD)' },
