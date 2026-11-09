@@ -94,7 +94,7 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
     const label = pairs.length > 1 ? `pair ${i + 1}: ` : ''
     // A file with CRLF endings still matches a --from typed with plain newlines.
     const from = crlf && pair.regex !== true ? pair.from.replace(CRLF, '\r\n') : pair.from
-    const to = crlf && pair.regex !== true ? pair.to.replace(CRLF, '\r\n') : pair.to
+    const to = crlf ? pair.to.replace(CRLF, '\r\n') : pair.to
     const pattern = pair.regex === true ? compile(from) : undefined
     const indexes = pattern === undefined ? literalIndexes(text, from) : [...text.matchAll(pattern)].map(match => match.index)
     const found = linesOf(text, indexes)

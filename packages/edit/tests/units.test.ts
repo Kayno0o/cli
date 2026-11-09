@@ -70,6 +70,10 @@ describe('applyPairs', () => {
   test('a plain newline in --from matches a CRLF file and keeps CRLF', () => {
     expect(applyPairs('a\r\nb\r\n', [{ from: 'a\nb', to: 'c\nd' }]).text).toBe('c\r\nd\r\n')
   })
+
+  test('a plain newline in a regex --to keeps CRLF too', () => {
+    expect(applyPairs('a\r\nb\r\n', [{ from: '^a', to: 'x\ny', regex: true }]).text).toBe('x\r\ny\r\nb\r\n')
+  })
 })
 
 describe('listLines', () => {
