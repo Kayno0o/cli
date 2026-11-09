@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { followMasked, maskedLogs } from '../src/dx'
+import { followMasked, followOrNot, maskedLogs } from '../src/dx'
 import { logsOf } from '../src/stack'
 
 const SECRET = 'zq81vkw0pLm'
@@ -61,5 +61,14 @@ describe('logsOf', () => {
 
     expect(text).toContain('login')
     expect(text).not.toContain(SECRET)
+  })
+})
+
+describe('followOrNot', () => {
+  test('follows on a terminal and prints once elsewhere, an explicit flag winning', () => {
+    expect(followOrNot(undefined, { isTTY: true })).toBe(true)
+    expect(followOrNot(undefined, {})).toBe(false)
+    expect(followOrNot(true, {})).toBe(true)
+    expect(followOrNot(false, { isTTY: true })).toBe(false)
   })
 })

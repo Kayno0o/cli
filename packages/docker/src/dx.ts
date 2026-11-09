@@ -12,7 +12,7 @@ const usage = `dx [service] [action]
 dx -
 
 Without a terminal (a script, a pipe, an agent) \`dx\` lists the services with their state, ports and image: that listing is the form to use there, \`--json\` giving the full record. On a terminal it picks one instead: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder.
-\`dx -\` does the last action again, \`dx <service> [action]\` acts without the picker: \`shell\` (bash when the container has it), \`logs\` (follows the last ${LOGS_TAIL} lines; \`--tail N\` changes the count and \`--no-follow\` prints them once and exits, for a script), \`restart\`, \`up\`, \`stop\` or \`build\` (up with a rebuild).
+\`dx -\` does the last action again, \`dx <service> [action]\` acts without the picker: \`shell\` (bash when the container has it), \`logs\` (the last ${LOGS_TAIL} lines, followed on a terminal and printed once without one; \`--tail N\` changes the count, \`--follow\` and \`--no-follow\` force either), \`restart\`, \`up\`, \`stop\` or \`build\` (up with a rebuild).
 The services are the stack of this folder or its nearest parent, the ones of the child folders (keyed \`api/php\`), and stacks found only through their containers (keyed \`<project>:php\`).`
 
 const EXITS: ExitRow[] = [['the code of the command it ran', 'a listing, a shell, logs, restart, up, stop or build'], [0, 'it listed the services'], [1, 'no compose service here or none by that name'], [2, 'a usage error']]
@@ -20,7 +20,7 @@ const EXITS: ExitRow[] = [['the code of the command it ran', 'a listing, a shell
 const options = {
   json: jsonOption('[{ key, project, name, state, status, ports, image }]'),
   tail: { type: 'string', description: `log lines shown by the logs action (${LOGS_TAIL})` },
-  follow: { type: 'boolean', negative: 'print the logs once and exit instead of following them' },
+  follow: { type: 'boolean', negative: 'print the logs once and exit instead of following them', description: 'follow the logs, the default on a terminal' },
 } as const
 
 function serviceTable(services: Service[]): string {
@@ -93,6 +93,11 @@ export function maskedLogs(command: string[], redactPath: string | null = Bun.wh
   return ['sh', '-c', '"$@" | redact', 'sh', ...command]
 }
 
+/** Logs follow on a terminal and are printed once elsewhere, where a follow would hang a script or an agent until its timeout. */
+export function followOrNot(follow: boolean | undefined, stdout: { isTTY?: boolean } = process.stdout): boolean {
+  return follow ?? stdout.isTTY === true
+}
+
 export async function followMasked(command: string[]): Promise<number> {
   const redactor = new Redactor(await loadKnown())
   const decoder = new TextDecoder()
@@ -120,7 +125,7 @@ export async function dx(args: string[]): Promise<number> {
 
   // The protocol the tmux picker reads instead of running the command: its mode, the words typed back, and the command's words.
   const emit = flag === '--emit'
-  const parsed = parse(emit ? args.slice(1) : args, usage, options, { allowNegative: true, exits: EXITS, replaces: 'docker compose exec <service> bash, logs -f and restart typed per service', examples: ['dx', ['dx php', 'a shell in php, or php brought up when stopped'], ['dx php logs', 'follow its logs'], ['dx php logs --tail 50 --no-follow', 'the last 50 lines, then exit'], ['dx -', 'the last action again']] })
+  const parsed = parse(emit ? args.slice(1) : args, usage, options, { allowNegative: true, exits: EXITS, replaces: 'docker compose exec <service> bash, logs -f and restart typed per service', examples: ['dx', ['dx php', 'a shell in php, or php brought up when stopped'], ['dx php logs', 'follow its logs on a terminal, print them once without one'], ['dx php logs --tail 50 --no-follow', 'the last 50 lines, then exit'], ['dx -', 'the last action again']] })
   const [named, asked] = parsed.positionals
   const services = await allServices()
 
@@ -178,7 +183,7 @@ export async function dx(args: string[]): Promise<number> {
   if ((tail !== undefined || follow !== undefined) && chosen !== 'logs')
     fail('--tail and --no-follow apply to the logs action: dx <service> logs')
 
-  const command = await commandFor(service, chosen, { tail: tail === undefined ? undefined : wholeNumber(tail, 'tail', LOGS_TAIL, 0), follow })
+  const command = await commandFor(service, chosen, { tail: tail === undefined ? undefined : wholeNumber(tail, 'tail', LOGS_TAIL, 0), follow: followOrNot(follow) })
 
   record('dx', { id: key(service), args: [chosen] })
 
