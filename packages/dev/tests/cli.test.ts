@@ -154,7 +154,7 @@ describe('dev hash', () => {
 
     expect(dev(['hash', 'sha256', join(dir, 'abc.txt')]).out).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n')
     expect(dev(['hash', 'sha1'], 'abc').out).toBe('a9993e364706816aba3e25717850c26c9cd0d89d\n')
-    expect(dev(['hash', 'md5', '--json'], 'abc').out).toContain('"hash": "900150983cd24fb0d6963f7d28e17f72"')
+    expect(JSON.parse(dev(['hash', 'md5', '--json'], 'abc').out)).toMatchObject({ hash: '900150983cd24fb0d6963f7d28e17f72' })
   })
 
   test('exit 1 on a missing file, 2 on an unknown algorithm or nothing to read', () => {
