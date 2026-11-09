@@ -12,6 +12,8 @@ afterAll(() => rmSync(config, { recursive: true, force: true }))
 process.env.XDG_CONFIG_HOME = config
 process.env.GLAB_CONFIG_DIR = join(config, 'glab-cli')
 process.env.GH_CONFIG_DIR = join(config, 'gh')
+// check queues its steps in slot by default: a test's runs take the slots of an empty queue, not the real ones of the sessions on this machine.
+process.env.SLOT_DIR = join(config, 'slots')
 // Every tool's state too, such as out's stats, so no test adds to the real ones.
 process.env.XDG_STATE_HOME = join(config, 'state')
 // Tests of colour pass their own streams and expect colour on them, so a NO_COLOR or FORCE_COLOR of the shell running them, `check` sets the first, is not theirs to see.
@@ -24,8 +26,9 @@ delete process.env.CI
 delete process.env.KIT_MODE
 
 // A test that times out keeps running while the next one starts, so its `finally` can chdir back here under the next test's feet and that test's git then runs in this checkout. No git a test starts through `$` or node:child_process may push to this checkout's remotes: each push URL is rewritten to a path that does not exist, after the entries the shell already passes. Bun.spawn without an env sees none of this.
+const WHITESPACE = /\s+/
 const remotes = Bun.spawnSync(['git', '-C', new URL('..', import.meta.url).pathname, 'remote', '-v'], { stdout: 'pipe', stderr: 'ignore' }).stdout.toString()
-const pushUrls = new Set(remotes.split('\n').filter(line => line.endsWith('(push)')).map(line => line.split(/\s+/)[1] ?? '').filter(url => url !== ''))
+const pushUrls = new Set(remotes.split('\n').filter(line => line.endsWith('(push)')).map(line => line.split(WHITESPACE)[1] ?? '').filter(url => url !== ''))
 let configs = Number(process.env.GIT_CONFIG_COUNT ?? 0)
 
 for (const url of pushUrls) {
