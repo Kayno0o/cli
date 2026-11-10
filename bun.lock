@@ -11,7 +11,7 @@
     },
     "packages/arc": {
       "name": "@kaynooo/cli-arc",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "bin": {
         "arc": "./dist/cli.js",
       },
