@@ -1,0 +1,39 @@
+{
+  "name": "@kaynooo/cli-wt",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "wt: git worktrees of a compose project, each with its own stack, data and <task>.<host> subdomains beside main.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/wt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/wt"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": ["git", "worktree", "docker", "compose", "devproxy", "cli", "bun"],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "wt": "./dist/cli.js"
+  },
+  "files": ["dist", "src"],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "wt": "$npm_execpath src/cli.ts"
+  },
+  "dependencies": {
+    "@kaynooo/cli-env": "workspace:*",
+    "@kaynooo/cli-kit": "workspace:*",
+    "@kaynooo/devproxy": "0.2.0",
+    "@kaynooo/utils": "3.0.0"
+  }
+}

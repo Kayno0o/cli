@@ -553,3 +553,16 @@ ws repos
 ws sweep --older 30d  # what a month of idle repos weighs
 ws audit
 ```
+
+## wt
+
+git worktrees of a compose project, each with its own stack, data and <task>.<host> subdomains beside main. Package `wt`.
+
+Instead of: a second clone, port juggling and a shared database to try a branch
+
+```sh
+wt <command> [options]
+wt add planning  # a worktree on wt/planning with its own stack
+wt up planning  # start it
+wt rm planning  # stop and delete it, keeping its branches
+```

@@ -39,6 +39,7 @@ export const ABOUT: Record<string, string> = {
   '@kaynooo/cli-view': 'markdown, source and git diffs in the colours of the other bins',
   '@kaynooo/cli-wait': 'wait for a line, a port, a URL or a process; a machine-wide slot for heavy jobs',
   '@kaynooo/cli-workspace': 'the repositories under a root needing attention, reclaimable folders and known vulnerabilities',
+  '@kaynooo/cli-wt': 'git worktrees of a compose project, each with its own stack, data and subdomains',
 }
 
 // What a package needs on the machine besides Bun. `tea` is checked on its own, with the login.
@@ -46,4 +47,5 @@ export const NEEDS: Record<string, Need[]> = {
   '@kaynooo/cli-forgejo': [{ bin: 'tea', why: 'ft goes through it', how: 'https://gitea.com/gitea/tea/releases, or gt (gitea-cli) instead', alternative: 'gt' }],
   '@kaynooo/cli-gitlab': [{ bin: 'glab', why: 'gl goes through it', how: 'https://gitlab.com/gitlab-org/cli' }],
   '@kaynooo/cli-docker': [{ bin: 'docker', why: 'dc, dlog, dx and sf run docker compose', how: 'https://docs.docker.com/engine/install/' }],
+  '@kaynooo/cli-wt': [{ bin: 'docker', why: 'wt runs each worktree stack with docker compose', how: 'https://docs.docker.com/engine/install/' }, { bin: 'mkcert', why: 'wt makes the certificates of passthrough routes', how: 'https://github.com/FiloSottile/mkcert' }],
 }

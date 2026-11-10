@@ -1,0 +1,102 @@
+/** Brings a worktree's stack up and down: the config's `runner` commands when it has them, else compose in the worktree, the manifest's `setup` run once after the first up. */
+
+import type { Worktree } from './project'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname } from 'node:path'
+import { $ } from 'bun'
+import { composeEnv } from './compose'
+import { fillTemplate } from './config'
+import { WtError } from './project'
+import { devproxyUp, hasDevproxy } from './proxy'
+
+const LEADING_ROOT = /^[/~]+/
+const UNSAFE_IN_FILE_NAME = /[^\w.-]+/g
+
+/** The name a stack's job files go by: `booki/planning` gives `booki--planning`, as other tools name them. */
+export function slugOf(ref: string): string {
+  return ref.replace(LEADING_ROOT, '').replace(UNSAFE_IN_FILE_NAME, '--')
+}
+
+export const refOf = (worktree: Worktree) => `${worktree.project.name}/${worktree.task}`
+
+// The env is always passed: a spawn given none gets the env the process started with, missing the WT_JOBS_HELD a job sets since.
+async function spawnInherit(argv: string[], cwd: string, env: Record<string, string | undefined> = process.env): Promise<number> {
+  return Bun.spawn(argv, { cwd, env, stdio: ['inherit', 'inherit', 'inherit'] }).exited
+}
+
+/** Runs a `runner` template, failing with the command named. */
+async function runTemplate(template: string[], worktree: Worktree): Promise<void> {
+  const argv = fillTemplate(template, { project: worktree.project.name, task: worktree.task, dir: worktree.dir, id: worktree.id })
+
+  if (await spawnInherit(argv, worktree.dir) !== 0)
+    throw new WtError(`\`${argv.join(' ')}\` failed`)
+}
+
+/** The manifest's setup commands, run with sh in the worktree the first time its stack comes up; a failing one leaves them all to run again next time. */
+export async function runSetup(worktree: Worktree, env: Record<string, string | undefined> = composeEnv()): Promise<void> {
+  const setup = worktree.project.setup ?? []
+  const marker = worktree.files.setupMarker
+
+  if (!setup.length || existsSync(marker))
+    return
+
+  for (const command of setup) {
+    if (await spawnInherit(['sh', '-c', command], worktree.dir, env) !== 0)
+      throw new WtError(`the worktree setup failed on \`${command}\``)
+  }
+
+  mkdirSync(dirname(marker), { recursive: true })
+  writeFileSync(marker, '')
+}
+
+export async function stackUp(worktree: Worktree): Promise<void> {
+  const { up } = worktree.project.settings.runner
+
+  if (up)
+    return runTemplate(up, worktree)
+
+  // The override puts routed services on the proxy's network, which must exist before compose starts them
+  if (await hasDevproxy())
+    await devproxyUp()
+
+  if (await spawnInherit(['docker', 'compose', 'up', '-d', '--build'], worktree.dir, composeEnv()) !== 0)
+    throw new WtError(`docker compose up failed in ${worktree.dir}`)
+
+  await runSetup(worktree)
+}
+
+/** Stops the stack; with the worktree's folder gone, compose finds its containers by their project label. */
+export async function stackDown(worktree: Worktree): Promise<void> {
+  const { down } = worktree.project.settings.runner
+
+  if (down && existsSync(worktree.dir))
+    return runTemplate(down, worktree)
+
+  const here = existsSync(worktree.dir)
+  // Away from the project, whose compose file compose would otherwise read under the worktree's name
+  const argv = here ? ['docker', 'compose', 'down', '--remove-orphans'] : ['docker', 'compose', '-p', worktree.id, 'down', '--remove-orphans']
+
+  if (await spawnInherit(argv, here ? worktree.dir : homedir(), composeEnv()) !== 0)
+    throw new WtError(`docker compose down failed for ${worktree.id}`)
+}
+
+/** Runs the config's `removed` command once a worktree is gone, from the project's root. */
+export async function afterRemove(worktree: Worktree): Promise<void> {
+  const { removed } = worktree.project.settings.runner
+
+  if (!removed)
+    return
+
+  const argv = fillTemplate(removed, { project: worktree.project.name, task: worktree.task, dir: worktree.dir, id: worktree.id })
+
+  if (await spawnInherit(argv, worktree.project.root) !== 0)
+    console.warn(`wt: \`${argv.join(' ')}\` failed after removing ${worktree.id}`)
+}
+
+/** Whether some container, running or not, belongs to that compose project. */
+export async function hasContainers(composeName: string): Promise<boolean> {
+  const found = await $`docker ps -aq --filter ${`label=com.docker.compose.project=${composeName}`}`.quiet().nothrow()
+
+  return found.stdout.toString().trim() !== ''
+}

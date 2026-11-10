@@ -54,6 +54,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-view': ['view'],
   '@kaynooo/cli-wait': ['waitfor', 'slot'],
   '@kaynooo/cli-workspace': ['ws'],
+  '@kaynooo/cli-wt': ['wt'],
 }
 
 export const FORGE = 'git.kaynooo.fr'

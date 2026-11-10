@@ -1,0 +1,16 @@
+/** What other tools build on wt with: a project tool reads the manifests and worktrees, shares the job locks and runs a worktree's setup. */
+
+export type { ComposeConfig } from './compose'
+export { COMPOSE_FILES, composeEnv } from './compose'
+export type { Resolved, WtConfig } from './config'
+export { defineConfig, expandHome, wtConfig } from './config'
+export { alive, bootTime, failKnown, KnownError } from './errors'
+export type { Job, JobStack, JobState } from './jobs'
+export { HELD_ENV, Jobs, logTail } from './jobs'
+export type { Project, ProjectConfig, Route, RunConfig, Worktree } from './project'
+export { defineProject, findProject, listTasks, loadProjects, locate, locateWorktree, worktreeHost, worktreeOf, WtError } from './project'
+export type { ProxyHost } from './proxy'
+export { devproxyUp, proxyHostList } from './proxy'
+export { inLine, queueDir } from './queue'
+export { urlsOf } from './routes'
+export { runSetup, slugOf } from './stack'
