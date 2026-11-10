@@ -10,4 +10,11 @@ describe('the test preload', () => {
     expect(dry.exitCode).not.toBe(0)
     expect(dry.stderr.toString()).toContain('push-refused-in-tests')
   })
+
+  test('rewrites every push URL, explicit pushurl entries included', async () => {
+    const urls = (await $`git remote get-url --push --all origin`.cwd(ROOT).text()).trim().split('\n')
+
+    expect(urls.length).toBeGreaterThan(0)
+    expect(urls.every(url => url.startsWith('/nonexistent/push-refused-in-tests/'))).toBe(true)
+  })
 })

@@ -29,12 +29,15 @@ delete process.env.KIT_MODE
 
 // A test that times out keeps running while the next one starts, so its `finally` can chdir back here under the next test's feet and that test's git then runs in this checkout. No git a test starts through `$` or node:child_process may push to this checkout's remotes: each push URL is rewritten to a path that does not exist, after the entries the shell already passes. Bun.spawn without an env sees none of this.
 const WHITESPACE = /\s+/
-const remotes = Bun.spawnSync(['git', '-C', new URL('..', import.meta.url).pathname, 'remote', '-v'], { stdout: 'pipe', stderr: 'ignore' }).stdout.toString()
-const pushUrls = new Set(remotes.split('\n').filter(line => line.endsWith('(push)')).map(line => line.split(WHITESPACE)[1] ?? '').filter(url => url !== ''))
+const ROOT = new URL('..', import.meta.url).pathname
+const git = (args: string[]) => Bun.spawnSync(['git', '-C', ROOT, ...args], { stdout: 'pipe', stderr: 'ignore' }).stdout.toString()
+const pushUrls = new Set(git(['remote', '-v']).split('\n').filter(line => line.endsWith('(push)')).map(line => line.split(WHITESPACE)[1] ?? '').filter(url => url !== ''))
+// Git skips pushInsteadOf for a remote with an explicit pushurl and rewrites those with insteadOf alone, which also turns away a fetch from the same URL.
+const explicit = new Set(git(['config', '--get-regexp', String.raw`^remote\..*\.pushurl$`]).split('\n').map(line => line.split(WHITESPACE)[1] ?? '').filter(url => url !== ''))
 let configs = Number(process.env.GIT_CONFIG_COUNT ?? 0)
 
 for (const url of pushUrls) {
-  process.env[`GIT_CONFIG_KEY_${configs}`] = 'url./nonexistent/push-refused-in-tests/.pushInsteadOf'
+  process.env[`GIT_CONFIG_KEY_${configs}`] = `url./nonexistent/push-refused-in-tests/.${explicit.has(url) ? 'insteadOf' : 'pushInsteadOf'}`
   process.env[`GIT_CONFIG_VALUE_${configs}`] = url
   configs += 1
 }
