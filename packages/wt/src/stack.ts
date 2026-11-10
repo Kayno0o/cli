@@ -23,11 +23,28 @@ async function spawnInherit(argv: string[], cwd: string, env: Record<string, str
   return Bun.spawn(argv, { cwd, env, stdio: ['inherit', 'inherit', 'inherit'] }).exited
 }
 
-/** Runs a `runner` template, failing with the command named. */
-async function runTemplate(template: string[], worktree: Worktree): Promise<void> {
-  const argv = fillTemplate(template, { project: worktree.project.name, task: worktree.task, dir: worktree.dir, id: worktree.id })
+type Role = 'up' | 'down' | 'removed'
 
-  if (await spawnInherit(argv, worktree.dir) !== 0)
+/** Spawns a `runner` command, one whose executable is missing (a shell function, a bin not installed) failing with the config line to fix. */
+async function spawnRunner(role: Role, argv: string[], cwd: string): Promise<number> {
+  try {
+    return await spawnInherit(argv, cwd)
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      throw new WtError(`\`${argv[0]}\` is not on PATH: fix runner.${role} in ${configPath()}`)
+
+    throw error
+  }
+}
+
+const argvOf = (template: string[], worktree: Worktree) => fillTemplate(template, { project: worktree.project.name, task: worktree.task, dir: worktree.dir, id: worktree.id })
+
+/** Runs a `runner` template, failing with the command named. */
+async function runTemplate(role: Role, template: string[], worktree: Worktree): Promise<void> {
+  const argv = argvOf(template, worktree)
+
+  if (await spawnRunner(role, argv, worktree.dir) !== 0)
     throw new WtError(`\`${argv.join(' ')}\` failed`)
 }
 
@@ -52,7 +69,7 @@ export async function stackUp(worktree: Worktree): Promise<void> {
   const { up } = worktree.project.settings.runner
 
   if (up)
-    return runTemplate(up, worktree)
+    return runTemplate('up', up, worktree)
 
   // The override puts routed services on the proxy's network, which must exist before compose starts them
   if (await hasDevproxy())
@@ -74,7 +91,7 @@ export async function stackDown(worktree: Worktree): Promise<void> {
   const { down } = worktree.project.settings.runner
 
   if (down && existsSync(worktree.dir))
-    return runTemplate(down, worktree)
+    return runTemplate('down', down, worktree)
 
   const here = existsSync(worktree.dir)
   // Away from the project, whose compose file compose would otherwise read under the worktree's name
@@ -91,10 +108,19 @@ export async function afterRemove(worktree: Worktree): Promise<void> {
   if (!removed)
     return
 
-  const argv = fillTemplate(removed, { project: worktree.project.name, task: worktree.task, dir: worktree.dir, id: worktree.id })
+  const argv = argvOf(removed, worktree)
 
-  if (await spawnInherit(argv, worktree.project.root) !== 0)
-    console.warn(`wt: \`${argv.join(' ')}\` failed after removing ${worktree.id}`)
+  try {
+    if (await spawnRunner('removed', argv, worktree.project.root) !== 0)
+      console.warn(`wt: \`${argv.join(' ')}\` failed after removing ${worktree.id}`)
+  }
+  catch (error) {
+    // The worktree is gone already: what is left to do is said, not failed on
+    if (!(error instanceof WtError))
+      throw error
+
+    console.warn(`wt: ${error.message}, after removing ${worktree.id}`)
+  }
 }
 
 /** Whether some container, running or not, belongs to that compose project. */

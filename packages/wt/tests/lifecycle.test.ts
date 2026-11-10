@@ -712,6 +712,29 @@ exit 0
   }, 30_000)
 })
 
+describe('a config runner naming no executable', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'config.ts'), `export default ${JSON.stringify({ runner: { up: ['no-such-runner', 'up'] } })}\n`)
+  })
+
+  afterAll(() => env?.stop())
+
+  test('fails naming the command and the config, with no stack trace', async () => {
+    const { wt } = env
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+
+    const run = await wt('up', 'planning')
+
+    expect(run.code).toBe(1)
+    expect(run.err).toBe(`error: \`no-such-runner\` is not on PATH: fix runner.up in ${join(env.sandbox.home, '.config', 'wt', 'config.ts')}\n`)
+  }, 30_000)
+})
+
 describe('up and down with no runner', () => {
   let env: Awaited<ReturnType<typeof timesSandbox>>
 
