@@ -370,18 +370,22 @@ export class Jobs {
     await notify(this.app, `${what} not started`, message, true)
   }
 
-  /** Runs `argv` with bun away from any terminal: setsid outlives the caller (a Herdr popup that closes), the output goes to the stack's log. */
+  /** Runs `argv` with bun away from any terminal, in a session of its own that outlives the caller (a Herdr popup that closes), the output in the stack's log. */
   detach(stack: JobStack, verb: string, argv: string[], service?: string): Job {
     const job = this.claim(stack, verb, true, service)
     const out = openSync(job.log, 'w')
 
     try {
-      Bun.spawn(['setsid', '-f', process.execPath, '--no-env-file', ...argv], { stdio: ['ignore', out, out], env: { ...process.env, [this.env]: stack.slug } })
+      // Not setsid -f, which busybox and macOS lack
+      Bun.spawn([process.execPath, '--no-env-file', ...argv], { stdio: ['ignore', out, out], env: { ...process.env, [this.env]: stack.slug }, detached: true }).unref()
     }
     catch (error) {
       this.finish(stack, job, 1)
 
       throw error
+    }
+    finally {
+      closeSync(out)
     }
 
     return job
