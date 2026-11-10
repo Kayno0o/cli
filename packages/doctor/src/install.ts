@@ -4,7 +4,7 @@ import process from 'node:process'
 import { badUsage, isInteractive, paint, saveWorkspace, userConfigPath, workspaceChosen } from '@kaynooo/cli-kit'
 import { checklist, completePath, confirm, input } from '@kaynooo/cli-kit/prompt'
 import { ABOUT, HOOKS_REQUIRES, NEEDS } from './catalog'
-import { firstLine, FORGE, hooksWiring, isInstalled, TOOLS } from './checks'
+import { firstLine, hooksWiring, isInstalled, MARKETPLACE, TOOLS } from './checks'
 
 // What `doctor --install` can add: a package, or the Claude Code hooks plugin that calls guard.
 export interface Candidate {
@@ -26,7 +26,7 @@ export interface InstallOptions {
 
 const HOOKS = 'hooks'
 const PLUGIN_UNINSTALL = ['claude', 'plugin', 'uninstall', 'cli-hooks']
-const PLUGIN_INSTALL = ['claude', 'plugin', 'install', 'cli-hooks', '--marketplace', `https://${FORGE}/kaynooo/cli.git`]
+const PLUGIN_INSTALL = ['claude', 'plugin', 'install', 'cli-hooks', '--marketplace', MARKETPLACE]
 
 const CLI_PREFIX = /^cli-/
 const shortName = (name: string) => name.slice(name.indexOf('/') + 1).replace(CLI_PREFIX, '')

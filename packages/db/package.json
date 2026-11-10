@@ -5,13 +5,13 @@
   "description": "db: run read-only SQL against Postgres, MySQL and MariaDB from the terminal without ever showing the connection credentials.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/db#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/db#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/db"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": ["postgres", "mysql", "mariadb", "sql", "read-only", "cli", "bun"],
   "bin": {
     "db": "./dist/cli.js"

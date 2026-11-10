@@ -92,7 +92,7 @@ describe('doctor --install', () => {
 
     await capture(async () => main(['--install', 'hooks'], host))
     expect(ran).toContain('bun install -g @kaynooo/cli-guard')
-    expect(ran).toContain('claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/cli.git')
+    expect(ran).toContain('claude plugin install cli-hooks --marketplace https://github.com/Kayno0o/cli.git')
   })
 
   test('--dry-run runs nothing, all names every package, and an installed one is skipped', async () => {

@@ -5,13 +5,13 @@
   "description": "Generates a release's changelog from its conventional commits and publishes it as a Forgejo release.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/changelog#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/changelog#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/changelog"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": ["forgejo", "gitea", "release", "changelog", "conventional-commits"],
   "sideEffects": false,
   "exports": {

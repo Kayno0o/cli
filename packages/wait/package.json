@@ -5,13 +5,13 @@
   "description": "waitfor and slot: waits for a log line, a listening port or a URL answering, and queues heavy commands behind machine-wide slots and named locks, for Claude Code, instead of sleep and polling loops.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/wait#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/wait#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/wait"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "claude-code",
     "cli",

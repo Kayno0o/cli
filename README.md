@@ -69,4 +69,4 @@ The packages come from npmjs with no registry setup. Each is also published to t
 
 The hooks need `@kaynooo/cli-guard` or later, the first with `guard hook`. Claude Code caches a plugin by its version, so a change under `plugin/` bumps `plugin/.claude-plugin/plugin.json` to reach the hosts.
 
-`~/.bun/bin` must be on the PATH Claude Code starts with, or the hooks find no `guard`: Claude Code then reports a hook error on each call and lets it through. In a session, `/plugin marketplace add https://git.kaynooo.fr/kaynooo/cli.git` then `/plugin install cli-hooks@kaynooo-cli` does the same as the last line.
+`~/.bun/bin` must be on the PATH Claude Code starts with, or the hooks find no `guard`: Claude Code then reports a hook error on each call and lets it through. In a session, `/plugin marketplace add https://github.com/Kayno0o/cli.git` then `/plugin install cli-hooks@kaynooo-cli` does the same as the last line.

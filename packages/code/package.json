@@ -5,13 +5,13 @@
   "description": "peek, todo-scan and hotspots: source read by spans, symbols and outlines in one call, the TODO and issue-reference comments of a repository with stale ones flagged, and the files ranked by complexity times git churn.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/code#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/code#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/code"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "claude-code",
     "cli",

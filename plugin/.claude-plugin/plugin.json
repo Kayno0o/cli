@@ -3,6 +3,6 @@
   "version": "0.4.0",
   "description": "Wires the @kaynooo/cli-* bins into Claude Code: guard's rules on every Bash call and every file tool (Read, Edit, MultiEdit, Write, NotebookEdit, Grep, Glob), pkg before installs, and the installed bins listed at session start.",
   "author": { "name": "Kaynooo" },
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli",
+  "homepage": "https://github.com/Kayno0o/cli",
   "license": "MIT"
 }

@@ -57,7 +57,9 @@ export const TOOLS: Record<string, string[]> = {
 
 export const FORGE = 'git.kaynooo.fr'
 const PLUGIN = 'cli-hooks@kaynooo-cli'
-const MARKETPLACE = `https://${FORGE}/kaynooo/cli.git`
+
+// The public GitHub copy: the Forgejo repo is private, and the marketplace is cloned without credentials.
+export const MARKETPLACE = 'https://github.com/Kayno0o/cli.git'
 const LEADING_TILDE = /^~(?=\/|$)/
 
 interface Manifest { version?: string, engines?: { bun?: string }, bin?: Record<string, string> | string }

@@ -5,13 +5,13 @@
   "description": "pkg: check an npm package before it is added, for a guessed name, a version under two weeks old and install scripts.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/pkg#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/pkg#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/pkg"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": ["npm", "package", "typosquat", "supply-chain", "dependencies"],
   "bin": {
     "pkg": "./dist/cli.js"

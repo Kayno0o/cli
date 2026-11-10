@@ -5,13 +5,13 @@
   "description": "gst, gc, gb, gp, gf, gm, gcl, gd and gu: a repository's state in one call, a commit of exactly the paths given, its message checked before anything is staged, a branch picked, nested repositories pushed or fetched, a branch merged with its conflicts listed, a clone into the workspace, the changes per file and an undo that keeps what it takes away.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/git#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/git#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/git"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "claude-code",
     "cli",

@@ -5,13 +5,13 @@
   "description": "ft: Forgejo CI runs, logs, releases and issue checklists from the terminal, through tea.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/ft#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/ft#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/ft"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": ["forgejo", "gitea", "tea", "ci", "actions", "release"],
   "bin": {
     "ft": "./dist/cli.js"

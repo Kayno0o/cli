@@ -5,13 +5,13 @@
   "description": "dl: downloads a file into a folder of its own, verified by sha256, then extracts it, installs it as a command or runs it as a script once it is pinned; remembers every URL to show what changed.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/dl#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/dl#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/dl"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "cli",
     "download",

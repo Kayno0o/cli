@@ -5,13 +5,13 @@
   "description": "guard: the safety rules a Claude Code Bash call is held to (git, remote machines, SQL writes, env files, package managers, commit messages), each refusal naming the route.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/guard#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/guard#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/guard"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "claude-code",
     "cli",

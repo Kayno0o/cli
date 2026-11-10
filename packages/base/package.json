@@ -5,13 +5,13 @@
   "description": "base: a command run at HEAD or another ref in a temporary worktree, the working tree left untouched.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/base#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/base#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/base"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "claude-code",
     "cli",

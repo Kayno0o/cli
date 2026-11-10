@@ -5,13 +5,13 @@
   "description": "What every @kaynooo CLI shares: argument parsing with --help, a command dispatcher with typo hints and shell completion, and output formatting.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/kit#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/kit#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/kit"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "args",
     "bun",

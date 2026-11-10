@@ -186,7 +186,7 @@ describe('checkHooks', () => {
   })
 
   test('fails with neither, settings missing included', () => {
-    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin install cli-hooks --marketplace https://git.kaynooo.fr/kaynooo/cli.git' })
+    expect(checkHooks(fakeHost())).toMatchObject({ ok: false, fix: 'claude plugin install cli-hooks --marketplace https://github.com/Kayno0o/cli.git' })
   })
 
   test('fails when wired without the guard they call', () => {

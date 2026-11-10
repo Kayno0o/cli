@@ -5,13 +5,13 @@
   "description": "dc, dx, dlog and sf: docker compose on the stack found here, including one only its containers tell of, a compose service's shell, logs, restart, stop or rebuild, every service's health and recent errors in one call, and a Symfony console command picked and run.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/docker#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/docker#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/docker"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": ["docker", "compose", "cli", "bun"],
   "exports": {
     ".": "./src/index.ts"

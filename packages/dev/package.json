@@ -5,13 +5,13 @@
   "description": "dev: small developer utilities in one bin: random passwords and bcrypt hashes, JWT decoding, timestamps, UUIDs and ULIDs, base64, URL parts and file hashes.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/dev#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/dev#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/dev"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "cli",
     "password",

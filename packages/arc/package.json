@@ -5,13 +5,13 @@
   "description": "arc: browses an archive without extracting it, packs a folder into a verified .tar.zst before deleting it, unpacks one without overwriting anything and checks it, and extracts any other archive.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/arc#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/arc#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/arc"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "cli",
     "archive",
