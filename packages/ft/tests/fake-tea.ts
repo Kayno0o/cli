@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { chmod, mkdtemp, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -323,16 +323,22 @@ export async function withFakeTea(initial: FakeState, run: () => Promise<unknown
 }
 
 // The same fake as the `gt` binary, which has no tea subcommands and fails on an error answer; tea is left out of the PATH it runs under.
+// A folder holding a real tea (/usr/bin on a machine with tea installed) holds git too, which ft still runs: git comes back through a folder of its own.
 export async function withFakeGt(initial: FakeState, run: () => Promise<unknown>): Promise<FakeState> {
   const saved = process.env.PATH
-  const withoutTea = (saved ?? '').split(':').filter(dir => !existsSync(join(dir, 'tea'))).join(':')
+  const git = Bun.which('git')
+  const gitDir = await mkdtemp(join(tmpdir(), 'ft-git-'))
+
+  if (git !== null)
+    await symlink(git, join(gitDir, 'git'))
 
   try {
-    process.env.PATH = withoutTea
+    process.env.PATH = [...(saved ?? '').split(':').filter(dir => !existsSync(join(dir, 'tea'))), gitDir].join(':')
 
     return await withFakeTea(initial, run, 'gt')
   }
   finally {
     restore('PATH', saved)
+    await rm(gitDir, { recursive: true, force: true })
   }
 }
