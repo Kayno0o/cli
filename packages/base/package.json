@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-base",
   "type": "module",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "base: a command run at HEAD or another ref in a temporary worktree, the working tree left untouched.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
