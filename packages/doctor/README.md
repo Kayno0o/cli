@@ -38,9 +38,10 @@ Only the packages that are installed are checked: a package left out is no failu
 ```sh
 cli completions fish --install            # one file per installed bin in ~/.cache/fish/kaynooo-cli
 source <(cli completions bash)            # in ~/.bashrc
+source <(cli completions zsh)             # in ~/.zshrc, after compinit
 ```
 
-Each bin completes itself through `<bin> __complete`. fish gets a file per bin (put the folder first in `fish_complete_path`), bash one script sourced from `~/.bashrc`. zsh has no script of its own: load `compinit` and `bashcompinit` in `~/.zshrc`, then the bash line above (not tested, zsh is not installed on the machine this was written on). The fish files are checked by `doctor`.
+Each bin completes itself through `<bin> __complete`, and these are the scripts `<bin> --completions <shell>` prints (from `@kaynooo/cli-kit`), written for every installed bin at once. fish gets a file per bin (put the folder first in `fish_complete_path`), bash and zsh one script each. The zsh one is untested, zsh not being installed here.
 
 ## cli config
 

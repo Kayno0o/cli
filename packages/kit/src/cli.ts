@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, UsageError, usageLine, wantsHelpJson } from './args'
 import { scriptArgs } from './argv'
+import { COMPLETION_SHELLS, completionScript } from './completions'
 import { notifyEnd } from './notify'
 import { paint, takesControlCodes } from './style'
 import { closest } from './text'
@@ -60,7 +61,11 @@ const LEVEL_OPTIONS = {
   ...OUTPUT_OPTIONS,
   help: { type: 'boolean', short: 'h', description: 'show this help' },
 } as const satisfies Options
-const TOP_OPTIONS = { ...LEVEL_OPTIONS, version: { type: 'boolean', short: 'v', description: 'print the version' } } as const satisfies Options
+const TOP_OPTIONS = {
+  ...LEVEL_OPTIONS,
+  version: { type: 'boolean', short: 'v', description: 'print the version' },
+  completions: { type: 'string', choices: COMPLETION_SHELLS, description: 'print the shell completion script' },
+} as const satisfies Options
 
 // The rows under `Commands:`, then a heading per group in the order first met, names aligned across them all.
 async function commandRows(all: Commands, colors: Colors): Promise<string[]> {
@@ -426,6 +431,28 @@ async function candidates(scope: Scope, defaultCommand: string | undefined, word
   return 'commands' in command ? candidates(scopeOf(command.commands, command.extraCommands, command.aliases), undefined, rest, [...before, word]) : leafCandidates(command.run, rest)
 }
 
+// The flag a bin prints its own completion script for: `<bin> --completions fish`.
+export const COMPLETIONS = '--completions'
+
+// The words after a leading `--flag`, or the value of `--flag=value` and the rest.
+function flagValue([flag = '', ...rest]: string[]): string[] {
+  return flag.includes('=') ? [flag.slice(flag.indexOf('=') + 1), ...rest] : rest
+}
+
+function printCompletionScript(name: string, args: string[]): number {
+  const shell = COMPLETION_SHELLS.find(each => each === args[0])
+
+  if (shell === undefined || args.length !== 1) {
+    printError(name, `${COMPLETIONS} takes one of ${COMPLETION_SHELLS.join(', ')}`, `${name} ${COMPLETIONS} fish`)
+
+    return 2
+  }
+
+  console.log(completionScript(shell, [name]).trimEnd())
+
+  return 0
+}
+
 async function printCandidates(found: Promise<string[]>): Promise<number> {
   for (const line of await found)
     console.log(line)
@@ -462,6 +489,9 @@ export async function runCli(cli: Cli, argv = scriptArgs()): Promise<number> {
 
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(scopeOf(cli.commands, cli.extraCommands, cli.aliases), cli.defaultCommand, argv.slice(1)))
+
+  if (argv[0] === COMPLETIONS || argv[0]?.startsWith(`${COMPLETIONS}=`) === true)
+    return printCompletionScript(cli.name, flagValue(argv))
 
   const started = performance.now()
   const code = await dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version, redact: cli.redact })
@@ -531,6 +561,9 @@ export async function mainArgs<T>(main: Omit<Main, 'run'>, parseArgv: (args: str
 export async function runMain({ name, version, run, redact, usage }: Main, argv = scriptArgs()): Promise<number> {
   if (argv[0] === COMPLETE)
     return printCandidates(leafCandidates(run, argv.slice(1)))
+
+  if (argv[0] === COMPLETIONS || argv[0]?.startsWith(`${COMPLETIONS}=`) === true)
+    return printCompletionScript(name, flagValue(argv))
 
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
     console.log(version ?? packageVersion())

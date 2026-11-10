@@ -41,7 +41,7 @@ describe('runCli', () => {
 
   test('prints the version and the help', async () => {
     expect((await capture(async () => runCli(cli, ['-v']))).out).toBe('1.2.3\n')
-    expect((await capture(async () => runCli(cli, []))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo <command> [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n\nOptions:\n      --color <value>  auto (on a terminal alone), always or never\n      --plain          plain text, no colour or spinner: --color never\n  -h, --help           show this help\n  -v, --version        print the version\n\nRun demo <command> --help for its options.\n')
+    expect((await capture(async () => runCli(cli, []))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo <command> [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n\nOptions:\n      --color <auto|always|never>    auto (the default) colours on a terminal alone\n      --plain                        plain text, no colour or spinner: --color never\n  -h, --help                         show this help\n  -v, --version                      print the version\n      --completions <fish|bash|zsh>  print the shell completion script\n\nRun demo <command> --help for its options.\n')
   })
 
   test('names the command an Exit came from and uses its code', async () => {
@@ -75,7 +75,7 @@ describe('runCli', () => {
       return 0
     } } }, defaultCommand: 'port' }
 
-    expect((await capture(async () => runCli(withDefault, ['--help']))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo [<command>] [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n  port  parses first\n\nOptions of port: the command run when none is named\n      --max <value>  highest port\n\nOptions:\n      --color <value>  auto (on a terminal alone), always or never\n      --plain          plain text, no colour or spinner: --color never\n  -h, --help           show this help\n  -v, --version        print the version\n\nRun demo <command> --help for its options.\n')
+    expect((await capture(async () => runCli(withDefault, ['--help']))).out).toBe('demo 1.2.3  a demo\n\nUsage: demo [<command>] [options]\n\nCommands:\n  echo  prints its arguments\n  boom  fails\n  plan  a group\n  port  parses first\n\nOptions of port: the command run when none is named\n      --max <value>  highest port\n\nOptions:\n      --color <auto|always|never>    auto (the default) colours on a terminal alone\n      --plain                        plain text, no colour or spinner: --color never\n  -h, --help                         show this help\n  -v, --version                      print the version\n      --completions <fish|bash|zsh>  print the shell completion script\n\nRun demo <command> --help for its options.\n')
     expect(ran).toEqual([])
   })
 
@@ -87,7 +87,7 @@ describe('runCli', () => {
       return 3
     } } } }
 
-    expect(await capture(async () => runCli(helped, ['port', '--help']))).toEqual({ result: 0, out: 'Usage: demo port\n\nOptions:\n      --color <value>  auto (on a terminal alone), always or never\n      --plain          plain text, no colour or spinner: --color never\n  -h, --help           show this help\n', err: '' })
+    expect(await capture(async () => runCli(helped, ['port', '--help']))).toEqual({ result: 0, out: 'Usage: demo port\n\nOptions:\n      --color <auto|always|never>  auto (the default) colours on a terminal alone\n      --plain                      plain text, no colour or spinner: --color never\n  -h, --help                       show this help\n', err: '' })
   })
 
   test('names an error other than an Exit by its class, prints its cause\'s message under it, and redacts both', async () => {
@@ -334,7 +334,7 @@ describe('__complete', () => {
   })
 
   test('lists a command\'s options without running it, and asks for paths otherwise', async () => {
-    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '--']))).out).toBe('--max\thighest port\n--bare\n--color\tauto (on a terminal alone), always or never\n--plain\tplain text, no colour or spinner: --color never\n--help\tshow this help\n')
+    expect((await capture(async () => runCli(parsing, ['__complete', 'port', '--']))).out).toBe('--max\thighest port\n--bare\n--color\tauto (the default) colours on a terminal alone\n--plain\tplain text, no colour or spinner: --color never\n--help\tshow this help\n')
     expect((await capture(async () => runCli(parsing, ['__complete', 'port', '']))).out).toBe('__files__\n')
     expect(ran).toEqual([])
     expect((await capture(async () => runCli(parsing, ['port']))).result).toBe(0)
@@ -348,7 +348,7 @@ describe('__complete', () => {
       return 0
     }
 
-    expect((await capture(async () => runMain({ name: 'x', version: '1', run }, ['__complete', '-']))).out).toBe('--only\tsome\n--color\tauto (on a terminal alone), always or never\n--plain\tplain text, no colour or spinner: --color never\n--help\tshow this help\n')
+    expect((await capture(async () => runMain({ name: 'x', version: '1', run }, ['__complete', '-']))).out).toBe('--only\tsome\n--color\tauto (the default) colours on a terminal alone\n--plain\tplain text, no colour or spinner: --color never\n--help\tshow this help\n')
   })
 })
 
