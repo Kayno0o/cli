@@ -57,7 +57,7 @@ describe('helpText', () => {
       return 1
     }
 
-    expect(await capture(async () => runMain({ name: 'demo', version: '1', run }, ['--help']))).toEqual({ result: 0, out: 'Usage: demo\n\nOptions:\n      --color <value>  auto (on a terminal alone), always or never\n      --plain          plain text, no colour or spinner: --color never\n  -h, --help           show this help\n', err: '' })
+    expect(await capture(async () => runMain({ name: 'demo', version: '1', run }, ['--help']))).toEqual({ result: 0, out: 'Usage: demo\n\nOptions:\n      --color <auto|always|never>  auto (the default) colours on a terminal alone\n      --plain                      plain text, no colour or spinner: --color never\n  -h, --help                       show this help\n', err: '' })
   })
 })
 

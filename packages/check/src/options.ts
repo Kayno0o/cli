@@ -14,6 +14,7 @@ export const fixOptions = {
 // The one options table of `check`; `fix` is `check --fix` and takes the shared part.
 export const options = {
   ...fixOptions,
+  'only': { ...fixOptions.only, candidates: () => [...STEP_NAMES] },
   'fix': { type: 'boolean', short: 'f', description: 'run the folder\'s fixers and formatters instead of the steps, as the fix bin does' },
   'quiet': { type: 'boolean', short: 'q', description: 'print nothing for a passing step, and nothing at all when every step passes' },
   'failed': { type: 'boolean', description: 'run only the steps that failed in the last run of this folder, read from the run folder' },

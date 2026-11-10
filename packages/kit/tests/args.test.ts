@@ -221,7 +221,7 @@ describe('negative', () => {
       return 0
     })).out
 
-    expect(await help({ allowNegative: true })).toContain('      --no-refresh     keep the cached copy\n      --md             markdown\n      --no-md          no markdown\n')
+    expect(await help({ allowNegative: true })).toContain('      --no-refresh                 keep the cached copy\n      --md                         markdown\n      --no-md                      no markdown\n')
     expect(await help({})).toContain('--refresh')
     expect(await help({})).not.toContain('--no-refresh')
   })

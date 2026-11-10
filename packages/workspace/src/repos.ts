@@ -3,7 +3,7 @@ import type { RepoState } from './repos-scan'
 import { existsSync, statSync } from 'node:fs'
 import { basename, relative } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, marked, oneOf, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
+import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
 const USAGE = `repos [options] [root]: the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
@@ -106,7 +106,7 @@ export async function repos(args: string[]): Promise<number> {
   if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`no folder ${root}`)
 
-  const only = values.only === undefined ? undefined : oneOf(values.only, 'only', REASONS)
+  const only = values.only
   const paths = await findRepos(root, await skipped())
   const states = await pool(paths, configuredNumber('repos', 'concurrency', CONCURRENCY), async path => inspect(path, values.fetch === true || values.pull === true))
   const keeps = (repo: RepoState) => {

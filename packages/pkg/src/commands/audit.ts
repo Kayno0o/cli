@@ -8,7 +8,7 @@ import process from 'node:process'
 import { fail, jsonOption, parse, pool, printJson, role, warn, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
-import { DEFAULT_BLOCK_SEVERITY, isSeverity, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
+import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
 import { parseBunLock, productionPackages } from '../lockfile'
 import { fetchPackument } from '../registry'
 
@@ -23,7 +23,7 @@ const EXITS: ExitRow[] = [[0, 'nothing blocks'], [1, 'a package is missing, too 
 const options = {
   'json': jsonOption('[{name, version, license, blocked, warnings, advisories}] for the packages with a finding'),
   'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS}, or the minAge setting)` },
-  'level': { type: 'string', description: 'lowest advisory severity listed and failing: low, moderate, high, critical (moderate)' },
+  'level': { type: 'string', choices: SEVERITIES, default: 'moderate', description: 'lowest advisory severity listed and failing (moderate)' },
   'prod': { type: 'boolean', description: 'only the packages a production dependency or an optional one of a workspace reaches' },
   'ignore': { type: 'string', multiple: true, description: 'an advisory skipped by GHSA or numeric id, repeatable' },
 } as const
@@ -130,10 +130,7 @@ export function renderAudit(findings: Audited[], total: number, stream: { isTTY?
 
 export async function audit(args: string[]): Promise<number> {
   const { values, positionals: [asked] } = parse(args, usage, options, { positionals: ['[dir]'], exits: EXITS })
-  const level = values.level ?? 'moderate'
-
-  if (!isSeverity(level))
-    fail(`--level takes ${SEVERITIES.join(', ')}, not ${level}`)
+  const { level } = values
 
   const dir = resolve(asked ?? process.cwd())
   const lock = Bun.file(join(dir, 'bun.lock'))

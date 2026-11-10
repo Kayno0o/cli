@@ -118,7 +118,7 @@ export interface Described { examples?: Example[] | undefined, replaces?: string
 
 // The output flags every command takes, before its own help.
 export const OUTPUT_OPTIONS = {
-  color: { type: 'string', description: 'auto (on a terminal alone), always or never' },
+  color: { type: 'string', choices: ['auto', 'always', 'never'], description: 'auto (the default) colours on a terminal alone' },
   plain: { type: 'boolean', description: 'plain text, no colour or spinner: --color never' },
 } as const satisfies Options
 

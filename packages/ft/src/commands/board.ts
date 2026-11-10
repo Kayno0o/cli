@@ -25,7 +25,6 @@ export function standing(claim: Claim | undefined, sessions: Session[]): Standin
 }
 
 const NOTE_WIDTH = 100
-const STATES = new Set(['available', 'taken', 'away'])
 
 type Claimed = Exclude<Standing, { state: 'available' }>
 
@@ -144,7 +143,7 @@ const boardOptions = {
   labels: { type: 'string', short: 'L', description: 'only issues with these labels, comma separated' },
   milestone: { type: 'string', short: 'm', description: 'only issues of this milestone, a title or an id' },
   query: { type: 'string', description: 'only issues whose title matches this, a case-insensitive regex such as dom|eager' },
-  state: { type: 'string', description: 'only issues in this state: available, taken or away (claimed, no live session here)' },
+  state: { type: 'string', choices: ['available', 'taken', 'away'], description: 'only issues in this state (away: claimed, no live session here)' },
   ...limitOptions(BOARD_LIMIT),
   json: jsonOption('number, title, labels, state, holder, since, session, boxesTotal, boxesLeft and note (author, at, body of the latest comment that is not a claim)'),
   watch: watchOption('the board'),
@@ -161,9 +160,6 @@ export async function board(args: string[]): Promise<number> {
 
   const state = values.state
   const limit = limitOf(values, BOARD_LIMIT)
-
-  if (state !== undefined && !STATES.has(state))
-    fail(`--state takes available, taken or away, not ${state}`)
 
   let query: RegExp | undefined
 

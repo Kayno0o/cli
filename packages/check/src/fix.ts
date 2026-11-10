@@ -96,6 +96,9 @@ async function toolFixers(dir: string): Promise<Fixer[]> {
   return fixers
 }
 
+// `fix --only` completes the fixers of the folder the shell is in.
+const fixParseOptions = { ...fixOptions, only: { ...fixOptions.only, candidates: async () => (await fixers(process.cwd())).map(fixer => fixer.name) } } as const
+
 export async function fixers(dir: string): Promise<Fixer[]> {
   const project = await projectFixers(dir)
   const csFixer = await firstFile(dir, CS_FIXER_CONFIGS)
@@ -148,7 +151,7 @@ function printChanged(changed: string[]): void {
 }
 
 export async function fix(args: string[], cwd = process.cwd()): Promise<number> {
-  const parsed = parse(args, fixUsage, fixOptions, { exits: EXITS, replaces: 'running each fixer and formatter by hand, or docker compose exec <service> bun run lint:fix', examples: ['fix', ['fix --list', 'the fixers it would run']] })
+  const parsed = parse(args, fixUsage, fixParseOptions, { exits: EXITS, replaces: 'running each fixer and formatter by hand, or docker compose exec <service> bun run lint:fix', examples: ['fix', ['fix --list', 'the fixers it would run']] })
 
   return runFixers(parsed.values, cwd)
 }

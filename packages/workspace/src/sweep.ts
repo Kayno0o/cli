@@ -23,7 +23,7 @@ const OPTIONS = {
   yes: { type: 'boolean', short: 'y', description: 'with --apply, skip the confirm' },
   older: { type: 'string', description: 'only the entries whose repo last committed longer ago than this (30d, 12h)' },
   min: { type: 'string', description: 'only the entries of at least this size (500K, 10M, 1G)' },
-  only: { type: 'string', description: 'worktrees, folders or caches: leave the other kinds out (.nuxt, .next, .turbo, .svelte-kit, __pycache__ and .gradle are caches; the global caches are listed with no root or with caches)' },
+  only: { type: 'string', choices: Object.keys(ONLY_KINDS) as (keyof typeof ONLY_KINDS)[], description: 'leave the other kinds out (.nuxt, .next, .turbo, .svelte-kit, __pycache__ and .gradle are caches; the global caches are listed with no root or with caches)' },
   docker: { type: 'boolean', description: 'add the docker system df output, which alone takes about ten seconds' },
   json: jsonOption('{root, entries: [{path, kind (folder, worktree or cache), bytes, committedAt, action (remove or keep), reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
 } as const
@@ -53,9 +53,6 @@ export async function sweep(args: string[]): Promise<number> {
   if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`${root} is not a folder`)
 
-  if (values.only !== undefined && !Object.hasOwn(ONLY_KINDS, values.only))
-    badUsage(`--only takes worktrees, folders or caches, not ${values.only}`)
-
   const olderMs = values.older === undefined ? undefined : duration(values.older, 'older', 0)
   const minBytes = values.min === undefined ? 0 : parseSize(values.min)
 
@@ -64,7 +61,7 @@ export async function sweep(args: string[]): Promise<number> {
 
   const now = Date.now()
   const found = await findCandidates(root, homedir(), positionals.length === 0 || values.only === 'caches')
-  const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => candidate.kind === ONLY_KINDS[values.only as keyof typeof ONLY_KINDS])
+  const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => candidate.kind === ONLY_KINDS[values.only!])
   const { entries: all, skipped } = await inspect({ candidates: wanted, skipped: found.skipped })
   const entries = all
     .filter(entry => entry.bytes >= minBytes && (olderMs === undefined || (entry.committedAt !== undefined && now - entry.committedAt >= olderMs)))

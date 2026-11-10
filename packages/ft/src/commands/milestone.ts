@@ -59,7 +59,7 @@ Lists the repository's milestones, the open ones unless --state says otherwise, 
 const listExits: ExitRow[] = [[0, 'it listed them'], [1, 'Forgejo refuses'], [2, 'a usage error']]
 
 const listOptions = {
-  state: { type: 'string', description: 'open (the default), closed or all' },
+  state: { type: 'string', choices: ['open', 'closed', 'all'], default: 'open', description: 'which milestones to list (open)' },
   issues: { type: 'boolean', short: 'i', description: 'list the open and closed issues of each milestone by title' },
   ...limitOptions(LIST_LIMIT),
   json: jsonOption('id, title, state, description, open, closed, due (YYYY-MM-DD or null)'),
@@ -70,11 +70,7 @@ export async function milestones(args: string[]): Promise<number> {
   const parsed = parse(args, listUsage, listOptions, { exits: listExits })
 
   const { values } = parsed
-  const state = values.state ?? 'open'
-
-  if (state !== 'open' && state !== 'closed' && state !== 'all')
-    fail(`--state takes open, closed or all, not ${state}`)
-
+  const state = values.state
   const limit = limitOf(values, LIST_LIMIT)
   const found = await listMilestones(state, values.repo)
 

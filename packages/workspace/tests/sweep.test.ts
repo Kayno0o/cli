@@ -191,6 +191,7 @@ describe('sweep', () => {
     expect(sweep([root, '--only', 'both']).code).toBe(2)
     expect(JSON.parse(sweep([root, '--only', 'both', '--json']).err)).toMatchObject({ error: expect.stringContaining('--only takes') })
     expect(JSON.parse(sweep([join(root, 'missing'), '--json']).err)).toMatchObject({ error: expect.stringContaining('is not a folder') })
+    expect(sweep(['__complete', root, '--only', '']).out).toBe('worktrees\nfolders\ncaches\n')
     expect(sweep([root, '--only', 'worktrees', '--apply', '--yes']).code).toBe(0)
     expect(existsSync(join(a, '.claude', 'worktrees', 'agent'))).toBe(false)
     expect(existsSync(join(a, 'node_modules', 'file'))).toBe(true)
@@ -407,7 +408,7 @@ describe('sweep', () => {
       const result = sweep([temp('sweep-'), '--only', 'nope'])
 
       expect(result.code).toBe(2)
-      expect(result.err).toContain('worktrees, folders or caches')
+      expect(result.err).toContain('--only takes one of worktrees, folders, caches')
     })
   })
 })
