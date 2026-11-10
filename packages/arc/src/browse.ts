@@ -1,22 +1,8 @@
 import type { ExitRow, TreeNode } from '@kaynooo/cli-kit'
 import type { Entry } from './entries'
 import process from 'node:process'
-import { fail, jsonOption, paint, parse, printJson, tree, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, formatSize, jsonOption, paint, parse, printJson, tree, wholeNumber } from '@kaynooo/cli-kit'
 import { cleanPath, formatOf, readEntries, tarFlags, under, zipPattern } from './entries'
-
-const UNITS = ['B', 'K', 'M', 'G', 'T']
-
-function humanSize(bytes: number): string {
-  let value = bytes
-  let unit = 0
-
-  while (value >= 1024 && unit < UNITS.length - 1) {
-    value /= 1024
-    unit++
-  }
-
-  return unit === 0 ? `${value}B` : `${value.toFixed(value < 10 ? 1 : 0)}${UNITS[unit]}`
-}
 
 function label(entry: Entry, shown: string): string {
   if (entry.kind === 'dir')
@@ -53,12 +39,12 @@ export async function ls(args: string[]): Promise<number> {
 
   const { dim } = paint(process.stdout)
   const base = cleanPath(prefix)
-  const width = Math.max(0, ...shown.map(entry => humanSize(entry.size).length))
+  const width = Math.max(0, ...shown.map(entry => formatSize(entry.size).length))
 
   for (const entry of shown) {
     const name = values.recursive === true || base === '' ? entry.path : entry.path.slice(base.length + 1)
 
-    console.log(`${dim(entry.mode.padEnd(10))} ${humanSize(entry.size).padStart(width)} ${dim(entry.modified.padEnd(16))} ${label(entry, entry.kind !== 'dir' && base !== '' && entry.path === base ? entry.path : name)}`)
+    console.log(`${dim(entry.mode.padEnd(10))} ${formatSize(entry.size).padStart(width)} ${dim(entry.modified.padEnd(16))} ${label(entry, entry.kind !== 'dir' && base !== '' && entry.path === base ? entry.path : name)}`)
   }
 
   return 0

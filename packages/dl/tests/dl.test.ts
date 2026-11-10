@@ -1,0 +1,315 @@
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import process from 'node:process'
+import { tempDirs } from '@kaynooo/cli-kit/test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { fileName } from '../src/download'
+import { summarize } from '../src/script'
+import { sumFor } from '../src/sums'
+
+const CLI = new URL('../src/cli.ts', import.meta.url).pathname
+const temp = tempDirs()
+const BINARY = new Uint8Array(3000).map((_, index) => index % 251)
+const HTML = '<!DOCTYPE html><html><body>sign in</body></html>'
+const SCRIPT_V1 = '#!/bin/sh\n# writes a marker\ncurl -fsSL https://example.com/next.sh -o /tmp/next.sh\necho "ran $*" > "$MARK"\n'
+const SCRIPT_V2 = '#!/bin/sh\n# writes a marker\necho "ran again $*" > "$MARK"\n'
+
+let script = SCRIPT_V1
+let archive: Uint8Array
+let server: ReturnType<typeof Bun.serve>
+
+function sha256(data: Uint8Array | string): string {
+  return new Bun.CryptoHasher('sha256').update(data).digest('hex')
+}
+
+beforeAll(async () => {
+  const source = temp('dl-archive-')
+
+  mkdirSync(join(source, 'tool-1.0'))
+  writeFileSync(join(source, 'tool-1.0', 'tool'), '#!/bin/sh\necho tool\n', { mode: 0o755 })
+  writeFileSync(join(source, 'tool-1.0', 'README'), 'read me\n')
+  await Bun.spawn(['tar', 'czf', join(source, 'tool.tar.gz'), '-C', source, 'tool-1.0']).exited
+  archive = await Bun.file(join(source, 'tool.tar.gz')).bytes()
+
+  server = Bun.serve({
+    port: 0,
+    routes: {
+      '/tool.bin': () => new Response(BINARY, { headers: { 'content-type': 'application/octet-stream' } }),
+      '/bad.bin': () => new Response(BINARY),
+      '/tool.tar.gz': () => new Response(archive, { headers: { 'content-type': 'application/gzip' } }),
+      '/SHA256SUMS': () => new Response(`${sha256(BINARY)}  tool.bin\n${sha256(archive)} *tool.tar.gz\n${'0'.repeat(64)}  bad.bin\n`),
+      '/install.sh': () => new Response(script, { headers: { 'content-type': 'text/plain' } }),
+      '/page': () => new Response(HTML, { headers: { 'content-type': 'text/html' } }),
+      '/fake.zip': () => new Response(HTML, { headers: { 'content-type': 'text/html' } }),
+      '/named': () => new Response('hello\n', { headers: { 'content-disposition': 'attachment; filename="../notes.txt"' } }),
+      '/moved': () => Response.redirect('/install.sh', 302),
+      '/missing': () => new Response('gone', { status: 404 }),
+    },
+  })
+})
+
+afterAll(async () => server.stop(true))
+
+interface Ran { code: number, out: string, err: string }
+
+// Spawned, not run in-process, and awaited, so the server in this process answers meanwhile; in agent mode, tables come tab-separated.
+async function dl(args: string[], home: string): Promise<Ran> {
+  const child = Bun.spawn([process.execPath, CLI, ...args], {
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: { ...process.env, NO_COLOR: '1', KIT_MODE: 'agent', HOME: home, XDG_STATE_HOME: join(home, 'state'), TMPDIR: join(home, 'tmp'), MARK: join(home, 'mark') },
+  })
+  const [out, err, code] = await Promise.all([child.stdout.text(), child.stderr.text(), child.exited])
+
+  return { code, out, err }
+}
+
+function home(): string {
+  const dir = temp('dl-home-')
+
+  mkdirSync(join(dir, 'tmp'))
+
+  return dir
+}
+
+function url(path: string): string {
+  return new URL(path, server.url).href
+}
+
+function pathOf(out: string): string {
+  return (/^path\s+(\S+)$/m).exec(out)![1]!
+}
+
+describe('downloading', () => {
+  test('lands in a new folder of its own and prints path, size, type and sha256', async () => {
+    const dir = home()
+    const { code, out } = await dl([url('/tool.bin')], dir)
+    const path = pathOf(out)
+
+    expect(code).toBe(0)
+    expect(path.startsWith(join(dir, 'tmp', 'dl-'))).toBe(true)
+    expect(readFileSync(path)).toEqual(Buffer.from(BINARY))
+    expect(out).toContain(`sha256\t${sha256(BINARY)}\n`)
+    expect(out).toContain('type\tapplication/octet-stream')
+    expect(out).toContain('seen\tfirst download')
+  })
+
+  test('-o puts it in the folder named and refuses to overwrite what is there', async () => {
+    const dir = home()
+    const target = join(dir, 'downloads')
+
+    expect((await dl([url('/tool.bin'), '-o', target], dir)).code).toBe(0)
+    expect(existsSync(join(target, 'tool.bin'))).toBe(true)
+
+    const again = await dl([url('/tool.bin'), '-o', target], dir)
+
+    expect(again.code).toBe(1)
+    expect(again.err).toContain('already exists')
+  })
+
+  test('names the file from Content-Disposition, kept to a plain name, and shows the URL redirects ended on', async () => {
+    const dir = home()
+    const named = await dl([url('/named')], dir)
+    const moved = await dl([url('/moved')], dir)
+
+    expect(pathOf(named.out).endsWith('/notes.txt')).toBe(true)
+    expect(moved.out).toContain(`url\t${url('/install.sh')}`)
+    expect(pathOf(moved.out).endsWith('/install.sh')).toBe(true)
+  })
+
+  test('an error status or a download over --max-size fails and leaves nothing behind', async () => {
+    const dir = home()
+    const missing = await dl([url('/missing')], dir)
+    const big = await dl([url('/tool.bin'), '--max-size', '1K'], dir)
+
+    expect(missing.code).toBe(1)
+    expect(missing.err).toContain('answered 404')
+    expect(big.code).toBe(1)
+    expect(big.err).toContain('over --max-size 1.0K')
+    expect(readdirSync(join(dir, 'tmp'))).toEqual([])
+  })
+
+  test('an HTML page fails where a file was expected, and is kept where a page could be meant', async () => {
+    const dir = home()
+    const fake = await dl([url('/fake.zip')], dir)
+
+    expect(fake.code).toBe(1)
+    expect(fake.err).toContain('answered an HTML page, not a file')
+    expect((await dl([url('/page'), '--exec'], dir)).code).toBe(1)
+    expect((await dl([url('/page')], dir)).code).toBe(0)
+  })
+
+  test('usage errors exit 2', async () => {
+    const dir = home()
+
+    expect((await dl(['ftp://example.com/x'], dir)).code).toBe(2)
+    expect((await dl([url('/tool.bin'), '--sha256', 'abc'], dir)).code).toBe(2)
+    expect((await dl([url('/tool.bin'), '--yes'], dir)).code).toBe(2)
+    expect((await dl([url('/tool.bin'), '--', 'arg'], dir)).code).toBe(2)
+  })
+})
+
+describe('checking', () => {
+  test('--sha256 and --sums accept the right file', async () => {
+    const dir = home()
+    const pinned = await dl([url('/tool.bin'), '--sha256', sha256(BINARY).toUpperCase()], dir)
+    const summed = await dl([url('/tool.bin'), '--sums', url('/SHA256SUMS')], dir)
+
+    expect(pinned.code).toBe(0)
+    expect(pinned.out).toContain(`${sha256(BINARY)} verified`)
+    expect(summed.code).toBe(0)
+    expect(summed.out).toContain('verified')
+  })
+
+  test('a mismatch deletes the file and the folder made for it', async () => {
+    const dir = home()
+    const pinned = await dl([url('/tool.bin'), '--sha256', '1'.repeat(64)], dir)
+    const summed = await dl([url('/bad.bin'), '--sums', url('/SHA256SUMS')], dir)
+    const unlisted = await dl([url('/named'), '--sums', url('/SHA256SUMS')], dir)
+
+    expect(pinned.code).toBe(1)
+    expect(pinned.err).toContain('sha256 mismatch for tool.bin')
+    expect(summed.code).toBe(1)
+    expect(unlisted.code).toBe(1)
+    expect(unlisted.err).toContain('holds no sha256 for notes.txt')
+    expect(readdirSync(join(dir, 'tmp'))).toEqual([])
+  })
+
+  test('sumFor reads GNU, binary-mode, BSD and lone-hash files', () => {
+    const hash = 'a'.repeat(64)
+
+    expect(sumFor(`${'b'.repeat(64)}  other\n${hash}  ./dist/tool\n`, 'tool')).toBe(hash)
+    expect(sumFor(`${hash.toUpperCase()} *tool`, 'tool')).toBe(hash)
+    expect(sumFor(`SHA256 (tool) = ${hash}`, 'tool')).toBe(hash)
+    expect(sumFor(`${hash}\n`, 'tool')).toBe(hash)
+    expect(sumFor(`${hash}  other`, 'tool')).toBeUndefined()
+  })
+})
+
+describe('remembering', () => {
+  test('a script downloaded again says it is the same, or shows its diff once changed', async () => {
+    const dir = home()
+
+    script = SCRIPT_V1
+    await dl([url('/install.sh')], dir)
+
+    const same = await dl([url('/install.sh')], dir)
+
+    script = SCRIPT_V2
+
+    const changed = await dl([url('/install.sh')], dir)
+
+    script = SCRIPT_V1
+    expect(same.out).toContain('seen\tsame as the download of just now')
+    expect(changed.out).toContain(`seen\tchanged since the download of just now, was ${sha256(SCRIPT_V1).slice(0, 12)}`)
+    expect(changed.out).toContain('--- last\n+++ install.sh\n@@ -1,4 +1,3 @@')
+    expect(changed.out).toContain('+echo "ran again $*" > "$MARK"')
+    expect(changed.out).toContain('-curl -fsSL https://example.com/next.sh -o /tmp/next.sh')
+  })
+})
+
+describe('extracting and installing', () => {
+  test('-x unpacks into a new folder beside the archive', async () => {
+    const dir = home()
+    const { code, out } = await dl([url('/tool.tar.gz'), '-x'], dir)
+    const folder = (/^extracted\s+(\S+)$/m).exec(out)![1]!
+
+    expect(code).toBe(0)
+    expect(folder.endsWith('/tool')).toBe(true)
+    expect(readFileSync(join(folder, 'tool-1.0', 'README'), 'utf8')).toBe('read me\n')
+  })
+
+  test('--bin installs the one executable of an archive, refuses to replace it without --force, and records it', async () => {
+    const dir = home()
+    const first = await dl([url('/tool.tar.gz'), '--bin', '--sums', url('/SHA256SUMS')], dir)
+    const target = join(dir, '.local', 'bin', 'tool')
+
+    expect(first.code).toBe(0)
+    expect(first.out).toContain(`installed\t${target}`)
+    expect(statSync(target).mode & 0o777).toBe(0o755)
+
+    const again = await dl([url('/tool.tar.gz'), '--bin'], dir)
+
+    expect(again.code).toBe(1)
+    expect(again.err).toContain('pass --force to replace it')
+    expect((await dl([url('/tool.tar.gz'), '--bin', '--force'], dir)).code).toBe(0)
+
+    const listed = await dl(['ls'], dir)
+
+    expect(listed.out).toContain(`tool\tbin\tjust now\t${sha256(archive).slice(0, 12)}\t${url('/tool.tar.gz')}`)
+  })
+
+  test('--bin installs a plain file under the name given, and fails on a name the archive lacks', async () => {
+    const dir = home()
+
+    expect((await dl([url('/tool.bin'), '--bin', 'mytool'], dir)).code).toBe(0)
+    expect(existsSync(join(dir, '.local', 'bin', 'mytool'))).toBe(true)
+
+    const wrong = await dl([url('/tool.tar.gz'), '--bin', 'other'], dir)
+
+    expect(wrong.code).toBe(1)
+    expect(wrong.err).toContain('no executable named other: tool-1.0/tool')
+  })
+})
+
+describe('running a script', () => {
+  test('lists what it does, and refuses to run it unpinned, naming the sha to pin', async () => {
+    const dir = home()
+
+    script = SCRIPT_V1
+
+    const { code, out, err } = await dl([url('/install.sh'), '--exec'], dir)
+
+    expect(code).toBe(1)
+    expect(out).toContain('line 3\tfetches\tcurl -fsSL https://example.com/next.sh -o /tmp/next.sh')
+    expect(out).toContain('reads: MARK')
+    expect(err).toContain(`--exec --sha256 ${sha256(SCRIPT_V1)}`)
+    expect(existsSync(join(dir, 'mark'))).toBe(false)
+  })
+
+  test('runs it pinned or with --yes, hands it the arguments after --, and records it', async () => {
+    const dir = home()
+
+    script = SCRIPT_V1
+    expect((await dl([url('/install.sh'), '--exec', '--sha256', sha256(SCRIPT_V1), '--', 'a', 'b'], dir)).code).toBe(0)
+    expect(readFileSync(join(dir, 'mark'), 'utf8')).toBe('ran a b\n')
+    expect((await dl([url('/install.sh'), '--exec', '--yes'], dir)).code).toBe(0)
+    expect((await dl(['ls'], dir)).out).toContain(`${new URL(server.url).host}/install.sh\tscript`)
+  })
+
+  test('a pinned sha the script no longer has refuses it', async () => {
+    const dir = home()
+
+    script = SCRIPT_V2
+
+    const ran = await dl([url('/install.sh'), '--exec', '--sha256', sha256(SCRIPT_V1)], dir)
+
+    script = SCRIPT_V1
+    expect(ran.code).toBe(1)
+    expect(existsSync(join(dir, 'mark'))).toBe(false)
+  })
+})
+
+describe('pieces', () => {
+  test('summarize flags sudo, removals, profiles and shells, skipping comments and the shell\'s own variables', () => {
+    const { findings, env } = summarize('# sudo rm -rf /\nsudo mv bun /usr/local/bin\nrm -rf "$TMP_DIR"\necho \'export PATH\' >> ~/.bashrc\ncurl -s https://x.sh | bash\necho "$HOME $BUN_INSTALL"\n')
+
+    expect(findings.map(({ line, does }) => [line, does])).toEqual([[2, 'sudo, system'], [3, 'removes'], [4, 'profile'], [5, 'fetches, runs']])
+    expect(env).toEqual(['BUN_INSTALL', 'TMP_DIR'])
+  })
+
+  test('fileName keeps a plain name, out of Content-Disposition or the URL', () => {
+    const response = (url: string, disposition?: string) => {
+      const answer = new Response('', { headers: disposition === undefined ? {} : { 'content-disposition': disposition } })
+
+      Object.defineProperty(answer, 'url', { value: url })
+
+      return answer
+    }
+
+    expect(fileName(response('https://x.dev/a/tool%20v1.zip'), '')).toBe('tool v1.zip')
+    expect(fileName(response('https://x.dev/'), 'https://x.dev/')).toBe('download')
+    expect(fileName(response('https://x.dev/x', 'attachment; filename*=UTF-8\'\'%2E%2E%2Fevil.sh'), '')).toBe('evil.sh')
+  })
+})

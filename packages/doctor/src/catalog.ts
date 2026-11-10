@@ -20,6 +20,7 @@ export const ABOUT: Record<string, string> = {
   '@kaynooo/cli-code': 'source read by spans, TODO comments and the files worth splitting',
   '@kaynooo/cli-db': 'read-only SQL against Postgres, MySQL and MariaDB, credentials never shown',
   '@kaynooo/cli-dev': 'passwords, JWTs, timestamps, UUIDs, base64 and file hashes',
+  '@kaynooo/cli-dl': 'downloads checked by sha256, extracted, installed as commands or run as pinned scripts',
   '@kaynooo/cli-docker': 'docker compose on the stack found here, service health, shells and Symfony commands',
   '@kaynooo/cli-doctor': 'this install check, and the list of every bin',
   '@kaynooo/cli-edit': 'replace text in files, writing nothing unless every match count is right',

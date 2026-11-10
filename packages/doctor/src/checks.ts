@@ -43,6 +43,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-guard': ['guard'],
   '@kaynooo/cli-out': ['out'],
   '@kaynooo/cli-dev': ['dev'],
+  '@kaynooo/cli-dl': ['dl'],
   '@kaynooo/cli-pick': ['pick'],
   '@kaynooo/cli-pkg': ['pkg'],
   '@kaynooo/cli-probe': ['probe'],

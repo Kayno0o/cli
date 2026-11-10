@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { fail } from '@kaynooo/cli-kit'
 
 // tar's flags for a faithful copy: numeric owners, ACLs and extended attributes.
@@ -36,8 +37,8 @@ export async function pipeline(left: string[], right: string[], capture = false)
 }
 
 // Runs a command on the terminal, its output shown and its prompts answerable, answering its exit code.
-export async function interactive(argv: string[]): Promise<number> {
-  return Bun.spawn(argv, { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' }).exited
+export async function interactive(argv: string[], cwd = process.cwd()): Promise<number> {
+  return Bun.spawn(argv, { cwd, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' }).exited
 }
 
 export function lines(text: string): string[] {

@@ -119,6 +119,20 @@ dev jwt <token>  # header, payload and expiry
 dev ts 1700000000  # an epoch as dates
 ```
 
+## dl
+
+downloads a file into a folder of its own, checks its sha256, then extracts it, installs it as a command or runs it as a script once it is pinned. Package `dl`.
+
+Instead of: curl -fsSL <url> | sh, curl -LO then sha256sum -c by hand, and unpacking a release to copy its binary into ~/.local/bin
+
+```sh
+dl <command> [options]
+dl https://bun.sh/install  # download a script to read it
+dl https://bun.sh/install --exec --sha256 <sha>  # run the script that was read
+dl https://example.com/tool.tar.gz --sums https://example.com/SHA256SUMS --bin tool  # a checked binary, installed
+dl ls  # what dl installed or ran
+```
+
 ## dlog
 
 one line per compose service with its state and health, then the last distinct error lines of the services that log some or are not healthy, repeats collapsed to one line with a count and secrets masked as redact does. Package `docker`.

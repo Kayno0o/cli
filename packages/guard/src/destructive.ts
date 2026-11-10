@@ -40,7 +40,10 @@ export const PROTECTED_RM = 'Never `rm -r` on a `.git` directory, on `~/Workspac
 export const FIND_DELETE_HOME = 'Never `find ~ -delete` or `find / -exec rm` (also `$HOME`): it deletes matches across the whole home or disk. Start `find` in the project folder or `.` and name the pattern, such as `find . -name "*.tmp" -delete`.'
 export const REFLOG_EXPIRE = 'Never `git reflog expire`, `git gc --prune=now` or `git update-ref -d`: they drop the reflog, unreachable commits or a ref, the only way back from a bad reset or rebase. Let git prune on its own schedule, and ask the user to run one when it is really wanted.'
 export const DOCKER_PRUNE_ALL = 'Never `docker system prune -a` (`--all`): it removes every image not used by a running container, volumes of other projects\' stacks included with --volumes. `docker system prune` without -a drops only dangling data; remove named images with `docker rmi`.'
-export const PIPE_TO_SHELL = 'Never run what `curl`/`wget` fetches straight in a shell (`| sh`, `bash <(curl ...)`, `eval "$(curl ...)"`): it runs code nobody read. Download it to a file, read it, then run it, or hand the command to the user.'
+const PINNED_RUN = '`dl <url>` downloads it and prints its path and sha256; read that file, then `dl <url> --exec --sha256 <sha>` runs exactly what was read.'
+
+export const PIPE_TO_SHELL = `Never run what \`curl\`/\`wget\` fetches straight in a shell (\`| sh\`, \`bash <(curl ...)\`, \`eval "$(curl ...)"\`): it runs code nobody read. ${PINNED_RUN} Or hand the command to the user.`
+export const UNPINNED_EXEC = `Never \`dl --exec --yes\` a script no \`--sha256\` or \`--sums\` pins: it runs code nobody read. ${PINNED_RUN}`
 
 // Whether a short or long option is among the arguments before a `--`.
 function hasOption(args: readonly string[], long: readonly string[], shorts: string): boolean {
@@ -212,6 +215,14 @@ function runsDownload(command: string): boolean {
   })
 }
 
+// Whether `dl` is told to run its script on --yes alone, with neither a sha256 nor a checksums file pinning it.
+function runsUnpinned(args: readonly string[]): boolean {
+  const own = args.includes('--') ? args.slice(0, args.indexOf('--')) : args
+  const given = (name: string) => own.some(arg => arg === name || arg.startsWith(`${name}=`))
+
+  return given('--exec') && given('--yes') && !given('--sha256') && !given('--sums')
+}
+
 // Why the command is refused as destructive, or null when no piece throws work away.
 export function destructiveViolation(command: string): string | null {
   if (runsDownload(command))
@@ -219,6 +230,9 @@ export function destructiveViolation(command: string): string | null {
 
   for (const piece of splitCommand(command)) {
     const { program, args } = parseCommand(piece.command)
+
+    if (program === 'dl' && runsUnpinned(args))
+      return UNPINNED_EXEC
 
     if (program === 'rm' && removesBroadly(args))
       return BROAD_RM

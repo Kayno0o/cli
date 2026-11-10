@@ -1,6 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import { existsSync, rmSync, statSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, join, resolve } from 'node:path'
+import process from 'node:process'
 import { fail, parse } from '@kaynooo/cli-kit'
 import { interactive } from './proc'
 
@@ -43,27 +44,43 @@ export async function extract(args: string[]): Promise<number> {
     examples: ['arc extract release.tar.gz', 'arc extract photos.zip'],
   })
 
+  return extractArchive(file, process.cwd())
+}
+
+// The archive extension `file` ends with, lower case; undefined for a file arc cannot extract.
+export function archiveSuffix(file: string): string | undefined {
+  return extractorOf(file)?.[0]
+}
+
+function extractorOf(file: string) {
+  return EXTRACTORS.find(([suffix]) => file.toLowerCase().endsWith(suffix))
+}
+
+// Extracts `file` into `cwd` by its extension, failing with exit 1 on a missing file, an unknown extension or a missing extractor; answers 0 or 1.
+export async function extractArchive(file: string, cwd: string): Promise<number> {
   if (!existsSync(file) || !statSync(file).isFile())
     return fail(`'${file}' is not a file`, 1)
 
-  const extractor = EXTRACTORS.find(([suffix]) => file.toLowerCase().endsWith(suffix))
+  const extractor = extractorOf(file)
 
   if (extractor === undefined)
     return fail(`'${file}' cannot be extracted: unknown extension`, 1)
 
   const [suffix, argvOf] = extractor
-  const argv = argvOf(file)
+  const argv = argvOf(resolve(file))
 
   if (Bun.which(argv[0] ?? '') === null)
     return fail(`${argv[0]} is not on PATH`, 1)
 
   if (!LONE.has(suffix))
-    return await interactive(argv) === 0 ? 0 : 1
+    return await interactive(argv, cwd) === 0 ? 0 : 1
 
-  const target = basename(file).slice(0, -suffix.length)
+  const name = basename(file).slice(0, -suffix.length)
 
-  if (target === '')
+  if (name === '')
     return fail(`'${file}' has no name left once ${suffix} is taken off`, 1)
+
+  const target = join(cwd, name)
 
   if (await Bun.spawn(argv, { stdin: 'ignore', stdout: Bun.file(target), stderr: 'inherit' }).exited === 0)
     return 0

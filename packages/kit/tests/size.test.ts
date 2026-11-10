@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { parseSize } from '../src/size'
+import { formatSize, parseSize } from '../src/size'
 
 test('parseSize reads units, decimals, MiB spellings and a bare number in the unit asked', () => {
   expect(parseSize('500M')).toBe(500 * 1024 ** 2)
@@ -10,4 +10,11 @@ test('parseSize reads units, decimals, MiB spellings and a bare number in the un
   expect(parseSize('2', 1024 ** 2)).toBe(2 * 1024 ** 2)
   expect(parseSize('lots')).toBeUndefined()
   expect(parseSize('-1M')).toBeUndefined()
+})
+
+test('formatSize keeps bytes whole, one decimal under 10 of a unit and none above', () => {
+  expect(formatSize(512)).toBe('512B')
+  expect(formatSize(1536)).toBe('1.5K')
+  expect(formatSize(38 * 1024 ** 2)).toBe('38M')
+  expect(formatSize(3 * 1024 ** 5)).toBe('3072T')
 })

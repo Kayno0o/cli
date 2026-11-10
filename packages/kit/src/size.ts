@@ -12,3 +12,18 @@ export function parseSize(text: string, bareUnit = 1): number | undefined {
 
   return Math.round(Number(match[1]) * (suffix === '' ? bareUnit : 1024 ** POWERS[suffix]!))
 }
+
+const UNITS = ['B', 'K', 'M', 'G', 'T']
+
+// Bytes in the largest unit under 1024 of it, in powers of 1024: `512B`, `1.5K`, `38M`.
+export function formatSize(bytes: number): string {
+  let value = bytes
+  let unit = 0
+
+  while (value >= 1024 && unit < UNITS.length - 1) {
+    value /= 1024
+    unit++
+  }
+
+  return unit === 0 ? `${value}B` : `${value.toFixed(value < 10 ? 1 : 0)}${UNITS[unit]}`
+}

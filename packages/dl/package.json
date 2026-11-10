@@ -1,0 +1,41 @@
+{
+  "name": "@kaynooo/cli-dl",
+  "type": "module",
+  "version": "0.0.0",
+  "description": "dl: downloads a file into a folder of its own, verified by sha256, then extracts it, installs it as a command or runs it as a script once it is pinned; remembers every URL to show what changed.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/dl#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "directory": "packages/dl"
+  },
+  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "keywords": [
+    "cli",
+    "download",
+    "checksum",
+    "install"
+  ],
+  "bin": {
+    "dl": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "publishConfig": {
+    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
+  },
+  "scripts": {
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "dl": "$npm_execpath src/cli.ts"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-arc": "workspace:*",
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}
