@@ -80,12 +80,30 @@ export async function syncTask(task: string | undefined, options: GlobalOptions)
   console.log(`wt: synced ${worktree.id}`)
 }
 
-/** Refuses a removal with nothing to remove, before it claims a job that would leave a record of a worktree never there. */
-export async function assertRemovable(task: string, options: GlobalOptions): Promise<void> {
+/** Refuses a removal that would lose uncommitted changes or commits on no branch, unless forced. */
+async function refuseLosingWork(worktree: Worktree, force: boolean): Promise<void> {
+  if (force || !existsSync(worktree.dir))
+    return
+
+  const dirty = await dirtyRepos(worktree)
+
+  if (dirty.length)
+    throw new WtError(`uncommitted changes in ${dirty.join(', ')}, commit them or pass --force`)
+
+  const unreachable = await unreachableCommits(worktree)
+
+  if (unreachable.length)
+    throw new WtError(`commits on no branch in ${unreachable.join(', ')} would be lost, \`git switch -c <branch>\` there or pass --force`)
+}
+
+/** Refuses a removal with nothing to remove, or work it would lose, before it claims a job: a job left recording a worktree never there, or a `--bg` one failing out of sight. */
+export async function assertRemovable(task: string, options: GlobalOptions & { force?: boolean }): Promise<void> {
   const worktree = await locateWorktree(process.cwd(), task, options.project)
 
   if (!existsSync(worktree.dir) && !Object.values(worktree.files).some(file => existsSync(file)) && !await isRegistered(worktree))
     throw new WtError(`no worktree ${worktree.task} of ${worktree.project.name}, nothing removed`)
+
+  await refuseLosingWork(worktree, options.force === true)
 }
 
 export async function removeTask(task: string, options: GlobalOptions & { force?: boolean }): Promise<void> {
@@ -96,17 +114,8 @@ export async function removeTask(task: string, options: GlobalOptions & { force?
 
   const anonymous = await anonymousVolumes(worktree)
 
-  if (existsSync(worktree.dir)) {
-    const dirty = options.force ? [] : await dirtyRepos(worktree)
-
-    if (dirty.length)
-      throw new WtError(`uncommitted changes in ${dirty.join(', ')}, commit them or pass --force`)
-
-    const unreachable = options.force ? [] : await unreachableCommits(worktree)
-
-    if (unreachable.length)
-      throw new WtError(`commits on no branch in ${unreachable.join(', ')} would be lost, \`git switch -c <branch>\` there or pass --force`)
-  }
+  // Again inside the job: the tree may have changed since the check before it
+  await refuseLosingWork(worktree, options.force === true)
 
   // With the folder gone, its containers may still hold its volumes
   if (existsSync(worktree.dir) || await hasContainers(worktree.id))

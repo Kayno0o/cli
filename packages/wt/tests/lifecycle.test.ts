@@ -743,6 +743,46 @@ describe('up and down with no runner', () => {
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
 
+  test('run up and rm with --bg as detached jobs, their output in the job log, a notification once up', async () => {
+    const { sandbox, wt, dirOf } = env
+    const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')
+    const job = join(jobs, 'times--planning.json')
+    const lock = join(jobs, 'times--planning.lock')
+    const settled = async (done: () => boolean) => {
+      for (let tries = 0; tries < 100 && !done(); tries++)
+        await Bun.sleep(100)
+    }
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+
+    const up = await wt('up', 'planning', '--bg')
+
+    expect(up.code).toBe(0)
+    expect(up.out).toContain(`wt: up times/planning runs out of sight, its output in ${join(jobs, 'times--planning.log')}`)
+    await settled(() => !existsSync(lock))
+    expect(JSON.parse(readFileSync(job, 'utf8'))).toMatchObject({ ref: 'times/planning', verb: 'up', code: 0 })
+    expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose up')).map(call => call.cwd)).toEqual([dirOf('planning')])
+    const notified = sandbox.calls().filter(call => call.startsWith('notify-send'))
+
+    expect(notified).toHaveLength(1)
+    expect(notified[0]).toContain('times/planning is up')
+
+    // The setup's log left the tree dirty: refused before any job starts, rather than failing out of sight
+    const refused = await wt('rm', 'planning', '--bg')
+
+    expect(refused.code).toBe(1)
+    expect(refused.err).toContain('uncommitted changes in root')
+    expect(JSON.parse(readFileSync(job, 'utf8'))).toMatchObject({ verb: 'up' })
+
+    expect((await wt('rm', 'planning', '--bg', '--force')).code).toBe(0)
+    await settled(() => !existsSync(dirOf('planning')) && !existsSync(lock))
+    expect(existsSync(dirOf('planning'))).toBe(false)
+    // A removal that worked forgets the worktree's jobs
+    expect(existsSync(job)).toBe(false)
+    expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose down'))).toHaveLength(1)
+    expect(sandbox.forbidden()).toEqual([])
+  }, 30_000)
+
   test('refuses, saying why, to start routed services on a proxy network nothing created', async () => {
     const { sandbox, wt } = env
 

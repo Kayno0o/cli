@@ -117,13 +117,19 @@ esac
 exit 0
 `
 
+// Logs the notification a detached job ends with, so none reaches the desktop
+const NOTIFY_SEND = `#!/bin/sh
+echo "notify-send $*" >> "$FAKE_DIR/calls.log"
+exit 0
+`
+
 const FORBIDDEN = `#!/bin/sh
 echo "$(basename "$0") $*" >> "$FAKE_DIR/forbidden.log"
 exit 1
 `
 
 /** Tools no test may reach, whether the code under test means to or not. */
-const FORBIDDEN_TOOLS = ['nginx', 'sudo', 'notify-send', 'xdg-open', 'ssh', 'systemctl']
+const FORBIDDEN_TOOLS = ['nginx', 'sudo', 'xdg-open', 'ssh', 'systemctl']
 
 export interface DockerCall {
   cwd: string
@@ -146,7 +152,7 @@ export interface Sandbox {
   /** What a fake wrote back, such as the volumes left or the containers still paused. */
   read: (file: string) => string
   dockerCalls: () => DockerCall[]
-  /** Everything the mkcert and devproxy fakes were asked, one per line. */
+  /** Everything the mkcert, devproxy and notify-send fakes were asked, one per line. */
   calls: () => string[]
   /** What a forbidden tool was asked; empty when nothing reached one. */
   forbidden: () => string[]
@@ -176,6 +182,7 @@ export function makeSandbox(): Sandbox {
   install('mkcert', MKCERT)
 
   install('devproxy', DEVPROXY)
+  install('notify-send', NOTIFY_SEND)
 
   for (const name of FORBIDDEN_TOOLS)
     install(name, FORBIDDEN)
