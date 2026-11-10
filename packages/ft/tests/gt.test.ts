@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { $ } from 'bun'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { teaLogins } from '../src/forge'
 import { close, comment, createIssue, editIssue, editLabels, getIssue, reopen } from '../src/issues'
@@ -9,7 +10,7 @@ import { refusal, withFakeGt } from './fake-tea'
 
 const TOKEN = 'secret-token-0123456789'
 const root = mkdtempSync(join(tmpdir(), 'ft-gt-'))
-const saved = { config: process.env.XDG_CONFIG_HOME, token: process.env.GITEA_TOKEN, host: process.env.GITEA_CLI_HOST }
+const saved = { cwd: process.cwd(), config: process.env.XDG_CONFIG_HOME, token: process.env.GITEA_TOKEN, host: process.env.GITEA_CLI_HOST }
 
 function restore(name: string, value: string | undefined): void {
   if (value === undefined)
@@ -18,13 +19,17 @@ function restore(name: string, value: string | undefined): void {
     process.env[name] = value
 }
 
-beforeAll(() => {
+// Run from a repository on the logged-in forge, whatever forge this checkout's own origin is on.
+beforeAll(async () => {
   mkdirSync(join(root, 'tea'), { recursive: true })
   writeFileSync(join(root, 'tea', 'config.yml'), `logins:\n    - name: git.kaynooo.fr\n      url: https://git.kaynooo.fr\n      token: ${TOKEN}\n      default: true\n      user: kaynooo\n`)
   process.env.XDG_CONFIG_HOME = root
+  await $`git init -q repo && git -C repo remote add origin git@git.kaynooo.fr:kaynooo/cli.git`.cwd(root).quiet()
+  process.chdir(join(root, 'repo'))
 })
 
 afterAll(() => {
+  process.chdir(saved.cwd)
   restore('XDG_CONFIG_HOME', saved.config)
   rmSync(root, { recursive: true, force: true })
 })

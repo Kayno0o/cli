@@ -73,7 +73,7 @@ export class Completing {
 // A value `__complete` offers, with an optional description shown beside it.
 export type Candidate = string | [value: string, description: string]
 
-// The values a positional or an option can take, read only while a shell completes it; `typed` holds the positionals written before the word being completed, so one can depend on another (`acme restart <stack> <service>`).
+// The values a positional or an option can take, read only while a shell completes it; `typed` holds the positionals written before the word being completed, so one can depend on another (`app restart <stack> <service>`).
 export type Candidates = (typed: string[]) => Candidate[] | Promise<Candidate[]>
 
 export const completion = { active: false }
@@ -95,7 +95,7 @@ type Chosen<T extends Options, Values> = {
 export interface ParseSettings<Names extends readonly string[] = string[]> {
   // Stops at the first `--` and hands what follows back untouched as `rest`, for a command that runs another (`out -n 200 -- <cmd>`).
   rest?: boolean
-  // With `positionals`, passes everything after the last declared one back untouched as `rest`, dashes included and without a `--`: `acme compose <project> exec -T php bash`. Options typed before it parse as usual, and it replaces `rest`.
+  // With `positionals`, passes everything after the last declared one back untouched as `rest`, dashes included and without a `--`: `app compose <project> exec -T php bash`. Options typed before it parse as usual, and it replaces `rest`.
   trailing?: boolean
   // Takes `--no-<flag>` as `false` for a boolean flag, as parseArgs' own `allowNegative` does.
   allowNegative?: boolean

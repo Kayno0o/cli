@@ -56,8 +56,6 @@ export const TOOLS: Record<string, string[]> = {
 }
 
 export const FORGE = 'git.kaynooo.fr'
-// The same Forgejo under the private name its owner's network reaches it by, which a login may use instead.
-const FORGE_HOSTS = new Set([FORGE, 'git.kaynooo.fr'])
 const PLUGIN = 'cli-hooks@kaynooo-cli'
 const MARKETPLACE = `https://${FORGE}/kaynooo/cli.git`
 const LEADING_TILDE = /^~(?=\/|$)/
@@ -185,7 +183,7 @@ export async function checkTea(host: Host): Promise<Result> {
 
   const logins = await host.run(['tea', 'login', 'list', '-o', 'json'])
   const parsed = logins.code === 0 ? readJsonText<{ name: string, url: string }[]>(logins.stdout) : undefined
-  const hosts = new Set([...FORGE_HOSTS, ...extraForgeHosts(host.home)])
+  const hosts = new Set([FORGE, ...extraForgeHosts(host.home)])
   const login = parsed?.find(each => URL.canParse(each.url) && hosts.has(new URL(each.url).host))
 
   if (login === undefined)

@@ -414,7 +414,7 @@ async function candidates(scope: Scope, defaultCommand: string | undefined, word
   if (listing) {
     const own = await Promise.all(Object.entries(shown(commands)).map(async ([name, { summary }]) => `${name}\t${await resolveSummary(summary)}`))
     const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]
-    // What the default command takes as its first positional is typed here too, `acme <project>`; a name a command already has is left out.
+    // What the default command takes as its first positional is typed here too, `app <project>`; a name a command already has is left out.
     const values = fallback !== undefined && 'run' in fallback ? await leafCandidates(fallback.run, [word]) : []
 
     const valueOf = (line: string) => line.slice(0, line.includes('\t') ? line.indexOf('\t') : undefined)
