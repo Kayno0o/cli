@@ -37,10 +37,8 @@
     "sf": "$npm_execpath src/sf-cli.ts"
   },
   "dependencies": {
-    "@kaynooo/utils": "3.0.0"
-  },
-  "devDependencies": {
     "@kaynooo/cli-env": "workspace:*",
-    "@kaynooo/cli-kit": "workspace:*"
+    "@kaynooo/cli-kit": "workspace:*",
+    "@kaynooo/utils": "3.0.0"
   }
 }

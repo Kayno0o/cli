@@ -36,7 +36,7 @@
     "ev": "$npm_execpath src/ev.ts",
     "redact": "$npm_execpath src/redact.ts"
   },
-  "devDependencies": {
+  "dependencies": {
     "@kaynooo/cli-kit": "workspace:*"
   }
 }

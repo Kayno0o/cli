@@ -37,10 +37,8 @@
         "changelog": "./dist/cli.js",
       },
       "dependencies": {
-        "@kaynooo/utils": "3.0.0",
-      },
-      "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/utils": "3.0.0",
       },
     },
     "packages/check": {
@@ -113,11 +111,9 @@
         "sf": "./dist/sf-cli.js",
       },
       "dependencies": {
-        "@kaynooo/utils": "3.0.0",
-      },
-      "devDependencies": {
         "@kaynooo/cli-env": "workspace:*",
         "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/utils": "3.0.0",
       },
     },
     "packages/doctor": {
@@ -151,7 +147,7 @@
         "ev": "./dist/ev.js",
         "redact": "./dist/redact.js",
       },
-      "devDependencies": {
+      "dependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
