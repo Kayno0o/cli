@@ -1,9 +1,10 @@
 import type { Fetcher } from '../src/registry'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import * as kit from '@kaynooo/cli-kit'
 import { Exit } from '@kaynooo/cli-kit'
 import { tempDirs } from '@kaynooo/cli-kit/test'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { fetchAdvisories } from '../src/advisories'
 import { parseSpec } from '../src/analyze'
 import { checkPackage, render } from '../src/commands/check'
@@ -336,14 +337,16 @@ describe('analyze edge cases', () => {
     expect(unfixed.fixes).toEqual([])
   })
 
-  test('a long name far from every popular name skips the edit distance', () => {
-    const started = performance.now()
-    const names = Array.from({ length: 1500 }, (_, index) => `@scope${index}/package-with-a-long-name-${index}`)
+  test('a name longer than every popular name by more than two skips the edit distance', () => {
+    const counted = spyOn(kit, 'distance')
 
-    for (const name of names)
-      nearMisses(name)
-
-    expect(performance.now() - started).toBeLessThan(2000)
+    try {
+      expect(nearMisses('@scope7/package-with-a-name-longer-than-any-popular-one')).toEqual([])
+      expect(counted).not.toHaveBeenCalled()
+    }
+    finally {
+      counted.mockRestore()
+    }
   })
 })
 
