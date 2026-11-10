@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-dl",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "dl: downloads a file into a folder of its own, verified by sha256, then extracts it, installs it as a command or runs it as a script once it is pinned; remembers every URL to show what changed.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
