@@ -75,10 +75,6 @@ export class WtError extends KnownError {}
 // A DNS label, as the task prefixes every host of the worktree.
 const TASK_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 
-export function defineProject(config: ProjectConfig): ProjectConfig {
-  return config
-}
-
 const ROUTE_TARGET = /^client$|^[\w.-]+:\d+$/
 
 // Every file wt generates for a worktree outside of it, so `wt rm` has one list to delete.

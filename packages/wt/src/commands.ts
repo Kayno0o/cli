@@ -80,11 +80,16 @@ export async function syncTask(task: string | undefined, options: GlobalOptions)
   console.log(`wt: synced ${worktree.id}`)
 }
 
-export async function removeTask(task: string, options: GlobalOptions & { force?: boolean }): Promise<void> {
+/** Refuses a removal with nothing to remove, before it claims a job that would leave a record of a worktree never there. */
+export async function assertRemovable(task: string, options: GlobalOptions): Promise<void> {
   const worktree = await locateWorktree(process.cwd(), task, options.project)
 
   if (!existsSync(worktree.dir) && !Object.values(worktree.files).some(file => existsSync(file)) && !await isRegistered(worktree))
     throw new WtError(`no worktree ${worktree.task} of ${worktree.project.name}, nothing removed`)
+}
+
+export async function removeTask(task: string, options: GlobalOptions & { force?: boolean }): Promise<void> {
+  const worktree = await locateWorktree(process.cwd(), task, options.project)
 
   // Every command after this one spawns from the cwd, which may be the directory about to go.
   process.chdir(worktree.project.root)

@@ -310,6 +310,7 @@ describe('removeTask', () => {
 
     expect(run.code).toBe(1)
     expect(run.err).toContain('no worktree nothing of times, nothing removed')
+    expect(existsSync(join(env.sandbox.home, '.cache', 'wt', 'jobs', 'times--nothing.json'))).toBe(false)
   })
 })
 
@@ -699,7 +700,8 @@ exit 0
 
     expect(run.err).toBe('')
     expect(run.code).toBe(0)
-    expect(sandbox.calls().filter(call => call.startsWith('runner'))).toEqual([
+    // Each entry names its holder's pid, which differs between the up and the rm
+    expect(sandbox.calls().filter(call => call.startsWith('runner')).map(call => call.replace(/held=\d+ /, 'held='))).toEqual([
       `runner up times/planning held=${lock}`,
       `runner down times/planning planning held=${lock}`,
       `runner up times/planning held=${lock}`,
@@ -740,6 +742,19 @@ describe('up and down with no runner', () => {
     expect(readFileSync(join(dirOf('planning'), 'setup.log'), 'utf8')).toBe('ran\n')
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
+
+  test('refuses, saying why, to start routed services on a proxy network nothing created', async () => {
+    const { sandbox, wt } = env
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+    sandbox.seed('devproxy-unconfigured', '')
+
+    const run = await wt('up', 'planning')
+
+    expect(run.code).toBe(1)
+    expect(run.err).toContain('the routed services join the proxy network, which does not exist: install and configure devproxy, or set proxyNetwork in')
+    expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose up'))).toEqual([])
+  }, 30_000)
 })
 
 describe('wt init', () => {
@@ -769,5 +784,37 @@ describe('wt init', () => {
     // The manifest's name is its file's, so the draft is the one printed, less the newline console.log adds
     expect(`${readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), 'utf8')}\n`).toBe(printed.out)
     expect(sandbox.forbidden()).toEqual([])
+  }, 30_000)
+})
+
+describe('wt ls --json', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+    env.sandbox.seed('volumes', 'times_mailpit\n')
+  })
+
+  afterAll(() => env?.stop())
+
+  // The shape Herdr's Worktrees section parses
+  test('lists main and each worktree of the project the directory is in, every key a reader relies on set', async () => {
+    const { sandbox, wt, root, dirOf } = env
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+    sandbox.seed('compose-ls.json', JSON.stringify([{ Name: 'times--planning', Status: 'running(2)' }]))
+
+    const run = await wt('ls', '--json')
+
+    expect(run.err).toBe('')
+    expect(run.code).toBe(0)
+    expect(JSON.parse(run.out)).toEqual({
+      project: 'times',
+      checkouts: [
+        { project: 'times', task: 'main', dir: root, branch: 'main', url: 'https://times.localhost', running: false, dirty: 0, unbranched: 0, session: 'times' },
+        { project: 'times', task: 'planning', dir: dirOf('planning'), branch: 'wt/planning', url: 'https://planning.times.localhost', running: true, dirty: 0, unbranched: 0, session: 'times--planning' },
+      ],
+    })
   }, 30_000)
 })

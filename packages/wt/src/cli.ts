@@ -3,7 +3,7 @@
 import type { GlobalOptions } from './commands'
 import process from 'node:process'
 import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
-import { addTask, downTask, printPath, printTasks, printUrls, removeTask, syncTask, upTask } from './commands'
+import { addTask, assertRemovable, downTask, printPath, printTasks, printUrls, removeTask, syncTask, upTask } from './commands'
 import { wtConfig } from './config'
 import { failKnown } from './errors'
 import { initProject } from './init'
@@ -193,7 +193,11 @@ process.exitCode = await runCli({
           bg: BG_OPTION,
         }, { positionals: ['<task>'], candidates: TASK })
 
-        return guarded(async () => asWorktreeJob('rm', task, values, ['rm', task, ...(values.force ? ['--force'] : [])], async () => removeTask(task, values)))
+        return guarded(async () => {
+          await assertRemovable(task, values)
+
+          return asWorktreeJob('rm', task, values, ['rm', task, ...(values.force ? ['--force'] : [])], async () => removeTask(task, values))
+        })
       },
     },
     up: {

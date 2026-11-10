@@ -27,6 +27,7 @@ case "$1" in
       exit 1
     fi
     case "$sub" in
+      ls) if [ -f "$d/compose-ls.json" ]; then cat "$d/compose-ls.json"; else echo '[]'; fi ;;
       config)
         case "$*" in
           *--format*) if [ -f "$d/config-$key.json" ]; then cat "$d/config-$key.json"; else cat "$d/config.json"; fi ;;
@@ -103,12 +104,15 @@ while [ $# -gt 0 ]; do
 done
 `
 
-// The shared proxy: logs what it was asked, lists the hosts of `devproxy-hosts` (none by default), fails `up` when `devproxy-fails` exists.
+// The shared proxy: logs what it was asked, lists the hosts of `devproxy-hosts` (none by default), fails `up` when `devproxy-fails` exists, and has no config to serve when `devproxy-unconfigured` does; `up` creates the proxy network.
 const DEVPROXY = `#!/bin/sh
 echo "devproxy $*" >> "$FAKE_DIR/calls.log"
+[ -f "$FAKE_DIR/devproxy-unconfigured" ] && exit 1
 case "$1" in
   hosts) cat "$FAKE_DIR/devproxy-hosts" 2>/dev/null || echo '[]' ;;
-  up) [ -f "$FAKE_DIR/devproxy-fails" ] && exit 1 ;;
+  up)
+    [ -f "$FAKE_DIR/devproxy-fails" ] && exit 1
+    touch "$FAKE_DIR/network" ;;
 esac
 exit 0
 `

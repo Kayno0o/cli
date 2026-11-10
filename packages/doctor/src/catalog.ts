@@ -47,5 +47,5 @@ export const NEEDS: Record<string, Need[]> = {
   '@kaynooo/cli-forgejo': [{ bin: 'tea', why: 'ft goes through it', how: 'https://gitea.com/gitea/tea/releases, or gt (gitea-cli) instead', alternative: 'gt' }],
   '@kaynooo/cli-gitlab': [{ bin: 'glab', why: 'gl goes through it', how: 'https://gitlab.com/gitlab-org/cli' }],
   '@kaynooo/cli-docker': [{ bin: 'docker', why: 'dc, dlog, dx and sf run docker compose', how: 'https://docs.docker.com/engine/install/' }],
-  '@kaynooo/cli-wt': [{ bin: 'docker', why: 'wt runs each worktree stack with docker compose', how: 'https://docs.docker.com/engine/install/' }, { bin: 'mkcert', why: 'wt makes the certificates of passthrough routes', how: 'https://github.com/FiloSottile/mkcert' }],
+  '@kaynooo/cli-wt': [{ bin: 'docker', why: 'wt runs each worktree stack with docker compose', how: 'https://docs.docker.com/engine/install/' }, { bin: 'mkcert', why: 'wt makes the certificates of a manifest\'s passthrough routes with it, and nothing else needs it', how: 'https://github.com/FiloSottile/mkcert' }],
 }

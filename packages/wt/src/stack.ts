@@ -6,7 +6,7 @@ import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import { $ } from 'bun'
 import { composeEnv } from './compose'
-import { fillTemplate } from './config'
+import { configPath, fillTemplate } from './config'
 import { WtError } from './project'
 import { devproxyUp, hasDevproxy } from './proxy'
 
@@ -17,8 +17,6 @@ const UNSAFE_IN_FILE_NAME = /[^\w.-]+/g
 export function slugOf(ref: string): string {
   return ref.replace(LEADING_ROOT, '').replace(UNSAFE_IN_FILE_NAME, '--')
 }
-
-export const refOf = (worktree: Worktree) => `${worktree.project.name}/${worktree.task}`
 
 // The env is always passed: a spawn given none gets the env the process started with, missing the WT_JOBS_HELD a job sets since.
 async function spawnInherit(argv: string[], cwd: string, env: Record<string, string | undefined> = process.env): Promise<number> {
@@ -59,6 +57,11 @@ export async function stackUp(worktree: Worktree): Promise<void> {
   // The override puts routed services on the proxy's network, which must exist before compose starts them
   if (await hasDevproxy())
     await devproxyUp()
+
+  const network = worktree.project.settings.proxyNetwork
+
+  if (worktree.project.routes.length > 0 && (await $`docker network inspect ${network}`.quiet().nothrow()).exitCode !== 0)
+    throw new WtError(`the routed services join the ${network} network, which does not exist: install and configure devproxy, or set proxyNetwork in ${configPath()} to the network your proxy dials stacks on`)
 
   if (await spawnInherit(['docker', 'compose', 'up', '-d', '--build'], worktree.dir, composeEnv()) !== 0)
     throw new WtError(`docker compose up failed in ${worktree.dir}`)

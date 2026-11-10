@@ -36,16 +36,22 @@ export interface JobState {
   last?: Job
 }
 
-/** The locks the jobs of this process tree hold, one path per line, so a command a job runs (wt rm running a project tool's `down`) works inside it instead of being refused. */
+/** The locks the jobs of this process tree hold, one `<pid> <lock path>` per line, so a command a job runs (wt rm running a project tool's `down`) works inside it instead of being refused. */
 export const HELD_ENV = 'WT_JOBS_HELD'
 /** How long a detached job may take to write its pid before its lock counts as abandoned. */
 const STARTING_MS = 30_000
 /** How long a takeover of an abandoned lock may last before another claimer takes it over in turn. */
 const TAKEOVER_MS = 5_000
 const TAIL_BYTES = 4096
-/** The words every Herdr mod shows too, for the action running on a stack. */
-const DOING: Record<string, string> = { up: 'coming up', down: 'stopping', restart: 'restarting', stop: 'stopping', start: 'starting', panes: 'relaunching panes', rebuild: 'rebuilding', add: 'being made', sync: 'syncing', rm: 'being removed' }
-const DONE: Record<string, [string, string]> = { up: ['is up', 'Its stack came up'], restart: ['is up', 'Restarted'], add: ['is ready', 'The worktree is made, its stack still down'] }
+/** What a refusal says of wt's own actions; another tool sharing the folder adds its verbs through `words`. */
+const DOING: Record<string, string> = { up: 'coming up', down: 'stopping', add: 'being made', sync: 'syncing', rm: 'being removed' }
+/** The actions a notification reports the success of, as a title and a body. */
+const DONE: Record<string, [string, string]> = { up: ['is up', 'Its stack came up'], add: ['is ready', 'The worktree is made, its stack still down'] }
+
+export interface JobWords {
+  doing?: Record<string, string>
+  done?: Record<string, [string, string]>
+}
 
 /** Written beside the file and renamed over it, so a mod reading it meanwhile never sees half of it. */
 function writeJob(file: string, job: Job): void {
@@ -64,9 +70,9 @@ function readJob(file: string): Job | undefined {
   }
 }
 
-/** What a job is doing, its service named: "restarting php". */
-function doing(job: Pick<Job, 'verb' | 'service'> | undefined): string {
-  const words = DOING[job?.verb ?? ''] ?? 'busy'
+/** What a job is doing, its service named: "restarting php"; a verb with no words is named as it is: "busy with panes". */
+function doing(table: Record<string, string>, job: Pick<Job, 'verb' | 'service'> | undefined): string {
+  const words = job === undefined ? 'busy' : table[job.verb] ?? `busy with ${job.verb}`
 
   return job?.service !== undefined ? `${words} ${job.service}` : words
 }
@@ -121,6 +127,20 @@ function takeOver(lock: string): boolean {
 }
 
 const heldHere = () => (process.env[HELD_ENV] ?? '').split('\n').filter(Boolean)
+const heldEntry = (lock: string) => `${process.pid} ${lock}`
+
+/** Whether an entry of HELD_ENV still names the lock's holder: a lock taken over since (its holder gone, its pid reused) holds another pid. */
+function stillHeldBy(entry: string): boolean {
+  const space = entry.indexOf(' ')
+  const lock = entry.slice(space + 1)
+
+  try {
+    return readFileSync(lock, 'utf8').trim() === entry.slice(0, space) && held(lock)
+  }
+  catch {
+    return false
+  }
+}
 
 /** The last lines of a log, read from its end: a long build's log is not read whole, and one gone reads empty. */
 export function logTail(file: string, lines = 5): string {
@@ -155,10 +175,15 @@ export class Jobs {
   readonly app: string
   readonly env: string
 
-  constructor({ dir, app }: { dir: string, app: string }) {
+  readonly doing: Record<string, string>
+  readonly done: Record<string, [string, string]>
+
+  constructor({ dir, app, words = {} }: { dir: string, app: string, words?: JobWords }) {
     this.dir = dir
     this.app = app
     this.env = `${app.toUpperCase()}_JOB`
+    this.doing = { ...DOING, ...words.doing }
+    this.done = { ...DONE, ...words.done }
   }
 
   paths(slug: string) {
@@ -169,7 +194,7 @@ export class Jobs {
   holds(stack: Pick<JobStack, 'slug'>): boolean {
     const { lock } = this.paths(stack.slug)
 
-    return heldHere().includes(lock) && held(lock)
+    return heldHere().some(entry => entry.endsWith(` ${lock}`) && stillHeldBy(entry))
   }
 
   /** Takes the stack's lock for `verb`, refusing while another action holds it; a lock its process left behind is taken over. */
@@ -191,7 +216,7 @@ export class Jobs {
         if (attempt > 0 || held(lock) || !takeOver(lock)) {
           const running = readJob(jobFile)
 
-          throw new KnownError(`${stack.ref} is already ${doing(running)}${running !== undefined && running.log !== '' ? `, see ${running.log}` : ''}`)
+          throw new KnownError(`${stack.ref} is already ${doing(this.doing, running)}${running !== undefined && running.log !== '' ? `, see ${running.log}` : ''}`)
         }
       }
     }
@@ -277,16 +302,21 @@ export class Jobs {
 
     // The commands the job runs are not the job, but they work under its lock
     delete process.env[this.env]
-    process.env[HELD_ENV] = [...heldHere(), this.paths(stack.slug).lock].join('\n')
+    process.env[HELD_ENV] = [...heldHere(), heldEntry(this.paths(stack.slug).lock)].join('\n')
 
-    const code = await attempt(async () => work(detached))
+    let code = 1
 
-    if (before === undefined)
-      delete process.env[HELD_ENV]
-    else
-      process.env[HELD_ENV] = before
+    try {
+      code = await attempt(async () => work(detached))
+    }
+    finally {
+      if (before === undefined)
+        delete process.env[HELD_ENV]
+      else
+        process.env[HELD_ENV] = before
 
-    this.finish(stack, job, code)
+      this.finish(stack, job, code)
+    }
 
     if (detached)
       await this.notifyEnd(stack, job, code)
@@ -364,7 +394,7 @@ export class Jobs {
 
   /** How a detached job ended, for the user who may have moved on: a failure always, an up, restart of the whole stack or new worktree once done. */
   async notifyEnd(stack: Pick<JobStack, 'ref'>, job: Job, code: number): Promise<void> {
-    const done = job.service !== undefined ? undefined : DONE[job.verb]
+    const done = job.service !== undefined ? undefined : this.done[job.verb]
 
     if (code === 0) {
       if (done)

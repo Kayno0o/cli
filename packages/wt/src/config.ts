@@ -40,10 +40,6 @@ export function expandHome(path: string): string {
 
 export const configPath = () => process.env.WT_CONFIG ?? join((process.env.XDG_CONFIG_HOME ?? '') || join(homedir(), '.config'), 'wt', 'config.ts')
 
-export function defineConfig(config: WtConfig): WtConfig {
-  return config
-}
-
 export function resolveConfig(config: WtConfig = {}): Resolved {
   const configDir = join(configPath(), '..')
   const state = expandHome(config.state ?? join(homedir(), '.cache', 'wt'))
