@@ -21,7 +21,7 @@ export async function pack(args: string[]): Promise<number> {
     exits: EXITS,
     positionals: ['<folder>', '<dest dir>'],
     replaces: 'tar czf, then diff or tar --compare by hand, then rm -rf once it looks right',
-    examples: ['arc pack ~/old-project /mnt/backup', ['arc pack -k ./data /mnt/backup', 'the folder stays']],
+    examples: ['arc pack ~/old-project /mnt/backup', ['arc pack -k ./data /mnt/backup', 'the folder stays'], ['arc pack -k ./dist .', 'compress only: ./dist.tar.zst next to it']],
   })
   const [folder, destination] = positionals
   const given = folder.replace(TRAILING_SLASHES, '')
@@ -33,7 +33,7 @@ export async function pack(args: string[]): Promise<number> {
     return fail(`'${folder}' is not a folder (a symlink is refused, as deleting it would not free its target)`, 1)
 
   if (!existsSync(destination) || !statSync(destination).isDirectory())
-    return fail(`'${destination}' is not a folder`, 1)
+    return fail(`'${destination}' is not a folder: <dest dir> is where <name>.tar.zst goes, '.' for here`, 1)
 
   // Symlinks in the parents resolved, so the mount and containment checks compare the paths the kernel sees.
   const source = realpathSync(given)
