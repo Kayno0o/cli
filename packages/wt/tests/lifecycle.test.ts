@@ -709,3 +709,65 @@ exit 0
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
 })
+
+describe('up and down with no runner', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, setup: ['echo ran >> setup.log'] })}\n`)
+  })
+
+  afterAll(() => env?.stop())
+
+  test('bring the proxy up, then compose up in the worktree and its setup once; down is compose down there', async () => {
+    const { sandbox, wt, dirOf } = env
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+    expect((await wt('up', 'planning')).code).toBe(0)
+    expect((await wt('up', 'planning')).code).toBe(0)
+    expect((await wt('down', 'planning')).code).toBe(0)
+
+    const stack = sandbox.dockerCalls().filter(call => call.args.startsWith('compose up') || call.args.startsWith('compose down'))
+
+    expect(stack.map(call => `${call.cwd} ${call.args}`)).toEqual([
+      `${dirOf('planning')} compose up -d --build`,
+      `${dirOf('planning')} compose up -d --build`,
+      `${dirOf('planning')} compose down --remove-orphans`,
+    ])
+    expect(sandbox.calls().filter(call => call === 'devproxy up')).toHaveLength(2)
+    expect(readFileSync(join(dirOf('planning'), 'setup.log'), 'utf8')).toBe('ran\n')
+    expect(sandbox.forbidden()).toEqual([])
+  }, 30_000)
+})
+
+describe('wt init', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+  })
+
+  afterAll(() => env?.stop())
+
+  test('drafts a manifest for a checkout no tool knows, named after its folder unless --name says otherwise', async () => {
+    const { sandbox, wt, root } = env
+    const printed = await wt('init', root, '--print', '--name', 'other')
+
+    expect(printed.err).toBe('')
+    expect(printed.code).toBe(0)
+    expect(printed.out).toContain('import type { ProjectConfig } from \'@kaynooo/cli-wt\'')
+    expect(printed.out).toContain('root: \'~/Workspace/times\'')
+    expect(printed.out).toContain('} satisfies ProjectConfig')
+    expect(existsSync(join(sandbox.home, '.config', 'wt', 'projects', 'other.ts'))).toBe(false)
+
+    rmSync(join(sandbox.home, '.config', 'wt', 'projects'), { recursive: true })
+
+    expect((await wt('init', root)).code).toBe(0)
+    // The manifest's name is its file's, so the draft is the one printed, less the newline console.log adds
+    expect(`${readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), 'utf8')}\n`).toBe(printed.out)
+    expect(sandbox.forbidden()).toEqual([])
+  }, 30_000)
+})
