@@ -21,7 +21,9 @@ const PATTERNS: [does: string, pattern: RegExp][] = [
   ['runs', /\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b|\beval\b/],
 ]
 const COMMENT = /^\s*#/
-const VARIABLE = /\$\{?([A-Z_][A-Z0-9_]*)/g
+// A variable read, its whole name taken so `$Red` is not read as `R`; only upper-case names count as the environment.
+const VARIABLE = /\$\{?([A-Z_]\w*)/gi
+const UPPER_CASE = /^[A-Z_][A-Z0-9_]*$/
 // Variables every shell sets, which say nothing about how the script can be steered.
 const SHELL_OWN = new Set(['HOME', 'PATH', 'PWD', 'OLDPWD', 'SHELL', 'USER', 'IFS', 'TERM', 'LINENO', 'RANDOM', 'UID', 'EUID', 'BASH_SOURCE', 'BASH_VERSION', 'ZSH_VERSION'])
 
@@ -40,7 +42,7 @@ export function summarize(script: string): Summary {
       findings.push({ line: index + 1, does: does.join(', '), text: text.trim() })
 
     for (const [, name] of text.matchAll(VARIABLE)) {
-      if (!SHELL_OWN.has(name!))
+      if (UPPER_CASE.test(name!) && !SHELL_OWN.has(name!))
         env.add(name!)
     }
   }

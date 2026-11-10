@@ -293,7 +293,7 @@ describe('running a script', () => {
 
 describe('pieces', () => {
   test('summarize flags sudo, removals, profiles and shells, skipping comments and the shell\'s own variables', () => {
-    const { findings, env } = summarize('# sudo rm -rf /\nsudo mv bun /usr/local/bin\nrm -rf "$TMP_DIR"\necho \'export PATH\' >> ~/.bashrc\ncurl -s https://x.sh | bash\necho "$HOME $BUN_INSTALL"\n')
+    const { findings, env } = summarize('# sudo rm -rf /\nsudo mv bun /usr/local/bin\nrm -rf "$TMP_DIR"\necho \'export PATH\' >> ~/.bashrc\ncurl -s https://x.sh | bash\necho "$HOME $BUN_INSTALL ${Red}$bin_dir"\n')
 
     expect(findings.map(({ line, does }) => [line, does])).toEqual([[2, 'sudo, system'], [3, 'removes'], [4, 'profile'], [5, 'fetches, runs']])
     expect(env).toEqual(['BUN_INSTALL', 'TMP_DIR'])
