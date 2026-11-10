@@ -48,6 +48,14 @@ describe.skipIf(!GNU)('arc pack', () => {
     expect(existsSync(join(dest, 'project.tar.zst'))).toBe(true)
   })
 
+  test('packs into the current folder when no destination is given', () => {
+    const { folder, dest } = project()
+
+    expect(arc(['pack', '-k', folder], dest).code).toBe(0)
+    expect(existsSync(folder)).toBe(true)
+    expect(existsSync(join(dest, 'project.tar.zst'))).toBe(true)
+  })
+
   test('overwrites nothing', () => {
     const { folder, dest } = project()
 

@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path'
 import { fail, parse, role } from '@kaynooo/cli-kit'
 import { lines, need, pipeline, probe, run, TAR_FIDELITY, ZSTD_LONG } from './proc'
 
-const USAGE = `arc pack [-k] <folder> <dest dir>: packs a folder into <dest dir>/<name>.tar.zst, checks every file against the archive, then deletes the folder
+const USAGE = `arc pack [-k] <folder> [dest dir]: packs a folder into <dest dir>/<name>.tar.zst (the current folder by default), checks every file against the archive, then deletes the folder
 
 The archive is written as <name>.tar.zst.partial and only renamed once complete; nothing is overwritten. The folder is deleted only after the archive passes zstd's checksum, holds as many entries as the folder and compares equal to it file by file (owners, ACLs and extended attributes included); -k keeps it. A symlink, a mount point, a folder with a file system mounted inside, a destination inside the folder and a destination with less free space than the folder holds are refused. A folder that is not readable or writable by you is packed and deleted through sudo.`
 
@@ -19,11 +19,11 @@ function say(message: string): void {
 export async function pack(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, { keep: { type: 'boolean', short: 'k', description: 'keep the folder once the archive is verified' } }, {
     exits: EXITS,
-    positionals: ['<folder>', '<dest dir>'],
+    positionals: ['<folder>', '[dest dir]'],
     replaces: 'tar czf, then diff or tar --compare by hand, then rm -rf once it looks right',
-    examples: ['arc pack ~/old-project /mnt/backup', ['arc pack -k ./data /mnt/backup', 'the folder stays'], ['arc pack -k ./dist .', 'compress only: ./dist.tar.zst next to it']],
+    examples: ['arc pack ~/old-project /mnt/backup', ['arc pack -k ./data /mnt/backup', 'the folder stays'], ['arc pack -k dist', 'compress only: ./dist.tar.zst, the folder stays']],
   })
-  const [folder, destination] = positionals
+  const [folder, destination = '.'] = positionals
   const given = folder.replace(TRAILING_SLASHES, '')
 
   need('tar')
@@ -33,7 +33,7 @@ export async function pack(args: string[]): Promise<number> {
     return fail(`'${folder}' is not a folder (a symlink is refused, as deleting it would not free its target)`, 1)
 
   if (!existsSync(destination) || !statSync(destination).isDirectory())
-    return fail(`'${destination}' is not a folder: <dest dir> is where <name>.tar.zst goes, '.' for here`, 1)
+    return fail(`'${destination}' is not a folder: [dest dir] is where <name>.tar.zst goes`, 1)
 
   // Symlinks in the parents resolved, so the mount and containment checks compare the paths the kernel sees.
   const source = realpathSync(given)

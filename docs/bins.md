@@ -13,7 +13,7 @@ arc <command> [options]
 arc ls backup.tar.zst  # what is in an archive
 arc cat backup.tar.zst project/package.json  # one file out of it
 arc pack ~/old-project /mnt/backup  # archive, verify, then delete the folder
-arc pack -k ./dist .  # compress only: ./dist.tar.zst, the folder stays
+arc pack -k dist  # compress only: ./dist.tar.zst, the folder stays
 arc unpack /mnt/backup/old-project.tar.zst ~/restored  # refuses to overwrite
 arc extract release.tar.gz  # any common archive
 ```

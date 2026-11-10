@@ -10,7 +10,7 @@ It needs `tar` and `zstd` on the machine (`findmnt`, `mountpoint` and `df` from 
 
 | Command | What it does |
 | --- | --- |
-| `arc pack [-k] <folder> <dest dir>` | packs the folder into `<dest dir>/<name>.tar.zst`, checks it, then deletes the folder; `-k` keeps it |
+| `arc pack [-k] <folder> [dest dir]` | packs the folder into `<dest dir>/<name>.tar.zst` (the current folder by default), checks it, then deletes the folder; `-k` keeps it |
 | `arc unpack <archive.tar.zst> <dest dir>` | unpacks it into the folder, refusing to overwrite, then checks every file against the archive; the archive is kept |
 | `arc ls [-r] <archive> [path]` | lists what an archive holds without extracting it, as `ls -l` would: the top level, the folder `path`, or every level with `-r`; `--json` for the entries |
 | `arc tree [-L <depth>] <archive> [path]` | draws the archive's files as a tree |
