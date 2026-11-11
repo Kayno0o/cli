@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-check",
   "type": "module",
-  "version": "0.20.1",
+  "version": "0.21.0",
   "description": "check and errs: run a repo's check, typecheck, lint and test steps or, with --fix, its fixers, inside its docker compose service when one mounts the folder, showing only what failed with each full output saved to a file, and turn tsc, eslint, bun test, vitest, playwright, phpunit, phpstan and php-cs-fixer logs into file:line:col errors.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
@@ -15,7 +15,6 @@
   "keywords": ["check", "fix", "lint", "format", "typecheck", "test", "claude-code"],
   "bin": {
     "check": "./dist/cli.js",
-
     "errs": "./dist/errs-cli.js",
     "j": "./dist/j-cli.js"
   },
@@ -29,7 +28,6 @@
   "scripts": {
     "build": "$npm_execpath build src/cli.ts src/errs-cli.ts src/j-cli.ts --target bun --outdir dist",
     "check": "$npm_execpath src/cli.ts",
-
     "errs": "$npm_execpath src/errs-cli.ts",
     "j": "$npm_execpath src/j-cli.ts"
   },
