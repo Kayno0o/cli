@@ -28,7 +28,7 @@
     "ft": "$npm_execpath src/cli.ts"
   },
   "dependencies": {
-    "@kaynooo/utils": "3.0.0"
+    "@kaynooo/utils": "3.1.0"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"

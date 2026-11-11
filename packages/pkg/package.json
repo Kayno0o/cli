@@ -30,7 +30,7 @@
     "record": "$npm_execpath scripts/record.ts"
   },
   "dependencies": {
-    "@kaynooo/utils": "3.0.0"
+    "@kaynooo/utils": "3.1.0"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"

@@ -33,6 +33,6 @@
   },
   "dependencies": {
     "@kaynooo/cli-kit": "workspace:*",
-    "@kaynooo/utils": "3.0.0"
+    "@kaynooo/utils": "3.1.0"
   }
 }
