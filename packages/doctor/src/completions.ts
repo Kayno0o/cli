@@ -29,14 +29,29 @@ export async function installCompletions(host: Host, dir: string): Promise<{ wri
 
   mkdirSync(dir, { recursive: true })
 
-  const removed = readdirSync(dir).filter(name => FISH_FILE.test(name) && !bins.includes(name.replace(FISH_FILE, '')) && readFileSync(join(dir, name), 'utf8').startsWith(MARKER))
+  const removed = staleCompletions(host, dir)
 
-  for (const name of removed)
-    rmSync(join(dir, name))
+  for (const bin of removed)
+    rmSync(join(dir, `${bin}.fish`))
 
   await Promise.all(bins.map(async bin => Bun.write(join(dir, `${bin}.fish`), completionFile(bin))))
 
-  return { written: bins, removed: removed.map(name => name.replace(FISH_FILE, '')) }
+  return { written: bins, removed }
+}
+
+// The bins whose file of ours is in the folder while they are no longer installed; a file we did not write is left alone.
+export function staleCompletions(host: Host, dir: string): string[] {
+  const bins = installedBins(host)
+  let names: string[] = []
+
+  try {
+    names = readdirSync(dir)
+  }
+  catch {
+    return []
+  }
+
+  return names.filter(name => FISH_FILE.test(name) && !bins.includes(name.replace(FISH_FILE, '')) && readFileSync(join(dir, name), 'utf8').startsWith(MARKER)).map(name => name.replace(FISH_FILE, '')).sort()
 }
 
 // The installed bins with no completion file in the folder.

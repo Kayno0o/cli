@@ -68,6 +68,19 @@ describe('checkCompletions', () => {
     await installCompletions(host, completionDir(home))
     expect(checkCompletions(host).ok).toBe(true)
   })
+
+  test('fails a file of ours left for a bin no longer installed', async () => {
+    const home = temp('completions-home-')
+    const dir = completionDir(home)
+
+    await installCompletions(hostWith(['fish', 'src', 'gst'], home), dir)
+    const host = hostWith(['fish', 'src'], home)
+
+    expect(checkCompletions(host)).toMatchObject({ ok: false, fix: 'cli completions fish --install' })
+    expect(checkCompletions(host).detail).toContain('no longer installed: gst')
+    expect((await installCompletions(host, dir)).removed).toEqual(['gst'])
+    expect(checkCompletions(host).ok).toBe(true)
+  })
 })
 
 describe('cli completions', () => {

@@ -21,6 +21,8 @@ doctor --install forgejo check hooks   # or name them: a package, one of its bin
 | `tea` | `ft` is installed, tea is installed, logged in to git.kaynooo.fr and `tea api version` answers, since `ft` goes through it | `tea login add --url https://git.kaynooo.fr --oauth` |
 | `hooks` | `~/.claude/settings.json` wires the hooks one way: the `cli-hooks@kaynooo-cli` plugin enabled, or the `cli` mod listed in `CLAUDE_CODE_PLUGIN_DIRS`; both at once fails, every call being checked twice | `claude plugin install cli-hooks --marketplace ...`, or `claude plugin disable` for the doubled one |
 | `bun` | Bun satisfies the `engines.bun` range of every installed package | `bun upgrade` |
+| `completions` | fish is missing, or its folder holds a completion for every installed bin and none of ours for a bin no longer installed | `cli completions fish --install` |
+| `dead-bins` | no link in Bun's bin folder points at a file of our packages that is gone, as `bun install -g` leaves the bins a newer version dropped | `rm` of those links, which `--fix` runs |
 
 Only the packages that are installed are checked: a package left out is no failure, and the last line counts them. A registry that does not answer leaves a package passing, with a note. Exit codes: 0 every check passed, 1 one failed, 2 a usage error.
 
@@ -30,7 +32,7 @@ Only the packages that are installed are checked: a package left out is no failu
 
 ## --fix
 
-`--fix` runs the `fix:` lines it may: the `bun install -g` ones (joined into one call), `cli completions fish --install`, and `claude plugin install` or `disable`. It then checks again, prints the checks as they stand and exits on those. Nothing that installs a system package is run, and a line that only describes a step (`tea` from its releases page, adding a folder to the PATH, `bun upgrade`, which replaces Bun itself) is printed as `not run`. `--dry-run` prints each line as `would` and runs nothing (alone it implies `--fix`).
+`--fix` runs the `fix:` lines it may: the `bun install -g` ones (joined into one call), `cli completions fish --install`, `claude plugin install` or `disable`, and the removal of dead bin links. It then checks again, prints the checks as they stand and exits on those. Nothing that installs a system package is run, and a line that only describes a step (`tea` from its releases page, adding a folder to the PATH, `bun upgrade`, which replaces Bun itself) is printed as `not run`. `--dry-run` prints each line as `would` and runs nothing (alone it implies `--fix`).
 `--json` keeps its shape and prints the checks after the fixes, the fixes going to stderr; `--quiet` filters it to the failing ones.
 
 ## cli completions

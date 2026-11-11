@@ -1,13 +1,15 @@
 import type { Host } from '../src/checks'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { checkBun, checkHooks, checkNeeds, checkTea, checkTool, checkWakatime, checkWorkspace, runChecks, TOOLS } from '../src/checks'
+import { checkBun, checkDeadBins, checkHooks, checkNeeds, checkTea, checkTool, checkWakatime, checkWorkspace, runChecks, TOOLS } from '../src/checks'
 import { configReport } from '../src/config-report'
 import { main } from '../src/doctor'
 
 const GUARD = '@kaynooo/cli-guard'
+// Where bun puts global packages under BUN_INSTALL, so the bin folder sits at ../../../bin as on a real host.
+const MODULES = join('.bun', 'install', 'global', 'node_modules')
 
 const temp = tempDirs()
 
@@ -19,14 +21,14 @@ function write(path: string, value: unknown): void {
 }
 
 function install(name: string, version: string, bun = '>=1.4.3'): void {
-  write(join(home, 'modules', name, 'package.json'), { name, version, engines: { bun } })
+  write(join(home, MODULES, name, 'package.json'), { name, version, engines: { bun } })
 }
 
 // A host whose commands answer from `answers`, keyed by the argv joined with spaces, and whose PATH holds `onPath`.
 function fakeHost(answers: Record<string, { code?: number, stdout?: string, stderr?: string }> = {}, onPath: string[] = ['ft', 'tea']): Host {
   return {
     home,
-    globalModules: join(home, 'modules'),
+    globalModules: join(home, MODULES),
     bunVersion: '1.4.4',
     which: bin => onPath.includes(bin) ? `/bin/${bin}` : null,
     run: async (argv) => {
@@ -41,6 +43,27 @@ const LATEST = { 'bun info @kaynooo/cli-forgejo version --no-cache': { stdout: '
 
 beforeEach(() => {
   home = temp('doctor-')
+})
+
+describe('checkDeadBins', () => {
+  test('fails the links into our packages whose file is gone, and its fix removes only those', async () => {
+    const bin = join(home, '.bun', 'bin')
+
+    install('@kaynooo/cli-code', '0.16.0')
+    write(join(home, MODULES, '@kaynooo/cli-code/dist/cli.js'), '')
+    mkdirSync(bin, { recursive: true })
+    symlinkSync('../install/global/node_modules/@kaynooo/cli-code/dist/cli.js', join(bin, 'src'))
+    symlinkSync('../install/global/node_modules/@kaynooo/cli-code/dist/peek-cli.js', join(bin, 'peek'))
+    symlinkSync('../install/global/node_modules/other/gone.js', join(bin, 'other'))
+
+    const host = fakeHost()
+    const result = checkDeadBins(host)
+
+    expect(result).toMatchObject({ check: 'dead-bins', ok: false, fix: `rm ${join(bin, 'peek')}` })
+    expect(await result.apply?.(host)).toBeUndefined()
+    expect(readdirSync(bin).sort()).toEqual(['other', 'src'])
+    expect(checkDeadBins(host).ok).toBe(true)
+  })
 })
 
 describe('checkWakatime', () => {
@@ -230,7 +253,7 @@ describe('doctor', () => {
 
     const json = JSON.parse((await capture(async () => main(['--json'], host))).out) as { check: string }[]
 
-    expect(json.map(each => each.check)).toEqual(['cli-forgejo', 'cli-git', 'tea', 'needs', 'bun', 'completions'])
+    expect(json.map(each => each.check)).toEqual(['cli-forgejo', 'cli-git', 'tea', 'needs', 'bun', 'completions', 'dead-bins'])
   })
 
   test('has nothing to fail on a host with no package installed', async () => {

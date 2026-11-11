@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { basename, join, resolve } from 'node:path'
 import { configuredNumber, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
 import { HOOKS_REQUIRES, NEEDS } from './catalog'
-import { completionDir, missingCompletions } from './completions'
+import { completionDir, missingCompletions, staleCompletions } from './completions'
 
 export interface Result {
   check: string
@@ -122,7 +123,7 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
     return { check, ok: false, detail: `${version}, ${latest} released${off.length > 0 ? `, ${off.join(', ')} not on the PATH` : ''}`, fix: `bun install -g ${name}@${latest}` }
 
   if (off.length > 0)
-    return { check, ok: false, detail: `${version}, ${off.join(', ')} not on the PATH`, fix: `add ${join(host.globalModules, '..', '..', '..', 'bin')} to the PATH` }
+    return { check, ok: false, detail: `${version}, ${off.join(', ')} not on the PATH`, fix: `add ${binDir(host)} to the PATH` }
 
   if (latest === '')
     return { check, ok: true, detail: `${version}, the registry did not answer: ${firstLine(info.stderr) || answered || 'no version'}` }
@@ -248,11 +249,61 @@ export function checkCompletions(host: Host): Result {
 
   const dir = completionDir(host.home)
   const missing = missingCompletions(host, dir)
+  const stale = staleCompletions(host, dir)
 
-  if (missing.length > 0)
-    return { check: 'completions', ok: false, detail: `no fish completion in ${dir} for ${missing.join(', ')}`, fix: 'cli completions fish --install' }
+  if (missing.length > 0 || stale.length > 0)
+    return { check: 'completions', ok: false, detail: [missing.length > 0 ? `no fish completion in ${dir} for ${missing.join(', ')}` : '', stale.length > 0 ? `completions in ${dir} for bins no longer installed: ${stale.join(', ')}` : ''].filter(Boolean).join('; '), fix: 'cli completions fish --install' }
 
   return { check: 'completions', ok: true, detail: dir }
+}
+
+// The folder `bun install -g` links the bins into.
+export function binDir(host: Host): string {
+  return join(host.globalModules, '..', '..', '..', 'bin')
+}
+
+// The links in the bin folder pointing at a file of ours that is gone: `bun install -g` leaves the bins a newer version dropped.
+export function deadBins(host: Host): string[] {
+  const dir = binDir(host)
+  const ours = join(host.globalModules, '@kaynooo')
+  let names: string[] = []
+
+  try {
+    names = readdirSync(dir)
+  }
+  catch {
+    return []
+  }
+
+  return names.filter((name) => {
+    const path = join(dir, name)
+
+    try {
+      return lstatSync(path, { throwIfNoEntry: false })?.isSymbolicLink() === true && resolve(dir, readlinkSync(path)).startsWith(`${ours}/`) && !existsSync(path)
+    }
+    catch {
+      return false
+    }
+  }).sort()
+}
+
+export function checkDeadBins(host: Host): Result {
+  const dead = deadBins(host)
+
+  if (dead.length === 0)
+    return { check: 'dead-bins', ok: true, detail: `no link in ${binDir(host)} points at a removed bin` }
+
+  return {
+    check: 'dead-bins',
+    ok: false,
+    detail: `${dead.join(', ')} in ${binDir(host)} point at bins the installed versions dropped`,
+    fix: `rm ${dead.map(name => join(binDir(host), name)).join(' ')}`,
+    apply: async (on) => {
+      await Promise.all(deadBins(on).map(async name => rm(join(binDir(on), name))))
+
+      return undefined
+    },
+  }
 }
 
 // The system tools the installed packages need, besides tea: a missing one fails.
@@ -326,7 +377,7 @@ export async function checkWakatime(host: Host): Promise<Result> {
 }
 
 const toolCheck = (name: string) => name.slice(name.indexOf('/') + 1)
-const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'workspace', 'wakatime']
+const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'dead-bins', 'workspace', 'wakatime']
 const FORGEJO = '@kaynooo/cli-forgejo'
 const WORKSPACE = '@kaynooo/cli-workspace'
 
@@ -361,6 +412,7 @@ export async function runChecks(host: Host, only: readonly string[] = []): Promi
     ...wanted('needs') ? [checkNeeds(host)] : [],
     ...wanted('bun') ? [checkBun(host)] : [],
     ...wanted('completions') ? [checkCompletions(host)] : [],
+    ...wanted('dead-bins') ? [checkDeadBins(host)] : [],
     ...wanted('workspace') && (only.length > 0 || isInstalled(host, WORKSPACE) || isInstalled(host, '@kaynooo/cli-pkg')) ? [checkWorkspace(host)] : [],
     ...wanted('wakatime') && existsSync(join(host.home, '.wakatime.cfg')) ? [await checkWakatime(host)] : [],
   ]
