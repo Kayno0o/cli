@@ -15,7 +15,7 @@ const USAGE = `gm [branch]: merges the branch into the current one with git merg
 Without a branch, on a terminal, picks one: every branch but the current one with how far it is ahead of and behind it, a preview of what the merge would do (the commits coming in, the files they touch, whether it would conflict and where), enter to merge and ctrl-s to merge with --squash. Without a terminal it lists the branches with that verdict each, clean, conflicts with the files, or merged already. A merge in progress is refused here: gm --continue or gm --abort.
 --squash stages the changes of the branch without committing them or recording a merge, to commit with gc; a conflict then leaves the files to resolve and git reset --merge to give up.
 
-A working tree with uncommitted changes is refused. The output names the outcome (fast-forward, merge commit or already up to date), the commits and the files that came in. On a conflict every conflicted file is listed with its conflict regions (the <<<<<<<, ======= and >>>>>>> lines and two lines around them, line numbers included) and the exit is 1.
+Staged changes are refused, and so are unstaged ones in files the merge changes; other unstaged edits stay as they are, through a conflict and gm --abort too. The output names the outcome (fast-forward, merge commit or already up to date), the commits and the files that came in. On a conflict every conflicted file is listed with its conflict regions (the <<<<<<<, ======= and >>>>>>> lines and two lines around them, line numbers included) and the exit is 1.
 gm --dry-run <branch> says whether the merge would conflict and in which files, touching nothing (git merge-tree). gm --continue commits the merge once the markers are gone from the conflicted files, refusing while one remains; gm --abort gives the merge up.`
 const EXITS: ExitRow[] = [[0, 'it merged, the branch was already merged, or --dry-run found no conflict'], [1, 'a conflict, a dirty tree, an unknown branch, a refused step or git failed'], [2, 'outside a git repository or a usage error']]
 
@@ -246,6 +246,26 @@ async function choose(into: string): Promise<{ branch: string, squash: boolean }
   return picked === undefined || picked.hidden[0] === undefined ? undefined : { branch: picked.hidden[0], squash: picked.key === 'ctrl-s' }
 }
 
+// Staged changes would go into the merge commit, and an abort could not give back an unstaged edit in a file the merge changes; other unstaged edits stay as they are.
+async function refuseUnsafeChanges(branch: string): Promise<void> {
+  const paths = async (args: string[]) => (await ran([...args, '--name-only', '-z'])).split('\0').filter(path => path !== '')
+  const staged = await paths(['diff', '--cached'])
+
+  if (staged.length > 0)
+    fail(`staged changes would go into the merge (${staged.join(', ')}): commit them first (gc), or unstage them (gu --staged)`, 1)
+
+  const dirty = await paths(['diff'])
+
+  if (dirty.length === 0)
+    return
+
+  const touched = new Set(await paths(['diff', '--no-renames', `HEAD...${branch}`]))
+  const overlap = dirty.filter(path => touched.has(path))
+
+  if (overlap.length > 0)
+    fail(`uncommitted changes in files the merge changes (${overlap.join(', ')}): commit them first (gc), or set them aside as a patch (gu)`, 1)
+}
+
 async function main(argv: string[]): Promise<number> {
   const { values, positionals } = parse(argv, USAGE, OPTIONS, { positionals: ['[branch]'], exits: EXITS, replaces: 'git merge and then git diff --name-only --diff-filter=U and reading each file for markers', examples: ['gm feature', ['gm --dry-run feature', 'whether it would conflict, and where'], ['gm --continue', 'commit once the conflicts are resolved'], ['gm --abort', 'give the merge up']] })
   const json = values.json === true
@@ -328,8 +348,7 @@ async function main(argv: string[]): Promise<number> {
   if (await merging())
     fail('a merge is already in progress: gm --continue once the conflicts are resolved, or gm --abort', 1)
 
-  if ((await ran(['status', '--porcelain', '--untracked-files=no'])).trim() !== '')
-    fail('the working tree has uncommitted changes: commit them first (gc), or set them aside as a patch (gu)', 1)
+  await refuseUnsafeChanges(branch)
 
   if (await succeeds(['merge-base', '--is-ancestor', branch, 'HEAD'])) {
     if (json)

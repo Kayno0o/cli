@@ -83,17 +83,43 @@ describe('gm', () => {
     expect(git('rev-list', '--parents', '-n', '1', 'HEAD').split(' ')).toHaveLength(3)
   })
 
-  test('says a merged branch is already in, and refuses a dirty tree or an unknown branch', () => {
+  test('says a merged branch is already in, and refuses an edit in a file the merge changes or an unknown branch', () => {
     setup(true)
     writeFileSync(join(dir, 'a.txt'), 'dirty\n')
 
-    expect(gm('feature')).toMatchObject({ code: 1, err: expect.stringContaining('uncommitted changes') })
+    expect(gm('feature')).toMatchObject({ code: 1, err: expect.stringContaining('files the merge changes (a.txt)') })
 
     git('checkout', '-q', '--', 'a.txt')
 
     expect(gm('nope').code).toBe(1)
     expect(gm('feature').code).toBe(0)
     expect(gm('feature').out).toContain('already contains feature')
+  })
+
+  test('merges past an unstaged edit in a file the merge leaves alone, keeping it', () => {
+    setup(true)
+    writeFileSync(join(dir, 'base.txt'), 'mine\n')
+
+    expect(gm('feature').code).toBe(0)
+    expect(readFileSync(join(dir, 'base.txt'), 'utf8')).toBe('mine\n')
+    expect(git('show', 'HEAD:base.txt')).toBe('base')
+  })
+
+  test('refuses staged changes, which would go into the merge commit', () => {
+    setup(true)
+    writeFileSync(join(dir, 'base.txt'), 'mine\n')
+    git('add', 'base.txt')
+
+    expect(gm('feature')).toMatchObject({ code: 1, err: expect.stringContaining('staged changes would go into the merge (base.txt)') })
+  })
+
+  test('keeps an unrelated unstaged edit through a conflict and --abort', () => {
+    setup(true, true)
+    writeFileSync(join(dir, 'base.txt'), 'mine\n')
+
+    expect(gm('feature').code).toBe(1)
+    expect(gm('--abort').code).toBe(0)
+    expect(readFileSync(join(dir, 'base.txt'), 'utf8')).toBe('mine\n')
   })
 
   test('lists every conflicted file with its regions and exits 1, then --abort restores', () => {

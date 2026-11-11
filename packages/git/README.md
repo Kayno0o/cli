@@ -53,7 +53,7 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 
 ## gm
 
-`gm <branch>` merges the branch into the current one with `git merge --no-edit` and prints what came in: fast-forward or merge commit, the commits and the files changed. A working tree with uncommitted changes is refused.
+`gm <branch>` merges the branch into the current one with `git merge --no-edit` and prints what came in: fast-forward or merge commit, the commits and the files changed. Staged changes are refused, and so are unstaged ones in files the merge changes; other unstaged edits stay as they are, through a conflict and gm --abort too.
 
 - On a conflict every conflicted file is listed with its conflict regions (the markers and two lines around them, line numbers included) and the exit is 1; `gm --continue` commits once the markers are gone, refusing while one remains, and `gm --abort` gives the merge up.
 - `gm --dry-run <branch>` says whether the merge would conflict, and in which files, with `git merge-tree` and nothing touched.
