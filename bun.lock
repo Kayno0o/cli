@@ -287,7 +287,7 @@
     },
     "packages/view": {
       "name": "@kaynooo/cli-view",
-      "version": "0.7.1",
+      "version": "0.7.2",
       "bin": {
         "view": "./dist/view.js",
       },
