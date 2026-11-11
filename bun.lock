@@ -46,7 +46,6 @@
       "version": "0.20.1",
       "bin": {
         "check": "./dist/cli.js",
-        "fix": "./dist/fix-cli.js",
         "errs": "./dist/errs-cli.js",
         "j": "./dist/j-cli.js",
       },

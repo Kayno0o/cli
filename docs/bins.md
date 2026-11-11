@@ -58,13 +58,15 @@ changelog undo v1.2.0 --dry-run  # what undoing that release would remove
 
 runs the repo's check, typecheck, lint and test steps, from package.json scripts (through bun run), composer.json, a Justfile or a Makefile, and for PHP from phpstan.neon (typecheck), .php-cs-fixer.dist.php (lint, dry-run) and phpunit.xml.dist (test) when composer.json has no such script. Package `check`.
 
-Instead of: chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail
+Instead of: chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail, and with --fix each fixer and formatter run by hand
 
 ```sh
 check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot | --no-slot] [--parallel] [--in <service> | --host] [--list]
 check
 check --only lint,test  # two of the steps
 check --in app  # every step inside the app service
+check --fix  # the fixers and formatters instead
+check --fix --list  # the fixers it would run
 ```
 
 ## cli
@@ -206,18 +208,6 @@ Instead of: cat .env, grep on env files and editing them by hand
 ev <command> [options]
 ev list
 ev get DATABASE_URL  # one key, its value masked
-```
-
-## fix
-
-alias of `check --fix`. Runs the folder's fixers: the project's own `fix` script, else its `lint:fix` and `format` ones (package.json through bun run, composer.json, a Justfile or a Makefile), then the formatters its files call for: php-cs-fixer where configured and composer.json has no fixer, just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY. Package `check`.
-
-Instead of: running each fixer and formatter by hand, or docker compose exec <service> bun run lint:fix
-
-```sh
-fix [--only <fixers>] [--timeout <duration>] [--in <service> | --host] [--list]
-fix
-fix --list  # the fixers it would run
 ```
 
 ## ft

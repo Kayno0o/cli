@@ -6,7 +6,8 @@ import { capture } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { changedFiles, dirtyFiles } from '../src/changes'
-import { fix, fixers } from '../src/fix'
+import { check } from '../src/check'
+import { fixers } from '../src/fix'
 
 let dir: string
 
@@ -57,8 +58,8 @@ describe('fixers', () => {
     expect(await names()).toEqual(['lint-fix', 'format'])
   })
 
-  test('skips a fix script calling this bin, and takes a Justfile recipe or Makefile target', async () => {
-    scripts({ 'fix': 'fix --only lint:fix', 'lint:fix': 'x' })
+  test('skips a fix script calling check, and takes a Justfile recipe or Makefile target', async () => {
+    scripts({ 'fix': 'check --fix --only lint:fix', 'lint:fix': 'x' })
     expect(await names()).toEqual(['lint:fix'])
 
     rmSync(join(dir, 'package.json'))
@@ -78,14 +79,14 @@ describe('fixers', () => {
   })
 })
 
-describe('fix', () => {
+describe('check --fix', () => {
   test('runs each fixer, prints one line each and the files they changed, not those already dirty', async () => {
     await repo()
     writeFileSync(join(dir, 'dirty.txt'), 'before\n')
     writeFileSync(join(dir, 'Makefile'), 'b:\n\ttrue\n\n\n\na:\n\ttrue\n')
     scripts({ 'lint:fix': 'echo fixed > a.ts' })
 
-    const { result, out } = await capture(async () => fix([], dir))
+    const { result, out } = await capture(async () => check(['--fix'], dir))
     const lines = out.trimEnd().split('\n')
 
     expect(result).toBe(0)
@@ -103,7 +104,7 @@ describe('fix', () => {
 
     await Bun.sleep(20)
 
-    const { result, out } = await capture(async () => fix([], dir))
+    const { result, out } = await capture(async () => check(['--fix'], dir))
 
     expect(result).toBe(0)
     expect(out).toContain('nothing changed')
@@ -114,7 +115,7 @@ describe('fix', () => {
     await repo()
     scripts({ fix: 'sleep 30 & wait' })
 
-    const { result, out } = await capture(async () => fix(['--timeout', '1s'], dir))
+    const { result, out } = await capture(async () => check(['--fix', '--timeout', '1s'], dir))
 
     expect(result).toBe(2)
     expect(out).toContain('TIME  fix')
@@ -124,7 +125,7 @@ describe('fix', () => {
     await repo()
     scripts({ 'lint:fix': 'echo fixed > a.ts' })
 
-    const { result, out } = await capture(async () => fix(['--json'], dir))
+    const { result, out } = await capture(async () => check(['--fix', '--json'], dir))
     const printed = JSON.parse(out) as { fixers: { name: string, ok: boolean }[], changed: string[] }
 
     expect(result).toBe(0)
@@ -135,7 +136,7 @@ describe('fix', () => {
   test('a failing fixer prints what it said and fails the run', async () => {
     scripts({ format: 'echo cannot parse src/a.ts && exit 3' })
 
-    const { result, out } = await capture(async () => fix([], dir))
+    const { result, out } = await capture(async () => check(['--fix'], dir))
 
     expect(result).toBe(1)
     expect(out).toContain('FAIL  format')
@@ -151,7 +152,7 @@ describe('fix', () => {
     writeFileSync(join(dir, 'justfile'), 'a:\n  echo a\n')
     writeFileSync(join(sub, 'justfile'), 'b:\n  echo b\n')
 
-    expect((await capture(async () => fix([], sub))).result).toBe(0)
+    expect((await capture(async () => check(['--fix'], sub))).result).toBe(0)
     expect(await Bun.file(join(sub, 'justfile')).text()).toBe('b:\n    echo b\n')
     expect(await Bun.file(join(dir, 'justfile')).text()).toBe('a:\n  echo a\n')
   })
@@ -159,24 +160,24 @@ describe('fix', () => {
   test('--list prints without running, --only picks', async () => {
     scripts({ 'lint:fix': 'echo ran > ran.txt', 'format': 'x' })
 
-    expect((await capture(async () => fix(['--list'], dir))).out).toContain('lint:fix  bun run lint:fix  package.json')
+    expect((await capture(async () => check(['--fix', '--list'], dir))).out).toContain('lint:fix  bun run lint:fix  package.json')
     expect(await Bun.file(join(dir, 'ran.txt')).exists()).toBe(false)
 
-    const { out } = await capture(async () => fix(['--only', 'lint:fix'], dir))
+    const { out } = await capture(async () => check(['--fix', '--only', 'lint:fix'], dir))
 
     expect(out).not.toContain('format')
     expect(await Bun.file(join(dir, 'ran.txt')).exists()).toBe(true)
   })
 
   test('refuses to run under a fixer, which would recurse, and fails where nothing applies', async () => {
-    expect(await failure(fix([], dir))).toContain('nothing to fix here')
+    expect(await failure(check(['--fix'], dir))).toContain('nothing to fix here')
     scripts({ 'lint:fix': 'x' })
-    expect(await failure(fix(['--only', 'nope'], dir))).toContain('no nope fixer here')
+    expect(await failure(check(['--fix', '--only', 'nope'], dir))).toContain('no nope fixer here')
 
     process.env.KAYNOOO_CLI_FIX = '1'
 
     try {
-      expect(await failure(fix([], dir))).toContain('would recurse')
+      expect(await failure(check(['--fix'], dir))).toContain('would recurse')
     }
     finally {
       delete process.env.KAYNOOO_CLI_FIX

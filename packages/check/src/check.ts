@@ -26,8 +26,8 @@ With --parallel, the steps run at the same time, each one's output held and prin
 With --quiet, passing steps print nothing, and a fully passing run prints nothing at all: only the failing steps and the closing summary of a run that failed.
 A step still running after --timeout is ended with everything it started, but not what it started inside a container.
 With --failed, only the steps that failed in the last run of this folder run again, read from that run's folder of logs; when no last run failed, it says so and exits 2.
-With --fix, the folder's fixers and formatters run instead of the steps, exactly as the \`fix\` bin does (it is the alias of \`check --fix\`): its own scripts, php-cs-fixer, just --fmt, go fmt, cargo fmt, ruff and the Makefile's .PHONY targets, then the files the run changed are listed. --only then names fixers, as --list prints them; --changed, --failed, --slot, --no-slot and --parallel do not apply.
---json prints [{name, command, in?, ok, ms, log, failed?}] once every step ran, --list --json [{name, command, source, in?}], in the compose service the step ran in; with --fix the shape \`fix --json\` prints.`
+With --fix, the folder's fixers and formatters run instead of the steps: the project's own \`fix\` script, else its \`lint:fix\` and \`format\` ones, from the same sources as the steps, then the formatters its files call for: php-cs-fixer where configured and composer.json has no fixer, just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY. The scripts and php-cs-fixer run in the compose service, the formatters on the host. One line per fixer, then the files the run changed. --only then names fixers, as --list prints them; --changed, --failed, --slot, --no-slot and --parallel do not apply.
+--json prints [{name, command, in?, ok, ms, log, failed?}] once every step ran, --list --json [{name, command, source, in?}], in the compose service the step ran in; with --fix {fixers: [{name, command, in?, ok, ms, log, failed?} or {name, command, skipped}], changed}, changed null outside a git repository.`
 
 const EXITS: ExitRow[] = [[0, 'every step passed'], [1, 'one failed'], [2, 'bad usage, no step is found or a step timed out']]
 
@@ -95,7 +95,7 @@ export function summaryLine(outcomes: ReturnType<typeof outcomeJson>[]): string 
 
 // Runs the repo's steps in order and prints one line each, with what failed under a failing one; returns 0 only when every step passed.
 export async function check(args: string[], cwd = process.cwd()): Promise<number> {
-  const parsed = parse(args, usage, options, { exits: EXITS, replaces: 'chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail', examples: ['check', ['check --only lint,test', 'two of the steps'], ['check --in app', 'every step inside the app service']] })
+  const parsed = parse(args, usage, options, { exits: EXITS, replaces: 'chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail, and with --fix each fixer and formatter run by hand', examples: ['check', ['check --only lint,test', 'two of the steps'], ['check --in app', 'every step inside the app service'], ['check --fix', 'the fixers and formatters instead'], ['check --fix --list', 'the fixers it would run']] })
   const settings = placeSettings(parsed.values)
 
   if (parsed.values.fix === true) {

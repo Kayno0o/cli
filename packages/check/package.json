@@ -2,7 +2,7 @@
   "name": "@kaynooo/cli-check",
   "type": "module",
   "version": "0.20.1",
-  "description": "check, fix and errs: run a repo's check, typecheck, lint and test steps or its fixers, inside its docker compose service when one mounts the folder, showing only what failed with each full output saved to a file, and turn tsc, eslint, bun test, vitest, playwright, phpunit, phpstan and php-cs-fixer logs into file:line:col errors.",
+  "description": "check and errs: run a repo's check, typecheck, lint and test steps or, with --fix, its fixers, inside its docker compose service when one mounts the folder, showing only what failed with each full output saved to a file, and turn tsc, eslint, bun test, vitest, playwright, phpunit, phpstan and php-cs-fixer logs into file:line:col errors.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/check#readme",
@@ -15,7 +15,7 @@
   "keywords": ["check", "fix", "lint", "format", "typecheck", "test", "claude-code"],
   "bin": {
     "check": "./dist/cli.js",
-    "fix": "./dist/fix-cli.js",
+
     "errs": "./dist/errs-cli.js",
     "j": "./dist/j-cli.js"
   },
@@ -27,9 +27,9 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts src/fix-cli.ts src/errs-cli.ts src/j-cli.ts --target bun --outdir dist",
+    "build": "$npm_execpath build src/cli.ts src/errs-cli.ts src/j-cli.ts --target bun --outdir dist",
     "check": "$npm_execpath src/cli.ts",
-    "fix": "$npm_execpath src/fix-cli.ts",
+
     "errs": "$npm_execpath src/errs-cli.ts",
     "j": "$npm_execpath src/j-cli.ts"
   },

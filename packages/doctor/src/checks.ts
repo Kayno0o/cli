@@ -29,7 +29,7 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-arc': ['arc'],
   '@kaynooo/cli-base': ['base', 'proof'],
   '@kaynooo/cli-changelog': ['changelog'],
-  '@kaynooo/cli-check': ['check', 'fix', 'errs', 'j'],
+  '@kaynooo/cli-check': ['check', 'errs', 'j'],
   '@kaynooo/cli-code': ['src', 'peek', 'todo-scan', 'hotspots'],
   '@kaynooo/cli-db': ['db'],
   '@kaynooo/cli-docker': ['dc', 'dlog', 'dx', 'sf'],

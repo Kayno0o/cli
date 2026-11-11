@@ -1,6 +1,6 @@
-# check and fix
+# check
 
-`check` runs a repo's validation and `check --fix` its fixers, both showing only what failed, so a Claude Code session spends no tokens on passing output. `fix` stays installed as the alias of `check --fix`: same options, output and exit codes.
+`check` runs a repo's validation and `check --fix` its fixers, both showing only what failed, so a Claude Code session spends no tokens on passing output.
 
 ```sh
 bun install -g @kaynooo/cli-check
@@ -12,7 +12,7 @@ check --no-slot  # run the steps at once; by default each queues behind the mach
 check --in app   # run every step in this compose service, whatever is detected
 check --failed   # run again only the steps that failed in this folder's last run
 check --quiet    # print only the failing steps, nothing when all pass
-check --fix      # run the fixers instead, what `fix` does
+check --fix      # run the fixers and formatters instead
 check --host     # run on the host even when a compose service mounts the folder
 check --json     # [{name, command, in?, ok, ms, log, failed?}] once every step ran
 ```
@@ -37,7 +37,7 @@ A folder with no step of its own but subfolders that have some (a root with `api
 
 ## In the compose service
 
-In a repo that runs its tools in a container, `check`, `fix` and `errs -- <command>` run a step inside the docker compose service that bind-mounts its folder, instead of on the host. The project is the nearest `compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml` from the step's folder up to the repository root (the folder holding `.git`), with its `compose.override.*` merged in. A service qualifies when one of its bind mounts (`.:/app`, `./api:/var/www/html`, the long `type: bind` syntax, `${VAR:-default}` interpolated with the environment and the project's `.env`) holds the folder, a mount of a parent folder included; named volumes are ignored. The step runs `docker compose exec -T -w <path of the folder in the container> <service> sh -c '<command>'` from the project's folder, with `NO_COLOR=1 FORCE_COLOR=0` set, and the container path is the mount's target plus the folder's path under its source.
+In a repo that runs its tools in a container, `check`, `check --fix` and `errs -- <command>` run a step inside the docker compose service that bind-mounts its folder, instead of on the host. The project is the nearest `compose.yaml`, `compose.yml`, `docker-compose.yaml` or `docker-compose.yml` from the step's folder up to the repository root (the folder holding `.git`), with its `compose.override.*` merged in. A service qualifies when one of its bind mounts (`.:/app`, `./api:/var/www/html`, the long `type: bind` syntax, `${VAR:-default}` interpolated with the environment and the project's `.env`) holds the folder, a mount of a parent folder included; named volumes are ignored. The step runs `docker compose exec -T -w <path of the folder in the container> <service> sh -c '<command>'` from the project's folder, with `NO_COLOR=1 FORCE_COLOR=0` set, and the container path is the mount's target plus the folder's path under its source.
 
 - The stack is only read: `docker compose ps --services --status running` is asked once per project, and a service that is down is never started. The step fails, naming the service and where its project lives, and the other steps go on; start the stack yourself, or pass `--host`.
 - Several services mounting the folder (php and a worker): the one whose name, image or build names the step's tool wins (`bun` and `node` look for `bun` or `node`, `composer`, `php`, `phpunit`, `phpstan` and `vendor/bin/*` for `php`). When none or several stand out the call fails listing them and asks for `--in <service>`.
@@ -48,7 +48,7 @@ In a repo that runs its tools in a container, `check`, `fix` and `errs -- <comma
 - A compose file that does not parse fails the call naming the file and the parse error, and points at `--host`; it never falls back to the host silently, even without docker.
 - The slot queue (the default when `slot` is installed, `--slot` to require it) holds the whole docker command. `--timeout` ends the `docker compose exec` client, which does not always end what it started inside the container.
 - `check --changed` (`-c`) narrows `lint` to the changed source files (staged, unstaged and untracked, against HEAD) when its script is a bare `keslint`, `eslint` or `oxlint`, and `test` to the changed test files and the tests next to changed sources (same folder, `tests/`, `../tests/`) when its script is a bare `bun test`. Every other step runs in full and its line says so, a test step finding no test for the diff included. The typecheck is never narrowed.
-- `fix` runs the project's scripts and `php-cs-fixer` in the service, and keeps its own formatters (`justfile`, `go`, `rust`, `python`, `makefile`) on the host. The recursion guard variable is passed into the container.
+- `check --fix` runs the project's scripts and `php-cs-fixer` in the service, and keeps its own formatters (`justfile`, `go`, `rust`, `python`, `makefile`) on the host. The recursion guard variable is passed into the container.
 
 ## Output
 
@@ -60,16 +60,16 @@ Exit code 0 when every step passed, 1 when one failed, 2 on bad usage, when no s
 
 `--failed` reads the last finished run's folder of logs, where each run leaves a `results.json` of its steps' names and results, and runs the steps that failed there again. When that run had none, or there was no run, it says so and exits 2. The re-run leaves its own `results.json`.
 
-## fix
+## check --fix
 
-`fix` is `check --fix`: `check --fix --only lint:fix` is the same call. `--only` then names fixers, and `--changed`, `--failed`, `--slot`, `--no-slot` and `--parallel` are refused.
+`--only` then names fixers, and `--changed`, `--failed`, `--slot`, `--no-slot` and `--parallel` are refused.
 
 ```sh
-fix              # run every fixer that applies to this folder
-fix --list       # print them and their commands
-fix --only lint:fix,justfile
-fix --in app     # run the scripts in this compose service; --host forces the host
-fix --json       # {fixers, changed}, a skipped fixer as {name, command, skipped}
+check --fix              # run every fixer that applies to this folder
+check --fix --list       # print them and their commands
+check --fix --only lint:fix,justfile
+check --fix --in app     # run the scripts in this compose service; --host forces the host
+check --fix --json       # {fixers, changed}, a skipped fixer as {name, command, skipped}
 ```
 
 The project's own `fix` script, recipe or target when it has one, else its `lint:fix` (or `lint-fix`) and `format` ones, found in the same sources as `check`'s steps. Then the formatters the folder's files call for:
@@ -83,7 +83,7 @@ The project's own `fix` script, recipe or target when it has one, else its `lint
 | `rust` | `Cargo.toml` | `cargo fmt` |
 | `python` | `ruff.toml`, `.ruff.toml` or a `[tool.ruff]` section | `ruff check --fix . && ruff format .` |
 
-It looks at the folder itself only, so each package of a monorepo gets its own run. A fixer whose binary is missing is skipped with a `skip` line. Lines and logs read like `check`'s, then the files the run changed are listed, leaving out those already dirty before it, when the folder is in a git repository. A script that calls `fix` again fails instead of recursing.
+It looks at the folder itself only, so each package of a monorepo gets its own run. A fixer whose binary is missing is skipped with a `skip` line. Lines and logs read like `check`'s, then the files the run changed are listed, leaving out those already dirty before it, when the folder is in a git repository. A script calling `check` is skipped, and one reaching `check --fix` again some other way fails instead of recursing.
 
 Exit code 0 when every fixer ran, 1 when one failed, 2 on bad usage or when nothing applies.
 

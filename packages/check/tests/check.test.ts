@@ -4,7 +4,7 @@ import { Exit } from '@kaynooo/cli-kit'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
-import { fix } from '../src/fix'
+
 import { discover } from '../src/steps'
 
 const temp = tempDirs()
@@ -263,19 +263,6 @@ describe('check', () => {
 })
 
 describe('check --fix', () => {
-  test('runs what fix runs, with the same output', async () => {
-    const dir = temp('check-fix-')
-
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { 'lint:fix': 'true' } }))
-
-    const viaFix = await capture(async () => fix(['--list'], dir))
-    const viaCheck = await capture(async () => check(['--fix', '--list'], dir))
-
-    expect(viaCheck.result).toBe(0)
-    expect(viaCheck.out).toBe(viaFix.out)
-    expect(viaCheck.out).toContain('lint:fix')
-  })
-
   test('--only names fixers, and the step-only options are refused', async () => {
     const dir = temp('check-fix-only-')
 

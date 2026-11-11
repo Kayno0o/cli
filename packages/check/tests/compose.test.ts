@@ -6,7 +6,6 @@ import { describe, expect, test } from 'bun:test'
 import { check } from '../src/check'
 import { place } from '../src/compose'
 import { errs } from '../src/errs'
-import { fix } from '../src/fix'
 import { discover, discoverProjects } from '../src/steps'
 
 const temp = tempDirs()
@@ -424,16 +423,16 @@ describe('check in a compose service', () => {
   })
 })
 
-describe('fix in a compose service', () => {
+describe('check --fix in a compose service', () => {
   test('a lint:fix script and php-cs-fixer run in the service, listed with where', async () => {
     const root = project({ 'compose.yml': COMPOSE, 'package.json': SCRIPTS, '.php-cs-fixer.dist.php': '' })
-    const listed = await capture(async () => fix(['--list'], root))
+    const listed = await capture(async () => check(['--fix', '--list'], root))
 
     expect(listed.out).toContain('lint:fix      bun run lint:fix             package.json            app')
     expect(listed.out).toContain('php-cs-fixer  vendor/bin/php-cs-fixer fix  .php-cs-fixer.dist.php  app')
 
     await withDocker(['app'], { '/app': root }, async (docker) => {
-      const { result, out } = await capture(async () => fix(['--only', 'lint:fix'], root))
+      const { result, out } = await capture(async () => check(['--fix', '--only', 'lint:fix'], root))
 
       expect(result).toBe(0)
       expect(out).toContain('ok    lint:fix')
@@ -444,12 +443,12 @@ describe('fix in a compose service', () => {
   test('php-cs-fixer is left to a composer fixer script, a down service fails the fixer naming it', async () => {
     const composer = project({ 'composer.json': JSON.stringify({ scripts: { 'lint:fix': 'php-cs-fixer fix' } }), '.php-cs-fixer.php': '' })
 
-    expect((await capture(async () => fix(['--list', '--json'], composer))).out).not.toContain('"php-cs-fixer"')
+    expect((await capture(async () => check(['--fix', '--list', '--json'], composer))).out).not.toContain('"php-cs-fixer"')
 
     const root = project({ 'compose.yml': COMPOSE, 'package.json': SCRIPTS })
 
     await withDocker([], { '/app': root }, async () => {
-      const { result, out } = await capture(async () => fix([], root))
+      const { result, out } = await capture(async () => check(['--fix'], root))
 
       expect(result).toBe(1)
       expect(out).toContain('the app service is not running')
