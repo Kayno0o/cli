@@ -31,7 +31,7 @@
     },
     "packages/changelog": {
       "name": "@kaynooo/cli-changelog",
-      "version": "2.3.5",
+      "version": "2.3.6",
       "bin": {
         "changelog": "./dist/cli.js",
       },
