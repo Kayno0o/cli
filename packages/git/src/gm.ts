@@ -329,7 +329,7 @@ async function main(argv: string[]): Promise<number> {
     fail('a merge is already in progress: gm --continue once the conflicts are resolved, or gm --abort', 1)
 
   if ((await ran(['status', '--porcelain', '--untracked-files=no'])).trim() !== '')
-    fail('the working tree has uncommitted changes, commit or stash them first (gc, git stash)', 1)
+    fail('the working tree has uncommitted changes: commit them first (gc), or set them aside as a patch (gu)', 1)
 
   if (await succeeds(['merge-base', '--is-ancestor', branch, 'HEAD'])) {
     if (json)
