@@ -284,7 +284,7 @@ export async function serviceNamed(dir: string, name: string, project: string): 
   return (await services(stack)).find(candidate => candidate.name === name)
 }
 
-/** A whole log with its secrets masked as `redact` does. */
+/** A whole log with its secrets masked as `ev redact` does. */
 export function maskLog(text: string, known?: KnownSecrets): string {
   const redactor = new Redactor(known)
 

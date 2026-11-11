@@ -5,7 +5,7 @@ import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { branchCell, syncCell } from '../src/repos'
 
-const CLI = new URL('../src/repos-cli.ts', import.meta.url).pathname
+const CLI = [new URL('../src/cli.ts', import.meta.url).pathname, 'repos']
 const temp = tempDirs()
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
 
@@ -37,7 +37,7 @@ function repo(path: string): string {
 }
 
 function repos(args: string[] = [], at = root) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args, at], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, HOME: home, XDG_CONFIG_HOME: join(home, '.config'), NO_COLOR: '1' } })
+  const result = Bun.spawnSync([process.execPath, ...CLI, ...args, at], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, HOME: home, XDG_CONFIG_HOME: join(home, '.config'), NO_COLOR: '1' } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }

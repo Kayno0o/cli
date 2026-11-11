@@ -1,22 +1,25 @@
 import { describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
-const BINS = ['proc', 'pid', 'ports', 'procs'] as const
+const COMMANDS = ['pid', 'ports', 'procs'] as const
 
 function listen() {
   return Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: () => undefined } })
 }
 
-function run(bin: string, args: string[]) {
-  const result = Bun.spawnSync([process.execPath, new URL(`../src/${bin}-cli.ts`, import.meta.url).pathname, ...args], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+function run(command: string, args: string[]) {
+  const result = Bun.spawnSync([process.execPath, new URL('../src/proc-cli.ts', import.meta.url).pathname, command, ...args], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
 
-describe.each(BINS)('%s', (bin) => {
-  test('prints its version and its usage', () => {
-    expect(run(bin, ['--version']).out.trim()).toBe(version)
-    expect(run(bin, ['--help']).out).toContain(`${bin} `)
+test('proc prints its version', () => {
+  expect(run('--version', []).out.trim()).toBe(version)
+})
+
+describe.each(COMMANDS)('proc %s', (command) => {
+  test('prints its usage', () => {
+    expect(run(command, ['--help']).out).toContain(`proc ${command}`)
   })
 })
 

@@ -29,12 +29,12 @@ Every bin answers by one table, stated in each command's `--help` on its `Exit c
 | Code | Meaning |
 | --- | --- |
 | 0 | clean: it did what was asked, found nothing wrong; also `--help` and `--version` |
-| 1 | a finding (`audit`, `doctor`, `guard`), nothing found (`peek`, `hotspots`, `todo-scan`, `ports`, `pick`, `view`), or an operation that ran and failed (Forgejo, GitLab or the database refused, a step failed: `fail(message, 1)` and any other error a command throws) |
+| 1 | a finding (`ws audit`, `doctor`, `guard`), nothing found (`src peek`, `src hotspots`, `src todo-scan`, `proc ports`, `pick`, `view`), or an operation that ran and failed (Forgejo, GitLab or the database refused, a step failed: `fail(message, 1)` and any other error a command throws) |
 | 2 | a usage error (an unknown command or option, a bad value, a missing argument: what `parse` and `fail` throw by default), or could not check (a timeout, an unreachable registry, no lockfile): never reported as clean |
 
 Exceptions, each stated in the command's own `Exit codes:`:
 
-- A bin running another command (`base`, `proof`, `out`, `slot`, `dc`, `dx`, `sf`, `gb`, `gc` on a signal) exits with that command's code: 126 when it cannot be run, 127 when it cannot be started, 128 plus the signal when interrupted.
+- A bin running another command (`base`, `base proof`, `out`, `slot`, `dc`, `dx`, `sf`, `gb`, `gc` on a signal) exits with that command's code: 126 when it cannot be run, 127 when it cannot be started, 128 plus the signal when interrupted.
 - `probe` exits 1 when the site could not be reached, that being its finding, and 0 when it answered, whatever it warns about.
 - A cancelled picker or prompt (`pick`, `ev set`, `dev password --bcrypt -`, `dev jwt`) exits 130, as Ctrl+C would.
 - `guard hook` never exits 2, which would block the tool call it vets.
@@ -46,7 +46,7 @@ Exceptions, each stated in the command's own `Exit codes:`:
 
 - `-n` is always a count: `--limit` (rows of a listing, with `--full` for all of them, from `limitOptions`), `--rows` (`db`, once `--limit`), `--lines` (`dlog`, `out` and `waitfor task`: lines of output kept), `--count` (`sub`, `dev uuid`) and `--slots` (`slot`). A listing cuts to its default and says `N more, rerun with --full`; `--json` is never cut on its own, only by an explicit `-n`.
 - `-t`/`--timeout` is how long to wait before giving up, a duration (`30s`, `5m`, `1h`). A bare number counts in the unit the help names: minutes for `ft ci`, `ft watch`, `ft release` and `gl ci`, seconds for `waitfor`, `slot` and `pkg bump`.
-- `-r`/`--repo` is the forge repository (`ft`, `gl`, `changelog`). Bins with no repository keep `-r` for their own noun: `--ref` (`base`, `proof`), `--regex` (`sub`), `--refs` (`peek`).
+- `-r`/`--repo` is the forge repository (`ft`, `gl`, `changelog`). Bins with no repository keep `-r` for their own noun: `--ref` (`base`, `base proof`), `--regex` (`sub`), `--refs` (`src peek`).
 - `--dry-run` shows what would change without changing it (`sub`, `ft release`, `pkg bump`, `changelog`; `changelog` keeps `--dry`).
 - A renamed flag keeps its old spelling through `aliases` on the option (`rows` answers `--limit`, `changelog` answers `--gitea` and `--dry`), left out of the help and of `__complete`.
 
@@ -60,7 +60,7 @@ On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, comma
 
 ## The workspace folder
 
-`workspaceRoot({ given })` is where the repositories live: the `--root` or positional given, else `KAYNOOO_WORKSPACE`, else the `workspace` key of `~/.config/kaynooo-cli/config.json`, else `~/Workspace`. `pkg bump`, `pkg consumers`, `repos` and `sweep` use it; `doctor --install` asks for it on a terminal and `doctor` reports it.
+`workspaceRoot({ given })` is where the repositories live: the `--root` or positional given, else `KAYNOOO_WORKSPACE`, else the `workspace` key of `~/.config/kaynooo-cli/config.json`, else `~/Workspace`. `pkg bump`, `pkg consumers`, `ws repos` and `ws sweep` use it; `doctor --install` asks for it on a terminal and `doctor` reports it.
 
 ## Ignored folders
 
@@ -106,7 +106,7 @@ On a terminal, help has bold `Usage:`, `Commands:` and `Options:` headers, comma
 - `table(rows, { cellWidth, header })` also flattens each cell's line breaks and cuts it to `cellWidth`, and with `header` prints the first row bold on a terminal with a dim rule under it (`stream` says which terminal); and `formatDuration(ms)` formats milliseconds like `formatSeconds` but with one decimal under a minute (`0.3s`).
 - `printChanges(title, changes, none?)` prints a section of `+` added, `-` removed and `~` changed lines (`changeLines` returns them), `planned(text, detail?)` and `printPlanned` word what a dry run would do (`◇ would create alice`, `would:` plain), and `unknownHint(name, known)` and `printUnknown(prefix, kind, name, known)` answer an unknown name with `did you mean x?` or `one of: a, b`.
 - `ok(text, detail?)`, `note`, `warn` and `problem` print a status line marked with a bold green ✓, a dimmed ›, a yellow ▲ or a red ✗ (`ok` and `note` on stdout, the others on stderr), the detail dimmed after the text; plain, the marks read `ok:`, `note:`, `warning:` and `error:`. `marked(mark, text, stream, detail?)` returns such a line, `paint(stream)` the colours for a stream and `takesControlCodes(stream)` whether it draws in place.
-- `isSecretName(name)` is true for the name of a variable, column or JSON key that holds a secret (`API_TOKEN`, `DB_PASS`, `SMTP_PWD`, `clientSecret`, `session_id`, `ssn`), by whole words so `compass` and `author` stay plain; `ev`, `redact` and `db` share it.
+- `isSecretName(name)` is true for the name of a variable, column or JSON key that holds a secret (`API_TOKEN`, `DB_PASS`, `SMTP_PWD`, `clientSecret`, `session_id`, `ssn`), by whole words so `compass` and `author` stay plain; `ev` and `db` share it.
 - `capture(fn)` from `@kaynooo/cli-kit/test` runs a command in-process and returns `{ result, out, err }`, what it printed through `console` and `process.stdout`/`stderr`, so a test needs no spy. `tempDirs()`, called at the top of a test file, answers a `temp(prefix?)` making fresh folders under the system temp folder, all removed once the file's tests are done.
 - `findUp(names, from?)` is the nearest of `names` in the current folder (or `from`) or one above it; `loadConfig(names, { from?, path? })` imports the nearest config (`.ts`, `.js` or `.json`), or the file `path` names, and returns `{ path, dir, config }` with its default export for the caller to check, `undefined` when there is none. A named file missing, one failing to import or one without a default export ends the command with exit 1.
 - `@kaynooo/cli-kit/prompt` asks on the terminal, on stderr:

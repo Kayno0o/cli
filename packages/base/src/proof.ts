@@ -4,7 +4,7 @@ import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, wholeNumber } from '@kaynooo/cli-kit'
 import { checkout, defaultProofRef, folded, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
-const USAGE = 'proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with the default branch of origin (origin/main unless origin/HEAD names another) when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass. --timeout kills a run that lasts longer (a hung test), which says nothing about the change and ends with exit 2.'
+const USAGE = 'base proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ref defaults to the merge base with the default branch of origin (origin/main unless origin/HEAD names another) when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass. --timeout kills a run that lasts longer (a hung test), which says nothing about the change and ends with exit 2.'
 
 const EXITS: ExitRow[] = [[0, 'the command fails before and passes in every run now'], [1, 'it passes before too, fails in any run now, or passes before and fails now'], [2, 'a usage error, an unknown ref, a command that cannot start, ends with exit 126, 127, 125 or a signal, or runs past --timeout'], [130, 'interrupted (128 plus the signal)']]
 
@@ -53,7 +53,7 @@ function describe(outcome: Outcome, at: string, now: readonly number[]): { messa
 export async function proof(argv: string[]): Promise<number> {
   // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
-  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, exits: EXITS, replaces: 'running a test, stashing the change and running it again', examples: [['proof --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the new test fails at HEAD and passes now'], ['proof --ref v1.2.0 --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the same against a release']] })
+  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, exits: EXITS, replaces: 'running a test, stashing the change and running it again', examples: [['base proof --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the new test fails at HEAD and passes now'], ['base proof --ref v1.2.0 --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the same against a release']] })
 
   const given = bare ? argv : parsed.rest ?? []
 

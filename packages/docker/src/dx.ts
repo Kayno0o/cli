@@ -85,12 +85,12 @@ async function hidden(flag: string, rest: string[], services: Service[]): Promis
   return undefined
 }
 
-/** The logs command with its output piped through `redact`, for the picker that runs the words itself; refused when `redact` is missing rather than leaking the logs. */
-export function maskedLogs(command: string[], redactPath: string | null = Bun.which('redact')): string[] {
-  if (redactPath === null)
-    fail('redact is not installed, so the logs would not be masked', 1)
+/** The logs command with its output piped through `ev redact`, for the picker that runs the words itself; refused when `ev` is missing rather than leaking the logs. */
+export function maskedLogs(command: string[], evPath: string | null = Bun.which('ev')): string[] {
+  if (evPath === null)
+    fail('ev is not installed, so the logs would not be masked', 1)
 
-  return ['sh', '-c', '"$@" | redact', 'sh', ...command]
+  return ['sh', '-c', '"$@" | ev redact', 'sh', ...command]
 }
 
 /** Logs follow on a terminal and are printed once elsewhere, where a follow would hang a script or an agent until its timeout. */

@@ -7,7 +7,7 @@ import { maskArgs, maskEnviron } from './mask'
 import { parseCgroup, parseEnviron, parseLimits, parseStat, parseStatus, statusBytes } from './parse'
 import { bootMs, fdCount, readProc, readSockets, readText, socketsOf, userName } from './read'
 
-const usage = `pid <pid>
+const usage = `proc pid <pid>
 
 Shows what a process is: its executable, working directory, command line, parent chain up to init, user, start time and age, memory, open files and limits, the TCP and UDP ports it listens on and its cgroup. Everything is read from /proc; what the calling user cannot read of another user's process is left out and named at the end.
 The environment is not shown unless --env is given, with every value that looks like a secret masked.`
@@ -170,9 +170,9 @@ export async function pid(args: string[]): Promise<number> {
     positionals: ['<pid>'],
     replaces: 'cat /proc/<pid>/{cmdline,environ,limits}, readlink /proc/<pid>/{exe,cwd}, the fish pid function',
     examples: [
-      ['pid 4242', 'executable, directory, command, parents, memory, limits and ports'],
-      ['pid 4242 --env', 'with the environment, secrets masked'],
-      'pid 4242 --json',
+      ['proc pid 4242', 'executable, directory, command, parents, memory, limits and ports'],
+      ['proc pid 4242 --env', 'with the environment, secrets masked'],
+      'proc pid 4242 --json',
     ],
   })
   const [given] = positionals

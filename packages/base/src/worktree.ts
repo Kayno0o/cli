@@ -61,7 +61,7 @@ async function defaultRemoteRef(root: string): Promise<string> {
   return head.code === 0 && stdoutOf(head) !== '' ? stdoutOf(head) : 'origin/main'
 }
 
-// The ref `proof` runs before at when none is given: the merge base with origin's default branch (main unless origin's HEAD names another) when HEAD is on another branch that is ahead of it, else HEAD.
+// The ref `base proof` runs before at when none is given: the merge base with origin's default branch (main unless origin's HEAD names another) when HEAD is on another branch that is ahead of it, else HEAD.
 export async function defaultProofRef(root: string): Promise<string> {
   const branch = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], root)
   const remote = await defaultRemoteRef(root)

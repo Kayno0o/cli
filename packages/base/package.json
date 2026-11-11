@@ -20,8 +20,7 @@
     "stash"
   ],
   "bin": {
-    "base": "./dist/cli.js",
-    "proof": "./dist/proof-cli.js"
+    "base": "./dist/cli.js"
   },
   "files": [
     "dist"
@@ -33,9 +32,8 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts src/proof-cli.ts --target bun --outdir dist",
-    "base": "$npm_execpath src/cli.ts",
-    "proof": "$npm_execpath src/proof-cli.ts"
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "base": "$npm_execpath src/cli.ts"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"

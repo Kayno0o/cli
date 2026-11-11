@@ -18,7 +18,7 @@ describe('touchesEnv', () => {
     })
   }
 
-  const allowed = ['ev list', 'ev get TOKEN .env.local', 'printf %s "$v" | ev set TOKEN .env', 'bun test | redact', 'ls -la .env*', 'test -f .env && echo yes', 'git check-ignore .env', 'docker compose --env-file .env.prod config --services', 'bun --env-file=.env.test test', 'cat .env.example', 'bun -e "console.log(process.env.HOME)"', 'cat environment.ts', 'git commit -m "feat: move secrets into a .env beside it"', 'git commit -qm \'docs: say .env; then cat .env\'', 'tea issues create --title "the guard denies commands naming .env"', 'sed -i \'20a | ev audit moves values into the .env beside it |\' README.md', 'cat > notes.md <<\'EOF\'\nnever cat .env\ncp .env x\nEOF', 'git commit -F - <<EOF\nfix: the .env guard\nEOF\ngit log -1', 'bun test 2>&1 | tail -3', 'echo "a .env $(date)"']
+  const allowed = ['ev list', 'ev get TOKEN .env.local', 'printf %s "$v" | ev set TOKEN .env', 'bun test | ev redact', 'ls -la .env*', 'test -f .env && echo yes', 'git check-ignore .env', 'docker compose --env-file .env.prod config --services', 'bun --env-file=.env.test test', 'cat .env.example', 'bun -e "console.log(process.env.HOME)"', 'cat environment.ts', 'git commit -m "feat: move secrets into a .env beside it"', 'git commit -qm \'docs: say .env; then cat .env\'', 'tea issues create --title "the guard denies commands naming .env"', 'sed -i \'20a | ev audit moves values into the .env beside it |\' README.md', 'cat > notes.md <<\'EOF\'\nnever cat .env\ncp .env x\nEOF', 'git commit -F - <<EOF\nfix: the .env guard\nEOF\ngit log -1', 'bun test 2>&1 | tail -3', 'echo "a .env $(date)"']
 
   for (const command of allowed) {
     test(`lets ${command} through`, () => {
@@ -97,7 +97,7 @@ describe('touchesEnv, commands that print no value', () => {
 })
 
 describe('touchesEnv, the shapes that once got through', () => {
-  const refused = ['git show HEAD~1:api/.env', 'git show HEAD:.env', 'git diff HEAD -- .env', 'git log -p -- api/.env.local', 'rg KEY .env*', 'bat .env', 'sed -n 1,20p api/.env', 'docker compose exec -T php printenv', 'docker compose exec php env | grep DB', 'docker exec app env', 'docker-compose exec php printenv DATABASE_URL', 'docker compose config', 'docker compose -f compose.yaml config | grep PASSWORD', 'docker inspect app', 'docker container inspect app', 'docker inspect -f \'{{json .Config.Env}}\' app', 'docker compose exec php env | redact; docker compose exec php env', 'cat <<EOF\n$(cat .env)\nEOF', 'docker exec app sh -c "env | sort"', 'docker exec app bash -lc "printenv"', 'docker exec app bash -l -c "env"', 'docker exec app bash --login -c "env"', 'docker exec app bash -ce env', 'docker --context box exec -it app printenv', 'docker compose -p x exec -u root php env']
+  const refused = ['git show HEAD~1:api/.env', 'git show HEAD:.env', 'git diff HEAD -- .env', 'git log -p -- api/.env.local', 'rg KEY .env*', 'bat .env', 'sed -n 1,20p api/.env', 'docker compose exec -T php printenv', 'docker compose exec php env | grep DB', 'docker exec app env', 'docker-compose exec php printenv DATABASE_URL', 'docker compose config', 'docker compose -f compose.yaml config | grep PASSWORD', 'docker inspect app', 'docker container inspect app', 'docker inspect -f \'{{json .Config.Env}}\' app', 'docker compose exec php env | ev redact; docker compose exec php env', 'cat <<EOF\n$(cat .env)\nEOF', 'docker exec app sh -c "env | sort"', 'docker exec app bash -lc "printenv"', 'docker exec app bash -l -c "env"', 'docker exec app bash --login -c "env"', 'docker exec app bash -ce env', 'docker --context box exec -it app printenv', 'docker compose -p x exec -u root php env']
 
   for (const command of refused) {
     test(`refuses ${command}`, () => {
@@ -105,7 +105,7 @@ describe('touchesEnv, the shapes that once got through', () => {
     })
   }
 
-  const allowed = ['docker compose exec -T php printenv | redact', 'docker compose exec php env | grep DB | redact', 'docker compose config | redact', 'docker compose config --services', 'docker inspect -f \'{{.State.Status}}\' app', 'docker compose exec php bin/phpunit', 'docker compose ps', 'ev list | redact', 'ev get A .env.local | redact', 'ev show HEAD:.env', 'ev grep ^DB_ .env', 'docker compose exec php composer config --list', 'docker compose exec php bin/console debug:config', 'docker exec app env-check', 'echo \'$(cat .env)\'', 'cat > a.md <<\'EOF\'\nnever cat .env\necho "$(cat .env)"\nEOF\ncat > b.md <<\'EOF\'\ngit show HEAD:.env\nEOF\nbun test']
+  const allowed = ['docker compose exec -T php printenv | ev redact', 'docker compose exec php env | grep DB | ev redact', 'docker compose config | ev redact', 'docker compose config --services', 'docker inspect -f \'{{.State.Status}}\' app', 'docker compose exec php bin/phpunit', 'docker compose ps', 'ev list | ev redact', 'ev get A .env.local | ev redact', 'ev show HEAD:.env', 'ev grep ^DB_ .env', 'docker compose exec php composer config --list', 'docker compose exec php bin/console debug:config', 'docker exec app env-check', 'echo \'$(cat .env)\'', 'cat > a.md <<\'EOF\'\nnever cat .env\necho "$(cat .env)"\nEOF\ncat > b.md <<\'EOF\'\ngit show HEAD:.env\nEOF\nbun test']
 
   for (const command of allowed) {
     test(`lets ${command} through`, () => {

@@ -10,11 +10,11 @@ import { protectionOf, terminate } from './kill'
 import { maskArgs } from './mask'
 import { ancestry, readSockets, snapshot, socketOwners } from './read'
 
-const usage = `ports [port]
+const usage = `proc ports [port]
 
 Lists what listens on this machine, TCP and UDP over IPv4 and IPv6, one row per port with its bound address, the owning process, its command and its working directory. A port Docker publishes is held by docker-proxy, and shows as its compose project and service when docker is installed; the owner of a socket of another user cannot be read and shows as -.
-\`ports <port>\` keeps that port alone and exits 1 when nothing listens on it.
-\`ports <port> --kill\` stops its owner with SIGTERM, and with --force SIGKILL once --grace has passed, after asking on a terminal unless --yes is given. It refuses processes of other users, pid 1, this command and its ancestors, and docker-proxy, for which it names the container to stop instead.`
+\`proc ports <port>\` keeps that port alone and exits 1 when nothing listens on it.
+\`proc ports <port> --kill\` stops its owner with SIGTERM, and with --force SIGKILL once --grace has passed, after asking on a terminal unless --yes is given. It refuses processes of other users, pid 1, this command and its ancestors, and docker-proxy, for which it names the container to stop instead.`
 const EXITS: ExitRow[] = [[0, 'it listed or stopped'], [1, 'nothing listens on the given port or the owner could not be stopped'], [2, 'a usage error']]
 
 const options = {
@@ -147,10 +147,10 @@ export async function ports(args: string[]): Promise<number> {
     positionals: ['[port]'],
     replaces: 'ss -ltnp | grep, lsof -i, fuser -k and lookups of docker-proxy by hand',
     examples: [
-      ['ports', 'every listening port with its owner'],
-      ['ports 3000', 'who holds 3000, exit 1 when nobody does'],
-      ['ports 3000 --kill --yes', 'stop it'],
-      'ports --json',
+      ['proc ports', 'every listening port with its owner'],
+      ['proc ports 3000', 'who holds 3000, exit 1 when nobody does'],
+      ['proc ports 3000 --kill --yes', 'stop it'],
+      'proc ports --json',
     ],
   })
 
@@ -164,7 +164,7 @@ export async function ports(args: string[]): Promise<number> {
     badUsage(`<port> takes a whole number from 1 to 65535, not ${given}`)
 
   if (values.kill === true && port === undefined)
-    badUsage('--kill takes the port to free: ports <port> --kill')
+    badUsage('--kill takes the port to free: proc ports <port> --kill')
 
   const [sockets, owners, procs] = await Promise.all([readSockets(), socketOwners(), snapshot('/proc', uid => uid === process.getuid?.())])
   const byPid = new Map(procs.map(proc => [proc.pid, proc]))

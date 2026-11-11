@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { knownSecrets } from '../src/mask'
 import { check, Redactor } from '../src/redactor'
 
-const CLI = new URL('../src/redact.ts', import.meta.url).pathname
+const CLI = new URL('../src/ev.ts', import.meta.url).pathname
 const GITHUB = `ghp_${'Ab1'.repeat(12)}`
 const GITLAB = `glpat-${'x9'.repeat(12)}`
 const OPENAI = `sk-${'q'.repeat(40)}`
@@ -24,7 +24,7 @@ afterEach(async () => {
 })
 
 function redact(args: string[], stdin: string) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: dir, stdin: Buffer.from(stdin), stdout: 'pipe', stderr: 'pipe' })
+  const result = Bun.spawnSync([process.execPath, CLI, 'redact', ...args], { cwd: dir, stdin: Buffer.from(stdin), stdout: 'pipe', stderr: 'pipe' })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -99,7 +99,7 @@ describe('redact', () => {
   })
 
   test('streams: a line comes out before the input ends', async () => {
-    const child = Bun.spawn([process.execPath, CLI], { cwd: dir, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' })
+    const child = Bun.spawn([process.execPath, CLI, 'redact'], { cwd: dir, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe' })
 
     void child.stdin.write(`first ${GITHUB}\n`)
     await child.stdin.flush()

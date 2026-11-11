@@ -14,7 +14,7 @@ const DAY_MS = 86_400_000
 const DEFAULT_HALF_LIFE = '90d'
 const DEFAULT_COUNT = configuredNumber('hotspots', 'limit', 20)
 
-const USAGE = `hotspots [options] [dir]: ranks the source files under dir (here by default) by complexity times churn, the ones both hard to read and often edited first, honouring .gitignore
+const USAGE = `src hotspots [options] [dir]: ranks the source files under dir (here by default) by complexity times churn, the ones both hard to read and often edited first, honouring .gitignore
 
 Complexity is the count of decision points in the file (branches, loops, cases, catches, boolean operators, ternaries) plus one, churn the commits touching it since --since (${DEFAULT_SINCE}), score their product. A commit counts for less the older it is (half as much every --half-life, 0 for all alike) and a commit touching more than --bulk files, a format or rename sweep, is left out. --by-lines scores the lines changed instead of the commits. Each file also shows how many lines changed, its author count ("solo" when one author wrote every change) and its most complex declaration, found by indentation. Test files and generated or built files are left out unless --all.
 
@@ -35,7 +35,7 @@ const HOT = 0.66
 const WARM = 0.33
 
 export async function hotspots(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'hotspots src --since "3 months ago" --limit 10'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[dir]'], replaces: 'guessing which files are worth splitting first', examples: ['hotspots', 'src hotspots src --since "3 months ago" --limit 10'] })
 
   if (positionals.length > 1)
     badUsage('give one folder')

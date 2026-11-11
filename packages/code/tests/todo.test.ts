@@ -6,7 +6,7 @@ import { marksIn } from '../src/todo'
 
 const temp = tempDirs()
 
-const CLI = new URL('../src/todo-scan-cli.ts', import.meta.url).pathname
+const CLI = [new URL('../src/cli.ts', import.meta.url).pathname, 'todo-scan']
 
 let dir = ''
 
@@ -16,7 +16,7 @@ function write(path: string, text: string) {
 }
 
 function scan(args: string[], env: Record<string, string | undefined> = process.env) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: dir, env, stdout: 'pipe', stderr: 'pipe' })
+  const result = Bun.spawnSync([process.execPath, ...CLI, ...args], { cwd: dir, env, stdout: 'pipe', stderr: 'pipe' })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }

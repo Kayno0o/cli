@@ -6,7 +6,7 @@ import process from 'node:process'
 import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
-const USAGE = `repos [options] [root]: the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
+const USAGE = `ws repos [options] [root]: the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
 
 A repository with nothing to report is left out unless --all. A monorepo tagging its packages <folder>-v<version> counts the unreleased commits per package folder. The walk goes ${MAX_DEPTH} levels deep, stops at a .git and skips node_modules, hidden folders and the names in "skip" of ~/.config/kaynooo-cli/repos.json.
 
@@ -96,7 +96,7 @@ function row(repo: RepoState, shown: string): string[] {
 }
 
 export async function repos(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a cd, git status, git log and git tag loop over each repository of the workspace', examples: ['repos', 'repos ~/Workspace --only unreleased --fetch', ['repos --only behind --pull', 'fast-forward what is behind and clean'], ['repos --only dirty --path', 'the paths, for xargs']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a cd, git status, git log and git tag loop over each repository of the workspace', examples: ['ws repos', 'ws repos ~/Workspace --only unreleased --fetch', ['ws repos --only behind --pull', 'fast-forward what is behind and clean'], ['ws repos --only dirty --path', 'the paths, for xargs']] })
 
   if (values.watch !== undefined)
     return watching(values.watch, async () => repos(withoutWatch(args)))

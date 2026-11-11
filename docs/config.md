@@ -1,12 +1,12 @@
 # Configuration
 
-Every file below is optional, nothing is assumed without it. The user files live in `~/.config/kaynooo-cli/` (`$XDG_CONFIG_HOME/kaynooo-cli/` when that is set). A file of a bin's own settings that does not parse is ignored with a warning (`config.json` and `pkg-excluded.json` silently, `repos.json` ends `repos` with exit 1).
+Every file below is optional, nothing is assumed without it. The user files live in `~/.config/kaynooo-cli/` (`$XDG_CONFIG_HOME/kaynooo-cli/` when that is set). A file of a bin's own settings that does not parse is ignored with a warning (`config.json` and `pkg-excluded.json` silently, `repos.json` ends `ws repos` with exit 1).
 
 ## Files
 
 | File | Read by | Keys |
 |---|---|---|
-| `~/.config/kaynooo-cli/config.json` | `doctor`, `gcl`, `pkg`, `repos`, `sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: the host `gcl owner/name` clones from, git.kaynooo.fr by default |
+| `~/.config/kaynooo-cli/config.json` | `doctor`, `gcl`, `pkg`, `ws repos`, `ws sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: the host `gcl owner/name` clones from, git.kaynooo.fr by default |
 | `~/.config/kaynooo-cli/theme.json` | every bin | `preset` (`default`, `ascii`, `mono`), `colors`, `glyphs`, `accents`, `bins`: see the kit README |
 | `.kaynooo/theme.json` | every bin | the same, found upward from the current folder to the repository root, laid over the user file |
 | `~/.config/kaynooo-cli/ft.json` | `ft` | `remoteHost`: the ssh host `ft remote` switches alias origins to (the older `~/.config/ft/config.json` is read when this one is missing) |
@@ -15,7 +15,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 | `~/.config/kaynooo-cli/pkg.json` | `pkg` | `licenses`, `blockSeverity`, `minAge`: the same keys as `.pkgrc.json` |
 | `.pkgrc.json` | `pkg` | `licenses`, `blockSeverity`, `minAge`, found upward, the nearest file that sets a key wins |
 | `~/.config/kaynooo-cli/pkg-excluded.json` | `pkg bump` | the folders left out of a package's bumps, `{ "<package>": ["<folder>"] }`: written by the checklist, editable |
-| `~/.config/kaynooo-cli/repos.json` | `repos` | `skip`: repository names left out |
+| `~/.config/kaynooo-cli/repos.json` | `ws repos` | `skip`: repository names left out |
 | `.npmrc`, `bunfig.toml` | `pkg` | the registry and token of a scope, read as `bun` reads them |
 | `changelog.config.{ts,mts,js,mjs,json}`, the `changelog` field of `package.json` | `changelog` | the release notes: repo, groups, Discord webhook |
 | `release.config.ts` | `stack audit` | the compose files and images the audit cross-checks |
@@ -28,7 +28,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 | `KIT_MODE` | every bin | `terminal`, `ci`, `agent` or `pipe`, forcing how the output is shaped; `CLAUDECODE` and `AI_AGENT` select `agent` |
 | `KIT_THEME` | every bin | a preset name, or the theme file to use instead of the others |
 | `KIT_HELP` | every bin | `json` makes `--help` print a machine-readable description |
-| `KAYNOOO_WORKSPACE` | `doctor`, `pkg`, `repos`, `sweep` | the folder holding the repositories, over `config.json` |
+| `KAYNOOO_WORKSPACE` | `doctor`, `pkg`, `ws repos`, `ws sweep` | the folder holding the repositories, over `config.json` |
 | `KAYNOOO_CLI_NO_USAGE` | every bin | anything but `0` or empty stops the run being recorded in `usage.jsonl` |
 | `BROWSER` | `--open` | the command opening a URL, else the platform's opener |
 | `EDITOR`, `VISUAL` | prompts | the editor a prompt that asks for a text opens |

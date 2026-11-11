@@ -18,18 +18,6 @@ arc unpack /mnt/backup/old-project.tar.zst ~/restored  # refuses to overwrite
 arc extract release.tar.gz  # any common archive
 ```
 
-## audit
-
-the known vulnerabilities of the Bun, Composer, Cargo and uv repositories under root (the current folder by default), one table per repository. Package `workspace`.
-
-Instead of: a bun audit run in each repository and a read of every advisory to find what is worth fixing
-
-```sh
-audit [options] [root]
-audit
-audit ~/Workspace --level high --prod
-```
-
 ## base
 
 runs a command at HEAD or another ref in a temporary worktree, the working tree untouched. Package `base`.
@@ -380,18 +368,6 @@ guard check "git push --force"  # the rules a command breaks, with their routes
 guard path .env  # whether a file tool may open a path
 ```
 
-## hotspots
-
-ranks the source files under dir (here by default) by complexity times churn, the ones both hard to read and often edited first, honouring .gitignore. Package `code`.
-
-Instead of: guessing which files are worth splitting first
-
-```sh
-hotspots [options] [dir]
-hotspots
-hotspots src --since "3 months ago" --limit 10
-```
-
 ## j
 
 without a name, picks a recipe, target, script or task of this folder, its parents and its child folders when a terminal is attached, and runs it. The ones run last come first, per folder. Without a terminal it lists them instead. Package `check`.
@@ -421,18 +397,6 @@ bun run build 2>&1 | out  # what is piped in
 out --stats --since 7d  # the tokens saved this week
 ```
 
-## peek
-
-prints files or line spans with their line numbers, several in one call. Package `code`.
-
-Instead of: sed -n N,Mp, grep -n chains and whole-file reads
-
-```sh
-peek [options] <file[:from-to]>...
-peek src/a.ts:120-140 src/b.ts:1-40  # two spans in one call
-peek --def parseArgs src  # a whole declaration
-```
-
 ## pick
 
 a fuzzy selector, the lines on stdin in, the chosen one on stdout out. Package `pick`.
@@ -447,19 +411,6 @@ git branch | pick --filter main  # every match, best first, no terminal
 ps aux | pick --with-nth 2,11.. --nth 11..  # show some fields, search others
 ```
 
-## pid
-
-shows what a process is: its executable, working directory, command line, parent chain up to init, user, start time and age, memory, open files and limits, the TCP and UDP ports it listens on and its cgroup. Everything is read from /proc; what the calling user cannot read of another user's process is left out and named at the end. Package `proc`.
-
-Instead of: cat /proc/<pid>/{cmdline,environ,limits}, readlink /proc/<pid>/{exe,cwd}, the fish pid function
-
-```sh
-pid <pid>
-pid 4242  # executable, directory, command, parents, memory, limits and ports
-pid 4242 --env  # with the environment, secrets masked
-pid 4242 --json
-```
-
 ## pkg
 
 checks npm packages before they are added, and moves a lib's consumers onto a new release. Package `pkg`.
@@ -470,20 +421,6 @@ Instead of: bun add on trust, and a bun info and sleep loop then a bun add per c
 pkg <command> [options]
 pkg zod  # the name, the newest version two weeks old, its licence and scripts
 pkg bump @kaynooo/cli-kit --dry-run  # the consumers a release would move
-```
-
-## ports
-
-lists what listens on this machine, TCP and UDP over IPv4 and IPv6, one row per port with its bound address, the owning process, its command and its working directory. A port Docker publishes is held by docker-proxy, and shows as its compose project and service when docker is installed; the owner of a socket of another user cannot be read and shows as -. Package `proc`.
-
-Instead of: ss -ltnp | grep, lsof -i, fuser -k and lookups of docker-proxy by hand
-
-```sh
-ports [port]
-ports  # every listening port with its owner
-ports 3000  # who holds 3000, exit 1 when nobody does
-ports 3000 --kill --yes  # stop it
-ports --json
 ```
 
 ## probe
@@ -513,58 +450,6 @@ proc <command> [options]
 proc pid 1234
 proc ports
 proc procs  # the leftover or heavy processes, dry-run first
-```
-
-## procs
-
-lists the leftover or heavy processes of the calling user that are worth cleaning, grouped by origin: the project folder their working directory is in, a browser profile for a chromium and its helpers, else their command. Each group shows its process count, total resident memory and oldest age. Package `proc`.
-
-Instead of: pkill -f and pgrep -f one-liners (which match their own shell), ps aux | grep for leftover chromium, bun or vite processes
-
-```sh
-procs
-procs  # leftover and heavy dev processes, by origin
-procs --min-mem 1G --older 1h  # only the big ones that have run a while
-procs --kill  # dry run: what would be stopped
-procs --kill --yes
-```
-
-## proof
-
-runs the command at HEAD or another ref in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it. Package `base`.
-
-Instead of: running a test, stashing the change and running it again
-
-```sh
-proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]
-proof --keep tests/fix.test.ts -- bun test tests/fix.test.ts  # the new test fails at HEAD and passes now
-proof --ref v1.2.0 --keep tests/fix.test.ts -- bun test tests/fix.test.ts  # the same against a release
-```
-
-## redact
-
-copies stdin to stdout line by line with secrets masked: known token formats (GitHub, GitLab, Slack, AWS, npm, Stripe, Google and SendGrid keys, sk-, JWTs, Authorization headers, password= and secret= pairs), private key blocks, the password and the tokens of any URL and the values of secret-looking keys in this folder's .env* files. Package `env`.
-
-Instead of: printing a command's secrets into a log or a transcript
-
-```sh
-redact [--check]
-docker compose config | redact  # the resolved compose file, secrets masked
-git diff --cached | redact --check  # refuse a commit carrying a secret
-```
-
-## repos
-
-the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag. Package `workspace`.
-
-Instead of: a cd, git status, git log and git tag loop over each repository of the workspace
-
-```sh
-repos [options] [root]
-repos
-repos ~/Workspace --only unreleased --fetch
-repos --only behind --pull  # fast-forward what is behind and clean
-repos --only dirty --path  # the paths, for xargs
 ```
 
 ## sf
@@ -630,31 +515,6 @@ sub [options] <file>...
 sub src/a.php <<'EOF' (SEARCH/REPLACE blocks, see above)  # multi-line text, no escaping
 sub --from oldName --to newName --all src/a.ts src/b.ts  # every match in two files
 sub --regex --from "v(\d+)" --to "v$1.0" --dry-run --diff README.md  # the diff, nothing written
-```
-
-## sweep
-
-lists the regenerable folders (node_modules, .output, dist, build, .venv, target beside a Cargo.toml, vendor beside a composer.json or composer.lock), the caches (.nuxt, .next, .turbo, .svelte-kit, __pycache__, .gradle and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, 3 levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind. Package `workspace`.
-
-Instead of: find ~/Workspace -name node_modules, du -sh and rm -rf by hand
-
-```sh
-sweep [options] [root]
-sweep
-sweep ~/Workspace --older 30d --min 100M --apply
-sweep --only worktrees --apply
-```
-
-## todo-scan
-
-lists the TODO, FIXME, HACK, XXX and owner/repo#N comments under the paths (here by default), each as <file>:<line>: <comment>, honouring .gitignore. Package `code`.
-
-Instead of: grep -rn TODO, then opening each issue it names
-
-```sh
-todo-scan [options] [path...]
-todo-scan src
-todo-scan --stale  # only the comments naming a closed issue
 ```
 
 ## view

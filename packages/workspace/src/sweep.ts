@@ -11,7 +11,7 @@ import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
 const LARGE = 100 * 1024 ** 2
 const BIG = 1024 ** 3
 
-const USAGE = `sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, .venv, target beside a Cargo.toml, vendor beside a composer.json or composer.lock), the caches (.nuxt, .next, .turbo, .svelte-kit, __pycache__, .gradle and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
+const USAGE = `ws sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, .venv, target beside a Cargo.toml, vendor beside a composer.json or composer.lock), the caches (.nuxt, .next, .turbo, .svelte-kit, __pycache__, .gradle and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
 
 Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. With --docker the Docker usage comes after the list, left to dclean.`
 const EXITS: ExitRow[] = [[0, 'it listed, or removed every entry it was allowed to'], [1, 'a removal failed or the confirm was declined'], [2, 'a usage error, a missing root, or --apply off a terminal without --yes']]
@@ -43,7 +43,7 @@ async function dockerUsage(): Promise<string | undefined> {
 }
 
 export async function sweep(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[root]'], replaces: 'find ~/Workspace -name node_modules, du -sh and rm -rf by hand', examples: ['sweep', 'sweep ~/Workspace --older 30d --min 100M --apply', 'sweep --only worktrees --apply'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[root]'], replaces: 'find ~/Workspace -name node_modules, du -sh and rm -rf by hand', examples: ['ws sweep', 'ws sweep ~/Workspace --older 30d --min 100M --apply', 'ws sweep --only worktrees --apply'] })
 
   if (positionals.length > 1)
     badUsage('give one root')

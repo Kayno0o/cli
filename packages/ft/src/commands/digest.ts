@@ -96,9 +96,9 @@ async function quietly<T>(read: () => Promise<T[]>): Promise<T[]> {
 
 interface ScannedTodo { path: string, line: number, refs: { repo: string, number: number, state?: string }[] }
 
-// The comments naming a closed issue, by issue; left out quietly when todo-scan is not installed or fails.
+// The comments naming a closed issue, by issue; left out quietly when `src todo-scan` is not installed or fails.
 export async function staleTodos(): Promise<StaleTodo[]> {
-  const bin = Bun.which('todo-scan', { PATH: process.env.PATH ?? '' })
+  const bin = Bun.which('src', { PATH: process.env.PATH ?? '' })
 
   if (bin === null)
     return []
@@ -106,7 +106,7 @@ export async function staleTodos(): Promise<StaleTodo[]> {
   let found: ScannedTodo[]
 
   try {
-    const ran = await runCommand([bin, '--stale', '--json'])
+    const ran = await runCommand([bin, 'todo-scan', '--stale', '--json'])
 
     found = JSON.parse(Buffer.concat(ran.chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString()) as ScannedTodo[]
   }

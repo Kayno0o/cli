@@ -23,11 +23,11 @@ afterAll(() => {
 
 describe('maskedLogs', () => {
   test('pipes the logs through redact when it is installed', () => {
-    expect(maskedLogs(['docker', 'logs'], '/usr/bin/redact')).toEqual(['sh', '-c', '"$@" | redact', 'sh', 'docker', 'logs'])
+    expect(maskedLogs(['docker', 'logs'], '/usr/bin/ev')).toEqual(['sh', '-c', '"$@" | ev redact', 'sh', 'docker', 'logs'])
   })
 
   test('refuses to hand back unmasked logs when redact is missing', () => {
-    expect(() => maskedLogs(['docker', 'logs'], null)).toThrow('redact')
+    expect(() => maskedLogs(['docker', 'logs'], null)).toThrow('ev is not installed')
   })
 })
 

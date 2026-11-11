@@ -27,15 +27,15 @@ export interface Host {
 // Every @kaynooo/cli-* package and the bins it installs; the repo's tests check it against packages/*.
 export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-arc': ['arc'],
-  '@kaynooo/cli-base': ['base', 'proof'],
+  '@kaynooo/cli-base': ['base'],
   '@kaynooo/cli-changelog': ['changelog'],
   '@kaynooo/cli-check': ['check', 'errs', 'j'],
-  '@kaynooo/cli-code': ['src', 'peek', 'todo-scan', 'hotspots'],
+  '@kaynooo/cli-code': ['src'],
   '@kaynooo/cli-db': ['db'],
   '@kaynooo/cli-docker': ['dc', 'dlog', 'dx', 'sf'],
   '@kaynooo/cli-doctor': ['doctor', 'cli'],
   '@kaynooo/cli-edit': ['sub'],
-  '@kaynooo/cli-env': ['ev', 'redact'],
+  '@kaynooo/cli-env': ['ev'],
   '@kaynooo/cli-forgejo': ['ft'],
   '@kaynooo/cli-git': ['gst', 'gc', 'gb', 'gp', 'gf', 'gm', 'gcl', 'gd', 'gu'],
   '@kaynooo/cli-gitlab': ['gl'],
@@ -47,12 +47,12 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-pick': ['pick'],
   '@kaynooo/cli-pkg': ['pkg'],
   '@kaynooo/cli-probe': ['probe'],
-  '@kaynooo/cli-proc': ['proc', 'pid', 'ports', 'procs'],
+  '@kaynooo/cli-proc': ['proc'],
 
   '@kaynooo/cli-stack': ['stack'],
   '@kaynooo/cli-view': ['view'],
   '@kaynooo/cli-wait': ['waitfor', 'slot'],
-  '@kaynooo/cli-workspace': ['ws', 'repos', 'sweep', 'audit'],
+  '@kaynooo/cli-workspace': ['ws'],
 }
 
 export const FORGE = 'git.kaynooo.fr'

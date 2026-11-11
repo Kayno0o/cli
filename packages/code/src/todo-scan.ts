@@ -6,7 +6,7 @@ import { capped, duration, jsonOption, limitOf, limitOptions, parse, printJson, 
 import { listFiles, readText } from './files'
 import { addAges, lookUp, marksIn, refKey } from './todo'
 
-const USAGE = `todo-scan [options] [path...]: lists the TODO, FIXME, HACK, XXX and owner/repo#N comments under the paths (here by default), each as <file>:<line>: <comment>, honouring .gitignore
+const USAGE = `src todo-scan [options] [path...]: lists the TODO, FIXME, HACK, XXX and owner/repo#N comments under the paths (here by default), each as <file>:<line>: <comment>, honouring .gitignore
 
 --older <duration> keeps only the comments whose line last changed longer ago than that (30d, 12w, 6m: git blame dates each one, a file git cannot blame is left out) and shows each one's age.
 
@@ -33,7 +33,7 @@ function printLines(lines: string[], footer: string | undefined): void {
 }
 
 export async function todoScan(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[path...]'], replaces: 'grep -rn TODO, then opening each issue it names', examples: ['todo-scan src', ['todo-scan --stale', 'only the comments naming a closed issue']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[path...]'], replaces: 'grep -rn TODO, then opening each issue it names', examples: ['src todo-scan src', ['src todo-scan --stale', 'only the comments naming a closed issue']] })
   const cwd = process.cwd()
   const limit = limitOf(values, LIST_LIMIT)
   const found: Mark[] = []

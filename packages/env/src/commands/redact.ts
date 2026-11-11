@@ -4,10 +4,10 @@ import { parse, readInput } from '@kaynooo/cli-kit'
 import { loadKnown } from '../files'
 import { check, Redactor } from '../redactor'
 
-const usage = `redact [--check]
+const usage = `ev redact [--check]
 
 Copies stdin to stdout line by line with secrets masked: known token formats (GitHub, GitLab, Slack, AWS, npm, Stripe, Google and SendGrid keys, sk-, JWTs, Authorization headers, password= and secret= pairs), private key blocks, the password and the tokens of any URL and the values of secret-looking keys in this folder's .env* files.
---check prints nothing of the input and lists the file and line of each secret found, exiting 1 when there is any: \`git diff --cached | redact --check\`.`
+--check prints nothing of the input and lists the file and line of each secret found, exiting 1 when there is any: \`git diff --cached | ev redact --check\`.`
 
 const EXITS: ExitRow[] = [[0, 'it copied the input or found no secret'], [1, '--check finds one'], [2, 'a usage error']]
 
@@ -17,7 +17,7 @@ const options = {
 } as const
 
 export async function redact(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options, { exits: EXITS, replaces: 'printing a command\'s secrets into a log or a transcript', examples: [['docker compose config | redact', 'the resolved compose file, secrets masked'], ['git diff --cached | redact --check', 'refuse a commit carrying a secret']] })
+  const parsed = parse(args, usage, options, { exits: EXITS, replaces: 'printing a command\'s secrets into a log or a transcript', examples: [['docker compose config | ev redact', 'the resolved compose file, secrets masked'], ['git diff --cached | ev redact --check', 'refuse a commit carrying a secret']] })
 
   const known = parsed.values['no-env'] === true ? undefined : await loadKnown()
 

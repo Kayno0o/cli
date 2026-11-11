@@ -79,8 +79,8 @@ describe('digest', () => {
 
       const bin = join(root, 'bin')
 
-      await Bun.write(join(bin, 'todo-scan'), `#!/bin/sh\necho '[{"path":"src/a.ts","line":3,"kind":"TODO","text":"TODO x","refs":[{"repo":"o/r","number":7,"state":"closed"}]},{"path":"src/b.ts","line":9,"kind":"ref","text":"o/r#7","refs":[{"repo":"o/r","number":7,"state":"closed"}]}]'\nexit 1\n`)
-      await chmod(join(bin, 'todo-scan'), 0o755)
+      await Bun.write(join(bin, 'src'), `#!/bin/sh\n[ "$1" = todo-scan ] || exit 2\necho '[{"path":"src/a.ts","line":3,"kind":"TODO","text":"TODO x","refs":[{"repo":"o/r","number":7,"state":"closed"}]},{"path":"src/b.ts","line":9,"kind":"ref","text":"o/r#7","refs":[{"repo":"o/r","number":7,"state":"closed"}]}]'\nexit 1\n`)
+      await chmod(join(bin, 'src'), 0o755)
 
       const state = {
         issues: [{ number: 5, title: 'abandoned', body: '- [ ] one\n- [ ] two', state: 'open' }, { number: 6, title: 'free', body: '', state: 'open' }],
@@ -130,11 +130,11 @@ describe('digest', () => {
       await withFakeTea({ issues: [], runs: [] }, async () => {
         const saved = process.env.PATH
 
-        // bun shares ~/.bun/bin with todo-scan, so the fake tea's interpreter comes back through a folder of its own
+        // bun shares ~/.bun/bin with src, so the fake tea's interpreter comes back through a folder of its own
         const bunOnly = await mkdtemp(join(tmpdir(), 'ft-digest-bun-'))
 
         await symlink(process.execPath, join(bunOnly, 'bun'))
-        process.env.PATH = [bunOnly, ...(saved ?? '').split(':').filter(dir => !Bun.file(join(dir, 'todo-scan')).size)].join(':')
+        process.env.PATH = [bunOnly, ...(saved ?? '').split(':').filter(dir => !Bun.file(join(dir, 'src')).size)].join(':')
 
         try {
           expect((await capture(async () => digest([]))).out).toBe('nothing to pick up\n')

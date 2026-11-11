@@ -8,14 +8,14 @@ import { counted } from '@kaynooo/utils/text'
 import { listFiles, readText } from './files'
 import { around, definitions, locations, outline, spansAround, usages } from './source'
 
-const USAGE = `peek [options] <file[:from-to]>...: prints files or line spans with their line numbers, several in one call
+const USAGE = `src peek [options] <file[:from-to]>...: prints files or line spans with their line numbers, several in one call
 
-peek src/a.ts:120-140 src/b.ts:1-40   the spans, src/a.ts:120 the one line, src/a.ts the whole file
-peek --def <symbol> [path...]          the whole declaration of the symbol, its comments included, --def again for more symbols
-peek --refs <symbol> [path...]         the lines naming the symbol, grouped by file, --defs-first printing its declarations before
-peek --outline <file>...               the declarations and class members, a Markdown file's headings
-peek --around <regex> [-C 3] [path...] the lines around each match, overlapping ones merged
-<output> | peek [-C 3]                 the lines around each path:line the output opens a line with (errs, rg -n, grep -n, tsc, linters)
+src peek src/a.ts:120-140 src/b.ts:1-40   the spans, src/a.ts:120 the one line, src/a.ts the whole file
+src peek --def <symbol> [path...]          the whole declaration of the symbol, its comments included, --def again for more symbols
+src peek --refs <symbol> [path...]         the lines naming the symbol, grouped by file, --defs-first printing its declarations before
+src peek --outline <file>...               the declarations and class members, a Markdown file's headings
+src peek --around <regex> [-C 3] [path...] the lines around each match, overlapping ones merged
+<output> | src peek [-C 3]                 the lines around each path:line the output opens a line with (errs, rg -n, grep -n, tsc, linters)
 The paths default to the files git keeps here (.gitignore holds).
 --refs lists at most 100 lines and --around prints at most 20 spans, the count of the rest after them (--limit <n>, --full for all).
 --json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}] ({definitions, references} with --defs-first), --outline as [{path, line, depth, text}], the lines never cut and the rows never counted off unless --limit is given.`
@@ -199,7 +199,7 @@ async function definitionsOf(symbols: readonly string[], paths: readonly string[
 }
 
 export async function peek(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[target...]'], replaces: 'sed -n N,Mp, grep -n chains and whole-file reads', examples: [['peek src/a.ts:120-140 src/b.ts:1-40', 'two spans in one call'], ['peek --def parseArgs src', 'a whole declaration']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[target...]'], replaces: 'sed -n N,Mp, grep -n chains and whole-file reads', examples: [['src peek src/a.ts:120-140 src/b.ts:1-40', 'two spans in one call'], ['src peek --def parseArgs src', 'a whole declaration']] })
   const modes = [values.def?.length === 0 ? undefined : values.def, values.refs, values.outline, values.around].filter(mode => mode !== undefined && mode !== false)
   const json = values.json === true
 

@@ -2,7 +2,7 @@ export const SEVERITIES = ['low', 'moderate', 'high', 'critical'] as const
 
 export type Severity = (typeof SEVERITIES)[number]
 
-/** One advisory as `audit` and `pkg audit` both list it: `ghsa` is read from the url and `fixed` is the version its range ends below, both absent when none applies. */
+/** One advisory as `ws audit` and `pkg audit` both list it: `ghsa` is read from the url and `fixed` is the version its range ends below, both absent when none applies. */
 export interface AdvisoryRow {
   id: number
   ghsa?: string | undefined

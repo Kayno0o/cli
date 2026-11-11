@@ -6,7 +6,7 @@ import { complexityOf, isCandidate } from '../src/churn'
 
 const temp = tempDirs()
 
-const CLI = new URL('../src/hotspots-cli.ts', import.meta.url).pathname
+const CLI = [new URL('../src/cli.ts', import.meta.url).pathname, 'hotspots']
 const BRANCHY = 'export function f(a: number) {\n  if (a > 1 && a < 5) {\n    for (const x of [a]) {\n      if (x) return 1\n    }\n  }\n  return a ? 2 : 3\n}\n'
 const PLAIN = 'export const a = 1\n'
 
@@ -29,7 +29,7 @@ function commit(date: string, ...paths: string[]) {
 }
 
 function hotspots(args: string[]) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+  const result = Bun.spawnSync([process.execPath, ...CLI, ...args], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -96,7 +96,7 @@ describe('hotspots', () => {
   test('counts the files of a commit over the whole repository, not only under the current folder', () => {
     commit('2026-10-06T00:00:00Z', 'src/plain.ts', 'other/a.ts', 'other/b.ts', 'other/c.ts')
 
-    const result = Bun.spawnSync([process.execPath, CLI, '--json', '--since', '2026-01-01', '--half-life', '0', '--bulk', '3'], { cwd: join(dir, 'src'), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+    const result = Bun.spawnSync([process.execPath, ...CLI, '--json', '--since', '2026-01-01', '--half-life', '0', '--bulk', '3'], { cwd: join(dir, 'src'), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
     const rows = JSON.parse(result.stdout.toString()) as { path: string, churn: number }[]
 
     expect(rows.find(row => row.path === 'plain.ts')?.churn).toBe(4)

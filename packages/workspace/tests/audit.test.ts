@@ -4,11 +4,12 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
-const AUDIT = new URL('../src/audit-cli.ts', import.meta.url).pathname
+const WS = new URL('../src/cli.ts', import.meta.url).pathname
+const AUDIT = [WS, 'audit']
 const dir = mkdtempSync(join(tmpdir(), 'audit-cli-'))
 
 function audit(...args: string[]) {
-  const ran = Bun.spawnSync([process.execPath, AUDIT, ...args], { stdout: 'pipe', stderr: 'pipe' })
+  const ran = Bun.spawnSync([process.execPath, ...AUDIT, ...args], { stdout: 'pipe', stderr: 'pipe' })
 
   return { code: ran.exitCode, out: ran.stdout.toString(), err: ran.stderr.toString() }
 }
@@ -17,8 +18,8 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
 describe('audit', () => {
   test('prints its version and its usage', () => {
-    expect(audit('--version').out.trim()).toBe(version)
-    expect(audit('--help').out).toContain('audit [options] [root]')
+    expect(Bun.spawnSync([process.execPath, WS, '--version']).stdout.toString().trim()).toBe(version)
+    expect(audit('--help').out).toContain('ws audit [options] [root]')
   })
 
   test('a root that is no folder is a usage error, and a folder with no bun.lock exits 2 saying so', () => {
@@ -62,7 +63,7 @@ describe('audit with a bun that answers', () => {
     writeFileSync(join(repo, 'bun.lock'), '')
     writeFileSync(join(repo, 'package.json'), JSON.stringify({ dependencies: { lodash: '4' } }))
 
-    const ran = Bun.spawnSync([process.execPath, AUDIT, ...args, repo], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, PATH: `${join(fake, 'bin')}:${process.env.PATH}` } })
+    const ran = Bun.spawnSync([process.execPath, ...AUDIT, ...args, repo], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, PATH: `${join(fake, 'bin')}:${process.env.PATH}` } })
 
     return { code: ran.exitCode, out: ran.stdout.toString() }
   }

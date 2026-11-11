@@ -23,7 +23,7 @@ const READS_CONFIG = new Set(['--get', '--get-all', '--get-regexp', '--list', '-
 
 const STAGE_BY_PATH = `Stage by path: the tree carries unrelated work and peer sessions edit it live. ${USE_GC}`
 
-export const STASH = 'Never `git stash`: a pop with nothing saved applies someone else\'s old stash. To prove a test fails without your change, `proof --keep <test> -- <cmd>` runs it at HEAD in a temporary worktree and again here; `base -- <cmd>` runs any command at HEAD (`--ref <rev>` another commit), the working tree untouched. To set edits aside before a cherry-pick, a rebase or a checkout, commit them with `gc` first, or do the other work in `git worktree add`.'
+export const STASH = 'Never `git stash`: a pop with nothing saved applies someone else\'s old stash. To prove a test fails without your change, `base proof --keep <test> -- <cmd>` runs it at HEAD in a temporary worktree and again here; `base -- <cmd>` runs any command at HEAD (`--ref <rev>` another commit), the working tree untouched. To set edits aside before a cherry-pick, a rebase or a checkout, commit them with `gc` first, or do the other work in `git worktree add`.'
 export const ADD_ALL = `\`git add\` over the whole tree is refused. ${STAGE_BY_PATH}`
 export const COMMIT_ALL = `\`git commit -a\` stages the whole tree and is refused. ${STAGE_BY_PATH}`
 export const PUSH = '`git push` and `gp` run only when the user asked for a push in their latest prompt: say the commit is ready and let them ask.'

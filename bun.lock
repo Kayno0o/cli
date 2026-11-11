@@ -24,7 +24,6 @@
       "version": "0.11.1",
       "bin": {
         "base": "./dist/cli.js",
-        "proof": "./dist/proof-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -58,9 +57,6 @@
       "version": "0.15.1",
       "bin": {
         "src": "./dist/cli.js",
-        "peek": "./dist/peek-cli.js",
-        "todo-scan": "./dist/todo-scan-cli.js",
-        "hotspots": "./dist/hotspots-cli.js",
       },
       "dependencies": {
         "@kaynooo/utils": "3.0.0",
@@ -144,7 +140,6 @@
       "version": "0.14.1",
       "bin": {
         "ev": "./dist/ev.js",
-        "redact": "./dist/redact.js",
       },
       "dependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -275,9 +270,6 @@
       "version": "0.7.5",
       "bin": {
         "proc": "./dist/proc-cli.js",
-        "pid": "./dist/pid-cli.js",
-        "ports": "./dist/ports-cli.js",
-        "procs": "./dist/procs-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -319,9 +311,6 @@
       "version": "0.11.1",
       "bin": {
         "ws": "./dist/cli.js",
-        "repos": "./dist/repos-cli.js",
-        "sweep": "./dist/sweep-cli.js",
-        "audit": "./dist/audit-cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",

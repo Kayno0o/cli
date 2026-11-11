@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 
 const temp = tempDirs()
 
-const CLI = new URL('../src/proof-cli.ts', import.meta.url).pathname
+const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 
 let repo = ''
 
@@ -16,7 +16,7 @@ function git(...args: string[]): string {
 }
 
 function proof(args: string[]) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+  const result = Bun.spawnSync([process.execPath, CLI, 'proof', ...args], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }

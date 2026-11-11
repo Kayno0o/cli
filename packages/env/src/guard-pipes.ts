@@ -4,7 +4,7 @@ import { namesEnv } from './guard-names'
 import { searchesEnvNames } from './guard-search'
 
 // Programs an `xargs` can run on a listing of names without printing a line of the files.
-const XARGS_SAFE = new Set(['ls', 'stat', 'wc', 'test', '[', 'touch', 'echo', 'printf', 'basename', 'dirname', 'ev', 'redact', ''])
+const XARGS_SAFE = new Set(['ls', 'stat', 'wc', 'test', '[', 'touch', 'echo', 'printf', 'basename', 'dirname', 'ev', ''])
 // GNU parallel's options taking their value as the next word, before the command it runs.
 const PARALLEL_VALUE_OPTIONS = new Set(['-j', '--jobs', '-P', '--max-procs', '-S', '--sshlogin', '-C', '--colsep', '-n', '--max-args', '-N', '-d', '--delimiter', '-E', '-I', '--timeout', '--delay', '--joblog', '--results', '--tmpdir', '-a', '--arg-file', '--halt', '--retries', '--tag-string'])
 const IDENTIFIER = /^[A-Z_]\w*$/i

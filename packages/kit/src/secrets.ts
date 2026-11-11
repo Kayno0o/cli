@@ -4,7 +4,7 @@ const SECRET_PART = /token|secret|passw|credential|private|dsn|apikey|accesskey|
 const SECRET_WORDS = new Set(['key', 'pass', 'pwd', 'auth', 'salt', 'cookie', 'session', 'jwt', 'ssn', 'iban', 'card', 'cvv', 'otp'])
 const WORD_BREAKS = /[^a-zA-Z\d]+|(?<=[a-z\d])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/
 
-// True for the name of a variable, a column or a JSON key that holds a secret, by one definition shared by ev, redact and db.
+// True for the name of a variable, a column or a JSON key that holds a secret, by one definition shared by ev and db.
 export function isSecretName(name: string): boolean {
   return SECRET_PART.test(name) || name.split(WORD_BREAKS).some(word => SECRET_WORDS.has(word.toLowerCase()))
 }

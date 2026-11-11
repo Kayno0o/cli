@@ -6,7 +6,7 @@ import { definitions, locations, outline, spansAround } from '../src/source'
 
 const temp = tempDirs()
 
-const CLI = new URL('../src/peek-cli.ts', import.meta.url).pathname
+const CLI = [new URL('../src/cli.ts', import.meta.url).pathname, 'peek']
 
 const SOURCE = `import { x } from './x'
 
@@ -47,7 +47,7 @@ function peek(...args: string[]) {
 
 // peek with `input` on stdin, or /dev/null when there is none.
 function piped(input: string | undefined, ...args: string[]) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: dir, stdin: input === undefined ? 'ignore' : Buffer.from(input), stdout: 'pipe', stderr: 'pipe' })
+  const result = Bun.spawnSync([process.execPath, ...CLI, ...args], { cwd: dir, stdin: input === undefined ? 'ignore' : Buffer.from(input), stdout: 'pipe', stderr: 'pipe' })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }

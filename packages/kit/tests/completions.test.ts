@@ -30,9 +30,9 @@ describe('completionScript', () => {
   })
 
   test('registers every bin on the one function', () => {
-    expect(completionScript('fish', ['peek', 'gst'])).toEndWith('end\ncomplete -c peek -f -a \'(__kaynooo_cli_complete peek)\'\ncomplete -c gst -f -a \'(__kaynooo_cli_complete gst)\'\n')
-    expect(completionScript('bash', ['peek', 'gst'])).toEndWith('complete -F __kaynooo_cli_complete peek gst\n')
-    expect(completionScript('zsh', ['peek', 'gst'])).toEndWith('compdef __kaynooo_cli_complete peek gst\n')
+    expect(completionScript('fish', ['src', 'gst'])).toEndWith('end\ncomplete -c src -f -a \'(__kaynooo_cli_complete src)\'\ncomplete -c gst -f -a \'(__kaynooo_cli_complete gst)\'\n')
+    expect(completionScript('bash', ['src', 'gst'])).toEndWith('complete -F __kaynooo_cli_complete src gst\n')
+    expect(completionScript('zsh', ['src', 'gst'])).toEndWith('compdef __kaynooo_cli_complete src gst\n')
   })
 
   test('zsh describes the values with one, escaping their colons, and completes files on the marker', () => {

@@ -9,7 +9,7 @@ import { maskArgs } from './mask'
 import { ancestry, snapshot } from './read'
 import { selectGroups } from './select'
 
-const usage = `procs
+const usage = `proc procs
 
 Lists the leftover or heavy processes of the calling user that are worth cleaning, grouped by origin: the project folder their working directory is in, a browser profile for a chromium and its helpers, else their command. Each group shows its process count, total resident memory and oldest age.
 A process is listed when it is a dev tool (bun, node, vite, nuxt, next, chromium and chrome, playwright and webview browsers and their helpers, language servers, test runners) and either an orphan, reparented to init or to the user's systemd, or heavy (500M resident by default). The processes below a listed one, and those sharing a browser profile with it, are listed too, so a chromium whose main process was killed groups with its leftover helpers.
@@ -65,10 +65,10 @@ export async function procs(args: string[]): Promise<number> {
     exits: EXITS,
     replaces: 'pkill -f and pgrep -f one-liners (which match their own shell), ps aux | grep for leftover chromium, bun or vite processes',
     examples: [
-      ['procs', 'leftover and heavy dev processes, by origin'],
-      ['procs --min-mem 1G --older 1h', 'only the big ones that have run a while'],
-      ['procs --kill', 'dry run: what would be stopped'],
-      'procs --kill --yes',
+      ['proc procs', 'leftover and heavy dev processes, by origin'],
+      ['proc procs --min-mem 1G --older 1h', 'only the big ones that have run a while'],
+      ['proc procs --kill', 'dry run: what would be stopped'],
+      'proc procs --kill --yes',
     ],
   })
   const minMem = values['min-mem'] === undefined ? undefined : parseSize(values['min-mem'], 1024 ** 2)

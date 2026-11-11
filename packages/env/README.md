@@ -1,6 +1,6 @@
 # ev and redact
 
-Two CLIs that keep secrets out of a Claude Code transcript: `ev` lists and edits `.env` files with every secret masked, and `redact` masks secrets in any piped output.
+`ev` keeps secrets out of a Claude Code transcript: it lists and edits `.env` files with every secret masked, and `ev redact` masks secrets in any piped output.
 
 ```sh
 bun install -g @kaynooo/cli-env
@@ -31,20 +31,20 @@ A value is masked when its key is named like a secret (`TOKEN`, `SECRET`, `PASSW
 
 Files are parsed and written back preserving comments, order, `export KEY=` prefixes, quoting and multiline values; only the lines a command touches change.
 
-## redact
+## ev redact
 
 ```sh
-some-command 2>&1 | redact
-git diff --cached | redact --check
+some-command 2>&1 | ev redact
+git diff --cached | ev redact --check
 ```
 
-`redact` copies stdin to stdout line by line, masking:
+`ev redact` copies stdin to stdout line by line, masking:
 
 - known token formats: `ghp_`, `github_pat_`, `glpat-`, `sk-`, `xox?-`, JWTs and the body of PEM private key blocks
 - the password and the tokens of any URL (webhook and push URLs, opaque path segments, token query parameters)
 - the values of secret-looking keys in the `.env*` files of the current folder and the folders below it (whole words only, from 4 characters, also in their percent-encoded and JSON-escaped forms), `--no-env` skips them
 
-`redact --check` prints nothing of the input: it lists `<file>:<line>: <kind>` for each secret found and exits 1. On a diff it reads the added lines only and names the new file's line numbers.
+`ev redact --check` prints nothing of the input: it lists `<file>:<line>: <kind>` for each secret found and exits 1. On a diff it reads the added lines only and names the new file's line numbers.
 
 ## The parser and the guard
 

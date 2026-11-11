@@ -8,7 +8,7 @@ import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printJso
 import { holdsOsvLock, osvAudit } from './osv'
 import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEVERITIES, workspaceFolders } from './report'
 
-const USAGE = `audit [options] [root]: the known vulnerabilities of the Bun, Composer, Cargo and uv repositories under root (the current folder by default), one table per repository
+const USAGE = `ws audit [options] [root]: the known vulnerabilities of the Bun, Composer, Cargo and uv repositories under root (the current folder by default), one table per repository
 
 Each package with an advisory is one row: its worst severity, how many advisories, whether a production dependency needs it (prod) or only a development one (dev), whether the repository asks for it itself (direct) or a dependency does (the row then says via and the direct dependencies leading to it, upgrading one of which is what fixes it), and the version that fixes every advisory at once, "-" when an advisory names none. The worst and the production ones come first.
 Advisories under --level (moderate by default) are counted under the table, and what \`bun audit\` warned about, such as a private registry that would not audit its packages, is repeated there. It runs \`bun audit --json\` in each repository holding a bun.lock, which reaches the registry, and asks osv.dev about the packages of a composer.lock, Cargo.lock or uv.lock (a severity the source leaves out reads as moderate, and only composer's manifest tells direct from pulled in); the walk goes three levels deep, stops at a lockfile and skips node_modules and hidden folders.
@@ -183,7 +183,7 @@ function rows(findings: Finding[]): string[][] {
 }
 
 export async function audit(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['audit', 'audit ~/Workspace --level high --prod'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['ws audit', 'ws audit ~/Workspace --level high --prod'] })
   const root = resolve(positionals[0] ?? '.')
 
   if (!existsSync(root) || !statSync(root).isDirectory())

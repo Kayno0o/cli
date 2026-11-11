@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 
-const CLI = new URL('../src/sweep-cli.ts', import.meta.url).pathname
+const WS = new URL('../src/cli.ts', import.meta.url).pathname
+const CLI = [WS, 'sweep']
 const temp = tempDirs()
 
 // A bun run creates ~/.bun/install/cache; a file named .bun keeps that out of the fake HOME.
@@ -31,7 +32,7 @@ function git(cwd: string, args: string[], env: Record<string, string> = {}): str
 }
 
 function sweep(args: string[], env: Record<string, string> = {}) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, NO_COLOR: '1', HOME: fakeHome, ...env } })
+  const result = Bun.spawnSync([process.execPath, ...CLI, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, ...IDENTITY, NO_COLOR: '1', HOME: fakeHome, ...env } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -191,7 +192,7 @@ describe('sweep', () => {
     expect(sweep([root, '--only', 'both']).code).toBe(2)
     expect(JSON.parse(sweep([root, '--only', 'both', '--json']).err)).toMatchObject({ error: expect.stringContaining('--only takes') })
     expect(JSON.parse(sweep([join(root, 'missing'), '--json']).err)).toMatchObject({ error: expect.stringContaining('is not a folder') })
-    expect(sweep(['__complete', root, '--only', '']).out).toBe('worktrees\nfolders\ncaches\n')
+    expect(Bun.spawnSync([process.execPath, WS, '__complete', 'sweep', root, '--only', '']).stdout.toString()).toBe('worktrees\nfolders\ncaches\n')
     expect(sweep([root, '--only', 'worktrees', '--apply', '--yes']).code).toBe(0)
     expect(existsSync(join(a, '.claude', 'worktrees', 'agent'))).toBe(false)
     expect(existsSync(join(a, 'node_modules', 'file'))).toBe(true)

@@ -18,12 +18,12 @@ base --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php
 - The exit code is the command's; a last stderr line says which ref ran, `base: ran at HEAD (1a2b3c4), exit 1`.
 - Exit codes of its own: 2 a usage error, an unknown ref or a refused command, 127 a command that cannot start.
 
-## proof
+## base proof
 
-`proof` shows that a test fails before a change and passes after it, the check `base` makes by hand: it runs the command at HEAD (or `--ref <rev>`) in the same temporary worktree as `base`, then in the working tree, both captured.
+`base proof` shows that a test fails before a change and passes after it, the check `base` makes by hand: it runs the command at HEAD (or `--ref <rev>`) in the same temporary worktree as `base`, then in the working tree, both captured.
 
 ```sh
-proof --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php
+base proof --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php
 ```
 
 - `--ref` defaults to the merge base with `origin/main` when HEAD is on a branch other than `main` that is ahead of it, else HEAD; `--ref HEAD` forces the old default. The `--json` `ref` and the line name the commit it resolved to.

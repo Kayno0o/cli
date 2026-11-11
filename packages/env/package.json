@@ -2,7 +2,7 @@
   "name": "@kaynooo/cli-env",
   "type": "module",
   "version": "0.14.1",
-  "description": "ev lists and edits .env files with secrets masked, redact masks secrets in any piped output.",
+  "description": "ev lists and edits .env files with secrets masked, and ev redact masks secrets in any piped output.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/env#readme",
@@ -21,8 +21,7 @@
     "./redactor": "./src/redactor.ts"
   },
   "bin": {
-    "ev": "./dist/ev.js",
-    "redact": "./dist/redact.js"
+    "ev": "./dist/ev.js"
   },
   "files": ["dist", "src"],
   "engines": {
@@ -32,9 +31,8 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/ev.ts src/redact.ts --target bun --outdir dist",
-    "ev": "$npm_execpath src/ev.ts",
-    "redact": "$npm_execpath src/redact.ts"
+    "build": "$npm_execpath build src/ev.ts --target bun --outdir dist",
+    "ev": "$npm_execpath src/ev.ts"
   },
   "dependencies": {
     "@kaynooo/cli-kit": "workspace:*"

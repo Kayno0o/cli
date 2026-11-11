@@ -16,7 +16,7 @@ const CODE_OPTIONS = new Set(['-e', '-c', '-p', '-E', '-pe', '-r', '--eval', '--
 const CAN_REACH_FILES = /read|write|open|exec|spawn|system|popen|import|require|eval|load|fetch|glob|stream|source|getline|constructor|file(?!s\b)|\bcat\b|\b(?:Bun|Deno|fs|os|io|sh|bash|process|globalThis|window|Function|qx)\b|\$\s*[`({]|`/i
 const DECLARERS = new Set(['export', 'declare', 'local', 'readonly', 'typeset'])
 // Programs that name an env file without reading it: listing, testing, or loading it into a process that prints nothing.
-const HARMLESS = new Set(['ev', 'redact', 'ls', 'stat', 'test', '[', '[[', 'touch'])
+const HARMLESS = new Set(['ev', 'ls', 'stat', 'test', '[', '[[', 'touch'])
 const GIT_HARMLESS = new Set(['check-ignore', 'ls-files', 'status'])
 
 // The values each variable is given in a command, by assignment, `export` or a `for` list.
