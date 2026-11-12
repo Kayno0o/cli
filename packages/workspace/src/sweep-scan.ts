@@ -4,7 +4,7 @@ import { lstat, readdir, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pool, runTool } from '@kaynooo/cli-kit'
-import { sizeOf } from './size'
+import { measure } from './size'
 
 export const FOLDER_NAMES = new Set(['node_modules', '.nuxt', '.next', '.output', 'dist', 'build', '.turbo', '.svelte-kit', 'target', 'vendor', '.venv', '__pycache__', '.gradle'])
 // Folders whose name alone is too common: removable only beside one of these files.
@@ -22,12 +22,14 @@ export interface Entry {
   // The repo's last commit in epoch milliseconds, undefined outside a repo or in an empty one.
   committedAt: number | undefined
   action: 'remove' | 'keep'
-  // Why a worktree is kept.
+  // Why it is kept.
   reason?: string
   // The repo a worktree is removed from.
   repo?: string
   // The node_modules a node_modules/.cache sits in, dropped when that node_modules is listed itself.
   inside?: string | undefined
+  // The folder whose running dev server or container would rebuild or use it: the repository, else the folder holding it; none for a global cache.
+  project?: string
 }
 
 export interface Skipped {
@@ -229,7 +231,7 @@ async function judgeFolder(path: string, kind: Entry['kind'], inside?: string): 
     return { skip: 'holds a git repository' }
 
   if (located === 'none')
-    return name === 'node_modules' || inside !== undefined ? { entry: { path, kind, committedAt: undefined, action: 'remove', inside } } : { skip: 'not in a git repository' }
+    return name === 'node_modules' || inside !== undefined ? { entry: { path, kind, committedAt: undefined, action: 'remove', inside, project: dirname(inside ?? path) } } : { skip: 'not in a git repository' }
 
   const tracked = await gitIn(parent, ['ls-files', '--', name])
 
@@ -239,7 +241,7 @@ async function judgeFolder(path: string, kind: Entry['kind'], inside?: string): 
   if (name !== 'node_modules' && inside === undefined && (await gitIn(parent, ['check-ignore', '-q', '--', name])).code !== 0)
     return { skip: 'not ignored by git' }
 
-  return { entry: { path, kind, committedAt: await lastCommitOf(located.top), action: 'remove', inside } }
+  return { entry: { path, kind, committedAt: await lastCommitOf(located.top), action: 'remove', inside, project: located.top } }
 }
 
 // A worktree is removable only when it is clean and every commit of its branch is on another branch or a remote.
@@ -290,7 +292,7 @@ async function judgeWorktree(path: string): Promise<Verdict> {
   if (unique.stdout !== '')
     return keep(`${unique.stdout.split('\n').length} commits on no other branch or remote`)
 
-  return { entry: { path, kind: 'worktree', committedAt, action: 'remove', repo: top } }
+  return { entry: { path, kind: 'worktree', committedAt, action: 'remove', repo: top, project: path } }
 }
 
 // A global cache is an exact allowlisted path found as a plain folder, so git has nothing to say about it.
@@ -301,18 +303,24 @@ async function judge(candidate: Candidate): Promise<Verdict> {
   return candidate.kind === 'worktree' ? judgeWorktree(candidate.path) : judgeFolder(candidate.path, candidate.kind, candidate.inside)
 }
 
-// Judges and sizes every candidate, the ones git forbids touching going to `skipped`; `onDone` hears how many are done.
-export async function inspect({ candidates, skipped }: Found, onDone?: (done: number, total: number) => void): Promise<{ entries: Entry[], skipped: Skipped[] }> {
+// Judges and sizes every candidate, the ones git forbids touching going to `skipped`, and keeps what holds entries another user owns, which deleting would fail on halfway; `onDone` hears how many are done.
+export async function inspect({ candidates, skipped }: Found, onDone?: (done: number, total: number) => void, uid?: number): Promise<{ entries: Entry[], skipped: Skipped[] }> {
   const entries: Entry[] = []
   const rejected = [...skipped]
 
   await pool(candidates, 8, async (candidate) => {
     const verdict = await judge(candidate)
 
-    if ('skip' in verdict)
+    if ('skip' in verdict) {
       rejected.push({ path: candidate.path, reason: verdict.skip })
-    else
-      entries.push({ ...verdict.entry, bytes: await sizeOf(candidate.path) })
+
+      return
+    }
+
+    const { bytes, foreign } = await measure(candidate.path, uid)
+    const owned = foreign > 0 && verdict.entry.action === 'remove' ? { action: 'keep' as const, reason: `${foreign} ${foreign === 1 ? 'entry' : 'entries'} owned by another user (a container's?)` } : {}
+
+    entries.push({ ...verdict.entry, ...owned, bytes })
   }, onDone)
 
   const listed = new Set(entries.filter(entry => entry.action === 'remove').map(entry => entry.path))

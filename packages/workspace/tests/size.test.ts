@@ -2,7 +2,7 @@ import { linkSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { sizeOf, walkSize } from '../src/size'
+import { measure, sizeOf, walkSize } from '../src/size'
 
 const temp = tempDirs()
 
@@ -39,5 +39,17 @@ describe('sizeOf', () => {
 
     expect(size).toBeGreaterThanOrEqual(walked)
     expect(size).toBeLessThan(walked + 3 * 4096)
+  })
+})
+
+describe('measure', () => {
+  test('counts the entries another user owns, the folder itself included', async () => {
+    const dir = temp('size-owner-')
+
+    mkdirSync(join(dir, 'a'))
+    writeFileSync(join(dir, 'a', 'one'), 'x'.repeat(10))
+
+    expect((await measure(dir)).foreign).toBe(0)
+    expect(await measure(dir, (process.getuid?.() ?? 0) + 1)).toMatchObject({ foreign: 3 })
   })
 })

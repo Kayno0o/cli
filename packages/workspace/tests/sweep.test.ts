@@ -78,6 +78,30 @@ describe('sweep', () => {
     expect(existsSync(join(a, 'dist', 'file'))).toBe(true)
   })
 
+  test('keeps the folders of a project a dev process runs in, naming it, and removes nothing of it on --apply', () => {
+    const root = temp('sweep-busy-')
+    const a = repo(root, 'a')
+    const b = repo(root, 'b')
+
+    fill(join(a, 'node_modules'), 3000)
+    fill(join(b, 'node_modules'), 2000)
+    mkdirSync(join(a, 'src'))
+    const server = Bun.spawn([process.execPath, '-e', 'await Bun.sleep(30000)'], { cwd: join(a, 'src'), stdin: 'ignore', stdout: 'ignore', stderr: 'ignore' })
+
+    try {
+      const result = listing([root])
+
+      expect(result.entries.map(entry => [entry.path, entry.action, entry.reason ?? null])).toEqual([[join(a, 'node_modules'), 'keep', `in use by pid ${server.pid} bun`], [join(b, 'node_modules'), 'remove', null]])
+      expect(result.reclaimable).toBe(2000)
+      expect(sweep([root, '--apply', '--yes']).code).toBe(0)
+      expect(existsSync(join(a, 'node_modules', 'file'))).toBe(true)
+      expect(existsSync(join(b, 'node_modules'))).toBe(false)
+    }
+    finally {
+      server.kill()
+    }
+  })
+
   test('--apply refuses off a terminal without --yes, then deletes with it', () => {
     const root = temp('sweep-')
     const a = repo(root, 'a')

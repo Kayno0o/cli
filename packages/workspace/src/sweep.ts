@@ -7,6 +7,7 @@ import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, 
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { applyAll } from './apply'
+import { containerPlaces, processPlaces, userOf } from './busy'
 import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
 
 const LARGE = 100 * 1024 ** 2
@@ -14,7 +15,7 @@ const BIG = 1024 ** 3
 
 const USAGE = `ws sweep [options] [root]: lists the regenerable folders (node_modules, .output, dist, build, .venv, target beside a Cargo.toml, vendor beside a composer.json or composer.lock), the caches (.nuxt, .next, .turbo, .svelte-kit, __pycache__, .gradle and node_modules/.cache per project; ~/.bun/install/cache, ~/.npm/_cacache, ~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript} and ~/.cargo/registry, exact paths only, listed only when no root is given or with --only caches) and the .worktrees/* and .claude/worktrees/* entries under root (the configured workspace, ~/Workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit; --only worktrees, folders or caches keeps one kind
 
-Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. With --docker the Docker usage comes after the list, left to dclean.`
+Dry unless --apply, which deletes after a confirm showing the total (read from the terminal; off one, pass --yes). A folder is deleted for good, not trashed. Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with git worktree remove, never forced, and only when it is clean and every commit of its branch is on another branch or a remote; the others stay listed as kept and count for nothing in the total. Kept too, and named: what a running dev process (node, bun, python...) or a container's bind mount uses, which would be rebuilt at once or break the server, and a folder holding files another user owns, as a container running as root writes. With --docker the Docker usage comes after the list, left to dclean.`
 const EXITS: ExitRow[] = [[0, 'it listed, or removed every entry it was allowed to'], [1, 'a removal failed or the confirm was declined'], [2, 'a usage error, a missing root, or --apply off a terminal without --yes']]
 
 const ONLY_KINDS = { worktrees: 'worktree', folders: 'folder', caches: 'cache' } as const
@@ -71,6 +72,8 @@ export async function sweep(args: string[]): Promise<number> {
 
     progress.update({ step: 'sizing', done: 0, total: wanted.length, unit: 'folders' })
     scanned = await inspect({ candidates: wanted, skipped: found.skipped }, (done, total) => progress.update({ step: 'sizing', done, total, unit: 'folders' }))
+    progress.update({ step: 'looking for running servers and containers' })
+    await keepWhatIsInUse(scanned.entries)
   }
   finally {
     progress.stop()
@@ -136,6 +139,25 @@ function report(root: string, outcome: Outcome, json: boolean): void {
     ok(`removed ${relative(root, outcome.path)}`)
   else
     problem(`kept ${relative(root, outcome.path)}`, outcome.error)
+}
+
+// A folder a running dev server or container uses is rebuilt as soon as it goes, or breaks what runs.
+async function keepWhatIsInUse(entries: Awaited<ReturnType<typeof inspect>>['entries']): Promise<void> {
+  const candidates = entries.filter(entry => entry.action === 'remove' && entry.project !== undefined)
+
+  if (candidates.length === 0)
+    return
+
+  const [processes, containers] = await Promise.all([processPlaces(), containerPlaces()])
+
+  for (const entry of candidates) {
+    const who = userOf(entry.project!, processes, containers)
+
+    if (who !== undefined) {
+      entry.action = 'keep'
+      entry.reason = `in use by ${who}`
+    }
+  }
 }
 
 function print(root: string, entries: Awaited<ReturnType<typeof inspect>>['entries'], skipped: number, reclaimable: number, now: number): void {
