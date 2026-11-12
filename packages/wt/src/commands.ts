@@ -42,7 +42,8 @@ async function removeVolumes(worktree: Worktree, anonymous: string[]): Promise<v
     throw new WtError(`could not remove the volumes of ${worktree.id}:\n${removed.stderr.toString().trim()}`)
 }
 
-export async function addTask(task: string, branch: string | undefined, options: GlobalOptions): Promise<void> {
+/** Creates the worktree, then starts its stack with `up`, else names the command that would. */
+export async function addTask(task: string, branch: string | undefined, options: GlobalOptions & { up?: boolean }): Promise<void> {
   const { project } = await locate(process.cwd(), options.project)
   const worktree = worktreeOf(project, task)
   const checkout = branch ?? `wt/${task}`
@@ -71,7 +72,10 @@ export async function addTask(task: string, branch: string | undefined, options:
   for (const url of urlsOf(worktree))
     console.log(`    ${url}`)
 
-  console.log(`    wt up ${task}`)
+  if (options.up)
+    await stackUp(worktree)
+  else
+    console.log(`    wt up ${task}`)
 }
 
 export async function syncTask(task: string | undefined, options: GlobalOptions): Promise<void> {

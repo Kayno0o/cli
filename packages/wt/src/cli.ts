@@ -5,7 +5,7 @@ import type { Worktree } from './project'
 import process from 'node:process'
 import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
 import { wtConfig } from './config'
-import { failKnown, failureText } from './errors'
+import { failKnown, failureText, knownMessage } from './errors'
 import { Jobs, notifyRefused } from './jobs'
 import { assertWorktreeExists, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
 
@@ -91,11 +91,41 @@ async function asWorktreeJob(verb: 'add' | 'sync' | 'rm' | 'up' | 'down', { proj
   return 0
 }
 
-const ADD_USAGE = `wt add <task> [branch] [-p <name>] [--bg]
+// Acts on each worktree of the project in turn, one refused or failed not stopping the rest: 1 when any failed.
+async function eachWorktree(projectName: string | undefined, act: (worktree: Worktree) => Promise<number>): Promise<number> {
+  const { project } = await locate(process.cwd(), projectName)
+  const tasks = listTasks(project)
 
-Creates a worktree, copies its files and data from main, and routes its subdomains. The task is a lowercase name, also the subdomain label; the branch defaults to wt/<task>.
+  if (!tasks.length)
+    console.log(`wt: ${project.name} has no worktree`)
 
-Exits 0 once the worktree is ready, 1 when it cannot be made or provisioned, 2 on a usage error.`
+  let code = 0
+
+  for (const task of tasks) {
+    try {
+      code = Math.max(code, await act(worktreeOf(project, task)))
+    }
+    catch (error) {
+      const message = knownMessage(error)
+
+      if (message === undefined)
+        throw error
+
+      console.error(`error: ${message}`)
+      code = 1
+    }
+  }
+
+  return code
+}
+
+const ALL_OPTION = { type: 'boolean', short: 'a', description: 'every worktree of the project, one after the other' } as const
+
+const ADD_USAGE = `wt add <task> [branch] [--up] [-p <name>] [--bg]
+
+Creates a worktree, copies its files and data from main, and routes its subdomains; --up starts its stack too. The task is a lowercase name, also the subdomain label; the branch defaults to wt/<task>.
+
+Exits 0 once the worktree is ready (and up), 1 when it cannot be made, provisioned or started, 2 on a usage error.`
 
 const SYNC_USAGE = `wt sync [task] [-p <name>]
 
@@ -109,17 +139,17 @@ Stops a worktree stack and deletes its checkouts, volumes, certificates and rout
 
 Exits 0 once it is gone, 1 when uncommitted changes or lost commits refuse it (unless --force) or a step fails, 2 on a usage error.`
 
-const UP_USAGE = `wt up [task] [-p <name>] [--bg]
+const UP_USAGE = `wt up [task | --all] [-p <name>] [--bg]
 
-Starts a worktree stack: \`docker compose up -d --build\` in the worktree then the manifest's setup the first time, or the config's runner.up. The task defaults to the worktree the current directory is in.
+Starts a worktree stack: \`docker compose up -d --build\` in the worktree then the manifest's setup the first time, or the config's runner.up. The task defaults to the worktree the current directory is in; --all starts every worktree of the project in turn.
 
-Exits 0 once the stack is up, 1 when a command fails, 2 on a usage error.`
+Exits 0 once the stacks are up, 1 when a command fails, 2 on a usage error.`
 
-const DOWN_USAGE = `wt down [task] [-p <name>] [--bg]
+const DOWN_USAGE = `wt down [task | --all] [-p <name>] [--bg]
 
-Stops a worktree stack: \`docker compose down\` in the worktree, or the config's runner.down. The task defaults to the worktree the current directory is in.
+Stops a worktree stack: \`docker compose down\` in the worktree, or the config's runner.down. The task defaults to the worktree the current directory is in; --all stops every worktree of the project in turn.
 
-Exits 0 once the stack is down, 1 when a command fails, 2 on a usage error.`
+Exits 0 once the stacks are down, 1 when a command fails, 2 on a usage error.`
 
 const SHELL_USAGE = `wt shell <shell>
 
@@ -178,12 +208,16 @@ process.exitCode = await runCli({
     add: {
       summary: 'create a worktree, copy its files and data from main, and route its subdomains',
       run: async (args) => {
-        const { values, positionals: [task, branch] } = parse(args, ADD_USAGE, { project: PROJECT_OPTION, bg: BG_OPTION }, { positionals: ['<task>', '[branch]'] })
+        const { values, positionals: [task, branch] } = parse(args, ADD_USAGE, {
+          project: PROJECT_OPTION,
+          up: { type: 'boolean', description: 'start its stack once it is ready, as `wt up` does' },
+          bg: BG_OPTION,
+        }, { positionals: ['<task>', '[branch]'] })
 
         return guarded(async () => {
           const worktree = worktreeOf((await locate(process.cwd(), values.project)).project, task)
 
-          return asWorktreeJob('add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch])], async () => (await commands()).addTask(task, branch, values))
+          return asWorktreeJob('add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch]), ...(values.up ? ['--up'] : [])], async () => (await commands()).addTask(task, branch, values))
         }, bgName(values, 'add', task))
       },
     },
@@ -221,29 +255,43 @@ process.exitCode = await runCli({
     up: {
       summary: 'start a worktree stack',
       run: async (args) => {
-        const { values, positionals: [task] } = parse(args, UP_USAGE, { project: PROJECT_OPTION, bg: BG_OPTION }, { positionals: ['[task]'], candidates: TASK })
+        const { values, positionals: [task] } = parse(args, UP_USAGE, { project: PROJECT_OPTION, all: ALL_OPTION, bg: BG_OPTION }, { positionals: ['[task]'], candidates: TASK })
+        const up = async (worktree: Worktree) => asWorktreeJob('up', worktree, values, ['up', worktree.task], async () => (await commands()).upTask(worktree))
+
+        if (values.all && task !== undefined)
+          badUsage('wt up takes a task or --all, not both')
 
         return guarded(async () => {
+          if (values.all)
+            return eachWorktree(values.project, up)
+
           const worktree = await locateWorktree(process.cwd(), task, values.project)
 
           assertWorktreeExists(worktree)
 
-          return asWorktreeJob('up', worktree, values, ['up', worktree.task], async () => (await commands()).upTask(worktree))
-        }, bgName(values, 'up', task))
+          return up(worktree)
+        }, bgName(values, 'up', values.all ? '--all' : task))
       },
     },
     down: {
       summary: 'stop a worktree stack',
       run: async (args) => {
-        const { values, positionals: [task] } = parse(args, DOWN_USAGE, { project: PROJECT_OPTION, bg: BG_OPTION }, { positionals: ['[task]'], candidates: TASK })
+        const { values, positionals: [task] } = parse(args, DOWN_USAGE, { project: PROJECT_OPTION, all: ALL_OPTION, bg: BG_OPTION }, { positionals: ['[task]'], candidates: TASK })
+        const down = async (worktree: Worktree) => asWorktreeJob('down', worktree, values, ['down', worktree.task], async () => (await commands()).downTask(worktree))
+
+        if (values.all && task !== undefined)
+          badUsage('wt down takes a task or --all, not both')
 
         return guarded(async () => {
+          if (values.all)
+            return eachWorktree(values.project, down)
+
           const worktree = await locateWorktree(process.cwd(), task, values.project)
 
           assertWorktreeExists(worktree)
 
-          return asWorktreeJob('down', worktree, values, ['down', worktree.task], async () => (await commands()).downTask(worktree))
-        }, bgName(values, 'down', task))
+          return down(worktree)
+        }, bgName(values, 'down', values.all ? '--all' : task))
       },
     },
     ls: {

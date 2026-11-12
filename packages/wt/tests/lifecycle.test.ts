@@ -878,6 +878,42 @@ describe('up and down with no runner', () => {
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
 
+  test('add --up starts the stack it made; up and down --all act on every worktree of the project in turn', async () => {
+    const { sandbox, wt, dirOf } = env
+    const stackCalls = () => sandbox.dockerCalls().filter(call => call.args.startsWith('compose up') || call.args.startsWith('compose down')).map(call => `${call.cwd} ${call.args}`)
+
+    const added = await wt('add', 'planning', '--up')
+
+    expect(added.code).toBe(0)
+    expect(added.out).not.toContain('wt up planning')
+    expect(stackCalls()).toEqual([`${dirOf('planning')} compose up -d --build`])
+
+    expect((await wt('add', 'other')).code).toBe(0)
+    expect((await wt('down', '--all')).code).toBe(0)
+    expect((await wt('up', '--all')).code).toBe(0)
+    expect(stackCalls().slice(1)).toEqual([
+      `${dirOf('other')} compose down --remove-orphans`,
+      `${dirOf('planning')} compose down --remove-orphans`,
+      `${dirOf('other')} compose up -d --build`,
+      `${dirOf('planning')} compose up -d --build`,
+    ])
+
+    // One that fails does not stop the others
+    sandbox.seed('down-fails-other', '')
+
+    const partly = await wt('down', '--all')
+
+    expect(partly.code).toBe(1)
+    expect(partly.err).toContain('down failed for other')
+    expect(stackCalls().at(-1)).toBe(`${dirOf('planning')} compose down --remove-orphans`)
+
+    const both = await wt('up', 'planning', '--all')
+
+    expect(both.code).toBe(2)
+    expect(both.err).toContain('wt up takes a task or --all, not both')
+    expect(sandbox.forbidden()).toEqual([])
+  }, 30_000)
+
   test('run up and rm with --bg as detached jobs, their output in the job log, a notification once up', async () => {
     const { sandbox, wt, dirOf } = env
     const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')
