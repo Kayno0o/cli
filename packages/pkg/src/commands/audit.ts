@@ -1,4 +1,5 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
+import type { Progress } from '@kaynooo/cli-kit/progress'
 import type { Advisory, VersionAdvisory } from '../advisories'
 import type { PkgSettings, RegistryConfig, Severity } from '../config'
 import type { Locked } from '../lockfile'
@@ -6,6 +7,7 @@ import type { Fetcher, Packument, Registry } from '../registry'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, parse, pool, printJson, role, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { progressLine } from '@kaynooo/cli-kit/progress'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
@@ -38,6 +40,8 @@ export interface AuditContext {
   ignore: string[]
   fetcher?: Fetcher | undefined
   now?: number | undefined
+  // Hears each step and how many packages were looked up, for a progress line.
+  onProgress?: ((progress: Progress) => void) | undefined
 }
 
 export interface Audited {
@@ -75,7 +79,9 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
     const input = { spec: { name, request: version }, packument: await lookup(name, registry), registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings.licenses }
 
     return { name, version, registry, input, safe: analyze(input).safe?.version }
-  })
+  }, (done, total) => context.onProgress?.({ step: 'looking up', done, total, unit: 'packages' }))
+
+  context.onProgress?.({ step: 'reading the advisories' })
 
   const registries = new Map<string, { registry: Registry, versions: Record<string, string[]> }>()
 
@@ -149,7 +155,17 @@ export async function audit(args: string[]): Promise<number> {
     level,
     ignore: values.ignore ?? [],
   }
-  const { audited, unavailable } = await auditPackages(packages, context)
+  const progress = progressLine()
+  let result: Audit
+
+  try {
+    result = await auditPackages(packages, { ...context, onProgress: progress.update })
+  }
+  finally {
+    progress.stop()
+  }
+
+  const { audited, unavailable } = result
   const findings = audited.filter(hasFinding)
 
   if (values.json === true)
