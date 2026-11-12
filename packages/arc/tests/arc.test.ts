@@ -9,8 +9,8 @@ const temp = tempDirs()
 // GNU tar with ACL and xattr support, and util-linux's findmnt and mountpoint: a busybox image has none of them.
 const GNU = Bun.which('zstd') !== null && Bun.which('findmnt') !== null && Bun.which('mountpoint') !== null && Bun.spawnSync(['tar', '--version']).stdout.toString().includes('GNU tar')
 
-function arc(args: string[], cwd = process.cwd()) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+function arc(args: string[], cwd = process.cwd(), env: Record<string, string> = {}) {
+  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1', ...env } })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -48,6 +48,18 @@ describe.skipIf(!GNU)('arc pack', () => {
     expect(result.err).toContain('kept')
     expect(existsSync(folder)).toBe(true)
     expect(existsSync(join(dest, 'project.tar.zst'))).toBe(true)
+  })
+
+  test('packs a folder holding a dangling symlink without sudo', () => {
+    const { root, folder, dest } = project()
+    const bin = join(root, 'bin')
+
+    mkdirSync(bin)
+    writeFileSync(join(bin, 'sudo'), `#!/bin/sh\ntouch '${join(root, 'sudo-ran')}'\nexit 1\n`, { mode: 0o755 })
+    symlinkSync('/nonexistent', join(folder, 'x'))
+
+    expect(arc(['pack', folder, dest], process.cwd(), { PATH: `${bin}:${process.env.PATH}` }).code).toBe(0)
+    expect(existsSync(join(root, 'sudo-ran'))).toBe(false)
   })
 
   test('packs a folder holding a file name with a newline', () => {

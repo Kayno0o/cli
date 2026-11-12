@@ -56,7 +56,7 @@ export async function pack(args: string[]): Promise<number> {
   if (lines((await probe(['findmnt', '-rn', '-o', 'TARGET'])).stdout).some(target => target.startsWith(`${source}/`)))
     return fail(`a file system is mounted inside '${source}', refused`, 1)
 
-  const needsRoot = !await writable(parent) || (await probe(['find', source, '-xdev', '(', '!', '-readable', '-o', '-type', 'd', '(', '!', '-writable', '-o', '!', '-executable', ')', ')', '-print', '-quit'])).stdout.trim() !== ''
+  const needsRoot = !await writable(parent) || (await probe(['find', source, '-xdev', '!', '-type', 'l', '(', '!', '-readable', '-o', '-type', 'd', '(', '!', '-writable', '-o', '!', '-executable', ')', ')', '-print', '-quit'])).stdout.trim() !== ''
   const as = needsRoot ? ['sudo'] : []
   const size = Number.parseInt((await probe([...as, 'du', '-sxb', '--', source])).stdout, 10)
   const free = Number((await probe(['df', '--output=avail', '-B1', '--', destDir])).stdout.trim().split('\n').at(-1))
