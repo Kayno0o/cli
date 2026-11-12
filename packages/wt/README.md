@@ -14,7 +14,7 @@ bun install -g @kaynooo/cli-wt
 | --- | --- |
 | `wt add <task> [branch] [--from <ref>] [--up]` | creates the worktree on `branch` (`wt/<task>`), a new one forked from main's current commit or `--from`, copies and clones from main, routes its subdomains; `--up` starts it too |
 | `wt sync [task]` | provisions it again after a manifest change |
-| `wt up [task]` / `wt down [task]` | starts or stops its stack, `--all` every worktree's in turn |
+| `wt up [task]` / `wt down [task]` | starts or stops its stack, `--all` every worktree's in turn; `down` also stops a stack whose folder is gone |
 | `wt rm <task>` | stops the stack, deletes the checkouts, volumes, certificates and override, keeps the branches; refuses uncommitted changes or commits on no branch unless `--force`; gitignored files (a copied `.env.local` edited since, uploads) go with the folder unchecked |
 | `wt open [task]` | opens its main URL in the browser |
 | `wt logs [task] [-f]` | prints the log of its last `--bg` job, or with `-f` follows its stack's compose logs |
@@ -89,7 +89,7 @@ export default {
 | `state` | `~/.cache/wt` | setup markers, clone progress, queues |
 | `jobs` | `<state>/jobs` | job records and per-stack locks; a tool pointing at the same folder shares the locks |
 | `proxyNetwork` | `proxy` | the network devproxy reaches the stacks on |
-| `runner` | | `up`, `down` and `removed` argv replacing `docker compose up -d --build`, `docker compose down` and nothing; `{project}`, `{task}`, `{dir}` and `{id}` filled in |
+| `runner` | | `up`, `down` and `removed` argv replacing `docker compose up -d --build`, `docker compose down` and nothing; `{project}`, `{task}`, `{dir}` and `{id}` filled in; a worktree whose folder is gone skips `down`, `{dir}` having gone with it, for `docker compose -p <id> down` |
 
 Without a runner, `wt up` brings devproxy up first when it is installed (on PATH or as this package's dependency), then compose, then the manifest's `setup` once. A runner command that itself runs wt, or another tool sharing the `jobs` folder, works inside the job that started it instead of being refused by its lock.
 

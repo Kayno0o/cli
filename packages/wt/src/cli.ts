@@ -184,7 +184,7 @@ Exits 0 once the stacks are up, 1 when a command fails, 2 on a usage error.`
 
 const DOWN_USAGE = `wt down [task | --all] [-p <name>] [--bg]
 
-Stops a worktree stack: \`docker compose down\` in the worktree, or the config's runner.down. The task defaults to the worktree the current directory is in; --all stops every worktree of the project in turn.
+Stops a worktree stack: \`docker compose down\` in the worktree, or the config's runner.down. A stack whose folder is gone is stopped by its compose project name, runner.down skipped. The task defaults to the worktree the current directory is in; --all stops every worktree of the project in turn.
 
 Exits 0 once the stacks are down, 1 when a command fails, 2 on a usage error.`
 
@@ -218,7 +218,10 @@ async function startOrStop(verb: 'up' | 'down', args: string[]): Promise<number>
 
     const worktree = await locateWorktree(process.cwd(), task, values.project)
 
-    assertWorktreeExists(worktree)
+    if (verb === 'up')
+      assertWorktreeExists(worktree)
+    else
+      await (await commands()).assertStoppable(worktree)
 
     return act(worktree)
   }, bgName(values, verb, values.all ? '--all' : task))

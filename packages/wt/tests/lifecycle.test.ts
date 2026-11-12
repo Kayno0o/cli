@@ -1091,6 +1091,23 @@ describe('up and down with no runner', () => {
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
 
+  test('down stops a stack whose folder was removed by hand, by its compose project name', async () => {
+    const { sandbox, wt, dirOf } = env
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+    rmSync(dirOf('planning'), { recursive: true })
+
+    const nothing = await wt('down', 'planning')
+
+    expect(nothing.code).toBe(1)
+    expect(nothing.err).toContain('no worktree planning')
+
+    sandbox.seed('compose-ls.json', JSON.stringify([{ Name: 'times--planning', Status: 'exited(2)' }]))
+
+    expect((await wt('down', 'planning')).code).toBe(0)
+    expect(sandbox.dockerCalls().filter(call => call.args.includes('down')).map(call => call.args)).toEqual(['compose -p times--planning down --remove-orphans'])
+  }, 30_000)
+
   test('add --up starts the stack it made; up and down --all act on every worktree of the project in turn', async () => {
     const { sandbox, wt, dirOf } = env
     const stackCalls = () => sandbox.dockerCalls().filter(call => call.args.startsWith('compose up') || call.args.startsWith('compose down')).map(call => `${call.cwd} ${call.args}`)

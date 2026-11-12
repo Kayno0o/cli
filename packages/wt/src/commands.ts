@@ -2,6 +2,7 @@ import type { Worktree } from './project'
 import { existsSync, rmSync } from 'node:fs'
 import { warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
+import { runningProjects } from './compose'
 import { knownMessage } from './errors'
 import { addWorktrees, dirtyRepos, isRegistered, removeWorktrees, unreachableCommits } from './git'
 import { assertWorktreeExists, locate, locateWorktree, worktreeOf, WtError } from './project'
@@ -168,7 +169,13 @@ export async function upTask(worktree: Worktree): Promise<void> {
   await stackUp(worktree)
 }
 
+/** A worktree whose folder went while its stack stayed can still be stopped, by its compose project name. */
+export async function assertStoppable(worktree: Worktree): Promise<void> {
+  if (!existsSync(worktree.dir) && !(await runningProjects(true)).has(worktree.id))
+    assertWorktreeExists(worktree)
+}
+
 export async function downTask(worktree: Worktree): Promise<void> {
-  assertWorktreeExists(worktree)
+  await assertStoppable(worktree)
   await stackDown(worktree)
 }

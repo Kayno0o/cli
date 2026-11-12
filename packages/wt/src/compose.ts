@@ -214,8 +214,9 @@ export function unknownServices(project: Project, config: ComposeConfig): string
     .map(name => `${project.name}: ${setting} names ${name}, which is not a service of ${config.name}`))
 }
 
-export async function runningProjects(): Promise<Set<string>> {
-  const result = await compose(['ls', '--format', 'json'])
+/** The compose projects with containers, running ones only unless `all`. */
+export async function runningProjects(all = false): Promise<Set<string>> {
+  const result = await compose(['ls', ...all ? ['-a'] : [], '--format', 'json'])
 
   if (result.code !== 0)
     return new Set()
