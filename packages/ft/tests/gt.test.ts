@@ -2,8 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { capture } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { dispatch } from '../src/commands/dispatch'
 import { teaLogins } from '../src/forge'
 import { close, comment, createIssue, editIssue, editLabels, getIssue, reopen } from '../src/issues'
 import { refusal, withFakeGt } from './fake-tea'
@@ -142,6 +144,27 @@ describe('ft with gt and no tea', () => {
     })
 
     expect(message).toContain('not found')
+    clean()
+  })
+
+  test('ft dispatch starts a run through gt with tea\'s token, and a refusal never prints it', async () => {
+    clean()
+
+    let message = ''
+    const state = await withFakeGt({ ...initial(), workflows: ['apps.yml'] }, async () => {
+      await capture(async () => dispatch(['apps.yml']))
+    })
+
+    expect(state.runs?.[0]).toMatchObject({ workflow_id: 'apps.yml', event: 'workflow_dispatch' })
+    expect(state.seen?.[0]).toEqual({ token: TOKEN, host: 'https://git.kaynooo.fr' })
+    clean()
+
+    await withFakeGt({ ...initial(), workflows: ['apps.yml'], failures: [{ match: 'dispatches', message: `denied for ${TOKEN}` }] }, async () => {
+      message = await refusal(dispatch(['apps.yml', '--ref', 'main']))
+    })
+
+    expect(message).toContain('denied for ***')
+    expect(message).not.toContain(TOKEN)
     clean()
   })
 

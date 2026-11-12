@@ -5,6 +5,7 @@ import { runCli } from '@kaynooo/cli-kit'
 import { board, drop, take } from './commands/board'
 import { ci } from './commands/ci'
 import { digest } from './commands/digest'
+import { dispatch } from './commands/dispatch'
 import { commentOn, edit, fixed, issue, newIssue, tick } from './commands/issue'
 import { logs } from './commands/logs'
 import { milestone, milestones } from './commands/milestone'
@@ -24,6 +25,7 @@ process.exitCode = await runCli({
     runs: { run: runs, summary: 'recent runs with workflow, ref, duration and age', group: 'CI and release' },
     ci: { run: ci, summary: 'wait for the runs covering a commit, printing what failed', group: 'CI and release' },
     watch: { run: watch, summary: 'wait for runs newer than an id, or those in progress', group: 'CI and release' },
+    dispatch: { run: dispatch, summary: 'start a workflow_dispatch run, --wait to follow it to its end', group: 'CI and release' },
     logs: { run: logs, summary: 'what the failed jobs of a run say went wrong', group: 'CI and release' },
     release: { run: release, summary: 'bump, push branch and tag atomically, wait for runs and registry', group: 'CI and release' },
     board: { run: board, summary: 'open issues: available, taken by a live session, or claimed by one gone', group: 'Issues and claims' },

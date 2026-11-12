@@ -11,7 +11,7 @@ export interface FakeMilestone { id: number, title: string, state: string, descr
 export interface FakeFailure { match: string, message: string, times?: number, exit?: number }
 // Calls whose arguments contain `match` (and `method`) wait until `parties` of them arrived, so two sessions reach that step together.
 export interface FakeBarrier { match: string, method?: string, parties: number }
-export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, beforeComment?: Record<number, string[]>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, beforeComment?: Record<number, string[]>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier, workflows?: string[], defaultBranch?: string, dispatchStatus?: string }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -151,6 +151,7 @@ if (command === 'api') {
   const milestone = /^milestones\\/(\\d+)$/.exec(path)
   const query = new URLSearchParams(path.split('?')[1] ?? '')
   const run = /^actions\\/runs\\/(\\d+)$/.exec(path)
+  const dispatched = /^actions\\/workflows\\/([^/]+)\\/dispatches$/.exec(path)
   const one = /^issues\\/(\\d+)(\\/comments)?$/.exec(path)
   const labelsOf = /^issues\\/(\\d+)\\/labels(?:\\/(\\d+))?$/.exec(path)
   const found = one === null ? undefined : issue(one[1])
@@ -158,6 +159,22 @@ if (command === 'api') {
 
   if (path === 'user')
     console.log(JSON.stringify({ login: 'kaynooo' }))
+  else if (path === 'repos/{owner}/{repo}')
+    console.log(JSON.stringify({ default_branch: state.defaultBranch ?? 'main' }))
+  else if (dispatched !== null && method === 'POST') {
+    // A dispatch starts a run at once, said back only when asked for with return_run_info.
+    const file = decodeURIComponent(dispatched[1])
+    const id = Math.max(0, ...(state.runs ?? []).map(each => each.id)) + 1
+
+    if (!(state.workflows ?? []).includes(file))
+      reject({ message: 'workflow "' + file + '" is not found', url: '' })
+    else {
+      state.runs = [{ id, index_in_repo: id, workflow_id: file, event: 'workflow_dispatch', prettyref: fields.ref, commit_sha: 'abc', status: state.dispatchStatus ?? 'waiting', html_url: 'https://forge/runs/' + id, title: file, inputs: fields.inputs }, ...(state.runs ?? [])]
+
+      if (fields.return_run_info === true)
+        console.log(JSON.stringify({ id, run_number: id, jobs: ['build'] }))
+    }
+  }
   else if (labelsOf !== null && method === 'POST') {
     const target = issue(labelsOf[1])
 
