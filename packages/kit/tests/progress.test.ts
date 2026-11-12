@@ -272,6 +272,23 @@ describe('the live region', () => {
     expect(written).toEqual([`${CLEAR_LINE}a\nb\x1B[1A\r`, CLEAR_LINE, 'kept\n', `${CLEAR_LINE}a\nb\x1B[1A\r`, CLEAR_LINE])
   })
 
+  it('paused, clears itself and draws nothing until resumed, and leaves console output alone', () => {
+    const { written, stream } = terminal()
+    const region = liveRegion(() => ['line'], stream, {})
+    const intercepted = console.log
+
+    region.redraw()
+    const resume = region.pause()
+    const freed = console.log
+
+    region.redraw()
+    resume()
+    region.stop()
+
+    expect(freed).not.toBe(intercepted)
+    expect(written).toEqual([`${CLEAR_LINE}line\r`, CLEAR_LINE, `${CLEAR_LINE}line\r`, CLEAR_LINE])
+  })
+
   it('draws nothing off a terminal, where print still prints', () => {
     const { written, stream } = terminal()
     const region = liveRegion(() => ['never'], { ...stream, isTTY: false }, {})

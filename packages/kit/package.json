@@ -20,6 +20,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./askpass": "./src/askpass.ts",
     "./progress": "./src/progress.ts",
     "./prompt": "./src/prompt.ts",
     "./shell": "./src/shell.ts",

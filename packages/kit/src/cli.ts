@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, UsageError, usageLine, wantsHelpJson } from './args'
 import { scriptArgs } from './argv'
+import { askpassClient } from './askpass'
 import { COMPLETION_SHELLS, completionScript } from './completions'
 import { notifyEnd } from './notify'
 import { paint, takesControlCodes } from './style'
@@ -487,6 +488,11 @@ export function packageVersion(entry = Bun.main): string {
 export async function runCli(cli: Cli, argv = scriptArgs()): Promise<number> {
   const version = cli.version ?? packageVersion()
 
+  const answered = await askpassClient(argv)
+
+  if (answered !== undefined)
+    return answered
+
   if (argv[0] === COMPLETE)
     return printCandidates(candidates(scopeOf(cli.commands, cli.extraCommands, cli.aliases), cli.defaultCommand, argv.slice(1)))
 
@@ -559,6 +565,11 @@ export async function mainArgs<T>(main: Omit<Main, 'run'>, parseArgv: (args: str
 
 // Runs a CLI that is a single command: `--version` or `-v` alone prints the version, an `Exit` or any error prints as `error: <name>: <message>`. Returns the exit code.
 export async function runMain({ name, version, run, redact, usage }: Main, argv = scriptArgs()): Promise<number> {
+  const answered = await askpassClient(argv)
+
+  if (answered !== undefined)
+    return answered
+
   if (argv[0] === COMPLETE)
     return printCandidates(leafCandidates(run, argv.slice(1)))
 

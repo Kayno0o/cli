@@ -30,6 +30,8 @@ export interface LiveRegion {
   print: (text: string) => void
   // Clears the region and leaves nothing behind.
   stop: () => void
+  // Clears the region and hands the terminal back, its keys and output included, until the function it answers is called.
+  pause: () => () => void
 }
 
 export interface TaskHandle {
@@ -48,6 +50,8 @@ export interface ProgressLine {
   update: (progress: Progress) => void
   // Clears the line and leaves nothing behind.
   stop: () => void
+  // Clears the line and hands the terminal back until the function it answers is called, for a prompt of a child process.
+  pause: () => () => void
   // Clears the line and leaves `✓ <text> <time since the line began>` in its place.
   done: (text: string) => void
   // Clears the line and leaves `✗ <text>` in its place.
@@ -79,12 +83,14 @@ interface Part { text: string, tint: (colors: Colors) => (text: string) => strin
 // Drawn only on a terminal that takes control codes, so elsewhere `render` never runs and the caller prints its own outcome; whatever else is printed meanwhile clears the block first, the next frame drawing it again under it, and an interrupt clears it before the process ends.
 export function liveRegion(render: (spinner: string) => string[], stream: ProgressStream = process.stderr, env: Env = process.env): LiveRegion {
   if (!takesControlCodes(stream, env))
-    return { redraw: () => undefined, print: text => void stream.write(`${text}\n`), stop: () => undefined }
+    return { redraw: () => undefined, print: text => void stream.write(`${text}\n`), stop: () => undefined, pause: () => () => undefined }
 
   // Its own write, taken before the region clears itself ahead of every other.
   const write = stream.write.bind(stream)
   let frame = 0
   let drawn = false
+  let paused = false
+  let stopped = false
   // Asked of the terminal at every draw: one more column than it has wraps the line, and each frame then leaves a row behind.
   const columns = () => {
     const now = stream.getWindowSize?.()[0] ?? stream.columns
@@ -99,6 +105,9 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
     drawn = false
   }
   const draw = () => {
+    if (paused)
+      return
+
     // A terminal that does not say its size, as a pseudo-terminal may, answers 0.
     const width = columns() - 1
     const height = stream.rows === undefined || stream.rows === 0 ? 24 : stream.rows
@@ -113,11 +122,11 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
     write(`${CLEAR_BELOW}${lines.join('\n')}${lines.length > 1 ? `\x1B[${lines.length - 1}A` : ''}\r`)
     drawn = true
   }
-  const timer = setInterval(draw, FRAME_MS)
+  let timer = setInterval(draw, FRAME_MS)
 
   stream.on?.('resize', draw)
-  const restore = interceptOutput(clear)
-  const release = swallowInput()
+  let restore = interceptOutput(clear)
+  let release = swallowInput()
   const onExit = () => {
     clear()
     release()
@@ -126,6 +135,7 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
   const signals = holdSignals(stop)
 
   function stop() {
+    stopped = true
     clearInterval(timer)
     stream.off?.('resize', draw)
     clear()
@@ -133,6 +143,31 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
     release()
     process.off('exit', onExit)
     signals.release()
+  }
+
+  function pause(): () => void {
+    if (paused || stopped)
+      return () => undefined
+
+    paused = true
+    clearInterval(timer)
+    stream.off?.('resize', draw)
+    clear()
+    restore()
+    release()
+
+    return () => {
+      if (!paused || stopped)
+        return
+
+      paused = false
+      timer = setInterval(draw, FRAME_MS)
+      timer.unref()
+      stream.on?.('resize', draw)
+      restore = interceptOutput(clear)
+      release = swallowInput()
+      draw()
+    }
   }
 
   timer.unref()
@@ -146,6 +181,7 @@ export function liveRegion(render: (spinner: string) => string[], stream: Progre
       draw()
     },
     stop,
+    pause,
   }
 }
 
@@ -177,6 +213,7 @@ export function progressLine(stream: ProgressStream = process.stderr, env: Env =
       }
     },
     stop: region.stop,
+    pause: region.pause,
     done: text => end(marked('ok', text, stream, formatDuration(performance.now() - begun), env)),
     failed: text => end(marked('problem', text, stream, undefined, env)),
   }
