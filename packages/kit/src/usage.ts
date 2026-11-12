@@ -1,8 +1,9 @@
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { CLI_FOLDER } from './logs'
+import { xdgFolder } from './user-config'
 
 // One run of a bin: which command it ran, the names of the flags it saw (never a value or an argument), how it exited and, on a usage error, the option it did not know.
 export interface UsageEntry {
@@ -28,11 +29,8 @@ export function noteUsageError(message: string): void {
   usageError = message
 }
 
-// XDG_STATE_HOME when it is an absolute path, else ~/.local/state, as the spec says an empty or relative value is ignored.
 export function stateHome(env: Record<string, string | undefined> = process.env): string {
-  const dir = env.XDG_STATE_HOME
-
-  return dir !== undefined && isAbsolute(dir) ? dir : join(homedir(), '.local', 'state')
+  return xdgFolder(env.XDG_STATE_HOME, join(homedir(), '.local', 'state'))
 }
 
 export function usagePath(env: Record<string, string | undefined> = process.env): string {

@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, stat } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { xdgFolder } from './user-config'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -23,9 +24,7 @@ function isPrivateDirectory(path: string): boolean {
 
 // A folder for log files that only this user can read: `<name>` under $XDG_RUNTIME_DIR, else ~/.cache/kaynooo-cli. When one already exists it must be a private directory of this user, otherwise a fresh private folder in the temp directory is used instead of trusting it.
 export async function privateLogDirectory(name: string, env: Record<string, string | undefined> = process.env): Promise<string> {
-  const runtime = env.XDG_RUNTIME_DIR
-  const base = runtime === undefined || runtime === '' ? join(homedir(), '.cache', CLI_FOLDER) : join(runtime, CLI_FOLDER)
-  const path = join(base, name)
+  const path = join(xdgFolder(env.XDG_RUNTIME_DIR, join(homedir(), '.cache')), CLI_FOLDER, name)
 
   try {
     await mkdir(path, { recursive: true, mode: 0o700 })

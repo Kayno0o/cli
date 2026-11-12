@@ -2,7 +2,7 @@ import type { UserConfigLocation } from './user-config'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { readUserConfig } from './user-config'
+import { readUserConfig, xdgFolder } from './user-config'
 
 /** Folders a walk over a repository's packages never descends into: dependencies and build output. A bin adds its own to a copy. */
 export const SKIPPED_FOLDERS: ReadonlySet<string> = new Set(['node_modules', 'vendor', 'dist', 'build', 'target', 'coverage', 'venv', '__pycache__'])
@@ -15,7 +15,7 @@ export function ignoredFolders(extra: Iterable<string> = [], where: UserConfigLo
   return new Set([...SKIPPED_FOLDERS, ...extra, ...names])
 }
 
-/** The user's cache folder, `$XDG_CACHE_HOME` or `~/.cache`, where the bins keep what they can rebuild: histories, answers, completions. */
+/** The user's cache folder, `$XDG_CACHE_HOME` when absolute or `~/.cache`, where the bins keep what they can rebuild: histories, answers, completions. */
 export function cacheFolder({ home = homedir(), env = process.env }: { home?: string, env?: Record<string, string | undefined> } = {}): string {
-  return env.XDG_CACHE_HOME ?? join(home, '.cache')
+  return xdgFolder(env.XDG_CACHE_HOME, join(home, '.cache'))
 }

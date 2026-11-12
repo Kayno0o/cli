@@ -1,7 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import process from 'node:process'
+
+// An XDG base folder variable's value, or the fallback when it is unset, empty or relative, as the spec says to ignore those.
+export function xdgFolder(value: string | undefined, fallback: string): string {
+  return value !== undefined && isAbsolute(value) ? value : fallback
+}
 
 export interface UserConfigLocation {
   // The home folder; `$XDG_CONFIG_HOME` is then ignored unless `xdg` is given too.
@@ -13,7 +18,7 @@ export interface UserConfigLocation {
 export function configBase(where: UserConfigLocation = {}): string {
   const xdg = where.xdg ?? (where.home === undefined ? process.env.XDG_CONFIG_HOME : undefined)
 
-  return xdg !== undefined && xdg !== '' ? xdg : join(where.home ?? homedir(), '.config')
+  return xdgFolder(xdg, join(where.home ?? homedir(), '.config'))
 }
 
 // The one config file of a bin, `~/.config/kaynooo-cli/<bin>.json`: where it is written.

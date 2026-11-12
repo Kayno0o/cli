@@ -19,6 +19,7 @@ describe('userConfigPath', () => {
   it('follows an explicit XDG base, and ignores the environment when a home is given', () => {
     expect(userConfigPath('db', { xdg: '/x' })).toBe('/x/kaynooo-cli/db.json')
     expect(configBase({ home: '/h' })).toBe('/h/.config')
+    expect(configBase({ home: '/h', xdg: 'rel' })).toBe('/h/.config')
   })
 })
 

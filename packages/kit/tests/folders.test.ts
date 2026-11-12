@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { ignoredFolders, SKIPPED_FOLDERS } from '../src/folders'
+import { cacheFolder, ignoredFolders, SKIPPED_FOLDERS } from '../src/folders'
 import { tempDirs } from '../src/test'
 import { configuredNumber, readUserConfig } from '../src/user-config'
 
@@ -17,6 +17,15 @@ function home(config?: string) {
 
   return dir
 }
+
+describe('cacheFolder', () => {
+  test('takes an absolute XDG_CACHE_HOME, and ~/.cache for an empty or relative one', () => {
+    expect(cacheFolder({ home: '/h', env: { XDG_CACHE_HOME: '/c' } })).toBe('/c')
+
+    for (const value of [undefined, '', 'rel/cache'])
+      expect(cacheFolder({ home: '/h', env: { XDG_CACHE_HOME: value } })).toBe('/h/.cache')
+  })
+})
 
 describe('ignoredFolders', () => {
   test('is the built-in set with nothing configured', () => {
