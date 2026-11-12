@@ -195,3 +195,13 @@ it('defaults to the public Forgejo host', async () => {
 
   expect(await inside(dir, async () => resolveConfig({}))).toMatchObject({ baseUrl: 'git.kaynooo.fr', baseUrlApi: 'git.kaynooo.fr/api/v1' })
 })
+
+it('reads an owner and a repo of one character', async () => {
+  const { dir, git } = await bareRepo()
+
+  await git('remote', 'add', 'origin', 'https://git.example.com/o/r.git')
+  expect(await inside(dir, getGiteaRepo)).toBe('o/r')
+
+  await git('remote', 'set-url', 'origin', 'git@git.example.com:o/r.git')
+  expect(await inside(dir, getGiteaRepo)).toBe('o/r')
+})

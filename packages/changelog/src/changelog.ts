@@ -101,7 +101,8 @@ export function parseGitCommit(commit: RawGitCommit, config: ChangelogConfig): G
   const breakingBody = BreakingBodyRE.exec(commit.body)
   const breakingNote = breakingBody?.[1]?.replaceAll(/\s+/g, ' ').trim()
   const rawScope = match.groups.scope ?? ''
-  const scope = config.scopeMap[rawScope] ?? rawScope
+  // Mapped here once, so the renderers print commit.scope as it is; an own key only, as `constructor` is no mapping.
+  const scope = Object.hasOwn(config.scopeMap, rawScope) ? config.scopeMap[rawScope]! : rawScope
   const isBreaking = match.groups.breaking !== undefined || breakingBody !== null
   let description = match.groups.description ?? ''
   const references: Reference[] = []

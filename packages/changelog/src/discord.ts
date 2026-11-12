@@ -133,7 +133,7 @@ export function generateDiscordPayload(commits: Commit[], options: ResolvedChang
     lines.push('', `**${formatTitle(section.title, options)}**`)
 
     for (const commit of section.commits.toReversed())
-      lines.push(`- ${formatLine(commit, options, commit.scope ? `**${options.scopeMap[commit.scope] ?? commit.scope}**: ` : '', true)}`)
+      lines.push(`- ${formatLine(commit, options, commit.scope ? `**${commit.scope}**: ` : '', true)}`)
   }
 
   if (!sections.length && !folded.length)

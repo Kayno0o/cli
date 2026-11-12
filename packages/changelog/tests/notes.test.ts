@@ -49,6 +49,17 @@ describe('ticket lines', () => {
   })
 })
 
+describe('scopes', () => {
+  it('maps a scope once, by an own key only', async () => {
+    const mapped = parseGitCommit({ message: 'fix(a): x', body: '', shortHash: 'aaaaaa1', author: { name: 'Ada', email: 'ada@example.com' } }, { scopeMap: { a: 'b', b: 'c' } } as never)!
+    const md = generateMarkdown([commit('fix(constructor): ctor'), mapped], await options({ scopeMap: { a: 'b', b: 'c' } }))
+
+    expect(md).toContain('**constructor**: Ctor')
+    expect(md).toContain('**b**: X')
+    expect(JSON.stringify(generateDiscordPayload([commit('fix(toString): y'), mapped], await options({ scopeMap: { a: 'b', b: 'c' } })))).toContain('**toString**: Y')
+  })
+})
+
 describe('forgejo markdown', () => {
   it('lists the note of a breaking footer under its entry', async () => {
     const md = generateMarkdown([commit('feat: new api', 'BREAKING CHANGE: call `run` instead of `exec`')], await options(), [ada])

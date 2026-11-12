@@ -130,7 +130,7 @@ function formatSection(section: Section, options: ResolvedChangelogOptions) {
   const nestable = Object.entries(scopes).some(([scope, commits]) => scope !== '' && commits.length > 1)
 
   for (const [scope, commits] of Object.entries(scopes).sort(([a], [b]) => a.localeCompare(b))) {
-    const scopeText = `**${options.scopeMap[scope] ?? scope}**`
+    const scopeText = `**${scope}**`
     const nested = nestable && scope !== '' && (options.group === true || (options.group === 'multiple' && commits.length > 1))
     const prefix = scope !== '' && !nested ? `${scopeText}: ` : ''
     const padding = nested ? '  ' : ''

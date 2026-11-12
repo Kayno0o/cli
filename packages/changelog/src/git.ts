@@ -3,9 +3,9 @@ import { isSemver, parseSemver } from '@kaynooo/utils/semver'
 import { $ } from 'bun'
 
 const gitSuffixRE = /\.git$/
-const sshRegex = /(?:ssh:\/\/[^/]+\/|^(?:[^@/\s]+@)?[^:/\s]+:)(\w[\w.-]+)\/(\w[\w.-]+)$/i
+const sshRegex = /(?:ssh:\/\/[^/]+\/|^(?:[^@/\s]+@)?[^:/\s]+:)(\w[\w.-]*)\/(\w[\w.-]*)$/i
 const regexSpecialRE = /[.*+?^${}()|[\]\\]/g
-const httpsRegex = /https?:\/\/[^/]+\/(\w[\w.-]+)\/(\w[\w.-]+)$/i
+const httpsRegex = /https?:\/\/[^/]+\/(\w[\w.-]*)\/(\w[\w.-]*)$/i
 const releaseVersionRE = /^[^.]*(?:\.[\d.]*|\d)$/
 
 export async function getGiteaRepo() {
