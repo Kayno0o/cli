@@ -19,7 +19,7 @@ bun install -g @kaynooo/cli-env
 | `--quiet` (`-q`) | on set, unset, cp and mv, prints nothing on success |
 | `ev cp KEY --from <file> --to <file>` | copies a key's value to another file without printing it, replacing the key there or appending it, `--as NEWKEY` to rename |
 | `ev mv KEY --from <file> --to <file>` | moves a key's line as written, `--force` to replace one the target has |
-| `ev diff <a> <b>` | names the keys set in one file and not the other, exit 1 when they differ; `--json` prints `{a, b, onlyA, onlyB}` |
+| `ev diff <a> <b>` | names the keys set in one file and not the other, and those set to different values with both masked as `list` shows them, exit 1 when they differ; `--keys` compares the keys only, `--json` prints `{a, b, onlyA, onlyB, differ}` |
 | `ev missing [file]` | names the keys of `.env.example` (`--against`) that the file lacks, exit 1 when some are; `--json` prints `{a, b, onlyA, onlyB}` with the reference as `a` |
 | `ev pins [dir]` | checks an app's tests pin the env that reaches outside (see below), exit 1 when something is unpinned |
 | `ev audit [dir...]` | lists the `.env` files any account can read or git tracks, and the compose files any account can read that write a secret or URL password out, never printing a value, with the fix for each, exit 1 when it finds one; it looks down to 5 levels, skipping `node_modules`, `vendor`, `.git` and `.example`, `.sample`, `.template` and `.dist` files, and names a folder it cannot read on stderr |

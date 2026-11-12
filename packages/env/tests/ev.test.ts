@@ -364,14 +364,15 @@ describe('ev', () => {
     expect(await read('.env.b')).toBe('B=2\n')
   })
 
-  test('diff and missing name keys without values', async () => {
+  test('diff names the keys one side sets and those set to other values, missing the keys only', async () => {
     await write('.env', 'A=1\nB=secretb\n')
     await write('.env.example', 'A=\nC=\n')
 
     const diff = ev(['diff', '.env', '.env.example'])
 
     expect(diff.code).toBe(1)
-    expect(diff.out).toBe('only in .env: B\nonly in .env.example: C\n')
+    expect(diff.out).toBe('only in .env: B\nonly in .env.example: C\ndiffers: A (1 in .env, empty in .env.example)\n')
+    expect(ev(['diff', '.env', '.env.example', '--keys']).out).toBe('only in .env: B\nonly in .env.example: C\n')
 
     const missing = ev(['missing'])
 
@@ -381,7 +382,21 @@ describe('ev', () => {
 
     await write('.env', 'A=1\nC=3\n')
     expect(ev(['missing']).code).toBe(0)
-    expect(ev(['diff', '.env', '.env.example']).code).toBe(0)
+    expect(ev(['diff', '.env', '.env.example', '--keys']).code).toBe(0)
+    expect(ev(['diff', '.env', '.env.example']).code).toBe(1)
+    await write('.env.example', 'A=1\nC=3\n')
+    expect(ev(['diff', '.env', '.env.example'])).toMatchObject({ code: 0, out: '' })
+  })
+
+  test('diff names a secret set to another value by its masks only', async () => {
+    await write('.env', 'API_TOKEN=tok_live_aaaaaaaaaaaaaaaa\nPORT=3000\n')
+    await write('.env.local', 'API_TOKEN=tok_live_bbbbbbbbbbbbbbbb\nPORT=3000\n')
+
+    const diff = ev(['diff', '.env', '.env.local'])
+
+    expect(diff.code).toBe(1)
+    expect(diff.out).toBe('differs: API_TOKEN (tok***(25) in .env, tok***(25) in .env.local)\n')
+    expect(JSON.parse(ev(['diff', '.env', '.env.local', '--json']).out)).toEqual({ a: '.env', b: '.env.local', onlyA: [], onlyB: [], differ: ['API_TOKEN'] })
   })
 
   test('--json lists keys with masked values and a secret flag', async () => {
@@ -405,7 +420,7 @@ describe('ev', () => {
     const diff = ev(['diff', '.env', '.env.example', '--json'])
 
     expect(diff.code).toBe(1)
-    expect(JSON.parse(diff.out)).toEqual({ a: '.env', b: '.env.example', onlyA: ['B'], onlyB: ['C'] })
+    expect(JSON.parse(diff.out)).toEqual({ a: '.env', b: '.env.example', onlyA: ['B'], onlyB: ['C'], differ: ['A'] })
     expect(diff.out).not.toContain('secretb')
     expect(JSON.parse(ev(['missing', '--json']).out)).toEqual({ a: '.env.example', b: '.env', onlyA: ['C'], onlyB: ['B'] })
 

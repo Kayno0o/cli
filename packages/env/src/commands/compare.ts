@@ -1,15 +1,17 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
-import { readEntries } from '../files'
+import { loadKnown, readEntries } from '../files'
+import { maskValue } from '../mask'
 
 const diffUsage = `ev diff <a> <b>
 
-Names the keys set in one file and not the other, never their values.
+Names the keys set in one file and not the other, and those both set to different values, each value masked as ev list does.
 
---json prints {a, b, onlyA, onlyB}.`
+--keys compares the keys only.
+--json prints {a, b, onlyA, onlyB, differ}, differ naming the keys only.`
 
-const DIFF_EXITS: ExitRow[] = [[0, 'both set the same keys'], [1, 'they differ'], [2, 'a usage error']]
+const DIFF_EXITS: ExitRow[] = [[0, 'both set the same keys to the same values'], [1, 'they differ'], [2, 'a usage error']]
 
 const missingUsage = `ev missing [file]
 
@@ -25,30 +27,39 @@ async function keys(path: string): Promise<Set<string>> {
   return new Set((await readEntries(path)).keys())
 }
 
+// Running ev reads both files already, and `ev redact` tells whether a string is one of their secrets, so naming a value as changed gives nothing away.
 export async function diff(args: string[]): Promise<number> {
-  const parsed = parse(args, diffUsage, jsonFlag, { exits: DIFF_EXITS })
+  const parsed = parse(args, diffUsage, { keys: { type: 'boolean', description: 'compare the keys only' }, ...jsonFlag }, { exits: DIFF_EXITS })
 
   const [a, b] = parsed.positionals
 
   if (a === undefined || b === undefined)
     fail(`needs two files\n\n${diffUsage}`)
 
-  const left = await keys(a)
-  const right = await keys(b)
-  const onlyA = [...left].filter(key => !right.has(key))
-  const onlyB = [...right].filter(key => !left.has(key))
+  const left = await readEntries(a)
+  const right = await readEntries(b)
+  const onlyA = [...left.keys()].filter(key => !right.has(key))
+  const onlyB = [...right.keys()].filter(key => !left.has(key))
+  const differ = parsed.values.keys === true ? [] : [...left].filter(([key, value]) => right.has(key) && right.get(key) !== value).map(([key]) => key)
+  const same = onlyA.length + onlyB.length + differ.length === 0
 
   if (parsed.values.json === true) {
-    printJson({ a, b, onlyA, onlyB })
+    printJson({ a, b, onlyA, onlyB, differ })
 
-    return onlyA.length + onlyB.length === 0 ? 0 : 1
+    return same ? 0 : 1
   }
 
   const path = role('path', process.stdout)
   const value = role('value', process.stdout)
-  const lines = [...onlyA.map(key => `only in ${path(a)}: ${value(key)}`), ...onlyB.map(key => `only in ${path(b)}: ${value(key)}`)]
+  const known = differ.length ? await loadKnown(process.cwd(), [left, right]) : undefined
+  const shown = (key: string, raw: string) => raw === '' ? 'empty' : maskValue(key, raw, known).replaceAll('\n', '\\n').replaceAll('\r', '\\r')
+  const lines = [
+    ...onlyA.map(key => `only in ${path(a)}: ${value(key)}`),
+    ...onlyB.map(key => `only in ${path(b)}: ${value(key)}`),
+    ...differ.map(key => `differs: ${value(key)} (${shown(key, left.get(key)!)} in ${path(a)}, ${shown(key, right.get(key)!)} in ${path(b)})`),
+  ]
 
-  if (lines.length === 0)
+  if (same)
     return 0
 
   console.log(lines.join('\n'))
