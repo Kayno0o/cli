@@ -24,6 +24,8 @@ export interface RunSettings {
   cwd?: string
   env?: Record<string, string | undefined>
   stdin?: 'inherit' | 'ignore'
+  // Written to the command's stdin in place of `stdin`.
+  input?: string
   // Ends the command and its children after this long.
   timeoutMs?: number
   // Ends the command and its children when aborted.
@@ -142,10 +144,10 @@ async function pipeInto(argv: string[], text: string): Promise<boolean> {
 }
 
 // Runs a command with stdout and stderr captured; throws when it cannot be started. With `timeoutMs`, `signal`, `onStart` or `onChunk` the child leads its own process group, and the whole group is ended (SIGTERM, then SIGKILL after a short grace) on the timeout, an abort or a throwing `onChunk`; the pipes are drained to their end either way.
-export async function runCommand(argv: string[], { cwd, env, stdin = 'ignore', timeoutMs, signal, maxBytes = Infinity, onChunk, onStart }: RunSettings = {}): Promise<Ran> {
+export async function runCommand(argv: string[], { cwd, env, stdin = 'ignore', input, timeoutMs, signal, maxBytes = Infinity, onChunk, onStart }: RunSettings = {}): Promise<Ran> {
   const chunks: Chunk[] = []
   const grouped = timeoutMs !== undefined || signal !== undefined || onStart !== undefined || onChunk !== undefined
-  const proc = Bun.spawn(argv, { ...(cwd === undefined ? {} : { cwd }), ...(env === undefined ? {} : { env }), stdin, stdout: 'pipe', stderr: 'pipe', ...(grouped ? { detached: true } : {}) })
+  const proc = Bun.spawn(argv, { ...(cwd === undefined ? {} : { cwd }), ...(env === undefined ? {} : { env }), stdin: input === undefined ? stdin : new TextEncoder().encode(input), stdout: 'pipe', stderr: 'pipe', ...(grouped ? { detached: true } : {}) })
   const state = { kept: 0, truncated: false, timedOut: false, failure: undefined as unknown, done: false }
   const timers: ReturnType<typeof setTimeout>[] = []
 
