@@ -854,7 +854,8 @@ describe('up and down with no runner', () => {
     expect(JSON.parse(readFileSync(job, 'utf8'))).toMatchObject({ verb: 'up' })
 
     expect((await wt('rm', 'planning', '--bg', '--force')).code).toBe(0)
-    await settled(() => !existsSync(dirOf('planning')) && !existsSync(lock))
+    // The job releases its lock before the removal forgets its jobs, so the wait is on the job record.
+    await settled(() => !existsSync(dirOf('planning')) && !existsSync(job))
     expect(existsSync(dirOf('planning'))).toBe(false)
     // A removal that worked forgets the worktree's jobs
     expect(existsSync(job)).toBe(false)
