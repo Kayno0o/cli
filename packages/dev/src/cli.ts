@@ -8,7 +8,7 @@ import { badUsage, copyOption, copyText, fail, isInteractive, isStdinPiped, json
 import { input } from '@kaynooo/cli-kit/prompt'
 import { b64Decode, b64Encode } from './encode'
 import { ALGORITHMS, hashHex, hashStream } from './hash'
-import { ulid, uuidV4, uuidV7 } from './ids'
+import { monotonic, nextUlid, nextUuidV7, ulid, uuidV4, uuidV7 } from './ids'
 import { publicIp } from './ip'
 import { claimTimes, decodeJwt } from './jwt'
 import { bcryptHash, DEFAULT_LENGTH, FORMATS, generatePassword } from './password'
@@ -165,7 +165,7 @@ export async function jwt(args: string[]): Promise<number> {
 
   if (claims.length > 0) {
     console.log('')
-    printRows(claims.map(({ claim, local, utc, relative }) => [claim, `${local}  ${utc}  ${relative}`]))
+    printRows(claims.map(({ claim, local, utc, relative }) => [claim, [local, utc, relative].filter(Boolean).join('  ')]))
   }
 
   return 0
@@ -223,7 +223,8 @@ export function uuid(args: string[]): number {
     replaces: 'uuidgen and python -c "import uuid"',
     examples: ['dev uuid', ['dev uuid -n 5 --v7', 'five time-ordered UUIDs']],
   })
-  const ids = Array.from({ length: wholeNumber(values.n, 'n', 1) }, () => values.v7 === true ? uuidV7() : uuidV4())
+  const count = wholeNumber(values.n, 'n', 1)
+  const ids = values.v7 === true ? monotonic(count, now => uuidV7(now), nextUuidV7) : Array.from({ length: count }, uuidV4)
 
   printIds(ids, values.json === true)
 
@@ -242,7 +243,7 @@ export function ulidCommand(args: string[]): number {
     examples: ['dev ulid', ['dev ulid -n 3', 'three ULIDs']],
   })
 
-  printIds(Array.from({ length: wholeNumber(values.n, 'n', 1) }, () => ulid()), values.json === true)
+  printIds(monotonic(wholeNumber(values.n, 'n', 1), now => ulid(now), nextUlid), values.json === true)
 
   return 0
 }

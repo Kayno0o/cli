@@ -37,3 +37,49 @@ export function ulid(now = Date.now(), random: Uint8Array = randomBytes(16)): st
 export function uuidV4(): string {
   return crypto.randomUUID()
 }
+
+// The ULID after this one: its base32 number plus one, a carry out of the random part moving the time on a millisecond.
+export function nextUlid(id: string): string {
+  const digits = [...id]
+
+  for (let i = digits.length - 1; i >= 0; i--) {
+    const value = CROCKFORD.indexOf(digits[i]!) + 1
+
+    digits[i] = CROCKFORD[value % 32]!
+
+    if (value < 32)
+      break
+  }
+
+  return digits.join('')
+}
+
+// The version 7 UUID after this one: its 48 time and 74 random bits as one number plus one, the version and variant bits kept.
+export function nextUuidV7(id: string): string {
+  const bits = BigInt(`0x${id.replaceAll('-', '')}`)
+  const time = bits >> 80n
+  const random = (((bits >> 64n) & 0xFFFn) << 62n) | (bits & ((1n << 62n) - 1n))
+  const next = ((time << 74n) | random) + 1n
+  const nextTime = next >> 74n
+  const nextA = (next >> 62n) & 0xFFFn
+  const nextB = next & ((1n << 62n) - 1n)
+  const hex = ((nextTime << 80n) | (0x7n << 76n) | (nextA << 64n) | (0x2n << 62n) | nextB).toString(16).padStart(32, '0')
+
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+// `count` ids in creation order: one drawn in the millisecond of the one before (or earlier, the clock stepping back) is that one's successor instead, so a batch sorts as it was made.
+export function monotonic(count: number, draw: (now: number) => string, successor: (id: string) => string, clock: () => number = Date.now): string[] {
+  const ids: string[] = []
+  let last = Number.NEGATIVE_INFINITY
+
+  for (let i = 0; i < count; i++) {
+    const now = clock()
+    const previous = ids.at(-1)
+
+    ids.push(previous !== undefined && now <= last ? successor(previous) : draw(now))
+    last = Math.max(last, now)
+  }
+
+  return ids
+}
