@@ -1,0 +1,20 @@
+============================= test session starts ==============================
+collected 2 items
+
+t.py FF                                                                  [100%]
+
+=================================== FAILURES ===================================
+____________________________________ test_x ____________________________________
+Traceback (most recent call last):
+  File "/w/t.py", line 2, in test_x
+    assert 1 == 2
+AssertionError: assert 1 == 2
+_______________________________ TestA.test_y ________________________________
+Traceback (most recent call last):
+  File "/w/t.py", line 6, in test_y
+    raise ValueError("bad")
+ValueError: bad
+=========================== short test summary info ============================
+FAILED t.py::test_x - AssertionError: assert 1 == 2
+FAILED t.py::TestA::test_y - ValueError: bad
+============================== 2 failed in 0.01s ===============================

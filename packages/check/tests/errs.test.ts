@@ -78,6 +78,21 @@ describe('parseErrors', () => {
     ])
   })
 
+  test('bun test: a test of the same name failing in two files is two errors', () => {
+    const block = (file: string) => [`${file}:`, 'error: nope', `      at <anonymous> (/repo/${file}:2:3)`, '(fail) works [1.00ms]', '']
+    const { errors, unrecognised } = parseErrors([...block('a.test.ts'), ...block('b.test.ts'), '(fail) works [1.00ms]', ' 2 fail'].join('\n'))
+
+    expect(errors.map(error => error.file)).toEqual(['/repo/a.test.ts', '/repo/b.test.ts'])
+    expect(unrecognised).toBe(0)
+  })
+
+  test('tsc: a CRLF log reads as an LF one', () => {
+    expect(parseErrors('src/a.ts(1,2): error TS2322: Bad.\r\nsrc/b.ts(3,4): error TS2345: Worse.\r\n').errors).toEqual([
+      { tool: 'tsc', file: 'src/a.ts', line: 1, column: 2, rule: 'TS2322', severity: 'error', message: 'Bad.' },
+      { tool: 'tsc', file: 'src/b.ts', line: 3, column: 4, rule: 'TS2345', severity: 'error', message: 'Worse.' },
+    ])
+  })
+
   test('bun test: a test listed again at the end is reported once', () => {
     const log = ['a.test.ts:', 'error: nope', '      at <anonymous> (/repo/a.test.ts:2:3)', '(fail) one [1.00ms]', '', '(fail) one [1.00ms]', ' 1 fail'].join('\n')
 
@@ -356,6 +371,17 @@ describe('parseErrors: pytest frames', () => {
 
     expect(short.errors).toEqual([{ tool: 'pytest', file: 'tests/test_calc.py', line: 4, column: 0, severity: 'error', message: 'assert 3 == 4' }])
     expect(collection.errors).toEqual([{ tool: 'pytest', file: 'tests/test_calc.py', line: 1, column: 0, severity: 'error', message: 'ModuleNotFoundError: No module named \'calc\'' }])
+  })
+
+  // Hand-written from pytest's documented --tb=native output: a Python traceback, no `E` lines and no `file:line:` location.
+  test('--tb=native takes each failure from its short summary line', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('pytest-native.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors).toEqual([
+      { tool: 'pytest', file: 't.py', line: 0, column: 0, severity: 'error', message: 'AssertionError: assert 1 == 2', test: 't.py::test_x' },
+      { tool: 'pytest', file: 't.py', line: 0, column: 0, severity: 'error', message: 'ValueError: bad', test: 't.py::TestA::test_y' },
+    ])
   })
 })
 

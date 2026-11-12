@@ -33,6 +33,7 @@ const GO_LINTER = /^(.*\S)\s+\(([a-z][\w-]*)\)$/
 const GO_NOISE = /^# \S+(?: \[\S+\])?$/
 const ARROW = /^\s*--> (.+?):(\d+):(\d+)$/
 const CARGO_HEADER = /^(error|warning)(?:\[([\w-]+)\])?: (.*)$/
+const LINE_BREAK = /\r?\n/
 // The lines a message runs on under its header, indented, as kay check prints a TypeScript message chain.
 const CONTINUATION = /^\s+\S/
 const MAX_CONTINUATION = 20
@@ -47,7 +48,8 @@ const PYTEST_BANNER = /^={3,} (.*?) ={3,}$/
 const PYTEST_FAILURES = new Set(['FAILURES', 'ERRORS'])
 const PYTEST_SUMMARY_LINE = /^(?:FAILED|ERROR) \S/
 const PYTEST_FRAME = /^in \S/
-const PYTEST_SECTION = /^_{3,} .* _{3,}$/
+const PYTEST_SECTION = /^_{3,} (.*) _{3,}$/
+const PYTEST_SUMMARY = /^(?:FAILED|ERROR) ([^\s:]+)::(\S+)(?: - (.*))?$/
 const PYTEST_EXCEPTION_END = /[\s:]/
 const PYTEST_NOISE = /^(?:platform |rootdir: |collected |plugins: |configfile: |cachedir: |\S+\.pyi? [.FEsxXR]+ +\[ *\d+%\]$|\S+\.py:\d+: $)/
 // The `file:line[:col]: error|warning|note: message` line gcc, clang, mypy, `shellcheck -f gcc` and golangci-lint print, as editors' problem matchers read it.
@@ -91,6 +93,7 @@ const collectBunCheck: Collector = (lines, used) => {
 const collectBunTest: Collector = (lines, used) => {
   const errors: ToolError[] = []
   const seen = new Set<string>()
+  const names = new Set<string>()
 
   for (const [index, line] of lines.entries()) {
     if (!line.startsWith('(fail) '))
@@ -99,12 +102,6 @@ const collectBunTest: Collector = (lines, used) => {
     used.add(index)
 
     const test = line.slice('(fail) '.length).replace(DURATION, '')
-
-    if (seen.has(test))
-      continue
-
-    seen.add(test)
-
     const start = lines.findLastIndex((text, at) => at < index && BOUNDARY.test(text)) + 1
     const block = lines.slice(start, index)
     const failure = block.findIndex(text => text.startsWith('error:'))
@@ -114,6 +111,14 @@ const collectBunTest: Collector = (lines, used) => {
 
     const frame = block.slice(Math.max(failure, 0)).map(text => BUN_TEST_FRAME.exec(text)).find(match => match !== null)
     const header = lines.slice(0, index).findLast(text => BUN_TEST_FILE.test(text))
+    // Two files may each hold a test of that name, so its file is part of what makes a failure one already listed; a bare repeat with no error above it is the recap at the end.
+    const key = `${header ?? ''}\0${test}`
+
+    if (seen.has(key) || (failure === -1 && names.has(test)))
+      continue
+
+    seen.add(key)
+    names.add(test)
     const expected = block.map(text => BUN_TEST_EXPECTED.exec(text)?.[1]).find(text => text !== undefined)
     const received = block.map(text => BUN_TEST_RECEIVED.exec(text)?.[1]).find(text => text !== undefined)
     const reason = failure === -1 ? 'failed' : (block[failure] ?? '').slice('error:'.length).trim()
@@ -277,9 +282,15 @@ const collectRuff: Collector = (lines, used) => {
   return errors
 }
 
-// pytest's failures section: each `file:line: Exception` location, the message from the `E` lines above it, the section and its short summary otherwise accounted for.
+// pytest's failures section: each `file:line: Exception` location, the message from the `E` lines above it, the section and its short summary otherwise accounted for; a test whose section gave no location (`--tb=native`, `--tb=line`) takes its error from its summary line.
 const collectPytest: Collector = (lines, used) => {
   const errors: ToolError[] = []
+  const silent = new Set<string>()
+  let section: { title: string, errors: number } | undefined
+  const closeSection = () => {
+    if (section !== undefined && errors.length === section.errors)
+      silent.add(section.title)
+  }
   const title = (line: string | undefined) => PYTEST_BANNER.exec(line ?? '')?.[1]
   const start = lines.findIndex(line => PYTEST_FAILURES.has(title(line) ?? ''))
 
@@ -318,8 +329,13 @@ const collectPytest: Collector = (lines, used) => {
         errors.push({ tool: 'pytest', file: location[1] ?? '', line: Number(location[2]), column: 0, severity: 'error', message: text })
       }
 
-      if (PYTEST_SECTION.test(line))
+      const opened = PYTEST_SECTION.exec(line)
+
+      if (opened !== null) {
         frame = undefined
+        closeSection()
+        section = { title: opened[1] ?? '', errors: errors.length }
+      }
 
       if (line.trim() !== '')
         message = []
@@ -331,9 +347,19 @@ const collectPytest: Collector = (lines, used) => {
   if (frame !== undefined && message.length > 0)
     errors.push({ tool: 'pytest', ...frame, column: 0, severity: 'error', message: message[0] ?? '' })
 
+  closeSection()
+
   for (let index = stop; index < lines.length; index++) {
-    if (PYTEST_SUMMARY_LINE.test(lines[index] ?? ''))
-      used.add(index)
+    if (!PYTEST_SUMMARY_LINE.test(lines[index] ?? ''))
+      continue
+
+    used.add(index)
+
+    // pytest titles the section of `t.py::Class::test` as `Class.test`.
+    const [, file = '', name = '', reason] = PYTEST_SUMMARY.exec(lines[index] ?? '') ?? []
+
+    if (silent.delete(name.replaceAll('::', '.')))
+      errors.push({ tool: 'pytest', file, line: 0, column: 0, severity: 'error', message: reason ?? 'failed', test: `${file}::${name}` })
   }
 
   return errors
@@ -368,7 +394,7 @@ const COLLECTORS: Collector[] = [collectBunCheck, collectBunTest, collectVitest,
 
 // Every error the known formats report, each format's in its own order, and how many non-blank lines none of them accounted for.
 export function parseErrors(output: string): ParsedErrors {
-  const lines = stripAnsi(output).split('\n')
+  const lines = stripAnsi(output).split(LINE_BREAK)
 
   if (BASH_ECHO.test(lines[0] ?? ''))
     lines.shift()
