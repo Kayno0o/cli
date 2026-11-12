@@ -5,7 +5,7 @@ import { tempDirs } from '@kaynooo/cli-kit/test'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { fileName } from '../src/download'
 import { summarize } from '../src/script'
-import { sumFor } from '../src/sums'
+import { pathUnder, sumFor } from '../src/sums'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const temp = tempDirs()
@@ -184,6 +184,18 @@ describe('checking', () => {
     expect(sumFor(`SHA256 (tool) = ${hash}`, 'tool')).toBe(hash)
     expect(sumFor(`${hash}\n`, 'tool')).toBe(hash)
     expect(sumFor(`${hash}  other`, 'tool')).toBeUndefined()
+  })
+
+  test('sumFor takes the line at the download\'s path, and refuses to guess between two of the same name', () => {
+    const [one, two] = ['1'.repeat(64), '2'.repeat(64)]
+    const sums = `${one}  linux/foo\n${two}  ./mac/foo\n`
+
+    expect(sumFor(sums, 'foo', 'mac/foo')).toBe(two)
+    expect(sumFor(sums, 'foo', 'linux/foo')).toBe(one)
+    expect(() => sumFor(sums, 'foo')).toThrow('linux/foo, ./mac/foo')
+    expect(sumFor(`${one}  a/foo\n${one}  b/foo\n`, 'foo')).toBe(one)
+    expect(pathUnder('https://x.org/v1/SHA256SUMS', 'https://x.org/v1/mac/foo')).toBe('mac/foo')
+    expect(pathUnder('https://x.org/v1/SHA256SUMS', 'https://y.org/v1/mac/foo')).toBeUndefined()
   })
 })
 

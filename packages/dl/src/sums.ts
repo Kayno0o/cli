@@ -7,8 +7,19 @@ const GNU_LINE = /^([0-9a-f]{64})(?:\s+\*?(\S.*))?$/i
 // `SHA256 (<name>) = <hash>` as BSD's sha256 and shasum --tag write it.
 const BSD_LINE = /^SHA256 \((.+)\) = ([0-9a-f]{64})$/i
 
-// The sha256 a checksums file gives for `name`, or the lone hash of a file holding one; undefined when it names none for it.
-export function sumFor(text: string, name: string): string | undefined {
+const DOT_SLASH = /^\.\//
+
+// The download's path under the folder of the checksums file: `linux/foo` for .../v1/linux/foo beside .../v1/SHA256SUMS; undefined when it is not under it.
+export function pathUnder(sumsUrl: string, url: string): string | undefined {
+  const sums = new URL(sumsUrl)
+  const file = new URL(url)
+  const folder = sums.pathname.slice(0, sums.pathname.lastIndexOf('/') + 1)
+
+  return sums.origin === file.origin && file.pathname.startsWith(folder) ? decodeURIComponent(file.pathname.slice(folder.length)) : undefined
+}
+
+// The sha256 a checksums file gives for the file at `path` under it, else for the one line naming `name`, or the lone hash of a file holding one; undefined when it names none for it.
+export function sumFor(text: string, name: string, path?: string): string | undefined {
   const entries: [hash: string, name: string | undefined][] = []
 
   for (const line of text.split('\n').map(line => line.trim())) {
@@ -21,17 +32,27 @@ export function sumFor(text: string, name: string): string | undefined {
       entries.push([bsd[2]!, bsd[1]])
   }
 
-  const named = entries.find(([, file]) => file !== undefined && basename(file) === name)
+  const exact = path === undefined ? undefined : entries.find(([, file]) => file?.replace(DOT_SLASH, '') === path)
 
-  if (named !== undefined)
-    return named[0].toLowerCase()
+  if (exact !== undefined)
+    return exact[0].toLowerCase()
+
+  const named = entries.filter(([, file]) => file !== undefined && basename(file) === name)
+  const hashes = new Set(named.map(([hash]) => hash.toLowerCase()))
+
+  // Two different files of that name and none at the download's path: which one is meant cannot be told.
+  if (hashes.size > 1)
+    fail(`the checksums file lists ${name} as ${named.map(([, file]) => file).join(', ')}, none at the download's path`, 1)
+
+  if (named[0] !== undefined)
+    return named[0][0].toLowerCase()
 
   const [only] = entries
 
   return entries.length === 1 && only![1] === undefined ? only![0].toLowerCase() : undefined
 }
 
-// Fetches the checksums file at `url` and answers the sha256 it gives for `name`.
-export async function fetchSum(url: string, name: string): Promise<string> {
-  return sumFor(await (await reach(url)).text(), name) ?? fail(`${url} holds no sha256 for ${name}`, 1)
+// Fetches the checksums file at `url` and answers the sha256 it gives for the download at `fileUrl`, named `name`.
+export async function fetchSum(url: string, fileUrl: string, name: string): Promise<string> {
+  return sumFor(await (await reach(url)).text(), name, pathUnder(url, fileUrl)) ?? fail(`${url} holds no sha256 for ${name}`, 1)
 }

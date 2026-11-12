@@ -156,7 +156,7 @@ async function fetchChecked(url: string, dir: string, created: boolean, checks: 
     if (file.html && (checks.expectsFile || !HTML_EXTENSIONS.has(extname(file.name).toLowerCase())))
       fail(`${url} answered an HTML page, not a file`, 1)
 
-    const expected = checks.sha256 ?? (checks.sums === undefined ? undefined : await fetchSum(checks.sums, file.name))
+    const expected = checks.sha256 ?? (checks.sums === undefined ? undefined : await fetchSum(checks.sums, url, file.name))
 
     if (expected !== undefined && expected !== file.sha256)
       fail(`sha256 mismatch for ${file.name}: expected ${expected}, got ${file.sha256}; the file was deleted`, 1)
