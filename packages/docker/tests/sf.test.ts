@@ -31,6 +31,8 @@ describe('phpService', () => {
     expect(phpService(['db', 'booki-php', 'php'])).toBe('php')
     expect(phpService(['db', 'dorad_php'])).toBe('dorad_php')
     expect(phpService(['db', 'node'])).toBeUndefined()
+    expect(phpService(['db', 'phpmyadmin'])).toBeUndefined()
+    expect(phpService(['phpmyadmin', 'app-php'])).toBe('app-php')
   })
 })
 
@@ -78,6 +80,17 @@ describe('commandFor', () => {
   test('keeps the arguments given and prompts only for the rest', () => {
     expect(commandFor(entry(make), ['User'])).toEqual(['php', 'bin/console', 'make:entity', { given: 'User' }, { ask: 'fields' }])
     expect(commandFor(entry(make), ['User', 'a', '--force'])).toEqual(['php', 'bin/console', 'make:entity', { given: 'User' }, { given: 'a' }, { given: '--force' }])
+  })
+
+  test('counts only the arguments against the required ones, not the options or their values', () => {
+    const migrate = command('app:x', { target: { is_required: true } })
+
+    migrate.definition.options = { env: { name: 'env', shortcut: '-e', accept_value: true, description: '' }, force: { name: 'force', shortcut: '', accept_value: false, description: '' } }
+
+    expect(commandFor(entry(migrate), ['--env=prod']).at(-1)).toEqual({ ask: 'target' })
+    expect(commandFor(entry(migrate), ['--env', 'prod', '-e', 'dev', '--force']).at(-1)).toEqual({ ask: 'target' })
+    expect(commandFor(entry(migrate), ['--force', 'v2']).at(-1)).toEqual({ given: 'v2' })
+    expect(commandFor(entry(migrate), ['--', '--odd']).at(-1)).toEqual({ given: '--odd' })
   })
 
   test('runs from the child folder with env -C', () => {

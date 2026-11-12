@@ -73,9 +73,11 @@ function optionsOf(command: Command): Option[] {
   return Array.isArray(command.definition.options) ? [] : Object.values(command.definition.options)
 }
 
-/** The php service by name, `php` itself before `booki-php` or `dorad_php`. */
+const NAME_PARTS = /[-_]/
+
+/** The php service by name, `php` itself before `booki-php` or `dorad_php`, never `phpmyadmin`. */
 export function phpService(names: string[]): string | undefined {
-  return names.find(name => name === 'php') ?? names.find(name => name.includes('php'))
+  return names.find(name => name === 'php') ?? names.find(name => name.split(NAME_PARTS).includes('php'))
 }
 
 async function consoleAt(dir: string): Promise<Console> {
@@ -196,9 +198,42 @@ function preview(dir: string, name: string): void {
   console.log(marked(lines.join('\n')))
 }
 
+/** Whether an option word leaves its value to the next word, as Symfony reads `--env prod` or `-e prod`. */
+function takesNext(command: Command, word: string): boolean {
+  const option = word.startsWith('--')
+    ? optionsOf(command).find(each => each.name === word.slice(2))
+    : optionsOf(command).find(each => each.shortcut.split('|').includes(word))
+
+  return option?.accept_value === true
+}
+
+/** How many given words are arguments, the options and their values left out. */
+function argumentCount(command: Command, given: string[]): number {
+  let count = 0
+  let options = true
+  let value = false
+
+  for (const word of given) {
+    if (value) {
+      value = false
+    }
+    else if (!options || !word.startsWith('-') || word === '-') {
+      count++
+    }
+    else if (word === '--') {
+      options = false
+    }
+    else {
+      value = takesNext(command, word)
+    }
+  }
+
+  return count
+}
+
 /** The arguments given, then a prompt for each required one past them. */
 export function commandFor(entry: Entry, given: string[]): Arg[] {
-  const prompts = argumentsOf(entry.command).filter(argument => argument.is_required).slice(given.length)
+  const prompts = argumentsOf(entry.command).filter(argument => argument.is_required).slice(argumentCount(entry.command, given))
 
   return [...entry.app.run, entry.command.name, ...given.map(value => ({ given: value })), ...prompts.map(argument => ({ ask: argument.name }))]
 }
