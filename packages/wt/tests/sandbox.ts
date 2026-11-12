@@ -3,7 +3,7 @@
  * Nothing in a sandbox reaches the real Docker, nginx or the user's checkouts: the tools that must never run log to `forbidden.log`, and a test asserts it stays empty.
  */
 
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -16,7 +16,7 @@ case "$1" in
   compose)
     shift
     key=$(basename "$PWD")
-    while [ "$1" = -f ] || [ "$1" = -p ]; do
+    while [ "$1" = -f ] || [ "$1" = -p ] || [ "$1" = --profile ]; do
       [ "$1" = -p ] && key=$2
       shift 2
     done
@@ -161,6 +161,37 @@ export interface Sandbox {
   remove: () => void
 }
 
+// The programs a sandbox fakes, or takes away to see wt without them: the real ones stay off its PATH.
+const NOT_FROM_SYSTEM = new Set(['docker', 'mkcert', 'devproxy', 'notify-send', 'osascript', ...FORBIDDEN_TOOLS])
+
+let systemBin: string | undefined
+
+// The system's programs (git, cp, ss...) linked into one folder less NOT_FROM_SYSTEM, once per test process, so a host with a real notify-send or mkcert behaves as one without.
+function systemTools(): string {
+  if (systemBin !== undefined)
+    return systemBin
+
+  const dir = mkdtempSync(join(tmpdir(), 'sandbox-system-'))
+
+  process.on('exit', () => rmSync(dir, { recursive: true, force: true }))
+
+  // A name in both, /bin being /usr/bin on most systems, links once; the set, as existsSync reads a dangling link as absent
+  const linked = new Set(NOT_FROM_SYSTEM)
+
+  for (const from of ['/usr/bin', '/bin']) {
+    for (const name of existsSync(from) ? readdirSync(from) : []) {
+      if (!linked.has(name))
+        symlinkSync(join(from, name), join(dir, name))
+
+      linked.add(name)
+    }
+  }
+
+  systemBin = dir
+
+  return dir
+}
+
 function lines(file: string): string[] {
   return existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean) : []
 }
@@ -194,8 +225,8 @@ export function makeSandbox(): Sandbox {
   mkdirSync(join(home, '.config', 'devproxy'), { recursive: true })
   writeFileSync(join(home, '.config', 'devproxy', 'config.ts'), 'export default {}\n')
 
-  // The system tools git, cp and ss come from, the fakes first so they shadow the real ones
-  const path = `${bin}:/usr/bin:/bin:${dirname(process.execPath)}`
+  // The fakes first, then the system's tools less the ones faked
+  const path = `${bin}:${systemTools()}:${dirname(process.execPath)}`
   const env = { PATH: path, HOME: home, FAKE_DIR: state, XDG_CACHE_HOME: join(home, '.cache'), XDG_CONFIG_HOME: join(home, '.config') }
 
   return {

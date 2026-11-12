@@ -164,7 +164,7 @@ export async function initProject(dir: string, options: { print?: boolean, name?
   mkdirSync(manifests, { recursive: true })
 
   if (existsSync(file))
-    throw new WtError(`${file} already exists, compare with \`wt init --print\``)
+    throw new WtError(`${file} already exists`, 'compare it with `wt init --print`')
 
   writeFileSync(file, content)
   writeTsconfig(manifests)

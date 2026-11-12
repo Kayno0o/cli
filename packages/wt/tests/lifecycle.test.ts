@@ -118,7 +118,9 @@ describe('addTask', () => {
   test('warns about manifest settings naming a service compose does not know', async () => {
     const { sandbox, wt } = env
 
-    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, skip: ['mailhog', 'ghost'], run: { service: 'php', dir: '.', provision: [] } })}\n`)
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, skip: ['mailhog', 'ghost', 'worker'], run: { service: 'php', dir: '.', provision: [] } })}\n`)
+    // worker sits behind a profile, so only `--profile '*'` lists it
+    sandbox.seed('services', 'api-php\nmailhog\nworker\n')
 
     const run = await wt('add', 'planning')
 
@@ -126,6 +128,7 @@ describe('addTask', () => {
     expect(run.err).toContain('times: skip names ghost, which is not a service of times')
     expect(run.err).toContain('times: run.service names php, which is not a service of times')
     expect(run.err).not.toContain('names mailhog')
+    expect(run.err).not.toContain('names worker')
     expect(run.err).not.toContain('names api-php')
   })
 
@@ -156,11 +159,11 @@ describe('addTask', () => {
     const run = await wt('add', 'planning', '--from', 'main')
 
     expect(run.code).toBe(1)
-    expect(run.err).toContain('wt/planning already exists, so it is checked out as it is: drop --from, or name a new branch')
+    expect(run.err).toContain('wt/planning already exists, so it is checked out as it is\n  hint: drop --from, or name a new branch')
     expect(existsSync(dirOf('planning'))).toBe(false)
   })
 
-  test.skipIf(Bun.which('mkcert', { PATH: '/usr/bin:/bin' }) !== null)('refuses before making anything when a program the project needs is missing, and doctor says so', async () => {
+  test('refuses before making anything when a program the project needs is missing, and doctor says so', async () => {
     const { sandbox, wt, dirOf } = env
 
     rmSync(join(sandbox.home, '..', 'bin', 'mkcert'))
@@ -176,7 +179,7 @@ describe('addTask', () => {
 
     expect(doctor.code).toBe(1)
     expect(doctor.out).toMatch(/missing\s+mkcert\s+https:\/\/github\.com\/FiloSottile\/mkcert.*\(times\)/)
-    expect(doctor.out).toMatch(/ok\s+git\s+\/usr\/bin\/git/)
+    expect(doctor.out).toMatch(/ok\s+git\s+\S+\/git\s/)
   })
 
   test('reads main and the worktree through compose with the worktree\'s own project name, and the tidy env after', async () => {
@@ -420,6 +423,49 @@ describe('wt prune', () => {
     expect(existsSync(override('times--other'))).toBe(true)
     expect((await wt('prune')).out).toBe('wt: nothing left behind\n')
     expect(sandbox.forbidden()).toEqual([])
+  }, 30_000)
+
+  test('asks on a terminal, and removes nothing when told no', async () => {
+    const { sandbox, root, override } = env
+
+    mkdirSync(dirname(override('times--ghost')), { recursive: true })
+    writeFileSync(override('times--ghost'), '')
+
+    const decoder = new TextDecoder()
+    let screen = ''
+    const proc = Bun.spawn([process.execPath, '--no-env-file', CLI, 'prune'], { cwd: root, env: { ...sandbox.env, ...IDENTITY }, terminal: { cols: 120, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+
+    try {
+      for (let tries = 0; !screen.includes('Remove it all?'); tries++) {
+        if (tries === 250)
+          throw new Error(`no prompt: ${screen}`)
+
+        await Bun.sleep(20)
+      }
+
+      proc.terminal?.write('n')
+
+      expect(await proc.exited).toBe(1)
+      expect(screen).toContain('times/ghost: compose override')
+      expect(existsSync(override('times--ghost'))).toBe(true)
+    }
+    finally {
+      proc.kill()
+      proc.terminal?.close()
+    }
+  }, 30_000)
+
+  test('looks at the current project only, and at every one with -a', async () => {
+    const { sandbox, wt, override } = env
+
+    mkdirSync(join(sandbox.home, 'Elsewhere', 'other', '.git'), { recursive: true })
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/other' })}\n`)
+    mkdirSync(dirname(override('times--ghost')), { recursive: true })
+    writeFileSync(override('times--ghost'), '')
+    writeFileSync(override('other--ghost'), '')
+
+    expect((await wt('prune')).out).toBe('times/ghost: compose override\n')
+    expect((await wt('prune', '-a')).out).toBe('other/ghost: compose override\ntimes/ghost: compose override\n')
   }, 30_000)
 })
 
@@ -717,7 +763,7 @@ describe('cloneData', () => {
 
   test('warns about an entry that is neither a path nor a volume, and refuses a volume that is a bind', async () => {
     expect((await clone(['nothing'])).warnings).toEqual(['clone: nothing is neither a path in main nor a volume of its stack'])
-    expect((await clone(['bound'])).error).toBe('clone: volume bound is a bind to /srv/data, list that path instead')
+    expect((await clone(['bound'])).error).toBe('clone: volume bound is a bind to /srv/data\nlist that path in clone instead')
   })
 })
 
@@ -989,7 +1035,7 @@ describe('a config runner naming no executable', () => {
     const run = await wt('up', 'planning')
 
     expect(run.code).toBe(1)
-    expect(run.err).toBe(`error: wt up: \`no-such-runner\` is not on PATH: fix runner.up in ${join(env.sandbox.home, '.config', 'wt', 'config.ts')}\n`)
+    expect(run.err).toBe(`error: wt up: \`no-such-runner\` is not on PATH\n  hint: fix runner.up in ${join(env.sandbox.home, '.config', 'wt', 'config.ts')}\n`)
   }, 30_000)
 })
 
@@ -1030,7 +1076,7 @@ describe('wt run', () => {
     const refused = await wt('rm', 'planning', '--force')
 
     expect(refused.code).toBe(1)
-    expect(refused.err).toContain('planning is in use by wt run (`phpunit`), remove it once that ends')
+    expect(refused.err).toContain('planning is in use by wt run (`phpunit`)\n  hint: remove it once that ends')
     expect(existsSync(dirOf('planning'))).toBe(true)
     expect((await running).code).toBe(0)
     expect((await wt('rm', 'planning', '--force')).code).toBe(0)
@@ -1345,11 +1391,9 @@ describe('up and down with no runner', () => {
     await settled(() => !existsSync(lock) && sandbox.calls().some(call => call.startsWith('osascript')))
     expect(sandbox.calls().find(call => call.startsWith('osascript'))).toContain('wt: times/planning is up')
 
-    if (Bun.which('notify-send', { PATH: '/usr/bin:/bin' }) === null && Bun.which('osascript', { PATH: '/usr/bin:/bin' }) === null) {
-      rmSync(join(bin, 'osascript'))
-      expect((await wt('up', 'planning', '--bg')).out).toContain('nothing here notifies its end, `wt ls` shows how it went')
-      await settled(() => !existsSync(lock))
-    }
+    rmSync(join(bin, 'osascript'))
+    expect((await wt('up', 'planning', '--bg')).out).toContain('nothing here notifies its end, `wt ls` shows how it went')
+    await settled(() => !existsSync(lock))
 
     // The setup's log left the tree dirty: refused before any job starts, rather than failing out of sight
     const refused = await wt('rm', 'planning', '--bg')

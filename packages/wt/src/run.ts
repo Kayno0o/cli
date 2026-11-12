@@ -269,7 +269,7 @@ async function provision(worktree: Worktree, run: RunConfig, plan: RunPlan, data
 
     for (const step of run.provision) {
       if (await runInherit(['docker', ...plan.runner(['sh', '-c', step])]) !== 0)
-        throw new WtError(`provisioning failed on \`${step}\`, run it again with \`wt run ${worktree.task} -- sh -c '${step}'\``)
+        throw new WtError(`provisioning failed on \`${step}\``, `run it again with \`wt run ${worktree.task} -- sh -c '${step}'\``)
     }
 
     mkdirSync(markers, { recursive: true })

@@ -97,8 +97,9 @@ export function worktreeHost(host: string, task: string): string {
   return host.startsWith('*.') ? `*.${task}.${host.slice(2)}` : `${task}.${host}`
 }
 
-const PROJECT_KEYS = new Set(['root', 'repos', 'copy', 'clone', 'link', 'skip', 'routeHosts', 'env', 'certs', 'setup', 'run', 'routes'])
-const RUN_KEYS = new Set(['service', 'dir', 'provision', 'dns', 'env'])
+// Every key of the manifest types, the compiler holding these lists to them
+const PROJECT_KEYS = new Set(Object.keys({ root: 0, repos: 0, copy: 0, clone: 0, link: 0, skip: 0, routeHosts: 0, env: 0, certs: 0, setup: 0, run: 0, routes: 0 } satisfies Record<keyof ProjectConfig, 0>))
+const RUN_KEYS = new Set(Object.keys({ service: 0, dir: 0, provision: 0, dns: 0, env: 0 } satisfies Record<keyof RunConfig, 0>))
 
 // A misspelt key is ignored as if it were absent, so it is named rather than silently dropped.
 function warnUnknownKeys(name: string, config: ProjectConfig): void {
@@ -233,7 +234,6 @@ export function listTasks(project: Project): string[] {
   return existsSync(dir) ? readdirSync(dir).filter(task => TASK_PATTERN.test(task)).sort() : []
 }
 
-// The project and task the working directory sits in, `main` when it is the project's own checkout.
 /** The directory wt runs in; once deleted from under the shell (after `wt rm --bg`), the path the shell still holds, so locate reads which worktree it was. */
 export function currentDir(): string {
   try {
@@ -243,7 +243,7 @@ export function currentDir(): string {
     const pwd = process.env.PWD ?? ''
 
     if (pwd === '')
-      throw new WtError('the current directory is gone: cd elsewhere')
+      throw new WtError('the current directory is gone', 'cd elsewhere')
 
     return pwd
   }
@@ -259,6 +259,7 @@ function resolved(path: string): string {
   }
 }
 
+// The project and task the working directory sits in, `main` when it is the project's own checkout.
 export async function locate(cwd: string, projectName?: string): Promise<{ project: Project, task: string }> {
   const here = resolved(cwd)
   const projects = projectName !== undefined ? [await findProject(projectName)] : await loadProjects()

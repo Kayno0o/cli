@@ -51,23 +51,27 @@ describe('shellWrapper', () => {
 
   afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
-  test.each(['fish', 'bash', 'zsh'])('wraps %s with its completion inline, so reading it runs nothing, and cd goes where wt path says', (shell) => {
+  test.each(['fish', 'bash', 'zsh'])('wraps %s with its completion inline', (shell) => {
     const wrapper = shellWrapper(shell)
-    const file = join(dir, `wt.${shell}`)
 
     expect(wrapper).toContain('__kaynooo_cli_complete')
     expect(wrapper).not.toContain('--completions fish |')
-    writeFileSync(file, wrapper)
-
-    if (Bun.which(shell) === null)
-      return
-
-    const script = shell === 'fish' ? `source ${file}; wt cd planning; and pwd` : `source ${file}; wt cd planning && pwd`
-    const run = Bun.spawnSync([shell, '-c', script], { env: { PATH: `${join(dir, 'bin')}:/usr/bin:/bin`, HOME: dir } })
-
-    expect(run.stdout.toString()).toBe(`${join(dir, 'there')}\n`)
-    expect(existsSync(join(dir, 'calls'))).toBe(false)
   })
+
+  // Run only where the shell is installed, reported as skipped elsewhere
+  for (const shell of ['fish', 'bash', 'zsh']) {
+    test.skipIf(Bun.which(shell) === null)(`${shell} reads its wrapper without running anything, and cd goes where wt path says`, () => {
+      const file = join(dir, `wt.${shell}`)
+
+      writeFileSync(file, shellWrapper(shell))
+
+      const script = shell === 'fish' ? `source ${file}; wt cd planning; and pwd` : `source ${file}; wt cd planning && pwd`
+      const run = Bun.spawnSync([shell, '-c', script], { env: { PATH: `${join(dir, 'bin')}:/usr/bin:/bin`, HOME: dir } })
+
+      expect(run.stdout.toString()).toBe(`${join(dir, 'there')}\n`)
+      expect(existsSync(join(dir, 'calls'))).toBe(false)
+    })
+  }
 
   test('names the shells it has a wrapper for when asked for another', () => {
     expect(() => shellWrapper('nu')).toThrow('no wrapper for nu, only fish, bash, zsh')

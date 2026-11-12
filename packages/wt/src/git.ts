@@ -56,7 +56,7 @@ export async function addWorktrees(worktree: Worktree, branch: string, from?: st
   if (from !== undefined) {
     for (const repo of project.repos.length ? project.repos : ['.']) {
       if (await branchExists(join(project.root, repo), branch))
-        throw new WtError(`${branch} already exists${repo === '.' ? '' : ` in ${repo}`}, so it is checked out as it is: drop --from, or name a new branch`)
+        throw new WtError(`${branch} already exists${repo === '.' ? '' : ` in ${repo}`}, so it is checked out as it is`, 'drop --from, or name a new branch')
     }
   }
 

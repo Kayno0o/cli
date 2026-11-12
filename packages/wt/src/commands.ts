@@ -102,7 +102,7 @@ function refuseWhileRun(worktree: Worktree): void {
   const runs = holders(runsDir(worktree))
 
   if (runs.length)
-    throw new WtError(`${worktree.task} is in use by wt run (${runs.map(command => `\`${command}\``).join(', ')}), remove it once that ends`)
+    throw new WtError(`${worktree.task} is in use by wt run (${runs.map(command => `\`${command}\``).join(', ')})`, 'remove it once that ends')
 }
 
 /** Refuses a removal that would lose uncommitted changes or commits on no branch, unless forced. */

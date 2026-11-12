@@ -6,7 +6,7 @@ import type { Worktree } from './project'
 import process from 'node:process'
 import { badUsage, fail, isInteractive, jsonOption, parse, printError, runCli, warn } from '@kaynooo/cli-kit'
 import { wtJobs } from './config'
-import { failKnown, failureText, knownMessage } from './errors'
+import { failKnown, failureText, knownHint, knownMessage } from './errors'
 import { canNotify, notifyRefused, slugOf } from './jobs'
 import { assertWorktreeExists, currentDir, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
 
@@ -103,7 +103,7 @@ async function inTurn(command: string, worktrees: Worktree[], act: (worktree: Wo
       if (message === undefined)
         throw error
 
-      printError(`${APP} ${command}`, message)
+      printError(`${APP} ${command}`, message, knownHint(error))
       code = 1
     }
   }

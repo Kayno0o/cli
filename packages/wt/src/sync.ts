@@ -11,7 +11,7 @@ export async function syncWorktree(worktree: Worktree): Promise<void> {
 
   const [warnings, main] = await Promise.all([copyFromMain(worktree), composeConfig(worktree.project.root)])
 
-  warnings.push(...unknownServices(worktree.project, main))
+  warnings.push(...await unknownServices(worktree.project, main))
   linkFromMain(worktree)
   writeEnvFiles(worktree)
   warnings.push(...await cloneData(worktree, main))

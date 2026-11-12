@@ -200,18 +200,24 @@ export function overrideWarnings(worktree: Worktree, config: ComposeConfig): str
   return warnings
 }
 
-/** The manifest's service names compose does not know, each a setting that would quietly do nothing (or fail `wt run`). */
-export function unknownServices(project: Project, config: ComposeConfig): string[] {
+/** The manifest's service names compose does not know, each a setting that would quietly do nothing (or fail `wt run`), `config` being main's. */
+export async function unknownServices(project: Project, config: ComposeConfig): Promise<string[]> {
   const named: [setting: string, names: string[]][] = [
     ['skip', project.skip ?? []],
     ['routeHosts', project.routeHosts ?? []],
     ['routes', project.routes.filter(route => route.to !== 'client').map(route => SERVICE.exec(route.to)![0])],
     ['run.service', project.run ? [project.run.service] : []],
   ]
+  const missing = named.flatMap(([setting, names]) => [...new Set(names)].filter(name => config.services[name] === undefined).map(name => [setting, name] as const))
 
-  return named.flatMap(([setting, names]) => [...new Set(names)]
-    .filter(name => config.services[name] === undefined)
-    .map(name => `${project.name}: ${setting} names ${name}, which is not a service of ${config.name}`))
+  if (!missing.length)
+    return []
+
+  // The config leaves out the services of a profile not enabled, so a name is only unknown once every profile is
+  const profiled = await compose(['--profile', '*', 'config', '--services'], { cwd: project.root, env: composeEnv() })
+  const every = new Set(profiled.code === 0 ? profiled.stdout.split('\n').filter(Boolean) : [])
+
+  return missing.filter(([, name]) => !every.has(name)).map(([setting, name]) => `${project.name}: ${setting} names ${name}, which is not a service of ${config.name}`)
 }
 
 /** The compose projects with containers, running ones only unless `all`. */

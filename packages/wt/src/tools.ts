@@ -12,13 +12,11 @@ interface Tool {
   for: string
   /** How to get it. */
   get: string
-  /** Whether a project needs it; one no project needs is optional. */
-  needed?: (project: Project) => boolean
+  /** Whether wt needs it: for every project, for the ones it picks, or never, only for comfort. */
+  needs: 'always' | 'optional' | ((project: Project) => boolean)
   /** Where it is, or undefined when it is missing. */
   find?: () => Promise<string | undefined> | string | undefined
 }
-
-const always = () => true
 
 // devproxy is installed with wt, so only a broken install misses it
 function findDevproxy(): string | undefined {
@@ -38,13 +36,17 @@ async function findCompose(): Promise<string | undefined> {
 }
 
 const TOOLS: Tool[] = [
-  { name: 'git', for: 'checks the worktrees out', get: 'the git package of the system', needed: always },
-  { name: 'docker', for: 'reads the compose project, clones its volumes and runs the stacks', get: 'https://docs.docker.com/engine/install/', needed: always },
-  { name: 'docker compose', for: 'runs the stacks', get: 'the docker compose plugin, https://docs.docker.com/compose/install/linux/', needed: always, find: findCompose },
-  { name: 'mkcert', for: 'issues the certificates of a project with `certs`', get: 'https://github.com/FiloSottile/mkcert, then `mkcert -install`', needed: project => project.certs !== undefined },
-  { name: 'devproxy', for: 'routes the subdomains', get: 'installed with wt, else `bun add -g @kaynooo/devproxy`', find: findDevproxy },
-  { name: 'notify-send', for: 'tells a --bg job is over', get: 'the libnotify package of the system' },
+  { name: 'git', for: 'checks the worktrees out', get: 'the git package of the system', needs: 'always' },
+  { name: 'docker', for: 'reads the compose project, clones its volumes and runs the stacks', get: 'https://docs.docker.com/engine/install/', needs: 'always' },
+  { name: 'docker compose', for: 'runs the stacks', get: 'the docker compose plugin, https://docs.docker.com/compose/install/linux/', needs: 'always', find: findCompose },
+  { name: 'mkcert', for: 'issues the certificates of a project with `certs`', get: 'https://github.com/FiloSottile/mkcert, then `mkcert -install`', needs: project => project.certs !== undefined },
+  { name: 'devproxy', for: 'routes the subdomains', get: 'installed with wt, else `bun add -g @kaynooo/devproxy`', needs: 'optional', find: findDevproxy },
+  { name: 'notify-send', for: 'tells a --bg job is over', get: 'the libnotify package of the system', needs: 'optional' },
 ]
+
+function neededBy(tool: Tool, project: Project): boolean {
+  return typeof tool.needs === 'function' ? tool.needs(project) : tool.needs === 'always'
+}
 
 async function locateTool(tool: Tool): Promise<string | undefined> {
   return tool.find ? tool.find() : Bun.which(tool.name) ?? undefined
@@ -52,12 +54,12 @@ async function locateTool(tool: Tool): Promise<string | undefined> {
 
 /** Refuses before anything is made when a program the project needs is missing, naming each with how to get it. */
 export async function assertTools(project: Project): Promise<void> {
-  const needed = TOOLS.filter(tool => tool.needed?.(project) === true)
+  const needed = TOOLS.filter(tool => neededBy(tool, project))
   const found = await Promise.all(needed.map(locateTool))
   const missing = needed.filter((_, index) => found[index] === undefined)
 
   if (missing.length)
-    throw new WtError(`${missing.map(tool => `${tool.name} is not on PATH, ${tool.get}`).join('\n')}\nwt needs it for ${project.name}: \`wt doctor\` lists every program`)
+    throw new WtError(`${missing.map(tool => `${tool.name} is not on PATH, ${tool.get}`).join('\n')}\nwt needs it for ${project.name}`, '`wt doctor` lists every program')
 }
 
 /** Prints each program wt runs, where it is or how to get it; 1 when one the projects need is missing. */
@@ -67,17 +69,20 @@ export async function doctor(projects: Project[]): Promise<number> {
 
   const rows = TOOLS.map((tool, index) => {
     const at = found[index]
-    const neededBy = tool.needed === undefined ? [] : projects.filter(tool.needed).map(project => project.name)
-    const required = tool.needed === always || neededBy.length > 0
+    const by = projects.filter(project => neededBy(tool, project)).map(project => project.name)
+    const required = tool.needs === 'always' || by.length > 0
+    let use = tool.for
 
-    if (at === undefined && required)
+    if (typeof tool.needs === 'function')
+      use += by.length ? ` (${by.join(', ')})` : ', no project has them'
+
+    if (at !== undefined)
+      return ['ok', tool.name, at, use]
+
+    if (required)
       code = 1
 
-    const use = tool.needed === undefined || tool.needed === always ? tool.for : `${tool.for}${neededBy.length ? ` (${neededBy.join(', ')})` : ', no project has them'}`
-
-    const state = required ? 'missing' : 'absent'
-
-    return [at === undefined ? state : 'ok', tool.name, at ?? tool.get, use]
+    return [required ? 'missing' : 'absent', tool.name, tool.get, use]
   })
 
   console.log(table([['', 'program', 'where', 'for'], ...rows], { header: true }))

@@ -70,7 +70,7 @@ async function dockerLines(argv: string[]): Promise<string[]> {
 }
 
 /** The worktrees of a project that state still names while no folder holds them, each with what is left of it. */
-export async function orphansOf(project: Project, jobsDir: string): Promise<Orphan[]> {
+async function orphansOf(project: Project, jobsDir: string): Promise<Orphan[]> {
   const live = new Set(listTasks(project))
   const stack = `${stackName(project)}--`
   const left = new Map<string, string[]>()
@@ -126,7 +126,7 @@ function counted(what: string[]): string[] {
 }
 
 /** The worktree registrations git keeps for folders gone, which `git worktree prune` drops, over the root and its repos. */
-export async function staleRegistrations(project: Project): Promise<number> {
+async function staleRegistrations(project: Project): Promise<number> {
   const runs = await Promise.all(['.', ...project.repos].map(async repo => git(join(project.root, repo), 'worktree', 'prune', '--dry-run', '--verbose')))
 
   return runs.filter(run => run.ok).flatMap(run => run.out.split('\n').filter(Boolean)).length

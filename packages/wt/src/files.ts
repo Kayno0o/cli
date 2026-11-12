@@ -270,7 +270,7 @@ async function cloneInLine(worktree: Worktree, main: ComposeConfig): Promise<str
     }
 
     if (volume.driver_opts?.device !== undefined && volume.driver_opts.device !== '')
-      throw new WtError(`clone: volume ${entry} is a bind to ${volume.driver_opts.device}, list that path instead`)
+      throw new WtError(`clone: volume ${entry} is a bind to ${volume.driver_opts.device}`, 'list that path in clone instead')
 
     const sourceVolume = volume.name ?? `${main.name}_${entry}`
     const targetVolume = `${worktree.id}_${entry}`

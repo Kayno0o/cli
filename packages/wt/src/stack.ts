@@ -25,7 +25,7 @@ async function spawnRunner(role: Role, argv: string[], cwd: string): Promise<num
   }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT')
-      throw new WtError(`\`${argv[0]}\` is not on PATH: fix runner.${role} in ${configPath()}`)
+      throw new WtError(`\`${argv[0]}\` is not on PATH`, `fix runner.${role} in ${configPath()}`)
 
     throw error
   }
