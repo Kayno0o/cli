@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -62,6 +62,29 @@ describe('conflictHunks', () => {
 })
 
 describe('gm', () => {
+  test('from a subfolder lists every conflict of the repository, relative to it, and --continue checks them all', () => {
+    mkdirSync(join(dir, 'sub'))
+    commit('g', 'base\n')
+    commit('sub/f', 'base\n')
+    git('checkout', '-q', '-b', 'feat')
+    commit('g', 'feat\n')
+    commit('sub/f', 'feat\n')
+    git('checkout', '-q', '-')
+    commit('g', 'main\n')
+    commit('sub/f', 'main\n')
+
+    const fromSub = (...args: string[]) => Bun.spawnSync([process.execPath, GM, ...args], { cwd: join(dir, 'sub'), env: ENV, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
+    const merged = fromSub('feat').stdout.toString()
+
+    expect(merged).toContain('left 2 conflicted files')
+    expect(merged).toContain('../g:1-6')
+    expect(merged).toContain('\nf:1-6')
+
+    writeFileSync(join(dir, 'sub', 'f'), 'resolved\n')
+
+    expect(fromSub('--continue').stdout.toString()).toContain('../g')
+  })
+
   test('fast-forwards and says the commits and files that came in', () => {
     setup(false)
     const result = gm('feature')

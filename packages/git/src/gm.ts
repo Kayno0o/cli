@@ -3,6 +3,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Hunk } from './conflicts'
 import { readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import process from 'node:process'
 import { badUsage, fail, formatAge, isInteractive, jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
@@ -57,8 +58,10 @@ async function merging(): Promise<boolean> {
   return succeeds(['rev-parse', '-q', '--verify', 'MERGE_HEAD'])
 }
 
+// Every conflicted file of the repository, wherever gm runs from, its path relative to the current folder.
 async function conflicted(): Promise<Conflict[]> {
-  const paths = (await ran(['diff', '--name-only', '--diff-filter=U', '--relative', '-z'])).split('\0').filter(Boolean)
+  const top = (await ran(['rev-parse', '--show-toplevel'])).trim()
+  const paths = (await ran(['diff', '--name-only', '--diff-filter=U', '-z'])).split('\0').filter(Boolean).map(path => relative(process.cwd(), join(top, path)))
 
   return paths.map((path) => {
     try {
