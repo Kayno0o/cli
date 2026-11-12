@@ -19,6 +19,7 @@ const CR = /\r$/
 // What may follow a JSON value on its line, so a property added after it goes on the next line and leaves a comment there in place.
 const LINE_TAIL = /^[ \t]*(?:\/\/.*|\/\*.*\*\/[ \t]*)?\r?$/
 const SPACED_COLON = /"[ \t]*:[ \t]/
+const KEY_COLON = /"[ \t]*:/
 const SPACED_COMMA = /,[ \t]/
 // jsonc-parser's SyntaxKind, a const enum its types declare and modules cannot import.
 const LINE_COMMENT = 12
@@ -126,7 +127,8 @@ function jsonInsert(text: string, tree: JsonNode, path: Path, value: unknown): E
 
   const added = path.slice(depth + 1).reduceRight<unknown>((inner, key) => ({ [key]: inner }), value)
   const own = text.slice(parent.offset, parent.offset + parent.length)
-  const colon = SPACED_COLON.test(text) ? ': ' : ':'
+  // The file's own spacing after a key's colon, else a space in a multi-line object and none in a one-line one.
+  const colon = SPACED_COLON.test(text) || (!KEY_COLON.test(text) && own.includes('\n')) ? ': ' : ':'
   const last = parent.children?.at(-1)
 
   if (!own.includes('\n')) {
@@ -361,7 +363,8 @@ function edit(name: string, text: string, key: string, value: string | undefined
   else
     expected.set(flat, String(written))
 
-  const read = parseStructured(name, after)
+  // Removing a YAML file's last key leaves nothing but comments, which reads as no value rather than an empty map.
+  const read = expected.size === 0 && format === 'YAML' && parseDocument(after).contents === null ? new Map<string, string>() : parseStructured(name, after)
 
   if (read.size !== expected.size || [...expected].some(([each, was]) => read.get(each) !== was))
     fail(`${name}: the edit would change more than ${key}, so nothing was written`, 1, 'edit it by hand')
