@@ -42,7 +42,7 @@
     },
     "packages/check": {
       "name": "@kaynooo/cli-check",
-      "version": "0.21.0",
+      "version": "0.21.1",
       "bin": {
         "check": "./dist/cli.js",
         "errs": "./dist/errs-cli.js",
