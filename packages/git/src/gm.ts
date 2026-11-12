@@ -33,12 +33,13 @@ const EDITOR_OFF = { ...process.env, GIT_EDITOR: 'true', GIT_MERGE_AUTOEDIT: 'no
 interface Conflict {
   path: string
   hunks: Hunk[]
-  // Git wrote its markers into the file, both sides being there and text, so a file left with none is resolved.
+  // Git wrote its markers into the file, both sides being there and text, and the file is no longer either side as it stood, so a file left with none is resolved.
   isMarked: boolean
 }
 
 // git's own test for a binary file: a NUL byte in its first 8000.
 const BINARY_PROBE = 8000
+const SYMLINK_MODE = '120000'
 
 async function ran(args: string[], env?: Record<string, string | undefined>): Promise<string> {
   const { code, stdout, stderr } = await git(args, env)
@@ -63,37 +64,55 @@ async function merging(): Promise<boolean> {
   return succeeds(['rev-parse', '-q', '--verify', 'MERGE_HEAD'])
 }
 
+interface Stage { mode: string, blob: string }
+
 // The index stages of each unmerged path, by its path from the top: 2 for ours and 3 for theirs.
-async function unmergedStages(): Promise<Map<string, Set<string>>> {
-  const stages = new Map<string, Set<string>>()
+async function unmergedStages(): Promise<Map<string, Map<string, Stage>>> {
+  const stages = new Map<string, Map<string, Stage>>()
 
   for (const entry of (await ran(['ls-files', '-u', '-z', '--full-name', '--', ':/'])).split('\0').filter(Boolean)) {
     const tab = entry.indexOf('\t')
     const path = entry.slice(tab + 1)
+    const [mode = '', blob = '', stage = ''] = entry.slice(0, tab).split(' ')
 
-    stages.set(path, (stages.get(path) ?? new Set()).add(entry.slice(0, tab).split(' ')[2] ?? ''))
+    stages.set(path, (stages.get(path) ?? new Map<string, Stage>()).set(stage, { mode, blob }))
   }
 
   return stages
+}
+
+// Whether git could have marked a conflict: both sides are text files, and the file is neither of them as it stood, which is what git leaves where it declines to merge (a `merge=binary` or `-merge` attribute, a file over its size limit).
+async function isMarkable(path: string, bytes: Buffer, stages: Map<string, Stage>): Promise<boolean> {
+  const ours = stages.get('2')
+  const theirs = stages.get('3')
+
+  if (bytes.subarray(0, BINARY_PROBE).includes(0) || ours === undefined || theirs === undefined || ours.mode === SYMLINK_MODE || theirs.mode === SYMLINK_MODE)
+    return false
+
+  const blob = (await ran(['hash-object', '--', path])).trim()
+
+  return blob !== ours.blob && blob !== theirs.blob
 }
 
 // Every conflicted file of the repository, wherever gm runs from, its path relative to the current folder.
 async function conflicted(): Promise<Conflict[]> {
   const top = (await ran(['rev-parse', '--show-toplevel'])).trim()
 
-  return [...await unmergedStages()].map(([fromTop, stages]) => {
+  return Promise.all([...await unmergedStages()].map(async ([fromTop, stages]) => {
     const path = relative(process.cwd(), join(top, fromTop))
+    let bytes: Buffer
 
     try {
-      const bytes = readFileSync(path)
-      const isText = !bytes.subarray(0, BINARY_PROBE).includes(0)
-
-      return { path, hunks: isText ? conflictHunks(bytes.toString('utf8')) : [], isMarked: isText && stages.has('2') && stages.has('3') }
+      bytes = readFileSync(path)
     }
     catch {
       return { path, hunks: [], isMarked: false }
     }
-  })
+
+    const isText = !bytes.subarray(0, BINARY_PROBE).includes(0)
+
+    return { path, hunks: isText ? conflictHunks(bytes.toString('utf8')) : [], isMarked: await isMarkable(path, bytes, stages) }
+  }))
 }
 
 function conflictLines(conflicts: Conflict[]): string[] {

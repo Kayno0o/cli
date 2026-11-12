@@ -68,10 +68,12 @@ const PASSWORD_NAME = new RegExp(`${STRONG_NAME}|pass|pwd`, 'i')
 const SETTING_SUFFIX = /[_.-](?:TTL|FILE|PATH|DIR|NAME|URL|TIMEOUT|EXPIRY|EXPIRES|LIFETIME|LENGTH|ENABLED|ALGORITHM|HEADER|PREFIX|COUNT|MAX|MIN)$/i
 
 const NUMBER = /^\d+$/
+// Names of a count rather than of the thing counted: `max_tokens`, `num_sessions`, `tokens`.
+const COUNT_NAME = /(?:^|[_.-])(?:max|min|num)[_.-]|tokens$/i
 
-// A value under a setting's name, or a count under a weak one (`max_tokens=4096`), is no secret.
+// A value under a setting's name, or a number under a count's (`max_tokens=4096`), is no secret.
 function isSetting(value: string, name: string): boolean {
-  return SETTING_SUFFIX.test(name) || (!PASSWORD_NAME.test(name) && NUMBER.test(value))
+  return SETTING_SUFFIX.test(name) || (COUNT_NAME.test(name) && NUMBER.test(value))
 }
 
 // The skip of a key the name alone does not settle: a private key is masked by its own markers.

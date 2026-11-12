@@ -55,7 +55,7 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 
 `gm <branch>` merges the branch into the current one with `git merge --no-edit` and prints what came in: fast-forward or merge commit, the commits and the files changed. Staged changes are refused, and so are unstaged ones in files the merge changes; other unstaged edits stay as they are, through a conflict and gm --abort too.
 
-- On a conflict every conflicted file is listed with its conflict regions (the markers and two lines around them, line numbers included) and the exit is 1; `gm --continue` commits once the markers are gone, refusing while one remains, and `gm --abort` gives the merge up.
+- On a conflict every conflicted file is listed with its conflict regions (the markers and two lines around them, line numbers included) and the exit is 1; `gm --continue` stages the conflicted files and commits once the markers are gone, refusing while one remains or while a file git could not mark (binary, deleted on one side, `merge=binary`) is still not added or removed, and `gm --abort` gives the merge up.
 - `gm --dry-run <branch>` says whether the merge would conflict, and in which files, with `git merge-tree` and nothing touched.
 - `--squash` stages the branch's changes without committing them or recording a merge, to commit with `gc`; a conflict then leaves the files to resolve and `git reset --merge` gives up.
 - With no branch, a terminal gets a picker of the other branches (ahead and behind the current one, a preview of the commits, files and verdict; enter merges, ctrl-s squashes); without a terminal the branches are listed with their verdict, `--json` giving `[{name, ahead, behind, outcome, conflicts}]`.

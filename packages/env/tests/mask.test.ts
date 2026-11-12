@@ -162,8 +162,11 @@ describe('maskLine keyword values', () => {
     expect(maskLine('log: password=hunter22 user=bob')).toBe('log: password=hu***(8) user=bob')
   })
 
-  test('leaves settings and counts under a secret name alone', () => {
-    for (const line of ['TOKEN_TTL=3600', 'AUTH_URL=https://auth.example.com/login', 'PASSWORD_FILE=/run/secrets/db', 'max_tokens=4096', 'key=value', 'SESSION_DRIVER=redis'])
+  test('masks a number under a secret name, but leaves settings and counts alone', () => {
+    for (const [name, value] of [['token', '48291037'], ['access_token', '4829103755'], ['auth', '123456789'], ['SESSIONID', '1234567890']])
+      expect(maskLine(`${name}=${value}`)).not.toContain(value!)
+
+    for (const line of ['TOKEN_TTL=3600', 'AUTH_URL=https://auth.example.com/login', 'PASSWORD_FILE=/run/secrets/db', 'max_tokens=4096', 'MAX_TOKENS=4096', 'num_sessions=12', 'tokens: 1234', 'key=value', 'SESSION_DRIVER=redis'])
       expect(maskLine(line)).toBe(line)
   })
 

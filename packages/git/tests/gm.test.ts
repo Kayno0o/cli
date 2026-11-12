@@ -212,6 +212,24 @@ describe('gm', () => {
     expect(readFileSync(join(dir, 'blob.bin'), 'utf8')).toBe('\0main')
   })
 
+  test('--continue refuses a text conflict git declined to mark, left as one side, until it is added', () => {
+    commit('base.txt', 'base\n')
+    commit('.gitattributes', 'lock.txt merge=binary\n')
+    commit('lock.txt', 'base\n')
+    git('checkout', '-q', '-b', 'feature')
+    commit('lock.txt', 'feature\n')
+    git('checkout', '-q', 'main')
+    commit('lock.txt', 'main\n')
+
+    expect(gm('feature').code).toBe(1)
+    expect(readFileSync(join(dir, 'lock.txt'), 'utf8')).toBe('main\n')
+    expect(gm('--continue').out).toContain('no side is picked yet in lock.txt')
+
+    git('add', 'lock.txt')
+
+    expect(gm('--continue').code).toBe(0)
+  })
+
   test('--continue commits the resolved conflicts alone, other edits and new files staying out', () => {
     setup(true, true)
     commit('other.txt', 'other\n')

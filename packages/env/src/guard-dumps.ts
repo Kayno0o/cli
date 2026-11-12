@@ -56,11 +56,12 @@ function printsEnv([program = '', ...args]: readonly string[]): boolean {
   return isEnvPrinter(program)
 }
 
-// `docker run` and `compose run` print the environment when the command after the image or service, or the entrypoint, is a dump.
+// `docker run` and `compose run` print the environment when what runs is a dump: the entrypoint given, followed by the words after the image or service, or those words alone.
 function runPrintsEnv(after: readonly string[]): boolean {
   const entrypoint = after.find((_, i) => after[i - 1] === '--entrypoint') ?? after.find(word => word.startsWith('--entrypoint='))?.slice('--entrypoint='.length)
+  const command = after.slice(firstOperand(after, RUN_VALUE_OPTIONS) + 1)
 
-  return (entrypoint !== undefined && isEnvPrinter(entrypoint)) || printsEnv(after.slice(firstOperand(after, RUN_VALUE_OPTIONS) + 1))
+  return printsEnv(entrypoint === undefined || entrypoint === '' ? command : [entrypoint, ...command])
 }
 
 // A docker call printing a container's environment: `env` or `printenv` run through exec or run, `compose config` and `inspect`, which spell it out.
