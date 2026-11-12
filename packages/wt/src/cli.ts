@@ -4,16 +4,14 @@ import type { GlobalOptions } from './commands'
 import type { Worktree } from './project'
 import process from 'node:process'
 import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
-import { addTask, assertRemovable, downTask, printPath, printTasks, printUrls, removeTask, syncTask, upTask } from './commands'
 import { wtConfig } from './config'
 import { failKnown, failureText } from './errors'
-import { initProject } from './init'
 import { Jobs, notifyRefused } from './jobs'
-import { listWorktrees } from './list'
 import { assertWorktreeExists, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
-import { runHeavy, runTask } from './run'
-import { shellWrapper } from './shell'
-import { slugOf } from './stack'
+
+// Each command loads its modules when it runs, so `wt path`, `wt tasks` and Tab completion do not pay for the whole tool.
+const commands = async () => import('./commands')
+const printing = async () => import('./print')
 
 const APP = 'wt'
 
@@ -72,6 +70,7 @@ const BG_OPTION = { type: 'boolean', description: 'run it away from any terminal
 // Every action on a worktree holds its stack's lock, so an up cannot race a removal, and --bg detaches it. Its caller checks the worktree first: a job claimed for one that cannot be acted on leaves a record behind, or a `--bg` one failing out of sight.
 async function asWorktreeJob(verb: 'add' | 'sync' | 'rm' | 'up' | 'down', { project, task }: Worktree, options: GlobalOptions & { bg?: boolean }, argv: string[], work: () => Promise<void>): Promise<number> {
   const ref = `${project.name}/${task}`
+  const { slugOf } = await import('./stack')
   const stack = { ref, slug: slugOf(ref) }
   const queue = await jobs()
 
@@ -184,7 +183,7 @@ process.exitCode = await runCli({
         return guarded(async () => {
           const worktree = worktreeOf((await locate(process.cwd(), values.project)).project, task)
 
-          return asWorktreeJob('add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch])], async () => addTask(task, branch, values))
+          return asWorktreeJob('add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch])], async () => (await commands()).addTask(task, branch, values))
         }, bgName(values, 'add', task))
       },
     },
@@ -198,7 +197,7 @@ process.exitCode = await runCli({
 
           assertWorktreeExists(worktree)
 
-          return asWorktreeJob('sync', worktree, values, ['sync', worktree.task], async () => syncTask(worktree.task, values))
+          return asWorktreeJob('sync', worktree, values, ['sync', worktree.task], async () => (await commands()).syncTask(worktree.task, values))
         })
       },
     },
@@ -212,6 +211,7 @@ process.exitCode = await runCli({
         }, { positionals: ['<task>'], candidates: TASK })
 
         return guarded(async () => {
+          const { assertRemovable, removeTask } = await commands()
           const worktree = await assertRemovable(task, values)
 
           return asWorktreeJob('rm', worktree, values, ['rm', task, ...(values.force ? ['--force'] : [])], async () => removeTask(task, values))
@@ -228,7 +228,7 @@ process.exitCode = await runCli({
 
           assertWorktreeExists(worktree)
 
-          return asWorktreeJob('up', worktree, values, ['up', worktree.task], async () => upTask(worktree))
+          return asWorktreeJob('up', worktree, values, ['up', worktree.task], async () => (await commands()).upTask(worktree))
         }, bgName(values, 'up', task))
       },
     },
@@ -242,7 +242,7 @@ process.exitCode = await runCli({
 
           assertWorktreeExists(worktree)
 
-          return asWorktreeJob('down', worktree, values, ['down', worktree.task], async () => downTask(worktree))
+          return asWorktreeJob('down', worktree, values, ['down', worktree.task], async () => (await commands()).downTask(worktree))
         }, bgName(values, 'down', task))
       },
     },
@@ -255,7 +255,7 @@ process.exitCode = await runCli({
           json: { type: 'boolean', description: 'print { project, checkouts }, project being the one the directory is in, null outside every one' },
         }, { positionals: [] })
 
-        return guarded(async () => listWorktrees(values))
+        return guarded(async () => (await import('./list')).listWorktrees(values))
       },
     },
     path: {
@@ -263,7 +263,7 @@ process.exitCode = await runCli({
       run: async (args) => {
         const { values, positionals: [task] } = parse(args, PATH_USAGE, { project: PROJECT_OPTION }, { positionals: ['[task]'], candidates: TASK })
 
-        return guarded(async () => printPath(task, values))
+        return guarded(async () => (await printing()).printPath(task, values))
       },
     },
     init: {
@@ -274,7 +274,7 @@ process.exitCode = await runCli({
           print: { type: 'boolean', description: 'print the draft instead of writing it' },
         }, { positionals: ['[dir]'] })
 
-        return guarded(async () => initProject(dir ?? process.cwd(), values))
+        return guarded(async () => (await import('./init')).initProject(dir ?? process.cwd(), values))
       },
     },
     run: {
@@ -290,7 +290,7 @@ process.exitCode = await runCli({
         if (rest === undefined || rest.length === 0)
           badUsage('give the command after --')
 
-        return guarded(async () => runTask(task, rest, values.project))
+        return guarded(async () => (await import('./run')).runTask(task, rest, values.project))
       },
     },
     heavy: {
@@ -305,7 +305,7 @@ process.exitCode = await runCli({
         if (rest === undefined || rest.length === 0)
           badUsage('give the command after --')
 
-        return guarded(async () => runHeavy(rest))
+        return guarded(async () => (await import('./run')).runHeavy(rest))
       },
     },
     shell: {
@@ -314,8 +314,7 @@ process.exitCode = await runCli({
         const { positionals: [shell] } = parse(args, SHELL_USAGE, {}, { positionals: ['<shell>'], candidates: { '<shell>': async () => Promise.resolve(['fish']) } })
 
         return guarded(async () => {
-          console.log(shellWrapper(shell))
-          await Promise.resolve()
+          console.log((await import('./shell')).shellWrapper(shell))
         })
       },
     },
@@ -325,7 +324,7 @@ process.exitCode = await runCli({
       run: async (args) => {
         const { values, positionals: [task] } = parse(args, URL_USAGE, { project: PROJECT_OPTION }, { positionals: ['[task]'], candidates: TASK })
 
-        return guarded(async () => printUrls(task, values))
+        return guarded(async () => (await printing()).printUrls(task, values))
       },
     },
     tasks: {
@@ -334,7 +333,7 @@ process.exitCode = await runCli({
       run: async (args) => {
         const { values } = parse(args, TASKS_USAGE, { project: PROJECT_OPTION }, { positionals: [] })
 
-        return guarded(async () => printTasks(values))
+        return guarded(async () => (await printing()).printTasks(values))
       },
     },
   },
