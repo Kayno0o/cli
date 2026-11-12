@@ -116,25 +116,58 @@ describe('ev', () => {
     expect(ev(['list', 'nope']).code).toBe(2)
   })
 
-  test('a file that is not dotenv is refused by name, never read as empty', async () => {
-    await write('app.json', '{"password": "hunter2hunter2"}\n')
+  test('a file ev cannot read is refused by name, never read as empty', async () => {
+    await write('app.ini', 'password=hunter2hunter2\n')
     await write('app.conf', 'password: hunter2hunter2\n# a comment\n')
     await write('.envrc', 'use flake\n')
     await write('.env', 'PORT=3000\n')
 
-    for (const args of [['list', 'app.json'], ['get', 'password', 'app.json'], ['grep', 'pass', 'app.json'], ['unset', 'password', 'app.json'], ['diff', '.env', 'app.json']]) {
+    for (const args of [['list', 'app.ini'], ['get', 'password', 'app.ini'], ['grep', 'pass', 'app.ini'], ['unset', 'password', 'app.ini'], ['diff', '.env', 'app.ini']]) {
       const run = ev(args)
 
       expect(run.code).toBe(2)
-      expect(run.err).toContain('app.json is JSON, and ev reads dotenv files (KEY=value lines)')
-      expect(run.err).toContain('ev redact < app.json')
+      expect(run.err).toContain('app.ini is INI, and ev reads dotenv (KEY=value lines), JSON, YAML and TOML files')
+      expect(run.err).toContain('ev redact < app.ini')
     }
 
-    expect(ev(['set', 'TOKEN', 'new.yaml'], 'x').err).toContain('new.yaml is YAML')
     expect(ev(['list', 'app.conf']).err).toContain('app.conf holds no KEY=value line, so it is not a dotenv file')
-    expect(await readFile(join(dir, 'app.json'), 'utf8')).toBe('{"password": "hunter2hunter2"}\n')
+    expect(await readFile(join(dir, 'app.ini'), 'utf8')).toBe('password=hunter2hunter2\n')
     // The folder's own .env* files are read as they are, a direnv .envrc with no assignment included
     expect(ev(['list']).code).toBe(0)
+  })
+
+  test('reads JSON, YAML and TOML keys as dotted paths with secrets masked, and refuses to write them', async () => {
+    await write('app.json', '{\n  // a tsconfig-style comment\n  "database": {"password": "hunter2hunter2", "port": 5432},\n  "servers": [{"host": "a"}]\n}\n')
+    await write('app.yaml', 'database:\n  password: hunter2hunter2\n  port: 5432\nempty:\n')
+    await write('app.toml', '[database]\npassword = "hunter2hunter2"\nport = 5432\nborn = 1979-05-27T07:32:00Z\n')
+
+    for (const name of ['app.json', 'app.yaml', 'app.toml']) {
+      expect(ev(['get', 'database.password', name]).out).toBe('hun***(14)\n')
+      expect(ev(['get', 'database.port', name]).out).toBe('5432\n')
+      expect(ev(['list', name]).out).toContain('database.password')
+      expect(ev(['grep', '^database\\.', name, '--json']).out).not.toContain('hunter2hunter2')
+    }
+
+    expect(ev(['get', 'servers.0.host', 'app.json']).out).toBe('a\n')
+    expect(ev(['get', 'database.born', 'app.toml']).out).toBe('1979-05-27T07:32:00Z\n')
+    expect(JSON.parse(ev(['grep', '^empty$', 'app.yaml', '--json']).out)).toEqual([{ file: 'app.yaml', key: 'empty', value: '', secret: false }])
+    expect(ev(['diff', 'app.yaml', 'app.toml']).out).toContain('database.born')
+
+    const unset = ev(['unset', 'database.password', 'app.json'])
+
+    expect(unset.code).toBe(2)
+    expect(unset.err).toContain('app.json is JSON, which ev reads but does not write: it writes dotenv files (KEY=value lines)')
+    expect(ev(['set', 'TOKEN', 'new.yaml'], 'x').err).toContain('new.yaml is YAML, which ev reads but does not write')
+    expect(await Bun.file(join(dir, 'new.yaml')).exists()).toBe(false)
+  })
+
+  test('refuses a JSON, YAML or TOML file that does not parse or holds no keys', async () => {
+    await write('broken.json', '{"a": \n')
+    await write('single.yaml', 'just text\n')
+
+    expect(ev(['list', 'broken.json'])).toMatchObject({ code: 2, err: expect.stringContaining('broken.json is not valid JSON') })
+    expect(ev(['list', 'single.yaml'])).toMatchObject({ code: 2, err: expect.stringContaining('single.yaml holds a single YAML value, no keys') })
+    expect(ev(['list', 'none.toml'])).toMatchObject({ code: 2, err: expect.stringContaining('none.toml does not exist') })
   })
 
   test('get prints one masked value, bare for a file and per file otherwise', async () => {
@@ -400,8 +433,9 @@ describe('ev', () => {
 
     await write('.env', ENV)
     await write('app.conf', 'password: hunter2hunter2\n')
+    await write('app.json', '{"password": "hunter2hunter2"}\n')
     git('init', '-q')
-    git('add', '-f', '.env', 'app.conf')
+    git('add', '-f', '.env', 'app.conf', 'app.json')
     git('commit', '-qm', 'x')
     await write('.env', 'PORT=1\n')
 
@@ -413,7 +447,8 @@ describe('ev', () => {
     expect(out).not.toContain('hunter22')
     expect(ev(['show', 'HEAD:nope']).code).toBe(1)
     expect(ev(['show', '.env']).code).toBe(2)
-    expect(ev(['show', 'HEAD:app.json']).err).toContain('app.json is JSON')
+    expect(ev(['show', 'HEAD:app.json']).out).toBe('password\thun***(14)\n')
+    expect(ev(['show', 'HEAD:app.ini']).err).toContain('app.ini is INI')
     expect(ev(['show', 'HEAD:app.conf']).err).toContain('HEAD:app.conf holds no KEY=value line')
     expect(ev(['show', 'HEAD:app.conf']).err).toContain('git show HEAD:app.conf | ev redact')
   })

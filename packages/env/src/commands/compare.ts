@@ -1,8 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
-import { entries } from '../dotenv'
-import { readEnv } from '../files'
+import { readEntries } from '../files'
 
 const diffUsage = `ev diff <a> <b>
 
@@ -23,7 +22,7 @@ const MISSING_EXITS: ExitRow[] = [[0, 'none is missing'], [1, 'some are'], [2, '
 const jsonFlag = { json: jsonOption() } as const
 
 async function keys(path: string): Promise<Set<string>> {
-  return new Set(entries(await readEnv(path)).keys())
+  return new Set((await readEntries(path)).keys())
 }
 
 export async function diff(args: string[]): Promise<number> {

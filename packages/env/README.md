@@ -31,7 +31,7 @@ A value is masked when its key is named like a secret (`TOKEN`, `SECRET`, `PASSW
 
 Files are parsed and written back preserving comments, order, `export KEY=` prefixes, quoting and multiline values; only the lines a command touches change.
 
-Only dotenv files are read: a file named on the command line with a `.json`, `.yaml`, `.toml`, `.ini` or `.xml` extension, or holding lines but no `KEY=value` one, is refused with exit 2 rather than read as empty. `ev redact < file` masks the secrets of those.
+`list`, `get`, `grep`, `show`, `diff` and `missing` also read a JSON (comments allowed), JSON5, YAML or TOML file named on the command line, its keys as dotted paths: `ev get database.password config.yaml`, `servers.0.host` for an array item. Writes stay on dotenv files: `set`, `unset`, `cp` and `mv` refuse those formats with exit 2. A file named with a `.ini` or `.xml` extension, or holding lines but no `KEY=value` one, is refused with exit 2 rather than read as empty; `ev redact < file` masks the secrets of those.
 
 ## ev redact
 

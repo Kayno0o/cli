@@ -92,7 +92,7 @@ export async function set(args: string[]): Promise<number> {
   })
 
   if (parsed.values.quiet !== true)
-    console.log(`${target}: ${key}=${maskValue(key, value, await loadKnown(process.cwd(), [file])).replaceAll('\n', '\\n')}`)
+    console.log(`${target}: ${key}=${maskValue(key, value, await loadKnown(process.cwd(), [entries(file)])).replaceAll('\n', '\\n')}`)
 
   return 0
 }
@@ -198,7 +198,7 @@ export async function cp(args: string[]): Promise<number> {
   const { source, target, value, name } = await withLocks([from, to], async () => transfer(key, from, to, as, true))
 
   if (parsed.values.quiet !== true)
-    console.log(`${to}: ${name}=${maskValue(name, value, await loadKnown(process.cwd(), [source, target])).replaceAll('\n', '\\n')}`)
+    console.log(`${to}: ${name}=${maskValue(name, value, await loadKnown(process.cwd(), [entries(source), entries(target)])).replaceAll('\n', '\\n')}`)
 
   return 0
 }

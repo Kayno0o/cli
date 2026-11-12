@@ -6,6 +6,7 @@ import { basename, dirname, extname, join, resolve } from 'node:path'
 import { fail, ignoredFolders, isSecretName } from '@kaynooo/cli-kit'
 import { entries, parseDotenv, serializeDotenv } from './dotenv'
 import { knownSecrets, urlPasswords } from './mask'
+import { parseStructured, structuredFormat } from './structured'
 
 // A dotenv file's name (`.env`, `.env.local`, `prod.env`, `.envrc`), and the templates among them that hold no values.
 export const ENV_FILE = /^(?:\.env(?:\..+)?|.+\.env|\.envrc)$/
@@ -50,20 +51,30 @@ export async function envFiles(folder = process.cwd()): Promise<string[]> {
 }
 
 // Formats ev does not read, told apart by their extension.
-const OTHER_FORMATS: Record<string, string> = { '.json': 'JSON', '.jsonc': 'JSON', '.json5': 'JSON', '.yaml': 'YAML', '.yml': 'YAML', '.toml': 'TOML', '.ini': 'INI', '.xml': 'XML' }
+const OTHER_FORMATS: Record<string, string> = { '.ini': 'INI', '.xml': 'XML' }
 const BLANK_OR_COMMENT = /^\s*(?:#.*)?$/
 
 // `redact` is the command masking that file's text, `ev redact < <path>` for a file on disk.
 function notDotenv(why: string, redact: string): never {
-  fail(`${why}, and ev reads dotenv files (KEY=value lines)`, 2, `\`${redact}\` masks the secrets of any text`)
+  fail(`${why}, and ev reads dotenv (KEY=value lines), JSON, YAML and TOML files`, 2, `\`${redact}\` masks the secrets of any text`)
 }
 
-// A file named as another format is refused before ev reads or writes it.
-export function assertDotenvName(path: string, redact = `ev redact < ${path}`): void {
+// A file named as a format ev cannot read is refused before ev reads it.
+export function assertReadableName(path: string, redact = `ev redact < ${path}`): void {
   const format = OTHER_FORMATS[extname(path).toLowerCase()]
 
   if (format !== undefined)
     notDotenv(`${path} is ${format}`, redact)
+}
+
+// ev writes dotenv files only, so any other format is refused before ev reads a file to write it.
+export function assertDotenvName(path: string, redact = `ev redact < ${path}`): void {
+  assertReadableName(path, redact)
+
+  const format = structuredFormat(path)
+
+  if (format !== undefined)
+    fail(`${path} is ${format}, which ev reads but does not write: it writes dotenv files (KEY=value lines)`)
 }
 
 // A file named on the command line is refused when it holds lines but no assignment, rather than read as empty.
@@ -91,6 +102,19 @@ export async function readEnv(path: string, { scanned = false } = {}): Promise<D
 }
 
 // Writes through a temp file in the same folder renamed over the target, so a crash or a full disk never leaves a half-written file. The target keeps its mode, owner and group and a new file is 0600.
+// The keys of a file named on the command line, or of one of the folder's own .env* files (`scanned`): a JSON, YAML or TOML one by dotted paths.
+export async function readEntries(path: string, { scanned = false } = {}): Promise<Map<string, string>> {
+  if (scanned || structuredFormat(path) === undefined)
+    return entries(await readEnv(path, { scanned }))
+
+  const file = Bun.file(path)
+
+  if (!await file.exists())
+    fail(`${path} does not exist`)
+
+  return parseStructured(path, await file.text())
+}
+
 export async function writeAtomic(path: string, text: string): Promise<void> {
   let target = path
   let mode = 0o600
@@ -227,11 +251,11 @@ async function acquire(lock: string, path: string): Promise<string> {
   }
 }
 
-// The secrets of a parsed file: values of secret-looking keys and the password of any URL value.
-export function secretPairs(file: Dotenv): [string, string][] {
+// The secrets of a file's keys: values of secret-looking keys and the password of any URL value.
+export function secretPairs(keys: Map<string, string>): [string, string][] {
   const pairs: [string, string][] = []
 
-  for (const [key, value] of entries(file)) {
+  for (const [key, value] of keys) {
     if (isSecretName(key))
       pairs.push([key, value])
     else
@@ -265,13 +289,13 @@ async function envFilesBelow(folder: string, depth = 0): Promise<string[]> {
   return found
 }
 
-// The secrets of the folder's .env* files and of those in the folders below it, plus any `extra` parsed file, ready to be searched for in output.
-export async function loadKnown(folder = process.cwd(), extra: Dotenv[] = []): Promise<KnownSecrets> {
+// The secrets of the folder's .env* files and of those in the folders below it, plus the keys of any `extra` file, ready to be searched for in output.
+export async function loadKnown(folder = process.cwd(), extra: Map<string, string>[] = []): Promise<KnownSecrets> {
   const pairs = extra.flatMap(secretPairs)
 
   for (const path of await envFilesBelow(folder)) {
     try {
-      pairs.push(...secretPairs(parseDotenv(await Bun.file(path).text())))
+      pairs.push(...secretPairs(entries(parseDotenv(await Bun.file(path).text()))))
     }
     catch {
       // a file that cannot be read has no secret to learn

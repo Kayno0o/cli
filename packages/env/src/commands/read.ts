@@ -1,15 +1,15 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
-import type { Dotenv } from '../dotenv'
 import type { KnownSecrets } from '../mask'
 import { fail, jsonOption, parse, printJson, role, table } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { entries, parseDotenv } from '../dotenv'
-import { assertDotenvName, assertDotenvText, envFiles, loadKnown, readEnv } from '../files'
+import { assertDotenvText, assertReadableName, envFiles, loadKnown, readEntries } from '../files'
 import { isSecretKey, maskValue } from '../mask'
+import { parseStructured, structuredFormat } from '../structured'
 
 const listUsage = `ev list [file]
 
-Prints every key of the folder's .env* files, or of one file, with secret values masked to a few leading characters and the length.
+Prints every key of the folder's .env* files, or of one file, with secret values masked to a few leading characters and the length. A JSON, YAML or TOML file names its keys as dotted paths (\`database.password\`, \`servers.0.host\`).
 
 --json prints [{file, key, value, secret}], value masked and secret true when a value was.`
 
@@ -17,7 +17,7 @@ const LIST_EXITS: ExitRow[] = [[0, 'it printed them'], [1, 'there is no .env* fi
 
 const getUsage = `ev get KEY [file]
 
-Prints the masked value of one key, from every .env* file that sets it or from one file.
+Prints the masked value of one key, from every .env* file that sets it or from one file: \`ev get database.password config.yaml\`.
 
 --json prints [{file, key, value, secret}] for each file that sets it.`
 
@@ -60,11 +60,11 @@ function printRows(rows: Row[], json: boolean, plain: () => void): void {
 }
 
 // Reads each file once and learns the secrets of the folder and of these files, so a value is masked whatever key holds it.
-async function readAll(names: string[], scanned: boolean): Promise<{ files: [name: string, file: Dotenv][], known: KnownSecrets }> {
-  const files: [string, Dotenv][] = []
+async function readAll(names: string[], scanned: boolean): Promise<{ files: [name: string, keys: Map<string, string>][], known: KnownSecrets }> {
+  const files: [string, Map<string, string>][] = []
 
   for (const name of names)
-    files.push([name, await readEnv(name, { scanned })])
+    files.push([name, await readEntries(name, { scanned })])
 
   return { files, known: await loadKnown(process.cwd(), files.map(([, file]) => file)) }
 }
@@ -82,8 +82,8 @@ export async function list(args: string[]): Promise<number> {
 
   const { files, known } = await readAll(names, file === undefined)
 
-  for (const [name, file] of files) {
-    for (const [key, value] of entries(file))
+  for (const [name, keys] of files) {
+    for (const [key, value] of keys)
       rows.push(row(name, key, value, known))
   }
 
@@ -108,8 +108,8 @@ export async function get(args: string[]): Promise<number> {
 
   const { files, known } = await readAll(names, file === undefined)
 
-  for (const [name, file] of files) {
-    const value = entries(file).get(key)
+  for (const [name, keys] of files) {
+    const value = keys.get(key)
 
     if (value !== undefined)
       rows.push(row(name, key, value, known))
@@ -163,8 +163,8 @@ export async function grep(args: string[]): Promise<number> {
 
   const { files, known } = await readAll(names, given.length === 0)
 
-  for (const [name, file] of files) {
-    for (const [key, value] of entries(file)) {
+  for (const [name, keys] of files) {
+    for (const [key, value] of keys) {
       if (pattern.test(key))
         rows.push(row(name, key, value, known))
     }
@@ -176,6 +176,14 @@ export async function grep(args: string[]): Promise<number> {
   printRows(rows, parsed.values.json === true, () => console.log(keyTable(rows)))
 
   return 0
+}
+
+function dotenvKeys(name: string, text: string, redact: string): Map<string, string> {
+  const file = parseDotenv(text)
+
+  assertDotenvText(name, file, redact)
+
+  return entries(file)
 }
 
 export async function show(args: string[]): Promise<number> {
@@ -192,18 +200,16 @@ export async function show(args: string[]): Promise<number> {
 
   const redact = `git show ${revision}:${path} | ev redact`
 
-  assertDotenvName(path, redact)
+  assertReadableName(path, redact)
 
   const shown = await $`git show --end-of-options ${`${revision}:${path}`}`.quiet().nothrow()
 
   if (shown.exitCode !== 0)
     fail(`git show ${revision}:${path} failed: ${shown.stderr.toString().trim()}`, 1)
 
-  const file = parseDotenv(shown.stdout.toString())
-
-  assertDotenvText(target ?? '', file, redact)
-  const known = await loadKnown(process.cwd(), [file])
-  const rows = [...entries(file)].map(([key, value]) => row(target ?? '', key, value, known))
+  const keys = structuredFormat(path) === undefined ? dotenvKeys(target ?? '', shown.stdout.toString(), redact) : parseStructured(target ?? '', shown.stdout.toString())
+  const known = await loadKnown(process.cwd(), [keys])
+  const rows = [...keys].map(([key, value]) => row(target ?? '', key, value, known))
 
   printRows(rows, parsed.values.json === true, () => {
     if (rows.length > 0)
