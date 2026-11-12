@@ -148,7 +148,7 @@ export async function withLocks<T>(paths: string[], fn: () => Promise<T>): Promi
     // One file spelled two ways, or through a symlink, takes its lock once.
     const locks = new Map(await Promise.all(paths.map(async path => [await lockFor(path), path] as const)))
 
-    for (const [lock, path] of [...locks].sort(([a], [b]) => a.localeCompare(b)))
+    for (const [lock, path] of [...locks].sort(([a], [b]) => a < b ? -1 : 1))
       held.push(await acquire(lock, path))
 
     return await fn()

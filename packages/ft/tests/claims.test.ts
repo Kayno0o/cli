@@ -27,6 +27,7 @@ describe('latestClaim', () => {
     expect(latestClaim([{ body: 'Picking this up.\nTaken by session lane-80-1978.', created_at: at(1) }])).toBeUndefined()
     expect(latestClaim([{ body: '```\nTaken by session x-1.\n```', created_at: at(1) }])).toBeUndefined()
     expect(latestClaim([{ body: 'as the "Taken by session x-1." comment said', created_at: at(1) }])).toBeUndefined()
+    expect(latestClaim([{ body: 'Taken by session cli-6b over from cli-6a, see above.', created_at: at(1) }])).toBeUndefined()
   })
 
   test('reads back a name holding a space, an accent, a slash or a final dot', () => {
@@ -47,7 +48,7 @@ describe('latestClaim', () => {
 describe('claimable', () => {
   test('refuses a name a claim would not read back as it is', () => {
     expect(['fix login', 'café-1', 'a/b'].every(claimable)).toBe(true)
-    expect(['', ' a', 'a ', 'a\nb', `a${String.fromCharCode(0x2028)}b`].some(claimable)).toBe(false)
+    expect(['', ' a', 'a ', 'a\nb', `a${String.fromCharCode(0x2028)}b`, 'a, b', 'a: b'].some(claimable)).toBe(false)
   })
 })
 

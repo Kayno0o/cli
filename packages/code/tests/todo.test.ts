@@ -71,7 +71,7 @@ describe('marksIn', () => {
   })
 
   test('reads a file anchor as no issue, a dotted repository name still as one', () => {
-    expect(marksIn('// TODO: see docs/guide.md#12 and kaynooo/kaynooo.fr#3\n', 'a.ts')[0]?.refs).toEqual([{ repo: 'kaynooo/kaynooo.fr', number: 3 }])
+    expect(marksIn('// TODO: see docs/guide.md#12 and kaynooo/kaynooo.fr#3 or mrdoob/three.js#123\n', 'a.ts')[0]?.refs).toEqual([{ repo: 'kaynooo/kaynooo.fr', number: 3 }, { repo: 'mrdoob/three.js', number: 123 }])
   })
 })
 

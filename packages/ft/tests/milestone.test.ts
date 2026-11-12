@@ -21,6 +21,7 @@ describe('progress', () => {
   test('reads 100% only once every issue is closed', () => {
     expect(progress({ open_issues: 1, closed_issues: 250 } as Milestone)).toBe('99%')
     expect(progress({ open_issues: 0, closed_issues: 3 } as Milestone)).toBe('100%')
+    expect(progress({ open_issues: 71, closed_issues: 29 } as Milestone)).toBe('29%')
   })
 })
 

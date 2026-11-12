@@ -76,6 +76,11 @@ describe('editing', () => {
 
     setLine(unended, 'C', '3')
     expect(serializeDotenv(unended)).toBe('A=1\r\nB=2\r\nC=3\r\n')
+
+    const blank = parseDotenv('B= # note\n')
+
+    setLine(blank, 'B', 'x')
+    expect(serializeDotenv(blank)).toBe('B=x # note\n')
   })
 
   test('quotes and escapes a value that needs it, and reads it back', () => {

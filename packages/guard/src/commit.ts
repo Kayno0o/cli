@@ -1,5 +1,5 @@
 import { parseCommand, shellQuote, splitCommand } from '@kaynooo/cli-kit/shell'
-import { COMMIT_VALUE_LONGS, COMMIT_VALUE_SHORTS, SHORT_OPTIONS, subcommandOf } from './git'
+import { COMMIT_ATTACHED_SHORTS, COMMIT_VALUE_LONGS, COMMIT_VALUE_SHORTS, SHORT_OPTIONS, subcommandOf } from './git'
 
 // What a commit's message is made of: the `-m` texts, a `-F` file (`-` reading the heredoc fed to it), or nothing to check when git reuses a message or opens an editor.
 export interface CommitSource { parts: string[], file: string | null, stdin: string | null, isReused: boolean, hasTrailerFlag: boolean }
@@ -84,6 +84,9 @@ function sourceOf(args: readonly string[], text: string): CommitSource {
       continue
 
     for (const [index, flag] of [...arg.slice(1)].entries()) {
+      if (COMMIT_ATTACHED_SHORTS.has(flag))
+        break
+
       if (flag === 's')
         source.hasTrailerFlag = true
 

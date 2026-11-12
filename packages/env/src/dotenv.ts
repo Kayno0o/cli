@@ -146,11 +146,13 @@ export function formatAssignment(key: string, value: string): string {
 // The inline comment after an assignment's value, on its last line.
 function inlineComment(raw: string): string {
   const lines = raw.replaceAll(CARRIAGE_RETURNS, '').split('\n')
-  const start = (ASSIGNMENT.exec(lines[0] ?? '')?.[2] ?? '').trimStart()
+  const value = ASSIGNMENT.exec(lines[0] ?? '')?.[2] ?? ''
+  const start = value.trimStart()
   const quote = start[0]
 
+  // An empty value leaves only the comment, whose leading space the trim would take.
   if (quote !== '"' && quote !== '\'' && quote !== '`')
-    return INLINE_COMMENT.exec(start)?.[0] ?? ''
+    return INLINE_COMMENT.exec(value)?.[0] ?? ''
 
   const last = lines.length === 1 ? start.slice(1) : lines.at(-1) ?? ''
   const end = closingQuote(last, quote)

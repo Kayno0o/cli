@@ -91,6 +91,7 @@ describe('commandFor', () => {
     expect(commandFor(entry(migrate), ['--env', 'prod', '-e', 'dev', '--force']).at(-1)).toEqual({ ask: 'target' })
     expect(commandFor(entry(migrate), ['--force', 'v2']).at(-1)).toEqual({ given: 'v2' })
     expect(commandFor(entry(migrate), ['--', '--odd']).at(-1)).toEqual({ given: '--odd' })
+    expect(commandFor(entry(migrate), ['--env', '-e', 'dev']).at(-1)).toEqual({ ask: 'target' })
   })
 
   test('runs from the child folder with env -C', () => {

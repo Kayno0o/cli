@@ -196,6 +196,7 @@ describe('checking', () => {
     expect(sumFor(`${one}  a/foo\n${one}  b/foo\n`, 'foo')).toBe(one)
     expect(pathUnder('https://x.org/v1/SHA256SUMS', 'https://x.org/v1/mac/foo')).toBe('mac/foo')
     expect(pathUnder('https://x.org/v1/SHA256SUMS', 'https://y.org/v1/mac/foo')).toBeUndefined()
+    expect(pathUnder('https://x.org/v1/SHA256SUMS', 'https://x.org/v1/a%zz')).toBe('a%zz')
   })
 })
 

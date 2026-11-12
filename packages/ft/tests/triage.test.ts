@@ -38,6 +38,10 @@ describe('appendBoxes', () => {
   test('writes CRLF throughout on a CRLF body without a final line end', () => {
     expect(appendBoxes('- [ ] b\r\n  detail', ['c'])).toBe('- [ ] b\r\n  detail\r\n- [ ] c')
   })
+
+  test('leaves the endings of the lines already there as they were', () => {
+    expect(appendBoxes('Intro\n- [ ] b\r\nTail\n', ['c'])).toBe('Intro\n- [ ] b\r\n- [ ] c\r\nTail\n')
+  })
 })
 
 describe('ft edit --append and --add-box', () => {

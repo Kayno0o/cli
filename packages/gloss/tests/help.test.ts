@@ -36,6 +36,7 @@ describe('man pages', () => {
     const [command] = analyze('/usr/bin/zzpage -l', { env: { ...env, MANPATH: join(dir, 'man') } }).commands
 
     expect(command?.notes[0]?.text).toContain('use a long listing format')
+    expect(analyze('./zzpage -l', { env: { ...env, MANPATH: join(dir, 'man') } }).commands[0]?.page).toBeUndefined()
   })
 })
 

@@ -47,6 +47,7 @@ export function boxes(body: string): Box[] {
 
 const INDENT = /^\s*/
 const LINE_END = /\r?\n/
+const LINE_ENDS = /(\r?\n)/
 
 function indentOf(line: string): number {
   return INDENT.exec(line)?.[0].length ?? 0
@@ -76,13 +77,18 @@ export function afterBox(lines: string[], line: number): number {
   return end
 }
 
-// The body with lines inserted before its line at the index, every line in the body's line ending.
+// The body with lines inserted before its line at the index, the new lines in the body's line ending and the others as they were.
 export function insertLines(body: string, at: number, added: string[]): string {
-  const lines = body.split(LINE_END)
+  const eol = lineEnding(body)
+  // Lines at even indexes, each followed by its own ending.
+  const parts = body.split(LINE_ENDS)
 
-  lines.splice(at, 0, ...added)
+  if (2 * at >= parts.length)
+    return `${body}${eol}${added.join(eol)}`
 
-  return lines.join(lineEnding(body))
+  parts.splice(2 * at, 0, added.map(line => `${line}${eol}`).join(''))
+
+  return parts.join('')
 }
 
 // New unticked boxes after the body's last box and its notes, indented like it, or at the end of a body without any.

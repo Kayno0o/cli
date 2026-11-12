@@ -55,7 +55,7 @@ export function dueDate(milestone: Milestone): string {
 export function progress(milestone: Milestone): string {
   const total = milestone.open_issues + milestone.closed_issues
 
-  return total === 0 ? '' : `${Math.floor(milestone.closed_issues / total * 100)}%`
+  return total === 0 ? '' : `${Math.floor(milestone.closed_issues * 100 / total)}%`
 }
 
 export async function createMilestone(title: string, description: string | undefined, due: string | undefined, repo?: string): Promise<Milestone> {

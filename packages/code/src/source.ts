@@ -18,7 +18,8 @@ const MEMBER = new RegExp(String.raw`^(?:(?:${MODIFIER_WORDS})+${RETURN_TYPE})?[
 // A Go method's receiver, `func (r *T) name`, and a generator's star.
 const RECEIVER = /^(?:\([^)]*\)\s*)?/
 const STAR = /^\*?\s*/
-const HOLDS_MEMBERS = /\b(?:class|interface|trait|impl|struct)\s/
+// What opens a body of members: a class and its kin across languages; the words JS lets be names (record, object...) only before a capitalised name.
+const HOLDS_MEMBERS = /\b(?:(?:class|interface|trait|struct|enum)\s|impl[\s<]|(?:record|extension|protocol|object)\s+[A-Z]|companion\s+object\b)/
 const CALL_KEYWORDS = /^(?:if|for|while|switch|catch|return|await|throw|new|else|do|try|super|typeof)\b/
 const LEADING = /^(?:\/\/|\/\*|\*|#(?!!)|@)/
 // A binding the module keeps to itself, left out of an outline.
@@ -30,10 +31,14 @@ const INDENTED = /\.(?:py|yml|yaml)$/i
 const INDENT = /^\s*/
 const CONTINUES = /(?:[=(,[{:?|&+\-*/<>]|=>)$/
 const BODY_OPENER = /\s*\{\s*$/
-// A class property or object key holding an arrow function or a function: `prop = () =>`, `prop: Handler = async x =>`, `key: function`.
-const PROPERTY_FUNCTION = /^[#\w$]+\s*(?:[?!]?:[^=]*)?[:=]\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[\w$]+)\s*(?::[^=]+)?=>)/
-// What comes before a brace opening an object literal rather than a block.
-const OBJECT_POSITION = /(?:[=(,[:?]|\breturn|\bdefault)\s*$/
+// A class property or object key holding an arrow function or a function: `prop = () =>`, `prop: Handler = async x =>`, `key: function`, `prop = <T,>(a: T) =>`, or `prop = (` whose parameters go on over the next lines.
+const PROPERTY_FUNCTION = /^[#\w$]+\s*(?:[?!]?:[^=]*)?[:=]\s*(?:async\s+)?(?:function\b|(?:<[^>]*>\s*)?(?:\([^)]*\)|[\w$]+)\s*(?::[^=]+)?=>|(?:<[^>]*>\s*)?\($)/
+// What comes before a brace opening an object literal rather than a block, or the body of an anonymous class (`new Thread() {`).
+const OBJECT_POSITION = /(?:[=(,[:?]|\|\||&&|\breturn|\bdefault)\s*$|\bnew\s+[\w$.]+(?:<[^>]*>)?\s*\([^()]*\)\s*$/
+// A switch label, whose colon opens a block, not an object.
+const CASE_LABEL = /(?:^|[\s;{])(?:case\b.*|default\s*):\s*$/
+// What a slash follows when it opens a regex literal rather than divides.
+const REGEX_BEFORE = /(?:^|[(,=:[!&|?{};+\-*%<>~^]|\b(?:return|typeof|case|throw|yield|await|in|of))\s*$/
 // A Rust char literal, so the quote of a lifetime (`'a`) opens nothing.
 const RUST_CHAR = /^'(?:\\(?:u\{[\da-f]{1,6}\}|x[\da-f]{2}|.)|[^'\\])'/i
 const RUST = /\.rs$/i
@@ -67,10 +72,39 @@ export function declares(line: string, name: string, inMembers = true): boolean 
   return word.test(named) && ((MEMBER.test(text) && (text.endsWith('{') || text.endsWith(':'))) || PROPERTY_FUNCTION.test(named))
 }
 
-// Calls `each` with every character of the line outside strings and line comments, with its index.
+// The index of the slash closing the regex literal opened at `start`, -1 when the line holds none, the slash being a division.
+function regexEnd(line: string, start: number): number {
+  let inClass = false
+
+  for (let i = start + 1; i < line.length; i++) {
+    const char = line[i]
+
+    if (char === '\\')
+      i++
+    else if (char === '[')
+      inClass = true
+    else if (char === ']')
+      inClass = false
+    else if (char === '/' && !inClass)
+      return i
+  }
+
+  return -1
+}
+
+// Calls `each` with every character of the line outside strings, regex literals and comments, with its index; `quote.open` carries a template literal or a block comment (`/*`) over to the next line.
 function codeChars(line: string, quote: { open: string }, rust: boolean, each: (char: string, index: number) => void): void {
   for (let i = 0; i < line.length; i++) {
     const char = line[i] ?? ''
+
+    if (quote.open === '/*') {
+      if (char === '*' && line[i + 1] === '/') {
+        quote.open = ''
+        i++
+      }
+
+      continue
+    }
 
     if (quote.open !== '') {
       if (char === '\\')
@@ -84,7 +118,18 @@ function codeChars(line: string, quote: { open: string }, rust: boolean, each: (
     if (char === '/' && line[i + 1] === '/')
       break
 
-    if (rust && char === '\'')
+    if (char === '/' && line[i + 1] === '*') {
+      quote.open = '/*'
+      i++
+
+      continue
+    }
+
+    const regex = char === '/' && !rust && REGEX_BEFORE.test(line.slice(0, i)) ? regexEnd(line, i) : -1
+
+    if (regex !== -1)
+      i = regex
+    else if (rust && char === '\'')
       i += (RUST_CHAR.exec(line.slice(i))?.[0].length ?? 1) - 1
     else if (char === '"' || char === '\'' || char === '`')
       quote.open = char
@@ -92,8 +137,8 @@ function codeChars(line: string, quote: { open: string }, rust: boolean, each: (
       each(char, i)
   }
 
-  // a line ends a single-quoted string, never a template literal
-  if (quote.open !== '`')
+  // a line ends a single-quoted string, never a template literal or a block comment
+  if (quote.open !== '`' && quote.open !== '/*')
     quote.open = ''
 }
 
@@ -116,22 +161,25 @@ function depthChange(line: string, quote: { open: string }, rust: boolean): { br
   return { braces, parens }
 }
 
-// For each line, whether it sits in a class body or an object literal, where members are declared, rather than among statements; every line of a file without braces (Python, YAML) may hold members.
+// For each line, whether it sits in a class body or an object literal, where members are declared, rather than among statements; every line of a file without braces (Python, YAML), or whose braces the scan loses count of, may hold members.
 function memberLines(lines: readonly string[], path: string): boolean[] {
+  const everywhere = lines.map(() => true)
+
   if (INDENTED.test(path))
-    return lines.map(() => true)
+    return everywhere
 
   const quote = { open: '' }
   const rust = RUST.test(path)
   const open: boolean[] = []
   let previous = ''
+  let lost = false
 
-  return lines.map((line) => {
+  const members = lines.map((line) => {
     const inMembers = open.at(-1) === true
 
     codeChars(line, quote, rust, (char, index) => {
       if (char === '}') {
-        open.pop()
+        lost ||= open.pop() === undefined
 
         return
       }
@@ -140,9 +188,9 @@ function memberLines(lines: readonly string[], path: string): boolean[] {
         return
 
       // A brace alone on its line opens what the line above declared.
-      const before = line.slice(0, index).trim() === '' ? previous : line.slice(0, index)
+      const before = (line.slice(0, index).trim() === '' ? previous : line.slice(0, index)).trimEnd()
 
-      open.push(HOLDS_MEMBERS.test(before) || OBJECT_POSITION.test(before.trimEnd()))
+      open.push(HOLDS_MEMBERS.test(before) || (OBJECT_POSITION.test(before) && !CASE_LABEL.test(before)))
     })
 
     if (line.trim() !== '')
@@ -150,6 +198,8 @@ function memberLines(lines: readonly string[], path: string): boolean[] {
 
     return inMembers
   })
+
+  return lost || open.length > 0 || quote.open !== '' ? everywhere : members
 }
 
 // The last line of the declaration starting at `start` (0-based): its braces closed, the line its indentation ends for Python or YAML.

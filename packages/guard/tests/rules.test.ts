@@ -93,6 +93,12 @@ describe('commit messages', () => {
     expect(commitSources('git status')).toEqual([])
   })
 
+  test('commitSources reads -u<mode> and -S<key> as one option, whatever letters they hold', () => {
+    expect(commitSources('git commit -unormal -m "fix: x"')[0]?.parts).toEqual(['fix: x'])
+    expect(commitSources('git commit -S3AA5C34 -m "fix: x"')[0]?.isReused).toBeFalsy()
+    expect(commitSources('git commit -m "fix: x" -Sfoos')[0]?.hasTrailerFlag).toBeFalsy()
+  })
+
   test('heredocBody takes the text up to the terminator', () => {
     const text = 'cat <<\'EOF\'\nline\nEOF\nrest'
 

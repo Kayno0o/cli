@@ -30,8 +30,8 @@ const ESCAPE = /\\./g
 const AFTER_FIRST_LINE = /\n[\s\S]*/
 // An owner and a repository as a forge names them, never `.` or `..` and no leading dash, so a match is neither a path nor an option.
 const REF = /(?<![\w./-])(\w[\w.-]*\/(?!\.+#)[\w.][\w.-]*)#(\d+)\b/g
-// A file's anchor such as docs/guide.md#12, which names no repository.
-const FILE_ANCHOR = /\.(?:md|mdx|markdown|txt|rst|adoc|html?|[cm]?[jt]sx?|json|ya?ml|toml|py|go|rs|php|rb|vue|svelte|css|scss)$/i
+// A document's anchor such as docs/guide.md#12, which names no repository; code extensions stay out, as repositories such as mrdoob/three.js carry them and a code file's anchor reads #L12.
+const FILE_ANCHOR = /\.(?:md|mdx|markdown|txt|rst|adoc|html?)$/i
 
 // Whether the index sits inside a string the line opened, the quote that opened it left unclosed before it.
 function isQuoted(line: string, index: number): boolean {

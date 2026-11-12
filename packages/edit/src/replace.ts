@@ -106,10 +106,9 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
 
   for (const [i, pair] of pairs.entries()) {
     const label = pairs.length > 1 ? `pair ${i + 1}: ` : ''
-    const from = pair.from
     const typed = pair.regex === true ? escapes(pair.to) : pair.to
     const to = crlf ? typed.replace(CRLF, '\r\n') : typed
-    const pattern = pair.regex === true ? compile(from, pair) : literal(from)
+    const pattern = pair.regex === true ? compile(pair.from, pair) : literal(pair.from)
     const indexes = [...text.matchAll(pattern)].map(match => match.index)
     const found = linesOf(text, indexes)
 
@@ -122,7 +121,7 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
       let where = ` on lines ${listLines(found)}: add context to --from, or pass --count ${indexes.length} or --all`
 
       if (indexes.length === 0)
-        where = pair.regex === true ? '' : firstLineHint(text, from)
+        where = pair.regex === true ? '' : firstLineHint(text, pair.from)
 
       problems.push(`${label}matched ${counted(indexes.length, 'time')}, expected ${wanted}${where}`)
 
@@ -130,8 +129,8 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
     }
 
     lines.push(...found)
-    // A literal replacement takes the line ending of the text it replaces, the file's own when that holds none.
-    text = pair.regex === true ? text.replace(pattern, bracedGroups(to)) : text.replace(pattern, match => match.includes('\n') ? typed.replace(CRLF, match.includes('\r\n') ? '\r\n' : '\n') : to)
+    // In a file holding CRLF, a literal replacement takes the line ending of the text it replaces, the file's own when that holds none; elsewhere it is written as typed.
+    text = pair.regex === true ? text.replace(pattern, bracedGroups(to)) : text.replace(pattern, match => crlf && match.includes('\n') ? typed.replace(CRLF, match.includes('\r\n') ? '\r\n' : '\n') : to)
   }
 
   return { text, lines, problems, matched }

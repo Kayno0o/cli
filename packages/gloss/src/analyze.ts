@@ -84,8 +84,8 @@ export function analyze(line: string, settings: AnalyzeSettings = {}, depth = 0)
   for (const { command, next } of parseLine(line)) {
     const [head, second] = command.words
     const name = head?.text ?? ''
-    // A command given by its path has its page under its name.
-    const paged = basename(name)
+    // A command given by its absolute path has its page under its name; a relative one such as ./ls is a local script, whatever system command it shares a name with.
+    const paged = name.startsWith('/') ? basename(name) : name
     const sub = head === undefined ? undefined : describeSubcommand(paged, second, env)
     const manual = sub?.page ?? (head === undefined ? undefined : loadPage(paged, env))
     const page = manual ?? (runHelp && head !== undefined ? loadHelp(name, second?.text, env) : undefined)

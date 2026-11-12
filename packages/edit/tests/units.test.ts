@@ -75,6 +75,7 @@ describe('applyPairs', () => {
     expect(applyPairs('a\nb\r\nc\n', [{ from: 'a\nb', to: 'X' }]).text).toBe('X\r\nc\n')
     expect(applyPairs('a\nb\r\nc\r\nd\n', [{ from: 'b\nc', to: 'x\ny' }]).text).toBe('a\nx\r\ny\r\nd\n')
     expect(applyPairs('a\nb\r\na\nb\n', [{ from: 'a\nb', to: 'x\ny', all: true }]).text).toBe('x\ny\r\nx\ny\n')
+    expect(applyPairs('a\nb\n', [{ from: 'a\nb', to: 'x\r\ny' }]).text).toBe('x\r\ny\n')
     expect(applyPairs('a.b $1', [{ from: '.b $1', to: '$&' }]).text).toBe('a$&')
   })
 

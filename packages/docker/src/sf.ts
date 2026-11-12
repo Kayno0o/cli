@@ -214,10 +214,15 @@ function argumentCount(command: Command, given: string[]): number {
   let value = false
 
   for (const word of given) {
-    if (value) {
-      value = false
-    }
-    else if (!options || !word.startsWith('-') || word === '-') {
+    // Symfony gives an option the next word as its value unless that word starts with a dash.
+    const isValue = value && !word.startsWith('-')
+
+    value = false
+
+    if (isValue)
+      continue
+
+    if (!options || !word.startsWith('-') || word === '-') {
       count++
     }
     else if (word === '--') {

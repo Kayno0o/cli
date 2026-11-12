@@ -211,6 +211,35 @@ describe('declarations in other languages', () => {
 
     expect(find(source, 'a.ts', 'onClick')).toEqual([2])
     expect(find(source, 'a.ts', 'handler')).toEqual([5])
+    expect(find('class A {\n  load = (\n    a,\n  ) => {\n  }\n  pick = <T,>(a: T) => {\n  }\n}\n', 'a.ts', 'load')).toEqual([2])
+    expect(find('class A {\n  load = (\n    a,\n  ) => {\n  }\n  pick = <T,>(a: T) => {\n  }\n}\n', 'a.ts', 'pick')).toEqual([6])
+  })
+
+  test('keeps the member context past regexes and comments holding quotes or braces', () => {
+    const member = (before: string) => find(`${before}\nclass A {\n  load() {\n  }\n}\n`, 'a.ts', 'load')
+
+    expect(member('const s = x.replace(/`/g, y)')).toEqual([3])
+    expect(member('const o = { a: /\\}/ }')).toEqual([3])
+    expect(member('/* a } and a ` */')).toEqual([3])
+    expect(member('/*\n  { `\n*/')).toEqual([5])
+    expect(member('const half = a / 2 / b')).toEqual([3])
+  })
+
+  test('reads the bodies of Java enums, records and anonymous classes, and objects after || and &&', () => {
+    expect(find('public enum Color {\n    RED;\n    public int code() {\n    }\n}\n', 'A.java', 'code')).toEqual([3])
+    expect(find('public record Point(int x) {\n    public int twice() {\n    }\n}\n', 'A.java', 'twice')).toEqual([2])
+    expect(find('class A {\n    void f() {\n        new Thread() {\n            public void run() {\n            }\n        };\n    }\n}\n', 'A.java', 'run')).toEqual([4])
+    expect(find('const o = a || {\n  load() {\n  },\n}\n', 'a.ts', 'load')).toEqual([2])
+    expect(find('const o = a && {\n  load() {\n  },\n}\n', 'a.ts', 'load')).toEqual([2])
+  })
+
+  test('reads no member in a switch case block or a for loop over a record', () => {
+    expect(find('function f(x) {\n  switch (x) {\n    case 1: {\n      load(1, {\n      })\n    }\n  }\n}\n', 'a.ts', 'load')).toEqual([])
+    expect(find('function f(rs) {\n  for (const record of rs) {\n    load(1, {\n    })\n  }\n}\n', 'a.ts', 'load')).toEqual([])
+  })
+
+  test('falls back to reading members anywhere once its count of braces is lost', () => {
+    expect(find('}\nclass A {\n  load() {\n  }\n}\n', 'a.ts', 'load')).toEqual([3])
   })
 
   test('reads a PHP method and a Rust item with their visibility', () => {
