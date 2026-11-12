@@ -16,7 +16,7 @@ const DIFF_FILE = /\.(?:diff|patch)$/i
 const USAGE = `view [options] [file]: shows a markdown file, a source file or a git diff in the colours of the other @kaynooo CLIs
 
 A file, or what is piped on stdin (or - for stdin). A source file is highlighted behind line numbers by its extension or --lang, a diff, a \`git log -p\` or a \`git show\` is recognised by its first line or a .diff or .patch name, and anything else is markdown; --diff and --markdown force one.
-Lines wrap to the terminal width and a long output on a terminal goes through $PAGER, unless --no-pager. No colour with NO_COLOR, a pipe or --plain.`
+Lines wrap to the terminal width and a long output on a terminal goes through $PAGER, unless --no-pager. No colour with NO_COLOR, a pipe or --plain. Control characters of the text, escape sequences included, show as cat -v writes them (^[) in code and diffs and are dropped from markdown, --json too.`
 const EXITS: ExitRow[] = [[0, 'it showed the text'], [1, 'there is nothing to show'], [2, 'a usage error or a file that is missing']]
 
 const OPTIONS = {

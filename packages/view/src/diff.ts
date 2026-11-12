@@ -10,6 +10,9 @@ const NEW_FILE = /^\+\+\+ (?:b\/)?([^\t]*)/
 const COMMIT = /^(commit )([0-9a-f]{7,40})(.*)$/
 const HUNK_LINE = new Set([' ', '+', '-', '\\'])
 const MARKERS = /^(?:--- |\+\+\+ )/
+// The colours git writes into a diff; any other escape sequence belongs to the content and is shown.
+// eslint-disable-next-line no-control-regex -- escape sequences are what it matches
+const GIT_COLOR = /\x1B\[[\d;]*m/g
 const META = /^(?:index |old mode |new mode |deleted file mode |new file mode |similarity index |dissimilarity index |rename from |rename to |copy from |copy to |Binary files |GIT binary patch)/
 const COMMIT_META = /^(?:Author|Date|Merge|AuthorDate|Commit|CommitDate):/
 const TOKEN = /\w+|\s+|[^\w\s]/g
@@ -123,7 +126,7 @@ export function renderDiff(text: string, theme: Theme): string {
   let newLeft = 0
   let language: Name | undefined
 
-  const lines = escapeControls(stripAnsi(text).replaceAll('\r\n', '\n')).replace(TRAILING_NEWLINE, '').split('\n').map((line): string | Content => {
+  const lines = escapeControls(text.replace(GIT_COLOR, '').replaceAll('\r\n', '\n')).replace(TRAILING_NEWLINE, '').split('\n').map((line): string | Content => {
     // A line that cannot belong to a hunk means its counts were off, so the rest is read as headers again.
     if ((oldLeft > 0 || newLeft > 0) && line !== '' && !HUNK_LINE.has(line[0] ?? ''))
       oldLeft = newLeft = 0

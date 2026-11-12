@@ -1,6 +1,6 @@
 import type { Align } from '@kaynooo/cli-kit'
 import type { Theme } from './theme'
-import { CONTROLS, stripAnsi, textWidth } from '@kaynooo/cli-kit'
+import { stripAnsi, stripControls, textWidth } from '@kaynooo/cli-kit'
 import { highlight, languageOf } from './code'
 
 export interface RenderSettings {
@@ -145,7 +145,7 @@ function renderTable(rows: string[][], aligns: Align[], width: number, theme: Th
 
 // The text without terminal escapes or control characters that would act on the terminal or collide with the markers above; tabs and line breaks stay.
 function printable(source: string): string {
-  return stripAnsi(source.replaceAll('\r\n', '\n')).replace(CONTROLS, '')
+  return stripControls(stripAnsi(source.replaceAll('\r\n', '\n')))
 }
 
 export function renderMarkdown(source: string, { theme, width }: RenderSettings): string {

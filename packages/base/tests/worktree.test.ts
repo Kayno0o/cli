@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
-import { describe, expect, test } from 'bun:test'
-import { copyKept, folded, keptPaths, linkedEntries, linkEntries, shellCommand } from '../src/worktree'
+import { describe, expect, spyOn, test } from 'bun:test'
+import { copyKept, folded, keptPaths, linkedEntries, linkEntries, removeTree, shellCommand } from '../src/worktree'
 
 const temp = tempDirs()
 const GIT_ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
@@ -143,5 +143,38 @@ describe('copyKept', () => {
 
     expect(exit(() => copyKept(root, dir, ['link/f.txt'])).message).toContain('symlink')
     expect(existsSync(join(outside, 'f.txt'))).toBe(false)
+  })
+})
+
+describe('removeTree', () => {
+  test('empties read-only folders, and warns instead of throwing on what it still cannot remove', () => {
+    const root = temp('rm-')
+
+    mkdirSync(join(root, 'a', 'b'), { recursive: true })
+    writeFileSync(join(root, 'a', 'b', 'f'), '')
+    chmodSync(join(root, 'a', 'b'), 0o555)
+    removeTree(join(root, 'a'))
+    expect(existsSync(join(root, 'a'))).toBe(false)
+
+    if (process.getuid?.() === 0)
+      return
+
+    const warned = spyOn(console, 'error').mockImplementation(() => undefined)
+    let warning = ''
+
+    mkdirSync(join(root, 'kept'))
+    chmodSync(root, 0o555)
+
+    try {
+      removeTree(join(root, 'kept'))
+      warning = String(warned.mock.calls[0]?.[0])
+    }
+    finally {
+      chmodSync(root, 0o755)
+      warned.mockRestore()
+    }
+
+    expect(existsSync(join(root, 'kept'))).toBe(true)
+    expect(warning).toContain(`could not remove ${join(root, 'kept')}`)
   })
 })

@@ -21,10 +21,10 @@ describe('renderDiff', () => {
     expect(Bun.stripANSI(renderDiff(DIFF, colour))).toBe(DIFF.replace('diff --git a/src/a.ts b/src/a.ts', 'diff src/a.ts'))
   })
 
-  test('drops colour codes and CRLF endings, and shows the other control characters', () => {
-    const out = renderDiff('--- a/x\r\n+++ b/x\r\n@@ -1 +1 @@\r\n-\u001B[31mold\u001B[m\u0007\r\n+new\u0008\u009B2J\r\r\n', colour)
+  test('drops git\'s colour codes and CRLF endings, and shows the other control characters and escapes', () => {
+    const out = renderDiff('--- a/x\r\n+++ b/x\r\n@@ -1 +1 @@\r\n-\u001B[31mold\u001B[m\u0007\r\n+new\u0008\u009B2J\r\u001B[2K\u001B]0;t\u0007\r\n', colour)
 
-    expect(Bun.stripANSI(out)).toBe('--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old^G\n+new^HM-^[2J^M\n')
+    expect(Bun.stripANSI(out)).toBe('--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old^G\n+new^HM-^[2J^M^[[2K^[]0;t^G\n')
   })
 
   test('colours added and removed lines, and tells a hunk\'s `---` content from a file header', () => {

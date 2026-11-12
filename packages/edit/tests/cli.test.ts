@@ -59,6 +59,7 @@ describe('sub', () => {
     expect(sub(['--regex', '--from', String.raw`\p{L}-1`, '--to', 'Y', 'u.txt']).code).toBe(0)
     expect(sub(['--regex', '--from', String.raw`c\-d`, '--to', 'Z', 'u.txt']).code).toBe(0)
     expect(read('u.txt')).toBe('Xb Y Z\n')
+    expect(sub(['--regex', '--from', String.raw`\p{Foo}`, '--to', 'Z', 'u.txt'])).toMatchObject({ code: 2, err: expect.stringContaining('--from is no valid regular expression') })
   })
 
   test.skipIf(process.getuid?.() === 0)('writes no file when the folder of a later one is not writable', () => {

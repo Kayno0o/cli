@@ -197,10 +197,26 @@ function writeAll(writes: { path: string, text: string }[]): Problem | undefined
     }
   }
 
-  for (const { temp, target } of staged)
-    renameSync(temp, target)
+  // A rename failing past the first (another device, a race) leaves the earlier ones done: the temp files left are removed and the error reaches the caller as it is.
+  for (const [index, { temp, target }] of staged.entries()) {
+    try {
+      renameSync(temp, target)
+    }
+    catch (error) {
+      for (const left of staged.slice(index))
+        rmSync(left.temp, { force: true })
+
+      throw error
+    }
+  }
 
   return undefined
+}
+
+function nothingWritten(problems: Problem[], json: boolean): number {
+  console.error(json ? JSON.stringify({ error: 'nothing written', failures: problems }) : `${role('problem', process.stderr)('sub: nothing written')}\n${problems.map(({ path, problem }) => path === '' ? problem : `${path}: ${problem}`).join('\n')}`)
+
+  return 1
 }
 
 // How long stdin may stay silent before it is taken for one that will never close, as in a tool call with no heredoc.
@@ -374,31 +390,23 @@ async function main(argv: string[]): Promise<number> {
   if (skipped.length > 0 && changes.length === 0 && problems.length === 0)
     problems.push({ path: skipped.join(', '), problem: 'no match in any file' })
 
-  if (problems.length > 0) {
-    console.error(json ? JSON.stringify({ error: 'nothing written', failures: problems }) : `${role('problem', process.stderr)('sub: nothing written')}\n${problems.map(({ path, problem }) => `${path}: ${problem}`).join('\n')}`)
-
-    return 1
-  }
+  if (problems.length > 0)
+    return nothingWritten(problems, json)
 
   try {
     for (const change of changes)
       change.diff = await diffTexts(change.path, change.before, change.after)
   }
   catch (error) {
-    console.error(`${role('problem', process.stderr)('sub: nothing written')}\n${error instanceof Error ? error.message : String(error)}`)
-
-    return 1
+    return nothingWritten([{ path: '', problem: error instanceof Error ? error.message : String(error) }], json)
   }
 
   const done: { path: string, replacements: number, lines: number[], added: number, removed: number, diff?: string }[] = []
 
   const failed = values['dry-run'] === true ? undefined : writeAll(changes.filter(({ before, after, diff }) => diff !== undefined && after !== before).map(({ path, after }) => ({ path, text: after })))
 
-  if (failed !== undefined) {
-    console.error(json ? JSON.stringify({ error: 'nothing written', failures: [failed] }) : `${role('problem', process.stderr)('sub: nothing written')}\n${failed.path}: ${failed.problem}`)
-
-    return 1
-  }
+  if (failed !== undefined)
+    return nothingWritten([failed], json)
 
   for (const { path, lines, diff } of changes) {
     if (diff === undefined)

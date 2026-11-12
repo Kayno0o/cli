@@ -240,7 +240,7 @@ function makeWritable(path: string): void {
 }
 
 // Removes a temporary folder, read-only ones inside included; one it still cannot remove is left with a warning, so cleanup never fails a run.
-function removeTree(path: string): void {
+export function removeTree(path: string): void {
   try {
     rmSync(path, { recursive: true, force: true })
   }

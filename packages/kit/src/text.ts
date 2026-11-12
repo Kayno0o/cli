@@ -8,7 +8,11 @@ export function stripAnsi(text: string): string {
 
 // The C0 controls but tab and line feed, DEL and the C1 controls: what a terminal acts on instead of drawing.
 // eslint-disable-next-line no-control-regex -- control characters are what it matches
-export const CONTROLS = /[\x00-\x08\x0B-\x1F\x7F-\x9F]/g
+const CONTROLS = /[\x00-\x08\x0B-\x1F\x7F-\x9F]/g
+
+export function stripControls(text: string): string {
+  return text.replace(CONTROLS, '')
+}
 
 // The text with each control character written the way `cat -v` shows it (`^[`, `^M`, `^?`, `M-^[`), so what reaches the terminal is drawn rather than run.
 export function escapeControls(text: string): string {

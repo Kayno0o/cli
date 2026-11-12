@@ -25,6 +25,7 @@ const CRLF = /\r?\n/g
 // A ${1} or ${name} reference in a regex --to, an escaped $$ matched first so it stays literal.
 const BRACED_GROUP = /\$\$|\$\{(\w+)\}/g
 const DIGITS = /^\d+$/
+const PROPERTY_ESCAPE = /\\p\{/i
 // A \n or \t typed in a regex --to, an escaped backslash matched first so \\n writes a backslash and an n.
 const ESCAPE = /\\\\|\\([nt])/g
 const SPECIAL = /[.*+?^${}()|[\]\\]/g
@@ -70,14 +71,17 @@ function firstLineHint(text: string, from: string): string {
   return lines.length === 0 ? '' : ` (its first line is on ${plural('line', lines.length)} ${listLines(lines)})`
 }
 
-// Unicode-aware, so `.` takes a whole emoji and `\p{L}` is a letter class; a pattern only the legacy syntax accepts, such as `\-` outside a class, still compiles without it.
+// Unicode-aware, so `.` takes a whole emoji and `\p{L}` is a letter class. A pattern only the legacy syntax accepts, such as `\-` outside a class, compiles without it, `.` then taking half an emoji; one naming a property is refused instead, as the legacy syntax would read `\p{Foo}` as the text `p{Foo}`.
 export function compile(source: string, { ignoreCase, dotAll }: Pick<Pair, 'ignoreCase' | 'dotAll'> = {}): RegExp {
   const flags = `gm${ignoreCase === true ? 'i' : ''}${dotAll === true ? 's' : ''}`
 
   try {
     return new RegExp(source, `${flags}u`)
   }
-  catch {
+  catch (error) {
+    if (PROPERTY_ESCAPE.test(source))
+      throw error
+
     return new RegExp(source, flags)
   }
 }
