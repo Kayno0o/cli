@@ -1,5 +1,8 @@
+import type { Piece } from '@kaynooo/cli-kit/shell'
+import type { Dialect } from './sql-tokens'
 import { parseCommand, splitCommand, tokenize } from '@kaynooo/cli-kit/shell'
 import { writes } from './guard'
+import { otherDatabases } from './guard-test'
 
 const SQL_CLIENTS = new Set(['psql', 'mysql', 'mariadb', 'pgcli', 'mycli', 'sqlite3'])
 // These write whatever they are given.
@@ -23,6 +26,9 @@ const LIST_OPTIONS = new Set(['-l', '--list'])
 const REDIRECT_ONLY = /^\d*(?:>|>>|>&|&>|>\||<&|<>)$/
 const REDIRECT_START = /^\d*>|^&>/
 const URL_DATABASE = /^[a-z][a-z\d+.-]*:\/\/[^/]*\/([^?#]*)/i
+// A libpq conninfo string, `host=h dbname=app user=u`, and the database it names.
+const CONNINFO = /^\s*\w+\s*=/
+const CONNINFO_DATABASE = /(?:^|\s)dbname\s*=\s*(?:'((?:\\.|[^'\\])*)'|(\S*))/
 // Console commands that write a schema or rows, Doctrine's and Laravel's.
 const WRITING_CONSOLE = /^(?:doctrine:(?:migrations:(?:migrate|execute|rollup)|schema:(?:update|create|drop)|database:(?:create|drop)|fixtures:load)|migrate(?::\w+)?|db:(?:seed|wipe))$/
 // A database, env file, compose file or service named for tests: `booki_test`, `.env.test`, `compose.test.yaml`, `-e test`, `APP_ENV=test`; "latest" is not one.
@@ -30,6 +36,8 @@ const TEST_SCOPED = /(?:^|[^a-z])test/i
 const ASSIGNMENT = /^([A-Z_]\w*)=/i
 // The variables that pick an environment or a database; `PGUSER=test_user` or `PGPASSWORD=test` pick neither.
 const TARGET_VARIABLE = /(?:^|_|^PG)(?:ENV|ENVIRONMENT|DATABASE|DB|DBNAME|DSN|URL)$|^(?:DB|DATABASE)_NAME$/i
+// The variables picking a database rather than an environment, which a database the client names overrides.
+const DATABASE_VARIABLE = /(?:^|_|^PG)(?:DATABASE|DB|DBNAME|DSN|URL)$|^(?:DB|DATABASE)_NAME$/i
 // The disposable stack git-diff captures on, by its directory `.worktrees/<project>/shot` or its compose project `<project>--shot`.
 // The options naming the account a command runs as, whose value is no target.
 const USER_OPTION = /^(?:-[uU]|--user(?:name)?)$/
@@ -40,6 +48,7 @@ const DEVICE_PATH = /^\/(?:dev|proc|sys)\//
 const STDIN_PATHS = new Set(['-', '/dev/stdin'])
 
 export const SQL_WRITE = 'Statements that write (INSERT, UPDATE, DELETE, DDL, migrations, fixtures) are handed over: list the exact command for the user to run. Only a clearly test-only database runs them directly.'
+export const SQL_OTHER_DATABASE = 'A write naming another database than the test one the client connects to (a qualified name, USE, CREATE or DROP DATABASE) reaches past it: hand the exact command over for the user to run.'
 const SHELL_SYNTAX = /[$`]/
 
 // Names the file and why it cannot be read, so the fix is clear: a path with a variable is not expanded here, and a file the same command writes does not exist yet when the command is checked.
@@ -54,8 +63,8 @@ export function sqlUnreadable(path: string): string {
   return `The SQL client is fed ${path}, which cannot be read here (${cause}), so what it runs is unknown. Write the file with the file edit tool in its own call and give a literal path, or run it on a database named *_test; otherwise hand over the exact command for the user to run.`
 }
 
-// What a client is given on its command line: the statements, the files it reads, the databases it names and its other operands.
-interface ClientInput { statements: string[], files: string[], databases: string[], operands: string[] }
+// What a client is given on its command line: the statements, the files it reads, the database it connects to when it names one, and its other operands.
+interface ClientInput { statements: string[], files: string[], database?: string | undefined, operands: string[] }
 
 function hasWrite(statement: string): boolean {
   // The server behind a client is unknown, so a statement is read as Postgres and as MySQL, and writes if either reading does.
@@ -66,8 +75,19 @@ function programOf(word: string): string {
   return word.split('/').pop() ?? ''
 }
 
-function databaseOf(operand: string): string {
-  return URL_DATABASE.exec(operand)?.[1] ?? operand
+// The database a `-d` value or a database operand names: a URL's path, a conninfo string's `dbname`, else the word itself.
+function databaseOf(operand: string): string | undefined {
+  const url = URL_DATABASE.exec(operand)
+
+  if (url !== null)
+    return url[1]
+
+  if (!CONNINFO.test(operand))
+    return operand
+
+  const conninfo = CONNINFO_DATABASE.exec(operand)
+
+  return conninfo === null ? undefined : (conninfo[1]?.replaceAll(/\\(.)/g, '$1') ?? conninfo[2])
 }
 
 // getopt_long and mysql's option parser take a long option cut short to what is unambiguous, `--comm` or `--exec`; it is read as the one option it prefixes.
@@ -82,7 +102,7 @@ function fullOption(option: string): string {
 
 // Reads a client's words, `-c`, `-tAc STATEMENT`, `--command=...`, `-fFILE`, `--file FILE`, `< FILE`, `<<< 'STATEMENT'` and the database it names included.
 function clientInput(name: string, args: readonly string[]): ClientInput {
-  const input: ClientInput = { statements: [], files: [], databases: [], operands: [] }
+  const input: ClientInput = { statements: [], files: [], operands: [] }
   const valueShorts = VALUE_SHORTS[name] ?? ''
   let isOperands = false
 
@@ -124,7 +144,7 @@ function clientInput(name: string, args: readonly string[]): ClientInput {
       else if (option === '--file')
         input.files.push(value)
       else if (DATABASE_LONGS.has(option))
-        input.databases.push(databaseOf(value))
+        input.database = databaseOf(value)
 
       if (attached === undefined && (STATEMENT_LONGS.has(option) || option === '--file' || DATABASE_LONGS.has(option) || VALUE_LONGS.has(option)))
         i++
@@ -150,7 +170,7 @@ function clientInput(name: string, args: readonly string[]): ClientInput {
         else if (FILE_SHORTS[name]?.includes(letter) === true)
           input.files.push(value)
         else if (DATABASE_SHORTS.has(letter))
-          input.databases.push(databaseOf(value))
+          input.database = databaseOf(value)
 
         break
       }
@@ -160,10 +180,11 @@ function clientInput(name: string, args: readonly string[]): ClientInput {
     }
   }
 
+  // the last `-d` wins, and names the database over the first operand, which is then the user
   if (name === 'sqlite3')
     input.statements.push(...input.operands.slice(1))
-  else if (input.operands[0] !== undefined)
-    input.databases.push(databaseOf(input.operands[0]))
+  else if (input.database === undefined && input.operands[0] !== undefined)
+    input.database = databaseOf(input.operands[0])
 
   return input
 }
@@ -183,11 +204,15 @@ function targetWords(words: readonly string[]): string[] {
   return words.filter((word, index) => !USER_OPTION.test(words[index - 1] ?? '') && !USER_ATTACHED.test(word))
 }
 
+// A database the client names wins over one a variable picks, `PGDATABASE=x_test psql -d prod` connecting to prod.
 function isTestScoped(words: readonly string[], client: number, input: ClientInput | null): boolean {
   if (client === -1)
     return targetWords(words).some(isTestWord)
 
-  return targetWords(words.slice(0, client)).some(isTestWord) || (input?.databases ?? []).some(name => TEST_SCOPED.test(name))
+  const named = input?.database
+  const before = targetWords(words.slice(0, client)).filter(word => named === undefined || !DATABASE_VARIABLE.test(ASSIGNMENT.exec(word)?.[1] ?? ''))
+
+  return before.some(isTestWord) || (named !== undefined && TEST_SCOPED.test(named))
 }
 
 // Whether a piece runs a SQL client, anywhere in its words so `docker compose exec db psql` counts.
@@ -198,6 +223,33 @@ export function runsSqlClient(command: string): boolean {
 // The text of a file a client reads, null when it cannot be: a device or a missing file.
 async function fileText(path: string, read: (path: string) => Promise<string | null>): Promise<string | null> {
   return DEVICE_PATH.test(path) ? null : read(path)
+}
+
+// The SQL a client speaks, none for sqlite3, whose database is its file.
+function clientDialect(name: string): Dialect | undefined {
+  if (IS_MYSQL.has(name))
+    return 'mysql'
+
+  return name === 'sqlite3' ? undefined : 'postgres'
+}
+
+// The statements a client is given: its own options, its heredoc body, the files it reads and what a printer pipes into it; `unreadable` names the first file that cannot be read.
+async function clientStatements(pieces: readonly Piece[], index: number, input: ClientInput, read: (path: string) => Promise<string | null>): Promise<{ statements: string[], unreadable: string | undefined }> {
+  const before = index === 0 ? null : parseCommand(pieces[index - 1]?.command ?? '')
+  const isPiped = pieces[index - 1]?.separator === '|'
+  // a file the client reads from stdin is its heredoc or what is piped in, not a path
+  const paths = input.files.filter(path => !STDIN_PATHS.has(path))
+  const files = [...paths, ...(isPiped && before?.program === 'cat' ? before.args.filter(arg => !arg.startsWith('-')) : [])]
+  const texts = await Promise.all(files.map(async path => fileText(path, read)))
+  const unreadable = texts.indexOf(null)
+  const statements = [
+    ...input.statements,
+    ...(pieces[index]?.heredocs ?? []),
+    isPiped && before !== null && PRINTERS.has(before.program) ? before.args.join(' ') : '',
+    ...texts.map(text => text ?? ''),
+  ]
+
+  return { statements, unreadable: unreadable === -1 ? undefined : files[unreadable] }
 }
 
 // Why the command is refused, or null; `read` gives the text of a file a client is fed, null when it cannot be read.
@@ -216,8 +268,20 @@ export async function sqlViolation(command: string, read: (path: string) => Prom
     const client = words.findIndex(word => SQL_CLIENTS.has(programOf(word)))
     const input = client === -1 ? null : clientInput(programOf(words[client] ?? ''), words.slice(client + 1))
 
-    if (inShotStack || isTestScoped(words, client, input))
+    if (inShotStack)
       continue
+
+    if (isTestScoped(words, client, input)) {
+      // what a test database is fed may still write to another one, which db refuses too; a file that cannot be read is no statement here
+      const fed = input === null ? null : await clientStatements(pieces, index, input, read)
+
+      const dialect = clientDialect(programOf(words[client] ?? ''))
+
+      if (dialect !== undefined && fed?.statements.some(statement => hasWrite(statement) && otherDatabases(statement, dialect, input?.database ?? '').length > 0) === true)
+        return SQL_OTHER_DATABASE
+
+      continue
+    }
 
     if (WRITING_TOOLS.has(program) && !words.some(word => LIST_OPTIONS.has(word)))
       return SQL_WRITE
@@ -228,24 +292,10 @@ export async function sqlViolation(command: string, read: (path: string) => Prom
     if (input === null)
       continue
 
-    const before = index === 0 ? null : parseCommand(pieces[index - 1]?.command ?? '')
-    const isPiped = pieces[index - 1]?.separator === '|'
-    // a file the client reads from stdin is its heredoc or what is piped in, not a path
-    const paths = input.files.filter(path => !STDIN_PATHS.has(path))
-    const files = [...paths, ...(isPiped && before?.program === 'cat' ? before.args.filter(arg => !arg.startsWith('-')) : [])]
-    const texts = await Promise.all(files.map(async path => fileText(path, read)))
-    const unreadable = texts.indexOf(null)
+    const { statements, unreadable } = await clientStatements(pieces, index, input, read)
 
-    if (unreadable !== -1)
-      return sqlUnreadable(files[unreadable] ?? '')
-
-    // the statements a client is given: its own options, its heredoc body, the files it reads and what a printer pipes into it
-    const statements = [
-      ...input.statements,
-      ...piece.heredocs,
-      isPiped && before !== null && PRINTERS.has(before.program) ? before.args.join(' ') : '',
-      ...texts.map(text => text ?? ''),
-    ]
+    if (unreadable !== undefined)
+      return sqlUnreadable(unreadable)
 
     if (statements.some(hasWrite))
       return SQL_WRITE

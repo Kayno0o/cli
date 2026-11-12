@@ -253,6 +253,13 @@ describe('SQL client forms', () => {
     'psql -f /dev/zero',
     'psql --file=/dev/zero',
     'psql < /dev/zero',
+    'PGDATABASE=prod_test psql -d prod -c "drop table t"',
+    'psql "host=h dbname=prod user=test" -c "delete from t"',
+    'psql -d prod test_user -c "drop table t"',
+    'mysql -e "drop database prod" test_db',
+    'mysql -D app_test -e "insert into prod.t values (1)"',
+    'mysql -D app_test -e "use prod; delete from t"',
+    'psql -d app_test -c "drop database app"',
   ], [
     'psql -c "SELECT 1"',
     'psql -tAc "SELECT 1"',
@@ -268,6 +275,11 @@ describe('SQL client forms', () => {
     'PGDATABASE=app_test psql -c "DROP TABLE t"',
     'mysql -D app_test -e "DROP TABLE t"',
     'docker compose -f compose.test.yaml exec db psql -c "DROP TABLE t"',
+    'psql "host=h dbname=app_test user=u" -c "delete from t"',
+    'psql "host=h dbname=\'app test\'" -c "delete from t"',
+    'psql -d app_test -c "insert into public.t values (1)"',
+    'mysql -D app_test -e "select * from prod.t"',
+    'mysql -D app_test -e "drop database app_test"',
   ], files)
 
   test('refuses the psql forms from the audit with the hand-over message', async () => {

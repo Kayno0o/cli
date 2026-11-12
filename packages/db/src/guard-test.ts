@@ -27,6 +27,33 @@ function foreignDatabases(statement: Token[], database: string): string[] {
   return found
 }
 
+const EXISTENCE_WORDS = new Set(['if', 'not', 'exists'])
+
+// The databases other than `database` a statement reaches: a qualified name (MySQL), a database it creates, alters or drops, or one it switches to with USE. `database` is empty when the one connected to is unknown.
+export function otherDatabases(sql: string, dialect: Dialect, database: string): string[] {
+  const found: string[] = []
+
+  for (const statement of splitStatements(tokenize(sql, dialect))) {
+    if (dialect === 'mysql')
+      found.push(...foreignDatabases(statement, database))
+
+    const first = statement[0]?.text ?? ''
+    const kind = statement.findIndex((token, index) => index > 0 && !DEFINITION_MODIFIERS.has(token.text))
+    const isDatabase = DEFINITION_STARTS.has(first) && (statement[kind]?.text === 'database' || (dialect === 'mysql' && statement[kind]?.text === 'schema'))
+    let named: Token | undefined
+
+    if (first === 'use')
+      named = statement[1]
+    else if (isDatabase)
+      named = statement.slice(kind + 1).find(token => !EXISTENCE_WORDS.has(token.text))
+
+    if (named !== undefined && named.kind !== 'punct' && named.text.toLowerCase() !== database.toLowerCase())
+      found.push(named.text)
+  }
+
+  return found
+}
+
 function definesServerObject(statement: Token[], dialect: Dialect): string | null {
   if (!DEFINITION_STARTS.has(statement[0]?.text ?? ''))
     return null
