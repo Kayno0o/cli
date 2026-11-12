@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { archiveSuffix, extractArchive } from '@kaynooo/cli-arc/src/extract.ts'
-import { badUsage, fail, formatAge, formatSize, jsonOption, parse, parseSize, printJson, table, takesControlCodes, truncate } from '@kaynooo/cli-kit'
+import { badUsage, escapeControls, fail, formatAge, formatSize, jsonOption, paint, parse, parseSize, printJson, table, truncate } from '@kaynooo/cli-kit'
 import { download } from './download'
 import { binDir, binDirOnPath, installBinary, pickBinary } from './install'
 import { summarize } from './script'
@@ -108,7 +108,7 @@ export async function get(args: string[]): Promise<number> {
     report.seen = `changed since the download of ${formatAge(last.seen.at)}, was ${last.seen.sha256.slice(0, 12)}`
 
   if (last?.content !== undefined && last.seen.sha256 !== file.sha256 && file.text)
-    report.diff = await diff(last.content, file, values.json !== true)
+    report.diff = await diff(last.content, file)
 
   remember(url, file)
 
@@ -175,19 +175,38 @@ async function fetchChecked(url: string, dir: string, created: boolean, checks: 
 }
 
 // The changes from the last download kept as `last` to this one, under a `--- last` and `+++ <name>` header in place of git's paths.
-async function diff(last: string, file: Downloaded, colored: boolean): Promise<string> {
+async function diff(last: string, file: Downloaded): Promise<string> {
   if (Bun.which('git') === null)
     return ''
 
-  const color = colored && takesControlCodes(process.stdout) ? '--color=always' : '--no-color'
-  const child = Bun.spawn(['git', 'diff', '--no-index', color, '--', last, file.path], { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' })
+  const child = Bun.spawn(['git', 'diff', '--no-index', '--no-color', '--', last, file.path], { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' })
   const lines = (await child.stdout.text()).trimEnd().split('\n')
 
   await child.exited
 
-  const hunks = lines.findIndex(line => Bun.stripANSI(line).startsWith('@@'))
+  const hunks = lines.findIndex(line => line.startsWith('@@'))
 
   return hunks === -1 ? '' : ['--- last', `+++ ${file.name}`, ...lines.slice(hunks)].join('\n')
+}
+
+// The diff with its control characters shown, coloured as git colours one when the terminal takes colours.
+function coloredDiff(text: string): string {
+  const colors = paint(process.stdout)
+
+  return text.split('\n').map((raw, index) => {
+    const line = escapeControls(raw)
+
+    if (index < 2)
+      return colors.bold(line)
+
+    if (line.startsWith('@@'))
+      return colors.cyan(line)
+
+    if (line.startsWith('+'))
+      return colors.green(line)
+
+    return line.startsWith('-') ? colors.red(line) : line
+  }).join('\n')
 }
 
 // Unpacks the archive into a new folder beside it named after it, so nothing already there is overwritten.
@@ -222,17 +241,18 @@ function print(report: Report, url: string, json: boolean): void {
     ...report.installed === undefined || binDirOnPath() ? [] : [['note', `${binDir()} is not on PATH`]],
   ]
 
-  console.log(table(rows))
+  // A served file name, URL or script line could carry escapes that redraw what the reader trusts, so each control character shows as `cat -v` writes it.
+  console.log(table(rows.map(([name = '', value = '']) => [name, escapeControls(value)])))
 
   if (report.diff !== undefined && report.diff !== '')
-    console.log(`\n${report.diff}`)
+    console.log(`\n${coloredDiff(report.diff)}`)
 
   if (report.script === undefined)
     return
 
   const { findings, env } = report.script
 
-  console.log(findings.length === 0 ? '\nscript: fetches, sudo, removes, profile, system and runs found nowhere' : `\nscript:\n${table(findings.map(({ line, does, text }) => [`line ${line}`, does, truncate(text, LINE_WIDTH)]))}`)
+  console.log(findings.length === 0 ? '\nscript: fetches, sudo, removes, profile, system and runs found nowhere' : `\nscript:\n${table(findings.map(({ line, does, text }) => [`line ${line}`, does, truncate(escapeControls(text), LINE_WIDTH)]))}`)
 
   if (env.length > 0)
     console.log(`reads: ${env.join(', ')}`)

