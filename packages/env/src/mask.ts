@@ -69,7 +69,7 @@ const SETTING_SUFFIX = /[_.-](?:TTL|FILE|PATH|DIR|NAME|URL|TIMEOUT|EXPIRY|EXPIRE
 
 const NUMBER = /^\d+$/
 // Names of a count rather than of the thing counted: `max_tokens`, `num_sessions`, `tokens`.
-const COUNT_NAME = /(?:^|[_.-])(?:max|min|num)[_.-]|tokens$/i
+const COUNT_NAME = /(?:^|[_.-])(?:max|min|num)[_.-]|^tokens$/i
 
 // A value under a setting's name, or a number under a count's (`max_tokens=4096`), is no secret.
 function isSetting(value: string, name: string): boolean {
