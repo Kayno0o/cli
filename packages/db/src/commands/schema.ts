@@ -186,10 +186,9 @@ export async function describe(args: string[]): Promise<number> {
   const indexes = await ask(plans.indexes)
   const foreignKeys = await ask(plans.foreignKeys)
 
-  if (values.json === true)
-    console.log(jsonText({ columns: columns.columns, rows: columns.rows, truncated: columns.truncated, masked: columns.masked, indexes, foreignKeys }, jsonValue))
-  else
-    console.log(`${render(columns, false, values.format)}\n\nindexes\n${render(shape(indexes, indexes.length, true), false, values.format)}\n\nforeign keys\n${render(shape(foreignKeys, foreignKeys.length, true), false, values.format)}`)
+  console.log(values.json === true
+    ? jsonText({ columns: columns.columns, rows: columns.rows, truncated: columns.truncated, masked: columns.masked, indexes, foreignKeys }, jsonValue)
+    : `${render(columns, false, values.format)}\n\nindexes\n${render(shape(indexes, indexes.length, true), false, values.format)}\n\nforeign keys\n${render(shape(foreignKeys, foreignKeys.length, true), false, values.format)}`)
 
   return 0
 }

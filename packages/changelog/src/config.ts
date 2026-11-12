@@ -105,7 +105,7 @@ export async function resolveConfig(options: ChangelogOptions) {
   config.discordWebhook ??= process.env.DISCORD_WEBHOOK ?? ''
 
   if (typeof config.repo !== 'string')
-    throw new Error(`Invalid Gitea repository, expected a string but got ${JSON.stringify(config.repo)}`)
+    throw new TypeError(`Invalid Gitea repository, expected a string but got ${JSON.stringify(config.repo)}`)
 
   return config as ResolvedChangelogOptions
 }

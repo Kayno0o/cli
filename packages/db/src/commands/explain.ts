@@ -56,10 +56,7 @@ export async function explain(args: string[]): Promise<number> {
   const rows = await readRows(url, explainSql(sql, dialect, prefix), [], undefined, undefined, timeout)
   const [only, ...others] = Object.keys(rows[0] ?? {})
 
-  if (values.json !== true && only !== undefined && others.length === 0)
-    console.log(rows.map(row => String(row[only])).join('\n'))
-  else
-    console.log(render(shape(rows, rows.length, true), values.json === true))
+  console.log(values.json !== true && only !== undefined && others.length === 0 ? rows.map(row => String(row[only])).join('\n') : render(shape(rows, rows.length, true), values.json === true))
 
   return 0
 }

@@ -16,7 +16,7 @@ const MILLISECONDS_FROM = 1e11
 
 function instant(kind: 'now' | 'epoch-seconds' | 'epoch-milliseconds' | 'date', ms: number, now: number, timeZone: string | undefined): Converted {
   if (Number.isNaN(new Date(ms).getTime()))
-    throw new Error('the date is out of range')
+    throw new RangeError('the date is out of range')
 
   return { kind, ...zoned(ms, timeZone), ms, seconds: Math.floor(ms / 1000), relative: relative(ms, now) }
 }

@@ -360,10 +360,7 @@ async function main(argv: string[]): Promise<number> {
     problems.push({ path: skipped.join(', '), problem: 'no match in any file' })
 
   if (problems.length > 0) {
-    if (json)
-      console.error(JSON.stringify({ error: 'nothing written', failures: problems }))
-    else
-      console.error(`${role('problem', process.stderr)('sub: nothing written')}\n${problems.map(({ path, problem }) => `${path}: ${problem}`).join('\n')}`)
+    console.error(json ? JSON.stringify({ error: 'nothing written', failures: problems }) : `${role('problem', process.stderr)('sub: nothing written')}\n${problems.map(({ path, problem }) => `${path}: ${problem}`).join('\n')}`)
 
     return 1
   }
