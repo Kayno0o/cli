@@ -3,6 +3,7 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { configBase } from '@kaynooo/cli-kit'
 import { KnownError } from './errors'
 
 export interface WtConfig {
@@ -38,7 +39,7 @@ export function expandHome(path: string): string {
   return path.replace(LEADING_TILDE, homedir())
 }
 
-export const configPath = () => process.env.WT_CONFIG ?? join((process.env.XDG_CONFIG_HOME ?? '') || join(homedir(), '.config'), 'wt', 'config.ts')
+export const configPath = () => process.env.WT_CONFIG ?? join(configBase(), 'wt', 'config.ts')
 
 export function resolveConfig(config: WtConfig = {}): Resolved {
   const configDir = join(configPath(), '..')

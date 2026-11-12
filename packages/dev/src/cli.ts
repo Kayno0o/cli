@@ -113,6 +113,7 @@ export async function password(args: string[]): Promise<number> {
 
   if (values.bcrypt !== undefined && Buffer.byteLength(secret) > BCRYPT_MAX_BYTES)
     badUsage(`bcrypt takes a password of at most ${BCRYPT_MAX_BYTES} bytes, this one has ${Buffer.byteLength(secret)}${given === undefined ? `: ${bytes} bytes as ${format} is too long, pick a smaller <length>` : ''}`)
+
   const hash = values.bcrypt === undefined ? undefined : await bcryptHash(secret)
   const copied = values.copy === true && await copyText(given === undefined ? secret : hash ?? secret)
 

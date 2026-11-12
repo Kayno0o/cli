@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'bun:test'
 import { parseGitCommit } from '../src/changelog'
 import { loadConfig } from '../src/config'
 import { generateDiscordPayload } from '../src/discord'
-import { formatLine, generateMarkdown } from '../src/markdown'
+import { foldedPrefix, formatLine, generateMarkdown } from '../src/markdown'
 import { releasedRepo } from './fixture'
 
 const tempDir = tempDirs()
@@ -57,6 +57,15 @@ describe('scopes', () => {
     expect(md).toContain('**constructor**: Ctor')
     expect(md).toContain('**b**: X')
     expect(JSON.stringify(generateDiscordPayload([commit('fix(toString): y'), mapped], await options({ scopeMap: { a: 'b', b: 'c' } })))).toContain('**toString**: Y')
+  })
+
+  it('groups and folds commits under the scope they map to', async () => {
+    const scopeMap = { a: 'x', b: 'x' }
+    const raw = (message: string, shortHash: string) => parseGitCommit({ message, body: '', shortHash, author: { name: 'Ada', email: 'ada@example.com' } }, { scopeMap } as never)!
+    const md = generateMarkdown([raw('fix(a): one', 'aaaaaa1'), raw('fix(b): two', 'aaaaaa2')], await options({ scopeMap, group: true }))
+
+    expect(md.match(/\*\*x\*\*/g)).toHaveLength(1)
+    expect(foldedPrefix(raw('chore(a): tidy', 'aaaaaa3'))).toBe('**chore(x)**: ')
   })
 })
 

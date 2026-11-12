@@ -1,7 +1,5 @@
-import { homedir } from 'node:os'
 import { join } from 'node:path'
-import process from 'node:process'
-import { fail, runTool } from '@kaynooo/cli-kit'
+import { configBase, fail, runTool } from '@kaynooo/cli-kit'
 import { redactUrl } from './remote'
 
 const LOGIN_HOST = /^\s*(?:-\s*)?(?:url|ssh_host):\s*["']?([^\s"']+)/gm
@@ -33,9 +31,7 @@ export function loginHosts(config: string): Set<string> {
 }
 
 function teaConfigPath(): string {
-  const base = process.env.XDG_CONFIG_HOME
-
-  return join(base !== undefined && base !== '' ? base : join(homedir(), '.config'), 'tea', 'config.yml')
+  return join(configBase(), 'tea', 'config.yml')
 }
 
 export async function readConfig(): Promise<string> {

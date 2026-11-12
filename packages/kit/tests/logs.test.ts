@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import process from 'node:process'
 import { describe, expect, test } from 'bun:test'
 import { createLog, privateLogDirectory, sweepLogs } from '../src'
 import { tempDirs } from '../src/test'
@@ -17,6 +18,15 @@ describe('privateLogDirectory', () => {
     expect(dir).toBe(join(base, 'kaynooo-cli', 'check/repo'))
     expect(statSync(dir).mode & 0o777).toBe(0o700)
     expect(await privateLogDirectory('check/repo', { XDG_RUNTIME_DIR: base })).toBe(dir)
+  })
+
+  test('uses ~/.cache/kaynooo-cli when XDG_RUNTIME_DIR is empty or relative', () => {
+    const home = temp('kit-logs-home-')
+    const source = new URL('../src', import.meta.url).pathname
+    const run = (value: string) => Bun.spawnSync([process.execPath, '-e', `import { privateLogDirectory } from '${source}'\nconsole.log(await privateLogDirectory('x', { XDG_RUNTIME_DIR: '${value}' }))`], { env: { ...process.env, HOME: home } }).stdout.toString().trim()
+
+    expect(run('')).toBe(join(home, '.cache', 'kaynooo-cli', 'x'))
+    expect(run('rel')).toBe(join(home, '.cache', 'kaynooo-cli', 'x'))
   })
 
   test('does not trust an existing folder others can read, nor a link', async () => {
