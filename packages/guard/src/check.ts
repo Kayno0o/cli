@@ -140,7 +140,7 @@ export async function checkCommand(command: string, context: Context): Promise<V
 
   add('remote', await guarded('remote', () => first([...run, ...scripted].map(remoteViolation))))
   add('git', await guarded('git', () => first([...run, ...scripted].map(each => gitViolation(each, context.isPushAsked)))))
-  add('destructive', await guarded('destructive', () => first([...run, ...scripted].map(destructiveViolation))))
+  add('destructive', await guarded('destructive', () => first([...run, ...scripted].map(each => destructiveViolation(each, context.home)))))
 
   const commit = await guarded('commit', () => first(run.map(each => commitViolation(each, context))))
 

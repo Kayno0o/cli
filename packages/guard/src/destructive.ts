@@ -13,6 +13,8 @@ const HOME_PREFIX = /^(?:~|\$HOME|\$\{HOME(?::?[-?=+][^}]*)?\}?)(?=\/|$)/
 const CURRENT_DIRECTORY = /^(?:\$PWD|\$\{PWD\}?|\$\(pwd\)?|`pwd`?)(?=\/|$)/
 // A path under /home/<user> or /root, as the first part of the path inside it.
 const ABSOLUTE_HOME = /^(?:home\/[^/]+|root)\/([^/]+)$/
+// Top-level system folders whose direct children (`/usr/lib`, `/var/lib`, `/etc/nginx`, `/home/<user>`) are as broad as they are.
+const SYSTEM_FOLDERS = new Set(['bin', 'boot', 'dev', 'etc', 'home', 'lib', 'lib32', 'lib64', 'media', 'mnt', 'opt', 'proc', 'run', 'sbin', 'srv', 'sys', 'usr', 'var'])
 const EXEC_FLAGS = new Set(['-exec', '-execdir', '-ok', '-okdir'])
 const REMOVER = /(?:^|\/)rm$/
 const TRAILING_SLASH = /\/$/
@@ -35,9 +37,9 @@ export const REMOTE_DELETE = 'Never delete a remote branch or tag with `git push
 export const BRANCH_DELETE = 'Never `git branch -D`: it drops commits no other branch holds. `git branch -d` deletes a merged branch only; ask the user before dropping an unmerged one.'
 export const REBASE = `Never start a \`git rebase\`: it rewrites history and stops halfway on conflicts in a tree others edit. ${COMMIT_FIRST} \`git cherry-pick\` or \`git merge\` keep history, and \`git worktree add\` gives a clean tree to do it in. \`--continue\` and \`--abort\` stay allowed.`
 export const REWRITE_HISTORY = 'Never `git filter-branch` or `git filter-repo`: they rewrite every commit of the repository. Ask the user to run it themselves.'
-export const BROAD_RM = 'Never `rm -r` on `/`, `~`, `$HOME`, `.`, `..`, `*` or a top-level directory: it deletes far more than the task. Name the exact directory, such as `dist` or `node_modules`.'
+export const BROAD_RM = 'Never `rm -r` on `/`, `~`, `$HOME` or the home by its path, `.`, `..`, `*`, a top-level directory or a system folder\'s child such as `/usr/lib`: it deletes far more than the task. Name the exact directory, such as `dist` or `node_modules`.'
 export const PROTECTED_RM = 'Never `rm -r` on a `.git` directory, on `~/Workspace` itself or on a dot-directory of the home (`~/.ssh`, `$HOME/.claude`, `~/.config`): it deletes a repository\'s whole history, every project, or the credentials and settings of the machine. Remove the named files inside, or ask the user to run it.'
-export const FIND_DELETE_HOME = 'Never `find ~ -delete` or `find / -exec rm` (also `$HOME`): it deletes matches across the whole home or disk. Start `find` in the project folder or `.` and name the pattern, such as `find . -name "*.tmp" -delete`.'
+export const FIND_DELETE_HOME = 'Never `find ~ -delete` or `find / -exec rm` (also `$HOME` or the home by its path): it deletes matches across the whole home or disk. Start `find` in the project folder or `.` and name the pattern, such as `find . -name "*.tmp" -delete`.'
 export const REFLOG_EXPIRE = 'Never `git reflog expire`, `git gc --prune=now` or `git update-ref -d`: they drop the reflog, unreachable commits or a ref, the only way back from a bad reset or rebase. Let git prune on its own schedule, and ask the user to run one when it is really wanted.'
 export const DOCKER_PRUNE_ALL = 'Never `docker system prune -a` (`--all`): it removes every image not used by a running container, volumes of other projects\' stacks included with --volumes. `docker system prune` without -a drops only dangling data; remove named images with `docker rmi`.'
 const PINNED_RUN = '`dl <url>` downloads it and prints its path and sha256; read that file, then `dl <url> --exec --sha256 <sha>` runs exactly what was read.'
@@ -58,8 +60,8 @@ function hasOption(args: readonly string[], long: readonly string[], shorts: str
   return false
 }
 
-// Whether a path names a place whose removal is far wider than a task: the root, the home, the current or parent directory, a glob of them, or a top-level directory.
-export function isBroadPath(path: string): boolean {
+// Whether a path names a place whose removal is far wider than a task: the root, the home by any spelling, the current or parent directory, a glob of them, a top-level directory or a system one's child.
+export function isBroadPath(path: string, homePath?: string): boolean {
   const arg = path.replace(CURRENT_DIRECTORY, '.')
   const home = HOME_PREFIX.exec(arg)
   const isAbsolute = home === null && arg.startsWith('/')
@@ -80,7 +82,12 @@ export function isBroadPath(path: string): boolean {
   if (home !== null)
     return parts.length === 0
 
-  return isAbsolute ? parts.length <= 1 : parts.every(part => part === '..')
+  if (!isAbsolute)
+    return parts.every(part => part === '..')
+
+  const isHome = homePath !== undefined && `/${parts.join('/')}` === homePath.replace(TRAILING_SLASH, '')
+
+  return parts.length <= 1 || isHome || (parts.length === 2 && SYSTEM_FOLDERS.has(parts[0] ?? ''))
 }
 
 // The paths a recursive removal names, none when it is not recursive.
@@ -104,12 +111,12 @@ function isProtectedPath(path: string): boolean {
 }
 
 // Whether a `find` starts at the home or the root and deletes what it matches.
-function deletesFromHome(args: readonly string[]): boolean {
+function deletesFromHome(args: readonly string[], home?: string): boolean {
   const firstOption = args.findIndex(arg => arg.startsWith('-') || arg === '(' || arg === '!')
   const starts = firstOption === -1 ? args : args.slice(0, firstOption)
   const deletes = args.includes('-delete') || args.some((arg, i) => EXEC_FLAGS.has(arg) && REMOVER.test(args[i + 1] ?? ''))
 
-  return deletes && starts.some(start => start === '/' || start.replace(TRAILING_SLASH, '') === HOME_PREFIX.exec(start)?.[0])
+  return deletes && starts.some(start => start === '/' || [HOME_PREFIX.exec(start)?.[0], home?.replace(TRAILING_SLASH, '')].includes(start.replace(TRAILING_SLASH, '')))
 }
 
 // Whether the command is `docker system prune` with `-a` or `--all`.
@@ -119,8 +126,8 @@ function dockerPrunesAll(args: readonly string[]): boolean {
   return system !== -1 && args[system + 1] === 'prune' && hasOption(args.slice(system + 2), ['--all'], 'a')
 }
 
-function removesBroadly(args: readonly string[]): boolean {
-  return args.includes('--no-preserve-root') || recursiveTargets(args).some(isBroadPath)
+function removesBroadly(args: readonly string[], home?: string): boolean {
+  return args.includes('--no-preserve-root') || recursiveTargets(args).some(path => isBroadPath(path, home))
 }
 
 // Whether a checkout restores the whole tree from its pathspecs: after a `--`, or past the first operand, which is the tree-ish, or alone.
@@ -223,8 +230,8 @@ function runsUnpinned(args: readonly string[]): boolean {
   return given('--exec') && given('--yes') && !given('--sha256') && !given('--sums')
 }
 
-// Why the command is refused as destructive, or null when no piece throws work away.
-export function destructiveViolation(command: string): string | null {
+// Why the command is refused as destructive, or null when no piece throws work away. `home` is the user's home folder by its absolute path.
+export function destructiveViolation(command: string, home?: string): string | null {
   if (runsDownload(command))
     return PIPE_TO_SHELL
 
@@ -234,13 +241,13 @@ export function destructiveViolation(command: string): string | null {
     if (program === 'dl' && runsUnpinned(args))
       return UNPINNED_EXEC
 
-    if (program === 'rm' && removesBroadly(args))
+    if (program === 'rm' && removesBroadly(args, home))
       return BROAD_RM
 
     if (program === 'rm' && recursiveTargets(args).some(isProtectedPath))
       return PROTECTED_RM
 
-    if (program === 'find' && deletesFromHome(args))
+    if (program === 'find' && deletesFromHome(args, home))
       return FIND_DELETE_HOME
 
     if (program === 'docker' && dockerPrunesAll(args))
