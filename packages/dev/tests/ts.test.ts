@@ -54,6 +54,8 @@ describe('parseDate', () => {
     expect(parseDate('2024-05-06T08:09:10Z', PARIS)).toBe(Date.UTC(2024, 4, 6, 8, 9, 10))
     expect(parseDate('2024-05-06T08:09:10+02:00', 'UTC')).toBe(Date.UTC(2024, 4, 6, 6, 9, 10))
     expect(parseDate('2024-05-06 08:09:10 +0200', 'UTC')).toBe(Date.UTC(2024, 4, 6, 6, 9, 10))
+    expect(parseDate('2024-05-06T08:09:10+02', 'UTC')).toBe(Date.UTC(2024, 4, 6, 6, 9, 10))
+    expect(parseDate('2024-05-06 08:09 -05', 'UTC')).toBe(Date.UTC(2024, 4, 6, 13, 9))
     expect(parseDate('2024-05-06T08:09:10.250Z')).toBe(Date.UTC(2024, 4, 6, 8, 9, 10, 250))
   })
 

@@ -78,13 +78,15 @@ const ZONELESS = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.
 const DATE_SPACE = /^(\d{4}-\d{2}-\d{2}) /
 const WHITESPACE = /\s+/g
 const ZONED = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:Z|[+-]\d{2}(?::?\d{2})?)$/i
+// An offset of hours alone, `+02`, which Date.parse refuses until written `+02:00`.
+const HOUR_OFFSET = /([+-]\d{2})$/
 
 // An ISO date or date-time as milliseconds. One without a zone (and a bare date) is read in `timeZone`, the host's when undefined; one ending in Z or an offset carries its own.
 export function parseDate(text: string, timeZone?: string): number | undefined {
   const match = ZONELESS.exec(text)
 
   if (match === null) {
-    const ms = ZONED.test(text) ? Date.parse(text.replace(DATE_SPACE, '$1T').replace(WHITESPACE, '')) : Number.NaN
+    const ms = ZONED.test(text) ? Date.parse(text.replace(DATE_SPACE, '$1T').replace(WHITESPACE, '').replace(HOUR_OFFSET, '$1:00')) : Number.NaN
 
     return Number.isNaN(ms) ? undefined : ms
   }
