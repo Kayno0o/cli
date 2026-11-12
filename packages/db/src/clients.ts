@@ -25,14 +25,15 @@ const KNOWN_LONGS = [...STATEMENT_LONGS, ...FILE_LONGS, ...DATABASE_LONGS, ...VA
 const LIST_OPTIONS = new Set(['-l', '--list'])
 const REDIRECT_ONLY = /^\d*(?:>|>>|>&|&>|>\||<&|<>)$/
 const REDIRECT_START = /^\d*>|^&>/
-// A connection URL's path, and a `dbname` in its query, which libpq reads over the path.
+// A connection URL's path, and its query, whose `dbname` libpq reads over the path. libpq knows no fragment: `/app#?dbname=prod` connects to prod, and `/app#x` to a database named `app#x`.
 const URL_START = /^[a-z][a-z\d+.-]*:\/\//i
-const URL_PATH = /^[a-z][a-z\d+.-]*:\/\/[^/?#]*\/?([^?#]*)/i
-const URL_QUERY_DATABASE = /[?&]dbname=([^&#]*)/g
-// A libpq conninfo string, `host=h dbname=app user=u`, read pair by pair: a value is quoted with '' and \ escapes, or bare up to a space.
+const URL_PATH = /^[a-z][a-z\d+.-]*:\/\/[^/?]*\/?([^?]*)/i
+// A libpq conninfo string, `host=h dbname=app user=u`, read pair by pair: a value is quoted with '' and \ escapes, or bare up to a space, where a quote is a plain character and \ still escapes.
 const CONNINFO = /^\s*\w+\s*=/
-const CONNINFO_PAIR = /\s*(\w+)\s*=\s*(?:'((?:\\.|[^'\\])*)'|((?:\\.|[^\s'\\])*))/gy
-const ESCAPED = /\\(.)/g
+const CONNINFO_PAIR = /\s*(\w+)\s*=\s*(?:'((?:\\[\s\S]|[^'\\])*)'|(?!')((?:\\[\s\S]?|[^\s\\])*))/gy
+const ESCAPED = /\\([\s\S]?)/g
+// What a conninfo libpq reads differently from this parse counts as naming: a database no test one, so nothing it hides lets a write through.
+const UNREAD_CONNINFO = 'a conninfo string not read to its end'
 // Console commands that write a schema or rows, Doctrine's and Laravel's.
 const WRITING_CONSOLE = /^(?:doctrine:(?:migrations:(?:migrate|execute|rollup)|schema:(?:update|create|drop)|database:(?:create|drop)|fixtures:load)|migrate(?::\w+)?|db:(?:seed|wipe))$/
 // A database, env file, compose file or service named for tests: `booki_test`, `.env.test`, `compose.test.yaml`, `-e test`, `APP_ENV=test`; "latest" is not one.
@@ -86,10 +87,28 @@ function percentDecoded(text: string): string {
   }
 }
 
+// The last `dbname` of a URL's query, its keys percent-decoded as libpq decodes them (`?%64bname=prod`).
+function queryDatabase(operand: string): string | undefined {
+  const query = operand.indexOf('?')
+  let database: string | undefined
+
+  if (query === -1)
+    return undefined
+
+  for (const pair of operand.slice(query + 1).split('&')) {
+    const equals = pair.indexOf('=')
+
+    if (equals !== -1 && percentDecoded(pair.slice(0, equals)) === 'dbname')
+      database = pair.slice(equals + 1)
+  }
+
+  return database
+}
+
 // The database a `-d` value or a database operand names: a URL's query `dbname` or path, a conninfo string's last `dbname`, else the word itself.
 function databaseOf(operand: string): string | undefined {
   if (URL_START.test(operand)) {
-    const raw = [...operand.matchAll(URL_QUERY_DATABASE)].at(-1)?.[1] ?? URL_PATH.exec(operand)?.[1]
+    const raw = queryDatabase(operand) ?? URL_PATH.exec(operand)?.[1]
 
     return raw === undefined || raw === '' ? undefined : percentDecoded(raw)
   }
@@ -98,13 +117,18 @@ function databaseOf(operand: string): string | undefined {
     return operand
 
   let database: string | undefined
+  let end = 0
 
-  for (const [, key, quoted, bare] of operand.matchAll(CONNINFO_PAIR)) {
+  for (const match of operand.matchAll(CONNINFO_PAIR)) {
+    const [whole, key, quoted, bare] = match
+
+    end = match.index + whole.length
+
     if (key === 'dbname')
       database = (quoted ?? bare ?? '').replaceAll(ESCAPED, '$1')
   }
 
-  return database
+  return operand.slice(end).trim() === '' ? database : UNREAD_CONNINFO
 }
 
 // getopt_long and mysql's option parser take a long option cut short to what is unambiguous, `--comm` or `--exec`; it is read as the one option it prefixes.
