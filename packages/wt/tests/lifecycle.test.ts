@@ -469,42 +469,69 @@ describe('commands checking their target before any job', () => {
 
   afterAll(() => env?.stop())
 
+  const manifest = (name: string, text: string) => writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', `${name}.ts`), text)
+
   // A manifest of a second project checked out at `root`, under the sandbox's home
-  const other = (root: string, extra: object = {}) => {
+  const other = (root: string, extra: object = {}, name = 'other') => {
     mkdirSync(join(env.sandbox.home, root, '.git'), { recursive: true })
-    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: `~/${root}`, ...extra })}\n`)
+    manifest(name, `export default ${JSON.stringify({ ...MANIFEST, root: `~/${root}`, ...extra })}\n`)
   }
 
-  test('refuse two projects whose checkout folders compose names alike, as their worktrees would share stacks', async () => {
-    other('Elsewhere/Times.')
+  // The times project keeps working beside a manifest skipped, which -p still refuses by name
+  const skipsOther = async (name: string, why: string) => {
+    const run = await env.wt('path')
 
-    const run = await env.wt('up', 'planning')
+    expect(run.code).toBe(0)
+    expect(run.out).toBe(`${env.root}\n`)
+    expect(run.err).toContain(why)
 
-    expect(run.code).toBe(1)
-    expect(run.err).toContain('other.ts and times.ts both have a checkout compose names times')
+    const named = await env.wt('path', '-p', name)
+
+    expect(named.code).toBe(1)
+    expect(named.err).toContain(why)
+  }
+
+  test('skip the second of two projects whose checkout folders compose names alike, as their worktrees would share stacks', async () => {
+    other('Elsewhere/Times.', {}, 'twin')
+
+    const run = await env.wt('path')
+
+    expect(run.out).toBe(`${env.root}\n`)
+    expect(run.err).toContain('times.ts and twin.ts both have a checkout compose names times, so their worktrees would share stacks and volumes: twin skipped')
   })
 
-  test('refuse a checkout folder that leaves compose no stack name', async () => {
+  test('skip a checkout folder that leaves compose no stack name', async () => {
     other('Elsewhere/__')
-
-    const run = await env.wt('up', 'planning')
-
-    expect(run.code).toBe(1)
-    expect(run.err).toContain('other.ts: the checkout folder __ holds no letter or digit')
+    await skipsOther('other', 'other.ts: the checkout folder __ holds no letter or digit')
   })
 
-  test('refuse a manifest whose root or repos are no git checkout, as git worktree add would fail late', async () => {
-    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Gone' })}\n`)
-
-    expect((await env.wt('up', 'planning')).err).toContain(`other: root ${join(env.sandbox.home, 'Gone')} is not a git checkout, the folder is missing`)
+  test('skip a manifest whose root or repos are no git checkout, as git worktree add would fail late', async () => {
+    manifest('other', `export default ${JSON.stringify({ ...MANIFEST, root: '~/Gone' })}\n`)
+    await skipsOther('other', `other: root ${join(env.sandbox.home, 'Gone')} is not a git checkout, the folder is missing`)
 
     other('Elsewhere/other', { repos: ['api'] })
     mkdirSync(join(env.sandbox.home, 'Elsewhere', 'other', 'api'))
+    await skipsOther('other', 'other: repo api is not a git checkout')
+  })
 
-    const run = await env.wt('up', 'planning')
+  test('skip a manifest that does not load or has no root, naming its file; repos and routes may be left out', async () => {
+    const file = join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts')
 
-    expect(run.code).toBe(1)
-    expect(run.err).toContain('other: repo api is not a git checkout\n')
+    manifest('other', 'export default {\n')
+    await skipsOther('other', `${file} does not load:`)
+    // -p reads that one manifest alone
+    expect((await env.wt('path', '-p', 'times')).err).toBe('')
+
+    manifest('other', 'export default { repos: [] }\n')
+    await skipsOther('other', `${file} has no default export with a \`root\``)
+
+    mkdirSync(join(env.sandbox.home, 'Elsewhere', 'bare', '.git'), { recursive: true })
+    manifest('other', 'export default { root: \'~/Elsewhere/bare\' }\n')
+
+    const bare = await env.wt('path', '-p', 'other')
+
+    expect(bare.err).toBe('')
+    expect(bare.out).toBe(`${join(env.sandbox.home, 'Elsewhere', 'bare')}\n`)
   })
 
   test('warns about a key the manifest does not know, naming it, and goes on', async () => {

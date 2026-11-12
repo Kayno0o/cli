@@ -42,7 +42,7 @@ function bgName(values: { bg?: boolean }, ...words: (string | undefined)[]): str
 
 async function projectNames(): Promise<string[]> {
   try {
-    return (await loadProjects()).map(project => project.name)
+    return (await loadProjects(() => undefined)).map(project => project.name)
   }
   catch {
     return []

@@ -3,7 +3,7 @@ import { existsSync, readdirSync, realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { warn } from '@kaynooo/cli-kit'
 import { expandHome, fillTemplate, wtConfig } from './config'
-import { KnownError } from './errors'
+import { failureText, KnownError } from './errors'
 import { stringToPort } from './port'
 
 export interface Route {
@@ -19,7 +19,7 @@ export interface ProjectConfig {
   // Checkout the worktrees are made from.
   root: string
   // Nested repos checked out on the task branch, the root then a detached worktree; with none, the root itself is on the branch.
-  repos: string[]
+  repos?: string[]
   // Gitignored files and dirs copied from main. Hosts in the `.env*` files among them are rewritten.
   copy?: string[]
   // Data each worktree gets its own copy of: a path under root, or the key of a named volume.
@@ -39,7 +39,8 @@ export interface ProjectConfig {
   setup?: string[]
   // What `wt run` needs to run a command of the worktree in a throwaway container, beside its own test database.
   run?: RunConfig
-  routes: Route[]
+  // The hosts devproxy routes to the worktree's stack; none leaves it unrouted.
+  routes?: Route[]
 }
 
 export interface RunConfig {
@@ -56,6 +57,8 @@ export interface RunConfig {
 }
 
 export interface Project extends ProjectConfig {
+  repos: string[]
+  routes: Route[]
   name: string
   // The wt config the manifest was loaded under, so every path below follows it.
   settings: Resolved
@@ -126,41 +129,68 @@ function assertValid(project: Project): void {
   }
 }
 
-export async function loadProjects(): Promise<Project[]> {
-  const settings = await wtConfig()
-  const files = existsSync(settings.manifests) ? readdirSync(settings.manifests).filter(file => file.endsWith('.ts')).sort() : []
+/** One manifest, checked; any failure names its file. */
+async function loadManifest(settings: Resolved, file: string): Promise<Project> {
+  const path = join(settings.manifests, file)
+  let config: unknown
 
-  const projects = await Promise.all(files.map(async (file) => {
-    const { default: config } = await import(join(settings.manifests, file)) as { default: ProjectConfig }
-    const project = { ...config, root: expandHome(config.root), name: basename(file, '.ts'), settings }
+  try {
+    config = ((await import(path)) as { default?: unknown }).default
+  }
+  catch (error) {
+    throw new WtError(`${path} does not load: ${error instanceof Error ? error.message : String(error)}`)
+  }
 
-    warnUnknownKeys(project.name, config)
-    assertValid(project)
+  if (typeof config !== 'object' || config === null || typeof (config as { root?: unknown }).root !== 'string')
+    throw new WtError(`${path} has no default export with a \`root\``, 'export default { root: \'~/Workspace/<checkout>\', ... } satisfies ProjectConfig')
 
-    return project
-  }))
+  const manifest = config as ProjectConfig
+  const project: Project = { ...manifest, repos: manifest.repos ?? [], routes: manifest.routes ?? [], root: expandHome(manifest.root), name: basename(file, '.ts'), settings }
+
+  warnUnknownKeys(project.name, manifest)
+  assertValid(project)
 
   // A worktree's stack is named after its checkout's folder, kept so that running stacks keep their containers and volumes.
-  for (const [index, project] of projects.entries()) {
-    if (stackName(project) === '')
-      throw new WtError(`${project.name}.ts: the checkout folder ${basename(project.root)} holds no letter or digit to name its compose stacks after`, 'rename the folder')
+  if (stackName(project) === '')
+    throw new WtError(`${project.name}.ts: the checkout folder ${basename(project.root)} holds no letter or digit to name its compose stacks after`, 'rename the folder')
 
-    const twin = projects.slice(0, index).find(other => stackName(other) === stackName(project))
+  return project
+}
+
+/** Every project whose manifest loads; one that does not is skipped, `skipped` told why (a warning by default), so it cannot break the others. */
+export async function loadProjects(skipped: (message: string) => void = warn): Promise<Project[]> {
+  const settings = await wtConfig()
+  const files = existsSync(settings.manifests) ? readdirSync(settings.manifests).filter(file => file.endsWith('.ts')).sort() : []
+  const loaded = await Promise.allSettled(files.map(async file => loadManifest(settings, file)))
+  const projects: Project[] = []
+
+  for (const result of loaded) {
+    if (result.status === 'rejected') {
+      skipped(`manifest skipped, ${failureText(result.reason)}`)
+
+      continue
+    }
+
+    const project = result.value
+    const twin = projects.find(other => stackName(other) === stackName(project))
 
     if (twin)
-      throw new WtError(`${twin.name}.ts and ${project.name}.ts both have a checkout compose names ${stackName(project)}, so their worktrees would share stacks and volumes`, 'rename the folder of a checkout that has no worktrees yet, or remove one of the files')
+      skipped(`${twin.name}.ts and ${project.name}.ts both have a checkout compose names ${stackName(project)}, so their worktrees would share stacks and volumes: ${project.name} skipped, rename the folder of a checkout that has no worktrees yet, or remove one of the files`)
+    else
+      projects.push(project)
   }
 
   return projects
 }
 
+/** The project of one manifest, the others left unread: its failure to load ends the command. */
 export async function findProject(name: string): Promise<Project> {
-  const project = (await loadProjects()).find(p => p.name === name)
+  const settings = await wtConfig()
 
-  if (!project)
-    throw new WtError(`no project named ${name} in ${(await wtConfig()).manifests}`)
+  if (!existsSync(join(settings.manifests, `${name}.ts`)))
+    throw new WtError(`no project named ${name} in ${settings.manifests}`)
 
-  return project
+  return loadManifest(settings, `${name}.ts`)
 }
 
 export const tasksDir = (project: Project) => fillTemplate([project.settings.worktrees], { root: dirname(project.root), repo: basename(project.root) })[0]!
