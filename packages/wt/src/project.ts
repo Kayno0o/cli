@@ -124,8 +124,9 @@ function assertValid(project: Project): void {
   }
 
   for (const [task, port] of Object.entries(project.ports ?? {})) {
-    if (!Number.isInteger(port) || port < 1 || port > 65535)
-      throw new WtError(`${project.name}: ports gives ${task} ${String(port)}, expected a whole number from 1 to 65535`)
+    // A port under 1024 needs root to listen on, and wt cannot tell whether one is taken
+    if (!Number.isInteger(port) || port < 1024 || port > 65535)
+      throw new WtError(`${project.name}: ports gives ${task} ${String(port)}, expected a whole number from 1024 to 65535`)
   }
 
   for (const route of project.routes) {

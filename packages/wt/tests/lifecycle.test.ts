@@ -163,7 +163,7 @@ describe('addTask', () => {
     expect(readFileSync(override('times--other'), 'utf8')).toContain(`"devproxy.wt0.to": "host:${port}"`)
 
     writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, ports: { other: 70000 } })}\n`)
-    expect((await wt('path', '-p', 'times')).err).toContain('times: ports gives other 70000, expected a whole number from 1 to 65535')
+    expect((await wt('path', '-p', 'times')).err).toContain('times: ports gives other 70000, expected a whole number from 1024 to 65535')
   }, 30_000)
 
   test('says what a new branch forks from, main\'s current commit or the ref --from names', async () => {

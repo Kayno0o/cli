@@ -1,5 +1,5 @@
 import type { TCPSocketListener } from 'bun'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { tempDirs } from '@kaynooo/cli-kit/test'
@@ -47,8 +47,11 @@ async function newKey(name: string): Promise<string> {
   return (await gpg('--with-colons', '--list-keys', `${name}@example.com`)).split('\n').find(line => line.startsWith('fpr:'))!.split(':')[9]!
 }
 
+let signed = 0
+
+// A file of its own per signature, as gpg will not write over one already there.
 async function sign(fingerprint: string, data: Uint8Array | string): Promise<string> {
-  const file = join(gpgHome, `${signatures.size}.data`)
+  const file = join(gpgHome, `${signed++}.data`)
 
   writeFileSync(file, data)
   await gpg('--local-user', fingerprint, '--armor', '--detach-sign', '-o', `${file}.asc`, file)
@@ -309,6 +312,7 @@ describe('checking', () => {
     expect((await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.asc')], dir)).code).toBe(2)
     expect((await dl([url('/tool.bin'), '--key', pem], dir)).code).toBe(2)
     expect((await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.asc'), '--key', 'nonsense'], dir)).code).toBe(2)
+    expect((await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.asc'), '--key', dir], dir)).code).toBe(2)
     expect(await dl([url('/tool.bin'), '--sig', url('/sig/x.minisig'), '--key', `RW${'A'.repeat(54)}`], dir, { PATH: empty })).toMatchObject({ code: 1, err: expect.stringContaining('--key is a minisign key and minisign is not on PATH') })
     expect(await dl([url('/tool.bin'), '--sig', url('/sig/x.sig'), '--key', pem], dir, { PATH: empty })).toMatchObject({ code: 1, err: expect.stringContaining('--key is a cosign key and cosign is not on PATH') })
     expect(readdirSync(join(dir, 'tmp'))).toEqual([])
@@ -383,6 +387,41 @@ describe('resuming', () => {
     expect((await dl([url('/big.bin')], rangeless)).code).toBe(1)
     expect((await dl([url('/big.bin'), '--sha256', sha256(BIG)], rangeless)).code).toBe(0)
     expect(big.asked).toHaveLength(1)
+  })
+
+  test('a part left over a week is dropped by the next download of any URL', async () => {
+    const dir = home()
+
+    reset()
+    expect((await dl([url('/big.bin')], dir)).code).toBe(1)
+
+    const [part] = (await parts(dir)).filter(each => each.endsWith('part'))
+    const weekAgo = new Date(Date.now() - 8 * 24 * 3600_000)
+
+    utimesSync(join(dir, 'state', part!), weekAgo, weekAgo)
+    expect((await dl([url('/tool.bin')], dir)).code).toBe(0)
+    expect(await parts(dir)).toEqual([])
+  })
+
+  // The part lives in the state folder, so one on another filesystem than the download's is copied over rather than renamed.
+  test.skipIf(!existsSync('/dev/shm') || statSync('/dev/shm').dev === statSync(temp('dl-dev-')).dev)('a part on another filesystem than the folder is copied into place', async () => {
+    const dir = home()
+    const state = mkdtempSync('/dev/shm/dl-state-')
+
+    try {
+      reset()
+      expect((await dl([url('/big.bin')], dir, { XDG_STATE_HOME: state })).code).toBe(1)
+
+      const out = join(dir, 'out')
+      const resumed = await dl([url('/big.bin'), '-o', out, '--sha256', sha256(BIG)], dir, { XDG_STATE_HOME: state })
+
+      expect(resumed.code).toBe(0)
+      expect(readFileSync(join(out, 'big.bin'))).toEqual(Buffer.from(BIG))
+      expect(Array.from(new Bun.Glob('**/part*').scanSync({ cwd: state, dot: true }))).toEqual([])
+    }
+    finally {
+      rmSync(state, { recursive: true, force: true })
+    }
   })
 })
 
@@ -493,6 +532,28 @@ describe('outdated and update', () => {
     expect(refused.err).toContain('mover: sha256 mismatch for moving.bin')
     expect(readFileSync(installed, 'utf8')).toBe('v2\n')
     expect((await dl(['update', 'nothing'], dir)).code).toBe(2)
+  })
+
+  test.skipIf(!hasGpg)('update checks a changed file against the signature and key it was installed with', async () => {
+    const dir = home()
+    const installed = join(dir, '.local', 'bin', 'signed')
+
+    Object.assign(moving, { body: 'v1\n', sums: 'v1\n' })
+    signatures.set('/moving.bin.asc', await sign(signer, 'v1\n'))
+    expect((await dl([url('/moving.bin'), '--bin', 'signed', '--sig', url('/sig/moving.bin.asc'), '--key', signerFile], dir)).code).toBe(0)
+
+    moving.body = 'v2\n'
+    signatures.set('/moving.bin.asc', await sign(stranger, 'v2\n'))
+
+    const refused = await dl(['update', 'signed'], dir)
+
+    expect(refused.code).toBe(1)
+    expect(refused.err).toContain('signed: the gpg signature does not verify')
+    expect(readFileSync(installed, 'utf8')).toBe('v1\n')
+
+    signatures.set('/moving.bin.asc', await sign(signer, 'v2\n'))
+    expect((await dl(['update', 'signed'], dir)).code).toBe(0)
+    expect(readFileSync(installed, 'utf8')).toBe('v2\n')
   })
 
   test('update shows a changed script and runs it with its arguments, unpinned only with --yes', async () => {

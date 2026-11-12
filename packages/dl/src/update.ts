@@ -1,7 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { LedgerEntry } from './state'
-import { Exit, fail, formatAge, jsonOption, parse, printError, printJson, table } from '@kaynooo/cli-kit'
-import { get } from './get'
+import { Exit, fail, formatAge, formatSize, jsonOption, parse, parseSize, printError, printJson, table } from '@kaynooo/cli-kit'
+import { DEFAULT_MAX_SIZE, get } from './get'
 import { readLedger } from './state'
 
 type Freshness = { state: 'current' } | { state: 'changed', now: string } | { state: 'unreachable', error: string }
@@ -10,6 +10,8 @@ interface Checked { entry: LedgerEntry, freshness: Freshness }
 
 // How many sources are asked at once.
 const AT_ONCE = 4
+// A body hashed is read no further than dl downloads by default.
+const MAX_BYTES = parseSize(DEFAULT_MAX_SIZE)!
 
 // Whether the source of an entry moved on: a conditional request answers 304 when the server can tell, else the body is hashed against the sha installed.
 async function freshness(entry: LedgerEntry): Promise<Freshness> {
@@ -33,9 +35,16 @@ async function freshness(entry: LedgerEntry): Promise<Freshness> {
     }
 
     const hasher = new Bun.CryptoHasher('sha256')
+    let size = 0
 
-    for await (const chunk of (response.body ?? new ReadableStream()) as AsyncIterable<Uint8Array>)
+    for await (const chunk of (response.body ?? new ReadableStream()) as AsyncIterable<Uint8Array>) {
+      size += chunk.length
+
+      if (size > MAX_BYTES)
+        return { state: 'unreachable', error: `goes over ${formatSize(MAX_BYTES)}` }
+
       hasher.update(chunk)
+    }
 
     const now = hasher.digest('hex')
 

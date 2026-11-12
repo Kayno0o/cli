@@ -2,7 +2,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
 import { loadKnown, readEntries } from '../files'
-import { maskValue } from '../mask'
+import { display } from './read'
 
 const diffUsage = `ev diff <a> <b>
 
@@ -52,7 +52,7 @@ export async function diff(args: string[]): Promise<number> {
   const path = role('path', process.stdout)
   const value = role('value', process.stdout)
   const known = differ.length ? await loadKnown(process.cwd(), [left, right]) : undefined
-  const shown = (key: string, raw: string) => raw === '' ? 'empty' : maskValue(key, raw, known).replaceAll('\n', '\\n').replaceAll('\r', '\\r')
+  const shown = (key: string, raw: string) => raw === '' ? 'empty' : display(key, raw, known)
   const lines = [
     ...onlyA.map(key => `only in ${path(a)}: ${value(key)}`),
     ...onlyB.map(key => `only in ${path(b)}: ${value(key)}`),

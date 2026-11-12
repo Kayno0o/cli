@@ -181,6 +181,27 @@ function validators(from: Headers | Part): Pick<Part, 'etag' | 'lastModified'> {
   return { ...etag === undefined ? {} : { etag }, ...lastModified === undefined ? {} : { lastModified } }
 }
 
+// A signature or a checksums file is never this large; a server sending more fails rather than filling memory.
+const SMALL_FILE = 16 * 1024 * 1024
+
+/** The whole body of a small file at `url`, such as a signature or a checksums file, failing with exit 1 past 16M. */
+export async function smallFile(url: string): Promise<Uint8Array> {
+  const response = await reach(url)
+  const chunks: Uint8Array[] = []
+  let size = 0
+
+  for await (const chunk of (response.body ?? new ReadableStream()) as AsyncIterable<Uint8Array>) {
+    size += chunk.length
+
+    if (size > SMALL_FILE)
+      fail(`${url} goes over ${formatSize(SMALL_FILE)}, too large for a signature or checksums file`, 1)
+
+    chunks.push(chunk)
+  }
+
+  return Buffer.concat(chunks)
+}
+
 // The answer of `url` after its redirects, failing with exit 1 when it cannot be reached or answers an error status other than one `allowed`.
 export async function reach(url: string, init?: BunFetchRequestInit, allowed: number[] = []): Promise<Response> {
   let response: Response

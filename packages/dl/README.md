@@ -12,7 +12,7 @@ bun add -g @kaynooo/cli-dl
 | --- | --- |
 | `dl <url>` | downloads into a new folder under the temp folder (`-o <dir>` to choose one, never overwriting), and prints the path, size, final URL, type, sha256 and how it compares with the last download of that URL |
 | `dl ls` | the commands `dl` installed and the scripts it ran, with where each came from and when |
-| `dl outdated [name...]` | asks each one's source whether it changed since (a conditional request when the server gave an ETag or Last-Modified, else the sha256 of a new download), lists those that did with the age of the install, exit 1 when one did; `--bins` the commands only, `--json` |
+| `dl outdated [name...]` | asks each one's source whether it changed since (a conditional request when the server gave an ETag or Last-Modified, else the sha256 of a new download), lists those that did with the age of the install, exit 1 when one did or its source cannot be reached; `--bins` the commands only, `--json` |
 | `dl update [name...]` | downloads again what changed, every one without names, checked as at install (`--sums`, `--sig`), then installs it or shows the script's diff and runs it with its arguments; a script only a sha256 pinned runs with `--yes`. `doctor` lists the commands behind, `dl update <name>` as the fix |
 
 | Option | What it does |

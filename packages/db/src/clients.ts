@@ -25,7 +25,7 @@ const KNOWN_LONGS = [...STATEMENT_LONGS, ...FILE_LONGS, ...DATABASE_LONGS, ...VA
 const LIST_OPTIONS = new Set(['-l', '--list'])
 const REDIRECT_ONLY = /^\d*(?:>|>>|>&|&>|>\||<&|<>)$/
 const REDIRECT_START = /^\d*>|^&>/
-// A connection URL's path, and its query, whose `dbname` libpq reads over the path. libpq knows no fragment: `/app#?dbname=prod` connects to prod, and `/app#x` to a database named `app#x`.
+// A connection URL's path, and its query, whose `dbname` libpq reads over the path. libpq knows no fragment: `/app#?dbname=prod` connects to prod, and `/app#x` to a database named `app#x`; mycli's urlparse cuts the fragment instead.
 const URL_START = /^[a-z][a-z\d+.-]*:\/\//i
 const URL_PATH = /^[a-z][a-z\d+.-]*:\/\/[^/?]*\/?([^?]*)/i
 // A libpq conninfo string, `host=h dbname=app user=u`, read pair by pair: a value is quoted with '' and \ escapes, or bare up to a space, where a quote is a plain character and \ still escapes.
@@ -105,12 +105,25 @@ function queryDatabase(operand: string): string | undefined {
   return database
 }
 
+function urlDatabase(url: string): string | undefined {
+  const raw = queryDatabase(url) ?? URL_PATH.exec(url)?.[1]
+
+  return raw === undefined || raw === '' ? undefined : percentDecoded(raw)
+}
+
 // The database a `-d` value or a database operand names: a URL's query `dbname` or path, a conninfo string's last `dbname`, else the word itself.
 function databaseOf(operand: string): string | undefined {
   if (URL_START.test(operand)) {
-    const raw = queryDatabase(operand) ?? URL_PATH.exec(operand)?.[1]
+    const whole = urlDatabase(operand)
+    const fragment = operand.indexOf('#')
 
-    return raw === undefined || raw === '' ? undefined : percentDecoded(raw)
+    if (fragment === -1)
+      return whole
+
+    // A client that cuts the fragment and one that keeps it may reach two databases, so the URL names a test one only when both readings do.
+    const cut = urlDatabase(operand.slice(0, fragment))
+
+    return whole !== undefined && TEST_SCOPED.test(whole) ? cut : whole
   }
 
   if (!CONNINFO.test(operand))

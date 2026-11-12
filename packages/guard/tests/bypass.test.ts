@@ -268,6 +268,7 @@ describe('SQL client forms', () => {
     'APP_ENV=test psql "dbname=app_test user=\'unterminated" -c "delete from t"',
     'psql "postgres://h/app_test?%64bname=prod" -c "delete from t"',
     'psql "postgres://h/app_test#?dbname=prod" -c "delete from t"',
+    'APP_ENV=test mycli "mysql://h/prod#app_test" -e "delete from t"',
   ], [
     'psql -c "SELECT 1"',
     'psql -tAc "SELECT 1"',
@@ -290,6 +291,7 @@ describe('SQL client forms', () => {
     'psql "host=h user=a\'b dbname=app_test" -c "delete from t"',
     'psql "dbname=app_test user=a\\\\" -c "delete from t"',
     'psql "postgres://h/prod?%64bname=app_test" -c "delete from t"',
+    'psql "postgres://h/app_test#x" -c "delete from t"',
     'psql -d app_test -c "insert into public.t values (1)"',
     'mysql -D app_test -e "select * from prod.t"',
     'mysql -D app_test -e "drop database app_test"',

@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { fail } from '@kaynooo/cli-kit'
-import { reach } from './download'
+import { smallFile } from './download'
 
 // `<hash>  <name>` as sha256sum writes it, `*` marking binary mode, or a hash alone as a `.sha256` file holds it.
 const GNU_LINE = /^([0-9a-f]{64})(?:\s+\*?(\S.*))?$/i
@@ -64,7 +64,7 @@ export function sumFor(text: string, name: string, path?: string): string | unde
 
 // The checksums file at `url`, as bytes so a signature over it can be checked.
 export async function fetchSums(url: string): Promise<Uint8Array> {
-  return (await reach(url)).bytes()
+  return smallFile(url)
 }
 
 // The sha256 the checksums file `sums`, fetched from `url`, gives for the download at `fileUrl`, named `name`.

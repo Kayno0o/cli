@@ -1,4 +1,5 @@
 import { chmodSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { tempDirs } from '@kaynooo/cli-kit/test'
@@ -14,6 +15,8 @@ const CONTAINER_PREFIX = 'cli-db-test-'
 const SERVER = process.env.DB_TOOLS_TEST_SERVER
 const PASSWORD = SERVER === undefined ? 'pw-never-printed-9731' : decodeURIComponent(new URL(SERVER).password)
 const CONTAINER = `${CONTAINER_PREFIX}${process.pid}`
+// A pid only says something on the machine that ran it, so a daemon shared with another pid namespace keeps the containers it labelled.
+const HOST_LABEL = `cli-db-test.host=${hostname()}`
 const DATABASE = `db_tools_test_${process.pid}`
 const PORT = /:(\d+)$/m
 const SCHEMA = `
@@ -62,7 +65,7 @@ function isRunning(pid: number): boolean {
 
 // A run killed before its afterAll leaves its container running: those named after a pid that no longer runs go before this run starts its own.
 function removeOrphans(): void {
-  const names = docker('ps', '-a', '--filter', `name=^${CONTAINER_PREFIX}`, '--format', '{{.Names}}').out.split('\n').filter(Boolean)
+  const names = docker('ps', '-a', '--filter', `name=^${CONTAINER_PREFIX}`, '--filter', `label=${HOST_LABEL}`, '--format', '{{.Names}}').out.split('\n').filter(Boolean)
 
   for (const name of names) {
     const pid = Number(name.slice(CONTAINER_PREFIX.length))
@@ -82,7 +85,7 @@ async function inDocker(): Promise<string> {
   if (!docker('image', 'inspect', IMAGE).ok && !docker('pull', IMAGE).ok)
     return `docker cannot provide ${IMAGE}`
 
-  if (!docker('run', '-d', '--rm', '--name', CONTAINER, '-e', `POSTGRES_PASSWORD=${PASSWORD}`, '-p', '127.0.0.1::5432', IMAGE).ok)
+  if (!docker('run', '-d', '--rm', '--name', CONTAINER, '--label', HOST_LABEL, '-e', `POSTGRES_PASSWORD=${PASSWORD}`, '-p', '127.0.0.1::5432', IMAGE).ok)
     return 'docker cannot start a container'
 
   let seeded = false

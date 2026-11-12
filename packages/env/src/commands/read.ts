@@ -23,7 +23,7 @@ Prints the masked value of one key, from every .env* file that sets it or from o
 
 const GET_EXITS: ExitRow[] = [[0, 'the key is set'], [1, 'it is not set anywhere'], [2, 'a usage error']]
 
-function display(key: string, value: string, known: KnownSecrets): string {
+export function display(key: string, value: string, known?: KnownSecrets): string {
   return maskValue(key, value, known).replaceAll('\n', '\\n').replaceAll('\r', '\\r')
 }
 

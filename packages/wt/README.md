@@ -64,7 +64,7 @@ export default {
 | `skip` | services left out of a worktree's stack |
 | `routeHosts` | services that dial the stack's own hosts from inside a container, given the worktree's in `/etc/hosts` |
 | `env` | values forced into copied env files, per file; `{task}` and `{port}` (the dev server's) filled in |
-| `ports` | a worktree's dev server port by task, for one whose port, hashed from its name, `wt add` or `wt sync` warns is taken |
+| `ports` | a worktree's dev server port by task, from 1024 to 65535, for one whose port, hashed from its name, is taken: `wt add` warns when something listens on it, `wt sync` when another worktree has it |
 | `certs` | where the stack's nginx reads certificates, required by passthrough routes |
 | `setup` | `sh -c` commands run in the worktree the first time its stack comes up |
 | `run` | `wt run`'s `service`, `dir`, `provision` commands, optional `dns` and `env` |

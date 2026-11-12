@@ -37,6 +37,25 @@ describe('fetchBranch', () => {
       expect(await Bun.file(marker).exists()).toBe(false)
     })
   })
+
+  test('says false for a branch origin lacks, and throws when origin cannot be reached', async () => {
+    await inClone(async (root) => {
+      expect(await fetchBranch('nowhere')).toBe(false)
+
+      await $`git remote set-url origin ${join(root, 'gone.git')}`.cwd(join(root, 'clone')).quiet()
+
+      let thrown = ''
+
+      try {
+        await fetchBranch('main')
+      }
+      catch (error) {
+        thrown = (error as Error).message
+      }
+
+      expect(thrown).toContain('git fetch -q origin refs/heads/main')
+    })
+  })
 })
 
 describe('resolveCommit', () => {

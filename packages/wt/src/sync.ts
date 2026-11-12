@@ -32,7 +32,7 @@ export async function syncWorktree(worktree: Worktree): Promise<void> {
     warn(warning)
 }
 
-// Ports are hashed from names, so two may land on one; main's is hashed from its project's name.
+// Ports are hashed from names, so two may land on one; main's is hashed from its project's name. Whether the port is in use is asked on add only, as the worktree's own dev server holds it once running.
 async function portClashes(worktree: Worktree): Promise<string[]> {
   const port = worktree.clientPort
   const sharing: string[] = []

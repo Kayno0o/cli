@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { badUsage, fail, runTool } from '@kaynooo/cli-kit'
-import { reach } from './download'
+import { smallFile } from './download'
 
 type Tool = 'gpg' | 'minisign' | 'cosign'
 
@@ -49,7 +49,7 @@ export function readKey(key: string): Key {
   else if (MINISIGN_KEY.test(key)) {
     found = { tool: 'minisign', minisignKey: key }
   }
-  else if (existsSync(key)) {
+  else if (existsSync(key) && statSync(key).isFile()) {
     const tool = toolOfFile(key) ?? badUsage(`--key ${key} is no OpenPGP, minisign or cosign public key`)
 
     found = { tool, file: key }
@@ -120,7 +120,7 @@ export async function verifySignature(signed: string | Uint8Array, url: string, 
     const signature = join(work, 'signature')
     const data = typeof signed === 'string' ? signed : join(work, 'signed')
 
-    writeFileSync(signature, await (await reach(url)).bytes())
+    writeFileSync(signature, await smallFile(url))
 
     if (typeof signed !== 'string')
       writeFileSync(data, signed)

@@ -46,7 +46,8 @@ const OPTIONS = {
 } as const
 
 const SHA256 = /^[0-9a-f]{64}$/i
-const DEFAULT_MAX_SIZE = '2G'
+
+export const DEFAULT_MAX_SIZE = '2G'
 const HTML_EXTENSIONS = new Set(['', '.html', '.htm'])
 // The width a script line is cut to in the summary.
 const LINE_WIDTH = 120
