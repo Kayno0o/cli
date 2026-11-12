@@ -43,7 +43,7 @@ source <(cli completions bash)            # in ~/.bashrc
 source <(cli completions zsh)             # in ~/.zshrc, after compinit
 ```
 
-Each bin completes itself through `<bin> __complete`, and these are the scripts `<bin> --completions <shell>` prints (from `@kaynooo/cli-kit`), written for every installed bin at once. fish gets a file per bin (put the folder first in `fish_complete_path`), bash and zsh one script each. The zsh one is untested, zsh not being installed here.
+Each bin completes itself through `<bin> __complete`, and these are the scripts `<bin> --completions <shell>` prints (from `@kaynooo/cli-kit`), written for every installed bin at once. fish gets a file per bin, the stale ones this command wrote taken out, in `~/.cache/fish/kaynooo-cli` (or `$XDG_CACHE_HOME`); the folder has to be in `fish_complete_path`, first so a completion fish ships for the same name does not win: `set -p fish_complete_path ~/.cache/fish/kaynooo-cli`. bash and zsh get one script each on stdout, `--install` and `--dir` being fish's; for zsh run `autoload -U +X compinit && compinit` before sourcing it. The zsh one is untested, zsh not being installed here.
 
 ## cli config
 
@@ -51,7 +51,7 @@ Each bin completes itself through `<bin> __complete`, and these are the scripts 
 cli config [--json]   # every config file a bin looks for (set, absent or invalid), the main variables set with secrets hidden, the workspace folder and the theme in force
 ```
 
-`~/.config/kaynooo-cli/doctor.json` takes `forgeHosts` (other hosts the same forge answers on) and `concurrency` (a positive whole number, 4 when unset), how many registry lookups run at once.
+It ends on the workspace folder and the theme in force; a token or webhook shows as hidden, and `docs/config.md` in the repository describes every key and variable. `~/.config/kaynooo-cli/doctor.json` takes `forgeHosts` (other hosts the same forge answers on) and `concurrency` (a positive whole number, 4 when unset), how many registry lookups run at once.
 
 ## cli stats
 
@@ -59,7 +59,7 @@ cli config [--json]   # every config file a bin looks for (set, absent or invali
 cli stats [--since 7d] [--json]   # runs per bin and per command, failures (exit 1) apart from usage errors (exit 2), and the options usage errors did not know
 ```
 
-Every bin records each run in `~/.local/state/kaynooo-cli/usage.jsonl`: the bin, its command, the flag names it saw (never values or arguments), the exit code and, on a usage error, the unknown option (never its message). `KAYNOOO_CLI_NO_USAGE=1` turns it off; `guard` never records.
+Every bin records each run in `~/.local/state/kaynooo-cli/usage.jsonl`: the bin, its command, the flag names it saw (never values or arguments), the exit code and, on a usage error, the unknown option (never its message). It also records how long each run took, and the commands whose 90th percentile took a second or more are listed slowest first, the ones worth a progress line or a speed-up. `failed` counts exits other than 0 and 2, usage errors being exit 2 (misuse, or a check that could not be made). `$XDG_STATE_HOME` moves the file. `KAYNOOO_CLI_NO_USAGE=1` turns it off; `guard` never records.
 
 ## cli list
 

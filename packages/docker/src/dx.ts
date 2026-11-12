@@ -11,9 +11,9 @@ import { ACTIONS, allServices, commandFor, defaultAction, key, LOGS_TAIL, logsOf
 const usage = `dx [service] [action]
 dx -
 
-Without a terminal (a script, a pipe, an agent) \`dx\` lists the services with their state, ports and image: that listing is the form to use there, \`--json\` giving the full record. On a terminal it picks one instead: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder.
-\`dx -\` does the last action again, \`dx <service> [action]\` acts without the picker: \`shell\` (bash when the container has it), \`logs\` (the last ${LOGS_TAIL} lines, followed on a terminal and printed once without one; \`--tail N\` changes the count, \`--follow\` and \`--no-follow\` force either), \`restart\`, \`up\`, \`stop\` or \`build\` (up with a rebuild).
-The services are the stack of this folder or its nearest parent, the ones of the child folders (keyed \`api/php\`), and stacks found only through their containers (keyed \`<project>:php\`).`
+Picks a compose service on a terminal to open its shell, follow its logs, restart, stop or rebuild it; without a terminal (a script, a pipe, an agent) it lists the services with their state, ports and image, the form to use there.
+\`dx -\` does the last action again, \`dx <service> [action]\` acts without the picker: \`shell\`, \`logs\` (the last ${LOGS_TAIL} lines), \`restart\`, \`up\`, \`stop\` or \`build\`.
+The services are the stack of this folder or its nearest parent, the child folders' (keyed \`api/php\`) and stacks found only through their containers (keyed \`<project>:php\`).`
 
 const EXITS: ExitRow[] = [['the code of the command it ran', 'a listing, a shell, logs, restart, up, stop or build'], [0, 'it listed the services'], [1, 'no compose service here or none by that name'], [2, 'a usage error']]
 

@@ -81,10 +81,8 @@ async function find(args: string[], host: Host = hostHere()): Promise<number> {
 
 const COMPLETIONS_USAGE = `cli completions <fish|bash|zsh> [--install] [--dir <folder>]: shell completions for every installed bin of the @kaynooo/cli-* packages
 
-Each bin completes itself through \`<bin> __complete\` and prints its own script with \`<bin> --completions <shell>\`; this writes the script for all of them at once.
-fish: without --install the files print on stdout, with it they go to ~/.cache/fish/kaynooo-cli (or $XDG_CACHE_HOME), one <bin>.fish each, the stale ones this command wrote taken out. That folder has to be in fish_complete_path, first so a completion fish ships for the same name does not win: \`set -p fish_complete_path ~/.cache/fish/kaynooo-cli\`.
-bash: one script on stdout, sourced from ~/.bashrc with \`source <(cli completions bash)\`; --install and --dir are fish's.
-zsh: one script on stdout like bash's, after compinit in ~/.zshrc: \`autoload -U +X compinit && compinit\`, then \`source <(cli completions zsh)\` (written without zsh at hand to run it, so untested).`
+Writes the script of every bin at once. fish gets one file per bin in ~/.cache/fish/kaynooo-cli (or $XDG_CACHE_HOME) with --install, the stale ones it wrote taken out; put that folder first in fish_complete_path.
+bash and zsh get one script on stdout to source from ~/.bashrc or ~/.zshrc (after compinit); --install and --dir are fish's.`
 
 const COMPLETIONS_OPTIONS = {
   install: { type: 'boolean', description: 'write the files to the folder instead of printing them' },
@@ -116,7 +114,8 @@ export async function completions(args: string[], host: Host = hostHere()): Prom
 
 const STATS_USAGE = `cli stats [--since 7d] [--json]: how often each bin ran, and the usage errors by the option it did not know
 
-Every bin records each run in ~/.local/state/kaynooo-cli/usage.jsonl (or $XDG_STATE_HOME): the bin, its command, the names of the flags it saw (never a value or an argument), the exit code, how long it took and, on a usage error, the unknown option (never the message, which carries the values it refused). The commands whose slowest runs (90th percentile) took a second or more are listed slowest first, the ones worth a progress line or a speed-up. failed counts exits other than 0 and 2, usage errors are exit 2 (misuse, or a check that could not be made). Set KAYNOOO_CLI_NO_USAGE=1 to stop recording; \`guard\` never records.`
+Every bin records each run in ~/.local/state/kaynooo-cli/usage.jsonl: the bin, its command, the flag names it saw (never a value or an argument), the exit code, how long it took and the unknown option of a usage error.
+The commands whose 90th percentile took a second or more are listed slowest first; failed counts exits other than 0 and 2. Set \`KAYNOOO_CLI_NO_USAGE=1\` to stop recording; \`guard\` never records.`
 
 const SLOW_MS = 1000
 const STATS_EXITS: ExitRow[] = [[0, 'it printed the summary'], [2, 'a usage error']]

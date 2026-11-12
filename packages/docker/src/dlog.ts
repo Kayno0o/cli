@@ -10,9 +10,8 @@ import { allServices, attempt, containers, key, stateColor } from './stack'
 
 const usage = `dlog [service...]
 
-One line per compose service with its state and health, then the last distinct error lines of the services that log some or are not healthy, repeats collapsed to one line with a count and secrets masked as redact does.
-With service names, only those are read. The stacks are the ones dx lists: this folder's, its child folders' and the ones only their containers tell of.
-\`--level warn\` keeps warnings too, \`--grep <regex>\` keeps the lines matching a case insensitive regex instead of the error words. What fails the exit is \`--fail-on\`: by default a service down, unhealthy or still starting, an error line or logs compose could not read, so it can gate a script; \`--fail-on down\` leaves out an old error line that \`--since\` has not aged out yet. A service that exited with code 0 (a migration, an init) is not down.`
+One line per compose service with its state and health, then the last distinct error lines of those that log some or are not healthy, repeats collapsed with a count and secrets masked.
+The stacks are the ones dx lists, and service names narrow it to those. The exit gates a script on --fail-on; a service that exited with code 0 (a migration, an init) is not down.`
 
 const EXITS: ExitRow[] = [[0, 'nothing the --fail-on list names: every service is up and quiet'], [1, 'a service is down, unhealthy or still starting, logged a matching line or has logs compose could not read (as --fail-on keeps them), or there is no compose service here'], [2, 'a usage error']]
 

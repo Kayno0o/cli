@@ -8,12 +8,11 @@ import { applyFixes, planFixes } from './fix'
 import { hostHere } from './host'
 import { install } from './install'
 
-const USAGE = `doctor [--only <check>] [--quiet] [--fix | --install [<name>...|all]] [--list] [--dry-run] [--force] [--json]: checks this host's @kaynooo/cli-* install, one line per check, the command that fixes a failing one beside it, and installs the packages it picks
+const USAGE = `doctor [--only <check>] [--quiet] [--fix | --install [<name>...|all]] [--list] [--dry-run] [--force] [--json]: checks this host's @kaynooo/cli-* install, one line per check with the fix beside a failing one, and installs the packages it picks
 
-Each @kaynooo/cli-* package installed globally with its bins on the PATH and no older than the registry's latest; tea (or gt in its place) logged in to git.kaynooo.fr and reaching it when ft is installed; the system tools the installed packages need (glab, docker); the Claude Code hooks wired through the cli-hooks plugin or the cli mod, not both, with guard installed; Bun at least the version the tools ask for; fish completions for every bin and none left for a bin gone; no link in Bun's bin folder pointing at a bin a newer version dropped. A package not installed is no failure, the last line counts them.
---fix runs the printed fix: lines it may (global installs of the packages, the completions, the hooks plugin, removing dead bin links), the installs in one call, then checks again; a line that installs a system package or only describes a step is printed as not run. --dry-run shows what --fix would run.
---install adds packages: the names given (a package such as forgejo, one of its bins such as ft, hooks for the Claude Code plugin, or all), else a checklist on a terminal. Each is checked against what it needs first: a missing required tool (tea for ft, glab for gl, docker for dc) leaves that package out unless --force, and hooks brings guard along. doctor never installs a system package. Then it checks and fixes what it installed. --list prints the choices, --dry-run what would be installed.
---quiet prints only the failing checks, nothing when all pass. --only limits the run to the checks named, e.g. --only tea --only bun.`
+Checks the installed packages are current, their system tools, tea's login, the Claude Code hooks, Bun, the fish completions and dead bin links; a package not installed is no failure.
+--fix runs the printed fixes, then checks again; a fix that installs a system package or only describes a step is printed, never run.
+--install adds the packages named (\`forgejo\`, \`ft\`, \`hooks\`, \`all\`) or picked from a checklist, leaving out one whose required tool is missing unless --force.`
 
 const EXITS: ExitRow[] = [[0, 'every check passes (after --fix, the ones it fixed too)'], [1, 'a check fails'], [2, 'a usage error']]
 

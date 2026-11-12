@@ -8,8 +8,7 @@ import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newest, pipelineLi
 const usage = `gl ci [ref]
 
 Waits for the pipeline covering a commit on the branch, by default origin's tip, and prints what each failed job's trace says.
-GitLab runs a push's pipeline on its last commit only, and cancels a redundant one, so a commit without a pipeline of its own is covered by the next commit's.
---json prints {status, runs, failedJobs, url} on stdout, the progress going to stderr; --quiet prints only the announcement, the failures and the result.
+GitLab runs a push's pipeline on its last commit only, so a commit without one of its own is covered by the next commit's.
 An exit 2 says why on the first line of its message: timeout, no runner, no pipeline or not on branch.`
 
 const exits: ExitRow[] = [[0, 'the pipeline passed (or stopped at a manual job, its earlier stages passed)'], [1, 'the pipeline failed'], [2, 'a usage error, or could not check: timeout, no runner, no pipeline, not on branch']]
@@ -19,7 +18,7 @@ const options = {
   job: { type: 'string', short: 'j', description: 'a job whose skipping means the pipeline left its work to a newer push' },
   branch: { type: 'string', short: 'b', description: 'branch the commit is on, by default the one origin/HEAD names' },
   timeout: { type: 'string', short: 't', description: 'how long before giving up (30m), a bare number in minutes' },
-  json: jsonOption('status, runs, failedJobs with their trace excerpts and url'),
+  json: jsonOption('{status, runs, failedJobs with their trace excerpts, url}, the progress going to stderr'),
   quiet: { type: 'boolean', short: 'q', description: 'no live progress or retry warnings: the announcement, the failures and the result' },
 } as const
 
