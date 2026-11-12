@@ -326,7 +326,7 @@
         "@kaynooo/cli-env": "workspace:*",
         "@kaynooo/cli-kit": "workspace:*",
         "@kaynooo/devproxy": "0.2.0",
-        "@kaynooo/utils": "3.0.0",
+        "@kaynooo/utils": "3.1.0",
       },
     },
   },
