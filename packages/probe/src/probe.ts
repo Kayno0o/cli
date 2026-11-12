@@ -22,7 +22,7 @@ Warns on a certificate with fewer than 14 days left or not trusted, and on an ht
 --dns makes no HTTP request and compares the records the system resolver, public resolvers and the zone's nameservers give.
 --cors <origin> sends the preflight a browser on that origin would send and says whether it would go on, with each reason when not.`
 
-const EXITS: ExitRow[] = [[0, 'every site answered, warnings or not'], [1, 'a site could not be reached, a CORS preflight was refused, or no resolver knows a name'], [2, 'a usage error']]
+const EXITS: ExitRow[] = [[0, 'every site answered, warnings or not'], [1, 'a site could not be reached or redirects where nothing answers, a CORS preflight was refused, or no resolver knows a name'], [2, 'a usage error']]
 
 const OPTIONS = {
   'insecure': { type: 'boolean', short: 'k', description: 'let curl go on with a certificate it does not trust' },
@@ -34,7 +34,7 @@ const OPTIONS = {
   'cors': { type: 'string', description: 'the origin a browser would call from: whether its CORS preflight lets the request through', conflicts: ['dns', 'verbose'] },
   'method': { type: 'string', description: 'with --cors, the method of the request the preflight asks for (POST)' },
   'cors-headers': { type: 'string', description: 'with --cors, the headers it carries, comma separated, empty for none (content-type)' },
-  'json': jsonOption('one object per target {target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, warnings}, an array of them for several targets (an unreachable one is {target, error}); with --dns {target, zone, answers, agree, warnings}, with --cors {target, url, status, request, allowed, reasons, warnings, headers}'),
+  'json': jsonOption('one object per target {target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, failedHop: {url, error} or null, warnings}, an array of them for several targets (an unreachable one is {target, error}); with --dns {target, zone, answers, agree, warnings}, with --cors {target, url, status, request, allowed, reasons, warnings, headers}'),
 } as const
 
 const BRACKETS = /^\[|\]$/g
@@ -54,12 +54,15 @@ interface Report {
   cdn: string | null
   offers: Offers
   httpRedirect: HttpRedirect | null
+  // The hop a redirect led to that did not answer, which fails the probe.
+  failedHop: { url: string, error: string } | null
   warnings: string[]
 }
 
 interface Followed {
   chain: Hop[]
-  error?: string
+  // The hop that did not answer, the first one or one a redirect led to.
+  failed?: { url: string, error: string }
   tooMany: boolean
 }
 
@@ -72,11 +75,12 @@ async function follow(start: string, { insecure, wire }: Settings, http3: boolea
   const chain: Hop[] = []
   let url = start
 
-  while (chain.length < MAX_HOPS) {
+  // MAX_HOPS redirects, then the answer they lead to.
+  while (chain.length <= MAX_HOPS) {
     const { hop, errormsg } = await curlHop(url, { ...wire, http3: http3 && url.startsWith('https:'), insecure, get: false })
 
     if (hop === undefined)
-      return { chain, error: errormsg ?? 'no response', tooMany: false }
+      return { chain, failed: { url, error: errormsg ?? 'no response' }, tooMany: false }
 
     chain.push(hop)
 
@@ -95,6 +99,8 @@ async function probe(target: Target, input: string, settings: Settings): Promise
   const { wire } = settings
   const http3 = await curlHasHttp3()
   let followed = await follow(target.url.href, settings, http3)
+  // Why https gave nothing, for a bare domain then tried over http.
+  let httpsError: string | undefined
 
   if (followed.chain.length === 0 && target.bare) {
     const plain = new URL(target.url.href)
@@ -103,14 +109,16 @@ async function probe(target: Target, input: string, settings: Settings): Promise
 
     const second = await follow(plain.href, settings, http3)
 
-    if (second.chain.length > 0)
+    if (second.chain.length > 0) {
+      httpsError = followed.failed?.error
       followed = second
+    }
   }
 
   const final = followed.chain.at(-1)
 
   if (final === undefined)
-    return { target: input, error: `could not reach ${target.url.host}: ${followed.error ?? 'no response'}` }
+    return { target: input, error: `could not reach ${target.url.host}: ${followed.failed?.error ?? 'no response'}` }
 
   const finalUrl = new URL(final.url)
   const secure = finalUrl.protocol === 'https:'
@@ -123,8 +131,11 @@ async function probe(target: Target, input: string, settings: Settings): Promise
   const offers = offersOf({ alpn: tls?.alpn, version: final.version, altSvc: final.headers['alt-svc'] })
   const warnings = warningsOf({ cert: tls?.cert, authorizationError: tls?.authorizationError, httpRedirect, tooManyRedirects: followed.tooMany })
 
+  if (followed.failed !== undefined)
+    warnings.unshift(`the redirect to ${followed.failed.url} got no answer: ${followed.failed.error}`)
+
   if (!secure)
-    warnings.push('the site is not served over https')
+    warnings.push(httpsError === undefined ? 'the site is not served over https' : `the site is not served over https: ${httpsError}`)
 
   return {
     target: input,
@@ -140,9 +151,13 @@ async function probe(target: Target, input: string, settings: Settings): Promise
     cdn: cdnHint(final.headers) ?? null,
     offers,
     httpRedirect: httpRedirect ?? null,
+    failedHop: followed.failed ?? null,
     warnings,
   }
 }
+
+// Whether a target was not reached: nothing answered, or a redirect led nowhere.
+const unreached = (report: Report | { error: string }) => 'error' in report || report.failedHop !== null
 
 async function twinOf(url: URL, { insecure, wire }: Settings): Promise<Hop | undefined> {
   const plain = new URL(url.href)
@@ -397,7 +412,7 @@ async function main(args: string[]): Promise<number> {
   if (values.json === true) {
     printJson(reports.length === 1 ? only : reports)
 
-    return reports.some(report => 'error' in report) ? 1 : 0
+    return reports.some(unreached) ? 1 : 0
   }
 
   let first = true
@@ -422,7 +437,7 @@ async function main(args: string[]): Promise<number> {
     first = false
   }
 
-  return reports.some(report => 'error' in report) ? 1 : 0
+  return reports.some(unreached) ? 1 : 0
 }
 
 process.exitCode = await runMain({ name: 'probe', run: main })

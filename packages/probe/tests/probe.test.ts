@@ -42,6 +42,16 @@ const server = Bun.serve({
     if (pathname === '/loop')
       return new Response(null, { status: 302, headers: { location: '/loop' } })
 
+    // /ten/10 redirects to /ten/9 and so on, /ten/0 answering: ten redirects in all.
+    if (pathname.startsWith('/ten/')) {
+      const left = Number(pathname.slice('/ten/'.length))
+
+      return left === 0 ? new Response('end') : new Response(null, { status: 302, headers: { location: `/ten/${left - 1}` } })
+    }
+
+    if (pathname === '/dead')
+      return new Response(null, { status: 302, headers: { location: 'http://127.0.0.1:1/x' } })
+
     if (pathname === '/seen')
       return new Response('x', { headers: { server: `${request.headers.get('x-probe') ?? 'none'} at ${request.headers.get('host')}` } })
 
@@ -186,8 +196,23 @@ describe('probe against a local http server', () => {
   test('stops a redirect loop and warns', async () => {
     const report = parsed((await probe([`${base}/loop`, '--json'])).out)
 
-    expect(report.chain).toHaveLength(10)
+    expect(report.chain).toHaveLength(11)
     expect(report.warnings).toContain('more than 10 redirects')
+  })
+
+  test('follows exactly ten redirects to their end', async () => {
+    const report = parsed((await probe([`${base}/ten/10`, '--json'])).out)
+
+    expect(report.status).toBe(200)
+    expect(report.chain).toHaveLength(11)
+    expect(report.warnings).not.toContain('more than 10 redirects')
+  })
+
+  test('a redirect to a target that does not answer warns, naming it, and exits 1', async () => {
+    const { code, out } = await probe([`${base}/dead`])
+
+    expect(code).toBe(1)
+    expect(out).toContain('the redirect to http://127.0.0.1:1/x got no answer:')
   })
 
   test('a bare domain falls back to http when https is not served', async () => {
@@ -195,6 +220,8 @@ describe('probe against a local http server', () => {
 
     expect(report.url).toBe(`${base}/final`)
     expect(report.tls).toBeNull()
+    // Why https failed stays in the warning.
+    expect(report.warnings.some(warning => warning.startsWith('the site is not served over https: '))).toBe(true)
   })
 
   test('exits 1 when nothing answers and 2 on bad input', async () => {
