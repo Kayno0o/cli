@@ -7,6 +7,7 @@ const edits: [name: string, text: string, key: string, value: string | undefined
   ['a removed key leaves the object before it inline', '{\n  "a": {"x": 1, "y": [1,2]},\n  "b": {"p":1},\n  "c": 3\n}\n', 'c', undefined, '{\n  "a": {"x": 1, "y": [1,2]},\n  "b": {"p":1}\n}\n'],
   ['a minified file stays minified', '{"name":"x","version":"1.0.0"}', 'private', 'yes', '{"name":"x","version":"1.0.0","private":"yes"}'],
   ['a key added after a commented line keeps the comment on its line', '{\n  "a": 1, // one\n  "b": 2 // two\n}\n', 'c', 'z', '{\n  "a": 1, // one\n  "b": 2, // two\n  "c": "z"\n}\n'],
+  ['a key after one sharing the brace\'s line goes at the line start', '{"a":1,\n}', 'b', 'x', '{"a":1,\n"b":"x"\n}'],
   ['a trailing comma is kept', '{\n  "a": 1,\n  "b": 2,\n}\n', 'c', 'z', '{\n  "a": 1,\n  "b": 2,\n  "c": "z"\n}\n'],
   ['nested keys added to a CRLF file keep its line endings', '{\r\n  "a": {\r\n    "b": 1\r\n  }\r\n}\r\n', 'a.c.d', 'z', '{\r\n  "a": {\r\n    "b": 1,\r\n    "c": {\r\n      "d": "z"\r\n    }\r\n  }\r\n}\r\n'],
   ['a key starting with $ is a key', '{\n  "$schema": "old"\n}\n', '$schema', 'new', '{\n  "$schema": "new"\n}\n'],

@@ -140,7 +140,7 @@ function jsonInsert(text: string, tree: JsonNode, path: Path, value: unknown): E
   const eol = eolOf(text)
   const unit = INDENT.exec(text)?.[1] ?? '  '
   const outer = INDENT_ONLY.exec(text.slice(lineStart(text, parent.offset), parent.offset))?.[0] ?? ''
-  const indent = last === undefined ? `${outer}${unit}` : text.slice(lineStart(text, last.offset), last.offset)
+  const indent = last === undefined ? `${outer}${unit}` : INDENT_ONLY.exec(text.slice(lineStart(text, last.offset), last.offset))?.[0] ?? ''
   const property = `${indent}${JSON.stringify(path[depth])}${colon}${JSON.stringify(added, null, unit).replaceAll('\n', `${eol}${indent}`)}`
 
   if (last === undefined)
