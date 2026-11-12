@@ -16,9 +16,9 @@ function squash(name: string): string {
   return name.toLowerCase().replace(SEPARATORS, '')
 }
 
-// Why a name resembles a popular one it is not: the same name under another scope, differing only in separators or case, or one or two edits away.
+// Why a name resembles a popular one it is not: an unscoped popular name put under a scope, differing only in separators or case, or one or two edits away. Two scopes sharing a last part (`@cacheable/utils`, `@vitest/utils`) is how scopes work.
 function resemblance(name: string, popular: string): string | undefined {
-  if (scopeOf(name) !== scopeOf(popular) && baseName(name) === baseName(popular) && baseName(name).length >= MIN_LENGTH)
+  if (scopeOf(popular) === '' && scopeOf(name) !== '' && baseName(name) === popular && popular.length >= MIN_LENGTH)
     return `${popular} under another scope`
 
   if (squash(name) === squash(popular))

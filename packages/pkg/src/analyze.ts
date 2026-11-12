@@ -129,7 +129,10 @@ function publisherWarnings(packument: Packument, version: string): string[] {
   const by = current._npmUser?.name
   const before = previous._npmUser?.name
 
-  if (by !== undefined && before !== undefined && by !== before)
+  // A move from a person to trusted publishing is the safe direction; a move back to a person still warns.
+  const toTrusted = current._npmUser?.trustedPublisher !== undefined && previous._npmUser?.trustedPublisher === undefined
+
+  if (by !== undefined && before !== undefined && by !== before && !toTrusted)
     warnings.push(`${version} was published by ${by}, ${previous.version} by ${before}`)
 
   if (previous.dist?.attestations !== undefined && current.dist?.attestations === undefined)

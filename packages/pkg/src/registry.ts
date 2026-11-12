@@ -17,7 +17,8 @@ export interface Version {
   scripts?: Record<string, string>
   deprecated?: string
   license?: string | { type?: string }
-  _npmUser?: { name?: string }
+  // trustedPublisher is set when CI published through npm trusted publishing (OIDC), named `GitHub Actions` or the like.
+  _npmUser?: { name?: string, trustedPublisher?: unknown }
   dist?: { attestations?: unknown }
 }
 

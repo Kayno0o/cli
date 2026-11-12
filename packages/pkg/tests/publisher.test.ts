@@ -27,6 +27,14 @@ describe('publisher change', () => {
     expect(warningsOf({ '1.0.0': { version: '1.0.0' }, '2.0.0': { version: '2.0.0', _npmUser: { name: 'alice' } } })).toEqual([])
   })
 
+  test('says nothing when a person hands publishing to CI through trusted publishing, and warns when it goes back', () => {
+    const ci = { name: 'GitHub Actions', trustedPublisher: { id: 'github' } }
+
+    expect(warningsOf({ '1.0.0': { version: '1.0.0', _npmUser: { name: 'alice' } }, '2.0.0': { version: '2.0.0', _npmUser: ci } })).toEqual([])
+    expect(warningsOf({ '1.0.0': { version: '1.0.0', _npmUser: ci }, '2.0.0': { version: '2.0.0', _npmUser: { name: 'mallory' } } })).toEqual(['2.0.0 was published by mallory, 1.0.0 by GitHub Actions'])
+    expect(warningsOf({ '1.0.0': { version: '1.0.0', _npmUser: { name: 'alice' } }, '2.0.0': { version: '2.0.0', _npmUser: { name: 'GitHub Actions' } } })).toEqual(['2.0.0 was published by GitHub Actions, 1.0.0 by alice'])
+  })
+
   test('compares with the stable release just below, not a later or a pre-release one', () => {
     const versions = { '1.0.0': { version: '1.0.0', _npmUser: { name: 'alice' } }, '1.5.0-beta.1': { version: '1.5.0-beta.1', _npmUser: { name: 'bob' } }, '2.0.0': { version: '2.0.0', _npmUser: { name: 'alice' } }, '3.0.0': { version: '3.0.0', _npmUser: { name: 'carol' } } }
 

@@ -397,6 +397,7 @@ describe('nearMisses', () => {
     expect(nearMisses('raect')).toEqual(['react, 1 edit away'])
     expect(nearMisses('react_dom')[0]).toContain('react-dom')
     expect(nearMisses('@evil/lodash')).toContain('lodash under another scope')
+    expect(nearMisses('@cacheable/utils', ['@vitest/utils', '@floating-ui/utils'])).toEqual([])
   })
 
   test('stays quiet for a popular name itself and for a short unrelated one', () => {
