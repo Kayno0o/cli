@@ -16,6 +16,7 @@ bun install -g @kaynooo/cli-wt
 | `wt sync [task]` | provisions it again after a manifest change |
 | `wt up [task]` / `wt down [task]` | starts or stops its stack, `--all` every worktree's in turn |
 | `wt rm <task>` | stops the stack, deletes the checkouts, volumes, certificates and override, keeps the branches; refuses uncommitted changes or commits on no branch unless `--force` |
+| `wt logs [task] [-f]` | prints the log of its last `--bg` job, or with `-f` follows its stack's compose logs |
 | `wt ls` | main and the worktrees of the current project (`-a` every project), with their last job and changed files |
 | `wt path [task]` | the directory of a worktree, or of main |
 | `wt init [dir]` | drafts a manifest from the compose project in `dir` into the manifests folder (`--print` to stdout) |

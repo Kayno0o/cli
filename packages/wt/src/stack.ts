@@ -101,6 +101,11 @@ export async function stackDown(worktree: Worktree): Promise<void> {
     throw new WtError(`docker compose down failed for ${worktree.id}`)
 }
 
+/** Follows the stack's compose logs from their last 100 lines until interrupted, returning compose's exit code. */
+export async function followLogs(worktree: Worktree): Promise<number> {
+  return spawnInherit(['docker', 'compose', 'logs', '--follow', '--tail', '100'], worktree.dir, composeEnv())
+}
+
 /** Runs the config's `removed` command once a worktree is gone, from the project's root. */
 export async function afterRemove(worktree: Worktree): Promise<void> {
   const { removed } = worktree.project.settings.runner

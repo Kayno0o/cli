@@ -151,6 +151,12 @@ Stops a worktree stack: \`docker compose down\` in the worktree, or the config's
 
 Exits 0 once the stacks are down, 1 when a command fails, 2 on a usage error.`
 
+const LOGS_USAGE = `wt logs [task] [-f] [-p <name>]
+
+Prints the log of the worktree's last --bg job, a job run in a terminal having printed there; -f follows its stack's compose logs instead, from their last 100 lines. The task defaults to the worktree the current directory is in.
+
+Exits 0 once printed, 1 when no --bg job left a log, compose's code with -f, 2 on a usage error.`
+
 const SHELL_USAGE = `wt shell <shell>
 
 Prints the shell function that lets \`wt cd\` change directory and \`wt rm\` leave the folder it removes: \`wt shell fish | source\` in config.fish.
@@ -292,6 +298,30 @@ process.exitCode = await runCli({
 
           return down(worktree)
         }, bgName(values, 'down', values.all ? '--all' : task))
+      },
+    },
+    logs: {
+      summary: 'print the log of a worktree\'s last --bg job, or follow its stack\'s compose logs',
+      run: async (args) => {
+        const { values, positionals: [task] } = parse(args, LOGS_USAGE, {
+          project: PROJECT_OPTION,
+          follow: { type: 'boolean', short: 'f', description: 'follow the stack\'s compose logs instead, from their last 100 lines' },
+        }, { positionals: ['[task]'], candidates: TASK })
+
+        return guarded(async () => {
+          const worktree = await locateWorktree(process.cwd(), task, values.project)
+
+          assertWorktreeExists(worktree)
+
+          if (values.follow)
+            return (await import('./stack')).followLogs(worktree)
+
+          const { printJobLog } = await printing()
+
+          printJobLog(worktree, await jobs())
+
+          return 0
+        })
       },
     },
     ls: {

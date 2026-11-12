@@ -928,6 +928,35 @@ describe('up and down with no runner', () => {
     expect(rows.find(row => row.includes('wt/other'))).toContain('add ok just now')
   }, 30_000)
 
+  test('logs prints the last --bg job\'s log, noting a later job run in a terminal, and -f follows the compose logs', async () => {
+    const { sandbox, wt, dirOf } = env
+    const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+
+    const none = await wt('logs', 'planning')
+
+    expect(none.code).toBe(1)
+    expect(none.err).toContain('no job of times/planning ran with --bg, which alone keeps a log')
+
+    writeFileSync(join(jobs, 'times--planning.log'), 'compose said this\n')
+    writeFileSync(join(jobs, 'times--planning.json'), JSON.stringify({ ref: 'times/planning', verb: 'up', pid: 1, startedAt: 0, endedAt: Date.now(), code: 0, log: join(jobs, 'times--planning.log') }))
+
+    const shown = await wt('logs', 'planning')
+
+    expect(shown).toMatchObject({ code: 0, out: 'compose said this\n', err: '' })
+
+    expect((await wt('down', 'planning')).code).toBe(0)
+
+    const noted = await wt('logs', 'planning')
+
+    expect(noted.out).toBe('compose said this\n')
+    expect(noted.err).toContain('the last job (down ok just now) ran in a terminal; this log is of the last --bg one')
+
+    expect((await wt('logs', 'planning', '-f')).code).toBe(0)
+    expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose logs')).map(call => `${call.cwd} ${call.args}`)).toEqual([`${dirOf('planning')} compose logs --follow --tail 100`])
+  }, 30_000)
+
   test('run up and rm with --bg as detached jobs, their output in the job log, a notification once up', async () => {
     const { sandbox, wt, dirOf } = env
     const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')
