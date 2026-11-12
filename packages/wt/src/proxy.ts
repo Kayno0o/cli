@@ -12,15 +12,15 @@ export interface ProxyHost {
   passthrough: boolean
 }
 
-// PATH first, so a test sandbox's fake answers instead of the real one.
-function devproxyArgv(): string[] {
-  const onPath = Bun.which('devproxy')
+// PATH first, so a test sandbox's fake answers instead of the real one. The installed copy runs with devproxy's own shebang flags, so the cwd's .env (a worktree's COMPOSE_PROJECT_NAME) stays out of it.
+export function devproxyArgv(path = process.env.PATH ?? ''): string[] {
+  const onPath = Bun.which('devproxy', { PATH: path })
 
   if (onPath !== null)
     return [onPath]
 
   try {
-    return [process.execPath, join(dirname(Bun.resolveSync('@kaynooo/devproxy', import.meta.dir)), '..', 'dist', 'cli.js')]
+    return [process.execPath, '--no-env-file', '--config=/dev/null', join(dirname(Bun.resolveSync('@kaynooo/devproxy', import.meta.dir)), '..', 'dist', 'cli.js')]
   }
   catch {
     return []
