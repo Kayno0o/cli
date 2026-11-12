@@ -325,7 +325,7 @@
       "dependencies": {
         "@kaynooo/cli-env": "workspace:*",
         "@kaynooo/cli-kit": "workspace:*",
-        "@kaynooo/devproxy": "0.2.0",
+        "@kaynooo/devproxy": "0.2.1",
         "@kaynooo/utils": "3.1.0",
       },
     },
@@ -436,7 +436,7 @@
 
     "@kaynooo/cli-wt": ["@kaynooo/cli-wt@workspace:packages/wt"],
 
-    "@kaynooo/devproxy": ["@kaynooo/devproxy@0.2.0", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Fdevproxy/-/0.2.0/devproxy-0.2.0.tgz", { "dependencies": { "@kaynooo/cli-kit": "0.41.0" }, "bin": { "devproxy": "dist/cli.js" } }, "sha512-7WoCatkdKCPWx3bCToQ7fXcgU8BAvD+tVyKuCP2Hsh9h/xqyofKM4+jZ1CfLnZ3wdOgeY5JiIfI1D5XPioBvMg=="],
+    "@kaynooo/devproxy": ["@kaynooo/devproxy@0.2.1", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Fdevproxy/-/0.2.1/devproxy-0.2.1.tgz", { "dependencies": { "@kaynooo/cli-kit": "0.41.2" }, "bin": { "devproxy": "dist/cli.js" } }, "sha512-UnVT/qokAh8CvXnDs1StPNNWe/lWiCVQ2omZuZCOh1zXpPwN3pVUxjjOBjR72+m3qC9i8atjagIlxXTmT+kRbw=="],
 
     "@kaynooo/eslint": ["@kaynooo/eslint@8.0.3", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Feslint/-/8.0.3/eslint-8.0.3.tgz", { "dependencies": { "@e18e/eslint-plugin": "^0.8.1", "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1", "@eslint/markdown": "^8.0.3", "@stylistic/eslint-plugin": "^5.10.0", "@typescript-eslint/eslint-plugin": "^8.72.1", "@typescript-eslint/parser": "^8.72.1", "eslint-config-flat-gitignore": "^2.4.0", "eslint-flat-config-utils": "^3.2.0", "eslint-merge-processors": "^2.0.0", "eslint-plugin-antfu": "^3.3.1", "eslint-plugin-better-tailwindcss": "^4.10.0", "eslint-plugin-import-lite": "^0.6.0", "eslint-plugin-jsonc": "^3.4.2", "eslint-plugin-no-only-tests": "^3.4.0", "eslint-plugin-perfectionist": "^5.13.0", "eslint-plugin-regexp": "^3.3.2", "eslint-plugin-toml": "^1.5.0", "eslint-plugin-unicorn": "^79.0.0", "eslint-plugin-unused-imports": "^4.4.1", "eslint-plugin-yml": "^3.9.0", "globals": "^17.13.0", "toml-eslint-parser": "^1.0.3", "yaml-eslint-parser": "^2.1.0" }, "peerDependencies": { "eslint": "^10.7.0" }, "bin": { "keslint": "dist/bin.js" } }, "sha512-WNjkW7j63mzXdH2z1S47V9SjCbqAGU5gjDQQDPqPyfWHrAlh8JRaF4Ix/0d2zTEDnfl3SmBWpehOYM5/cl3NqA=="],
 
@@ -909,6 +909,8 @@
     "zwitch": ["zwitch@2.0.4", "", {}, "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A=="],
 
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
+
+    "@kaynooo/devproxy/@kaynooo/cli-kit": ["@kaynooo/cli-kit@0.41.2", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Fcli-kit/-/0.41.2/cli-kit-0.41.2.tgz", { "dependencies": { "@kaynooo/utils": "3.1.0" } }, "sha512-eoglZCtqJULLZLWzANm6L6u8pBn7pXXwM1GG7VZ/uBQjU/EhzwtsDCeGgI3qDzJ/NZhpbVQS0ccR1wcZugWfew=="],
 
     "@typescript-eslint/parser/@typescript-eslint/types": ["@typescript-eslint/types@8.72.2", "", {}, "sha512-Xfn37OLZx03+PCU7qWx9DTv2FCRh1E6fk2+wONeNY15HXIwtcwuveaSwVpGAUptkNmPQegRxW5JyRel9T7wrog=="],
 
