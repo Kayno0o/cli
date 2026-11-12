@@ -3,13 +3,14 @@ import type { Project, Route } from './project'
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, relative } from 'node:path'
+import { warn } from '@kaynooo/cli-kit'
 import { composeConfig } from './compose'
 import { wtConfig } from './config'
 import { volumeExists } from './files'
 import { git } from './git'
 import { stringToPort } from './port'
 import { WtError } from './project'
-import { proxyHostList } from './proxy'
+import { hasDevproxy, proxyHostList } from './proxy'
 
 export type Draft = Omit<Project, 'link' | 'env' | 'setup' | 'settings'> & Required<Pick<Project, 'copy' | 'clone' | 'skip'>>
 
@@ -43,8 +44,9 @@ async function findRoutes(config: ComposeConfig, name: string, network: string):
     || `${config.name}-${service}-1` === target
     || settings.networks?.[network]?.aliases?.includes(target))?.[0]
   const routes: Route[] = []
+  const hosts = await proxyHostList()
 
-  for (const { host, to, passthrough } of await proxyHostList()) {
+  for (const { host, group, to, passthrough } of hosts) {
     const [, target = '', port = ''] = (passthrough ? PASSTHROUGH_TARGET : HTTP_TARGET).exec(to) ?? []
     const service = serviceOf(target)
 
@@ -52,7 +54,17 @@ async function findRoutes(config: ComposeConfig, name: string, network: string):
       routes.push({ host, to: 'client' })
     else if (service !== undefined)
       routes.push({ host, to: `${service}:${Number(port)}`, ...passthrough ? { passthrough } : {} })
+    // A label of main's own stack, so one of its hosts, yet the draft cannot tell which service it reaches
+    else if (group === `docker-${config.name}`)
+      warn(`devproxy serves ${host} from ${config.name}'s labels, to ${to}, which is no service of it: add its route by hand`)
   }
+
+  if (!hasDevproxy())
+    warn('devproxy is not installed or has no config, so the draft has no routes: write them by hand, or set devproxy up and run init again')
+  else if (!hosts.length)
+    warn('devproxy serves no hosts, so the draft has no routes: start main\'s stack for devproxy to read its labels and run init again, or write them by hand')
+  else if (!routes.length)
+    warn(`none of the hosts devproxy serves leads to ${config.name}, so the draft has no routes: start main's stack and run init again, or write them by hand`)
 
   return routes
 }

@@ -1279,6 +1279,9 @@ describe('wt init', () => {
 
   test('drafts a manifest for a checkout no tool knows, named after its folder unless --name says otherwise', async () => {
     const { sandbox, wt, root } = env
+
+    sandbox.seed('devproxy-hosts', JSON.stringify([{ host: 'mail.times.localhost', group: 'docker-times', to: 'http://times-mailhog:8025', passthrough: false }]))
+
     const printed = await wt('init', root, '--print', '--name', 'other')
 
     expect(printed.err).toBe('')
@@ -1297,6 +1300,29 @@ describe('wt init', () => {
     const { compilerOptions } = JSON.parse(readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'tsconfig.json'), 'utf8')) as { compilerOptions: { paths: Record<string, string[]> } }
 
     expect(compilerOptions.paths['@kaynooo/cli-wt']).toEqual([join(import.meta.dir, '..', 'src', 'index.ts')])
+    expect(printed.out).toContain('{ host: \'mail.times.localhost\', to: \'mailhog:8025\' },')
+  }, 30_000)
+
+  test('says why the draft has no routes, and names a host of main it cannot place', async () => {
+    const { sandbox, wt, root } = env
+
+    expect((await wt('init', root, '--print')).err).toContain('devproxy serves no hosts, so the draft has no routes')
+
+    sandbox.seed('devproxy-hosts', JSON.stringify([
+      { host: 'ghost.times.localhost', group: 'docker-times', to: 'http://gone:80', passthrough: false },
+      { host: 'app.other.localhost', group: 'docker-other', to: 'http://other-web:80', passthrough: false },
+    ]))
+
+    const unplaced = await wt('init', root, '--print')
+
+    expect(unplaced.code).toBe(0)
+    expect(unplaced.err).toContain('devproxy serves ghost.times.localhost from times\'s labels, to http://gone:80, which is no service of it: add its route by hand')
+    expect(unplaced.err).not.toContain('app.other.localhost')
+    expect(unplaced.err).toContain('none of the hosts devproxy serves leads to times')
+
+    rmSync(join(sandbox.home, '.config', 'devproxy', 'config.ts'))
+
+    expect((await wt('init', root, '--print')).err).toContain('devproxy is not installed or has no config')
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
 })
