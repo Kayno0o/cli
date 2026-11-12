@@ -7,7 +7,7 @@ import process from 'node:process'
 import { badUsage, fail, isInteractive, jsonOption, parse, printError, runCli, warn } from '@kaynooo/cli-kit'
 import { wtJobs } from './config'
 import { failKnown, failureText, knownMessage } from './errors'
-import { notifyRefused, slugOf } from './jobs'
+import { canNotify, notifyRefused, slugOf } from './jobs'
 import { assertWorktreeExists, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
 
 // Each command loads its modules when it runs, so `wt path`, `wt tasks` and Tab completion do not pay for the whole tool.
@@ -84,7 +84,7 @@ async function asWorktreeJob(verb: 'add' | 'add --up' | 'sync' | 'rm' | 'up' | '
 
   const job = queue.detach(stack, verb, [import.meta.path, ...argv, '-p', project.name])
 
-  console.log(`wt: ${verb} ${ref} runs out of sight, its output in ${job.log}`)
+  console.log(`wt: ${verb} ${ref} runs out of sight, its output in ${job.log}${canNotify() ? '' : `; nothing here notifies its end, \`wt ls\` shows how it went`}`)
 
   return 0
 }

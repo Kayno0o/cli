@@ -1236,6 +1236,24 @@ describe('up and down with no runner', () => {
     expect(notified).toHaveLength(1)
     expect(notified[0]).toContain('times/planning is up')
 
+    // Without notify-send, macOS's osascript tells it; with neither, the detach line points at `wt ls`
+    const bin = join(sandbox.home, '..', 'bin')
+
+    rmSync(join(bin, 'notify-send'))
+    writeFileSync(join(bin, 'osascript'), '#!/bin/sh\nprintf \'osascript %s\\n\' "$*" >> "$FAKE_DIR/calls.log"\n', { mode: 0o755 })
+
+    const again = await wt('up', 'planning', '--bg')
+
+    expect(again.out).not.toContain('wt ls')
+    await settled(() => !existsSync(lock) && sandbox.calls().some(call => call.startsWith('osascript')))
+    expect(sandbox.calls().find(call => call.startsWith('osascript'))).toContain('wt: times/planning is up')
+
+    if (Bun.which('notify-send', { PATH: '/usr/bin:/bin' }) === null && Bun.which('osascript', { PATH: '/usr/bin:/bin' }) === null) {
+      rmSync(join(bin, 'osascript'))
+      expect((await wt('up', 'planning', '--bg')).out).toContain('nothing here notifies its end, `wt ls` shows how it went')
+      await settled(() => !existsSync(lock))
+    }
+
     // The setup's log left the tree dirty: refused before any job starts, rather than failing out of sight
     const refused = await wt('rm', 'planning', '--bg')
 

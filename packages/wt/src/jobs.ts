@@ -176,9 +176,19 @@ export function logTail(file: string, lines = 5): string {
   }
 }
 
+// macOS has no notify-send; the title and body reach AppleScript as arguments, so nothing in them is read as script.
+const OSASCRIPT_NOTIFY = ['-e', 'on run argv', '-e', 'display notification (item 2 of argv) with title (item 1 of argv)', '-e', 'end run']
+
+/** Whether this machine shows a detached job's end: notify-send, or osascript on macOS. */
+export function canNotify(): boolean {
+  return Bun.which('notify-send') !== null || Bun.which('osascript') !== null
+}
+
 async function notify(app: string, title: string, body: string, critical = false): Promise<void> {
   if (Bun.which('notify-send') !== null)
     await $`notify-send -a ${app} ${critical ? ['-u', 'critical'] : []} ${title} ${body}`.quiet().nothrow()
+  else if (Bun.which('osascript') !== null)
+    await $`osascript ${OSASCRIPT_NOTIFY} ${`${app}: ${title}`} ${body}`.quiet().nothrow()
 }
 
 /** A `--bg` command refused before any job started (the stack busy, a ref it does not know, a config that does not load): told by notification, as its caller is often a popup that closed meanwhile. */
