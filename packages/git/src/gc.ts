@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
-import { copyFileSync, existsSync, renameSync, rmSync } from 'node:fs'
-import { isAbsolute, join, relative } from 'node:path'
+import { copyFileSync, existsSync, realpathSync, renameSync, rmSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, relative } from 'node:path'
 import process from 'node:process'
 import { exitCodeOf, fail, holdSignals, jsonOption, parse, printError, printJson, runHint, runMain } from '@kaynooo/cli-kit'
 import { git } from './git'
@@ -46,11 +46,21 @@ async function stagedElsewhere(paths: string[]): Promise<string[]> {
   return all.split('\0').filter(path => path !== '' && !ours.has(path))
 }
 
+// An absolute path with the links of its folder resolved, as the repository top git gives is; one whose folder is gone stays as given.
+function onDisk(path: string): string {
+  try {
+    return join(realpathSync(dirname(path)), basename(path))
+  }
+  catch {
+    return path
+  }
+}
+
 // The old side of each staged rename whose new side the given paths cover, relative to the current folder: a rename is one change, which a pathspec on the new side alone would split.
 async function renameSources(paths: string[]): Promise<string[]> {
   const [top = '', prefix = ''] = (await checked(['rev-parse', '--show-toplevel', '--show-prefix'])).split('\n')
   // Each path as git names it from the repository top, a folder covering what it holds.
-  const specs = paths.map(path => (isAbsolute(path) ? relative(top, path) : join(prefix, path)).replace(TRAILING_SLASHES, '') || '.')
+  const specs = paths.map(path => (isAbsolute(path) ? relative(top, onDisk(path)) : join(prefix, path)).replace(TRAILING_SLASHES, '') || '.')
   const covered = (name: string) => specs.some(spec => spec === '.' || name === spec || name.startsWith(`${spec}/`))
   const fields = (await checked(['diff', '--cached', '-M', '--name-status', '--no-relative', '-z'])).split('\0')
   const sources: string[] = []

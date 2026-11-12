@@ -1,0 +1,31 @@
+============================= test session starts ==============================
+collected 2 items / 1 error
+
+==================================== ERRORS ====================================
+____________________________ ERROR collecting u.py _____________________________
+Traceback (most recent call last):
+  File "/w/u.py", line 1, in <module>
+    import nothing
+ModuleNotFoundError: No module named 'nothing'
+__________________________ ERROR at setup of test_s ____________________________
+Traceback (most recent call last):
+  File "/w/t.py", line 4, in db
+    raise RuntimeError("no db")
+RuntimeError: no db
+=================================== FAILURES ===================================
+_________________________________ test_x[a b] __________________________________
+Traceback (most recent call last):
+  File "/w/t.py", line 9, in test_x
+    assert value == "c"
+AssertionError: assert 'a b' == 'c'
+_________________________ ERROR at teardown of test_x[a b] _________________________
+Traceback (most recent call last):
+  File "/w/t.py", line 5, in db
+    raise RuntimeError("left open")
+RuntimeError: left open
+=========================== short test summary info ============================
+FAILED t.py::test_x[a b] - AssertionError: assert 'a b' == 'c'
+ERROR u.py - ModuleNotFoundError: No module named 'nothing'
+ERROR t.py::test_s - RuntimeError: no db
+ERROR t.py::test_x[a b] - RuntimeError: left open
+==================== 1 failed, 3 errors in 0.02s ====================

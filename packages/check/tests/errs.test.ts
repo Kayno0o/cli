@@ -383,6 +383,19 @@ describe('parseErrors: pytest frames', () => {
       { tool: 'pytest', file: 't.py', line: 0, column: 0, severity: 'error', message: 'ValueError: bad', test: 't.py::TestA::test_y' },
     ])
   })
+
+  // Hand-written the same way: a parametrized id holding a space, a collection error, and setup and teardown errors.
+  test('--tb=native finds the summary line of every kind of section', async () => {
+    const { errors, unrecognised } = parseErrors(await fixture('pytest-native-errors.txt'))
+
+    expect(unrecognised).toBe(0)
+    expect(errors.map(error => [error.test, error.message])).toEqual([
+      ['t.py::test_x[a b]', 'AssertionError: assert \'a b\' == \'c\''],
+      ['u.py', 'ModuleNotFoundError: No module named \'nothing\''],
+      ['t.py::test_s', 'RuntimeError: no db'],
+      ['t.py::test_x[a b]', 'RuntimeError: left open'],
+    ])
+  })
 })
 
 describe('parseErrors: the generic file:line:col matcher', () => {

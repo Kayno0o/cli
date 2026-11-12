@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -295,6 +295,30 @@ describe('gc', () => {
     expect(result.err).toContain('nothing staged: a merge is in progress, which git commits only whole')
     expect(result.err).toContain('hint: run `gm --continue` to finish a merge')
     expect(git('status', '--porcelain')).toBe('UU base.ts')
+  })
+
+  test.each([['CHERRY_PICK_HEAD', 'a cherry-pick', 'git cherry-pick --continue'], ['REVERT_HEAD', 'a revert', 'git revert --continue']])('refuses while %s is set, naming what finishes it', (ref, what, finish) => {
+    writeFileSync(join(dir, '.git', ref), `${git('rev-parse', 'HEAD')}\n`)
+    file('base.ts', 'changed\n')
+    const result = gc('fix: base', '--', 'base.ts')
+
+    expect(result.code).toBe(1)
+    expect(result.err).toContain(`nothing staged: ${what} is in progress`)
+    expect(result.err).toContain(`hint: run \`${finish}\` to finish ${what}`)
+    expect(git('status', '--porcelain')).toBe('M base.ts')
+  })
+
+  test('commits the old side of a rename given the new one by an absolute path through a link', () => {
+    git('mv', 'base.ts', 'moved.ts')
+    symlinkSync(dir, `${dir}-link`)
+
+    try {
+      expect(gc('refactor: move base', '--', join(`${dir}-link`, 'moved.ts')).code).toBe(0)
+      expect(git('status', '--porcelain')).toBe('')
+    }
+    finally {
+      rmSync(`${dir}-link`)
+    }
   })
 
   test('from a subfolder, or given a folder, commits the old side of a rename too', () => {

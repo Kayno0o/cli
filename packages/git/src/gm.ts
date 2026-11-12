@@ -61,7 +61,7 @@ async function merging(): Promise<boolean> {
 // Every conflicted file of the repository, wherever gm runs from, its path relative to the current folder.
 async function conflicted(): Promise<Conflict[]> {
   const top = (await ran(['rev-parse', '--show-toplevel'])).trim()
-  const paths = (await ran(['diff', '--name-only', '--diff-filter=U', '-z'])).split('\0').filter(Boolean).map(path => relative(process.cwd(), join(top, path)))
+  const paths = (await ran(['diff', '--name-only', '--no-relative', '--diff-filter=U', '-z'])).split('\0').filter(Boolean).map(path => relative(process.cwd(), join(top, path)))
 
   return paths.map((path) => {
     try {

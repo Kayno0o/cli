@@ -88,6 +88,8 @@ export async function resolveConfig(options: ChangelogOptions) {
   config.tagFilter ??= () => true
   config.tag = getSafeTagTemplate(config.tag ?? defaultConfig.tag)
   config.rollup ??= {}
+  // Worked out here alone, so a config file setting it never drops a given from.
+  config.fromRoot = false
 
   if (config.from === undefined || config.from === '') {
     const tag = await getLastMatchingTag(config.to, config.tagFilter, config.tag, config.rollup, config.firstParent)

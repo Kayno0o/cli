@@ -30,6 +30,7 @@ it('parse', async () => {
       "emoji": true,
       "firstParent": false,
       "from": "<from>",
+      "fromRoot": false,
       "group": true,
       "prerelease": true,
       "releaseRepo": "kaynooo/cli",

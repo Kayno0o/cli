@@ -92,6 +92,11 @@ it('takes in the root commit when no earlier tag exists', async () => {
 
   expect(config.from).toMatch(/^[0-9a-f]{40}$/)
   expect(commits.map(c => c.description)).toEqual(['second', 'initial import'])
+
+  // A given from keeps its range, whatever a config says of fromRoot.
+  const given = await inside(dir, async () => generate({ from: config.from, fromRoot: true, to: 'v0.1.0', contributors: false, repo: 'o/r' }))
+
+  expect(given.commits.map(c => c.description)).toEqual(['second'])
 })
 
 it('reads the type at the start of the subject only', () => {

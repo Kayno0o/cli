@@ -49,7 +49,10 @@ const PYTEST_FAILURES = new Set(['FAILURES', 'ERRORS'])
 const PYTEST_SUMMARY_LINE = /^(?:FAILED|ERROR) \S/
 const PYTEST_FRAME = /^in \S/
 const PYTEST_SECTION = /^_{3,} (.*) _{3,}$/
-const PYTEST_SUMMARY = /^(?:FAILED|ERROR) ([^\s:]+)::(\S+)(?: - (.*))?$/
+// A node id may hold spaces inside its parameters (`t.py::test_x[a b]`), and a collection error's names the file alone.
+const PYTEST_SUMMARY = /^(?:FAILED|ERROR) ([^\s:]+?\.py)(?:::(.+?))?(?: - (.*))?$/
+// The section of a setup, teardown or collection error is titled after its test or file with this before it.
+const PYTEST_ERROR_SECTION = /^ERROR (?:at (?:setup|teardown) of |collecting )/
 const PYTEST_EXCEPTION_END = /[\s:]/
 const PYTEST_NOISE = /^(?:platform |rootdir: |collected |plugins: |configfile: |cachedir: |\S+\.pyi? [.FEsxXR]+ +\[ *\d+%\]$|\S+\.py:\d+: $)/
 // The `file:line[:col]: error|warning|note: message` line gcc, clang, mypy, `shellcheck -f gcc` and golangci-lint print, as editors' problem matchers read it.
@@ -285,11 +288,16 @@ const collectRuff: Collector = (lines, used) => {
 // pytest's failures section: each `file:line: Exception` location, the message from the `E` lines above it, the section and its short summary otherwise accounted for; a test whose section gave no location (`--tb=native`, `--tb=line`) takes its error from its summary line.
 const collectPytest: Collector = (lines, used) => {
   const errors: ToolError[] = []
-  const silent = new Set<string>()
+  // The sections that gave no error, by the test or file they are titled after; a test can fail in its call and again in its teardown.
+  const silent = new Map<string, number>()
   let section: { title: string, errors: number } | undefined
   const closeSection = () => {
-    if (section !== undefined && errors.length === section.errors)
-      silent.add(section.title)
+    if (section === undefined || errors.length !== section.errors)
+      return
+
+    const key = section.title.replace(PYTEST_ERROR_SECTION, '')
+
+    silent.set(key, (silent.get(key) ?? 0) + 1)
   }
   const title = (line: string | undefined) => PYTEST_BANNER.exec(line ?? '')?.[1]
   const start = lines.findIndex(line => PYTEST_FAILURES.has(title(line) ?? ''))
@@ -355,11 +363,16 @@ const collectPytest: Collector = (lines, used) => {
 
     used.add(index)
 
-    // pytest titles the section of `t.py::Class::test` as `Class.test`.
-    const [, file = '', name = '', reason] = PYTEST_SUMMARY.exec(lines[index] ?? '') ?? []
+    const [, file = '', name, reason] = PYTEST_SUMMARY.exec(lines[index] ?? '') ?? []
+    // pytest titles the section of `t.py::Class::test` as `Class.test`, and that of a collection error after the file.
+    const key = name === undefined ? file : name.replaceAll('::', '.')
+    const left = silent.get(key) ?? 0
 
-    if (silent.delete(name.replaceAll('::', '.')))
-      errors.push({ tool: 'pytest', file, line: 0, column: 0, severity: 'error', message: reason ?? 'failed', test: `${file}::${name}` })
+    if (left === 0)
+      continue
+
+    silent.set(key, left - 1)
+    errors.push({ tool: 'pytest', file, line: 0, column: 0, severity: 'error', message: reason ?? 'failed', test: name === undefined ? file : `${file}::${name}` })
   }
 
   return errors

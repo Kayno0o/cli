@@ -90,6 +90,8 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
 
   /**
    * Set when no earlier tag was found: `from` is then the root commit, shown as the start, and the range takes in every commit up to `to`, the root included.
+   *
+   * @internal set by resolveConfig, whatever a config says
    */
   fromRoot?: boolean
 

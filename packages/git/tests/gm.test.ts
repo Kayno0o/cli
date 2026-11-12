@@ -63,6 +63,8 @@ describe('conflictHunks', () => {
 
 describe('gm', () => {
   test('from a subfolder lists every conflict of the repository, relative to it, and --continue checks them all', () => {
+    // A config showing diffs relative to the current folder must not narrow the list.
+    git('config', 'diff.relative', 'true')
     mkdirSync(join(dir, 'sub'))
     commit('g', 'base\n')
     commit('sub/f', 'base\n')
