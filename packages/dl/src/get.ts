@@ -1,5 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Downloaded } from './download'
+import type { Resolved } from './release'
 import type { Summary } from './script'
 import type { Key } from './signature'
 import type { LedgerEntry } from './state'
@@ -11,6 +12,7 @@ import { archiveSuffix, extractArchive } from '@kaynooo/cli-arc/src/extract.ts'
 import { badUsage, escapeControls, fail, formatAge, formatSize, jsonOption, paint, parse, parseSize, printJson, table, truncate } from '@kaynooo/cli-kit'
 import { download } from './download'
 import { binDir, binDirOnPath, installBinary, pickBinary } from './install'
+import { assertReleaseOptions, parseSpec, resolveRelease } from './release'
 import { summarize } from './script'
 import { readKey, verifySignature } from './signature'
 import { lastSeen, record, remember } from './state'
@@ -18,6 +20,7 @@ import { fetchSums, sumIn } from './sums'
 
 const USAGE = `dl [options] <url> [-- <script args>]: downloads a file into a new folder of its own, checks its sha256, then extracts it, installs it as a command or runs it as a script
 
+<url> is an http or https URL, or a release: gh:owner/repo on GitHub, fj:owner/repo on git.kaynooo.fr, with @tag for one release. A release is the newest at least two weeks old unless --fresh; its asset the one built for this OS and arch, or the one --asset names; it is checked against the checksums file the release ships, else the sha256 the forge gives, and --key alone finds the signature beside it.
 Without -o the file lands in a new folder under the temp folder. It prints where the file went, its size, final URL, type and sha256, and how it compares with the last download of the same URL (a changed text file shows its diff).
 An HTML page arriving where a file was expected fails, as does a download over --max-size.
 --sig checks a detached signature with --key: of the file, or of the checksums file when --sums names one. A gpg key is a fingerprint of your keyring or a key file, a minisign key its string or file, a cosign key its PEM file; the tool has to be on PATH.
@@ -26,7 +29,7 @@ An HTML page arriving where a file was expected fails, as does a download over -
 
 const EXITS: ExitRow[] = [
   [0, 'downloaded, and extracted, installed or run as asked'],
-  [1, 'an unreachable URL, an error status, a sha256 mismatch, a signature that does not verify or a missing tool to check it, an HTML page in place of a file, a download over --max-size, a script nothing pins, or one that failed'],
+  [1, 'an unreachable URL, an error status, a release with no asset for this machine, a sha256 mismatch, a signature that does not verify or a missing tool to check it, an HTML page in place of a file, a download over --max-size, a script nothing pins, or one that failed'],
   [2, 'a usage error'],
 ]
 
@@ -42,6 +45,8 @@ const OPTIONS = {
   'exec': { type: 'boolean', description: 'run the file as a script, once --sha256, --sums or --sig pins it, or with --yes' },
   'yes': { type: 'boolean', description: 'run an --exec script that nothing pins' },
   'max-size': { type: 'string', description: 'the largest download taken, 2G by default' },
+  'fresh': { type: 'boolean', description: 'take a release under two weeks old' },
+  'asset': { type: 'string', description: 'the release asset to take, a part of its name or a glob, when the one for this machine cannot be told' },
   'json': jsonOption(),
 } as const
 
@@ -60,6 +65,7 @@ interface Report {
   sha256: string
   verified: boolean
   signature?: string
+  release?: string
   seen: string
   diff?: string
   extracted?: string
@@ -68,7 +74,7 @@ interface Report {
 }
 
 export async function get(args: string[]): Promise<number> {
-  const { values, positionals: [url], rest = [] } = parse(args, USAGE, OPTIONS, {
+  const { values, positionals: [given], rest = [] } = parse(args, USAGE, OPTIONS, {
     positionals: ['<url>'],
     rest: true,
     exits: EXITS,
@@ -79,11 +85,15 @@ export async function get(args: string[]): Promise<number> {
       ['dl https://example.com/releases/tool-linux-amd64 --sums https://example.com/releases/SHA256SUMS --bin tool', 'a checked binary, installed'],
       ['dl https://example.com/tool.tar.gz -x', 'download and unpack'],
       ['dl https://example.com/tool.tar.gz --sums https://example.com/SHA256SUMS --sig https://example.com/SHA256SUMS.asc --key <fingerprint>', 'checked against checksums its publisher signed'],
+      ['dl gh:BurntSushi/ripgrep --bin rg', 'the build of the latest release for this machine, installed'],
     ],
   })
+  const spec = parseSpec(given)
 
-  if (!URL.canParse(url) || !['http:', 'https:'].includes(new URL(url).protocol))
-    badUsage(`'${url}' is not an http or https URL`)
+  assertReleaseOptions(spec !== undefined, values)
+
+  if (spec === undefined && (!URL.canParse(given) || !['http:', 'https:'].includes(new URL(given).protocol)))
+    badUsage(`'${given}' is not an http or https URL, nor a release as gh:owner/repo or fj:owner/repo`)
 
   if (values.sha256 !== undefined && !SHA256.test(values.sha256))
     badUsage(`--sha256 takes 64 hex digits, not '${values.sha256}'`)
@@ -100,23 +110,30 @@ export async function get(args: string[]): Promise<number> {
   if (values.bin !== undefined && (values.bin.includes('/') || values.bin === '.' || values.bin === '..'))
     badUsage(`--bin takes a command name, not '${values.bin}'`)
 
-  if ((values.sig === undefined) !== (values.key === undefined))
-    badUsage('--sig and --key go together')
+  if (spec === undefined ? (values.sig === undefined) !== (values.key === undefined) : values.sig !== undefined && values.key === undefined)
+    badUsage(spec === undefined ? '--sig and --key go together' : '--sig goes with --key')
 
   if (values.sig !== undefined && (!URL.canParse(values.sig) || !['http:', 'https:'].includes(new URL(values.sig).protocol)))
     badUsage(`--sig takes an http or https URL, not '${values.sig}'`)
 
   const key = values.key === undefined ? undefined : readKey(values.key)
   const maxSize = parseSize(values['max-size'] ?? DEFAULT_MAX_SIZE) ?? badUsage(`--max-size takes a size such as 500M or 2G, not '${values['max-size']}'`)
+  const release = spec === undefined ? undefined : await resolveRelease(spec, { fresh: values.fresh === true, asset: values.asset, key })
+  const url = release?.asset.url ?? given
+  // What the user gave wins over what the release ships
+  const pinned = values.sha256 !== undefined || values.sums !== undefined
+  const sums = values.sums ?? (pinned ? undefined : release?.sums)
+  const sha256 = values.sha256 ?? (pinned ? undefined : release?.sha256)
+  const sig = values.sig ?? release?.sig
   const created = values.output === undefined
   const dir = created ? mkdtempSync(join(tmpdir(), 'dl-')) : resolve(values.output!)
 
   mkdirSync(dir, { recursive: true })
 
-  const expectsFile = values.exec === true || values.bin !== undefined || values.extract === true
-  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: values.sha256?.toLowerCase(), sums: values.sums, sig: values.sig, key })
+  const expectsFile = release !== undefined || values.exec === true || values.bin !== undefined || values.extract === true
+  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: sha256?.toLowerCase(), sums, sig, key })
   const last = lastSeen(url)
-  const report: Report = { path: file.path, size: file.size, url: file.url, type: file.type, sha256: file.sha256, verified, ...signature === undefined ? {} : { signature }, seen: 'first download' }
+  const report: Report = { path: file.path, size: file.size, url: file.url, type: file.type, sha256: file.sha256, verified, ...signature === undefined ? {} : { signature }, ...release === undefined ? {} : { release: releaseLine(release) }, seen: 'first download' }
 
   if (last !== undefined && last.seen.sha256 === file.sha256)
     report.seen = `same as the download of ${formatAge(last.seen.at)}`
@@ -138,13 +155,13 @@ export async function get(args: string[]): Promise<number> {
     const name = values.bin === '' ? basename(source) : values.bin
 
     report.installed = installBinary(source, name, values.force === true)
-    record({ kind: 'bin', name, url, sha256: file.sha256, path: report.installed, at: new Date().toISOString(), ...checkedBy(file, values) })
+    record({ kind: 'bin', name, url, sha256: file.sha256, path: report.installed, at: new Date().toISOString(), ...release === undefined ? checkedBy(file, values) : fromRelease(release, values) })
   }
 
   if (values.exec === true)
     report.script = summarize(await Bun.file(file.path).text())
 
-  print(report, url, values.json === true)
+  print(report, given, values.json === true)
 
   if (values.exec !== true)
     return 0
@@ -153,6 +170,17 @@ export async function get(args: string[]): Promise<number> {
     return fail('not run: no --sha256, --sums or --sig pins this script', 1, `read ${file.path}, then: dl ${url} --exec --sha256 ${file.sha256}`)
 
   return runScript(file, url, rest, checkedBy(file, values))
+}
+
+function releaseLine(release: Resolved): string {
+  return `${release.spec} ${release.tag}, published ${formatAge(release.published)}, ${release.asset.name}`
+}
+
+// A release finds its checksums and signature again for the next version, so the ledger keeps the release and what picked its asset, and the key only.
+function fromRelease(release: Resolved, values: { key?: string, asset?: string }): Partial<LedgerEntry> {
+  const key = values.key !== undefined && existsSync(values.key) ? resolve(values.key) : values.key
+
+  return { release: release.spec, version: release.tag, released: release.published, ...values.asset === undefined ? {} : { asset: values.asset }, ...key === undefined ? {} : { key } }
 }
 
 // How a download was checked and what tells it changed, for the ledger: `dl update` checks the next one the same way.
@@ -263,6 +291,7 @@ function print(report: Report, url: string, json: boolean): void {
     ['size', formatSize(report.size)],
     ...report.url === url ? [] : [['url', report.url]],
     ['type', report.type === '' ? '-' : report.type],
+    ...report.release === undefined ? [] : [['release', report.release]],
     ['sha256', `${report.sha256}${report.verified ? ' verified' : ''}`],
     ...report.signature === undefined ? [] : [['signature', `${report.signature}, verified`]],
     ['seen', report.seen],

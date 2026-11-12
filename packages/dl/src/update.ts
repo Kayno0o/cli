@@ -2,6 +2,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { LedgerEntry } from './state'
 import { Exit, fail, formatAge, formatSize, jsonOption, parse, parseSize, printError, printJson, table } from '@kaynooo/cli-kit'
 import { DEFAULT_MAX_SIZE, get } from './get'
+import { latestRelease, parseSpec } from './release'
 import { readLedger } from './state'
 
 type Freshness = { state: 'current' } | { state: 'changed', now: string } | { state: 'unreachable', error: string }
@@ -13,8 +14,23 @@ const AT_ONCE = 4
 // A body hashed is read no further than dl downloads by default.
 const MAX_BYTES = parseSize(DEFAULT_MAX_SIZE)!
 
+// A release moved on once one published after the installed one is two weeks old, so an install taken --fresh is not reported behind an older one.
+async function releaseFreshness(entry: LedgerEntry, release: string): Promise<Freshness> {
+  try {
+    const latest = await latestRelease(parseSpec(release)!)
+
+    return latest !== undefined && Date.parse(latest.published) > Date.parse(entry.released ?? '') ? { state: 'changed', now: latest.tag } : { state: 'current' }
+  }
+  catch (error) {
+    return { state: 'unreachable', error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 // Whether the source of an entry moved on: a conditional request answers 304 when the server can tell, else the body is hashed against the sha installed.
 async function freshness(entry: LedgerEntry): Promise<Freshness> {
+  if (entry.release !== undefined)
+    return releaseFreshness(entry, entry.release)
+
   const headers: Record<string, string> = { 'accept-encoding': 'identity' }
 
   if (entry.etag !== undefined)
@@ -72,21 +88,22 @@ async function checkAll(names: string[], bins: boolean): Promise<Checked[]> {
   return checked
 }
 
-function said(freshness: Freshness, was: string): string {
+// A release says its tags, anything else the start of its shas.
+function said(freshness: Freshness, entry: LedgerEntry): string {
   if (freshness.state === 'changed')
-    return `changed, ${was.slice(0, 12)} now ${freshness.now.slice(0, 12)}`
+    return entry.version === undefined ? `changed, ${entry.sha256.slice(0, 12)} now ${freshness.now.slice(0, 12)}` : `changed, ${entry.version} now ${freshness.now}`
 
   return freshness.state === 'unreachable' ? `unreachable: ${freshness.error}` : 'current'
 }
 
 const OUTDATED_USAGE = `dl outdated [name...] [options]: asks the source of each command dl installed and script it ran whether it changed since
 
-A server that gives an ETag or Last-Modified answers without sending the file again; otherwise the file is downloaded and its sha256 compared.`
+A server that gives an ETag or Last-Modified answers without sending the file again; otherwise the file is downloaded and its sha256 compared. A command installed from a release is behind once a release published after it is two weeks old.`
 
 const OUTDATED_EXITS: ExitRow[] = [[0, 'every one is current'], [1, 'one changed, or its source cannot be reached'], [2, 'a usage error']]
 
 export async function outdated(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, OUTDATED_USAGE, { bins: { type: 'boolean', description: 'only the commands --bin installed' }, json: jsonOption('[{name, kind, url, at, sha256, state, now?, error?}], state current, changed or unreachable') }, {
+  const { values, positionals } = parse(args, OUTDATED_USAGE, { bins: { type: 'boolean', description: 'only the commands --bin installed' }, json: jsonOption('[{name, kind, url, at, sha256, version?, state, now?, error?}], state current, changed or unreachable, now a release\'s tag or a sha256') }, {
     positionals: ['[name...]'],
     exits: OUTDATED_EXITS,
     replaces: 'checking by hand whether a tool installed from a URL has a newer build',
@@ -96,7 +113,7 @@ export async function outdated(args: string[]): Promise<number> {
   const behind = checked.filter(({ freshness }) => freshness.state !== 'current')
 
   if (values.json === true) {
-    printJson(checked.map(({ entry, freshness }) => ({ name: entry.name, kind: entry.kind, url: entry.url, at: entry.at, sha256: entry.sha256, ...freshness })))
+    printJson(checked.map(({ entry, freshness }) => ({ name: entry.name, kind: entry.kind, url: entry.url, at: entry.at, sha256: entry.sha256, ...entry.version === undefined ? {} : { version: entry.version }, ...freshness })))
 
     return behind.length === 0 ? 0 : 1
   }
@@ -109,7 +126,7 @@ export async function outdated(args: string[]): Promise<number> {
 
   const changed = behind.filter(({ freshness }) => freshness.state === 'changed').map(({ entry }) => entry.name)
 
-  console.log(table([['name', 'kind', 'installed', 'source'], ...behind.map(({ entry, freshness }) => [entry.name, entry.kind, formatAge(entry.at), said(freshness, entry.sha256)])], { header: true }))
+  console.log(table([['name', 'kind', 'installed', 'source'], ...behind.map(({ entry, freshness }) => [entry.name, entry.kind, formatAge(entry.at), said(freshness, entry)])], { header: true }))
 
   if (changed.length > 0)
     console.log(`\nupdate them: dl update ${changed.join(' ')}`)
@@ -125,6 +142,9 @@ const UPDATE_EXITS: ExitRow[] = [[0, 'every one updated, or nothing changed'], [
 
 // The dl arguments that fetch an entry again the way it was the first time.
 function argvOf(entry: LedgerEntry, yes: boolean): string[] {
+  if (entry.release !== undefined)
+    return [entry.release, '--bin', entry.name, '--force', ...entry.asset === undefined ? [] : ['--asset', entry.asset], ...entry.key === undefined ? [] : ['--key', entry.key]]
+
   const checks = [...entry.sums === undefined ? [] : ['--sums', entry.sums], ...entry.sig === undefined || entry.key === undefined ? [] : ['--sig', entry.sig, '--key', entry.key]]
 
   if (entry.kind === 'bin')

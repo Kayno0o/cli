@@ -29,6 +29,11 @@ export interface LedgerEntry {
   lastModified?: string
   // The arguments a script ran with.
   args?: string[]
+  // A bin installed from a release: the release as `gh:owner/repo`, its tag and when it was published, and the --asset that picked its build.
+  release?: string
+  version?: string
+  released?: string
+  asset?: string
 }
 
 /** A download that broke off, kept for the next `dl` of its URL to resume: what the server called it and what tells the file did not change since. */

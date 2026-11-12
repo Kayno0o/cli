@@ -5,6 +5,7 @@ import process from 'node:process'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { fileName } from '../src/download'
+import { pickAsset } from '../src/release'
 import { summarize } from '../src/script'
 import { pathUnder, sumFor } from '../src/sums'
 
@@ -61,6 +62,41 @@ async function sign(fingerprint: string, data: Uint8Array | string): Promise<str
 
 function sha256(data: Uint8Array | string): string {
   return new Bun.CryptoHasher('sha256').update(data).digest('hex')
+}
+
+// The releases /gh (GitHub's API) and /fj (Forgejo's) answer for o/tool, each asset served under /rel/<tag>/<name>; `digest` gives the sha256 as GitHub does.
+interface FakeRelease { tag: string, published: string, prerelease?: boolean, digest?: boolean, assets: Record<string, string> }
+
+const ARCH = process.arch === 'arm64' ? 'aarch64' : 'x86_64'
+const OTHER_ARCH = ARCH === 'x86_64' ? 'aarch64' : 'x86_64'
+const DAY = 24 * 3600_000
+let releases: FakeRelease[] = []
+
+function ago(days: number): string {
+  return new Date(Date.now() - days * DAY).toISOString()
+}
+
+function tagged(tag: string): Response {
+  const release = releases.find(each => each.tag === tag)
+
+  return release === undefined ? new Response('not found', { status: 404 }) : Response.json(apiRelease(release))
+}
+
+// A build per platform of `tag` and a checksums file listing them.
+function builds(tag: string, extra: Record<string, string> = {}): Record<string, string> {
+  const files = { [`tool-${tag}-linux-${ARCH}`]: `#!/bin/sh\necho ${tag}\n`, [`tool-${tag}-linux-${OTHER_ARCH}`]: 'other arch\n', [`tool-${tag}-darwin-universal`]: 'mac\n', ...extra }
+
+  return { ...files, 'checksums.txt': Object.entries(files).map(([name, content]) => `${sha256(content)}  ${name}\n`).join('') }
+}
+
+function apiRelease(release: FakeRelease): object {
+  return {
+    tag_name: release.tag,
+    draft: false,
+    prerelease: release.prerelease ?? false,
+    published_at: release.published,
+    assets: Object.entries(release.assets).map(([name, content]) => ({ name, browser_download_url: url(`/rel/${release.tag}/${name}`), ...release.digest === true ? { digest: `sha256:${sha256(content)}` } : {} })),
+  }
 }
 
 beforeAll(async () => {
@@ -139,6 +175,15 @@ beforeAll(async () => {
       '/moved': () => Response.redirect('/install.sh', 302),
       '/missing': () => new Response('gone', { status: 404 }),
       '/encoded.tar.gz': () => new Response(archive, { headers: { 'content-type': 'application/gzip', 'content-encoding': 'gzip' } }),
+      '/gh/repos/o/tool/releases': () => Response.json(releases.map(apiRelease)),
+      '/gh/repos/o/tool/releases/tags/:tag': request => tagged(request.params.tag),
+      '/fj/api/v1/repos/o/tool/releases': () => Response.json(releases.map(apiRelease)),
+      '/fj/api/v1/repos/o/tool/releases/tags/:tag': request => tagged(request.params.tag),
+      '/rel/:tag/:name': (request) => {
+        const content = releases.find(each => each.tag === request.params.tag)?.assets[request.params.name]
+
+        return content === undefined ? new Response('not found', { status: 404 }) : new Response(content, { headers: { 'content-type': 'application/octet-stream' } })
+      },
     },
   })
 })
@@ -576,6 +621,106 @@ describe('outdated and update', () => {
   })
 })
 
+describe('releases', () => {
+  const forges = (): Record<string, string> => ({ DL_GITHUB_API: url('/gh'), DL_FORGEJO_URL: url('/fj') })
+  const installed = (dir: string, name: string) => readFileSync(join(dir, '.local', 'bin', name), 'utf8')
+
+  test('gh:owner/repo installs this machine\'s build of the newest release two weeks old, checked against its checksums', async () => {
+    const dir = home()
+
+    releases = [{ tag: 'v2.0.0-rc', published: ago(1), prerelease: true, assets: builds('v2.0.0-rc') }, { tag: 'v1.2.0', published: ago(3), assets: builds('v1.2.0') }, { tag: 'v1.1.0', published: ago(30), assets: builds('v1.1.0') }]
+
+    const taken = await dl(['gh:o/tool', '--bin', 'tool'], dir, forges())
+
+    expect(taken.code).toBe(0)
+    expect(taken.out).toContain(`release\tgh:o/tool v1.1.0, published 30d ago, tool-v1.1.0-linux-${ARCH}`)
+    expect(taken.out).toContain(`${sha256('#!/bin/sh\necho v1.1.0\n')} verified`)
+    expect(taken.err).toContain('took v1.1.0, skipped v1.2.0 (3d ago) as under two weeks old')
+    expect(installed(dir, 'tool')).toBe('#!/bin/sh\necho v1.1.0\n')
+
+    expect((await dl(['gh:o/tool', '--bin', 'tool', '--force', '--fresh'], dir, forges())).code).toBe(0)
+    expect(installed(dir, 'tool')).toBe('#!/bin/sh\necho v1.2.0\n')
+
+    const tagged = await dl(['fj:o/tool@v1.2.0', '--bin', 'other'], dir, forges())
+
+    expect(tagged.code).toBe(0)
+    expect(tagged.err).not.toContain('skipped')
+    expect(installed(dir, 'other')).toBe('#!/bin/sh\necho v1.2.0\n')
+  })
+
+  test.skipIf(!hasGpg)('--key alone checks the signature the release ships beside its checksums file', async () => {
+    const dir = home()
+    const assets = builds('v1.0.0')
+
+    releases = [{ tag: 'v1.0.0', published: ago(20), assets }]
+    expect(await dl(['gh:o/tool', '--key', signerFile], dir, forges())).toMatchObject({ code: 1, err: expect.stringContaining('gh:o/tool v1.0.0 ships no gpg signature of checksums.txt') })
+
+    assets['checksums.txt.asc'] = await sign(signer, assets['checksums.txt']!)
+
+    const signed = await dl(['gh:o/tool', '--key', signerFile], dir, forges())
+
+    expect(signed.code).toBe(0)
+    expect(signed.out).toContain(`signature\tgpg, by ${signer}, verified`)
+  })
+
+  test('without a checksums file the sha256 the forge gives checks the asset', async () => {
+    const assets = builds('v1.0.0')
+
+    delete assets['checksums.txt']
+    releases = [{ tag: 'v1.0.0', published: ago(20), digest: true, assets }]
+
+    const taken = await dl(['gh:o/tool'], home(), forges())
+
+    expect(taken.code).toBe(0)
+    expect(taken.out).toContain(`${sha256('#!/bin/sh\necho v1.0.0\n')} verified`)
+  })
+
+  test('a mismatched checksum, a tie between builds or no release two weeks old fails; --asset breaks the tie', async () => {
+    const dir = home()
+    const tampered = builds('v1.0.0')
+
+    tampered[`tool-v1.0.0-linux-${ARCH}`] = 'tampered\n'
+    releases = [{ tag: 'v1.0.0', published: ago(20), assets: tampered }]
+    expect(await dl(['gh:o/tool'], dir, forges())).toMatchObject({ code: 1, err: expect.stringContaining('sha256 mismatch') })
+
+    releases = [{ tag: 'v1.0.0', published: ago(20), assets: builds('v1.0.0', { [`tool-v1.0.0-linux-${ARCH}-debug`]: 'debug\n' }) }]
+
+    const tie = await dl(['gh:o/tool'], dir, forges())
+
+    expect(tie.code).toBe(1)
+    expect(tie.err).toContain(`several assets fit linux ${process.arch}: tool-v1.0.0-linux-${ARCH}, tool-v1.0.0-linux-${ARCH}-debug`)
+    expect((await dl(['gh:o/tool', '--asset', 'debug'], dir, forges())).code).toBe(0)
+
+    releases = [{ tag: 'v1.0.0', published: ago(2), assets: builds('v1.0.0') }]
+    expect(await dl(['gh:o/tool'], dir, forges())).toMatchObject({ code: 1, err: expect.stringContaining('no release of gh:o/tool is two weeks old yet: v1.0.0 (2d ago)') })
+    expect((await dl([url('/tool.bin'), '--fresh'], dir)).code).toBe(2)
+    expect((await dl(['gh:o/missing'], dir, forges())).code).toBe(1)
+  })
+
+  test('outdated compares release dates, so an install taken --fresh is not behind an older release, and update installs the newer', async () => {
+    const dir = home()
+
+    releases = [{ tag: 'v1.2.0', published: ago(3), assets: builds('v1.2.0') }, { tag: 'v1.1.0', published: ago(30), assets: builds('v1.1.0') }]
+    expect((await dl(['gh:o/tool', '--bin', 'tool'], dir, forges())).code).toBe(0)
+    expect(await dl(['outdated'], dir, forges())).toMatchObject({ code: 0, out: 'all 1 current\n' })
+
+    releases[0]!.published = ago(20)
+
+    const behind = await dl(['outdated'], dir, forges())
+
+    expect(behind.code).toBe(1)
+    expect(behind.out).toContain('tool\tbin\tjust now\tchanged, v1.1.0 now v1.2.0')
+
+    expect((await dl(['update'], dir, forges())).code).toBe(0)
+    expect(installed(dir, 'tool')).toBe('#!/bin/sh\necho v1.2.0\n')
+    expect((await dl(['outdated'], dir, forges())).code).toBe(0)
+
+    releases.unshift({ tag: 'v1.3.0', published: ago(1), assets: builds('v1.3.0') })
+    expect((await dl(['gh:o/tool', '--bin', 'tool', '--force', '--fresh'], dir, forges())).code).toBe(0)
+    expect(await dl(['outdated'], dir, forges())).toMatchObject({ code: 0, out: 'all 1 current\n' })
+  })
+})
+
 describe('running a script', () => {
   test('lists what it does, and refuses to run it unpinned, naming the sha to pin', async () => {
     const dir = home()
@@ -631,6 +776,26 @@ describe('running a script', () => {
 })
 
 describe('pieces', () => {
+  test('pickAsset takes the build for the OS, arch and libc, preferring a tarball, and skips checksums, signatures and packages', () => {
+    const asset = (name: string) => ({ name, url: name })
+    const pick = (names: string[], os: NodeJS.Platform, arch: string, musl = false) => pickAsset(names.map(asset), { os, arch, musl }).name
+    const ripgrep = ['x86_64-unknown-linux-musl.tar.gz', 'x86_64-unknown-linux-musl.tar.gz.sha256', 'aarch64-unknown-linux-gnu.tar.gz', 'x86_64-apple-darwin.tar.gz', 'aarch64-apple-darwin.tar.gz', 'x86_64-pc-windows-msvc.zip', 'amd64.deb'].map(name => `rg-14.1.0-${name}`)
+    const goreleaser = ['tool_linux_amd64.tar.gz', 'tool_linux_amd64.zip', 'tool_linux_arm64.tar.gz', 'tool_darwin_all.tar.gz', 'tool_windows_amd64.zip', 'checksums.txt', 'checksums.txt.sig']
+    const libcs = ['t-x86_64-unknown-linux-gnu.tar.gz', 't-x86_64-unknown-linux-musl.tar.gz']
+
+    expect(pick(ripgrep, 'linux', 'x64')).toBe('rg-14.1.0-x86_64-unknown-linux-musl.tar.gz')
+    expect(pick(ripgrep, 'linux', 'arm64')).toBe('rg-14.1.0-aarch64-unknown-linux-gnu.tar.gz')
+    expect(pick(ripgrep, 'darwin', 'arm64')).toBe('rg-14.1.0-aarch64-apple-darwin.tar.gz')
+    expect(pick(ripgrep, 'win32', 'x64')).toBe('rg-14.1.0-x86_64-pc-windows-msvc.zip')
+    expect(pick(goreleaser, 'linux', 'x64')).toBe('tool_linux_amd64.tar.gz')
+    expect(pick(libcs, 'linux', 'x64')).toBe('t-x86_64-unknown-linux-gnu.tar.gz')
+    expect(pick(libcs, 'linux', 'x64', true)).toBe('t-x86_64-unknown-linux-musl.tar.gz')
+    expect(pick(['tool-macos-universal', 'tool-linux-x64'], 'darwin', 'arm64')).toBe('tool-macos-universal')
+    expect(pick(['tool'], 'linux', 'x64')).toBe('tool')
+    expect(() => pick(['rg-14.1.0-aarch64-unknown-linux-gnu.tar.gz'], 'linux', 'arm64', true)).toThrow('no asset is built for linux arm64 musl')
+    expect(() => pick(goreleaser, 'darwin', 'arm64')).not.toThrow()
+  })
+
   test('summarize flags sudo, removals, profiles and shells, skipping comments and the shell\'s own variables', () => {
     // The shell's own ${Red} syntax, not a template literal.
     // eslint-disable-next-line no-template-curly-in-string
