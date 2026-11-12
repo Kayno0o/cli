@@ -97,7 +97,8 @@ export function parseGitCommit(commit: RawGitCommit, config: ChangelogConfig): G
   if (!match?.groups)
     return null
 
-  const type = match.groups.type ?? ''
+  // Conventional Commits types are not case-sensitive, and the notes group them by their lower-case name.
+  const type = (match.groups.type ?? '').toLowerCase()
   const breakingBody = BreakingBodyRE.exec(commit.body)
   const breakingNote = breakingBody?.[1]?.replaceAll(/\s+/g, ' ').trim()
   const rawScope = match.groups.scope ?? ''

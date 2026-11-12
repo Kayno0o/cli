@@ -88,13 +88,13 @@ export async function resolveConfig(options: ChangelogOptions) {
   config.tagFilter ??= () => true
   config.tag = getSafeTagTemplate(config.tag ?? defaultConfig.tag)
   config.rollup ??= {}
-  config.from ||= await getLastMatchingTag(
-    config.to,
-    config.tagFilter,
-    config.tag,
-    config.rollup,
-    config.firstParent,
-  ) ?? await getFirstGitCommit(config.firstParent)
+
+  if (config.from === undefined || config.from === '') {
+    const tag = await getLastMatchingTag(config.to, config.tagFilter, config.tag, config.rollup, config.firstParent)
+
+    config.fromRoot = tag === undefined
+    config.from = tag ?? await getFirstGitCommit(config.firstParent, config.to)
+  }
 
   // The option names it had before Forgejo, still read from older configs.
   const legacy = config as ChangelogOptions & { gitea?: string, releaseGithub?: string }

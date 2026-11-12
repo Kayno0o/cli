@@ -7,6 +7,7 @@ const sshRegex = /(?:ssh:\/\/[^/]+\/|^(?:[^@/\s]+@)?[^:/\s]+:)(\w[\w.-]*)\/(\w[\
 const regexSpecialRE = /[.*+?^${}()|[\]\\]/g
 const httpsRegex = /https?:\/\/[^/]+\/(\w[\w.-]*)\/(\w[\w.-]*)$/i
 const releaseVersionRE = /^[^.]*(?:\.[\d.]*|\d)$/
+const TAG_DECORATION = /tag: ([^,\n]+)/g
 
 export async function getGiteaRepo() {
   const url = await execCommand('git', ['config', '--get', 'remote.origin.url'])
@@ -44,29 +45,16 @@ export function getVersionString(template: string, tag: string): string {
   return match?.[1] ?? tag
 }
 
-export async function getGitTags(firstParent = false) {
-  const output = await execCommand('git', [
-    'log',
-    ...firstParent ? ['--first-parent'] : [],
-    '--simplify-by-decoration',
-    '--pretty=format:"%d"',
-  ])
+// Where a release ends: `to` when it names a commit, else HEAD, as the notes of a version not tagged yet run up to HEAD.
+async function tipOf(to: string): Promise<string> {
+  return (await $`git rev-parse --verify -q ${`${to}^{commit}`}`.quiet().nothrow()).exitCode === 0 ? to : 'HEAD'
+}
 
-  const tagRegex = /tag: ([^,)]+)/g
-  const tagList: string[] = []
-  let match
+// The tags reachable from `to`, newest first, so a release's start is always one of its ancestors; every commit is walked, as --simplify-by-decoration hides a tag on an empty commit.
+export async function getGitTags(firstParent = false, to = 'HEAD') {
+  const output = await execCommand('git', ['log', ...firstParent ? ['--first-parent'] : [], '--decorate-refs=refs/tags/', '--format=%D', await tipOf(to), '--'])
 
-  while (match !== null) {
-    const tag = match?.[1]?.trim()
-
-    if (tag !== undefined && tag !== '') {
-      tagList.push(tag)
-    }
-
-    match = tagRegex.exec(output)
-  }
-
-  return tagList
+  return [...output.matchAll(TAG_DECORATION)].map(match => match[1]?.trim() ?? '').filter(tag => tag !== '')
 }
 
 export async function getLastMatchingTag(
@@ -80,7 +68,7 @@ export async function getLastMatchingTag(
   // `isSemver` only accepts stable `x.y.z` versions, so it doubles as a
   // "is a stable (non-prerelease) version" check.
   const isStableVersion = isSemver(inputVersionString)
-  const tags = await getGitTags(firstParent)
+  const tags = await getGitTags(firstParent, inputTag)
   const filteredTags = tags.filter(tagFilter)
 
   let tag: string | undefined
@@ -129,8 +117,8 @@ export async function isRefGitTag(to: string) {
   }
 }
 
-export async function getFirstGitCommit(firstParent = false) {
-  return (await execCommand('git', ['rev-list', '--max-parents=0', ...firstParent ? ['--first-parent'] : [], 'HEAD'])).split('\n').at(-1) ?? ''
+export async function getFirstGitCommit(firstParent = false, to = 'HEAD') {
+  return (await execCommand('git', ['rev-list', '--max-parents=0', ...firstParent ? ['--first-parent'] : [], await tipOf(to), '--'])).split('\n').at(-1) ?? ''
 }
 
 export async function deleteLocalTag(tag: string) {

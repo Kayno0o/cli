@@ -89,6 +89,11 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   firstParent?: boolean
 
   /**
+   * Set when no earlier tag was found: `from` is then the root commit, shown as the start, and the range takes in every commit up to `to`, the root included.
+   */
+  fromRoot?: boolean
+
+  /**
    * Filter tags
    */
   tagFilter?: (tag: string) => boolean

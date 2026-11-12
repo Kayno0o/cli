@@ -3,6 +3,7 @@ import { tempDirs } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
 import { expect, it } from 'bun:test'
 import { getGitDiff, parseGitCommit } from '../src/changelog'
+import { generate } from '../src/generate'
 import { inside } from './fixture'
 
 const tempDir = tempDirs()
@@ -57,6 +58,40 @@ it('keeps a subject, an author name and a body containing pipes or rules in one 
   expect(commits[0]!.body).toContain('more text')
   expect(commits[1]).toMatchObject({ author: { name: 'Ada', email: 'ada@example.com' } })
   expect(commits[1]!.shortHash).toMatch(/^[0-9a-f]+$/)
+})
+
+it('reads a type in any case as its lower-case name', () => {
+  expect(parsed('Fix: capital')).toMatchObject({ type: 'fix', description: 'capital' })
+  expect(parsed('FEAT(Scope): shouting')).toMatchObject({ type: 'feat', scope: 'Scope' })
+})
+
+it('starts at the newest tag that is an ancestor of to, so an older release regenerates', async () => {
+  const { dir, git, commit } = await repo()
+
+  // Empty commits, whose tags a log simplified by decoration would hide.
+  for (const version of ['1.0.0', '1.1.0', '1.2.0']) {
+    await commit(`feat: before ${version}`)
+    await git('tag', `v${version}`)
+  }
+
+  const { config, commits } = await inside(dir, async () => generate({ to: 'v1.1.0', contributors: false, repo: 'o/r' }))
+
+  expect(config.from).toBe('v1.0.0')
+  expect(commits.map(c => c.description)).toEqual(['before 1.1.0'])
+})
+
+it('takes in the root commit when no earlier tag exists', async () => {
+  const { dir, git, commit } = await repo()
+
+  await commit('feat: initial import')
+  await commit('fix: second')
+  await git('tag', 'v0.1.0')
+  await commit('fix: after')
+
+  const { config, commits } = await inside(dir, async () => generate({ to: 'v0.1.0', contributors: false, repo: 'o/r' }))
+
+  expect(config.from).toMatch(/^[0-9a-f]{40}$/)
+  expect(commits.map(c => c.description)).toEqual(['second', 'initial import'])
 })
 
 it('reads the type at the start of the subject only', () => {

@@ -10,7 +10,7 @@ import { parseCommits } from './parse'
 export async function generate(options: ChangelogOptions) {
   const resolved = await resolveConfig(options)
 
-  const rawCommits = await getGitDiff(resolved.from, resolved.to, resolved.firstParent)
+  const rawCommits = await getGitDiff(resolved.fromRoot === true ? undefined : resolved.from, resolved.to, resolved.firstParent)
   const commits = parseCommits(rawCommits, resolved)
   const contributors: AuthorInfo[] = resolved.contributors ? await resolveAuthors(commits, resolved) : []
 
