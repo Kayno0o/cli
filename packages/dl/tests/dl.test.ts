@@ -44,6 +44,7 @@ beforeAll(async () => {
       '/named': () => new Response('hello\n', { headers: { 'content-disposition': 'attachment; filename="../notes.txt"' } }),
       '/moved': () => Response.redirect('/install.sh', 302),
       '/missing': () => new Response('gone', { status: 404 }),
+      '/encoded.tar.gz': () => new Response(archive, { headers: { 'content-type': 'application/gzip', 'content-encoding': 'gzip' } }),
     },
   })
 })
@@ -219,6 +220,16 @@ describe('remembering', () => {
     expect(changed.out).toContain('--- last\n+++ install.sh\n@@ -1,4 +1,3 @@')
     expect(changed.out).toContain('+echo "ran again $*" > "$MARK"')
     expect(changed.out).toContain('-curl -fsSL https://example.com/next.sh -o /tmp/next.sh')
+  })
+})
+
+describe('encoded bodies', () => {
+  test('keeps a body sent with Content-Encoding: gzip as the bytes it is', async () => {
+    const { code, out } = await dl([url('/encoded.tar.gz'), '-x'], home())
+
+    expect(code).toBe(0)
+    expect(out).toContain(`sha256\t${sha256(archive)}`)
+    expect(readFileSync(pathOf(out)).length).toBe(archive.length)
   })
 })
 

@@ -24,7 +24,8 @@ const DISPOSITION_NAME = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i
 
 // Streams `url` into a new file of `dir`, hashing it on the way under a progress line; the file goes again on any failure.
 export async function download(url: string, dir: string, maxSize: number): Promise<Downloaded> {
-  const response = await reach(url)
+  // A .tar.gz an S3 bucket or static host labels Content-Encoding: gzip would otherwise be saved inflated, under a sha256 nobody published.
+  const response = await reach(url, { headers: { 'accept-encoding': 'identity' }, decompress: false })
   const name = fileName(response, url)
   const path = join(dir, name)
 
@@ -90,11 +91,11 @@ export async function download(url: string, dir: string, maxSize: number): Promi
 }
 
 // The answer of `url` after its redirects, failing with exit 1 when it cannot be reached or answers an error status.
-export async function reach(url: string): Promise<Response> {
+export async function reach(url: string, init?: BunFetchRequestInit): Promise<Response> {
   let response: Response
 
   try {
-    response = await fetch(url)
+    response = await fetch(url, init)
   }
   catch (error) {
     return fail(`cannot reach ${url}: ${error instanceof Error ? error.message : String(error)}`, 1)
