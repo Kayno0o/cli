@@ -18,6 +18,14 @@ describe('pool', () => {
     expect(peak).toBe(2)
   })
 
+  test('tells how many have finished out of all, once per item', async () => {
+    const heard: [number, number][] = []
+
+    await pool([30, 10, 20], 2, async ms => Bun.sleep(ms), (done, total) => void heard.push([done, total]))
+
+    expect(heard).toEqual([[1, 3], [2, 3], [3, 3]])
+  })
+
   test('answers empty for no items', async () => {
     expect(await pool([], 4, async x => x)).toEqual([])
   })
