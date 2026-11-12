@@ -27,8 +27,12 @@ describe('usageEntry', () => {
   test('names the unknown option of a usage error once', () => {
     noteUsageError('ft board: unknown option \'--nope=token\'')
 
-    expect(usageEntry('ft', 'board', ['--nope=token'], 2, new Date(0))).toEqual({ at: '1970-01-01T00:00:00.000Z', bin: 'ft', command: 'board', flags: ['--nope'], code: 2, unknown: '--nope' })
+    expect(usageEntry('ft', 'board', ['--nope=token'], 2, { now: new Date(0) })).toEqual({ at: '1970-01-01T00:00:00.000Z', bin: 'ft', command: 'board', flags: ['--nope'], code: 2, unknown: '--nope' })
     expect(usageEntry('ft', 'board', [], 2).unknown).toBeUndefined()
+  })
+
+  test('keeps how long the run took in whole milliseconds', () => {
+    expect(usageEntry('code', 'hotspots', [], 0, { ms: 5470.6 }).ms).toBe(5471)
   })
 })
 
@@ -37,8 +41,8 @@ describe('recordUsage', () => {
     const state = temp('usage-state-')
     const env = { XDG_STATE_HOME: state }
 
-    recordUsage(usageEntry('ft', 'board', ['--json'], 0, new Date(0)), env)
-    recordUsage(usageEntry('db', undefined, [], 1, new Date(0)), env)
+    recordUsage(usageEntry('ft', 'board', ['--json'], 0, { now: new Date(0) }), env)
+    recordUsage(usageEntry('db', undefined, [], 1, { now: new Date(0) }), env)
 
     const lines = readFileSync(usagePath(env), 'utf8').trim().split('\n').map(line => JSON.parse(line) as { bin: string })
 
@@ -76,6 +80,20 @@ describe('summarizeUsage', () => {
     expect(summary.bins).toEqual([{ bin: 'code', runs: 3, failed: 0, usageErrors: 2 }, { bin: 'ft', runs: 1, failed: 1, usageErrors: 0 }])
     expect(summary.commands).toEqual([{ bin: 'code', command: 'hotspots', runs: 2, failed: 0, usageErrors: 2 }])
     expect(summary.usageErrors).toEqual([{ bin: 'code', command: 'hotspots', unknown: '-n', count: 2 }])
+  })
+
+  test('gives each command its median and p90 duration, slowest first, leaving out untimed runs and usage errors', () => {
+    const at = new Date(0).toISOString()
+    const run = (bin: string, ms: number, code = 0, command?: string) => ({ at, bin, ...command === undefined ? {} : { command }, flags: [], code, ms })
+    const summary = summarizeUsage([
+      ...[100, 200, 300, 400, 500, 600, 700, 800, 900, 30_000].map(ms => run('code', ms, 0, 'hotspots')),
+      run('code', 90_000, 2, 'hotspots'),
+      run('gst', 50),
+      run('gst', 70, 1),
+      { at, bin: 'gst', flags: [], code: 0 },
+    ])
+
+    expect(summary.durations).toEqual([{ bin: 'code', command: 'hotspots', runs: 10, median: 500, p90: 900 }, { bin: 'gst', runs: 2, median: 50, p90: 70 }])
   })
 
   test('never keeps the message of a usage error, which carries the value it refused', () => {

@@ -12,6 +12,8 @@ export interface UsageEntry {
   flags: string[]
   code: number
   unknown?: string
+  // How long the run took, in whole milliseconds.
+  ms?: number
 }
 
 const UNKNOWN_OPTION = /unknown option '(--[a-z][a-z0-9-]*)[=']/
@@ -53,12 +55,12 @@ export function flagNames(argv: readonly string[]): string[] {
 }
 
 // The entry for a run that exited with `code`, with the unknown option a usage error named. Only that option's name is kept, never the message, which most usage errors fill with the value they refused.
-export function usageEntry(bin: string, command: string | undefined, argv: readonly string[], code: number, now = new Date()): UsageEntry {
+export function usageEntry(bin: string, command: string | undefined, argv: readonly string[], code: number, { ms, now = new Date() }: { ms?: number, now?: Date } = {}): UsageEntry {
   const unknown = code === 2 && usageError !== undefined ? UNKNOWN_OPTION.exec(usageError)?.[1] : undefined
 
   usageError = undefined
 
-  return { at: now.toISOString(), bin, ...(command === undefined ? {} : { command }), flags: flagNames(argv), code, ...(unknown === undefined ? {} : { unknown }) }
+  return { at: now.toISOString(), bin, ...(command === undefined ? {} : { command }), flags: flagNames(argv), code, ...(unknown === undefined ? {} : { unknown }), ...(ms === undefined ? {} : { ms: Math.round(ms) }) }
 }
 
 // Appends the run to the usage log, best effort: a log that cannot be written never changes what a bin prints or exits with.
@@ -101,6 +103,13 @@ export interface UsageSummary {
   bins: ({ bin: string } & UsageCounts)[]
   commands: ({ bin: string, command: string } & UsageCounts)[]
   usageErrors: { bin: string, command?: string, unknown: string, count: number }[]
+  // Per command (the bin alone for a single-command one), how long its timed runs took, slowest p90 first; a usage error is left out.
+  durations: { bin: string, command?: string, runs: number, median: number, p90: number }[]
+}
+
+// The value below which `share` of the sorted values fall, nearest rank.
+function percentile(sorted: readonly number[], share: number): number {
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(share * sorted.length) - 1))] ?? 0
 }
 
 function tally(counts: UsageCounts, code: number): void {
@@ -114,8 +123,17 @@ export function summarizeUsage(entries: readonly UsageEntry[]): UsageSummary {
   const bins = new Map<string, UsageCounts>()
   const commands = new Map<string, { bin: string, command: string } & UsageCounts>()
   const unknowns = new Map<string, { bin: string, command?: string, unknown: string, count: number }>()
+  const timed = new Map<string, { bin: string, command?: string, ms: number[] }>()
 
   for (const entry of entries) {
+    if (entry.ms !== undefined && entry.code !== 2) {
+      const key = `${entry.bin} ${entry.command ?? ''}`
+      const times = timed.get(key) ?? { bin: entry.bin, ...entry.command === undefined ? {} : { command: entry.command }, ms: [] }
+
+      times.ms.push(entry.ms)
+      timed.set(key, times)
+    }
+
     const bin = bins.get(entry.bin) ?? { runs: 0, failed: 0, usageErrors: 0 }
 
     tally(bin, entry.code)
@@ -145,5 +163,10 @@ export function summarizeUsage(entries: readonly UsageEntry[]): UsageSummary {
     bins: [...bins].map(([bin, counts]) => ({ bin, ...counts })).toSorted((a, b) => b.runs - a.runs),
     commands: [...commands.values()].toSorted((a, b) => b.runs - a.runs),
     usageErrors: [...unknowns.values()].toSorted((a, b) => b.count - a.count),
+    durations: [...timed.values()].map(({ ms, ...name }) => {
+      const sorted = ms.toSorted((a, b) => a - b)
+
+      return { ...name, runs: sorted.length, median: percentile(sorted, 0.5), p90: percentile(sorted, 0.9) }
+    }).toSorted((a, b) => b.p90 - a.p90),
   }
 }

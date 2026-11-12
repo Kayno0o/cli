@@ -507,7 +507,7 @@ export async function runCli(cli: Cli, argv = scriptArgs()): Promise<number> {
 
   if (cli.usage !== false) {
     try {
-      recordUsage(usageEntry(cli.name, command, argv, code))
+      recordUsage(usageEntry(cli.name, command, argv, code, { ms: performance.now() - started }))
     }
     catch {}
   }
@@ -596,7 +596,7 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
 
   if (usage !== false) {
     try {
-      recordUsage(usageEntry(name, undefined, argv, code))
+      recordUsage(usageEntry(name, undefined, argv, code, { ms: performance.now() - started }))
     }
     catch {}
   }
