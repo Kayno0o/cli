@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-dev",
   "type": "module",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "dev: small developer utilities in one bin: random passwords and bcrypt hashes, JWT decoding, timestamps, UUIDs and ULIDs, base64, URL parts and file hashes.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
