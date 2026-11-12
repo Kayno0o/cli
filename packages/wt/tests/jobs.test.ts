@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { $ } from 'bun'
@@ -51,6 +51,16 @@ describe('Jobs', () => {
     jobs.claim(stack, 'add', true)
 
     expect(() => jobs.claim(stack, 'up', false)).toThrow('already being made')
+  })
+
+  test('releases the lock at once when a detached job\'s log cannot be opened', () => {
+    const jobs = jobsIn()
+
+    mkdirSync(jobs.paths(stack.slug).log, { recursive: true })
+
+    expect(() => jobs.detach(stack, 'up', ['-e', ''])).toThrow('EISDIR')
+    expect(jobs.states().get(stack.slug)?.last).toMatchObject({ verb: 'up', code: 1 })
+    expect(() => jobs.claim(stack, 'down', false)).not.toThrow()
   })
 
   test('takes over a lock its process left behind, and reads its job as killed', () => {

@@ -406,9 +406,11 @@ export class Jobs {
   /** Runs `argv` with bun away from any terminal, in a session of its own that outlives the caller (a Herdr popup that closes), the output in the stack's log. */
   detach(stack: JobStack, verb: string, argv: string[], service?: string): Job {
     const job = this.claim(stack, verb, true, service)
-    const out = openSync(job.log, 'w')
+    let out: number | undefined
 
+    // A log that cannot be opened ends the job too, or its pid-less lock would read as starting for STARTING_MS
     try {
+      out = openSync(job.log, 'w')
       // Not setsid -f, which busybox and macOS lack
       Bun.spawn([process.execPath, '--no-env-file', ...argv], { stdio: ['ignore', out, out], env: { ...process.env, [this.env]: stack.slug }, detached: true }).unref()
     }
@@ -418,7 +420,8 @@ export class Jobs {
       throw error
     }
     finally {
-      closeSync(out)
+      if (out !== undefined)
+        closeSync(out)
     }
 
     return job
