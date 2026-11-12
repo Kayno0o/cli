@@ -33,6 +33,8 @@ export interface ProjectConfig {
   routeHosts?: string[]
   // Values forced into copied env files, `{task}` standing for the task name and `{port}` for its dev server port.
   env?: Record<string, Record<string, string>>
+  // A worktree's dev server port by task, in place of the one hashed from its name, for one that clashes.
+  ports?: Record<string, number>
   // Where the stack's own nginx reads certificates from, relative to root. Required by passthrough routes.
   certs?: string
   // Commands run once with sh, in the worktree, the first time its stack comes up.
@@ -98,7 +100,7 @@ export function worktreeHost(host: string, task: string): string {
 }
 
 // Every key of the manifest types, the compiler holding these lists to them
-const PROJECT_KEYS = new Set(Object.keys({ root: 0, repos: 0, copy: 0, clone: 0, link: 0, skip: 0, routeHosts: 0, env: 0, certs: 0, setup: 0, run: 0, routes: 0 } satisfies Record<keyof ProjectConfig, 0>))
+const PROJECT_KEYS = new Set(Object.keys({ root: 0, repos: 0, copy: 0, clone: 0, link: 0, skip: 0, routeHosts: 0, env: 0, ports: 0, certs: 0, setup: 0, run: 0, routes: 0 } satisfies Record<keyof ProjectConfig, 0>))
 const RUN_KEYS = new Set(Object.keys({ service: 0, dir: 0, provision: 0, dns: 0, env: 0 } satisfies Record<keyof RunConfig, 0>))
 
 // A misspelt key is ignored as if it were absent, so it is named rather than silently dropped.
@@ -119,6 +121,11 @@ function assertValid(project: Project): void {
 
     if (!existsSync(join(dir, '.git')))
       throw new WtError(`${project.name}: ${repo === '.' ? `root ${dir}` : `repo ${repo}`} is not a git checkout${existsSync(dir) ? '' : ', the folder is missing'}`)
+  }
+
+  for (const [task, port] of Object.entries(project.ports ?? {})) {
+    if (!Number.isInteger(port) || port < 1 || port > 65535)
+      throw new WtError(`${project.name}: ports gives ${task} ${String(port)}, expected a whole number from 1 to 65535`)
   }
 
   for (const route of project.routes) {
@@ -218,7 +225,7 @@ export function worktreeOf(project: Project, task: string): Worktree {
     task,
     dir: join(tasksDir(project), task),
     id,
-    clientPort: stringToPort(`${project.name}--${task}`),
+    clientPort: project.ports?.[task] ?? stringToPort(`${project.name}--${task}`),
     files: worktreeFiles(project.settings, id),
   }
 }

@@ -57,17 +57,18 @@ export default {
 | Key | |
 | --- | --- |
 | `root` | the main checkout |
-| `repos` | nested repos put on the task branch; empty when the root itself is the repo |
+| `repos` | nested repos put on the task branch; none when the root itself is the repo |
 | `copy` | gitignored files and folders copied from main, hosts rewritten in the `.env*` ones |
 | `clone` | data each worktree gets its own copy of: a path under root or a named volume's key |
 | `link` | paths shared with main through a symlink |
 | `skip` | services left out of a worktree's stack |
 | `routeHosts` | services that dial the stack's own hosts from inside a container, given the worktree's in `/etc/hosts` |
 | `env` | values forced into copied env files, per file; `{task}` and `{port}` (the dev server's) filled in |
+| `ports` | a worktree's dev server port by task, for one whose port, hashed from its name, `wt add` or `wt sync` warns is taken |
 | `certs` | where the stack's nginx reads certificates, required by passthrough routes |
 | `setup` | `sh -c` commands run in the worktree the first time its stack comes up |
 | `run` | `wt run`'s `service`, `dir`, `provision` commands, optional `dns` and `env` |
-| `routes` | `host` main answers on, `to` `client` (the dev server on the host) or `<service>:<port>`, `passthrough` to leave TLS to the stack |
+| `routes` | none leaves the worktree unrouted; `host` main answers on, `to` `client` (the dev server on the host) or `<service>:<port>`, `passthrough` to leave TLS to the stack |
 
 ## Config
 

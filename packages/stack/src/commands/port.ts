@@ -1,5 +1,5 @@
-import { fail, jsonOption, parse, printJson, warn, wholeNumber } from '@kaynooo/cli-kit'
-import { DEFAULT_MAX_PORT, isListening, MAX_PORT, MIN_PORT, stringToPort } from '../port'
+import { fail, isListening, jsonOption, parse, printJson, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { DEFAULT_MAX_PORT, MAX_PORT, MIN_PORT, stringToPort } from '../port'
 
 const usage = `stack port <name>
 

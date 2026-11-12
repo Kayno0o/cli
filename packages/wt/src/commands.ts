@@ -1,6 +1,6 @@
 import type { Worktree } from './project'
 import { existsSync, rmSync } from 'node:fs'
-import { warn } from '@kaynooo/cli-kit'
+import { isListening, warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { runningProjects } from './compose'
 import { knownMessage } from './errors'
@@ -54,6 +54,10 @@ export async function addTask(task: string, branch: string | undefined, options:
   const checkout = branch ?? `wt/${task}`
 
   await assertTools(project)
+
+  // Its own dev server is not up yet, so whatever holds the port would take its requests
+  if (isListening(worktree.clientPort))
+    warn(`dev server port ${worktree.clientPort} of ${task} is in use already: give it its own in the manifest's ports`)
 
   const starts = await addWorktrees(worktree, checkout, options.from)
 

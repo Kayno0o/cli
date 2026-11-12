@@ -1,10 +1,12 @@
 /** addTask, removeTask, cloneData and whilePaused against fake docker and mkcert on a PATH of their own and a HOME of their own, so nothing reaches the real stack. */
 
+import type { TCPSocketListener } from 'bun'
 import type { Sandbox } from './sandbox'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { $ } from 'bun'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
+import { stringToPort } from '../src/port'
 import { makeSandbox } from './sandbox'
 
 const CLI = join(import.meta.dir, '..', 'src', 'cli.ts')
@@ -131,6 +133,38 @@ describe('addTask', () => {
     expect(run.err).not.toContain('names worker')
     expect(run.err).not.toContain('names api-php')
   })
+
+  test('warns when the dev server port is in use or another worktree\'s, and takes the one ports gives', async () => {
+    const { sandbox, wt, override } = env
+    const port = stringToPort('times--planning')
+    let held: TCPSocketListener | undefined
+
+    try {
+      held = Bun.listen({ hostname: '127.0.0.1', port, socket: { data: () => undefined } })
+    }
+    // Something else holds it already, which is as good for this test
+    catch {}
+
+    try {
+      const planning = await wt('add', 'planning')
+
+      expect(planning.code).toBe(0)
+      expect(planning.err).toContain(`dev server port ${port} of planning is in use already: give it its own in the manifest's ports`)
+    }
+    finally {
+      held?.stop(true)
+    }
+
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, ports: { other: port } })}\n`)
+
+    const other = await wt('add', 'other')
+
+    expect(other.err).toContain(`dev server port ${port} of other is also the one of times/planning: give one of them its own in the manifest's ports`)
+    expect(readFileSync(override('times--other'), 'utf8')).toContain(`"devproxy.wt0.to": "host:${port}"`)
+
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, ports: { other: 70000 } })}\n`)
+    expect((await wt('path', '-p', 'times')).err).toContain('times: ports gives other 70000, expected a whole number from 1 to 65535')
+  }, 30_000)
 
   test('says what a new branch forks from, main\'s current commit or the ref --from names', async () => {
     const { root, wt, git, dirOf } = env

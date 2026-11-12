@@ -1,7 +1,7 @@
 import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { port } from '../src/commands/port'
-import { isListening, stringToPort } from '../src/port'
+import { stringToPort } from '../src/port'
 
 // FNV-1a with BigInt, which never loses precision.
 function fnv(name: string): number {
@@ -28,21 +28,6 @@ describe('stringToPort', () => {
   test('stays inside min and max', () => {
     for (const name of ['a', 'proxy-manager', 'inventory', 'é', ''])
       expect(stringToPort(name, 3000, 3010)).toBeWithin(3000, 3011)
-  })
-})
-
-describe('isListening', () => {
-  test('sees a bound port and a free one', () => {
-    const server = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: () => undefined } })
-
-    try {
-      expect(isListening(server.port)).toBe(true)
-    }
-    finally {
-      server.stop(true)
-    }
-
-    expect(isListening(server.port)).toBe(false)
   })
 })
 
