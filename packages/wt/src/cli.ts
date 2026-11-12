@@ -3,7 +3,7 @@
 import type { GlobalOptions } from './commands'
 import type { Worktree } from './project'
 import process from 'node:process'
-import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
+import { badUsage, isInteractive, parse, runCli } from '@kaynooo/cli-kit'
 import { wtConfig } from './config'
 import { failKnown, failureText, knownMessage } from './errors'
 import { Jobs, notifyRefused } from './jobs'
@@ -91,19 +91,13 @@ async function asWorktreeJob(verb: 'add' | 'sync' | 'rm' | 'up' | 'down', { proj
   return 0
 }
 
-// Acts on each worktree of the project in turn, one refused or failed not stopping the rest: 1 when any failed.
-async function eachWorktree(projectName: string | undefined, act: (worktree: Worktree) => Promise<number>): Promise<number> {
-  const { project } = await locate(process.cwd(), projectName)
-  const tasks = listTasks(project)
-
-  if (!tasks.length)
-    console.log(`wt: ${project.name} has no worktree`)
-
+// Acts on each worktree in turn, one refused or failed not stopping the rest: 1 when any failed.
+async function inTurn(worktrees: Worktree[], act: (worktree: Worktree) => Promise<number>): Promise<number> {
   let code = 0
 
-  for (const task of tasks) {
+  for (const worktree of worktrees) {
     try {
-      code = Math.max(code, await act(worktreeOf(project, task)))
+      code = Math.max(code, await act(worktree))
     }
     catch (error) {
       const message = knownMessage(error)
@@ -115,6 +109,51 @@ async function eachWorktree(projectName: string | undefined, act: (worktree: Wor
       code = 1
     }
   }
+
+  return code
+}
+
+async function eachWorktree(projectName: string | undefined, act: (worktree: Worktree) => Promise<number>): Promise<number> {
+  const { project } = await locate(process.cwd(), projectName)
+  const tasks = listTasks(project)
+
+  if (!tasks.length)
+    console.log(`wt: ${project.name} has no worktree`)
+
+  return inTurn(tasks.map(task => worktreeOf(project, task)), act)
+}
+
+// Lists what removed worktrees left behind and, once confirmed, removes each as `wt rm --force` would, then git's stale registrations.
+async function prune(options: GlobalOptions & { all?: boolean, yes?: boolean }): Promise<number> {
+  const { describeLeftBehind, leftBehind, pruneRegistrations } = await import('./prune')
+  const found = await leftBehind(options)
+
+  if (!found.length) {
+    console.log('wt: nothing left behind')
+
+    return 0
+  }
+
+  console.log(describeLeftBehind(found).join('\n'))
+
+  if (!options.yes) {
+    if (!isInteractive()) {
+      console.error('wt: nothing removed, `wt prune -y` removes it')
+
+      return 0
+    }
+
+    const { confirm } = await import('@kaynooo/cli-kit/prompt')
+
+    if (await confirm('Remove it all?', { default: false }) !== true)
+      return 1
+  }
+
+  const { removeTask } = await commands()
+  const code = await inTurn(found.flatMap(each => each.orphans.map(orphan => orphan.worktree)), async worktree => asWorktreeJob('rm', worktree, { project: worktree.project.name }, [], async () => removeTask(worktree.task, { project: worktree.project.name, force: true })))
+
+  for (const { project } of found)
+    await pruneRegistrations(project)
 
   return code
 }
@@ -156,6 +195,12 @@ const LOGS_USAGE = `wt logs [task] [-f] [-p <name>]
 Prints the log of the worktree's last --bg job, a job run in a terminal having printed there; -f follows its stack's compose logs instead, from their last 100 lines. The task defaults to the worktree the current directory is in.
 
 Exits 0 once printed, 1 when no --bg job left a log, compose's code with -f, 2 on a usage error.`
+
+const PRUNE_USAGE = `wt prune [-a] [-y] [-p <name>]
+
+Lists what worktrees removed by hand, or an add that crashed, left behind: wt's files, job records, queues, containers and volumes, and git's registrations of folders gone. Once confirmed, removes each as \`wt rm --force\` would. The current project, or every project with -a.
+
+Exits 0 once removed, or when nothing is left or nothing could be asked, 1 when a removal fails or is declined, 2 on a usage error.`
 
 const SHELL_USAGE = `wt shell <shell>
 
@@ -328,6 +373,18 @@ process.exitCode = await runCli({
 
           return 0
         })
+      },
+    },
+    prune: {
+      summary: 'remove what worktrees removed by hand left behind',
+      run: async (args) => {
+        const { values } = parse(args, PRUNE_USAGE, {
+          project: PROJECT_OPTION,
+          all: { type: 'boolean', short: 'a', description: 'every project, even from inside one' },
+          yes: { type: 'boolean', short: 'y', description: 'remove without asking' },
+        }, { positionals: [] })
+
+        return guarded(async () => prune(values))
       },
     },
     ls: {

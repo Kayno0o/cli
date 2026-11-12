@@ -314,6 +314,51 @@ describe('removeTask', () => {
   })
 })
 
+describe('wt prune', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+    env.sandbox.seed('running', 'main-db\nmain-web\n')
+    env.sandbox.seed('volumes', 'times_mailpit\n')
+  })
+
+  afterAll(() => env?.stop())
+
+  test('lists what a worktree deleted by hand left, removes it with -y, and leaves the worktrees there alone', async () => {
+    const { sandbox, wt, git, root, dirOf, override } = env
+    const state = join(sandbox.home, '.cache', 'wt')
+    const jobs = join(state, 'jobs')
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+    expect((await wt('add', 'other')).code).toBe(0)
+    mkdirSync(join(state, 'queues', 'times--planning.provision'), { recursive: true })
+    writeFileSync(join(jobs, 'times--planning.json'), '{}')
+    writeFileSync(join(jobs, 'times--planning.log'), '')
+    rmSync(dirOf('planning'), { recursive: true, force: true })
+
+    const listed = await wt('prune')
+
+    expect(listed.code).toBe(0)
+    expect(listed.out).toBe('times/planning: compose override, queue, job record, volume\ntimes: 1 git worktree registration for a folder gone\n')
+    expect(listed.err).toContain('nothing removed, `wt prune -y` removes it')
+    expect(existsSync(override('times--planning'))).toBe(true)
+
+    const pruned = await wt('prune', '-y')
+
+    expect(pruned.code).toBe(0)
+    expect(existsSync(override('times--planning'))).toBe(false)
+    expect(existsSync(join(state, 'queues', 'times--planning.provision'))).toBe(false)
+    expect(existsSync(join(jobs, 'times--planning.json'))).toBe(false)
+    expect(sandbox.read('volumes')).not.toContain('times--planning_')
+    expect(await git(root, 'worktree', 'list')).not.toContain(dirOf('planning'))
+    expect(existsSync(override('times--other'))).toBe(true)
+    expect((await wt('prune')).out).toBe('wt: nothing left behind\n')
+    expect(sandbox.forbidden()).toEqual([])
+  }, 30_000)
+})
+
 describe('commands checking their target before any job', () => {
   let env: Awaited<ReturnType<typeof timesSandbox>>
 

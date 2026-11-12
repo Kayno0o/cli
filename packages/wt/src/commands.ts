@@ -4,6 +4,7 @@ import { $ } from 'bun'
 import { knownMessage } from './errors'
 import { addWorktrees, dirtyRepos, isRegistered, removeWorktrees, unreachableCommits } from './git'
 import { assertWorktreeExists, locate, locateWorktree, worktreeOf, WtError } from './project'
+import { removeQueues } from './prune'
 import { urlsOf } from './routes'
 import { forgetTestDatabases } from './run'
 import { afterRemove, hasContainers, stackDown, stackUp } from './stack'
@@ -134,6 +135,7 @@ export async function removeTask(task: string, options: GlobalOptions & { force?
     rmSync(file, { force: true })
 
   await forgetTestDatabases(worktree)
+  removeQueues(worktree)
 
   await removeWorktrees(worktree)
   await afterRemove(worktree)
