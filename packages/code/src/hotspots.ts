@@ -3,6 +3,7 @@ import type { Hotspot } from './churn'
 import { basename, join } from 'node:path'
 import process from 'node:process'
 import { badUsage, capped, configuredNumber, duration, fail, fileLink, jsonOption, limitOf, limitOptions, paint, parse, printHeader, printJson, readUserConfig, role, table } from '@kaynooo/cli-kit'
+import { progressLine } from '@kaynooo/cli-kit/progress'
 import { churnSince, complexityOf, isCandidate, isGenerated } from './churn'
 import { listFiles, readText } from './files'
 import { worstUnit } from './units'
@@ -48,29 +49,34 @@ export async function hotspots(args: string[]): Promise<number> {
     badUsage(`--bulk takes a number of files, not ${values.bulk}`)
 
   const halfLifeMs = values['half-life'] === '0' ? 0 : duration(values['half-life'], 'half-life', 90 * DAY_MS)
-  const churn = await churnSince(cwd, values.since ?? DEFAULT_SINCE, { bulk, halfLifeMs })
-
-  if (churn === undefined)
-    fail('not a git repository, churn comes from its log')
-
+  const progress = progressLine()
   const ranked: Hotspot[] = []
 
-  for (const path of await listFiles(positionals[0] === undefined ? [] : [positionals[0]], cwd)) {
-    const touched = churn.get(path)
+  try {
+    progress.update({ step: 'reading the git log' })
+    const churn = await churnSince(cwd, values.since ?? DEFAULT_SINCE, { bulk, halfLifeMs, onProgress: (done, total) => progress.update({ step: 'reading the git log', done, total, unit: 'commits' }) })
 
-    if (touched === undefined || (values.all !== true && !isCandidate(path)))
-      continue
+    if (churn === undefined)
+      fail('not a git repository, churn comes from its log')
 
-    const text = await readText(join(cwd, path))
+    const listed = (await listFiles(positionals[0] === undefined ? [] : [positionals[0]], cwd)).filter(path => churn.has(path) && (values.all === true || isCandidate(path)))
 
-    if (text === undefined || (values.all !== true && isGenerated(text)))
-      continue
+    for (const [done, path] of listed.entries()) {
+      progress.update({ step: 'measuring the files', done, total: listed.length, unit: 'files' })
+      const touched = churn.get(path)!
+      const text = await readText(join(cwd, path))
 
-    const complexity = complexityOf(text)
+      if (text === undefined || (values.all !== true && isGenerated(text)))
+        continue
 
-    const worst = worstUnit(text, path)
+      const complexity = complexityOf(text)
+      const worst = worstUnit(text, path)
 
-    ranked.push({ path, score: Math.round(complexity * (values['by-lines'] === true ? touched.linesWeight : touched.weight)), churn: touched.commits, recent: Math.round(touched.weight * 10) / 10, changed: touched.lines, authors: touched.authors, solo: touched.authors === 1, complexity, worst: worst === undefined ? undefined : { name: worst.name, line: worst.line, complexity: worst.complexity }, lines: text.split('\n').length - (text.endsWith('\n') ? 1 : 0) })
+      ranked.push({ path, score: Math.round(complexity * (values['by-lines'] === true ? touched.linesWeight : touched.weight)), churn: touched.commits, recent: Math.round(touched.weight * 10) / 10, changed: touched.lines, authors: touched.authors, solo: touched.authors === 1, complexity, worst: worst === undefined ? undefined : { name: worst.name, line: worst.line, complexity: worst.complexity }, lines: text.split('\n').length - (text.endsWith('\n') ? 1 : 0) })
+    }
+  }
+  finally {
+    progress.stop()
   }
 
   if (ranked.length === 0)

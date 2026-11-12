@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { complexityOf, isCandidate } from '../src/churn'
+import { churnSince, complexityOf, isCandidate } from '../src/churn'
 
 const temp = tempDirs()
 
@@ -46,6 +46,34 @@ beforeEach(() => {
   commit('2026-10-03T00:00:00Z', 'src/branchy.ts', 'src/plain.ts')
   commit('2026-10-04T00:00:00Z', 'src/plain.ts')
   commit('2026-10-05T00:00:00Z', 'src/plain.ts')
+})
+
+describe('churnSince', () => {
+  test('reads a history long enough for parallel runs as one log, counting each commit once', async () => {
+    const long = temp('churn-')
+    const COMMITS = 1201
+    const blob = (text: string) => `data ${Buffer.byteLength(text)}\n${text}\n`
+    let stream = ''
+
+    // a.ts changes one line in every commit, b.ts two lines in every third.
+    for (let at = 1; at <= COMMITS; at++) {
+      stream += `commit refs/heads/main\nmark :${at}\ncommitter t <t${at % 2}@t> ${1_700_000_000 + at} +0000\n${blob(`c${at}`)}${at === 1 ? '' : `from :${at - 1}\n`}`
+      stream += `M 100644 inline a.ts\n${blob(`${at}\n`)}`
+
+      if (at % 3 === 0)
+        stream += `M 100644 inline b.ts\n${blob(`${at}\n`)}`
+    }
+
+    Bun.spawnSync(['git', 'init', '-q', '-b', 'main'], { cwd: long })
+    Bun.spawnSync(['git', 'fast-import', '--quiet'], { cwd: long, stdin: new TextEncoder().encode(stream) })
+    const seen: [number, number][] = []
+
+    const churn = await churnSince(long, '2000-01-01', { bulk: 25, halfLifeMs: 0, onProgress: (read, total) => void seen.push([read, total]) })
+
+    expect(churn?.get('a.ts')).toEqual({ commits: COMMITS, weight: COMMITS, lines: 1 + 2 * (COMMITS - 1), linesWeight: 1 + 2 * (COMMITS - 1), authors: 2 })
+    expect(churn?.get('b.ts')).toEqual({ commits: 400, weight: 400, lines: 1 + 2 * 399, linesWeight: 1 + 2 * 399, authors: 2 })
+    expect(seen.at(-1)).toEqual([COMMITS, COMMITS])
+  })
 })
 
 describe('complexityOf', () => {
