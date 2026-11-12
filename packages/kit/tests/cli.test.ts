@@ -429,7 +429,7 @@ describe('the help screen', () => {
       return 0
     }
 
-    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: replacing }, ['--help']))).out).toStartWith('Usage: demo [file]: prints a file\n\nOptions:')
+    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: replacing }, ['--help']))).out).toStartWith('Usage: demo [file]\n\nPrints a file\n\nOptions:')
     expect((await capture(async () => runCli({ ...cli, replaces: 'echo' }, ['--help']))).out).toContain('Usage: demo <command> [options]\n\nCommands:')
   })
 

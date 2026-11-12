@@ -46,6 +46,15 @@ describe('helpText', () => {
     expect(line).toBe(`\x1B[1mUsage:\x1B[22m ft \x1B[36m<command>\x1B[39m \x1B[2m[options]\x1B[22m`)
   })
 
+  it('puts the summary in bold on its own line, then the details with their flags and code spans marked', () => {
+    const colors = paint(TERMINAL, {})
+    const usage = 'demo [--fix] [file]: checks a file\n\nWith --fix, `bun run fix` runs first; -k keeps the dry-run [file] as is.'
+
+    expect(usageLine(usage, colors)).toBe(`\x1B[1mUsage:\x1B[22m demo \x1B[2m[--fix]\x1B[22m \x1B[2m[file]\x1B[22m\n\n\x1B[1mChecks a file\x1B[22m\n\nWith \x1B[36m--fix\x1B[39m, \x1B[1mbun run fix\x1B[22m runs first; \x1B[36m-k\x1B[39m keeps the dry-run [file] as is.`)
+    expect(usageLine(usage, paint({}))).toBe('Usage: demo [--fix] [file]\n\nChecks a file\n\nWith --fix, `bun run fix` runs first; -k keeps the dry-run [file] as is.')
+    expect(usageLine('demo\n\nChecks.\nThen more.', paint({}))).toBe('Usage: demo\n\nChecks.\n\nThen more.')
+  })
+
   it('names a bad option in a short message, the help left to --help', () => {
     expect(() => parse(['--nope'], 'usage: demo', options)).toThrow('unknown option \'--nope\'')
   })

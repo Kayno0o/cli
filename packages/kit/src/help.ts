@@ -8,10 +8,36 @@ import { paint } from './style'
 const OPTIONAL = /(?<!\x1B)\[[^\]]+\]/g
 const USAGE_PREFIX = /^usage:\s*/i
 const FULL_STOP = /\.$/
+// A `code` span, or a flag standing alone in prose: `--only`, `-k`, not the dash of dry-run.
+const PROSE_MARKS = /`([^`\n]+)`|(?<![\w-])(--[a-z][\w-]*|-[a-z](?![\w-]))/gi
 
-// `Usage: <usage>`, the usage given with or without its own `usage:`, optional parts dimmed.
+// `Usage: <synopsis>` with its optional parts dimmed, then the summary in bold on its own line and the details, their flags and code spans marked; the usage may start with its own `usage:`.
 export function usageLine(usage: string, colors = paint(process.stdout)): string {
-  return `${colors.bold('Usage:')} ${usage.replace(USAGE_PREFIX, '').replaceAll(OPTIONAL, part => colors.dim(part))}`
+  const lines = usage.replace(USAGE_PREFIX, '').split('\n')
+  const blank = lines.indexOf('')
+  const synopses = blank === -1 ? lines : lines.slice(0, blank)
+  const details = blank === -1 ? [] : lines.slice(blank + 1)
+  const colon = synopses[0]!.indexOf(': ')
+  const inline = synopses[0]!.slice(colon + 2)
+  // A summary after the synopsis's colon starts in lower case, as the rest of that line ran on.
+  const summary = colon === -1 ? details.shift() : `${inline.charAt(0).toUpperCase()}${inline.slice(1)}`
+
+  if (colon !== -1)
+    synopses[0] = synopses[0]!.slice(0, colon)
+
+  const head = `${colors.bold('Usage:')} ${synopses.map(line => line.replaceAll(OPTIONAL, part => colors.dim(part))).join('\n')}`
+  const lead = summary === undefined ? [] : ['', colors.bold(prose(summary, colors))]
+  const rest = details.length === 0 ? [] : ['', ...details.map(line => prose(line, colors))]
+
+  return [head, ...lead, ...rest].join('\n')
+}
+
+// A line of the description with its flags cyan and its code spans bold, the backticks dropped once the span is marked.
+function prose(line: string, colors: ReturnType<typeof paint>): string {
+  if (colors.cyan('x') === 'x')
+    return line
+
+  return line.replaceAll(PROSE_MARKS, (match, code: string | undefined, flag: string | undefined) => code === undefined ? colors.cyan(flag ?? match) : colors.bold(code))
 }
 
 export function helpText(usage: string, options: Options, colors = paint(process.stdout), { examples = [], exits = [] }: Described = {}): string {
