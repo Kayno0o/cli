@@ -7,7 +7,7 @@ import { runningProjects } from './compose'
 import { wtJobs } from './config'
 import { currentBranch, git, unreachableCount } from './git'
 import { slugOf } from './jobs'
-import { listTasks, loadProjects, locate, stackName, worktreeOf } from './project'
+import { currentDir, listTasks, loadProjects, locate, stackName, worktreeOf } from './project'
 import { urlsOf } from './routes'
 
 export interface Checkout {
@@ -41,7 +41,7 @@ async function projectsToList(options: ListOptions): Promise<{ here: Project | n
   let here: Project | null = null
 
   try {
-    here = (await locate(process.cwd(), options.project)).project
+    here = (await locate(currentDir(), options.project)).project
   }
   catch (error) {
     // A project named on the command line that does not load is the user's to hear of

@@ -4,7 +4,7 @@ import type { Worktree } from './project'
 import { existsSync } from 'node:fs'
 import { openUrl, warn } from '@kaynooo/cli-kit'
 import { slugOf } from './jobs'
-import { assertWorktreeExists, listTasks, locate, locateWorktree, worktreeOf, WtError } from './project'
+import { assertWorktreeExists, currentDir, listTasks, locate, locateWorktree, worktreeOf, WtError } from './project'
 import { urlsOf } from './routes'
 
 /** Prints the log of the worktree's last --bg job: a job run in a terminal printed there and kept none, which a note says when it came after. */
@@ -27,12 +27,12 @@ export async function printJobLog(worktree: Worktree, jobs: Jobs): Promise<void>
 }
 
 export async function printUrls(task: string | undefined, options: GlobalOptions): Promise<void> {
-  for (const url of urlsOf(await locateWorktree(process.cwd(), task, options.project)))
+  for (const url of urlsOf(await locateWorktree(currentDir(), task, options.project)))
     console.log(url)
 }
 
 export async function printPath(task: string | undefined, options: GlobalOptions): Promise<void> {
-  const { project } = await locate(process.cwd(), options.project)
+  const { project } = await locate(currentDir(), options.project)
 
   if (task === undefined || task === 'main')
     return console.log(project.root)
@@ -45,7 +45,7 @@ export async function printPath(task: string | undefined, options: GlobalOptions
 
 /** Opens a worktree's main URL in the browser, main's when the task is `main` or the current directory is main's checkout. */
 export async function openTask(task: string | undefined, options: GlobalOptions): Promise<void> {
-  const here = await locate(process.cwd(), options.project)
+  const here = await locate(currentDir(), options.project)
   const name = task ?? here.task
   let url: string | undefined
 
@@ -71,6 +71,6 @@ export async function openTask(task: string | undefined, options: GlobalOptions)
 }
 
 export async function printTasks(options: GlobalOptions): Promise<void> {
-  for (const task of listTasks((await locate(process.cwd(), options.project)).project))
+  for (const task of listTasks((await locate(currentDir(), options.project)).project))
     console.log(task)
 }

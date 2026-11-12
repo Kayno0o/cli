@@ -5,7 +5,7 @@ import { $ } from 'bun'
 import { runningProjects } from './compose'
 import { knownMessage } from './errors'
 import { addWorktrees, dirtyRepos, isRegistered, removeWorktrees, unreachableCommits } from './git'
-import { assertWorktreeExists, locate, locateWorktree, worktreeOf, WtError } from './project'
+import { assertWorktreeExists, currentDir, locate, locateWorktree, worktreeOf, WtError } from './project'
 import { removeQueues } from './prune'
 import { holders } from './queue'
 import { urlsOf } from './routes'
@@ -49,7 +49,7 @@ async function removeVolumes(worktree: Worktree, anonymous: string[]): Promise<v
 
 /** Creates the worktree, then starts its stack with `up`, else names the command that would. */
 export async function addTask(task: string, branch: string | undefined, options: GlobalOptions & { up?: boolean, from?: string }): Promise<void> {
-  const { project } = await locate(process.cwd(), options.project)
+  const { project } = await locate(currentDir(), options.project)
   const worktree = worktreeOf(project, task)
   const checkout = branch ?? `wt/${task}`
 
@@ -91,7 +91,7 @@ export async function addTask(task: string, branch: string | undefined, options:
 }
 
 export async function syncTask(task: string | undefined, options: GlobalOptions): Promise<void> {
-  const worktree = await locateWorktree(process.cwd(), task, options.project)
+  const worktree = await locateWorktree(currentDir(), task, options.project)
 
   await syncWorktree(worktree)
   console.log(`wt: synced ${worktree.id}`)
@@ -123,7 +123,7 @@ async function refuseLosingWork(worktree: Worktree, force: boolean): Promise<voi
 
 /** Refuses a removal with nothing to remove, or work it would lose, before it claims a job: a job left recording a worktree never there, or a `--bg` one failing out of sight. */
 export async function assertRemovable(task: string, options: GlobalOptions & { force?: boolean }): Promise<Worktree> {
-  const worktree = await locateWorktree(process.cwd(), task, options.project)
+  const worktree = await locateWorktree(currentDir(), task, options.project)
 
   if (!existsSync(worktree.dir) && !Object.values(worktree.files).some(file => existsSync(file)) && !await isRegistered(worktree))
     throw new WtError(`no worktree ${worktree.task} of ${worktree.project.name}, nothing removed`)
@@ -135,7 +135,7 @@ export async function assertRemovable(task: string, options: GlobalOptions & { f
 }
 
 export async function removeTask(task: string, options: GlobalOptions & { force?: boolean }): Promise<void> {
-  const worktree = await locateWorktree(process.cwd(), task, options.project)
+  const worktree = await locateWorktree(currentDir(), task, options.project)
 
   // Every command after this one spawns from the cwd, which may be the directory about to go.
   process.chdir(worktree.project.root)

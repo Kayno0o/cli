@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { $ } from 'bun'
 import { wtConfig } from './config'
 import { git } from './git'
-import { listTasks, loadProjects, locate, stackName, worktreeOf } from './project'
+import { currentDir, listTasks, loadProjects, locate, stackName, worktreeOf } from './project'
 
 export interface Orphan {
   worktree: Worktree
@@ -24,7 +24,7 @@ export interface LeftBehind {
 
 /** What each project, the current one or every one with `all`, has left behind; only the projects with something left. */
 export async function leftBehind(options: GlobalOptions & { all?: boolean }): Promise<LeftBehind[]> {
-  const projects = options.all ? await loadProjects() : [(await locate(process.cwd(), options.project)).project]
+  const projects = options.all ? await loadProjects() : [(await locate(currentDir(), options.project)).project]
   const { jobs } = await wtConfig()
   const found = await Promise.all(projects.map(async project => ({ project, orphans: await orphansOf(project, jobs), stale: await staleRegistrations(project) })))
 

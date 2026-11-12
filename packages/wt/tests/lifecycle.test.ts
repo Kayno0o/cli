@@ -1,7 +1,7 @@
 /** addTask, removeTask, cloneData and whilePaused against fake docker and mkcert on a PATH of their own and a HOME of their own, so nothing reaches the real stack. */
 
 import type { Sandbox } from './sandbox'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { $ } from 'bun'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
@@ -1058,6 +1058,58 @@ describe('a wt config that does not load', () => {
     expect(notified[0]).toContain('wt up planning not started')
     expect(notified[0]).toContain('config.ts does not load')
   })
+})
+
+describe('locate', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+    // A second project, so a cwd matching neither is not settled by there being only one
+    mkdirSync(join(env.sandbox.home, 'Elsewhere', 'other', '.git'), { recursive: true })
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/other' })}\n`)
+  })
+
+  afterAll(() => env?.stop())
+
+  // wt run from `cwd` by sh, whose PWD keeps the path once the folder is deleted
+  const wtIn = async (cwd: string, script: string, ...args: string[]) => spawn(['sh', '-c', `cd "$0" && ${script} exec "$@"`, cwd, process.execPath, '--no-env-file', CLI, ...args], env.sandbox.home, env.sandbox)
+
+  test('finds the project of a cwd under a root the manifest names through a symlink', async () => {
+    const { sandbox, wt, root, dirOf } = env
+
+    symlinkSync(join(sandbox.home, 'Workspace'), join(sandbox.home, 'Linked'))
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Linked/times' })}\n`)
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+
+    const main = await wtIn(root, '', 'tasks')
+
+    expect(main.err).toBe('')
+    expect(main.out).toBe('planning\n')
+    expect((await wtIn(dirOf('planning'), '', 'path')).out).toBe(`${join(sandbox.home, 'Linked', 'times')}\n`)
+  }, 30_000)
+
+  test('reads a deleted cwd as the worktree it was, and says so when it was none', async () => {
+    const { sandbox, wt, dirOf } = env
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+
+    const gone = await wtIn(dirOf('planning'), `rm -rf "${dirOf('planning')}" &&`, 'up')
+
+    expect(gone.code).toBe(1)
+    expect(gone.err).toContain('no worktree planning')
+
+    const nowhere = join(sandbox.home, 'tmp-gone')
+
+    mkdirSync(nowhere)
+
+    const lost = await wtIn(nowhere, `rmdir "${nowhere}" &&`, 'tasks')
+
+    expect(lost.err).toContain(`the current directory ${nowhere} is gone: cd into a project or worktree, or pass --project`)
+    expect(lost.err).not.toContain('ENOENT')
+  }, 30_000)
 })
 
 describe('up and down with no runner', () => {

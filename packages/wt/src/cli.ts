@@ -8,7 +8,7 @@ import { badUsage, fail, isInteractive, jsonOption, parse, printError, runCli, w
 import { wtJobs } from './config'
 import { failKnown, failureText, knownMessage } from './errors'
 import { canNotify, notifyRefused, slugOf } from './jobs'
-import { assertWorktreeExists, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
+import { assertWorktreeExists, currentDir, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
 
 // Each command loads its modules when it runs, so `wt path`, `wt tasks` and Tab completion do not pay for the whole tool.
 const commands = async () => import('./commands')
@@ -52,7 +52,7 @@ async function projectNames(): Promise<string[]> {
 // The worktrees of the project the current directory belongs to, none outside one.
 async function taskNames(): Promise<string[]> {
   try {
-    return listTasks((await locate(process.cwd())).project)
+    return listTasks((await locate(currentDir())).project)
   }
   catch {
     return []
@@ -112,7 +112,7 @@ async function inTurn(command: string, worktrees: Worktree[], act: (worktree: Wo
 }
 
 async function eachWorktree(command: string, projectName: string | undefined, act: (worktree: Worktree) => Promise<number>): Promise<number> {
-  const { project } = await locate(process.cwd(), projectName)
+  const { project } = await locate(currentDir(), projectName)
   const tasks = listTasks(project)
 
   if (!tasks.length)
@@ -216,7 +216,7 @@ async function startOrStop(verb: 'up' | 'down', args: string[]): Promise<number>
     if (values.all)
       return eachWorktree(verb, values.project, act)
 
-    const worktree = await locateWorktree(process.cwd(), task, values.project)
+    const worktree = await locateWorktree(currentDir(), task, values.project)
 
     if (verb === 'up')
       assertWorktreeExists(worktree)
@@ -310,7 +310,7 @@ process.exitCode = await runCli({
         }, { positionals: ['<task>', '[branch]'] })
 
         return guarded(async () => {
-          const worktree = worktreeOf((await locate(process.cwd(), values.project)).project, task)
+          const worktree = worktreeOf((await locate(currentDir(), values.project)).project, task)
 
           return asWorktreeJob(values.up ? 'add --up' : 'add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch]), ...(values.from === undefined ? [] : ['--from', values.from]), ...(values.up ? ['--up'] : [])], async () => (await commands()).addTask(task, branch, values))
         }, bgName(values, values.up ? 'add --up' : 'add', task))
@@ -322,7 +322,7 @@ process.exitCode = await runCli({
         const { values, positionals: [task] } = parse(args, SYNC_USAGE, { project: PROJECT_OPTION }, { positionals: ['[task]'], candidates: TASK })
 
         return guarded(async () => {
-          const worktree = await locateWorktree(process.cwd(), task, values.project)
+          const worktree = await locateWorktree(currentDir(), task, values.project)
 
           assertWorktreeExists(worktree)
 
@@ -364,7 +364,7 @@ process.exitCode = await runCli({
         }, { positionals: ['[task]'], candidates: TASK })
 
         return guarded(async () => {
-          const worktree = await locateWorktree(process.cwd(), task, values.project)
+          const worktree = await locateWorktree(currentDir(), task, values.project)
 
           assertWorktreeExists(worktree)
 
@@ -433,7 +433,7 @@ process.exitCode = await runCli({
           print: { type: 'boolean', description: 'print the draft instead of writing it' },
         }, { positionals: ['[dir]'] })
 
-        return guarded(async () => (await import('./init')).initProject(dir ?? process.cwd(), values))
+        return guarded(async () => (await import('./init')).initProject(dir ?? currentDir(), values))
       },
     },
     doctor: {

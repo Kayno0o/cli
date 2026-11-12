@@ -204,12 +204,38 @@ export function listTasks(project: Project): string[] {
 }
 
 // The project and task the working directory sits in, `main` when it is the project's own checkout.
+/** The directory wt runs in; once deleted from under the shell (after `wt rm --bg`), the path the shell still holds, so locate reads which worktree it was. */
+export function currentDir(): string {
+  try {
+    return process.cwd()
+  }
+  catch {
+    const pwd = process.env.PWD ?? ''
+
+    if (pwd === '')
+      throw new WtError('the current directory is gone: cd elsewhere')
+
+    return pwd
+  }
+}
+
+// Symlinks resolved, so a cwd the kernel hands back resolved matches a root given through a link; a path gone stays as written.
+function resolved(path: string): string {
+  try {
+    return realpathSync(path)
+  }
+  catch {
+    return path
+  }
+}
+
 export async function locate(cwd: string, projectName?: string): Promise<{ project: Project, task: string }> {
-  const here = realpathSync(cwd)
+  const here = resolved(cwd)
   const projects = projectName !== undefined ? [await findProject(projectName)] : await loadProjects()
 
   for (const project of projects) {
-    const dir = tasksDir(project)
+    const dir = resolved(tasksDir(project))
+    const root = resolved(project.root)
 
     if (here.startsWith(`${dir}/`)) {
       const rest = here.slice(dir.length + 1)
@@ -218,12 +244,15 @@ export async function locate(cwd: string, projectName?: string): Promise<{ proje
       return { project, task: slash === -1 ? rest : rest.slice(0, slash) }
     }
 
-    if (here === project.root || here.startsWith(`${project.root}/`))
+    if (here === root || here.startsWith(`${root}/`))
       return { project, task: 'main' }
   }
 
   if (projects.length === 1)
     return { project: projects[0]!, task: 'main' }
+
+  if (!existsSync(cwd))
+    throw new WtError(`the current directory ${cwd} is gone: cd into a project or worktree, or pass --project`)
 
   throw new WtError('not inside a known project or worktree (cd into one, or pass --project)')
 }

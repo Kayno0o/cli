@@ -8,7 +8,7 @@ import { $ } from 'bun'
 import { baseComposeFiles, composeConfig } from './compose'
 import { wtConfig } from './config'
 import { readEnvFile } from './env_file'
-import { assertWorktreeExists, locateWorktree, WtError } from './project'
+import { assertWorktreeExists, currentDir, locateWorktree, WtError } from './project'
 import { holding, inLine, queueDir } from './queue'
 
 export interface TestDatabase {
@@ -278,7 +278,7 @@ async function provision(worktree: Worktree, run: RunConfig, plan: RunPlan, data
 }
 
 export async function runTask(task: string, command: string[], project?: string): Promise<number> {
-  const worktree = await locateWorktree(process.cwd(), task, project)
+  const worktree = await locateWorktree(currentDir(), task, project)
   const { run, name } = worktree.project
 
   assertWorktreeExists(worktree)
@@ -304,7 +304,7 @@ export function runsDir(worktree: Worktree): string {
 
 // One heavy command at a time across every session on the machine, the rest waiting their turn in arrival order.
 export async function runHeavy(command: string[]): Promise<number> {
-  const label = `${command.join(' ')} (in ${process.cwd()})`
+  const label = `${command.join(' ')} (in ${currentDir()})`
 
   return inLine(queueDir(await wtConfig(), 'heavy'), label, (ahead, running) => console.error(`wt heavy: ${ahead} ahead, running ${running}`), async () => runInherit(command))
 }
