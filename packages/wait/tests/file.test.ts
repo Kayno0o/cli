@@ -1,4 +1,4 @@
-import { appendFileSync, renameSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { waitforHarness } from './waitfor'
@@ -16,6 +16,20 @@ describe('waitfor --file', () => {
     })
 
     expect(result).toEqual({ code: 0, out: 'app.log:2: ready on 8000\n'.replace('app.log', path), err: '' })
+  })
+
+  test('a --file that is a folder or unreadable is a usage error, exit 2, not the exit of a --fail line', async () => {
+    const unreadable = log('secret\n')
+
+    chmodSync(unreadable, 0o000)
+
+    // root reads a file whatever its mode, as CI runs
+    for (const path of process.getuid?.() === 0 ? [dir()] : [dir(), unreadable]) {
+      const result = await waitfor(['-f', path, '-u', 'x', '-t', '2s'])
+
+      expect(result.code).toBe(2)
+      expect(result.err).toContain('--file')
+    }
   })
 
   test('matches a line already in the file at once', async () => {

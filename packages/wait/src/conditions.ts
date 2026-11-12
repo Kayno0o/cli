@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs'
-import { configuredNumber } from '@kaynooo/cli-kit'
+import { badUsage, configuredNumber } from '@kaynooo/cli-kit'
 
 // Lines kept from the end of the file for a timeout's excerpt, and on each side of a failure line.
 const TAIL = configuredNumber('wait', 'tail', 20)
@@ -99,7 +99,12 @@ export class FileWatch {
     if (!existsSync(this.path))
       return undefined
 
-    const { size, dev, ino } = statSync(this.path)
+    const stats = statSync(this.path)
+
+    if (stats.isDirectory())
+      badUsage(`--file ${this.path} is a folder, not a log file`)
+
+    const { size, dev, ino } = stats
     const replaced = this.identity !== undefined && (this.identity.dev !== dev || this.identity.ino !== ino)
 
     this.identity = { dev, ino }
@@ -118,7 +123,7 @@ export class FileWatch {
     const end = Math.min(size, this.offset + SLICE_BYTES)
 
     // Streamed, so a read ending inside a multibyte character keeps its first bytes for the next one.
-    const chunk = this.decoder.decode(await Bun.file(this.path).slice(this.offset, end).bytes(), { stream: true })
+    const chunk = this.decoder.decode(await this.slice(end), { stream: true })
 
     this.offset = end
 
@@ -127,6 +132,16 @@ export class FileWatch {
     this.partial = (pieces.pop() ?? '').slice(0, MAX_LINE)
 
     return pieces.map(text => ({ number: ++this.number, text: Bun.stripANSI(text.slice(0, MAX_LINE).replace(CARRIAGE_RETURN, '')) }))
+  }
+
+  // The bytes up to `end`; a file that cannot be read is a usage error, kept apart from the exit of a --fail line.
+  private async slice(end: number): Promise<Uint8Array> {
+    try {
+      return await Bun.file(this.path).slice(this.offset, end).bytes()
+    }
+    catch (error) {
+      return badUsage(`--file ${this.path} cannot be read (${(error as NodeJS.ErrnoException).code ?? String(error)})`)
+    }
   }
 }
 
