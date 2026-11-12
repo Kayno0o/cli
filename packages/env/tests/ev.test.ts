@@ -116,6 +116,27 @@ describe('ev', () => {
     expect(ev(['list', 'nope']).code).toBe(2)
   })
 
+  test('a file that is not dotenv is refused by name, never read as empty', async () => {
+    await write('app.json', '{"password": "hunter2hunter2"}\n')
+    await write('app.conf', 'password: hunter2hunter2\n# a comment\n')
+    await write('.envrc', 'use flake\n')
+    await write('.env', 'PORT=3000\n')
+
+    for (const args of [['list', 'app.json'], ['get', 'password', 'app.json'], ['grep', 'pass', 'app.json'], ['unset', 'password', 'app.json'], ['diff', '.env', 'app.json']]) {
+      const run = ev(args)
+
+      expect(run.code).toBe(2)
+      expect(run.err).toContain('app.json is JSON, and ev reads dotenv files (KEY=value lines)')
+      expect(run.err).toContain('ev redact < app.json')
+    }
+
+    expect(ev(['set', 'TOKEN', 'new.yaml'], 'x').err).toContain('new.yaml is YAML')
+    expect(ev(['list', 'app.conf']).err).toContain('app.conf holds no KEY=value line, so it is not a dotenv file')
+    expect(await readFile(join(dir, 'app.json'), 'utf8')).toBe('{"password": "hunter2hunter2"}\n')
+    // The folder's own .env* files are read as they are, a direnv .envrc with no assignment included
+    expect(ev(['list']).code).toBe(0)
+  })
+
   test('get prints one masked value, bare for a file and per file otherwise', async () => {
     await write('.env', ENV)
     await write('.env.local', 'PORT=4000\n')
@@ -354,8 +375,9 @@ describe('ev', () => {
     const git = (...args: string[]) => Bun.spawnSync(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: dir })
 
     await write('.env', ENV)
+    await write('app.conf', 'password: hunter2hunter2\n')
     git('init', '-q')
-    git('add', '-f', '.env')
+    git('add', '-f', '.env', 'app.conf')
     git('commit', '-qm', 'x')
     await write('.env', 'PORT=1\n')
 
@@ -367,5 +389,8 @@ describe('ev', () => {
     expect(out).not.toContain('hunter22')
     expect(ev(['show', 'HEAD:nope']).code).toBe(1)
     expect(ev(['show', '.env']).code).toBe(2)
+    expect(ev(['show', 'HEAD:app.json']).err).toContain('app.json is JSON')
+    expect(ev(['show', 'HEAD:app.conf']).err).toContain('HEAD:app.conf holds no KEY=value line')
+    expect(ev(['show', 'HEAD:app.conf']).err).toContain('git show HEAD:app.conf | ev redact')
   })
 })

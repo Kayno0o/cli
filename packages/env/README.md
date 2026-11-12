@@ -31,6 +31,8 @@ A value is masked when its key is named like a secret (`TOKEN`, `SECRET`, `PASSW
 
 Files are parsed and written back preserving comments, order, `export KEY=` prefixes, quoting and multiline values; only the lines a command touches change.
 
+Only dotenv files are read: a file named on the command line with a `.json`, `.yaml`, `.toml`, `.ini` or `.xml` extension, or holding lines but no `KEY=value` one, is refused with exit 2 rather than read as empty. `ev redact < file` masks the secrets of those.
+
 ## ev redact
 
 ```sh

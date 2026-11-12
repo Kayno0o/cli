@@ -4,7 +4,7 @@ import type { KnownSecrets } from '../mask'
 import { fail, jsonOption, parse, printJson, role, table } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { entries, parseDotenv } from '../dotenv'
-import { envFiles, loadKnown, readEnv } from '../files'
+import { assertDotenvName, assertDotenvText, envFiles, loadKnown, readEnv } from '../files'
 import { isSecretKey, maskValue } from '../mask'
 
 const listUsage = `ev list [file]
@@ -60,11 +60,11 @@ function printRows(rows: Row[], json: boolean, plain: () => void): void {
 }
 
 // Reads each file once and learns the secrets of the folder and of these files, so a value is masked whatever key holds it.
-async function readAll(names: string[]): Promise<{ files: [name: string, file: Dotenv][], known: KnownSecrets }> {
+async function readAll(names: string[], scanned: boolean): Promise<{ files: [name: string, file: Dotenv][], known: KnownSecrets }> {
   const files: [string, Dotenv][] = []
 
   for (const name of names)
-    files.push([name, await readEnv(name)])
+    files.push([name, await readEnv(name, { scanned })])
 
   return { files, known: await loadKnown(process.cwd(), files.map(([, file]) => file)) }
 }
@@ -80,7 +80,7 @@ export async function list(args: string[]): Promise<number> {
 
   const rows: Row[] = []
 
-  const { files, known } = await readAll(names)
+  const { files, known } = await readAll(names, file === undefined)
 
   for (const [name, file] of files) {
     for (const [key, value] of entries(file))
@@ -106,7 +106,7 @@ export async function get(args: string[]): Promise<number> {
   const names = file === undefined ? await envFiles() : [file]
   const rows: Row[] = []
 
-  const { files, known } = await readAll(names)
+  const { files, known } = await readAll(names, file === undefined)
 
   for (const [name, file] of files) {
     const value = entries(file).get(key)
@@ -161,7 +161,7 @@ export async function grep(args: string[]): Promise<number> {
   const names = given.length === 0 ? await envFiles() : given
   const rows: Row[] = []
 
-  const { files, known } = await readAll(names)
+  const { files, known } = await readAll(names, given.length === 0)
 
   for (const [name, file] of files) {
     for (const [key, value] of entries(file)) {
@@ -190,12 +190,18 @@ export async function show(args: string[]): Promise<number> {
   if (revision.startsWith('-'))
     fail(`${revision} is not a revision: it reads as a git option`)
 
+  const redact = `git show ${revision}:${path} | ev redact`
+
+  assertDotenvName(path, redact)
+
   const shown = await $`git show --end-of-options ${`${revision}:${path}`}`.quiet().nothrow()
 
   if (shown.exitCode !== 0)
     fail(`git show ${revision}:${path} failed: ${shown.stderr.toString().trim()}`, 1)
 
   const file = parseDotenv(shown.stdout.toString())
+
+  assertDotenvText(target ?? '', file, redact)
   const known = await loadKnown(process.cwd(), [file])
   const rows = [...entries(file)].map(([key, value]) => row(target ?? '', key, value, known))
 

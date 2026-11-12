@@ -2,7 +2,7 @@ import type { Dirent } from 'node:fs'
 import type { Dotenv } from './dotenv'
 import type { KnownSecrets } from './mask'
 import { chmod, chown, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import { fail, ignoredFolders, isSecretName } from '@kaynooo/cli-kit'
 import { entries, parseDotenv, serializeDotenv } from './dotenv'
 import { knownSecrets, urlPasswords } from './mask'
@@ -49,13 +49,45 @@ export async function envFiles(folder = process.cwd()): Promise<string[]> {
   return names.sort()
 }
 
-export async function readEnv(path: string): Promise<Dotenv> {
+// Formats ev does not read, told apart by their extension.
+const OTHER_FORMATS: Record<string, string> = { '.json': 'JSON', '.jsonc': 'JSON', '.json5': 'JSON', '.yaml': 'YAML', '.yml': 'YAML', '.toml': 'TOML', '.ini': 'INI', '.xml': 'XML' }
+const BLANK_OR_COMMENT = /^\s*(?:#.*)?$/
+
+// `redact` is the command masking that file's text, `ev redact < <path>` for a file on disk.
+function notDotenv(why: string, redact: string): never {
+  fail(`${why}, and ev reads dotenv files (KEY=value lines)`, 2, `\`${redact}\` masks the secrets of any text`)
+}
+
+// A file named as another format is refused before ev reads or writes it.
+export function assertDotenvName(path: string, redact = `ev redact < ${path}`): void {
+  const format = OTHER_FORMATS[extname(path).toLowerCase()]
+
+  if (format !== undefined)
+    notDotenv(`${path} is ${format}`, redact)
+}
+
+// A file named on the command line is refused when it holds lines but no assignment, rather than read as empty.
+export function assertDotenvText(path: string, dotenv: Dotenv, redact = `ev redact < ${path}`): void {
+  if (dotenv.lines.every(line => line.key === undefined) && !dotenv.lines.every(line => BLANK_OR_COMMENT.test(line.raw)))
+    notDotenv(`${path} holds no KEY=value line, so it is not a dotenv file`, redact)
+}
+
+// The folder's own .env* files are read as they are (`scanned`), a direnv .envrc holding only `use flake` included.
+export async function readEnv(path: string, { scanned = false } = {}): Promise<Dotenv> {
   const file = Bun.file(path)
+
+  if (!scanned)
+    assertDotenvName(path)
 
   if (!await file.exists())
     fail(`${path} does not exist`)
 
-  return parseDotenv(await file.text())
+  const dotenv = parseDotenv(await file.text())
+
+  if (!scanned)
+    assertDotenvText(path, dotenv)
+
+  return dotenv
 }
 
 // Writes through a temp file in the same folder renamed over the target, so a crash or a full disk never leaves a half-written file. The target keeps its mode, owner and group and a new file is 0600.

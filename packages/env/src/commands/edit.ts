@@ -2,7 +2,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import { badUsage, fail, isInteractive, parse, readInput } from '@kaynooo/cli-kit'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { entries, lastLine, removeKey, setLine } from '../dotenv'
-import { loadKnown, readEnv, withLocks, writeEnv } from '../files'
+import { assertDotenvName, loadKnown, readEnv, withLocks, writeEnv } from '../files'
 import { maskValue } from '../mask'
 
 const DEFAULT_FILE = '.env'
@@ -53,6 +53,8 @@ function checkKey(key: string): void {
 }
 
 async function readOrEmpty(path: string) {
+  assertDotenvName(path)
+
   return await Bun.file(path).exists() ? readEnv(path) : { lines: [] }
 }
 
