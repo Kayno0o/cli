@@ -59,6 +59,17 @@ describe('runCli', () => {
     expect((await capture(async () => runCli(cli, ['nope']))).err).toBe('error: demo: no command nope\n  hint: run demo --help for its commands\n')
   })
 
+  test('reads a word naming an Object property, toString or constructor, as no command', async () => {
+    const bare = { name: cli.name, version: cli.version, about: cli.about, commands: cli.commands }
+
+    for (const word of ['toString', 'constructor', '__proto__']) {
+      expect(await capture(async () => runCli(bare, [word]))).toMatchObject({ result: 2, err: expect.stringContaining(`no command ${word}`) })
+      expect(await capture(async () => runCli(cli, ['plan', word]))).toMatchObject({ result: 2, err: expect.stringContaining(`no command ${word}`) })
+    }
+
+    expect((await capture(async () => runCli(cli, ['__complete', 'toString', '']))).result).toBe(0)
+  })
+
   test('hands the arguments to the default command when the first names none', async () => {
     const withDefault = { ...cli, defaultCommand: 'echo' }
 

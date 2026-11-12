@@ -134,6 +134,13 @@ async function resolveSummary(summary: Summary): Promise<string> {
   return typeof summary === 'string' ? summary : summary()
 }
 
+// The command a word names, through an alias; own keys only, so `toString` or `constructor` names nothing.
+function lookup({ commands, aliases }: Pick<Level, 'commands' | 'aliases'>, word: string): Level['commands'][string] | undefined {
+  const name = aliases !== undefined && Object.hasOwn(aliases, word) ? (aliases[word] ?? word) : word
+
+  return Object.hasOwn(commands, name) ? commands[name] : undefined
+}
+
 function scopeOf(commands: Commands | LazyCommands, extra: LazyCommands | undefined, aliases: Record<string, string> | undefined): Scope {
   return { commands: typeof commands === 'function' ? {} : commands, lazy: [...typeof commands === 'function' ? [commands] : [], ...extra === undefined ? [] : [extra]], aliases }
 }
@@ -278,13 +285,13 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
     return 0
   }
 
-  let command = level.commands[level.aliases?.[name] ?? name]
+  let command = lookup(level, name)
   let rest = args
   let ran = name
 
   if (command === undefined && level.lazy.length > 0) {
     level = await expand(level, [...level.path.slice(1), ...argv])
-    command = level.commands[level.aliases?.[name] ?? name]
+    command = lookup(level, name)
   }
 
   if (command === undefined && level.defaultCommand !== undefined) {
@@ -404,12 +411,14 @@ async function leafCandidates(run: (args: string[]) => Promise<number>, words: s
 async function candidates(scope: Scope, defaultCommand: string | undefined, words: string[], before: string[] = []): Promise<string[]> {
   const [word = '', ...rest] = words
   const listing = rest.length === 0 && !word.startsWith('-')
-  let { commands, aliases } = scope
-  let command = commands[aliases?.[word] ?? word]
+  let { commands } = scope
+  let command = lookup(scope, word)
 
   if (listing || command === undefined) {
-    ({ commands, aliases } = await expand(scope, [...before, ...words]))
-    command = commands[aliases?.[word] ?? word]
+    const expanded = await expand(scope, [...before, ...words])
+
+    commands = expanded.commands
+    command = lookup(expanded, word)
   }
 
   if (listing) {
@@ -420,7 +429,7 @@ async function candidates(scope: Scope, defaultCommand: string | undefined, word
 
     const valueOf = (line: string) => line.slice(0, line.includes('\t') ? line.indexOf('\t') : undefined)
 
-    return [...own, ...values.filter(line => line !== FILES && !(valueOf(line) in commands))]
+    return [...own, ...values.filter(line => line !== FILES && !Object.hasOwn(commands, valueOf(line)))]
   }
 
   if (command === undefined) {
@@ -521,8 +530,7 @@ function commandPath(scope: Pick<Level, 'commands' | 'aliases'>, argv: readonly 
   let level = scope
 
   for (const word of argv.filter(each => !each.startsWith('-'))) {
-    const name = level.aliases !== undefined && Object.hasOwn(level.aliases, word) ? (level.aliases[word] ?? word) : word
-    const command: Level['commands'][string] | undefined = Object.hasOwn(level.commands, name) ? level.commands[name] : undefined
+    const command = lookup(level, word)
 
     if (command === undefined)
       break
