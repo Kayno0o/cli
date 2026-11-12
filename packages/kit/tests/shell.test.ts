@@ -117,6 +117,16 @@ describe('parseCommand wrappers', () => {
       expect(parseCommand(text)).toMatchObject({ program: 'git', args: ['stash'], isWrapped: true })
   })
 
+  test('reads the command a runner or a tracing, scheduling or proxy wrapper runs', () => {
+    const wrapped = ['out -- git stash', 'out --was x -- git stash', 'slot -- git stash', 'slot -l db -- git stash', 'waitfor --port 1 -- git stash', 'base -- git stash', 'base proof --keep t.ts -- git stash', 'strace -f -o x.log git stash', 'strace -e trace=file git stash', 'ltrace -o x git stash', 'taskset 0x3 git stash', 'taskset -c 0-3 git stash', 'fakeroot git stash', 'fakeroot -- git stash', 'sshpass -p x git stash', 'sshpass -f pw git stash', 'coproc git stash', 'proxychains -q git stash', 'proxychains4 -f p.conf git stash', 'torsocks git stash', 'torsocks -u u git stash', 'chrt -f 10 git stash', 'chrt 10 git stash', 'unshare -r git stash', 'unshare --map-user 0 git stash', 'nsenter -t 1 -m git stash']
+
+    for (const text of wrapped)
+      expect(parseCommand(text)).toMatchObject({ program: 'git', args: ['stash'], isWrapped: true })
+
+    expect(parseCommand('slot ls')).toMatchObject({ program: 'slot', args: ['ls'], isWrapped: false })
+    expect(parseCommand('out --help')).toMatchObject({ program: 'out', args: ['--help'] })
+  })
+
   test('skips an input redirection before the program, its file joined or apart', () => {
     for (const text of ['< in.txt cat -n', '<in.txt cat -n', '0< in.txt cat -n', '0<in.txt cat -n'])
       expect(parseCommand(text)).toMatchObject({ program: 'cat', args: ['-n'] })

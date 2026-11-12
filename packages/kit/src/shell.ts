@@ -58,12 +58,15 @@ const PRINTERS = new Set(['echo', 'printf'])
 const FIND_EXEC = new Set(['-exec', '-execdir', '-ok', '-okdir'])
 
 // Programs that run the command following them, which is the one that counts, with the options taking a value and the operands before that command.
-interface WrapperSpec { short: string, long: readonly string[], operands: number, runsString: boolean }
+interface WrapperSpec { short: string, long: readonly string[], operands: number, runsString: boolean, afterDashes?: boolean }
 
 // `runsString` for a wrapper that hands its command to a shell, so a quoted `'git stash'` is a command line.
 function wrapper(short = '', long: readonly string[] = [], operands = 0, runsString = false): WrapperSpec {
   return { short, long, operands, runsString }
 }
+
+// A runner of this repository, whose command is what follows its `--` (`out -- <cmd>`, `base proof --keep t -- <cmd>`); without one it runs none.
+const RUNNER: WrapperSpec = { ...wrapper(), afterDashes: true }
 
 const WRAPPERS = new Map<string, WrapperSpec>([
   ['command', wrapper()],
@@ -87,6 +90,22 @@ const WRAPPERS = new Map<string, WrapperSpec>([
   ['unbuffer', wrapper()],
   ['systemd-run', wrapper('puEMH', ['--property', '--unit', '--description', '--slice', '--setenv', '--machine', '--host', '--uid', '--gid', '--working-directory', '--nice', '--service-type'])],
   ['xargs', wrapper('IndsEaPL', ['--max-args', '--max-procs', '--max-chars', '--delimiter', '--arg-file', '--eof', '--max-lines', '--process-slot-var'])],
+  ['strace', wrapper('abeEIoOpPsSuUX', ['--trace', '--output', '--attach', '--string-limit', '--user', '--env', '--columns', '--trace-path', '--signal', '--status', '--summary-sort-by', '--summary-columns', '--const-print-style', '--interruptible', '--detach-on'])],
+  ['ltrace', wrapper('aeFlnopsuxX', ['--output', '--user', '--library', '--config', '--align', '--indent'])],
+  ['taskset', wrapper('', [], 1)],
+  ['fakeroot', wrapper('lsib', ['--lib', '--faked'])],
+  ['sshpass', wrapper('pfdP')],
+  ['coproc', wrapper()],
+  ['proxychains', wrapper('f')],
+  ['proxychains4', wrapper('f')],
+  ['torsocks', wrapper('upaP', ['--user', '--pass', '--address', '--port'])],
+  ['chrt', wrapper('TPD', ['--sched-runtime', '--sched-period', '--sched-deadline'], 1)],
+  ['unshare', wrapper('SGRw', ['--setuid', '--setgid', '--root', '--wd', '--map-user', '--map-group', '--map-users', '--map-groups', '--propagation', '--setgroups'])],
+  ['nsenter', wrapper('tSG', ['--target', '--setuid', '--setgid'])],
+  ['out', RUNNER],
+  ['slot', RUNNER],
+  ['waitfor', RUNNER],
+  ['base', RUNNER],
 ])
 
 function closerOf(quote: string): string {
@@ -683,6 +702,15 @@ export function parseCommand(text: string): Invocation {
     else if (tokens.length > 1 && CASE_LABEL.test(first)) {
       isWrapped = true
       tokens.shift()
+    }
+    else if (spec?.afterDashes === true) {
+      const dashes = tokens.indexOf('--')
+
+      if (dashes === -1)
+        break
+
+      isWrapped = true
+      tokens.splice(0, dashes + 1)
     }
     else if (spec !== undefined) {
       isWrapped = true

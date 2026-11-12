@@ -58,7 +58,9 @@ describe('git', () => {
 
 describe('shapes bash and fish run as the real command', () => {
   cases('git', ['2>/dev/null git stash', '>out git stash', '&>/dev/null git stash', 'gi\\\nt stash', 'FOO+=1 git stash', 'A[0]=1 git stash', '{git,stash}', 'fish -c \'true; and git push\'', 'fish -c \'false; or git stash\'', 'fish -c \'not git stash\'', 'fish -C \'git stash\' -c true', 'fish --init-command=\'git stash\''], [`cat ${['$', '{f}'].join('')}`, 'echo \'{git,stash}\''])
-  cases('remote', ['2>/dev/null ssh prod uptime'], [])
+  cases('remote', ['2>/dev/null ssh prod uptime', 'sshpass -p x ssh host', 'waitfor --port 1 -- ssh host'], [])
+  cases('git', ['out -- git push', 'slot -- git push', 'strace git stash'], ['slot -- bun test'])
+  cases('destructive', ['out -- git reset --hard'], [])
   cases('git', ['git add --al', 'git commit --al -m "fix: x"', 'git commit --mess="fix: x" --al'], ['git add --dry src'])
   cases('commit', ['git commit --mess="bad title"', 'git commit -m "fix: x" --trail "Co-Authored-By: x"', 'git commit --sign -m "fix: x"'], ['git commit --mess="fix: x"'])
   cases('git', ['cat <<<foo\ngit stash', 'cat <<\\EOF\nbody\nEOF\ngit stash', 'cat <<E"O"F\nbody\nEOF\ngit stash', 'echo "$(echo \'a"b\')"; git stash', 'echo "`echo \'a"b\'`"; git stash'], ['cat <<\\EOF\ngit stash\nEOF'])
