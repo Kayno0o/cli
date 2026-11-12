@@ -222,6 +222,10 @@ export async function unknownServices(project: Project, config: ComposeConfig): 
 
 /** The compose projects with containers, running ones only unless `all`. */
 export async function runningProjects(all = false): Promise<Set<string>> {
+  // Spawning a missing program throws, and without docker no stack runs.
+  if (Bun.which('docker') === null)
+    return new Set()
+
   const result = await compose(['ls', ...all ? ['-a'] : [], '--format', 'json'])
 
   if (result.code !== 0)

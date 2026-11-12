@@ -63,7 +63,11 @@ function taskOf(name: string, prefix: string, end: string): string | undefined {
   return stop > 0 ? rest.slice(0, stop) : undefined
 }
 
+// Bun's shell throws on a missing program even with nothrow, and without docker there is nothing of a stack left to list.
 async function dockerLines(argv: string[]): Promise<string[]> {
+  if (Bun.which('docker') === null)
+    return []
+
   const listed = await $`docker ${argv}`.quiet().nothrow()
 
   return listed.exitCode === 0 ? listed.text().split('\n').filter(Boolean) : []

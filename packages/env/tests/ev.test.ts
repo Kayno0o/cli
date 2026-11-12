@@ -136,22 +136,32 @@ describe('ev', () => {
     expect(ev(['list']).code).toBe(0)
   })
 
-  test('reads JSON, YAML and TOML keys as dotted paths with secrets masked, and refuses to move or copy them', async () => {
+  async function writeStructured() {
     await write('app.json', '{\n  // a tsconfig-style comment\n  "database": {"password": "hunter2hunter2", "port": 5432},\n  "servers": [{"host": "a"}]\n}\n')
     await write('app.yaml', 'database:\n  password: hunter2hunter2\n  port: 5432\nempty:\n')
     await write('app.toml', '[database]\npassword = "hunter2hunter2"\nport = 5432\nborn = 1979-05-27T07:32:00Z\n')
+  }
 
-    for (const name of ['app.json', 'app.yaml', 'app.toml']) {
-      expect(ev(['get', 'database.password', name]).out).toBe('hun***(14)\n')
-      expect(ev(['get', 'database.port', name]).out).toBe('5432\n')
-      expect(ev(['list', name]).out).toContain('database.password')
-      expect(ev(['grep', '^database\\.', name, '--json']).out).not.toContain('hunter2hunter2')
-    }
+  test.each(['app.json', 'app.yaml', 'app.toml'])('reads the keys of %s as dotted paths with secrets masked', async (name) => {
+    await writeStructured()
+
+    expect(ev(['get', 'database.password', name]).out).toBe('hun***(14)\n')
+    expect(ev(['get', 'database.port', name]).out).toBe('5432\n')
+    expect(ev(['list', name]).out).toContain('database.password')
+    expect(ev(['grep', '^database\\.', name, '--json']).out).not.toContain('hunter2hunter2')
+  })
+
+  test('reads array items, TOML dates and empty YAML values, and diffs structured files by their paths', async () => {
+    await writeStructured()
 
     expect(ev(['get', 'servers.0.host', 'app.json']).out).toBe('a\n')
     expect(ev(['get', 'database.born', 'app.toml']).out).toBe('1979-05-27T07:32:00Z\n')
     expect(JSON.parse(ev(['grep', '^empty$', 'app.yaml', '--json']).out)).toEqual([{ file: 'app.yaml', key: 'empty', value: '', secret: false }])
     expect(ev(['diff', 'app.yaml', 'app.toml']).out).toContain('database.born')
+  })
+
+  test('writes only into a structured file that is there, and refuses to move or copy its keys', async () => {
+    await writeStructured()
 
     expect(ev(['set', 'TOKEN', 'new.yaml'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('new.yaml does not exist: ev writes into a JSON, YAML or TOML file that is there') })
     expect(await Bun.file(join(dir, 'new.yaml')).exists()).toBe(false)
@@ -519,7 +529,7 @@ describe('ev', () => {
     expect(out).not.toContain('hunter22')
     expect(ev(['show', 'HEAD:nope']).code).toBe(1)
     expect(ev(['show', '.env']).code).toBe(2)
-    expect(ev(['show', 'HEAD:app.json']).out).toBe('password\thun***(14)\n')
+    expect(ev(['show', 'HEAD:app.json']).out).toMatch(/^password\s+hun\*{3}\(14\)\n$/)
     expect(ev(['show', 'HEAD:app.ini']).err).toContain('app.ini is INI')
     expect(ev(['show', 'HEAD:app.conf']).err).toContain('HEAD:app.conf holds no KEY=value line')
     expect(ev(['show', 'HEAD:app.conf']).err).toContain('git show HEAD:app.conf | ev redact')

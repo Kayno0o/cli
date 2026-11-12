@@ -29,7 +29,7 @@ const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, MANPATH: '/non
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
 describe('man pages', () => {
-  test('finds the page of a command given by its path under its name', () => {
+  test.skipIf(Bun.which('nroff') === null)('finds the page of a command given by its path under its name', () => {
     mkdirSync(join(dir, 'man/man1'), { recursive: true })
     writeFileSync(join(dir, 'man/man1/zzpage.1'), '.TH ZZPAGE 1\n.SH NAME\nzzpage \\- a demo\n.SH OPTIONS\n.TP\n\\fB\\-l\\fR\nuse a long listing format\n')
 

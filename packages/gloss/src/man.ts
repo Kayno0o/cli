@@ -87,7 +87,11 @@ function unOverstrike(text: string): string {
   return kept.join('')
 }
 
+// Without nroff (groff's), a page cannot be read, as on a minimal image.
 function render(source: Uint8Array): string | undefined {
+  if (Bun.which('nroff') === null)
+    return undefined
+
   const result = Bun.spawnSync(['nroff', '-man', '-Tutf8', '-rLL=200n', '-rLT=200n'], { stdin: source, stdout: 'pipe', stderr: 'ignore', env: { ...process.env, GROFF_NO_SGR: '1' } })
 
   if (result.exitCode !== 0)
