@@ -30,6 +30,8 @@ interface Unit {
   lines: string[]
   // The last repetition's final line, to show where a run of lookalikes ended.
   last: string
+  // Every line of a run of single lines.
+  run: string[]
   key: string
   important: boolean
 }
@@ -111,6 +113,7 @@ function toUnits(lines: string[], keys: string[]): Unit[] {
       reps,
       lines: slice,
       last: lines[at + size * reps - 1] ?? '',
+      run: size === 1 ? lines.slice(at, at + reps) : slice,
       key: keys.slice(at, at + size).join('\n'),
       important: slice.some(line => isImportant(line)),
     })
@@ -125,6 +128,27 @@ function clip(line: string, width = 100): string {
   const trimmed = line.trim()
 
   return truncate(trimmed, width)
+}
+
+// Lookalike lines as one, the parts where they differ listed in braces as a shell writes them: `FAIL src/{a,b,c}.test.ts`.
+function merged(lines: string[]): string {
+  const distinct = [...new Set(lines)]
+
+  if (distinct.length === 1)
+    return distinct[0] ?? ''
+
+  const first = distinct[0] ?? ''
+  let start = 0
+
+  while (start < first.length && distinct.every(line => line[start] === first[start]))
+    start++
+
+  let end = 0
+
+  while (end < first.length - start && distinct.every(line => end < line.length - start && line.at(-1 - end) === first.at(-1 - end)))
+    end++
+
+  return `${first.slice(0, start)}{${distinct.map(line => line.slice(start, line.length - end)).join(',')}}${first.slice(first.length - end)}`
 }
 
 function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repeated: string[] } {
@@ -146,7 +170,7 @@ function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repe
 
       const where = unit.size > 1 ? `block same as line ${earlier}` : `same as line ${earlier}`
       const times = unit.reps > 1 ? `, repeated ${unit.reps} times` : ''
-      const prefix = unit.important ? `${clip(unit.lines[0] ?? '')} ` : ''
+      const prefix = unit.important ? `${unit.size === 1 ? merged(unit.run.map(line => line.trim())) : clip(unit.lines[0] ?? '')} ` : ''
 
       entries.push({ text: `${prefix}(${where}${times})`, important: unit.important, covers })
 
@@ -157,6 +181,13 @@ function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repe
 
     if (unit.reps === 1) {
       entries.push(...unit.lines.map(text => ({ text, important: unit.important, covers: 1 })))
+
+      continue
+    }
+
+    // An error line names every file it was printed for, so none of them hides in the log.
+    if (unit.size === 1 && unit.important) {
+      entries.push({ text: `${merged(unit.run)} (x${unit.reps})`, important: true, covers })
 
       continue
     }

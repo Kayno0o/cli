@@ -34,6 +34,13 @@ describe('fold', () => {
     expect(out.split('\n').length).toBeLessThan(150)
   })
 
+  test('folds error lines alike in shape into one naming every part where they differ', () => {
+    const fails = ['a', 'b', 'c', 'd', 'e'].map(name => ` FAIL src/${name}.test.ts`).join('\n')
+    const text = `${Array.from({ length: 100 }, (_, i) => `step ${i} ok`).join('\n')}\n${fails}\n${'done\n'.repeat(100)}`
+
+    expect(folded(text, 20)).toContain(' FAIL src/{a,b,c,d,e}.test.ts (x5)')
+  })
+
   test('folds lines alike in shape into one with a count and the last line', async () => {
     const out = folded(await fixture('build.txt'))
 
