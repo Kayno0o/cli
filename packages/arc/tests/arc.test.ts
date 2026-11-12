@@ -29,9 +29,9 @@ function project(): { root: string, folder: string, dest: string } {
 }
 
 describe.skipIf(!GNU)('arc pack', () => {
-  test('packs, verifies and deletes the folder', () => {
+  test('--delete packs, verifies and deletes the folder', () => {
     const { folder, dest } = project()
-    const result = arc(['pack', folder, dest])
+    const result = arc(['pack', '--delete', folder, dest])
 
     expect(result.code).toBe(0)
     expect(result.err).toContain('deleted')
@@ -40,10 +40,12 @@ describe.skipIf(!GNU)('arc pack', () => {
     expect(existsSync(join(dest, 'project.tar.zst.partial'))).toBe(false)
   })
 
-  test('-k keeps the folder', () => {
+  test('keeps the folder unless asked to delete it', () => {
     const { folder, dest } = project()
+    const result = arc(['pack', folder, dest])
 
-    expect(arc(['pack', '-k', folder, dest]).code).toBe(0)
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('kept')
     expect(existsSync(folder)).toBe(true)
     expect(existsSync(join(dest, 'project.tar.zst'))).toBe(true)
   })
@@ -51,7 +53,7 @@ describe.skipIf(!GNU)('arc pack', () => {
   test('packs into the current folder when no destination is given', () => {
     const { folder, dest } = project()
 
-    expect(arc(['pack', '-k', folder], dest).code).toBe(0)
+    expect(arc(['pack', folder], dest).code).toBe(0)
     expect(existsSync(folder)).toBe(true)
     expect(existsSync(join(dest, 'project.tar.zst'))).toBe(true)
   })
@@ -131,7 +133,7 @@ describe.skipIf(!GNU)('arc unpack', () => {
   test('refuses to overwrite a top-level entry', () => {
     const { folder, dest, root } = project()
 
-    arc(['pack', '-k', folder, dest])
+    arc(['pack', folder, dest])
 
     const result = arc(['unpack', join(dest, 'project.tar.zst'), root])
 
@@ -210,7 +212,7 @@ describe.skipIf(!GNU)('arc ls, tree and cat', () => {
     const { folder, dest } = project()
 
     symlinkSync('b.txt', join(folder, 'link'))
-    arc(['pack', '-k', folder, dest])
+    arc(['pack', folder, dest])
 
     return join(dest, 'project.tar.zst')
   }

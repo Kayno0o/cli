@@ -1,6 +1,6 @@
 # @kaynooo/cli-arc
 
-`arc` packs a folder into a `.tar.zst` it has verified before it deletes anything, unpacks one without overwriting a file, and extracts any other archive.
+`arc` packs a folder into a `.tar.zst` it has verified, deleting the folder only when asked, unpacks one without overwriting a file, and extracts any other archive.
 
 ```sh
 bun add -g @kaynooo/cli-arc
@@ -10,7 +10,7 @@ It needs `tar` and `zstd` on the machine (`findmnt`, `mountpoint` and `df` from 
 
 | Command | What it does |
 | --- | --- |
-| `arc pack [-k] <folder> [dest dir]` | packs the folder into `<dest dir>/<name>.tar.zst` (the current folder by default), checks it, then deletes the folder; `-k` keeps it |
+| `arc pack [--delete] <folder> [dest dir]` | packs the folder into `<dest dir>/<name>.tar.zst` (the current folder by default) and checks it; `--delete` then deletes the folder |
 | `arc unpack <archive.tar.zst> <dest dir>` | unpacks it into the folder, refusing to overwrite, then checks every file against the archive; the archive is kept |
 | `arc ls [-r] <archive> [path]` | lists what an archive holds without extracting it, as `ls -l` would: the top level, the folder `path`, or every level with `-r`; `--json` for the entries |
 | `arc tree [-L <depth>] <archive> [path]` | draws the archive's files as a tree |
@@ -19,12 +19,12 @@ It needs `tar` and `zstd` on the machine (`findmnt`, `mountpoint` and `df` from 
 
 `ls`, `tree` and `cat` read `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.tar.zst` and `.zip`. Folders an archive holds no entry for, as one made from a file list, are shown all the same.
 
-## What `pack` checks before it deletes
+## What `pack --delete` checks before it deletes
 
 - The archive is written as `<name>.tar.zst.partial` and renamed once complete; an existing archive or partial is never overwritten.
 - It refuses a symlink, a mount point, a folder with a file system mounted inside (tar and `rm` would both skip it), a destination inside the folder, and a destination with less free space than the folder holds.
 - The finished archive must pass zstd's checksum, list as many entries as the folder holds, and `tar --compare` equal to it, owners, ACLs and extended attributes included.
-- Only then is the folder deleted, with `rm -rf --one-file-system`. Any failure before that leaves the folder as it was.
+- Only then, and only with `--delete`, is the folder deleted, with `rm -rf --one-file-system`. Without it, or on any failure before that, the folder stays as it was.
 - A folder you cannot read or write is packed, compared and deleted through `sudo`.
 
 ## What `unpack` checks

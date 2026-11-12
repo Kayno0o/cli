@@ -13,7 +13,7 @@ export const HOOKS_REQUIRES = '@kaynooo/cli-guard'
 
 // One line per package, shown beside it when `doctor --install` asks which to add.
 export const ABOUT: Record<string, string> = {
-  '@kaynooo/cli-arc': 'pack a folder into a verified .tar.zst before deleting it, unpack without overwriting',
+  '@kaynooo/cli-arc': 'pack a folder into a verified .tar.zst, deleting it only with --delete, unpack without overwriting',
   '@kaynooo/cli-base': 'run a command at a ref in a throwaway worktree, and prove a test fails before a change',
   '@kaynooo/cli-changelog': 'release notes from conventional commits, published as a Forgejo release',
   '@kaynooo/cli-check': 'the repo\'s check, lint and test steps, its fixers, error lines from logs and a recipe picker',

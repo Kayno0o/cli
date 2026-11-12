@@ -4,11 +4,11 @@ import { basename, dirname, join } from 'node:path'
 import { fail, parse, role } from '@kaynooo/cli-kit'
 import { lines, need, pipeline, probe, run, TAR_FIDELITY, ZSTD_LONG } from './proc'
 
-const USAGE = `arc pack [-k] <folder> [dest dir]: packs a folder into <dest dir>/<name>.tar.zst (the current folder by default), checks every file against the archive, then deletes the folder
+const USAGE = `arc pack [--delete] <folder> [dest dir]: packs a folder into <dest dir>/<name>.tar.zst (the current folder by default) and checks every file against the archive, the folder kept unless --delete
 
-The archive is written as <name>.tar.zst.partial and only renamed once complete; nothing is overwritten. The folder is deleted only after the archive passes zstd's checksum, holds as many entries as the folder and compares equal to it file by file (owners, ACLs and extended attributes included); -k keeps it. A symlink, a mount point, a folder with a file system mounted inside, a destination inside the folder and a destination with less free space than the folder holds are refused. A folder that is not readable or writable by you is packed and deleted through sudo.`
+The archive is written as <name>.tar.zst.partial and only renamed once complete; nothing is overwritten. With --delete, the folder is deleted only after the archive passes zstd's checksum, holds as many entries as the folder and compares equal to it file by file (owners, ACLs and extended attributes included). A symlink, a mount point, a folder with a file system mounted inside, a destination inside the folder and a destination with less free space than the folder holds are refused. A folder that is not readable or writable by you is packed, and deleted, through sudo.`
 
-const EXITS: ExitRow[] = [[0, 'the archive is verified (and the folder deleted unless -k)'], [1, 'anything was refused or failed, with the folder kept'], [2, 'a usage error']]
+const EXITS: ExitRow[] = [[0, 'the archive is verified (and the folder deleted with --delete)'], [1, 'anything was refused or failed, with the folder kept'], [2, 'a usage error']]
 
 const TRAILING_SLASHES = /\/+$/
 
@@ -17,11 +17,11 @@ function say(message: string): void {
 }
 
 export async function pack(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, { keep: { type: 'boolean', short: 'k', description: 'keep the folder once the archive is verified' } }, {
+  const { values, positionals } = parse(args, USAGE, { delete: { type: 'boolean', description: 'delete the folder once the archive is verified' } }, {
     exits: EXITS,
     positionals: ['<folder>', '[dest dir]'],
     replaces: 'tar czf, then diff or tar --compare by hand, then rm -rf once it looks right',
-    examples: ['arc pack ~/old-project /mnt/backup', ['arc pack -k ./data /mnt/backup', 'the folder stays'], ['arc pack -k dist', 'compress only: ./dist.tar.zst, the folder stays']],
+    examples: [['arc pack ./data /mnt/backup', 'the folder stays'], ['arc pack dist', 'compress only: ./dist.tar.zst'], ['arc pack --delete ~/old-project /mnt/backup', 'archive, verify, then delete the folder']],
   })
   const [folder, destination = '.'] = positionals
   const given = folder.replace(TRAILING_SLASHES, '')
@@ -102,7 +102,7 @@ export async function pack(args: string[]): Promise<number> {
 
   const bytes = statSync(out).size
 
-  if (values.keep === true) {
+  if (values.delete !== true) {
     say(`${out} holds all ${inArchive} entries (${size} -> ${bytes} bytes), '${source}' kept`)
 
     return 0
