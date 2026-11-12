@@ -41,7 +41,7 @@ function cases(rule: string, refused: string[], allowed: string[], files: Record
 }
 
 describe('git', () => {
-  cases('git', ['(git stash)', 'command git stash', 'sleep 1 & git stash', 'git \\\n  stash', 'git add -Av', 'git add -fA src', 'git stash pop', 'git -C /tmp/x stash push -m wip', 'git add -A', 'git add .', 'git add -u src', 'git commit -am "fix: wip"', 'git commit --all -m "fix: wip"', 'cd x && git commit -a', 'git push'], ['git log 2>&1 | head', 'cat > notes.md <<\'EOF\'\nnever git add -A\ngit stash\nEOF', 'git stash list', 'git stash show -p', 'git add src/a.ts', 'git commit -m "fix: -a flag"', 'git commit -m "fix: wip" -- a.ts', 'git commit --amend --no-edit'])
+  cases('git', ['(git stash)', 'command git stash', 'sleep 1 & git stash', 'git \\\n  stash', 'git add -Av', 'git add -fA src', 'git stash pop', 'git -C /tmp/x stash push -m wip', 'git add -A', 'git add .', 'git add -u src', 'git commit -am "fix: wip"', 'git commit -vuall -a', 'git commit --all -m "fix: wip"', 'cd x && git commit -a', 'git push'], ['git log 2>&1 | head', 'cat > notes.md <<\'EOF\'\nnever git add -A\ngit stash\nEOF', 'git stash list', 'git stash show -p', 'git add src/a.ts', 'git commit -m "fix: -a flag"', 'git commit -m "fix: wip" -- a.ts', 'git commit --amend --no-edit', 'git commit -m "fix: x" -uall', 'git commit -Sabc -m "fix: x"', 'git commit -m "fix: x" -uno'])
 
   test('points a stash at base', async () => {
     const { violations } = await checkCommand('git stash', context())

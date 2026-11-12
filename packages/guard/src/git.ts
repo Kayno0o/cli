@@ -8,6 +8,9 @@ const WHOLE_TREE = new Set(['-A', '--all', '-u', '--update', '--no-ignore-remova
 
 // commit's short options taking a value, which ends a cluster such as `-am`.
 export const COMMIT_VALUE_SHORTS = new Set(['m', 'F', 'c', 'C', 't'])
+// -u<mode> and -S<keyid> take only an attached value, so the rest of the cluster is theirs.
+const COMMIT_ATTACHED_SHORTS = new Set(['u', 'S'])
+
 export const COMMIT_VALUE_LONGS = new Set(['--message', '--file', '--reuse-message', '--reedit-message', '--template', '--author', '--date', '--fixup', '--squash', '--cleanup', '--trailer', '--pathspec-from-file'])
 export const SHORT_CLUSTER = /^-[A-Z]+$/i
 // A short option cluster that may end in an attached value, `-m"fix: x"` reaching the parser as `-mfix: x`.
@@ -115,6 +118,9 @@ function commitsAll(args: readonly string[]): boolean {
     for (const [index, flag] of [...arg.slice(1)].entries()) {
       if (flag === 'a')
         return true
+
+      if (COMMIT_ATTACHED_SHORTS.has(flag))
+        break
 
       if (!COMMIT_VALUE_SHORTS.has(flag))
         continue
