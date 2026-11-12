@@ -11,10 +11,9 @@ import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEV
 
 const USAGE = `ws audit [options] [root]: the known vulnerabilities of the Bun, Composer, Cargo and uv repositories under root (the current folder by default), one table per repository
 
-Each package with an advisory is one row: its worst severity, how many advisories, whether a production dependency needs it (prod) or only a development one (dev), whether the repository asks for it itself (direct) or a dependency does (the row then says via and the direct dependencies leading to it, upgrading one of which is what fixes it), and the version that fixes every advisory at once, "-" when an advisory names none. The worst and the production ones come first.
-Advisories under --level (moderate by default) are counted under the table, and what \`bun audit\` warned about, such as a private registry that would not audit its packages, is repeated there. It runs \`bun audit --json\` in each repository holding a bun.lock, which reaches the registry, and asks osv.dev about the packages of a composer.lock, Cargo.lock or uv.lock (a severity the source leaves out reads as moderate, and only composer's manifest tells direct from pulled in); the walk goes three levels deep, stops at a lockfile and skips node_modules and hidden folders.
-
-Reach for it to sweep many repositories at once; \`pkg audit\` vets the one repository in a folder (package age, install scripts, licences) as well as its advisories, and shares --level, --prod and --ignore.`
+Each package with an advisory is one row: its worst severity, advisory count, prod or dev, direct or via the direct dependencies leading to it, and the version that fixes every advisory at once.
+It reaches the network: \`bun audit --json\` for a bun.lock, osv.dev for a composer.lock, Cargo.lock or uv.lock; the walk goes three levels deep and stops at a lockfile.
+To sweep many repositories at once; \`pkg audit\` vets the one repository in depth.`
 
 const EXITS: ExitRow[] = [[0, 'no repository has an advisory at the level asked'], [1, 'one has'], [2, 'a repository\'s audit failed, no lockfile sits under root, a usage error or a root that is no folder']]
 

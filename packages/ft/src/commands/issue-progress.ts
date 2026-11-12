@@ -14,7 +14,7 @@ const tickUsage = `ft tick [<n>] <box>...
 Ticks checklist boxes of issue <n>, each given by its number from \`ft issue\` or by text matching exactly one box, then posts the -m or -F comment.
 With --closed, ticks instead every box opening with \`#<issue>\` whose issue is closed, as a release plan lists them.
 
-Without <n> (a first argument that is not a number) it takes the one open issue this session holds (\`ft take\`), and exits 2 when it holds none or several, saying which issue it used. A first argument that is a number is always the issue, so boxes named by number need it.`
+Without <n> it takes the one open issue this session holds (\`ft take\`); a first argument that is a number is always the issue.`
 const tickExits: ExitRow[] = [[0, 'it ticked the boxes'], [1, 'Forgejo refuses'], [2, 'a usage error or a box matching none or several']]
 
 const tickOptions = {
@@ -78,9 +78,9 @@ export async function tick(args: string[]): Promise<number> {
 
 const fixedUsage = `ft fixed [<n>] [commit]...
 
-Comments "Fixed in <sha>: <message>" on issue <n> and closes it, naming each commit given as "Fixed in <a>, <b> and <c>".
-Without a commit it takes those on origin's default branch whose message names #<n>, and says which, or HEAD when none does.
-Without <n> it takes the one open issue this session holds (\`ft take\`). The message defaults to the subject of the first commit. Every open issue listing \`- [ ] #<n>\` in its checklist gets that line ticked. An issue with boxes left is refused, as a partly done issue stays open, unless --tick ticks them first.`
+Comments "Fixed in <a>, <b> and <c>: <subject>" on issue <n> and closes it.
+Without a commit it takes those on origin's default branch naming #<n> in their message, or HEAD when none does, and says which; without <n> it takes the one open issue this session holds (\`ft take\`).
+An issue with boxes left is refused unless --tick ticks them first, and every open issue listing \`- [ ] #<n>\` gets that line ticked.`
 const fixedExits: ExitRow[] = [[0, 'it closed the issue'], [1, 'the issue is already closed, has boxes left or Forgejo refuses'], [2, 'a usage error']]
 
 const fixedOptions = {

@@ -7,13 +7,10 @@ import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHe
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
-const USAGE = `ws repos [options] [root]: the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
+const USAGE = `ws repos [options] [root]: the git repositories under root (the configured workspace by default) that need attention: dirty files, commits not pushed, an upstream ahead, commits since the latest tag
 
-A repository with nothing to report, or only unreleased commits, is left out unless --all or --only unreleased. A monorepo tagging its packages <folder>-v<version> counts the unreleased commits per package folder. The walk goes ${MAX_DEPTH} levels deep, stops at a .git and skips node_modules, hidden folders and the names in "skip" of ~/.config/kaynooo-cli/repos.json.
-
-Ahead and behind are those of the last fetch unless --fetch refreshes the upstreams first, which reaches the remote.
---pull fetches, then fast-forwards the repositories listed that are clean, on a branch and only behind their upstream, and touches nothing else: a dirty, ahead, diverged or detached one is reported as skipped. A repository pulled is listed again as it now stands.
---path prints only the paths of the repositories listed, one per line, for xargs -d '\\n'.`
+A clean repository, or one with only unreleased commits, is left out unless --all or --only unreleased. The walk goes ${MAX_DEPTH} levels deep and skips the names in "skip" of \`~/.config/kaynooo-cli/repos.json\`; ahead and behind are those of the last fetch unless --fetch reaches the remote.
+--pull fetches, then fast-forwards only the repositories listed that are clean, on a branch and only behind their upstream; the others are reported as skipped.`
 
 const EXITS: ExitRow[] = [[0, 'it listed the repositories, including when none needs attention'], [1, 'a fast-forward --pull attempted failed'], [2, 'a usage error, an unreadable config or a root that is no folder']]
 

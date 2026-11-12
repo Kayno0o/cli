@@ -21,14 +21,10 @@ ft release <level> -p <a,b:minor,...>
 ft release <level> --all
 ft release --tagged
 
-Cuts a release from the default branch: first the commit it sits on is pushed and its runs waited for, so failing tests stop it before anything is bumped or tagged. Then \`bun pm version\` commits and tags the bump, one atomic push sends the branch and its tag, and it waits for the runs the push started and for the registry to serve the version.
---tagged releases a version commit already tagged at HEAD instead, for repos bumping with their own script; the runs waited for first are then those of the commit below it.
---package releases one workspace package of a monorepo on its own, tagged \`<folder>-v<version>\` (\`ft release patch -p ft\` tags packages/ft as ft-v0.3.0).
---package takes several folders separated by commas, each optionally with its own level after a colon (\`-p ft:minor,db\` bumps ft by minor and db by the level given); --all takes every published package of the workspace. Each package gets its own bump commit and tag, and one atomic push sends the branch with every tag, so the tests run once for them all; the registry is then waited for package by package, stopping at the first one it does not serve.
-A refused or interrupted push drops the bump commits and their tags, so a retry starts clean; with --tagged the commit and tag are yours and stay.
-Once released, an open milestone titled like the version (\`1.2.0\`, \`v1.2.0\` or the tag) has its closed issues listed and is closed; a failure there only warns.
---dry-run checks the same and prints the plan: the version bump, the tag, the pushes and the runs and registry it would wait for, changing nothing.
---json prints {released, tag, package, version, status, runs, failedJobs, url} on stdout and the progress on stderr, an array of them with --package a,b or --all; it does not take --dry-run.`
+Cuts a release from the default branch: waits for the runs on HEAD, bumps and tags with \`bun pm version\`, pushes, then waits for the runs and the registry.
+Failing tests stop it before anything is bumped or tagged, and a refused or interrupted push drops the bump commits and their tags; with --tagged the commit and tag are yours and stay.
+--package releases workspace packages tagged \`<folder>-v<version>\`, each with an optional level of its own (\`-p ft:minor,db\`), --all every published one, in one atomic push.
+Once released, an open milestone titled like the version has its closed issues listed and is closed; a failure there only warns.`
 const EXITS: ExitRow[] = [[0, 'released or planned'], [1, 'a run fails, origin refuses a push or the registry never serves the version'], [2, 'a timeout, a stalled queue, a refusal before anything ran (another branch, uncommitted changes, origin ahead) or a usage error']]
 
 const options = {
@@ -38,7 +34,7 @@ const options = {
   'no-registry': { type: 'boolean', description: 'do not wait for the registry to serve the new version' },
   'dry-run': { type: 'boolean', description: 'print what the release would do, changing nothing' },
   'timeout': { type: 'string', short: 't', description: 'how long to wait for the runs (15m), a bare number in minutes' },
-  'json': jsonOption('what was released and how its runs ended'),
+  'json': jsonOption('{released, tag, package, version, status, runs, failedJobs, url} on stdout and the progress on stderr, an array with several packages; not with --dry-run'),
 } as const
 
 export type Released = ReturnType<typeof ciJson> & { released: boolean, tag: string, package: string | null, version: string }
