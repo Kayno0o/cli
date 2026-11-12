@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, afterEach, describe, expect, test } from 'bun:test'
+import { $ } from 'bun'
+import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { HELD_ENV, Jobs, logTail } from '../src/jobs'
 
 const scratch = mkdtempSync(join(tmpdir(), 'wt-jobs-'))
@@ -70,6 +71,24 @@ describe('Jobs', () => {
     writeFileSync(`${lock}.takeover`, '')
 
     expect(() => jobs.claim(stack, 'up', false)).toThrow('booki/planning is already coming up')
+  })
+
+  test('prints a failed command as what it said, with no stack trace', async () => {
+    const printed: unknown[] = []
+    const spy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      printed.push(...args)
+    })
+
+    try {
+      expect(await jobsIn().run(stack, 'down', async () => {
+        await $`sh -c ${'echo cannot reach docker >&2; exit 3'}`.quiet()
+      })).toBe(1)
+    }
+    finally {
+      spy.mockRestore()
+    }
+
+    expect(printed).toEqual(['error: cannot reach docker'])
   })
 
   test('records how an action ended, its lock let go either way', async () => {

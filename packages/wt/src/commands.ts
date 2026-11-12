@@ -1,8 +1,7 @@
 import type { Worktree } from './project'
 import { existsSync, rmSync } from 'node:fs'
 import { $ } from 'bun'
-import { KnownError } from './errors'
-import { failureText } from './files'
+import { knownMessage } from './errors'
 import { addWorktrees, dirtyRepos, isRegistered, removeWorktrees, unreachableCommits } from './git'
 import { assertWorktreeExists, listTasks, locate, locateWorktree, worktreeOf, WtError } from './project'
 import { urlsOf } from './routes'
@@ -56,8 +55,10 @@ export async function addTask(task: string, branch: string | undefined, options:
   catch (error) {
     const way = `the worktree is checked out but not ready: \`wt sync ${task} -p ${project.name}\` resumes it, \`wt rm ${task} -p ${project.name}\` removes it`
 
-    if (error instanceof KnownError || error instanceof $.ShellError)
-      throw new WtError(`${failureText(error)}\n${way}`)
+    const message = knownMessage(error)
+
+    if (message !== undefined)
+      throw new WtError(`${message}\n${way}`)
 
     // A bug keeps its stack trace
     console.error(`wt: ${way}`)

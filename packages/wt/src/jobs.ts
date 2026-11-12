@@ -7,7 +7,7 @@
 import { closeSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { $ } from 'bun'
-import { alive, bootTime, failKnown, KnownError } from './errors'
+import { alive, bootTime, failKnown, KnownError, knownMessage } from './errors'
 
 export interface Job {
   ref: string
@@ -418,7 +418,9 @@ async function attempt(work: () => Promise<void>): Promise<number> {
     return 0
   }
   catch (error) {
-    console.error(error instanceof KnownError ? `error: ${error.message}` : error)
+    const message = knownMessage(error)
+
+    console.error(message !== undefined ? `error: ${message}` : error)
 
     return 1
   }

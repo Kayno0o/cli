@@ -6,6 +6,7 @@ import { basename, dirname, join } from 'node:path'
 import { escapeRegExp } from '@kaynooo/utils/text'
 import { $ } from 'bun'
 import { baseComposeFiles } from './compose'
+import { failureText } from './errors'
 import { worktreeHost, WtError } from './project'
 import { inLine, queueDir } from './queue'
 
@@ -183,14 +184,6 @@ export async function settle(copies: (() => Promise<void>)[]): Promise<unknown[]
   const results = await Promise.allSettled(copies.map(async copy => copy()))
 
   return results.flatMap(result => result.status === 'rejected' ? [result.reason as unknown] : [])
-}
-
-/** What a failed command said, else the error's message. */
-export function failureText(error: unknown): string {
-  if (error instanceof $.ShellError)
-    return error.stderr.toString().trim() || error.message
-
-  return error instanceof Error ? error.message : String(error)
 }
 
 // The ids of main's containers a clone of the project paused, one per line, while it copies.
