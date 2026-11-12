@@ -1,6 +1,6 @@
 import type { Name } from './code'
 import type { Theme } from './theme'
-import { stripAnsi } from '@kaynooo/cli-kit'
+import { escapeControls, stripAnsi } from '@kaynooo/cli-kit'
 import { highlight, languageOf } from './code'
 
 const TRAILING_NEWLINE = /\n$/
@@ -123,7 +123,7 @@ export function renderDiff(text: string, theme: Theme): string {
   let newLeft = 0
   let language: Name | undefined
 
-  const lines = stripAnsi(text).replaceAll('\r', '').replace(TRAILING_NEWLINE, '').split('\n').map((line): string | Content => {
+  const lines = escapeControls(stripAnsi(text).replaceAll('\r\n', '\n')).replace(TRAILING_NEWLINE, '').split('\n').map((line): string | Content => {
     // A line that cannot belong to a hunk means its counts were off, so the rest is read as headers again.
     if ((oldLeft > 0 || newLeft > 0) && line !== '' && !HUNK_LINE.has(line[0] ?? ''))
       oldLeft = newLeft = 0

@@ -1,4 +1,5 @@
 import type { Theme } from './theme'
+import { escapeControls } from '@kaynooo/cli-kit'
 
 interface Language {
   // What starts a comment that runs to the end of the line.
@@ -234,7 +235,7 @@ export function highlight(source: string, name: Name, theme: Theme): string {
 
 // The code behind a gutter of line numbers on a terminal; a `lineNumbers` of false leaves it bare.
 export function renderCode(source: string, name: Name | undefined, theme: Theme, lineNumbers: boolean): string {
-  const text = source.replace(TRAILING_NEWLINE, '')
+  const text = escapeControls(source.replaceAll('\r\n', '\n')).replace(TRAILING_NEWLINE, '')
   const shown = name === undefined ? text : highlight(text, name, theme)
 
   if (!lineNumbers)

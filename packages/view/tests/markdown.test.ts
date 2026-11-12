@@ -62,9 +62,10 @@ describe('block content and control characters', () => {
   })
 
   test('control characters in the source never reach the output', () => {
-    const out = renderMarkdown('hello \u0001\u0005 world \u001B]0;title\u0007\n', { theme: plain, width: 40 })
+    const out = renderMarkdown('hello \u0001\u0005 world \u001B]0;title\u0007 \u007F\u009B2J \u0085\n', { theme: plain, width: 40 })
 
     expect(Array.from(out).some(char => char < ' ' && char !== '\n')).toBe(false)
+    expect(out).not.toMatch(/[\u007F-\u009F]/)
     expect(stripAnsi(out)).toContain('hello')
   })
 })

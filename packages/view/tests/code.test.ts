@@ -60,6 +60,11 @@ describe('renderCode', () => {
     expect(renderCode('a\nb\n', 'script', plain, true)).toBe('1 │ a\n2 │ b\n')
     expect(renderCode('a\nb\n', 'script', plain, false)).toBe('a\nb\n')
   })
+
+  test('shows the control characters of the file instead of sending them, a CRLF ending read as a line break', () => {
+    expect(renderCode('x // \u001B]0;pwned\u0007\r\ny \u001B[2J\r\u009B\n', languageOf('a.ts'), plain, false)).toBe('x // ^[]0;pwned^G\ny ^[[2J^MM-^[\n')
+    expect(renderCode('a\u0008\n', undefined, tint, true)).toContain('a^H')
+  })
 })
 
 describe('markdown code blocks', () => {

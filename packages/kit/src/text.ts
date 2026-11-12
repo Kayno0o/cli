@@ -6,6 +6,22 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI, '')
 }
 
+// The C0 controls but tab and line feed, DEL and the C1 controls: what a terminal acts on instead of drawing.
+// eslint-disable-next-line no-control-regex -- control characters are what it matches
+export const CONTROLS = /[\x00-\x08\x0B-\x1F\x7F-\x9F]/g
+
+// The text with each control character written the way `cat -v` shows it (`^[`, `^M`, `^?`, `M-^[`), so what reaches the terminal is drawn rather than run.
+export function escapeControls(text: string): string {
+  return text.replace(CONTROLS, (char) => {
+    const code = char.charCodeAt(0)
+
+    if (code === 0x7F)
+      return '^?'
+
+    return code < 0x80 ? `^${String.fromCharCode(code + 0x40)}` : `M-^${String.fromCharCode(code - 0x40)}`
+  })
+}
+
 // Edit distance between two names, for pointing a mistyped name at the one meant; two neighbours typed swapped count as one edit.
 export function distance(a: string, b: string): number {
   const left = [...a]

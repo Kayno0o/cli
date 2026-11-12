@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { copyText, distance, exitCodeOf, holdSignals, openUrl, runCommand, stripAnsi } from '../src'
+import { copyText, distance, escapeControls, exitCodeOf, holdSignals, openUrl, runCommand, stripAnsi } from '../src'
 import { tempDirs } from '../src/test'
 
 const temp = tempDirs()
@@ -218,6 +218,10 @@ describe('text', () => {
   test('stripAnsi removes colour and cursor codes', () => {
     expect(stripAnsi('\u001B[31mred\u001B[0m \u001B[2K ok')).toBe('red  ok')
     expect(stripAnsi('\u001B]8;;https://x.test\u001B\\link\u001B]8;;\u001B\\ \u001B]0;title\u0007\u001B[>4;1m.')).toBe('link .')
+  })
+
+  test('escapeControls writes each control character as cat -v shows it, keeping tabs and line breaks', () => {
+    expect(escapeControls('a\u001B]0;t\u0007\r\b\u007F\u009B2J\tb\nc é')).toBe('a^[]0;t^G^M^H^?M-^[2J\tb\nc é')
   })
 
   test('distance counts edits', () => {
