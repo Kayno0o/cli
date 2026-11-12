@@ -155,6 +155,8 @@ describe('git options and pathspecs', () => {
     'git -c credential.helper=x fetch',
     'git --config-env=core.pager=PAGER log',
     'git --config-env core.pager=PAGER log',
+    'git --attr-source HEAD stash',
+    'git --attr-source HEAD push',
     'GIT_CONFIG_COUNT=1 git status',
     'GIT_EXTERNAL_DIFF=x git diff',
     'git config alias.s "!git stash"',
@@ -340,7 +342,7 @@ describe('env reads', () => {
     'grep ".*" notes.md',
   ])
 
-  cases('env', ['git diff', 'git diff HEAD~1', 'git show HEAD', 'git log -p', 'git log --patch -3', 'git grep KEY', 'git format-patch -1'], [
+  cases('env', ['git diff', 'git --attr-source HEAD diff', 'git --config-env core.pager=P show HEAD', 'git diff HEAD~1', 'git show HEAD', 'git log -p', 'git log --patch -3', 'git grep KEY', 'git format-patch -1'], [
     'git diff --stat',
     'git diff --name-only',
     'git log --oneline',

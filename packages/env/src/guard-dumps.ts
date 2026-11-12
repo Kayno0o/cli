@@ -6,7 +6,7 @@ const DUMP_FLAGS = /^-[a-z]*[px]/
 // Git commands whose output carries the content of tracked files.
 const GIT_PATCHES = new Set(['diff', 'log', 'show', 'whatchanged', 'format-patch', 'grep'])
 const GIT_NO_PATCH = new Set(['--stat', '--numstat', '--shortstat', '--name-only', '--name-status', '--summary', '-s', '--no-patch', '--check', '--quiet'])
-const GIT_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path'])
+const GIT_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--attr-source'])
 const GIT_PATCH_FLAGS = new Set(['-p', '-u', '--patch', '-c', '--cc', '--patch-with-stat', '--patch-with-raw'])
 
 export const GIT_EXCLUDE = /^:(?:!|\^|\(exclude\))/

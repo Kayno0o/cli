@@ -2,7 +2,7 @@ import { USE_GC } from '@kaynooo/cli-git/message'
 import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
 
 // git's own options that take the next word as their value, before the subcommand.
-const GLOBAL_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'])
+const GLOBAL_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--attr-source'])
 const READ_ONLY_STASH = new Set(['list', 'show'])
 const WHOLE_TREE = new Set(['-A', '--all', '-u', '--update', '--no-ignore-removal', '.', './', ':/', '*'])
 
