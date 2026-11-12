@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseStatus } from '../src/conditions'
 import { waitforHarness } from './waitfor'
 
-const { waitfor } = waitforHarness()
+const { waitfor, log } = waitforHarness()
 
 const listener = () => Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: socket => void socket.end() } })
 
@@ -22,6 +22,19 @@ describe('repeated --port and --url', () => {
 
     expect(conditions.map(item => item.name).toSorted()).toEqual([`127.0.0.1:${one.port}`, `127.0.0.1:${two.port}`, url, `${url}x`].toSorted())
     expect(conditions.every(item => item.ms >= 0)).toBe(true)
+  })
+
+  test('a --fail line already in the file wins over a port up in the same poll, with --any too', async () => {
+    const up = listener()
+
+    for (const extra of [[], ['--any', '-u', 'ready']]) {
+      const result = await waitfor(['-f', log('error boom\n'), '-e', 'error', '-p', String(up.port), '-t', '3s', ...extra])
+
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('matched --fail')
+    }
+
+    up.stop(true)
   })
 
   test('a timeout names the ones still pending only', async () => {

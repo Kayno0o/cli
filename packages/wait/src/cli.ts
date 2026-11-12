@@ -346,7 +346,10 @@ async function main(args: string[]): Promise<number> {
         values.cmd !== undefined && cmdLeft === undefined,
       ]
 
-      if (isAny ? isMet.includes(true) : (watch?.done ?? true) && ports.every(probe => probe.left === undefined) && urls.every(probe => probe.left === undefined) && !isPidLeft && cmdLeft === undefined) {
+      const isAllMet = (watch?.done ?? true) && ports.every(probe => probe.left === undefined) && urls.every(probe => probe.left === undefined) && !isPidLeft && cmdLeft === undefined
+
+      // A --fail line read before any --until match but held back for the lines after it wins over a condition met in the same poll: the next poll reports it.
+      if ((isAny ? isMet.includes(true) : isAllMet) && !(watch?.failsFirst ?? false)) {
         if (json)
           printJson({ met: true, ms: Date.now() - started, line: matched ?? null, conditions: metAt })
 

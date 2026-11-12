@@ -23,6 +23,7 @@ interface Failure {
   line: Line
   after: Line[]
   waited: boolean
+  isFirst: boolean
 }
 
 // Reads a growing file from the start, a line at a time as each is completed, starting over when it shrinks (rotated or truncated).
@@ -46,6 +47,11 @@ export class FileWatch {
     return this.failure !== undefined
   }
 
+  // A --fail line read before any --until match, which no condition met since can outweigh; one after the match comes too late to.
+  get failsFirst(): boolean {
+    return this.failure?.isFirst === true
+  }
+
   get exists(): boolean {
     return existsSync(this.path)
   }
@@ -64,7 +70,7 @@ export class FileWatch {
         }
 
         if (this.failOn?.test(line.text) === true) {
-          this.failure = { before: this.recent.slice(-AROUND), line, after: [], waited: false }
+          this.failure = { before: this.recent.slice(-AROUND), line, after: [], waited: false, isFirst: !this.matched }
 
           continue
         }
