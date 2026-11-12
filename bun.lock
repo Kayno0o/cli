@@ -313,7 +313,7 @@
     },
     "packages/workspace": {
       "name": "@kaynooo/cli-workspace",
-      "version": "0.14.1",
+      "version": "0.14.2",
       "bin": {
         "ws": "./dist/cli.js",
       },
