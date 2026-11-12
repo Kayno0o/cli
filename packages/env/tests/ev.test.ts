@@ -156,6 +156,17 @@ describe('ev', () => {
     expect(await read('.env')).toBe(ENV.replace('tok_abcdefghijklmnop', 'new_token_value_123'))
   })
 
+  test('set, list and get mask a password whose name runs the words together', async () => {
+    await write('.env', ENV)
+
+    for (const key of ['PGPASS', 'GPG_PASSPHRASE', 'AUTHORIZATION']) {
+      expect(ev(['set', key], 'fakevalue123456\n').out).not.toContain('fakevalue123456')
+      expect(ev(['get', key]).out).not.toContain('fakevalue123456')
+    }
+
+    expect(ev(['list']).out).not.toContain('fakevalue123456')
+  })
+
   test('set appends a new key, creates the file, and takes -F', async () => {
     await write('value.txt', 'two words\n')
 

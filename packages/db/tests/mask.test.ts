@@ -6,7 +6,7 @@ const URL = 'postgres://app:s3cr%40t-pw@db.example.com:5432/shop'
 
 describe('masking', () => {
   test('recognizes sensitive column names only', () => {
-    for (const name of ['email', 'user_email', 'mobile_phone', 'api_token', 'password_hash', 'secret', 'passwd', 'db_pass', 'ssn', 'iban', 'card_number', 'cvv', 'auth', 'cookie', 'session_id', 'jwt', 'otp', 'salt'])
+    for (const name of ['email', 'user_email', 'mobile_phone', 'api_token', 'password_hash', 'secret', 'passwd', 'db_pass', 'ssn', 'iban', 'card_number', 'cvv', 'auth', 'cookie', 'session_id', 'jwt', 'otp', 'salt', 'dbpass', 'passphrase', 'authorization', 'sessionid'])
       expect(sensitiveKind(name)).toBeDefined()
 
     for (const name of ['id', 'name', 'status', 'compass', 'created_at', 'key', 'author', 'footprint', 'keyword'])
