@@ -7,11 +7,13 @@ import { afterAll, describe, expect, test } from 'bun:test'
 const temp = tempDirs()
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
-const IMAGE = 'postgres:18-alpine'
+// Pinned, so a run never pulls a moving tag nor leaves one behind for a scanner to flag.
+const IMAGE = 'postgres:18-alpine@sha256:9ba53c7d41ea093baf5c1ba635ba5434c4f979880527d49bb7d9237d3193085b'
+const CONTAINER_PREFIX = 'cli-db-test-'
 // A Postgres the suite may create and drop its own database in, as CI starts the runner image's: set only there, so the tests never touch an existing database.
 const SERVER = process.env.DB_TOOLS_TEST_SERVER
 const PASSWORD = SERVER === undefined ? 'pw-never-printed-9731' : decodeURIComponent(new URL(SERVER).password)
-const CONTAINER = `cli-db-test-${process.pid}`
+const CONTAINER = `${CONTAINER_PREFIX}${process.pid}`
 const DATABASE = `db_tools_test_${process.pid}`
 const PORT = /:(\d+)$/m
 const SCHEMA = `
@@ -47,10 +49,35 @@ function onServer(server: string): string {
   return psql(server, `create database ${DATABASE}`) && psql(url, SCHEMA) ? '' : `DB_TOOLS_TEST_SERVER could not take the ${DATABASE} database`
 }
 
+function isRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+
+    return true
+  }
+  catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+// A run killed before its afterAll leaves its container running: those named after a pid that no longer runs go before this run starts its own.
+function removeOrphans(): void {
+  const names = docker('ps', '-a', '--filter', `name=^${CONTAINER_PREFIX}`, '--format', '{{.Names}}').out.split('\n').filter(Boolean)
+
+  for (const name of names) {
+    const pid = Number(name.slice(CONTAINER_PREFIX.length))
+
+    if (Number.isInteger(pid) && pid > 0 && !isRunning(pid))
+      docker('rm', '-f', name)
+  }
+}
+
 // A throwaway Postgres in docker on a free port. Returns why it could not be had, or ''.
 async function inDocker(): Promise<string> {
   if (Bun.which('docker') === null)
     return 'docker is not installed'
+
+  removeOrphans()
 
   if (!docker('image', 'inspect', IMAGE).ok && !docker('pull', IMAGE).ok)
     return `docker cannot provide ${IMAGE}`
