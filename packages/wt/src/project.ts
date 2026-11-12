@@ -76,6 +76,8 @@ export class WtError extends KnownError {}
 const TASK_PATTERN = /^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 
 const ROUTE_TARGET = /^client$|^[\w.-]+:\d+$/
+const NOT_IN_STACK_NAME = /[^\w-]/g
+const LEADING_SEPARATORS = /^[_-]+/
 
 // Every file wt generates for a worktree outside of it, so `wt rm` has one list to delete.
 export function worktreeFiles(settings: Resolved, id: string) {
@@ -117,10 +119,13 @@ export async function loadProjects(): Promise<Project[]> {
 
   // A worktree's stack is named after its checkout's folder, kept so that running stacks keep their containers and volumes.
   for (const [index, project] of projects.entries()) {
-    const twin = projects.slice(0, index).find(other => basename(other.root) === basename(project.root))
+    if (stackName(project) === '')
+      throw new WtError(`${project.name}.ts: the checkout folder ${basename(project.root)} holds no letter or digit to name its compose stacks after: rename the folder`)
+
+    const twin = projects.slice(0, index).find(other => stackName(other) === stackName(project))
 
     if (twin)
-      throw new WtError(`${twin.name}.ts and ${project.name}.ts both have a checkout named ${basename(project.root)}, so their worktrees would share stacks and volumes: rename the folder of a checkout that has no worktrees yet, or remove one of the files`)
+      throw new WtError(`${twin.name}.ts and ${project.name}.ts both have a checkout compose names ${stackName(project)}, so their worktrees would share stacks and volumes: rename the folder of a checkout that has no worktrees yet, or remove one of the files`)
   }
 
   return projects
@@ -137,6 +142,11 @@ export async function findProject(name: string): Promise<Project> {
 
 export const tasksDir = (project: Project) => fillTemplate([project.settings.worktrees], { root: dirname(project.root), repo: basename(project.root) })[0]!
 
+/** The project name compose gives the checkout's folder, which its worktrees' stacks start with: lower case, only letters, digits, _ and -, none of the last two first. */
+export function stackName(project: Pick<Project, 'root'>): string {
+  return basename(project.root).toLowerCase().replace(NOT_IN_STACK_NAME, '').replace(LEADING_SEPARATORS, '')
+}
+
 export function worktreeOf(project: Project, task: string): Worktree {
   if (task === 'main' || !TASK_PATTERN.test(task))
     throw new WtError(`invalid task name "${task}": lowercase letters, digits and single inner dashes, at most 63, and not "main"`)
@@ -147,7 +157,7 @@ export function worktreeOf(project: Project, task: string): Worktree {
   if (taken)
     throw new WtError(`invalid task name "${task}": the worktree's ${worktreeHost(taken.host, task)} would be one of main's hosts`)
 
-  const id = `${basename(project.root)}--${task}`
+  const id = `${stackName(project)}--${task}`
 
   return {
     project,

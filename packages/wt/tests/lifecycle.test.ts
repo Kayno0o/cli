@@ -324,13 +324,22 @@ describe('commands checking their target before any job', () => {
 
   afterAll(() => env?.stop())
 
-  test('refuse two projects whose checkouts share a folder name, as their worktrees would share stacks', async () => {
-    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/times' })}\n`)
+  test('refuse two projects whose checkout folders compose names alike, as their worktrees would share stacks', async () => {
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/Times.' })}\n`)
 
     const run = await env.wt('up', 'planning')
 
     expect(run.code).toBe(1)
-    expect(run.err).toContain('other.ts and times.ts both have a checkout named times')
+    expect(run.err).toContain('other.ts and times.ts both have a checkout compose names times')
+  })
+
+  test('refuse a checkout folder that leaves compose no stack name', async () => {
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/__' })}\n`)
+
+    const run = await env.wt('up', 'planning')
+
+    expect(run.code).toBe(1)
+    expect(run.err).toContain('other.ts: the checkout folder __ holds no letter or digit')
   })
 
   test.each([
@@ -926,5 +935,20 @@ describe('wt ls --json', () => {
         { project: 'times', task: 'planning', dir: dirOf('planning'), branch: 'wt/planning', url: 'https://planning.times.localhost', running: true, dirty: 0, unbranched: 0, session: 'times--planning' },
       ],
     })
+  }, 30_000)
+
+  test('finds main running under the name compose gives a folder with capitals and dots', async () => {
+    const { sandbox, wt } = env
+    const caps = join(sandbox.home, 'Workspace', 'Caps.Dir')
+
+    mkdirSync(caps)
+    await $`git init -q -b main`.cwd(caps).env({ ...sandbox.env, ...IDENTITY })
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'caps.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Workspace/Caps.Dir' })}\n`)
+    sandbox.seed('compose-ls.json', JSON.stringify([{ Name: 'capsdir', Status: 'running(1)' }]))
+
+    const run = await wt('ls', '--json', '-p', 'caps')
+
+    expect(run.code).toBe(0)
+    expect((JSON.parse(run.out) as { checkouts: { task: string, running: boolean }[] }).checkouts).toMatchObject([{ task: 'main', running: true }])
   }, 30_000)
 })

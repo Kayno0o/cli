@@ -3,7 +3,7 @@ import type { Project } from './project'
 import { basename, join } from 'node:path'
 import { runningProjects } from './compose'
 import { currentBranch, git, unreachableCount } from './git'
-import { listTasks, loadProjects, locate, worktreeOf } from './project'
+import { listTasks, loadProjects, locate, stackName, worktreeOf } from './project'
 import { urlsOf } from './routes'
 
 export interface Checkout {
@@ -59,7 +59,7 @@ async function dirtyCount(dir: string, repos: string[]): Promise<number> {
 async function checkoutsOf(project: Project, running: Set<string>): Promise<Checkout[]> {
   const branchDir = project.repos[0] ?? '.'
   const mainHost = project.routes.find(route => !route.host.startsWith('*.'))?.host
-  const main = { id: basename(project.root), task: 'main', dir: project.root, url: mainHost !== undefined ? `https://${mainHost}` : '' }
+  const main = { id: stackName(project), task: 'main', dir: project.root, url: mainHost !== undefined ? `https://${mainHost}` : '' }
   const worktrees = listTasks(project).map((task) => {
     const worktree = worktreeOf(project, task)
 
