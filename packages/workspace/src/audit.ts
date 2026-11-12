@@ -120,8 +120,8 @@ async function bunAudited(path: string, shown: string, level: Severity, ignore: 
     runCommand(['bun', 'audit', '--json'], { cwd: path, timeoutMs: AUDIT_MS }),
     runCommand(['bun', 'audit', '--json', '--prod'], { cwd: path, timeoutMs: AUDIT_MS }),
   ])
-  const audit = parseAudit(stdoutOf(all))
-  const reached = parseAudit(stdoutOf(production))
+  const audit = parseAudit(all.stdout)
+  const reached = parseAudit(production.stdout)
 
   if (audit === undefined || reached === undefined)
     return { repo: shown, path, findings: [], below: 0, warnings: [], error: failure(audit === undefined ? all : production) }
@@ -152,10 +152,6 @@ function originOf(found: Finding): string {
     return 'via'
 
   return `via ${found.via.slice(0, VIA_SHOWN).join(', ')}${found.via.length > VIA_SHOWN ? ` +${found.via.length - VIA_SHOWN}` : ''}`
-}
-
-function stdoutOf(ran: Ran): string {
-  return Buffer.concat(ran.chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString()
 }
 
 function failure(ran: Ran): string {

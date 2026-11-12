@@ -21,10 +21,6 @@ export interface Checkout {
   prefix: string
 }
 
-function stdoutOf(ran: Ran): string {
-  return Buffer.concat(ran.chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString().trim()
-}
-
 async function git(args: string[], cwd: string): Promise<Ran> {
   return runCommand(['git', ...args], { cwd })
 }
@@ -40,7 +36,7 @@ export async function checkout(cwd: string): Promise<Checkout> {
   if (ran.code !== 0)
     fail('not inside a git repository')
 
-  const [root = '', prefix = ''] = stdoutOf(ran).split('\n')
+  const [root = '', prefix = ''] = ran.stdout.trim().split('\n')
 
   return { root, prefix }
 }
@@ -51,14 +47,14 @@ export async function resolveRef(root: string, ref: string): Promise<string> {
   if (ran.code !== 0)
     fail(`no commit ${ref} in this repository`)
 
-  return stdoutOf(ran)
+  return ran.stdout.trim()
 }
 
 // The remote ref the repository's default branch is: what origin's HEAD names (`origin/master`), else origin/main.
 async function defaultRemoteRef(root: string): Promise<string> {
   const head = await git(['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], root)
 
-  return head.code === 0 && stdoutOf(head) !== '' ? stdoutOf(head) : 'origin/main'
+  return head.code === 0 && head.stdout.trim() !== '' ? head.stdout.trim() : 'origin/main'
 }
 
 // The ref `base proof` runs before at when none is given: the merge base with origin's default branch (main unless origin's HEAD names another) when HEAD is on another branch that is ahead of it, else HEAD.
@@ -66,13 +62,13 @@ export async function defaultProofRef(root: string): Promise<string> {
   const branch = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], root)
   const remote = await defaultRemoteRef(root)
 
-  if (branch.code !== 0 || stdoutOf(branch) === remote.replace(ORIGIN_PREFIX, ''))
+  if (branch.code !== 0 || branch.stdout.trim() === remote.replace(ORIGIN_PREFIX, ''))
     return 'HEAD'
 
   const base = await git(['merge-base', 'HEAD', remote], root)
   const head = await git(['rev-parse', 'HEAD'], root)
 
-  return base.code === 0 && stdoutOf(base) !== stdoutOf(head) ? stdoutOf(base) : 'HEAD'
+  return base.code === 0 && base.stdout.trim() !== head.stdout.trim() ? base.stdout.trim() : 'HEAD'
 }
 
 // Repository paths of the --keep files, refused before anything is created when one is missing or outside the repository.
@@ -116,7 +112,7 @@ export async function linkedEntries(root: string): Promise<string[]> {
   if (ran.code !== 0)
     return []
 
-  return stdoutOf(ran).split('\0').filter((entry) => {
+  return ran.stdout.trim().split('\0').filter((entry) => {
     const folder = entry.endsWith('/')
     const name = basename(entry)
 

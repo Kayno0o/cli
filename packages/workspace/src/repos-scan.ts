@@ -99,7 +99,7 @@ async function read(path: string, args: string[], timeoutMs = GIT_MS): Promise<s
   try {
     const ran = await runCommand(['git', '--no-optional-locks', ...args], { cwd: path, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, timeoutMs })
 
-    return ran.code === 0 && !ran.timedOut ? ran.text.trim() : undefined
+    return ran.code === 0 && !ran.timedOut ? ran.stdout.trim() : undefined
   }
   catch {
     return undefined

@@ -14,6 +14,8 @@ export interface Ran {
   // The bytes of every chunk joined.
   output: Buffer
   text: string
+  // Stdout alone, for a command whose warnings on stderr are no part of its answer.
+  stdout: string
   // The command was ended because `timeoutMs` passed, its code then being the signal's.
   timedOut: boolean
   // More than `maxBytes` came, and the rest was left out of chunks, output and text.
@@ -244,6 +246,7 @@ export async function runCommand(argv: string[], { cwd, env, stdin = 'ignore', i
   const joined = () => Buffer.concat(chunks.map(({ data }) => data))
   let output: Buffer | undefined
   let text: string | undefined
+  let stdout: string | undefined
 
   return {
     code: exitCodeOf(proc.exitCode, proc.signalCode),
@@ -255,6 +258,9 @@ export async function runCommand(argv: string[], { cwd, env, stdin = 'ignore', i
     },
     get text() {
       return text ??= (output ??= joined()).toString()
+    },
+    get stdout() {
+      return stdout ??= Buffer.concat(chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString()
     },
   }
 }

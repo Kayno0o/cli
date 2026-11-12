@@ -128,7 +128,7 @@ export async function containerService(wanted: string): Promise<Service> {
     fail(`no container ${wanted}`)
 
   try {
-    return describeNamedContainer(wanted, JSON.parse(stdoutOf(inspect.chunks)) as Inspected[])
+    return describeNamedContainer(wanted, JSON.parse(inspect.stdout) as Inspected[])
   }
   catch (error) {
     if (error instanceof SyntaxError)
@@ -136,10 +136,6 @@ export async function containerService(wanted: string): Promise<Service> {
 
     throw error
   }
-}
-
-function stdoutOf(chunks: { stream: string, data: Uint8Array }[]): string {
-  return Buffer.concat(chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString()
 }
 
 // The running services of the compose project the working directory belongs to, as Compose finds it (this directory or a parent). Empty without docker or a project.
@@ -161,7 +157,7 @@ export async function composeServices(): Promise<Service[]> {
 
     const inspect = await runCommand(['docker', 'inspect', ...rows.map(row => row.ID ?? '')])
 
-    return inspect.code === 0 ? describeServices(rows, JSON.parse(stdoutOf(inspect.chunks)) as Inspected[]) : []
+    return inspect.code === 0 ? describeServices(rows, JSON.parse(inspect.stdout) as Inspected[]) : []
   }
   catch {
     // Output that is not the JSON Compose prints is read as no project.

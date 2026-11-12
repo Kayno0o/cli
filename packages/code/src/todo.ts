@@ -1,4 +1,3 @@
-import type { Chunk } from '@kaynooo/cli-kit'
 import { runCommand } from '@kaynooo/cli-kit'
 
 export interface Ref {
@@ -62,7 +61,7 @@ async function commitTimes(path: string, cwd: string): Promise<Map<number, numbe
   let sha = ''
   let line = 0
 
-  for (const row of stdoutOf(blamed.chunks).split('\n')) {
+  for (const row of blamed.stdout.split('\n')) {
     const header = BLAME_HEADER.exec(row)
 
     if (header !== null) {
@@ -116,10 +115,6 @@ export function marksIn(text: string, path: string): Mark[] {
   return marks
 }
 
-function stdoutOf(chunks: Chunk[]): string {
-  return Buffer.concat(chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString()
-}
-
 export interface Lookup {
   // `owner/repo#n` to the issue's state.
   states: Map<string, string>
@@ -139,7 +134,7 @@ async function lookUpOnGitHub(repo: string, numbers: readonly string[], cwd: str
     if (ran.ran.code !== 0)
       return ran.ran.text.trim().replace(AFTER_FIRST_LINE, '')
 
-    states.set(refKey({ repo, number: Number(ran.number) }), stdoutOf(ran.ran.chunks).trim())
+    states.set(refKey({ repo, number: Number(ran.number) }), ran.ran.stdout.trim())
   }
 
   return states
@@ -167,7 +162,7 @@ export async function lookUp(refs: readonly Ref[], cwd: string): Promise<Lookup>
       continue
     }
 
-    const parsed = JSON.parse(stdoutOf(ran.chunks)) as { number: number, state: string } | { number: number, state: string }[]
+    const parsed = JSON.parse(ran.stdout) as { number: number, state: string } | { number: number, state: string }[]
 
     for (const issue of Array.isArray(parsed) ? parsed : [parsed])
       lookup.states.set(refKey({ repo, number: issue.number }), issue.state)

@@ -127,6 +127,7 @@ describe('runCommand', () => {
     expect(ran.code).toBe(3)
     expect(ran.text.split('\n').filter(Boolean).toSorted()).toEqual(['err', 'out'])
     expect(ran.chunks.map(chunk => chunk.stream).toSorted()).toEqual(['stderr', 'stdout'])
+    expect(ran.stdout).toBe('out\n')
   })
 
   test('runs in a folder with an environment', async () => {

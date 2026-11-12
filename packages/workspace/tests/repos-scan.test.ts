@@ -1,9 +1,11 @@
 import type { RepoState } from '../src/repos-scan'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import process from 'node:process'
 import { tempDirs } from '@kaynooo/cli-kit/test'
+import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
-import { findRepos, reasonsOf } from '../src/repos-scan'
+import { findRepos, inspect, reasonsOf } from '../src/repos-scan'
 
 const temp = tempDirs()
 
@@ -62,5 +64,23 @@ describe('findRepos', () => {
     repo(root, 'a', 'b', 'c', 'd')
 
     expect(await findRepos(root, new Set())).toEqual([join(root, 'a', 'b', 'c'), join(root, 'w')])
+  })
+})
+
+describe('inspect', () => {
+  // Root reads any folder, so git has nothing to warn about.
+  test.skipIf(process.getuid?.() === 0)('counts no dirty file from a warning git prints on stderr', async () => {
+    const root = temp('repos-')
+
+    await $`git init -q -b main && git -c user.name=a -c user.email=a@b -c commit.gpgsign=false commit -q --allow-empty -m base`.cwd(root).quiet()
+    mkdirSync(join(root, 'secret'))
+    chmodSync(join(root, 'secret'), 0o000)
+
+    try {
+      expect((await inspect(root, false)).dirty).toBe(0)
+    }
+    finally {
+      chmodSync(join(root, 'secret'), 0o700)
+    }
   })
 })

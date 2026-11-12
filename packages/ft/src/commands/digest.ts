@@ -108,7 +108,7 @@ export async function staleTodos(): Promise<StaleTodo[]> {
   try {
     const ran = await runCommand([bin, 'todo-scan', '--stale', '--json'])
 
-    found = JSON.parse(Buffer.concat(ran.chunks.filter(chunk => chunk.stream === 'stdout').map(chunk => chunk.data)).toString()) as ScannedTodo[]
+    found = JSON.parse(ran.stdout) as ScannedTodo[]
   }
   catch {
     return []
