@@ -131,7 +131,7 @@ describe('proof', () => {
   })
 
   test('stops after an interrupt in the run before, never printing proved', async () => {
-    const proc = Bun.spawn([process.execPath, CLI, '--', 'sleep', '30'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+    const proc = Bun.spawn([process.execPath, CLI, '--', 'sleep', '30'], { cwd: repo, stdout: 'pipe', stderr: 'pipe', detached: true })
 
     for (let i = 0; i < 100 && git('worktree', 'list').split('\n').length === 1; i++)
       await Bun.sleep(50)

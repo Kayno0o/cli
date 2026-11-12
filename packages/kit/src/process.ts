@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { constants } from 'node:os'
 import { resolve } from 'node:path'
 import process from 'node:process'
@@ -43,14 +44,16 @@ export interface RunSettings {
 export interface HeldSignals {
   // The last signal received, undefined while none has come.
   readonly signal: NodeJS.Signals | undefined
-  // Passes each signal received from now on to `child`, so it ends and its code is the one to exit with.
-  forward: (child: { kill: (signal: NodeJS.Signals) => unknown }) => void
+  // Passes each signal received from now on to `child`, so it ends and its code is the one to exit with; while this process runs in the terminal's foreground group, a child with a pid in that group is not sent the SIGINT or SIGHUP the terminal gives the whole group.
+  forward: (child: { kill: (signal: NodeJS.Signals) => unknown, pid?: number }) => void
   // Takes the handlers off again, and may be called more than once.
   release: () => void
 }
 
 const KILL_GRACE_MS = 2000
 const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
+// The signals a terminal sends to its whole foreground group, Ctrl-C and a hangup, which a child in that group has had already.
+const GROUP_SIGNALS = new Set<NodeJS.Signals>(['SIGINT', 'SIGHUP'])
 // A scheme of two letters or more, so a Windows drive is read as a path.
 const SCHEME = /^[a-z][\w+.-]+:/i
 const OPENERS: Partial<Record<NodeJS.Platform, string[]>> = { darwin: ['open'], win32: ['cmd', '/c', 'start', ''] }
@@ -64,6 +67,30 @@ export function exitCodeOf(code: number | null, signal: NodeJS.Signals | number 
     return 128 + signal
 
   return signal === null ? 129 : 128 + constants.signals[signal]
+}
+
+// A process's group and its terminal's foreground group, read from /proc; undefined where there is none to read.
+function groupsOf(pid: number | 'self'): { group: number, foreground: number } | undefined {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    // After the name in parentheses come the state, the parent, the group, the session, the terminal and its foreground group.
+    const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+
+    return { group: Number(fields[2]), foreground: Number(fields[5]) }
+  }
+  catch {
+    return undefined
+  }
+}
+
+// Whether a terminal sending Ctrl-C or a hangup to this process reached the child too: both sit in the terminal's foreground group.
+function heardTheTerminal(child: { pid?: number }): boolean {
+  if (child.pid === undefined)
+    return false
+
+  const own = groupsOf('self')
+
+  return own !== undefined && own.group === own.foreground && groupsOf(child.pid)?.group === own.group
 }
 
 // Takes SIGINT, SIGTERM and SIGHUP over until released. A signal goes to the child given to `forward`; without one, `cleanup` runs and the signal is raised again so the process ends as it would have; without either, it is only kept in `signal` for the caller to wind down on.
@@ -87,7 +114,8 @@ export function holdSignals(cleanup?: (signal: NodeJS.Signals) => void): HeldSig
     received = signal
 
     if (child !== undefined) {
-      child.kill(signal)
+      if (!GROUP_SIGNALS.has(signal) || !heardTheTerminal(child))
+        child.kill(signal)
 
       return
     }

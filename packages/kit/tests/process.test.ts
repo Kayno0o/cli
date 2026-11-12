@@ -39,9 +39,9 @@ async function isGone(pid: number): Promise<boolean> {
   return false
 }
 
-// Runs a script importing the kit as `kit`, which sends itself a signal.
-async function script(body: string) {
-  const child = Bun.spawn([process.execPath, '-e', `import * as kit from ${SRC}\n${body}`], { stdout: 'pipe', stderr: 'pipe' })
+// Runs a script importing the kit as `kit`, which sends itself a signal; detached, it runs in a group of its own, away from any terminal's foreground group.
+async function script(body: string, { detached = false } = {}) {
+  const child = Bun.spawn([process.execPath, '-e', `import * as kit from ${SRC}\n${body}`], { stdout: 'pipe', stderr: 'pipe', detached })
   const [out] = await Promise.all([new Response(child.stdout).text(), child.exited])
 
   return { out, code: child.exitCode, signal: child.signalCode }
@@ -60,9 +60,28 @@ describe('holdSignals', () => {
   })
 
   test('passes a signal to the child it forwards to, the process going on to exit with the child\'s code', async () => {
-    const ran = await script(`const held = kit.holdSignals(() => console.log('cleaned'))\nconst child = Bun.spawn(['sleep', '5'])\nheld.forward(child)\nprocess.kill(process.pid, 'SIGINT')\nawait child.exited\nconsole.log(held.signal, child.signalCode)\nprocess.exit(kit.exitCodeOf(child.exitCode, child.signalCode))`)
+    const ran = await script(`const held = kit.holdSignals(() => console.log('cleaned'))\nconst child = Bun.spawn(['sleep', '5'])\nheld.forward(child)\nprocess.kill(process.pid, 'SIGTERM')\nawait child.exited\nconsole.log(held.signal, child.signalCode)\nprocess.exit(kit.exitCodeOf(child.exitCode, child.signalCode))`)
 
-    expect(ran).toEqual({ out: 'SIGINT SIGINT\n', code: 130, signal: null })
+    expect(ran).toEqual({ out: 'SIGTERM SIGTERM\n', code: 143, signal: null })
+  })
+
+  test('a terminal Ctrl-C reaches a child in the foreground group once, not forwarded a second time', async () => {
+    const counter = 'let n = 0; process.on("SIGINT", () => console.log("SIGINT " + ++n)); setTimeout(() => process.exit(0), 800); console.log("ready")'
+    const parent = `import * as kit from ${SRC}\nconst held = kit.holdSignals()\nconst child = Bun.spawn([process.execPath, '-e', ${JSON.stringify(counter)}], { stdout: 'inherit' })\nheld.forward(child)\nawait child.exited`
+    let out = ''
+    const run = Bun.spawn([process.execPath, '-e', parent], { terminal: { data: (_, data) => out += new TextDecoder().decode(data) } })
+
+    while (!out.includes('ready'))
+      await Bun.sleep(10)
+
+    run.terminal?.write('\x03')
+    await run.exited
+
+    expect(out.match(/SIGINT \d/g)).toEqual(['SIGINT 1'])
+  })
+
+  test('a SIGINT sent to the process alone outside a terminal is forwarded to a child in its group', async () => {
+    expect(await script(`const held = kit.holdSignals()\nconst child = Bun.spawn(['sleep', '5'])\nheld.forward(child)\nprocess.kill(process.pid, 'SIGINT')\nawait child.exited\nconsole.log(child.signalCode)`, { detached: true })).toEqual({ out: 'SIGINT\n', code: 0, signal: null })
   })
 
   test('without a cleanup or a child, only keeps the signal', async () => {
