@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-wt",
   "type": "module",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "wt: git worktrees of a compose project, each with its own stack, data and <task>.<host> subdomains beside main.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
