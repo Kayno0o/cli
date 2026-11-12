@@ -1,19 +1,19 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
-import { badUsage, duration, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { ciJson, runById } from '../runs'
-import { api, repoPost } from '../tea'
+import { api, repoWriteOrEmpty } from '../tea'
 import { followRuns } from './watch'
 
 const usage = `ft dispatch <workflow> [--ref <branch>] [--input key=value]...
 
-Starts a run of a workflow that declares \`on: workflow_dispatch\`, on the tip of the ref (the default branch unless given), and prints the run's id and link.
+Starts a run of a workflow that declares \`on: workflow_dispatch\`, on the ref (the default branch's tip unless given), and prints the run's id and link.
 --wait then follows it to its end as \`ft watch\` does.`
 const EXITS: ExitRow[] = [[0, 'the run started, and with --wait it passed'], [1, 'Forgejo refused it, or with --wait the run failed or was cancelled'], [2, 'a usage error, or with --wait a timeout or a stalled queue']]
 
 const options = {
-  ref: { type: 'string', description: 'the branch or tag to run, by default the repository\'s default branch' },
+  ref: { type: 'string', description: 'the branch, tag or commit sha to run, by default the repository\'s default branch' },
   input: { type: 'string', short: 'i', multiple: true, description: 'an input the workflow declares, key=value, repeatable' },
   wait: { type: 'boolean', short: 'w', description: 'follow the run to its end, exit 1 when it fails' },
   timeout: { type: 'string', short: 't', description: 'how long --wait waits before giving up (30m), a bare number in minutes' },
@@ -60,26 +60,31 @@ export async function dispatch(args: string[]): Promise<number> {
   const timeout = duration(values.timeout, 'timeout', 30 * 60_000, 'm')
   const ref = values.ref ?? (await api<{ default_branch: string }>('repos/{owner}/{repo}', values.repo)).default_branch
   const json = values.json === true
+  const wait = values.wait === true
+  const say = json ? console.error : console.log
   const fields = { ref, ...Object.keys(inputs).length === 0 ? {} : { inputs }, return_run_info: true }
-  const started = await repoPost<Dispatched>(`actions/workflows/${encodeURIComponent(workflow)}/dispatches`, fields, values.repo)
+  const started = await repoWriteOrEmpty<Dispatched>('POST', `actions/workflows/${encodeURIComponent(workflow)}/dispatches`, fields, values.repo)
 
-  // A Forgejo whose API predates return_run_info starts the run without saying which.
+  // A Forgejo whose API predates return_run_info starts the run without saying which, so there is no run to follow or print.
   if (started === undefined) {
-    console.error(`${workflow} started on ${ref}, but Forgejo did not say which run: ft runs -w ${workflow} lists it`)
+    const said = `${workflow} started on ${ref}, but Forgejo did not say which run`
+
+    if (wait || json)
+      fail(`${said}, so it cannot be ${wait ? 'followed' : 'printed'}`, 1, `ft runs -w ${workflow} lists it`)
+
+    console.error(`${said}: ft runs -w ${workflow} lists it`)
 
     return 0
   }
 
   const run = await runById(started.id, values.repo)
 
-  const say = json ? console.error : console.log
-
-  if (json && values.wait !== true)
+  if (json && !wait)
     printJson({ id: run.id, number: started.run_number, workflow, ref, url: run.html_url })
   else
     say(`started ${workflow} run ${run.id} on ${ref}: ${run.html_url}`)
 
-  if (values.wait !== true)
+  if (!wait)
     return 0
 
   const followed = await followRuns(runs => runs.filter(each => each.id === run.id), timeout, values.repo, undefined, json ? process.stderr : process.stdout, { json, quiet: values.quiet === true })

@@ -69,6 +69,39 @@ describe('ft dispatch', () => {
     expect(err).toContain('started apps.yml run 1')
   })
 
+  test('--wait gives up after --timeout on a run that does not finish', async () => {
+    let message = ''
+
+    await withFakeTea({ issues: [], workflows: ['apps.yml'], dispatchStatus: 'running' }, async () => {
+      const poll = timing.poll
+
+      timing.poll = 1
+
+      try {
+        message = await refusal(capture(async () => dispatch(['apps.yml', '--wait', '-q', '-t', '1s', ...REPO])))
+      }
+      finally {
+        timing.poll = poll
+      }
+    })
+
+    expect(message).toContain('did not finish in')
+  })
+
+  test('a Forgejo that does not say which run started is told on stderr, and refused under --wait or --json', async () => {
+    const plain = await dispatched({ noRunInfo: true }, ['apps.yml'])
+
+    expect(plain.result).toBe(0)
+    expect(plain.out).toBe('')
+    expect(plain.err).toContain('apps.yml started on main, but Forgejo did not say which run: ft runs -w apps.yml lists it')
+
+    for (const flag of ['--wait', '--json']) {
+      await withFakeTea({ issues: [], workflows: ['apps.yml'], noRunInfo: true }, async () => {
+        expect(await refusal(dispatch(['apps.yml', flag, ...REPO]))).toContain(`so it cannot be ${flag === '--wait' ? 'followed' : 'printed'}`)
+      })
+    }
+  })
+
   test('surfaces Forgejo\'s refusal of a workflow it does not know', async () => {
     let message = ''
 

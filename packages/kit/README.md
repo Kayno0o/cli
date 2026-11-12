@@ -38,14 +38,14 @@ Exceptions, each stated in the command's own `Exit codes:`:
 - `probe` exits 1 when the site could not be reached, that being its finding, and 0 when it answered, whatever it warns about.
 - A cancelled picker or prompt (`pick`, `ev set`, `dev password --bcrypt -`, `dev jwt`) exits 130, as Ctrl+C would.
 - `guard hook` never exits 2, which would block the tool call it vets.
-- `waitfor` and `ft watch`/`ft ci` exit 2 on a timeout, 1 on the failure they waited for.
+- `waitfor`, `ft watch`, `ft ci` and `ft dispatch --wait` exit 2 on a timeout, 1 on the failure they waited for.
 
 `tests/exits.test.ts` holds every bin to this: each command states its codes, only from the table, and answers `--help` with 0 and an unknown option with 2.
 
 ## Flags that mean the same everywhere
 
 - `-n` is always a count: `--limit` (rows of a listing, with `--full` for all of them, from `limitOptions`), `--rows` (`db`, once `--limit`), `--lines` (`dlog`, `out` and `waitfor task`: lines of output kept), `--count` (`sub`, `dev uuid`) and `--slots` (`slot`). A listing cuts to its default and says `N more, rerun with --full`; `--json` is never cut on its own, only by an explicit `-n`.
-- `-t`/`--timeout` is how long to wait before giving up, a duration (`30s`, `5m`, `1h`). A bare number counts in the unit the help names: minutes for `ft ci`, `ft watch`, `ft release` and `gl ci`, seconds for `waitfor`, `slot` and `pkg bump`.
+- `-t`/`--timeout` is how long to wait before giving up, a duration (`30s`, `5m`, `1h`). A bare number counts in the unit the help names: minutes for `ft ci`, `ft watch`, `ft dispatch`, `ft release` and `gl ci`, seconds for `waitfor`, `slot` and `pkg bump`.
 - `-r`/`--repo` is the forge repository (`ft`, `gl`, `changelog`). Bins with no repository keep `-r` for their own noun: `--ref` (`base`, `base proof`), `--regex` (`sub`), `--refs` (`src peek`).
 - `--dry-run` shows what would change without changing it (`sub`, `ft release`, `pkg bump`, `changelog`; `changelog` keeps `--dry`).
 - A renamed flag keeps its old spelling through `aliases` on the option (`rows` answers `--limit`, `changelog` answers `--gitea` and `--dry`), left out of the help and of `__complete`.

@@ -11,7 +11,7 @@ export interface FakeMilestone { id: number, title: string, state: string, descr
 export interface FakeFailure { match: string, message: string, times?: number, exit?: number }
 // Calls whose arguments contain `match` (and `method`) wait until `parties` of them arrived, so two sessions reach that step together.
 export interface FakeBarrier { match: string, method?: string, parties: number }
-export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, beforeComment?: Record<number, string[]>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier, workflows?: string[], defaultBranch?: string, dispatchStatus?: string }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, beforeComment?: Record<number, string[]>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier, workflows?: string[], defaultBranch?: string, dispatchStatus?: string, noRunInfo?: boolean }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -162,7 +162,7 @@ if (command === 'api') {
   else if (path === 'repos/{owner}/{repo}')
     console.log(JSON.stringify({ default_branch: state.defaultBranch ?? 'main' }))
   else if (dispatched !== null && method === 'POST') {
-    // A dispatch starts a run at once, said back only when asked for with return_run_info.
+    // A dispatch starts a run at once, said back only when asked for with return_run_info and the Forgejo knows it (noRunInfo plays one that does not).
     const file = decodeURIComponent(dispatched[1])
     const id = Math.max(0, ...(state.runs ?? []).map(each => each.id)) + 1
 
@@ -171,7 +171,7 @@ if (command === 'api') {
     else {
       state.runs = [{ id, index_in_repo: id, workflow_id: file, event: 'workflow_dispatch', prettyref: fields.ref, commit_sha: 'abc', status: state.dispatchStatus ?? 'waiting', html_url: 'https://forge/runs/' + id, title: file, inputs: fields.inputs }, ...(state.runs ?? [])]
 
-      if (fields.return_run_info === true)
+      if (fields.return_run_info === true && state.noRunInfo !== true)
         console.log(JSON.stringify({ id, run_number: id, jobs: ['build'] }))
     }
   }

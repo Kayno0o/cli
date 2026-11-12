@@ -123,15 +123,15 @@ export async function repoSend(method: 'POST' | 'PATCH' | 'DELETE', path: string
   return runApi(full, ['-X', method, ...flags, full], repo)
 }
 
-export async function repoWrite<T>(method: 'POST' | 'PATCH', path: string, fields: Record<string, unknown>, repo?: string): Promise<T> {
-  return parseJson<T>(`repos/{owner}/{repo}/${path}`, await repoSend(method, path, fields, repo))
-}
-
-/** A POST answered with JSON, or undefined when Forgejo answers 204 with no body. */
-export async function repoPost<T>(path: string, fields: Record<string, unknown>, repo?: string): Promise<T | undefined> {
-  const text = await repoSend('POST', path, fields, repo)
+// A write's JSON answer, or undefined when Forgejo answers 204 with no body.
+export async function repoWriteOrEmpty<T>(method: 'POST' | 'PATCH', path: string, fields: Record<string, unknown>, repo?: string): Promise<T | undefined> {
+  const text = await repoSend(method, path, fields, repo)
 
   return text.trim() === '' ? undefined : parseJson<T>(`repos/{owner}/{repo}/${path}`, text)
+}
+
+export async function repoWrite<T>(method: 'POST' | 'PATCH', path: string, fields: Record<string, unknown>, repo?: string): Promise<T> {
+  return await repoWriteOrEmpty<T>(method, path, fields, repo) ?? parseJson<T>(`repos/{owner}/{repo}/${path}`, '')
 }
 
 // A text answer such as a job log; Forgejo's error object, which tea prints with exit 0, is thrown instead of returned as the text.
