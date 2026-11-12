@@ -790,6 +790,29 @@ describe('a config runner naming no executable', () => {
   }, 30_000)
 })
 
+describe('a wt config that does not load', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'config.ts'), 'export default {\n')
+  })
+
+  afterAll(() => env?.stop())
+
+  test('notifies a --bg command it refuses, like any other refusal', async () => {
+    const run = await env.wt('up', 'planning', '--bg')
+    const notified = env.sandbox.calls().filter(call => call.startsWith('notify-send'))
+
+    expect(run.code).toBe(1)
+    expect(run.err).toContain('config.ts does not load')
+    expect(notified).toHaveLength(1)
+    expect(notified[0]).toContain('wt up planning not started')
+    expect(notified[0]).toContain('config.ts does not load')
+  })
+})
+
 describe('up and down with no runner', () => {
   let env: Awaited<ReturnType<typeof timesSandbox>>
 

@@ -6,9 +6,9 @@ import process from 'node:process'
 import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
 import { addTask, assertRemovable, downTask, printPath, printTasks, printUrls, removeTask, syncTask, upTask } from './commands'
 import { wtConfig } from './config'
-import { failKnown } from './errors'
+import { failKnown, failureText } from './errors'
 import { initProject } from './init'
-import { Jobs } from './jobs'
+import { Jobs, notifyRefused } from './jobs'
 import { listWorktrees } from './list'
 import { assertWorktreeExists, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
 import { runHeavy, runTask } from './run'
@@ -21,12 +21,19 @@ async function jobs(): Promise<Jobs> {
 
 // A config that does not load fails like any other known error; `bg` names a `--bg` command, whose refusal is notified too.
 async function guarded(action: () => Promise<number | void>, bg?: string): Promise<number> {
+  let built: Jobs
+
   try {
-    return await (await jobs()).guarded(action, bg)
+    built = await jobs()
   }
   catch (error) {
+    if (bg !== undefined)
+      await notifyRefused('wt', bg, failureText(error))
+
     return failKnown(error)
   }
+
+  return built.guarded(action, bg)
 }
 
 // The name a `--bg` command is notified under, none without `--bg`.

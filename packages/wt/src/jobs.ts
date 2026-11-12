@@ -169,6 +169,11 @@ async function notify(app: string, title: string, body: string, critical = false
     await $`notify-send -a ${app} ${critical ? ['-u', 'critical'] : []} ${title} ${body}`.quiet().nothrow()
 }
 
+/** A `--bg` command refused before any job started (the stack busy, a ref it does not know, a config that does not load): told by notification, as its caller is often a popup that closed meanwhile. */
+export async function notifyRefused(app: string, what: string, message: string): Promise<void> {
+  await notify(app, `${what} not started`, message, true)
+}
+
 /** The jobs of one folder, notified under `app`, whose `<APP>_JOB` env var marks the detached process of a job. */
 export class Jobs {
   readonly dir: string
@@ -359,15 +364,10 @@ export class Jobs {
       await this.failDetached(message)
 
       if (bg !== undefined)
-        await this.notifyRefused(bg, message)
+        await notifyRefused(this.app, bg, message)
 
       return failKnown(error)
     }
-  }
-
-  /** A `--bg` command refused before any job started (the stack busy, a ref it does not know): told by notification, as its caller is often a popup that closed meanwhile. */
-  async notifyRefused(what: string, message: string): Promise<void> {
-    await notify(this.app, `${what} not started`, message, true)
   }
 
   /** Runs `argv` with bun away from any terminal, in a session of its own that outlives the caller (a Herdr popup that closes), the output in the stack's log. */
