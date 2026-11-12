@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -76,6 +76,26 @@ describe('base', () => {
     expect(line.out).toBe('SECOND\n')
     expect(line.code).toBe(4)
     expect(worktrees()).toBe(1)
+  })
+
+  test('keeps the command\'s exit code when it leaves a read-only folder, and sweeps a stale one later', () => {
+    const tmp = temp('base-tmp-')
+    const stale = join(tmp, 'base-ab12cd')
+    const run = (args: string[]) => Bun.spawnSync([process.execPath, CLI, ...args], { cwd: repo, env: { ...process.env, TMPDIR: tmp }, stderr: 'pipe' })
+
+    expect(run(['--', 'sh', '-c', 'mkdir d; touch d/f; chmod 555 d; exit 4']).exitCode).toBe(4)
+    expect(readdirSync(tmp)).toEqual([])
+
+    mkdirSync(join(stale, 'd'), { recursive: true })
+    writeFileSync(join(stale, 'd', 'f'), '')
+    chmodSync(join(stale, 'd'), 0o555)
+    utimesSync(stale, new Date(0), new Date(0))
+
+    const swept = run(['--', 'true'])
+
+    expect(swept.exitCode).toBe(0)
+    expect(swept.stderr.toString()).not.toContain('could not remove')
+    expect(readdirSync(tmp)).toEqual([])
   })
 
   test('runs in the caller\'s folder of the worktree', () => {

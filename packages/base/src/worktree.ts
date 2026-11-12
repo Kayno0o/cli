@@ -1,10 +1,10 @@
 import type { HeldSignals, Ran } from '@kaynooo/cli-kit'
 import type { Subprocess } from 'bun'
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, runCommand } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, role, runCommand } from '@kaynooo/cli-kit'
 
 const WHITESPACE = /\s/
 const ORIGIN_PREFIX = /^origin\//
@@ -226,6 +226,35 @@ function linkModules(root: string, dir: string, folder: string): string[] {
 
 const STALE_AFTER = 24 * 60 * 60 * 1000
 
+// Gives the owner write access to every folder of the tree, links left alone, so a folder the command made read-only can be emptied.
+function makeWritable(path: string): void {
+  const stat = lstatSync(path, { throwIfNoEntry: false })
+
+  if (stat?.isDirectory() !== true)
+    return
+
+  chmodSync(path, stat.mode | 0o700)
+
+  for (const entry of readdirSync(path))
+    makeWritable(join(path, entry))
+}
+
+// Removes a temporary folder, read-only ones inside included; one it still cannot remove is left with a warning, so cleanup never fails a run.
+function removeTree(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true })
+  }
+  catch {
+    try {
+      makeWritable(path)
+      rmSync(path, { recursive: true, force: true })
+    }
+    catch (error) {
+      console.error(`${role('warn', process.stderr)('base:')} could not remove ${path}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+}
+
 // Removes the temporary worktrees an earlier run left behind when it was killed without a chance to clean up, then forgets their git entries.
 async function sweepStale(root: string): Promise<void> {
   for (const name of readdirSync(tmpdir())) {
@@ -236,7 +265,7 @@ async function sweepStale(root: string): Promise<void> {
     const stat = lstatSync(path, { throwIfNoEntry: false })
 
     if (stat?.isDirectory() === true && stat.uid === process.getuid?.() && Date.now() - stat.mtimeMs > STALE_AFTER)
-      rmSync(path, { recursive: true, force: true })
+      removeTree(path)
   }
 
   await git(['worktree', 'prune'], root)
@@ -249,7 +278,7 @@ export async function removeWorktree(root: string, dir: string, links: string[])
   }
 
   await git(['worktree', 'remove', '--force', dir], root)
-  rmSync(dirname(dir), { recursive: true, force: true })
+  removeTree(dirname(dir))
   await git(['worktree', 'prune'], root)
 }
 
