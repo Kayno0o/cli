@@ -313,6 +313,15 @@ describe('removeTask', () => {
     expect(existsSync(join(env.sandbox.home, '.cache', 'wt', 'jobs', 'times--nothing.json'))).toBe(false)
   })
 
+  test('refuses two projects whose checkouts share a folder name, as their worktrees would share stacks', async () => {
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/times' })}\n`)
+
+    const run = await env.wt('up', 'planning')
+
+    expect(run.code).toBe(1)
+    expect(run.err).toContain('other.ts and times.ts both have a checkout named times')
+  })
+
   test.each([
     [['up', 'nothing'], 'no worktree nothing'],
     [['down', 'nothing'], 'no worktree nothing'],

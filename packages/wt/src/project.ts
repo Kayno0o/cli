@@ -106,7 +106,7 @@ export async function loadProjects(): Promise<Project[]> {
   const settings = await wtConfig()
   const files = existsSync(settings.manifests) ? readdirSync(settings.manifests).filter(file => file.endsWith('.ts')).sort() : []
 
-  return Promise.all(files.map(async (file) => {
+  const projects = await Promise.all(files.map(async (file) => {
     const { default: config } = await import(join(settings.manifests, file)) as { default: ProjectConfig }
     const project = { ...config, root: expandHome(config.root), name: basename(file, '.ts'), settings }
 
@@ -114,6 +114,16 @@ export async function loadProjects(): Promise<Project[]> {
 
     return project
   }))
+
+  // A worktree's stack is named after its checkout's folder, kept so that running stacks keep their containers and volumes.
+  for (const [index, project] of projects.entries()) {
+    const twin = projects.slice(0, index).find(other => basename(other.root) === basename(project.root))
+
+    if (twin)
+      throw new WtError(`${twin.name}.ts and ${project.name}.ts both have a checkout named ${basename(project.root)}, so their worktrees would share stacks and volumes: rename one of the folders`)
+  }
+
+  return projects
 }
 
 export async function findProject(name: string): Promise<Project> {
