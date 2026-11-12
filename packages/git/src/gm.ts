@@ -20,7 +20,7 @@ const EXITS: ExitRow[] = [[0, 'it merged, the branch was already merged, or --dr
 
 const OPTIONS = {
   'abort': { type: 'boolean', description: 'give up the merge in progress', conflicts: ['continue', 'dry-run'] },
-  'continue': { type: 'boolean', description: 'commit the merge in progress once no conflict marker is left', conflicts: ['abort', 'dry-run'] },
+  'continue': { type: 'boolean', description: 'commit the merge in progress once no conflict marker is left and a side is picked for each file git could not mark', conflicts: ['abort', 'dry-run'] },
   'squash': { type: 'boolean', short: 's', description: 'stage the branch\'s changes without committing or recording a merge', conflicts: ['abort', 'continue', 'dry-run'] },
   'dry-run': { type: 'boolean', short: 'n', description: 'say whether the merge would conflict, and where, without touching the tree', conflicts: ['abort', 'continue'] },
   'json': jsonOption('{outcome, branch, into, sha?, commits?, files?: [{status, path, from?}], conflicts?: [{path, hunks: [{from, to, lines: [{line, text}]}]}]}, outcome being fast-forward, merge, squashed, up-to-date, conflict, clean (dry run), aborted or refused; with no branch an array of {name, remote, ahead, behind, outcome, conflicts: [path], when, subject}'),
@@ -33,7 +33,12 @@ const EDITOR_OFF = { ...process.env, GIT_EDITOR: 'true', GIT_MERGE_AUTOEDIT: 'no
 interface Conflict {
   path: string
   hunks: Hunk[]
+  // Git wrote its markers into the file, both sides being there and text, so a file left with none is resolved.
+  isMarked: boolean
 }
+
+// git's own test for a binary file: a NUL byte in its first 8000.
+const BINARY_PROBE = 8000
 
 async function ran(args: string[], env?: Record<string, string | undefined>): Promise<string> {
   const { code, stdout, stderr } = await git(args, env)
@@ -58,17 +63,35 @@ async function merging(): Promise<boolean> {
   return succeeds(['rev-parse', '-q', '--verify', 'MERGE_HEAD'])
 }
 
+// The index stages of each unmerged path, by its path from the top: 2 for ours and 3 for theirs.
+async function unmergedStages(): Promise<Map<string, Set<string>>> {
+  const stages = new Map<string, Set<string>>()
+
+  for (const entry of (await ran(['ls-files', '-u', '-z', '--full-name', '--', ':/'])).split('\0').filter(Boolean)) {
+    const tab = entry.indexOf('\t')
+    const path = entry.slice(tab + 1)
+
+    stages.set(path, (stages.get(path) ?? new Set()).add(entry.slice(0, tab).split(' ')[2] ?? ''))
+  }
+
+  return stages
+}
+
 // Every conflicted file of the repository, wherever gm runs from, its path relative to the current folder.
 async function conflicted(): Promise<Conflict[]> {
   const top = (await ran(['rev-parse', '--show-toplevel'])).trim()
-  const paths = (await ran(['diff', '--name-only', '--no-relative', '--diff-filter=U', '-z'])).split('\0').filter(Boolean).map(path => relative(process.cwd(), join(top, path)))
 
-  return paths.map((path) => {
+  return [...await unmergedStages()].map(([fromTop, stages]) => {
+    const path = relative(process.cwd(), join(top, fromTop))
+
     try {
-      return { path, hunks: conflictHunks(readFileSync(path, 'utf8')) }
+      const bytes = readFileSync(path)
+      const isText = !bytes.subarray(0, BINARY_PROBE).includes(0)
+
+      return { path, hunks: isText ? conflictHunks(bytes.toString('utf8')) : [], isMarked: isText && stages.has('2') && stages.has('3') }
     }
     catch {
-      return { path, hunks: [] }
+      return { path, hunks: [], isMarked: false }
     }
   })
 }
@@ -96,7 +119,7 @@ function files(text: string) {
 // Reports a merge that left conflicts, exit 1.
 function conflictReport(branch: string, into: string, conflicts: Conflict[], json: boolean, squash = false): number {
   if (json) {
-    printJson({ outcome: 'conflict', branch, into, conflicts })
+    printJson({ outcome: 'conflict', branch, into, conflicts: conflicts.map(({ path, hunks }) => ({ path, hunks })) })
 
     return 1
   }
@@ -290,13 +313,21 @@ async function main(argv: string[]): Promise<number> {
       return 0
     }
 
-    const left = (await conflicted()).filter(conflict => conflict.hunks.length > 0)
+    const conflicts = await conflicted()
+    const left = conflicts.filter(conflict => conflict.hunks.length > 0)
+    // A binary file or one deleted on a side holds no markers to remove: only the user can pick its side.
+    const unpicked = conflicts.filter(conflict => conflict.hunks.length === 0 && !conflict.isMarked)
 
-    if (left.length > 0) {
+    if (left.length > 0 || unpicked.length > 0) {
+      const problems = [
+        left.length > 0 ? `conflict markers remain in ${left.map(conflict => conflict.path).join(', ')}` : undefined,
+        unpicked.length > 0 ? `no side is picked yet in ${unpicked.map(conflict => conflict.path).join(', ')}: keep one and git add it, or git rm it` : undefined,
+      ].filter(problem => problem !== undefined)
+
       if (json)
-        printJson({ outcome: 'refused', into, conflicts: left })
+        printJson({ outcome: 'refused', into, conflicts: [...left, ...unpicked].map(({ path, hunks }) => ({ path, hunks })) })
       else
-        console.log([marked('problem', `conflict markers remain in ${left.map(conflict => conflict.path).join(', ')}`, process.stdout), ...conflictLines(left)].join('\n').trimEnd())
+        console.log([...problems.map(problem => marked('problem', problem, process.stdout)), ...conflictLines([...left, ...unpicked])].join('\n').trimEnd())
 
       return 1
     }
@@ -304,7 +335,10 @@ async function main(argv: string[]): Promise<number> {
     const before = (await ran(['rev-parse', 'HEAD'])).trim()
     const incoming = (await ran(['rev-parse', 'MERGE_HEAD'])).trim()
 
-    await ran(['add', '-A', '--', ...(await conflicted()).map(conflict => conflict.path)])
+    // Only the files still conflicted are staged: one the user git-added is staged already, and other edits stay out of the merge.
+    if (conflicts.length > 0)
+      await ran(['add', '-A', '--', ...conflicts.map(conflict => conflict.path)])
+
     await ran(['commit', '--no-edit'], EDITOR_OFF)
 
     return mergedReport(before, incoming.slice(0, 7), into, json)

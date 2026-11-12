@@ -185,6 +185,47 @@ describe('gm', () => {
     expect(git('rev-list', '--parents', '-n', '1', 'HEAD').split(' ')).toHaveLength(3)
   })
 
+  test('--continue refuses a binary conflict, or one deleted on a side, until a side is picked', () => {
+    commit('base.txt', 'base\n')
+    commit('blob.bin', '\0base')
+    commit('gone.txt', 'gone\n')
+    git('checkout', '-q', '-b', 'feature')
+    commit('blob.bin', '\0feature')
+    commit('gone.txt', 'feature edit\n')
+    git('checkout', '-q', 'main')
+    commit('blob.bin', '\0main')
+    git('rm', '-q', 'gone.txt')
+    git('commit', '-q', '-m', 'main drops gone')
+
+    expect(gm('feature').code).toBe(1)
+
+    const refused = gm('--continue')
+
+    expect(refused.code).toBe(1)
+    expect(refused.out).toContain('no side is picked yet in blob.bin, gone.txt')
+    expect(git('rev-parse', '-q', '--verify', 'MERGE_HEAD')).not.toBe('')
+
+    git('add', 'blob.bin')
+    git('rm', '-q', 'gone.txt')
+
+    expect(gm('--continue').code).toBe(0)
+    expect(readFileSync(join(dir, 'blob.bin'), 'utf8')).toBe('\0main')
+  })
+
+  test('--continue commits the resolved conflicts alone, other edits and new files staying out', () => {
+    setup(true, true)
+    commit('other.txt', 'other\n')
+    gm('feature')
+    writeFileSync(join(dir, 'a.txt'), 'one\ntwo\nresolved\nfour\nfive\n')
+    git('add', 'a.txt')
+    writeFileSync(join(dir, 'other.txt'), 'edited\n')
+    writeFileSync(join(dir, 'new.txt'), 'new\n')
+
+    expect(gm('--continue').code).toBe(0)
+    expect(git('show', '--name-only', '--format=', 'HEAD', '--first-parent')).toBe('a.txt\nb.txt')
+    expect(git('status', '--porcelain')).toBe('M other.txt\n?? new.txt')
+  })
+
   test('--dry-run says whether it would conflict and where, touching nothing', () => {
     setup(true)
 
