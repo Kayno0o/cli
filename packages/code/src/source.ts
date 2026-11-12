@@ -38,7 +38,7 @@ const OBJECT_POSITION = /(?:[=(,[:?]|\|\||&&|\breturn|\bdefault)\s*$|\bnew\s+[\w
 // A switch label, whose colon opens a block, not an object.
 const CASE_LABEL = /(?:^|[\s;{])(?:case\b.*|default\s*):\s*$/
 // What a slash follows when it opens a regex literal rather than divides.
-const REGEX_BEFORE = /(?:^|[(,=:[!&|?{};+\-*%<>~^]|\b(?:return|typeof|case|throw|yield|await|in|of))\s*$/
+const REGEX_BEFORE = /(?:^|[(,=:[!&|?{};]|\b(?:return|typeof|case|throw|yield|await|in|of))\s*$/
 // A Rust char literal, so the quote of a lifetime (`'a`) opens nothing.
 const RUST_CHAR = /^'(?:\\(?:u\{[\da-f]{1,6}\}|x[\da-f]{2}|.)|[^'\\])'/i
 const RUST = /\.rs$/i

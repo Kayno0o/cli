@@ -10,7 +10,7 @@ import { resolveConfig } from '../src/config'
 import { copyFromMain, expandEnvValue, rewriteHosts, setEnvValue, settle, whilePaused, writeEnvFiles } from '../src/files'
 import { addWorktrees, currentBranch, isRegistered, unreachableCommits } from '../src/git'
 import { changedFiles } from '../src/list'
-import { worktreeHost, worktreeOf } from '../src/project'
+import { listTasks, worktreeHost, worktreeOf } from '../src/project'
 import { inLine, liveTickets } from '../src/queue'
 import { runPlan, testDatabase } from '../src/run'
 
@@ -451,6 +451,17 @@ describe('worktreeOf', () => {
       expect(() => worktreeOf(project, task)).toThrow('invalid task name')
 
     expect(worktreeOf(project, 'plan-2').task).toBe('plan-2')
+  })
+})
+
+describe('listTasks', () => {
+  test('leaves out a folder no task could be named, an old b--c among them', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wt-tasks-'))
+
+    for (const task of ['plan-2', 'b--c', 'Notes'])
+      mkdirSync(join(dir, task))
+
+    expect(listTasks({ ...project, settings: { ...project.settings, worktrees: dir } })).toEqual(['plan-2'])
   })
 })
 

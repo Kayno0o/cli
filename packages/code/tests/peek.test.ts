@@ -223,6 +223,7 @@ describe('declarations in other languages', () => {
     expect(member('/* a } and a ` */')).toEqual([3])
     expect(member('/*\n  { `\n*/')).toEqual([5])
     expect(member('const half = a / 2 / b')).toEqual([3])
+    expect(definitions('function f(i) {\n  const o = [i++ / 2, { a: 1 / 3 }]\n  return o\n}\n', 'a.ts', 'f')).toEqual([{ path: 'a.ts', from: 1, to: 4 }])
   })
 
   test('reads the bodies of Java enums, records and anonymous classes, and objects after || and &&', () => {
