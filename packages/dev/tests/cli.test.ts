@@ -77,6 +77,12 @@ describe('dev password', () => {
     expect(await Bun.password.verify('hunter2', hash.replace('$2y$', '$2b$'))).toBe(true)
   })
 
+  test('--bcrypt refuses a password over 72 bytes, given or generated', () => {
+    expect(dev(['password', '--bcrypt', 'a'.repeat(72)]).code).toBe(0)
+    expect(dev(['password', '--bcrypt', 'a'.repeat(73)])).toMatchObject({ code: 2, err: expect.stringContaining('at most 72 bytes') })
+    expect(dev(['password', '64', '--bcrypt'])).toMatchObject({ code: 2, err: expect.stringContaining('pick a smaller <length>') })
+  })
+
   test('--bcrypt alone hashes a generated password and prints that one on stderr', async () => {
     const { out, err } = dev(['password', '-b'])
 

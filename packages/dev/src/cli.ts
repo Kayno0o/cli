@@ -11,7 +11,7 @@ import { ALGORITHMS, hashHex, hashStream } from './hash'
 import { monotonic, nextUlid, nextUuidV7, ulid, uuidV4, uuidV7 } from './ids'
 import { publicIp } from './ip'
 import { claimTimes, decodeJwt } from './jwt'
-import { bcryptHash, DEFAULT_LENGTH, FORMATS, generatePassword } from './password'
+import { BCRYPT_MAX_BYTES, bcryptHash, DEFAULT_LENGTH, FORMATS, generatePassword } from './password'
 import { convert } from './ts'
 import { urlParts } from './url'
 
@@ -81,7 +81,7 @@ function printRows(rows: [label: string, value: string][]): void {
 
 const PASSWORD_USAGE = `dev password [length] [format] [-b|--bcrypt [password]] [--copy]: a random password of <length> bytes (default ${DEFAULT_LENGTH}) as hex, base64 (default) or base64url
 
-Printed on stdout, and copied with --copy. With --bcrypt the bcrypt hash (cost 10) prints, of the password given (- asks for it masked on a terminal, or reads stdin, keeping it out of the shell history) or of a generated one, which prints on stderr and is the one --copy copies. The hash has the $2y$ prefix htpasswd -B writes.`
+Printed on stdout, and copied with --copy. With --bcrypt the bcrypt hash (cost 10) prints, of the password given (- asks for it masked on a terminal, or reads stdin, keeping it out of the shell history) or of a generated one, which prints on stderr and is the one --copy copies. The hash has the $2y$ prefix htpasswd -B writes; a password over 72 bytes, all bcrypt reads, is refused.`
 
 const PASSWORD_EXITS: ExitRow[] = [[0, 'it printed the password or hash'], [2, 'a usage error'], [130, 'the prompt was cancelled']]
 
@@ -110,6 +110,9 @@ export async function password(args: string[]): Promise<number> {
   const bcrypt = values.bcrypt === '' ? undefined : values.bcrypt
   const given = bcrypt === '-' ? await secretInput('the password') : bcrypt
   const secret = given ?? generatePassword(bytes, format)
+
+  if (values.bcrypt !== undefined && Buffer.byteLength(secret) > BCRYPT_MAX_BYTES)
+    badUsage(`bcrypt takes a password of at most ${BCRYPT_MAX_BYTES} bytes, this one has ${Buffer.byteLength(secret)}${given === undefined ? `: ${bytes} bytes as ${format} is too long, pick a smaller <length>` : ''}`)
   const hash = values.bcrypt === undefined ? undefined : await bcryptHash(secret)
   const copied = values.copy === true && await copyText(given === undefined ? secret : hash ?? secret)
 
