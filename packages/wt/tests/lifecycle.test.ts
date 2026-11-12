@@ -575,7 +575,8 @@ describe('cloneData of two worktrees of one project', () => {
   test('never has main paused by one while the other copies: the pause and unpause pairs do not interleave', async () => {
     const first = clone('zzclonea')
 
-    for (let tries = 0; tries < 100 && !sandbox.dockerCalls().some(call => call.args.startsWith('pause')); tries++)
+    // The pause call is logged before the fake docker writes its state, so the state itself is what is waited for.
+    for (let tries = 0; tries < 200 && sandbox.read('paused') !== 'main-db\n'; tries++)
       await Bun.sleep(50)
 
     // The first is mid-copy, main paused
