@@ -928,6 +928,29 @@ describe('up and down with no runner', () => {
     expect(rows.find(row => row.includes('wt/other'))).toContain('add ok just now')
   }, 30_000)
 
+  test('open starts the browser on the worktree\'s main URL, main\'s from main\'s checkout', async () => {
+    const { sandbox, wt } = env
+    const browser = join(sandbox.state, 'browser')
+    const opened = async (count: number) => {
+      for (let tries = 0; tries < 50 && sandbox.calls().length < count; tries++)
+        await Bun.sleep(20)
+
+      return sandbox.calls()
+    }
+
+    writeFileSync(browser, '#!/bin/sh\necho "browser $*" >> "$FAKE_DIR/calls.log"\n', { mode: 0o755 })
+    sandbox.env.BROWSER = browser
+    expect((await wt('add', 'planning')).code).toBe(0)
+
+    const before = sandbox.calls().length
+    const run = await wt('open', 'planning')
+
+    expect(run).toMatchObject({ code: 0, out: 'wt: opened https://planning.times.localhost\n' })
+    expect((await wt('open')).code).toBe(0)
+    expect((await opened(before + 2)).slice(before).sort()).toEqual(['browser https://planning.times.localhost', 'browser https://times.localhost'])
+    expect((await wt('open', 'nothing')).err).toContain('no worktree nothing')
+  }, 30_000)
+
   test('logs prints the last --bg job\'s log, noting a later job run in a terminal, and -f follows the compose logs', async () => {
     const { sandbox, wt, dirOf } = env
     const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')

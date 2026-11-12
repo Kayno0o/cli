@@ -193,6 +193,12 @@ Runs a heavy command (a full suite, e2e) once those queued before it, from any s
 
 Exits with the command's code, 2 on a usage error.`
 
+const OPEN_USAGE = `wt open [task] [-p <name>]
+
+Opens the worktree's main URL in the browser ($BROWSER, else the system's opener). The task defaults to the checkout the current directory is in, \`main\` naming main's.
+
+Exits 0 once the browser is started, 1 when there is no such worktree, no URL or no browser, 2 on a usage error.`
+
 const URL_USAGE = `wt url [task] [-p <name>]
 
 Prints the URLs of a worktree.
@@ -394,6 +400,14 @@ process.exitCode = await runCli({
         return guarded(async () => {
           console.log((await import('./shell')).shellWrapper(shell))
         })
+      },
+    },
+    open: {
+      summary: 'open a worktree\'s main URL in the browser',
+      run: async (args) => {
+        const { values, positionals: [task] } = parse(args, OPEN_USAGE, { project: PROJECT_OPTION }, { positionals: ['[task]'], candidates: TASK })
+
+        return guarded(async () => (await printing()).openTask(task, values))
       },
     },
     url: {
