@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-pick",
   "type": "module",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "description": "pick: a themed fuzzy selector, lines on stdin, the chosen one on stdout.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
