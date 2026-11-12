@@ -254,8 +254,19 @@ describe('ev', () => {
     }
   })
 
+  test('set and cp refuse a value no quoting keeps for both Bun and compose, and write nothing', async () => {
+    await write('.env.a', 'RAW="a\\\\$b"\n')
+
+    const set = ev(['set', 'AWKWARD', '.env.a'], 'a"b\'c\\d $HOME\n')
+
+    expect(set).toMatchObject({ code: 1 })
+    expect(set.err).toContain('its value holds $, ", \', \\, which no quoting')
+    expect(ev(['cp', 'RAW', '--from', '.env.a', '--to', '.env.a', '--as', 'COPY']).code).toBe(1)
+    expect(await read('.env.a')).toBe('RAW="a\\\\$b"\n')
+  })
+
   test('set and cp keep an awkward value byte for byte, drop one trailing newline of stdin and leave other lines alone', async () => {
-    const value = 'a"b\'c\\d $HOME #not-a-comment\nsecond line\\n end'
+    const value = 'a"b\\c #not-a-comment\nsecond line\\n end'
     const before = '# keep me\n\nA=1   # trailing\nexport B="two words"\n'
 
     await write('.env.a', before)

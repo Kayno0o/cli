@@ -4,8 +4,7 @@ import process from 'node:process'
 import { $ } from 'bun'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { audit, groupReads, inlineSecrets } from '../src/audit'
-import { parseDotenv } from '../src/dotenv'
-import { composeEntry, envLine, shutOthersOut } from '../src/fix'
+import { composeEntry, shutOthersOut } from '../src/fix'
 
 const CLI = new URL('../src/ev.ts', import.meta.url).pathname
 const VALUE = 'hunter2-never-printed'
@@ -171,24 +170,6 @@ describe('groupReads', () => {
   })
 })
 
-describe('envLine', () => {
-  test('writes a value holding a dollar so that Bun reads it back unchanged', () => {
-    for (const value of ['a$b', 'p$a"s\\s', '$5 off'])
-      expect(parseDotenv(`${envLine('K', value)}\n`).lines[0]?.value).toBe(value)
-
-    expect(envLine('K', 'a$b')).not.toContain('\'')
-  })
-
-  test('declines a value holding a carriage return, quoted or not', () => {
-    expect(envLine('K', 'a\rb')).toBeUndefined()
-    expect(envLine('K', 'a\rb$')).toBeUndefined()
-  })
-
-  test('escapes a dollar and the characters around it as a double-quoted value', () => {
-    expect(envLine('K', 'a$b "c"')).toBe('K="a\\$b \\"c\\""')
-  })
-})
-
 describe('shutOthersOut', () => {
   // As root the chmod would go through and change the real file.
   test.skipIf(process.getuid?.() === 0)('answers false on a file another account owns, leaving it as it was', async () => {
@@ -243,7 +224,7 @@ describe('ev audit --fix', () => {
       '      - DB_PASSWORD=${DB_PASSWORD}',
       '',
     ].join('\n'))
-    expect(await Bun.file(join(dir, '.env')).text()).toBe(`DB_PASSWORD=${VALUE}\nAPI_TOKEN='tok en'\nSESSION_SECRET=sq-secret\nDATABASE_URL=postgres://app:pw1@db/app\nMQTT_TOKEN="abc\\$def"\n`)
+    expect(await Bun.file(join(dir, '.env')).text()).toBe(`DB_PASSWORD=${VALUE}\nAPI_TOKEN="tok en"\nSESSION_SECRET=sq-secret\nDATABASE_URL=postgres://app:pw1@db/app\nMQTT_TOKEN="abc\\$def"\n`)
     expect((await stat(join(dir, '.env'))).mode & 0o777).toBe(0o600)
     expect((await stat(join(dir, 'compose.yml'))).mode & 0o777).toBe(0o640)
     expect(ev(['audit']).code).toBe(0)
@@ -263,13 +244,14 @@ describe('ev audit --fix', () => {
       '      API_TOKEN: same',
       '      DATABASE_URL: postgres://$${USER}:pw1@db/app',
       '      REDIS_URL: redis://${REDIS_USER}:pw2@redis',
+      '      SIGNING_KEY: back\\slash$$x"y',
       '',
     ].join('\n'), 0o644)
 
     const result = ev(['audit', '--fix'])
 
     expect(result.code).toBe(1)
-    expect(result.out).toBe(`.env\n  now unreadable by other accounts\ncompose.yml\n  moved API_TOKEN, DATABASE_URL into .env\n  left DB_PASSWORD in place: .env already sets it to another value\n  left REDIS_URL in place: its value reads another variable\n  ${checked}\n  now unreadable by other accounts\n`)
+    expect(result.out).toBe(`.env\n  now unreadable by other accounts\ncompose.yml\n  moved API_TOKEN, DATABASE_URL into .env\n  left DB_PASSWORD in place: .env already sets it to another value\n  left REDIS_URL in place: its value reads another variable\n  left SIGNING_KEY in place: its value holds $, ", \\, which no quoting lets both Bun's --env-file and compose's env_file read as it is\n  ${checked}\n  now unreadable by other accounts\n`)
     expect(result.out).not.toContain(VALUE)
     expect(await Bun.file(join(dir, '.env')).text()).toBe('KEEP=1\nDB_PASSWORD=other\nAPI_TOKEN=same\nDATABASE_URL="postgres://\\${USER}:pw1@db/app"\n')
     expect(await Bun.file(join(dir, 'compose.yml')).text()).toContain(`DB_PASSWORD: ${VALUE}`)

@@ -20,9 +20,15 @@ const COMMENT_AFTER_QUOTE = /\s*#.*$/
 const ESCAPES: Record<string, string> = { 'n': '\n', 'r': '\r', 't': '\t', '"': '"', '\\': '\\', '$': '$' }
 
 export const LINE_BREAK = /[\r\n]/
-// Bun does not unescape these inside double quotes, so a value holding one is written in single quotes.
-const RAW_ONLY = /["\\]/
-const NEEDS_QUOTES = /[\s#"'\\$`]/
+// What neither Bun's --env-file nor compose's env_file reads specially.
+const PLAIN = /^[^\s#"'\\$`]+$/
+// What single quotes cannot hold for both: Bun expands `$` in them, compose reads `\'` as a quote, and a carriage return would be written raw.
+const NOT_SINGLE = /['$\r]|\\$/
+// Both read \n, \r and \$ in double quotes, but each reads \", \\ and the other escapes its own way.
+const NOT_DOUBLE = /["\\]/
+// A bare value: Bun ends it at any `#`, both expand `$`, trim it and take a leading quote for an opening one.
+const NOT_BARE = /[#$\r\n]|^[\s"'`]|\s$/
+const UNQUOTABLE = [['$', '$'], ['"', '"'], ['\'', '\''], ['\\', '\\'], ['#', '#'], ['\n', 'a line break'], ['\r', 'a carriage return']] as const
 
 // Finds the closing quote, skipping backslash escapes inside double quotes. Returns -1 when the value continues on the next line.
 function closingQuote(text: string, quote: string): number {
@@ -127,20 +133,26 @@ export function entries(file: Dotenv): Map<string, string> {
   return map
 }
 
-// A value written between double quotes, each `$` escaped because Bun expands it in every quoting.
-export function escapeDouble(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\r', '\\r').replaceAll('\n', '\\n').replaceAll('$', '\\$')
-}
-
-export function formatAssignment(key: string, value: string): string {
-  if (value === '' || !NEEDS_QUOTES.test(value))
+// The assignment Bun's --env-file and compose's env_file both read back as the value: bare when nothing in it is special, else double-quoted, single-quoted or bare, the first form that holds it for both; undefined when none does.
+export function formatAssignment(key: string, value: string): string | undefined {
+  if (value === '' || PLAIN.test(value))
     return `${key}=${value}`
 
-  // Bun expands a bare `$` in every quoting, so each one is written as `\$`.
-  if (RAW_ONLY.test(value) && !value.includes('\'') && !LINE_BREAK.test(value))
-    return `${key}='${value.replaceAll('$', '\\$')}'`
+  if (!NOT_DOUBLE.test(value))
+    return `${key}="${value.replaceAll('\r', '\\r').replaceAll('\n', '\\n').replaceAll('$', '\\$')}"`
 
-  return `${key}="${escapeDouble(value)}"`
+  if (!NOT_SINGLE.test(value))
+    return `${key}='${value}'`
+
+  return NOT_BARE.test(value) ? undefined : `${key}=${value}`
+}
+
+// Why formatAssignment finds no form for the value: the characters in it that clash.
+export function unquotable(value: string): string {
+  const held = UNQUOTABLE.filter(([char]) => value.includes(char)).map(([, name]) => name)
+  const spaced = value.trim() === value ? [] : ['whitespace at an end']
+
+  return `its value holds ${[...held, ...spaced].join(', ')}, which no quoting lets both Bun's --env-file and compose's env_file read as it is`
 }
 
 // The inline comment after an assignment's value, on its last line.
@@ -160,6 +172,16 @@ function inlineComment(raw: string): string {
   return end === -1 ? '' : COMMENT_AFTER_QUOTE.exec(last.slice(end + 1))?.[0] ?? ''
 }
 
+// The callers refuse an unquotable value first, so reaching this with one is a bug.
+function assignment(key: string, value: string): string {
+  const line = formatAssignment(key, value)
+
+  if (line === undefined)
+    throw new Error(unquotable(value))
+
+  return line
+}
+
 // Replaces the last assignment of a key keeping its `export`, inline comment and line ending, or appends before the trailing newline in the file's line ending. `raw` is the whole line to store when given.
 export function setLine(file: Dotenv, key: string, value: string, raw?: string): void {
   const index = file.lines.findLastIndex(line => line.key === key)
@@ -168,7 +190,7 @@ export function setLine(file: Dotenv, key: string, value: string, raw?: string):
   if (existing !== undefined) {
     const exported = EXPORTED.test(existing.raw) ? 'export ' : ''
     const ending = existing.raw.endsWith('\r') ? '\r' : ''
-    const line = raw?.replace(CARRIAGE_RETURN, '') ?? `${exported}${formatAssignment(key, value)}${inlineComment(existing.raw)}`
+    const line = raw?.replace(CARRIAGE_RETURN, '') ?? `${exported}${assignment(key, value)}${inlineComment(existing.raw)}`
 
     file.lines[index] = { raw: `${line}${ending}`, key, value }
 
@@ -176,7 +198,7 @@ export function setLine(file: Dotenv, key: string, value: string, raw?: string):
   }
 
   const ending = file.lines.some(line => line.raw.endsWith('\r')) ? '\r' : ''
-  const line = { raw: `${raw?.replace(CARRIAGE_RETURN, '') ?? formatAssignment(key, value)}${ending}`, key, value }
+  const line = { raw: `${raw?.replace(CARRIAGE_RETURN, '') ?? assignment(key, value)}${ending}`, key, value }
   const last = file.lines.at(-1)
 
   if (last === undefined) {

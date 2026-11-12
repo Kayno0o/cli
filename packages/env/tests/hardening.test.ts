@@ -170,7 +170,9 @@ describe('linear time', () => {
 
 describe('dotenv writes', () => {
   test('escapes a dollar sign so Bun does not expand it, and reads it back', () => {
-    for (const value of ['pa$word', 'a $b "c" d', 'it\'s $5', 'back\\slash $x', 'two\nlines $y']) {
+    expect(() => setLine(parseDotenv(''), 'PW', 'back\\slash $x')).toThrow('its value holds $, \\')
+
+    for (const value of ['pa$word', 'a $b c d', 'it\'s $5', 'two\nlines $y']) {
       const file = parseDotenv('')
 
       setLine(file, 'PW', value)

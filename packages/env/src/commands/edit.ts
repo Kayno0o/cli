@@ -1,7 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import { badUsage, fail, isInteractive, parse, readInput } from '@kaynooo/cli-kit'
 import { input } from '@kaynooo/cli-kit/prompt'
-import { entries, lastLine, removeKey, setLine } from '../dotenv'
+import { entries, formatAssignment, lastLine, removeKey, setLine, unquotable } from '../dotenv'
 import { assertDotenvName, loadKnown, readEnv, withLocks, writeEnv } from '../files'
 import { maskValue } from '../mask'
 
@@ -13,7 +13,7 @@ const QUIET = { quiet: { type: 'boolean', short: 'q', description: 'print nothin
 
 const setUsage = `ev set KEY [file] [--quiet]
 
-Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; on a terminal with nothing piped it is asked for, masked as it is typed. --empty sets it to an empty value.`
+Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; on a terminal with nothing piped it is asked for, masked as it is typed. --empty sets it to an empty value. The value is written in the quoting Bun's --env-file and compose's env_file both read back unchanged, and refused when none does, as for one holding both a dollar sign and a backslash.`
 
 const SET_EXITS: ExitRow[] = [[0, 'it wrote the key'], [1, 'it could not'], [2, 'a usage error'], [130, 'the prompt was cancelled']]
 
@@ -27,13 +27,13 @@ const mvUsage = `ev mv KEY --from <file> --to <file> [--quiet]
 
 Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force.`
 
-const MV_EXITS: ExitRow[] = [[0, 'it moved the key'], [1, 'the source lacks it or the target already sets it'], [2, 'a usage error']]
+const MV_EXITS: ExitRow[] = [[0, 'it moved the key'], [1, 'the source lacks it, the target already sets it, or its value cannot be rewritten'], [2, 'a usage error']]
 
 const cpUsage = `ev cp KEY --from <file> --to <file> [--as NEWKEY] [--quiet]
 
 Copies KEY's value from one file to another without printing it, replacing the key's line in the target in place or appending one, and prints the masked result as ev set does. --as stores the copy under another key.`
 
-const CP_EXITS: ExitRow[] = [[0, 'it copied the key'], [1, 'the source lacks it'], [2, 'a usage error']]
+const CP_EXITS: ExitRow[] = [[0, 'it copied the key'], [1, 'the source lacks it or its value cannot be rewritten'], [2, 'a usage error']]
 
 async function readValue(key: string, from: string | undefined): Promise<string> {
   const value = from === undefined && isInteractive()
@@ -78,6 +78,9 @@ export async function set(args: string[]): Promise<number> {
   checkKey(key)
 
   const value = parsed.values.empty === true ? '' : await readValue(key, parsed.values.file)
+
+  if (formatAssignment(key, value) === undefined)
+    fail(`${unquotable(value)}, nothing was written`, 1)
 
   const file = await withLocks([target], async () => {
     const current = await readOrEmpty(target)
@@ -140,8 +143,12 @@ async function transfer(key: string, from: string, to: string, newKey: string | 
     fail(`${to} already sets ${name}, --force replaces it`, 1)
 
   const value = line.value ?? ''
+  const raw = newKey === undefined && !entries(target).has(name) ? line.raw : undefined
 
-  setLine(target, name, value, newKey === undefined && !entries(target).has(name) ? line.raw : undefined)
+  if (raw === undefined && formatAssignment(name, value) === undefined)
+    fail(`${key} in ${from}: ${unquotable(value)}, nothing was written`, 1)
+
+  setLine(target, name, value, raw)
   await writeEnv(to, target)
 
   return { source, target, value, name }

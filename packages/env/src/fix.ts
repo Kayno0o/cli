@@ -2,7 +2,7 @@ import { chmod, chown, lstat, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { compose } from '@kaynooo/cli-kit'
 import { isInlineSecret } from './audit'
-import { entries, escapeDouble, LINE_BREAK, parseDotenv, serializeDotenv, setLine } from './dotenv'
+import { entries, formatAssignment, parseDotenv, serializeDotenv, setLine, unquotable } from './dotenv'
 import { writeAtomic } from './files'
 
 export interface Left {
@@ -29,7 +29,6 @@ const LIST_ENTRY = /^(\s*-[ \t]*)(["']?)([A-Z0-9_]+)=(.*)$/
 const TRAILING = /^\s*(?:#.*)?$/
 const PLAIN_COMMENT = /\s+#.*$/
 const NOT_PLAIN = /^[|>&*![{]/
-const ENV_PLAIN = /^[^\s#"'\\$`]*$/
 
 // The inside of a YAML quoted scalar starting after its opening quote: double quotes take only \\ and \" escapes here.
 function quoted(text: string, quote: string): { value: string, after: string } | undefined {
@@ -98,20 +97,6 @@ export function composeEntry(line: string): Entry | undefined {
     return { key, value: rest, unmovable: 'its value is written in a form ev does not rewrite' }
 
   return { key, value: scalar.value, swap: ref => `${dash}${quote}${key}=${ref}${quote}${scalar.after}` }
-}
-
-// The .env line holding a value compose and Bun both read literally: plain when nothing needs quoting, single-quoted otherwise, double-quoted with each `$` escaped when it holds one since Bun expands it even in single quotes.
-export function envLine(key: string, value: string): string | undefined {
-  if (ENV_PLAIN.test(value))
-    return `${key}=${value}`
-
-  if (LINE_BREAK.test(value))
-    return undefined
-
-  if (value.includes('$'))
-    return `${key}="${escapeDouble(value)}"`
-
-  return value.includes('\'') ? undefined : `${key}='${value}'`
 }
 
 // A link, dangling or not: writing through it would change a file elsewhere.
@@ -201,10 +186,10 @@ export async function fixCompose(path: string, group = false): Promise<ComposeFi
     const existing = known.get(key)
 
     if (existing === undefined) {
-      const raw = envLine(key, value)
+      const raw = formatAssignment(key, value)
 
       if (raw === undefined) {
-        fix.left.push({ key, why: 'its value holds a quote or line break a .env cannot keep literal' })
+        fix.left.push({ key, why: unquotable(value) })
 
         return line
       }
