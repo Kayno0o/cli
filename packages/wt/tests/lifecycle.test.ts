@@ -146,6 +146,25 @@ describe('addTask', () => {
     expect(existsSync(dirOf('planning'))).toBe(false)
   })
 
+  test.skipIf(Bun.which('mkcert', { PATH: '/usr/bin:/bin' }) !== null)('refuses before making anything when a program the project needs is missing, and doctor says so', async () => {
+    const { sandbox, wt, dirOf } = env
+
+    rmSync(join(sandbox.home, '..', 'bin', 'mkcert'))
+
+    const run = await wt('add', 'planning')
+
+    expect(run.code).toBe(1)
+    expect(run.err).toContain('mkcert is not on PATH, https://github.com/FiloSottile/mkcert, then `mkcert -install`')
+    expect(existsSync(dirOf('planning'))).toBe(false)
+    expect(sandbox.dockerCalls().filter(call => !call.args.startsWith('compose version'))).toEqual([])
+
+    const doctor = await wt('doctor')
+
+    expect(doctor.code).toBe(1)
+    expect(doctor.out).toMatch(/missing\s+mkcert\s+https:\/\/github\.com\/FiloSottile\/mkcert.*\(times\)/)
+    expect(doctor.out).toMatch(/ok\s+git\s+\/usr\/bin\/git/)
+  })
+
   test('reads main and the worktree through compose with the worktree\'s own project name, and the tidy env after', async () => {
     const { sandbox, wt, root, dirOf } = env
 

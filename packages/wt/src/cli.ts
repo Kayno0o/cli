@@ -248,6 +248,12 @@ Drafts a manifest for the project checked out in a directory, the current one by
 
 Exits 0 once it is written or printed, 1 when the folder holds no compose project, 2 on a usage error.`
 
+const DOCTOR_USAGE = `wt doctor
+
+Lists each program wt runs: where it is on PATH, or how to get it, and what wt needs it for.
+
+Exits 0 when every program the projects need is there, 1 when one is missing, 2 on a usage error.`
+
 const RUN_USAGE = `wt run <task> [-p <name>] -- <command>...
 
 Runs a command of a worktree in a throwaway container of its run service, against a test database of its own, provisioned on first use.
@@ -425,6 +431,14 @@ process.exitCode = await runCli({
         }, { positionals: ['[dir]'] })
 
         return guarded(async () => (await import('./init')).initProject(dir ?? process.cwd(), values))
+      },
+    },
+    doctor: {
+      summary: 'list the programs wt runs, where each is or how to get it',
+      run: async (args) => {
+        parse(args, DOCTOR_USAGE, {})
+
+        return guarded(async () => (await import('./tools')).doctor(await loadProjects()))
       },
     },
     run: {

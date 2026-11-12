@@ -23,6 +23,7 @@ bun install -g @kaynooo/cli-wt
 | `wt cd [task]` | goes to a worktree, or main, through the shell function of `wt shell` |
 | `wt path [task]` | the directory of a worktree, or of main |
 | `wt url [task]` / `wt tasks` | its URLs; the worktree names of the project, one per line |
+| `wt doctor` | lists the programs wt runs (git, docker, compose, mkcert, devproxy, notify-send), where each is or how to get it; `wt add` refuses before changing anything when one it needs is missing |
 | `wt init [dir]` | drafts a manifest from the compose project in `dir` into the manifests folder (`--print` to stdout) |
 | `wt run <task> -- <cmd>` | runs a command in a throwaway container of the manifest's `run.service`, against a test database of the worktree's own |
 | `wt heavy -- <cmd>` | runs a command once the heavy ones queued before it, from any session, are done |

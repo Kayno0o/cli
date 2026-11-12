@@ -11,6 +11,7 @@ import { urlsOf } from './routes'
 import { forgetTestDatabases, runsDir } from './run'
 import { afterRemove, hasContainers, stackDown, stackUp } from './stack'
 import { syncWorktree } from './sync'
+import { assertTools } from './tools'
 
 export interface GlobalOptions {
   project?: string
@@ -50,6 +51,8 @@ export async function addTask(task: string, branch: string | undefined, options:
   const { project } = await locate(process.cwd(), options.project)
   const worktree = worktreeOf(project, task)
   const checkout = branch ?? `wt/${task}`
+
+  await assertTools(project)
 
   const starts = await addWorktrees(worktree, checkout, options.from)
 
