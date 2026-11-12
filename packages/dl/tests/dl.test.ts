@@ -675,6 +675,36 @@ describe('releases', () => {
     expect(taken.out).toContain(`${sha256('#!/bin/sh\necho v1.0.0\n')} verified`)
   })
 
+  test('the forge\'s sha256 checks an asset its checksums file leaves out, and a release with neither installs with a warning', async () => {
+    const assets = builds('v1.0.0')
+
+    assets['checksums.txt'] = `${sha256('other arch\n')}  tool-v1.0.0-linux-${OTHER_ARCH}\n`
+    releases = [{ tag: 'v1.0.0', published: ago(20), digest: true, assets }]
+
+    const digested = await dl(['gh:o/tool'], home(), forges())
+
+    expect(digested.code).toBe(0)
+    expect(digested.out).toContain(`${sha256('#!/bin/sh\necho v1.0.0\n')} verified`)
+
+    delete assets['checksums.txt']
+    releases = [{ tag: 'v1.0.0', published: ago(20), assets }]
+
+    const unchecked = await dl(['fj:o/tool'], home(), forges())
+
+    expect(unchecked.code).toBe(0)
+    expect(unchecked.err).toContain(`fj:o/tool v1.0.0 ships no checksums file and its forge gives no sha256 of tool-v1.0.0-linux-${ARCH}, so nothing checked it`)
+  })
+
+  test('--asset takes a script the build filter leaves out, and --key with a pin of the user\'s needs --sig', async () => {
+    releases = [{ tag: 'v1.0.0', published: ago(20), assets: builds('v1.0.0', { 'install.sh': 'echo hi\n' }) }]
+
+    const script = await dl(['gh:o/tool', '--asset', 'install.sh'], home(), forges())
+
+    expect(script.code).toBe(0)
+    expect(script.out).toContain('install.sh')
+    expect(await dl(['gh:o/tool', '--sha256', '0'.repeat(64), '--key', 'A'.repeat(40)], home(), forges())).toMatchObject({ code: 2, err: expect.stringContaining('--key alone checks the release\'s own checksums file') })
+  })
+
   test('a mismatched checksum, a tie between builds or no release two weeks old fails; --asset breaks the tie', async () => {
     const dir = home()
     const tampered = builds('v1.0.0')
@@ -717,6 +747,14 @@ describe('releases', () => {
 
     releases.unshift({ tag: 'v1.3.0', published: ago(1), assets: builds('v1.3.0') })
     expect((await dl(['gh:o/tool', '--bin', 'tool', '--force', '--fresh'], dir, forges())).code).toBe(0)
+    expect(await dl(['outdated'], dir, forges())).toMatchObject({ code: 0, out: 'all 1 current\n' })
+  })
+
+  test('an install pinned with @tag stays current while newer releases come out', async () => {
+    const dir = home()
+
+    releases = [{ tag: 'v1.2.0', published: ago(20), assets: builds('v1.2.0') }, { tag: 'v1.1.0', published: ago(30), assets: builds('v1.1.0') }]
+    expect((await dl(['gh:o/tool@v1.1.0', '--bin', 'tool'], dir, forges())).code).toBe(0)
     expect(await dl(['outdated'], dir, forges())).toMatchObject({ code: 0, out: 'all 1 current\n' })
   })
 })

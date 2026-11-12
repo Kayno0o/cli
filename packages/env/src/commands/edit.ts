@@ -10,6 +10,8 @@ import { setStructured, unsetStructured } from '../structured-write'
 const DEFAULT_FILE = '.env'
 const TRAILING_NEWLINE = /\r?\n$/
 const KEY_NAME = /^[A-Z_][\w.-]*$/i
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001F]/
 
 const QUIET = { quiet: { type: 'boolean', short: 'q', description: 'print nothing on success' } } as const
 
@@ -52,8 +54,15 @@ async function readValue(key: string, from: string | undefined): Promise<string>
   return stripped
 }
 
-// A key that is not a plain name could carry a line break or an `=` and write more than one line.
-function checkKey(key: string): void {
+// A key that is not a plain name could carry a line break or an `=` and write more than one line. A JSON, YAML or TOML file quotes its keys, so a dotted path there only needs each part named.
+function checkKey(key: string, target: string): void {
+  if (structuredFormat(target) !== undefined) {
+    if (key.split('.').includes('') || CONTROL.test(key))
+      badUsage(`${JSON.stringify(key)} is not a path of keys: names joined by dots, none empty`)
+
+    return
+  }
+
   if (!KEY_NAME.test(key))
     badUsage(`${JSON.stringify(key)} is not a valid key: letters, digits, _, . and - only, not starting with a digit`)
 }
@@ -85,7 +94,7 @@ export async function set(args: string[]): Promise<number> {
   if (parsed.values.empty === true && parsed.values.file !== undefined)
     fail('--empty and -F exclude each other')
 
-  checkKey(key)
+  checkKey(key, target)
 
   const value = parsed.values.empty === true ? '' : await readValue(key, parsed.values.file)
 
@@ -130,6 +139,9 @@ export async function unset(args: string[]): Promise<number> {
   if (key === undefined)
     fail(`missing KEY\n\n${unsetUsage}`)
 
+  if (structuredFormat(target) !== undefined)
+    checkKey(key, target)
+
   await withLocks([target], async () => {
     if (structuredFormat(target) !== undefined) {
       await writeAtomic(target, unsetStructured(target, await readStructured(target), key) ?? fail(`${key} is not set in ${target}`, 1))
@@ -153,10 +165,10 @@ export async function unset(args: string[]): Promise<number> {
 
 // The write path of mv and cp: puts KEY's line from `from` into `to`, as `newKey` when given, and returns both files for the caller to finish.
 async function transfer(key: string, from: string, to: string, newKey: string | undefined, replace: boolean) {
-  checkKey(key)
+  checkKey(key, to)
 
   if (newKey !== undefined)
-    checkKey(newKey)
+    checkKey(newKey, to)
 
   if (from === to && newKey === undefined)
     fail('--from and --to are the same file')

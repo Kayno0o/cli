@@ -213,6 +213,7 @@ describe('ev', () => {
     expect(ev(['set', 'b.d', 'c.yaml'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('sits in a flow mapping') })
     expect(ev(['set', 'a.b', 'c.json'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('c.json: a holds a value, not keys') })
     expect(ev(['set', 'a', 'c.json5'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('ev reads JSON5 but does not write it') })
+    expect(ev(['set', 'a..b', 'c.json'], 'x')).toMatchObject({ code: 2, err: expect.stringContaining('is not a path of keys') })
     expect(await readFile(join(dir, 'c.json'), 'utf8')).toBe(json)
     expect(await readFile(join(dir, 'c.yaml'), 'utf8')).toBe(yaml)
   })

@@ -15,7 +15,7 @@ export function structuredFormat(path: string): string | undefined {
   return PARSERS[extname(path).toLowerCase()]?.[0]
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null)
     return false
 

@@ -9,14 +9,14 @@ import { tmpdir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { archiveSuffix, extractArchive } from '@kaynooo/cli-arc/src/extract.ts'
-import { badUsage, escapeControls, fail, formatAge, formatSize, jsonOption, paint, parse, parseSize, printJson, table, truncate } from '@kaynooo/cli-kit'
+import { badUsage, escapeControls, fail, formatAge, formatSize, jsonOption, paint, parse, parseSize, printJson, table, truncate, warn } from '@kaynooo/cli-kit'
 import { download } from './download'
 import { binDir, binDirOnPath, installBinary, pickBinary } from './install'
 import { assertReleaseOptions, parseSpec, resolveRelease } from './release'
 import { summarize } from './script'
 import { readKey, verifySignature } from './signature'
 import { lastSeen, record, remember } from './state'
-import { fetchSums, sumIn } from './sums'
+import { fetchSums, pathUnder, sumFor, sumIn } from './sums'
 
 const USAGE = `dl [options] <url> [-- <script args>]: downloads a file into a new folder of its own, checks its sha256, then extracts it, installs it as a command or runs it as a script
 
@@ -113,6 +113,9 @@ export async function get(args: string[]): Promise<number> {
   if (spec === undefined ? (values.sig === undefined) !== (values.key === undefined) : values.sig !== undefined && values.key === undefined)
     badUsage(spec === undefined ? '--sig and --key go together' : '--sig goes with --key')
 
+  if (spec !== undefined && values.key !== undefined && values.sig === undefined && (values.sha256 !== undefined || values.sums !== undefined))
+    badUsage('--key alone checks the release\'s own checksums file, which --sha256 and --sums replace: give --sig with it')
+
   if (values.sig !== undefined && (!URL.canParse(values.sig) || !['http:', 'https:'].includes(new URL(values.sig).protocol)))
     badUsage(`--sig takes an http or https URL, not '${values.sig}'`)
 
@@ -123,7 +126,7 @@ export async function get(args: string[]): Promise<number> {
   // What the user gave wins over what the release ships
   const pinned = values.sha256 !== undefined || values.sums !== undefined
   const sums = values.sums ?? (pinned ? undefined : release?.sums)
-  const sha256 = values.sha256 ?? (pinned ? undefined : release?.sha256)
+  const digest = pinned ? undefined : release?.digest
   const sig = values.sig ?? release?.sig
   const created = values.output === undefined
   const dir = created ? mkdtempSync(join(tmpdir(), 'dl-')) : resolve(values.output!)
@@ -131,7 +134,11 @@ export async function get(args: string[]): Promise<number> {
   mkdirSync(dir, { recursive: true })
 
   const expectsFile = release !== undefined || values.exec === true || values.bin !== undefined || values.extract === true
-  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: sha256?.toLowerCase(), sums, sig, key })
+  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: values.sha256?.toLowerCase(), sums, digest, sig, key })
+
+  if (release !== undefined && !verified)
+    warn(`${release.spec} ${release.tag} ships no checksums file and its forge gives no sha256 of ${release.asset.name}, so nothing checked it`)
+
   const last = lastSeen(url)
   const report: Report = { path: file.path, size: file.size, url: file.url, type: file.type, sha256: file.sha256, verified, ...signature === undefined ? {} : { signature }, ...release === undefined ? {} : { release: releaseLine(release) }, seen: 'first download' }
 
@@ -180,7 +187,7 @@ function releaseLine(release: Resolved): string {
 function fromRelease(release: Resolved, values: { key?: string, asset?: string }): Partial<LedgerEntry> {
   const key = values.key !== undefined && existsSync(values.key) ? resolve(values.key) : values.key
 
-  return { release: release.spec, version: release.tag, released: release.published, ...values.asset === undefined ? {} : { asset: values.asset }, ...key === undefined ? {} : { key } }
+  return { release: release.pinned ?? release.spec, version: release.tag, released: release.published, ...values.asset === undefined ? {} : { asset: values.asset }, ...key === undefined ? {} : { key } }
 }
 
 // How a download was checked and what tells it changed, for the ledger: `dl update` checks the next one the same way.
@@ -196,8 +203,18 @@ interface Checks {
   expectsFile: boolean
   sha256: string | undefined
   sums: string | undefined
+  // The sha256 a release's forge gives, checking the file when no checksums file does.
+  digest: string | undefined
   sig: string | undefined
   key: Key | undefined
+}
+
+// The sha256 the checksums file gives the download. A release's may leave its asset out, and the forge's sha256 then checks it, unless a signature vouches for that checksums file alone.
+function listedSum(sums: Uint8Array | undefined, checks: Checks, url: string, name: string, signed: boolean): string | undefined {
+  if (sums === undefined)
+    return undefined
+
+  return checks.digest !== undefined && !signed ? sumFor(new TextDecoder().decode(sums), name, pathUnder(checks.sums!, url)) : sumIn(sums, checks.sums!, url, name)
 }
 
 // Downloads `url` and checks it is no HTML page where a file was expected, has the sha256 asked and carries the signature asked; on a failure the file goes, and the folder too when dl made it.
@@ -213,7 +230,7 @@ async function fetchChecked(url: string, dir: string, created: boolean, checks: 
 
     const sums = checks.sums === undefined ? undefined : await fetchSums(checks.sums)
     const signed = checks.sig === undefined || checks.key === undefined ? undefined : await verifySignature(sums ?? file.path, checks.sig, checks.key)
-    const expected = checks.sha256 ?? (sums === undefined ? undefined : sumIn(sums, checks.sums!, url, file.name))
+    const expected = checks.sha256 ?? listedSum(sums, checks, url, file.name, signed !== undefined) ?? checks.digest
 
     if (expected !== undefined && expected !== file.sha256)
       fail(`sha256 mismatch for ${file.name}: expected ${expected}, got ${file.sha256}; the file was deleted`, 1)

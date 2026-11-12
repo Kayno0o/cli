@@ -165,7 +165,7 @@ export async function update(args: string[]): Promise<number> {
 
   for (const { entry, freshness } of checked) {
     if (freshness.state === 'unreachable') {
-      printError('dl update', `${entry.name}: ${entry.url} ${freshness.error}`)
+      printError('dl update', `${entry.name}: ${entry.release ?? entry.url} ${freshness.error}`)
       code = 1
     }
   }

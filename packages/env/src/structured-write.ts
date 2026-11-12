@@ -1,10 +1,11 @@
-import type { ParseError } from 'jsonc-parser'
+import type { Edit, Node as JsonNode, ParseError } from 'jsonc-parser'
+import type { Document, Pair } from 'yaml'
 // Kept out of structured.ts: the editors are bundled into ev's dist, and the modules other packages import from src must not need them.
 import { parse as parseToml, patch as patchToml } from '@decimalturn/toml-patch'
 import { fail } from '@kaynooo/cli-kit'
-import { applyEdits, createScanner, findNodeAtLocation, modify, parse as parseJsonc, parseTree } from 'jsonc-parser'
-import { isMap, isScalar, parseDocument, stringify } from 'yaml'
-import { parseStructured, parseStructuredValue, structuredFormat } from './structured'
+import { applyEdits, createScanner, findNodeAtLocation, modify, parseTree } from 'jsonc-parser'
+import { isAlias, isMap, isScalar, isSeq, parseDocument, stringify } from 'yaml'
+import { isRecord, parseStructured, parseStructuredValue, structuredFormat } from './structured'
 
 type Path = (string | number)[]
 
@@ -12,15 +13,17 @@ interface Located { path: Path, current: unknown }
 
 const INDEX = /^\d+$/
 const INDENT = /^([ \t]+)\S/m
+const INDENT_ONLY = /^[ \t]*/
 const BLANK = /^[ \t]*$/
+const CR = /\r$/
+// What may follow a JSON value on its line, so a property added after it goes on the next line and leaves a comment there in place.
+const LINE_TAIL = /^[ \t]*(?:\/\/.*|\/\*.*\*\/[ \t]*)?\r?$/
+const SPACED_COLON = /"[ \t]*:[ \t]/
+const SPACED_COMMA = /,[ \t]/
 // jsonc-parser's SyntaxKind, a const enum its types declare and modules cannot import.
 const LINE_COMMENT = 12
 const BLOCK_COMMENT = 13
 const END = 17
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date)
-}
 
 // The path of `key` in the parsed file: a key holding dots is matched whole before it is split, and a list takes an item's index. A key not there yet is created under the deepest one that is.
 function locate(name: string, parsed: unknown, key: string): Located {
@@ -80,7 +83,22 @@ function unchanged(name: string, format: string): never {
   return fail(`${name}: the ${format} editor would not give this file back as it is, so nothing was written`, 1, 'edit it by hand')
 }
 
-// The comments of a JSON text with where each starts, those inside `[from, to)` left out.
+function lineStart(text: string, at: number): number {
+  return text.lastIndexOf('\n', at - 1) + 1
+}
+
+// The offset after the line holding `at`, its line break included.
+function lineEnd(text: string, at: number): number {
+  const end = text.indexOf('\n', at)
+
+  return end === -1 ? text.length : end + 1
+}
+
+function eolOf(text: string): string {
+  return text.includes('\r\n') ? '\r\n' : '\n'
+}
+
+// The comments of a JSON text, those starting inside `[from, to)` left out.
 function jsonComments(text: string, from = 0, to = 0): string[] {
   const scanner = createScanner(text, false)
   const found: string[] = []
@@ -95,19 +113,64 @@ function jsonComments(text: string, from = 0, to = 0): string[] {
   return found
 }
 
-// jsonc-parser edits the span of the key alone; removing one also takes the text up to the previous value, so a comment there would go with it unless refused.
+// A property added to a JSON object as its siblings are written: on a line of its own at their indent in a multi-line object, inline with their spacing in a one-line one, the rest of the file untouched.
+function jsonInsert(text: string, tree: JsonNode, path: Path, value: unknown): Edit[] {
+  let depth = path.length - 1
+  let parent = findNodeAtLocation(tree, path.slice(0, depth))
+
+  while (parent?.type !== 'object' && depth > 0)
+    parent = findNodeAtLocation(tree, path.slice(0, --depth))
+
+  if (parent?.type !== 'object')
+    return fail(`the file holds no object to add ${path.join('.')} to`, 1)
+
+  const added = path.slice(depth + 1).reduceRight<unknown>((inner, key) => ({ [key]: inner }), value)
+  const own = text.slice(parent.offset, parent.offset + parent.length)
+  const colon = SPACED_COLON.test(text) ? ': ' : ':'
+  const last = parent.children?.at(-1)
+
+  if (!own.includes('\n')) {
+    const property = `${JSON.stringify(path[depth])}${colon}${JSON.stringify(added)}`
+
+    return last === undefined
+      ? [{ offset: parent.offset + 1, length: parent.length - 2, content: property }]
+      : [{ offset: last.offset + last.length, length: 0, content: `${SPACED_COMMA.test(own) ? ', ' : ','}${property}` }]
+  }
+
+  const eol = eolOf(text)
+  const unit = INDENT.exec(text)?.[1] ?? '  '
+  const outer = INDENT_ONLY.exec(text.slice(lineStart(text, parent.offset), parent.offset))?.[0] ?? ''
+  const indent = last === undefined ? `${outer}${unit}` : text.slice(lineStart(text, last.offset), last.offset)
+  const property = `${indent}${JSON.stringify(path[depth])}${colon}${JSON.stringify(added, null, unit).replaceAll('\n', `${eol}${indent}`)}`
+
+  if (last === undefined)
+    return [{ offset: parent.offset + 1, length: parent.length - 2, content: `${eol}${property}${eol}${outer}` }]
+
+  // The comma goes right after the last value, or a trailing one is kept, and the new line goes after a comment ending that line.
+  const rest = text.slice(last.offset + last.length)
+  const trailing = rest.trimStart().startsWith(',')
+  const end = last.offset + last.length + (trailing ? rest.length - rest.trimStart().length + 1 : 0)
+  const lineBreak = text.indexOf('\n', end)
+  const tail = lineBreak === -1 ? undefined : text.slice(end, lineBreak)
+  const after = tail !== undefined && LINE_TAIL.test(tail) ? end + tail.replace(CR, '').length : end
+  const comma = trailing ? '' : ','
+
+  return after === end
+    ? [{ offset: end, length: 0, content: `${comma}${eol}${property}` }]
+    : [{ offset: end, length: 0, content: comma }, { offset: after, length: 0, content: `${eol}${property}` }]
+}
+
+// jsonc-parser replaces or removes the key's span alone when no formatting is asked, as its formatter would redo the lines around it; an added key is written by jsonInsert. Removing one also takes the text up to the previous value, so a comment there would go with it unless refused.
 function editJson(name: string, text: string, path: Path, value: unknown): string {
   const errors: ParseError[] = []
+  const tree = parseTree(text, errors, { allowTrailingComma: true })
 
-  parseJsonc(text, errors, { allowTrailingComma: true })
+  if (errors.length > 0 || tree === undefined)
+    return unchanged(name, 'JSON')
 
-  if (errors.length > 0)
-    unchanged(name, 'JSON')
-
-  const indent = INDENT.exec(text)?.[1] ?? '  '
-  const formattingOptions = { insertSpaces: !indent.includes('\t'), tabSize: indent.includes('\t') ? 1 : indent.length, eol: text.includes('\r\n') ? '\r\n' : '\n' }
-  const edited = applyEdits(text, modify(text, path, value, { formattingOptions }))
-  const property = value === undefined ? findNodeAtLocation(parseTree(text)!, path)?.parent : undefined
+  const existing = findNodeAtLocation(tree, path)
+  const edited = applyEdits(text, value === undefined || existing !== undefined ? modify(text, path, value, {}) : jsonInsert(text, tree, path, value))
+  const property = value === undefined ? existing?.parent : undefined
   const kept = jsonComments(text, property?.offset, property === undefined ? 0 : property.offset + property.length)
 
   if (jsonComments(edited).join('\0') !== kept.join('\0'))
@@ -127,68 +190,107 @@ function yamlScalar(value: unknown, type?: string): string {
   return stringify(value, { lineWidth: 0 }).trimEnd()
 }
 
-function lineStart(text: string, at: number): number {
-  return text.lastIndexOf('\n', at - 1) + 1
+type Range = [number, number, number]
+
+// Where `path` leads in the document, keys matched as the text the parsed file reads them as (so `404:` is key '404'): the pair or list item it names, else the deepest map on the way and how many segments lead to it.
+interface YamlSpot { map?: unknown, depth: number, pair?: Pair, item?: unknown }
+
+function yamlSpot(document: Document, path: Path): YamlSpot {
+  let node: unknown = document.contents
+
+  for (let depth = 0; depth < path.length; depth++) {
+    const segment = path[depth]!
+
+    if (isSeq(node)) {
+      if (depth === path.length - 1)
+        return { depth, item: node.items[Number(segment)] }
+
+      node = node.items[Number(segment)]
+
+      continue
+    }
+
+    if (!isMap(node))
+      return { depth }
+
+    const pair = node.items.find(each => isScalar(each.key) && String(each.key.value) === String(segment))
+
+    if (pair === undefined)
+      return { map: node, depth }
+
+    if (depth === path.length - 1)
+      return { map: node, depth, pair }
+
+    node = pair.value
+  }
+
+  return { depth: path.length }
 }
 
-// The offset after the line holding `at`, its line break included.
-function lineEnd(text: string, at: number): number {
-  const end = text.indexOf('\n', at)
-
-  return end === -1 ? text.length : end + 1
-}
-
-// yaml prints a whole document anew, folding lines and respacing comments, so the edit is a splice of the source at the ranges it parsed: the value's own span, a line added after the last of its map, or the key's line taken out.
+// yaml prints a whole document anew, folding lines and respacing comments, so the edit is a splice of the source at the ranges it parsed: the value's own span, a line added after the last of its map, or the key's lines taken out.
 function editYaml(name: string, text: string, path: Path, value: unknown): string {
   const document = parseDocument(text)
 
   if (document.errors.length > 0)
     unchanged(name, 'YAML')
 
-  const node = document.getIn(path, true)
   const refuse = (why: string): never => fail(`${name}: ${path.join('.')} ${why}, which ev does not edit`, 1, 'edit it by hand')
+  const spot = yamlSpot(document, path)
+  const node = spot.pair === undefined ? spot.item : spot.pair.value
 
-  if (value !== undefined && isScalar(node)) {
-    if (node.type === 'BLOCK_LITERAL' || node.type === 'BLOCK_FOLDED')
+  if (value !== undefined && (spot.pair !== undefined || spot.item !== undefined)) {
+    if (isAlias(node))
+      refuse('is an alias')
+
+    if (!isScalar(node))
+      return refuse('holds no plain value')
+
+    const scalar = node
+    const [from, to] = scalar.range!
+
+    if (scalar.type === 'BLOCK_LITERAL' || scalar.type === 'BLOCK_FOLDED')
       refuse('is a block scalar')
 
-    return `${text.slice(0, node.range![0])}${yamlScalar(value, node.type)}${text.slice(node.range![1])}`
-  }
+    // An empty value has an empty range wherever the parser stopped, so the value goes right after the key's colon.
+    if (from === to) {
+      const key = spot.pair?.key as { range: Range } | undefined
+      const colon = key === undefined ? -1 : text.indexOf(':', key.range[1])
 
-  let depth = path.length - 1
-  let parent = document.getIn(path.slice(0, depth), true) ?? (depth === 0 ? document.contents : undefined)
+      if (colon === -1)
+        refuse('is an empty list item')
 
-  // A key added under parents not there yet goes into the deepest map that is
-  if (value !== undefined) {
-    while (!isMap(parent) && depth > 0) {
-      depth--
-      parent = depth === 0 ? document.contents : document.getIn(path.slice(0, depth), true)
+      return `${text.slice(0, colon + 1)} ${yamlScalar(value)}${text.slice(colon + 1)}`
     }
-  }
 
-  if (!isMap(parent) || parent.flow === true || parent.items.length === 0)
-    return refuse(depth === 0 ? 'is not under a block mapping' : 'sits in a flow mapping or list')
+    return `${text.slice(0, from)}${yamlScalar(value, scalar.type)}${text.slice(to)}`
+  }
 
   if (value === undefined) {
-    const pair = parent.items.find(each => isScalar(each.key) && String(each.key.value) === String(path.at(-1)))
-    const key = pair?.key as { range: [number, number, number] } | undefined
-    const own = pair?.value as { range?: [number, number, number] } | null | undefined
+    const key = spot.pair?.key as { range: Range } | undefined
 
     if (key === undefined)
       return text
 
     const start = lineStart(text, key.range[0])
+    const valueEnd = (node as { range?: Range } | null | undefined)?.range?.[1] ?? 0
 
     if (!BLANK.test(text.slice(start, key.range[0])))
       refuse('shares its line with another key')
 
-    return `${text.slice(0, start)}${text.slice(lineEnd(text, Math.max(key.range[1], own?.range?.[1] ?? 0)))}`
+    // A block scalar's range ends at the start of the next line, so the removal ends on the line of the value's last character.
+    return `${text.slice(0, start)}${text.slice(lineEnd(text, Math.max(key.range[1], valueEnd) - 1))}`
   }
 
-  const first = parent.items[0]!.key as { range: [number, number, number] }
+  const parent = spot.map as { flow?: boolean, items: Pair[], range?: Range } | undefined
+
+  if (!isMap(parent) || parent.flow === true || parent.items.length === 0)
+    return refuse(spot.depth === 0 ? 'is not under a block mapping' : 'sits in a flow mapping or list')
+
+  const first = parent.items[0]!.key as { range: Range }
   const column = first.range[0] - lineStart(text, first.range[0])
   const unit = INDENT.exec(text)?.[1] ?? '  '
-  const lines = path.slice(depth).map((segment, index, missing) => {
+  const eol = eolOf(text)
+  const lines = path.slice(spot.depth).map((segment, index, missing) => {
     const indent = ' '.repeat(column + index * unit.length)
     const key = yamlScalar(String(segment))
 
@@ -197,7 +299,7 @@ function editYaml(name: string, text: string, path: Path, value: unknown): strin
   const at = lineEnd(text, parent.range![1] - 1)
   const before = text.slice(0, at)
 
-  return `${before}${before.endsWith('\n') ? '' : '\n'}${lines.join('\n')}\n${text.slice(at)}`
+  return `${before}${before.endsWith('\n') ? '' : eol}${lines.join(eol)}${eol}${text.slice(at)}`
 }
 
 function editToml(name: string, text: string, path: Path, value: unknown): string {

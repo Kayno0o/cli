@@ -15,14 +15,15 @@ interface Asset { name: string, url: string, digest?: string }
 
 interface Release { tag: string, published: string, assets: Asset[] }
 
-/** The release picked, its asset for this machine and what checks it: a checksums file, else the sha256 the forge gives, and a signature beside either. */
+/** The release picked, its asset for this machine and what checks it: a checksums file, the sha256 the forge gives, and a signature beside either. `pinned` is the spec with its tag when one was asked for. */
 export interface Resolved {
   spec: string
+  pinned?: string
   tag: string
   published: string
   asset: Asset
   sums?: string
-  sha256?: string
+  digest?: string
   sig?: string
 }
 
@@ -68,11 +69,14 @@ export function specName(spec: ReleaseSpec): string {
   return `${spec.forge}:${spec.owner}/${spec.repo}`
 }
 
+// Bun reports the glibc it runs on, none on musl; a musl loader alone proves nothing, as glibc systems can install one beside theirs.
 export function thisPlatform(): Platform {
   let musl = false
 
   try {
-    musl = process.platform === 'linux' && readdirSync('/lib').some(file => file.startsWith('ld-musl-'))
+    const glibc = (process.report.getReport() as { header?: { glibcVersionRuntime?: string } }).header?.glibcVersionRuntime
+
+    musl = process.platform === 'linux' && glibc === undefined && readdirSync('/lib').some(file => file.startsWith('ld-musl-'))
   }
   catch {}
 
@@ -191,9 +195,11 @@ export function pickAsset(assets: Asset[], platform: Platform, wanted?: string):
   const builds = assets.filter(asset => !NOT_A_BUILD.test(asset.name))
   const listed = (list: Asset[]) => list.map(asset => asset.name).join(', ')
 
+  // A name asked for may be a script or package the build filter leaves out, when no build matches it.
   if (wanted !== undefined) {
     const glob = new Bun.Glob(wanted)
-    const named = builds.filter(asset => wanted.includes('*') ? glob.match(asset.name) : asset.name.includes(wanted))
+    const matches = (asset: Asset) => wanted.includes('*') ? glob.match(asset.name) : asset.name.includes(wanted)
+    const named = builds.some(matches) ? builds.filter(matches) : assets.filter(matches)
 
     if (named.length === 1)
       return named[0]!
@@ -240,7 +246,7 @@ export async function resolveRelease(spec: ReleaseSpec, options: { fresh: boolea
   const asset = pickAsset(release.assets, options.platform ?? thisPlatform(), options.asset)
   const own = release.assets.find(each => each.name.startsWith(`${asset.name}.sha256`))
   const sums = own ?? release.assets.find(each => SUMS.test(each.name))
-  const sha256 = sums === undefined ? DIGEST.exec(asset.digest ?? '')?.[1] : undefined
+  const digest = DIGEST.exec(asset.digest ?? '')?.[1]
   const signature = options.key === undefined ? undefined : signatureOf(release.assets, (sums ?? asset).name, options.key)
 
   if (options.key !== undefined && signature === undefined)
@@ -248,11 +254,12 @@ export async function resolveRelease(spec: ReleaseSpec, options: { fresh: boolea
 
   return {
     spec: specName(spec),
+    ...spec.tag === undefined ? {} : { pinned: `${specName(spec)}@${spec.tag}` },
     tag: release.tag,
     published: release.published,
     asset,
     ...sums === undefined ? {} : { sums: sums.url },
-    ...sha256 === undefined ? {} : { sha256 },
+    ...digest === undefined ? {} : { digest },
     ...signature === undefined ? {} : { sig: signature.url },
   }
 }
