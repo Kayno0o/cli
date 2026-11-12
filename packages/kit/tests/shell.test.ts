@@ -16,6 +16,19 @@ describe('splitCommand', () => {
     expect(first?.text).toContain('nor this')
     expect(second?.command.trim()).toBe('git status')
   })
+
+  test('opens no heredoc at a here-string, and ends one at its delimiter with the quoting taken off', () => {
+    for (const command of ['cat <<<foo\nls', 'cat <<\\EOF\nbody\nEOF\nls', 'cat <<E"O"F\nbody\nEOF\nls', 'cat <<\'E\'OF\nbody\nEOF\nls'])
+      expect(splitCommand(command).map(piece => piece.command.trim()).at(-1)).toBe('ls')
+
+    expect(splitCommand('cat <<E"O"F\n$x\nEOF')[0]?.expanded).toBe('')
+    expect(splitCommand('cat <<EOF\n$x\nEOF')[0]?.expanded).toBe('\n$x\nEOF')
+  })
+
+  test('reads the quotes of a substitution inside double quotes apart from the ones around it', () => {
+    expect(splitCommand('echo "$(echo \'a"b\')"; ls').map(piece => piece.command.trim())).toEqual(['echo "$(echo \'a"b\')"', 'ls'])
+    expect(splitCommand('echo "`echo \'a"b\'`"; ls').map(piece => piece.command.trim())).toEqual(['echo "`echo \'a"b\'`"', 'ls'])
+  })
 })
 
 describe('parseCommand', () => {

@@ -59,6 +59,7 @@ describe('git', () => {
 describe('shapes bash and fish run as the real command', () => {
   cases('git', ['2>/dev/null git stash', '>out git stash', '&>/dev/null git stash', 'gi\\\nt stash', 'FOO+=1 git stash', 'A[0]=1 git stash', '{git,stash}', 'fish -c \'true; and git push\'', 'fish -c \'false; or git stash\'', 'fish -c \'not git stash\'', 'fish -C \'git stash\' -c true', 'fish --init-command=\'git stash\''], [`cat ${['$', '{f}'].join('')}`, 'echo \'{git,stash}\''])
   cases('remote', ['2>/dev/null ssh prod uptime'], [])
+  cases('git', ['cat <<<foo\ngit stash', 'cat <<\\EOF\nbody\nEOF\ngit stash', 'cat <<E"O"F\nbody\nEOF\ngit stash', 'echo "$(echo \'a"b\')"; git stash', 'echo "`echo \'a"b\'`"; git stash'], ['cat <<\\EOF\ngit stash\nEOF'])
 })
 
 describe('remote machines', () => {

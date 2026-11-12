@@ -21,7 +21,10 @@ const REDIRECT_START = /^\d*[<>]|^&>/
 const SAFE_WORD = /^[\w@%+=:,./-]+$/
 const LEADING_HEX = /^[\da-f]*/i
 const DOUBLE_QUOTED_ESCAPES = new Set(['$', '`', '"', '\\'])
-const HEREDOC = /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|([^\s;&|<>()-][^\s;&|<>()]*))/
+// A heredoc operator and its delimiter word, whose quoted and backslashed parts (`'EOF'`, `E"O"F`, `\EOF`) quote the whole body.
+const HEREDOC = /^<<(-?)[ \t]*((?:'[^']*'|"(?:\\.|[^"\\])*"|\\.|[^\s;&|<>()'"\\-])(?:'[^']*'|"(?:\\.|[^"\\])*"|\\.|[^\s;&|<>()'"\\])*)/
+const DELIMITER_QUOTING = /'([^']*)'|"((?:\\.|[^"\\])*)"|\\(.)/g
+const DOUBLE_QUOTED_ESCAPE = /\\([$`"\\])/g
 // The quote opened by `$'`, inside which a backslash escapes and decodes.
 const ANSI_QUOTE = '$\''
 const ANSI_ESCAPES: Record<string, string> = { 'n': '\n', 't': '\t', 'r': '\r', 'a': '\x07', 'b': '\b', 'f': '\f', 'v': '\v', 'e': '\x1B', 'E': '\x1B', '\\': '\\', '\'': '\'', '"': '"', '?': '?' }
@@ -165,6 +168,12 @@ export function splitCommand(command: string): Piece[] {
       continue
     }
 
+    if (quote === '"' && isSubstitutionAt(command, i)) {
+      i = substitutionEnd(command, i)
+
+      continue
+    }
+
     if (quote !== null) {
       if (char === closerOf(quote))
         quote = null
@@ -218,10 +227,20 @@ export function splitCommand(command: string): Piece[] {
       continue
     }
 
-    const heredoc = char === '<' && command[i + 1] === '<' && command[i + 2] !== '<' && !LET_PIECE.test(command.slice(start, i)) ? HEREDOC.exec(command.slice(i)) : null
+    // A here-string `<<<word` is one line, and none of its `<` opens a heredoc.
+    if (command.startsWith('<<<', i)) {
+      i += 2
+
+      continue
+    }
+
+    const heredoc = char === '<' && command[i + 1] === '<' && !LET_PIECE.test(command.slice(start, i)) ? HEREDOC.exec(command.slice(i)) : null
 
     if (heredoc) {
-      heredocs.push({ word: heredoc[2] ?? heredoc[3] ?? heredoc[4] ?? '', stripsTabs: heredoc[1] === '-', isQuoted: heredoc[4] === undefined })
+      const raw = heredoc[2] ?? ''
+      const word = raw.replace(DELIMITER_QUOTING, (_, single?: string, double?: string, escaped?: string) => single ?? double?.replace(DOUBLE_QUOTED_ESCAPE, (__, kept: string) => kept) ?? escaped ?? '')
+
+      heredocs.push({ word, stripsTabs: heredoc[1] === '-', isQuoted: word !== raw })
       i += heredoc[0].length - 1
 
       continue
@@ -346,6 +365,15 @@ function withoutSubshell(text: string): string {
   return result
 }
 
+// A `$(...)` or a backquoted body inside double quotes, whose own quotes bash reads apart from the ones around it.
+function isSubstitutionAt(text: string, i: number): boolean {
+  return text[i] === '`' || (text[i] === '$' && text[i + 1] === '(')
+}
+
+function substitutionEnd(text: string, i: number): number {
+  return text[i] === '`' ? closingBackquote(text, i) : closingParen(text, i + 1)
+}
+
 // The index of the `)` closing the `(` at `open`, past nested parentheses and quotes; the text's end when it never closes.
 function closingParen(text: string, open: number): number {
   let depth = 0
@@ -356,6 +384,9 @@ function closingParen(text: string, open: number): number {
 
     if (char === '\\' && quote !== '\'') {
       i++
+    }
+    else if (quote === '"' && isSubstitutionAt(text, i)) {
+      i = substitutionEnd(text, i)
     }
     else if (quote !== null) {
       if (char === closerOf(quote))
