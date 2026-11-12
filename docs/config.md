@@ -18,7 +18,6 @@ Every file below is optional, nothing is assumed without it. The user files live
 | `~/.config/kaynooo-cli/repos.json` | `ws repos` | `skip`: repository names left out |
 | `.npmrc`, `bunfig.toml` | `pkg` | the registry and token of a scope, read as `bun` reads them |
 | `changelog.config.{ts,mts,js,mjs,json}`, the `changelog` field of `package.json` | `changelog` | the release notes: repo, groups, Discord webhook |
-| `release.config.ts` | `stack audit` | the compose files and images the audit cross-checks |
 
 ## Environment variables
 

@@ -12,7 +12,7 @@ function stack(...args: string[]) {
 describe('stack', () => {
   test('prints its version and lists its commands', () => {
     expect(stack('--version').out.trim()).toBe(version)
-    expect(stack('--help').out).toContain('audit')
+    expect(stack('--help').out).toContain('port')
   })
 
   test('port prints the FNV-1a number of the name', () => {

@@ -494,14 +494,14 @@ src hotspots -n 10  # the ten files both complex and often edited
 
 ## stack
 
-a stable port per service name, and a compose release audit. Package `stack`.
+a stable port per service name. Package `stack`.
 
-Instead of: picking a free host port by hand, and reading compose files against release.config.ts
+Instead of: picking a free host port by hand
 
 ```sh
 stack <command> [options]
 stack port api
-stack audit  # this folder's release setup
+stack port api --json  # the port and whether something listens on it
 ```
 
 ## sub

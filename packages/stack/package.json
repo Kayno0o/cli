@@ -2,7 +2,7 @@
   "name": "@kaynooo/cli-stack",
   "type": "module",
   "version": "0.7.3",
-  "description": "stack: a stable port per service name, and an audit of a compose release setup against its release.config.ts.",
+  "description": "stack: a stable host port per service name, the same on every machine.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/stack#readme",
@@ -12,7 +12,7 @@
     "directory": "packages/stack"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["docker", "compose", "port", "release", "cli", "bun"],
+  "keywords": ["docker", "compose", "port", "cli", "bun"],
   "bin": {
     "stack": "./dist/cli.js"
   },
