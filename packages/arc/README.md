@@ -15,7 +15,7 @@ It needs `tar` and `zstd` on the machine (`findmnt`, `mountpoint` and `df` from 
 | `arc ls [-r] <archive> [path]` | lists what an archive holds without extracting it, as `ls -l` would: the top level, the folder `path`, or every level with `-r`; `--json` for the entries |
 | `arc tree [-L <depth>] <archive> [path]` | draws the archive's files as a tree |
 | `arc cat <archive> <file>` | prints a file of the archive on stdout |
-| `arc extract <file>` | extracts `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`, `.tar.zst`, `.gz`, `.bz2`, `.zip`, `.Z`, `.rar` or `.7z` into the current folder, checking nothing |
+| `arc extract [--overwrite] <file>` | extracts `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`, `.tar.zst`, `.gz`, `.bz2`, `.zip`, `.Z`, `.rar` or `.7z` into the current folder, checking nothing against the archive; a file already there is kept unless `--overwrite` |
 
 `ls`, `tree` and `cat` read `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.tar.zst` and `.zip`. Folders an archive holds no entry for, as one made from a file list, are shown all the same.
 

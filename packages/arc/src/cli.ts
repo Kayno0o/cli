@@ -14,6 +14,6 @@ process.exitCode = await runCli({
     ls: { summary: 'list what an archive holds, without extracting it', run: async args => (await import('./browse')).ls(args) },
     tree: { summary: 'draw the files of an archive as a tree', run: async args => (await import('./browse')).treeCommand(args) },
     cat: { summary: 'print a file of an archive on stdout', run: async args => (await import('./browse')).cat(args) },
-    extract: { summary: 'extract any common archive into the current folder', run: async args => (await import('./extract')).extract(args) },
+    extract: { summary: 'extract any common archive into the current folder, keeping the files already there unless --overwrite', run: async args => (await import('./extract')).extract(args) },
   },
 })

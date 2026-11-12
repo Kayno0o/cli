@@ -198,6 +198,41 @@ describe('arc extract', () => {
     expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('beta')
   })
 
+  test('keeps a file already there unless --overwrite', () => {
+    const { folder, dest } = project()
+
+    Bun.spawnSync(['tar', 'czf', join(dest, 'p.tar.gz'), '-C', folder, '.'])
+
+    const out = temp()
+
+    writeFileSync(join(out, 'b.txt'), 'mine')
+
+    expect(arc(['extract', join(dest, 'p.tar.gz')], out).code).toBe(1)
+    expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('mine')
+    expect(readFileSync(join(out, 'src/a.txt'), 'utf8')).toBe('alpha')
+    expect(arc(['extract', '--overwrite', join(dest, 'p.tar.gz')], out).code).toBe(0)
+    expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('beta')
+  })
+
+  test('refuses a lone compressed file whose output exists, and never removes it on a failed --overwrite', () => {
+    const out = temp()
+
+    writeFileSync(join(out, 'note.txt'), 'mine')
+    writeFileSync(join(out, 'note.txt.gz'), Bun.gzipSync('hello'))
+
+    const refused = arc(['extract', join(out, 'note.txt.gz')], out)
+
+    expect(refused.code).toBe(1)
+    expect(refused.err).toContain('already exists')
+    expect(readFileSync(join(out, 'note.txt'), 'utf8')).toBe('mine')
+
+    writeFileSync(join(out, 'note.txt.gz'), 'not gzip')
+
+    expect(arc(['extract', '--overwrite', join(out, 'note.txt.gz')], out).code).toBe(1)
+    expect(readFileSync(join(out, 'note.txt'), 'utf8')).toBe('mine')
+    expect(existsSync(join(out, 'note.txt.arc-partial'))).toBe(false)
+  })
+
   test('says so for an unknown extension', () => {
     const { dest } = project()
 
