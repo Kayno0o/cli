@@ -290,8 +290,8 @@ export function isPlain(text: string): boolean {
   return quote === null
 }
 
-// How many `)` the text closes without opening, as the end of a subshell does.
-function unmatchedClosers(text: string): number {
+// How many `(` the text leaves open, as the start of a subshell does, and how many `)` it closes without opening, as its end does; quoted ones count for nothing.
+export function parenBalance(text: string): { opened: number, closed: number } {
   let depth = 0
   let unmatched = 0
   let quote: string | null = null
@@ -320,13 +320,13 @@ function unmatchedClosers(text: string): number {
       unmatched++
   }
 
-  return unmatched
+  return { opened: depth, closed: unmatched }
 }
 
 // A piece less the `(` opening its subshell and the `)` closing it, so the last word of `(cat .env)` is the file.
 function withoutSubshell(text: string): string {
   let result = text.trim()
-  let closers = unmatchedClosers(result)
+  let closers = parenBalance(result).closed
 
   while (result.startsWith('(')) result = result.slice(1).trimStart()
 

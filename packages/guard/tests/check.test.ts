@@ -198,6 +198,18 @@ describe('package managers', () => {
     expect(await rules('bun --cwd client add zod', { [`${REPO}/client/pnpm-lock.yaml`]: '' })).toEqual(['package-manager'])
   })
 
+  test('a folder option after the subcommand decides the folder, and a cd in a subshell ends with it', async () => {
+    const files = { [`${REPO}/bun.lock`]: '', [`${REPO}/web/package-lock.json`]: '' }
+
+    for (const command of ['bun add --cwd web zod', 'bun add --cwd=web zod'])
+      expect(await rules(command, files)).toEqual(['package-manager'])
+
+    for (const command of ['npm install --prefix web zod', 'bun add zod --cwd web/..', '(cd web && npm i zod); bun add zod'])
+      expect(await rules(command, files)).toEqual([])
+
+    expect((await checkCommand('(cd web && bun add zod); bun add zod', context(files))).command).toBe('(cd web && npm install zod); bun add zod')
+  })
+
   test('refuses a third manager beside two lockfiles', async () => {
     expect(await rules('npm install', { ...pnpm, [`${REPO}/bun.lock`]: '' })).toEqual(['package-manager'])
   })

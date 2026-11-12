@@ -1,5 +1,5 @@
 import type { Piece } from '@kaynooo/cli-kit/shell'
-import { parseCommand, resolvePath, splitCommand } from '@kaynooo/cli-kit/shell'
+import { parenBalance, parseCommand, resolvePath, splitCommand } from '@kaynooo/cli-kit/shell'
 
 export type Manager = 'bun' | 'pnpm' | 'yarn' | 'npm'
 type Action = 'install' | 'frozen' | 'add' | 'remove' | 'update'
@@ -62,6 +62,8 @@ const OPTION_FLAGS: ReadonlyMap<string, Option> = new Map([
 const DIR_FLAGS = new Set(['--cwd', '-C', '--dir', '--prefix'])
 const VALUE_FLAGS = new Set([...DIR_FLAGS, '--filter', '-F'])
 const PLAIN_WORD = /^[\w=@./:+-]+$/
+const AROUND_START = /^[\s(]*/
+const AROUND_END = /[\s)]*$/
 
 function actions(byAction: Partial<Record<Action, readonly string[]>>): Map<string, Action | null> {
   return new Map(Object.entries(byAction).flatMap(([action, names]) => names.map(name => [name, action as Action] as const)))
@@ -99,54 +101,77 @@ export function translate(from: Manager, to: Manager, subcommand: string, rest: 
 // Each piece of the command that installs or rewrites dependencies, with the directory it runs in.
 export function installRequests(command: string, cwd: string, home: string): InstallRequest[] {
   const requests: InstallRequest[] = []
+  // The folders to go back to as each subshell ends, so a `cd` inside `( ... )` does not outlive it.
+  const outer: string[] = []
 
   for (const piece of splitCommand(command)) {
-    const { program, args, assignments, isWrapped } = parseCommand(piece.command)
+    const { opened, closed } = parenBalance(piece.command)
 
-    if (program === 'cd' && args[0] !== undefined) {
-      cwd = resolvePath(cwd, args[0], home)
+    for (let count = 0; count < opened; count++)
+      outer.push(cwd)
 
-      continue
-    }
+    const request = requestOf(piece, cwd, home)
 
-    if (!isManager(program))
-      continue
+    if (typeof request === 'string')
+      cwd = request
+    else if (request !== undefined)
+      requests.push(request)
 
-    let dir = cwd
-    let subcommand = ''
-    let rest: string[] = []
-    let hasLeadingFlag = false
-
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i] ?? ''
-      const equals = arg.indexOf('=')
-      const flag = equals === -1 ? arg : arg.slice(0, equals)
-      const value = equals === -1 ? undefined : arg.slice(equals + 1)
-
-      if (DIR_FLAGS.has(flag) && value !== undefined && value !== '') {
-        dir = resolvePath(cwd, value, home)
-      }
-      else if (VALUE_FLAGS.has(arg)) {
-        if (DIR_FLAGS.has(arg) && args[i + 1] !== undefined)
-          dir = resolvePath(cwd, args[i + 1] ?? '', home)
-
-        i++
-      }
-      else if (!arg.startsWith('-')) {
-        subcommand = arg
-        rest = args.slice(i + 1)
-
-        break
-      }
-
-      hasLeadingFlag = true
-    }
-
-    if (ACTIONS[program].has(subcommand))
-      requests.push({ piece, program, subcommand, rest, dir, assignments, isRewritable: !hasLeadingFlag && !isWrapped && piece.command === piece.text })
+    for (let count = 0; count < closed; count++)
+      cwd = outer.pop() ?? cwd
   }
 
   return requests
+}
+
+// The install a piece asks for, or the folder a `cd` moves to.
+function requestOf(piece: Piece, cwd: string, home: string): InstallRequest | string | undefined {
+  const { program, args, assignments, isWrapped } = parseCommand(piece.command)
+
+  if (program === 'cd' && args[0] !== undefined)
+    return resolvePath(cwd, args[0], home)
+
+  if (!isManager(program))
+    return undefined
+
+  let dir = cwd
+  let subcommand = ''
+  let rest: string[] = []
+  let hasLeadingFlag = false
+
+  // A folder option counts wherever it sits, before the subcommand or after it.
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? ''
+    const equals = arg.indexOf('=')
+    const flag = equals === -1 ? arg : arg.slice(0, equals)
+    const value = equals === -1 ? undefined : arg.slice(equals + 1)
+    const isLeading = subcommand === ''
+
+    if (DIR_FLAGS.has(flag) && value !== undefined && value !== '') {
+      dir = resolvePath(cwd, value, home)
+    }
+    else if (VALUE_FLAGS.has(arg)) {
+      if (DIR_FLAGS.has(arg) && args[i + 1] !== undefined)
+        dir = resolvePath(cwd, args[i + 1] ?? '', home)
+
+      i++
+    }
+    else if (isLeading && !arg.startsWith('-')) {
+      subcommand = arg
+      rest = args.slice(i + 1)
+
+      continue
+    }
+
+    hasLeadingFlag ||= isLeading
+  }
+
+  return ACTIONS[program].has(subcommand) ? { piece, program, subcommand, rest, dir, assignments, isRewritable: !hasLeadingFlag && !isWrapped && piece.command === piece.text } : undefined
+}
+
+// A piece's command less the whitespace and subshell parens around it.
+export function bareCommand(text: string): string {
+  return text.replace(AROUND_START, '').replace(AROUND_END, '')
 }
 
 // The request against the managers its directory is pinned to, null when it runs with one of them.
@@ -160,8 +185,9 @@ export function mismatchFor(request: InstallRequest, pinned: Pinned | null): Mis
   const only = expected.length === 1 ? expected[0] : undefined
   const canRewrite = only !== undefined && isRewritable && assignments.every(word => PLAIN_WORD.test(word))
   const translated = canRewrite ? translate(program, only, subcommand, rest) : null
-  const leading = piece.text.slice(0, piece.text.length - piece.text.trimStart().length)
-  const trailing = piece.text.slice(piece.text.trimEnd().length)
+  // What the piece holds around the command, the parens of a subshell it opens or closes included; a package name never holds one.
+  const leading = AROUND_START.exec(piece.text)?.[0] ?? ''
+  const trailing = AROUND_END.exec(piece.text)?.[0] ?? ''
 
   return {
     piece,

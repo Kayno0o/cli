@@ -5,7 +5,7 @@ import { commitMessageViolation, TRAILERS, USE_GC } from '@kaynooo/cli-git/messa
 import { commandsRun, parentDir, replacePieces } from '@kaynooo/cli-kit/shell'
 import { shouldWrap, wrap } from '@kaynooo/cli-out/src/wrap.ts'
 import { addedPackages } from '@kaynooo/cli-pkg/src/added.ts'
-import { installRequests, LOCKFILES, mismatchFor } from '@kaynooo/cli-pkg/src/pin.ts'
+import { bareCommand, installRequests, LOCKFILES, mismatchFor } from '@kaynooo/cli-pkg/src/pin.ts'
 import { commitSources, inlineMessage, isStdin } from './commit'
 import { destructiveViolation } from './destructive'
 import { fedCommands, scriptedCommands } from './embedded'
@@ -104,9 +104,9 @@ function mismatches(command: string, { cwd, home, exists }: Context): Mismatch[]
   })
 }
 
-// The mismatches of the commands nested in the first of `run` (`bash -c`, `$(...)`), which are refused rather than rewritten as their pieces are not the command's own.
-function nestedMismatches(run: readonly string[], context: Context, own: readonly Mismatch[]): Mismatch[] {
-  const ownTexts = new Set(own.map(mismatch => mismatch.piece.command.trim()))
+// The mismatches of the commands nested in the first of `run` (`bash -c`, `$(...)`), which are refused rather than rewritten as their pieces are not the command's own; an install of the command's own subshell was weighed in the folder its `cd` reached, so it is not weighed again out of it.
+function nestedMismatches(run: readonly string[], context: Context): Mismatch[] {
+  const ownTexts = new Set(installRequests(run[0] ?? '', context.cwd, context.home).map(request => bareCommand(request.piece.command)))
 
   return run.slice(1).flatMap(each => mismatches(each, context)).filter(mismatch => !ownTexts.has(mismatch.piece.command.trim())).map(mismatch => ({ ...mismatch, rewrite: null }))
 }
@@ -157,7 +157,7 @@ export async function checkCommand(command: string, context: Context): Promise<V
   add('edit', context.canSub ? await guarded('edit', () => first(run.map(replaceViolation))) : null)
 
   const found = mismatches(command, context)
-  const refused = [...found, ...nestedMismatches(run, context, found)].find(mismatch => mismatch.rewrite === null || !context.canRewrite)
+  const refused = [...found, ...nestedMismatches(run, context)].find(mismatch => mismatch.rewrite === null || !context.canRewrite)
   const rewrite = refused?.rewrite ?? null
   const route = rewrite === null ? 'Run it with the pinned manager instead.' : `Run \`${rewrite.trim()}\` instead.`
 
