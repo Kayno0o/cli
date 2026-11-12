@@ -2,7 +2,7 @@ import process from 'node:process'
 import { fail, parse, role } from '@kaynooo/cli-kit'
 import { checkout, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
-const USAGE = 'base [--ref <rev>] [--keep <path>...] [--no-link] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, the working tree untouched, exiting with its code\n\nExits with the code of the command, 127 when it cannot be started, 2 on a usage error, an unknown ref or a refused command.'
+const USAGE = 'base [--ref <rev>] [--keep <path>...] [--no-link] -- <command> [args...]: runs the command at HEAD or another ref in a temporary worktree, exiting with its code\n\nThe changes of the working tree stay out of the run, but its ignored env files, node_modules, vendor and .venv are linked in, so a write to them lands in the working tree; --no-link runs fully apart.\n\nExits with the code of the command, 127 when it cannot be started, 2 on a usage error, an unknown ref or a refused command.'
 
 const OPTIONS = {
   'ref': { type: 'string', short: 'r', description: 'the commit to run at (default HEAD)' },

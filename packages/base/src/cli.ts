@@ -7,7 +7,7 @@ import { proof } from './proof'
 
 process.exitCode = await runCli({
   name: 'base',
-  about: 'runs a command at HEAD or another ref in a temporary worktree, the working tree untouched',
+  about: 'runs a command at HEAD or another ref in a temporary worktree, sharing node_modules and env files with the working tree unless --no-link',
   replaces: 'git stash, a test run, then git stash pop',
   examples: [['base -- bun test tests/api.test.ts', 'the test at HEAD, the working tree changes left out'], ['base proof -- bun test tests/new.test.ts', 'it fails at HEAD and passes in the working tree']],
   commands: {

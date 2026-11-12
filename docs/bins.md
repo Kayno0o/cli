@@ -20,7 +20,7 @@ arc extract release.tar.gz  # any common archive
 
 ## base
 
-runs a command at HEAD or another ref in a temporary worktree, the working tree untouched. Package `base`.
+runs a command at HEAD or another ref in a temporary worktree, sharing node_modules and env files with the working tree unless --no-link. Package `base`.
 
 Instead of: git stash, a test run, then git stash pop
 
