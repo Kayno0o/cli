@@ -46,13 +46,13 @@ export function isPermanentFailure(error: unknown): boolean {
   return (error instanceof SpawnError && error.missing) || PERMANENT.test(error.message)
 }
 
-// Runs a command and returns its code and both streams; throws, naming `label`, when it cannot start or outlives `timeoutMs`.
-export async function runTool(label: string, argv: string[], { timeoutMs, cwd, onStart }: { [K in 'timeoutMs' | 'cwd' | 'onStart']?: RunSettings[K] | undefined } = {}): Promise<ToolRun> {
+// Runs a command and returns its code and both streams, `env` added to the process's own; throws, naming `label`, when it cannot start or outlives `timeoutMs`.
+export async function runTool(label: string, argv: string[], { timeoutMs, cwd, onStart, env }: { [K in 'timeoutMs' | 'cwd' | 'onStart' | 'env']?: RunSettings[K] | undefined } = {}): Promise<ToolRun> {
   let ran
 
   try {
     // The environment is passed whole so the program is looked up on the PATH as it is now, not as the process started with.
-    ran = await runCommand(argv, { env: process.env, ...(timeoutMs === undefined ? {} : { timeoutMs }), ...(cwd === undefined ? {} : { cwd }), ...(onStart === undefined ? {} : { onStart }) })
+    ran = await runCommand(argv, { env: { ...process.env, ...env }, ...(timeoutMs === undefined ? {} : { timeoutMs }), ...(cwd === undefined ? {} : { cwd }), ...(onStart === undefined ? {} : { onStart }) })
   }
   catch (error) {
     throw spawnFailure(label, error)

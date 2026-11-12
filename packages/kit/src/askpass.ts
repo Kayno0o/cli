@@ -19,8 +19,8 @@ export interface Askpass {
 
 const quoted = (text: string) => `'${text.replaceAll('\'', `'\\''`)}'`
 
-/** While a live region is drawn, git and ssh cannot ask on the terminal: the region erases their prompt at its next frame and races them for the keys. Run them with `env` and each prompt is asked here instead, the region paused by `pause` until it is answered. Off a terminal it returns undefined and they ask as they always do. */
-export function askpass(pause: () => () => void): Askpass | undefined {
+/** While a live region is drawn, git and ssh cannot ask on the terminal: the region erases their prompt at its next frame and races them for the keys; run in their own session, as a timeout does, they have no terminal to ask on at all. Run them with `env` and each prompt is asked here instead, the region paused by `pause` until it is answered. Off a terminal it returns undefined and they ask as they always do. */
+export function askpass(pause: () => () => void = () => () => undefined): Askpass | undefined {
   if (process.stdin.isTTY !== true || process.stderr.isTTY !== true || process.argv[1] === undefined)
     return undefined
 
