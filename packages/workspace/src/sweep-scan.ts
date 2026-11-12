@@ -301,8 +301,8 @@ async function judge(candidate: Candidate): Promise<Verdict> {
   return candidate.kind === 'worktree' ? judgeWorktree(candidate.path) : judgeFolder(candidate.path, candidate.kind, candidate.inside)
 }
 
-// Judges and sizes every candidate, the ones git forbids touching going to `skipped`.
-export async function inspect({ candidates, skipped }: Found): Promise<{ entries: Entry[], skipped: Skipped[] }> {
+// Judges and sizes every candidate, the ones git forbids touching going to `skipped`; `onDone` hears how many are done.
+export async function inspect({ candidates, skipped }: Found, onDone?: (done: number, total: number) => void): Promise<{ entries: Entry[], skipped: Skipped[] }> {
   const entries: Entry[] = []
   const rejected = [...skipped]
 
@@ -313,7 +313,7 @@ export async function inspect({ candidates, skipped }: Found): Promise<{ entries
       rejected.push({ path: candidate.path, reason: verdict.skip })
     else
       entries.push({ ...verdict.entry, bytes: await sizeOf(candidate.path) })
-  })
+  }, onDone)
 
   const listed = new Set(entries.filter(entry => entry.action === 'remove').map(entry => entry.path))
 

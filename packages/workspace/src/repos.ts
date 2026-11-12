@@ -4,6 +4,7 @@ import { existsSync, statSync } from 'node:fs'
 import { basename, relative } from 'node:path'
 import process from 'node:process'
 import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
+import { progressLine } from '@kaynooo/cli-kit/progress'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
 const USAGE = `ws repos [options] [root]: the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
@@ -95,11 +96,12 @@ function row(repo: RepoState, shown: string): string[] {
   ]
 }
 
-export async function repos(args: string[]): Promise<number> {
+// `watched` keeps the progress line off the screen a watch holds up while it refreshes.
+export async function repos(args: string[], watched = false): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a cd, git status, git log and git tag loop over each repository of the workspace', examples: ['ws repos', 'ws repos ~/Workspace --only unreleased --fetch', ['ws repos --only behind --pull', 'fast-forward what is behind and clean'], ['ws repos --only dirty --path', 'the paths, for xargs']] })
 
   if (values.watch !== undefined)
-    return watching(values.watch, async () => repos(withoutWatch(args)))
+    return watching(values.watch, async () => repos(withoutWatch(args), true))
 
   const root = workspaceRoot({ given: positionals[0] })
 
@@ -107,8 +109,22 @@ export async function repos(args: string[]): Promise<number> {
     fail(`no folder ${root}`)
 
   const only = values.only
-  const paths = await findRepos(root, await skipped())
-  const states = await pool(paths, configuredNumber('repos', 'concurrency', CONCURRENCY), async path => inspect(path, values.fetch === true || values.pull === true))
+  const progress = watched ? undefined : progressLine()
+  const fetching = values.fetch === true || values.pull === true
+  const step = fetching ? 'fetching' : 'reading'
+  let states: RepoState[]
+
+  try {
+    progress?.update({ step: 'finding the repositories' })
+    const paths = await findRepos(root, await skipped())
+
+    progress?.update({ step, done: 0, total: paths.length, unit: 'repositories' })
+    states = await pool(paths, configuredNumber('repos', 'concurrency', CONCURRENCY), async path => inspect(path, fetching), (done, total) => progress?.update({ step, done, total, unit: 'repositories' }))
+  }
+  finally {
+    progress?.stop()
+  }
+
   const keeps = (repo: RepoState) => {
     const reasons = reasonsOf(repo)
 

@@ -5,6 +5,7 @@ import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
+import { progressLine } from '@kaynooo/cli-kit/progress'
 import { holdsOsvLock, osvAudit } from './osv'
 import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEVERITIES, workspaceFolders } from './report'
 
@@ -190,12 +191,23 @@ export async function audit(args: string[]): Promise<number> {
     fail(`no folder ${root}`)
 
   const level = oneOf(values.level, 'level', SEVERITIES)
-  const paths = await findRepos(root)
+  const progress = progressLine()
+  let audits: RepoAudit[]
 
-  if (paths.length === 0)
-    fail(`no bun.lock, composer.lock, Cargo.lock or uv.lock under ${root}`)
+  try {
+    progress.update({ step: 'finding the repositories' })
+    const paths = await findRepos(root)
 
-  const audits = await pool(paths, configuredNumber('audit', 'concurrency', CONCURRENCY), async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []))
+    if (paths.length === 0)
+      fail(`no bun.lock, composer.lock, Cargo.lock or uv.lock under ${root}`)
+
+    progress.update({ step: 'auditing', done: 0, total: paths.length, unit: 'repositories' })
+    audits = await pool(paths, configuredNumber('audit', 'concurrency', CONCURRENCY), async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []), (done, total) => progress.update({ step: 'auditing', done, total, unit: 'repositories' }))
+  }
+  finally {
+    progress.stop()
+  }
+
   const kept = audits.map(each => ({ ...each, findings: values.prod === true ? each.findings.filter(found => found.scope === 'prod') : each.findings }))
 
   if (values.json === true)

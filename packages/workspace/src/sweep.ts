@@ -4,6 +4,7 @@ import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { relative } from 'node:path'
 import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, paint, parse, parseSize, printJson, problem, role, runTool, table, workspaceRoot } from '@kaynooo/cli-kit'
+import { progressLine } from '@kaynooo/cli-kit/progress'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { applyAll } from './apply'
 import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
@@ -60,9 +61,22 @@ export async function sweep(args: string[]): Promise<number> {
     badUsage(`--min takes a size such as 500K, 10M or 1G, not ${values.min}`)
 
   const now = Date.now()
-  const found = await findCandidates(root, homedir(), positionals.length === 0 || values.only === 'caches')
-  const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => candidate.kind === ONLY_KINDS[values.only!])
-  const { entries: all, skipped } = await inspect({ candidates: wanted, skipped: found.skipped })
+  const progress = progressLine()
+  let scanned: Awaited<ReturnType<typeof inspect>>
+
+  try {
+    progress.update({ step: 'finding the folders' })
+    const found = await findCandidates(root, homedir(), positionals.length === 0 || values.only === 'caches')
+    const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => candidate.kind === ONLY_KINDS[values.only!])
+
+    progress.update({ step: 'sizing', done: 0, total: wanted.length, unit: 'folders' })
+    scanned = await inspect({ candidates: wanted, skipped: found.skipped }, (done, total) => progress.update({ step: 'sizing', done, total, unit: 'folders' }))
+  }
+  finally {
+    progress.stop()
+  }
+
+  const { entries: all, skipped } = scanned
   const entries = all
     .filter(entry => entry.bytes >= minBytes && (olderMs === undefined || (entry.committedAt !== undefined && now - entry.committedAt >= olderMs)))
     .sort((a, b) => b.bytes - a.bytes || a.path.localeCompare(b.path))
