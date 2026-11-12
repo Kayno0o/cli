@@ -25,8 +25,21 @@ const LONG_OPTIONS: Record<string, readonly string[]> = {
   rm: ['--cached', '--dry-run', '--force', '--quiet', '--ignore-unmatch', '--sparse', '--pathspec-from-file'],
   switch: ['--force', '--discard-changes', '--create', '--force-create', '--detach', '--guess', '--merge', '--orphan', '--track', '--quiet', '--progress'],
 }
+
+export const SHORT_CLUSTER = /^-[A-Z]+$/i
 // Long options whose value is the next word, which is never read as an option.
 const LONG_VALUES = new Set([...COMMIT_VALUE_LONGS, '--source', '--push-option', '--repo', '--exclude'])
+
+// Whether a commit short option cluster ends in one taking a value, `-m` or `-am`, so the next word is that value.
+function takesNextWord(name: string, word: string): boolean {
+  if (name !== 'commit' || !SHORT_CLUSTER.test(word))
+    return false
+
+  const letters = [...word.slice(1)]
+  const at = letters.findIndex(letter => COMMIT_VALUE_SHORTS.has(letter) || COMMIT_ATTACHED_SHORTS.has(letter))
+
+  return at === letters.length - 1 && COMMIT_VALUE_SHORTS.has(letters[at] ?? '')
+}
 
 // A subcommand's words with each long option written out whole, `--ha` as `--hard` and `--mess=x` as `--message=x`, up to a `--`.
 function fullLongOptions(name: string, rest: readonly string[]): string[] {
@@ -39,8 +52,12 @@ function fullLongOptions(name: string, rest: readonly string[]): string[] {
     if (word === '--')
       break
 
-    if (!word.startsWith('--'))
+    if (!word.startsWith('--')) {
+      if (takesNextWord(name, word))
+        i++
+
       continue
+    }
 
     const [spelled = '', ...value] = word.split('=')
     const option = known.includes(spelled) || spelled.length <= 2 ? spelled : known.find(each => each.startsWith(spelled)) ?? spelled
@@ -54,7 +71,6 @@ function fullLongOptions(name: string, rest: readonly string[]): string[] {
   return words
 }
 
-export const SHORT_CLUSTER = /^-[A-Z]+$/i
 // A short option cluster that may end in an attached value, `-m"fix: x"` reaching the parser as `-mfix: x`.
 export const SHORT_OPTIONS = /^-[A-Z]/i
 const STAGES_ALL = /[Au]/

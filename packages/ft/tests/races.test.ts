@@ -1,3 +1,4 @@
+import { Exit } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
 import { latestClaim } from '../src/claims'
 import { drop, take } from '../src/commands/board'
@@ -41,6 +42,23 @@ describe('take', () => {
 
     expect(state.comments?.[5]).toEqual(['Taken by session other-1.', 'Taken by session a-1.', 'Withdrawn by session a-1.'])
     expect(latestClaim((state.comments?.[5] ?? []).map(body => ({ body, created_at: '2026-10-23T10:00:00Z' })))?.holder).toBe('other-1')
+  })
+
+  test('says how to withdraw its claim by hand when posting the withdrawal fails', async () => {
+    await withFakeTea({ issues: [open(5, 'x')], beforeComment: { 5: ['Taken by session other-1.'] }, failures: [{ match: 'Withdrawn', message: 'boom', times: 1 }] }, async () => {
+      let refused: unknown
+
+      try {
+        await take(['5', '--as', 'a-1'])
+      }
+      catch (error) {
+        refused = error
+      }
+
+      expect(refused).toBeInstanceOf(Exit)
+      expect((refused as Exit).message).toContain('#5 was taken by other-1 at the same moment, and withdrawing this claim failed: tea api repos/{owner}/{repo}/issues/5/comments: boom')
+      expect((refused as Exit).hint).toContain('ft comment 5 \'Withdrawn by session a-1.\'')
+    })
   })
 
   test('holds the issue when another session claimed it just after, as that one sees this claim first', async () => {

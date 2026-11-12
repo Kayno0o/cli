@@ -293,8 +293,16 @@ export async function take(args: string[]): Promise<number> {
     const winner = firstClaimSince(await commentsOf(number, values.repo), comments.length, author)
 
     if (winner !== name) {
-      await comment(number, withdrawnComment(name), values.repo)
-      fail(`#${number} was taken by ${winner ?? 'another session'} at the same moment`, 1)
+      const taken = `#${number} was taken by ${winner ?? 'another session'} at the same moment`
+
+      try {
+        await comment(number, withdrawnComment(name), values.repo)
+      }
+      catch (error) {
+        fail(`${taken}, and withdrawing this claim failed: ${error instanceof Error ? error.message : String(error)}`, 1, runHint(`ft comment ${number} '${withdrawnComment(name)}'`, 'withdraw it'))
+      }
+
+      fail(taken, 1)
     }
 
     console.log(good(`took #${number} as ${name}: ${found.title}`))

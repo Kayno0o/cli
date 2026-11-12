@@ -15,8 +15,10 @@ import { runHeavy, runTask } from './run'
 import { shellWrapper } from './shell'
 import { slugOf } from './stack'
 
+const APP = 'wt'
+
 async function jobs(): Promise<Jobs> {
-  return new Jobs({ dir: (await wtConfig()).jobs, app: 'wt' })
+  return new Jobs({ dir: (await wtConfig()).jobs, app: APP })
 }
 
 // A config that does not load fails like any other known error; `bg` names a `--bg` command, whose refusal is notified too.
@@ -28,7 +30,7 @@ async function guarded(action: () => Promise<number | void>, bg?: string): Promi
   }
   catch (error) {
     if (bg !== undefined)
-      await notifyRefused('wt', bg, failureText(error))
+      await notifyRefused(APP, bg, failureText(error))
 
     return failKnown(error)
   }
@@ -38,7 +40,7 @@ async function guarded(action: () => Promise<number | void>, bg?: string): Promi
 
 // The name a `--bg` command is notified under, none without `--bg`.
 function bgName(values: { bg?: boolean }, ...words: (string | undefined)[]): string | undefined {
-  return values.bg ? ['wt', ...words.filter(word => word !== undefined)].join(' ') : undefined
+  return values.bg ? [APP, ...words.filter(word => word !== undefined)].join(' ') : undefined
 }
 
 async function projectNames(): Promise<string[]> {
@@ -169,7 +171,7 @@ Prints the worktree names of the project, one per line.
 Exits 0 when it printed them, 1 when there is no such project, 2 on a usage error.`
 
 process.exitCode = await runCli({
-  name: 'wt',
+  name: APP,
   about: 'git worktrees of a compose project, each with its own stack, data and <task>.<host> subdomains beside main',
   replaces: 'a second clone, port juggling and a shared database to try a branch',
   examples: [['wt add planning', 'a worktree on wt/planning with its own stack'], ['wt up planning', 'start it'], ['wt rm planning', 'stop and delete it, keeping its branches']],

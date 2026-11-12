@@ -25,10 +25,14 @@ const KNOWN_LONGS = [...STATEMENT_LONGS, ...FILE_LONGS, ...DATABASE_LONGS, ...VA
 const LIST_OPTIONS = new Set(['-l', '--list'])
 const REDIRECT_ONLY = /^\d*(?:>|>>|>&|&>|>\||<&|<>)$/
 const REDIRECT_START = /^\d*>|^&>/
-const URL_DATABASE = /^[a-z][a-z\d+.-]*:\/\/[^/]*\/([^?#]*)/i
-// A libpq conninfo string, `host=h dbname=app user=u`, and the database it names.
+// A connection URL's path, and a `dbname` in its query, which libpq reads over the path.
+const URL_START = /^[a-z][a-z\d+.-]*:\/\//i
+const URL_PATH = /^[a-z][a-z\d+.-]*:\/\/[^/?#]*\/?([^?#]*)/i
+const URL_QUERY_DATABASE = /[?&]dbname=([^&#]*)/g
+// A libpq conninfo string, `host=h dbname=app user=u`, read pair by pair: a value is quoted with '' and \ escapes, or bare up to a space.
 const CONNINFO = /^\s*\w+\s*=/
-const CONNINFO_DATABASE = /(?:^|\s)dbname\s*=\s*(?:'((?:\\.|[^'\\])*)'|(\S*))/
+const CONNINFO_PAIR = /\s*(\w+)\s*=\s*(?:'((?:\\.|[^'\\])*)'|((?:\\.|[^\s'\\])*))/gy
+const ESCAPED = /\\(.)/g
 // Console commands that write a schema or rows, Doctrine's and Laravel's.
 const WRITING_CONSOLE = /^(?:doctrine:(?:migrations:(?:migrate|execute|rollup)|schema:(?:update|create|drop)|database:(?:create|drop)|fixtures:load)|migrate(?::\w+)?|db:(?:seed|wipe))$/
 // A database, env file, compose file or service named for tests: `booki_test`, `.env.test`, `compose.test.yaml`, `-e test`, `APP_ENV=test`; "latest" is not one.
@@ -36,8 +40,6 @@ const TEST_SCOPED = /(?:^|[^a-z])test/i
 const ASSIGNMENT = /^([A-Z_]\w*)=/i
 // The variables that pick an environment or a database; `PGUSER=test_user` or `PGPASSWORD=test` pick neither.
 const TARGET_VARIABLE = /(?:^|_|^PG)(?:ENV|ENVIRONMENT|DATABASE|DB|DBNAME|DSN|URL)$|^(?:DB|DATABASE)_NAME$/i
-// The variables picking a database rather than an environment, which a database the client names overrides.
-const DATABASE_VARIABLE = /(?:^|_|^PG)(?:DATABASE|DB|DBNAME|DSN|URL)$|^(?:DB|DATABASE)_NAME$/i
 // The disposable stack git-diff captures on, by its directory `.worktrees/<project>/shot` or its compose project `<project>--shot`.
 // The options naming the account a command runs as, whose value is no target.
 const USER_OPTION = /^(?:-[uU]|--user(?:name)?)$/
@@ -75,19 +77,34 @@ function programOf(word: string): string {
   return word.split('/').pop() ?? ''
 }
 
-// The database a `-d` value or a database operand names: a URL's path, a conninfo string's `dbname`, else the word itself.
-function databaseOf(operand: string): string | undefined {
-  const url = URL_DATABASE.exec(operand)
+function percentDecoded(text: string): string {
+  try {
+    return decodeURIComponent(text)
+  }
+  catch {
+    return text
+  }
+}
 
-  if (url !== null)
-    return url[1]
+// The database a `-d` value or a database operand names: a URL's query `dbname` or path, a conninfo string's last `dbname`, else the word itself.
+function databaseOf(operand: string): string | undefined {
+  if (URL_START.test(operand)) {
+    const raw = [...operand.matchAll(URL_QUERY_DATABASE)].at(-1)?.[1] ?? URL_PATH.exec(operand)?.[1]
+
+    return raw === undefined || raw === '' ? undefined : percentDecoded(raw)
+  }
 
   if (!CONNINFO.test(operand))
     return operand
 
-  const conninfo = CONNINFO_DATABASE.exec(operand)
+  let database: string | undefined
 
-  return conninfo === null ? undefined : (conninfo[1]?.replaceAll(/\\(.)/g, '$1') ?? conninfo[2])
+  for (const [, key, quoted, bare] of operand.matchAll(CONNINFO_PAIR)) {
+    if (key === 'dbname')
+      database = (quoted ?? bare ?? '').replaceAll(ESCAPED, '$1')
+  }
+
+  return database
 }
 
 // getopt_long and mysql's option parser take a long option cut short to what is unambiguous, `--comm` or `--exec`; it is read as the one option it prefixes.
@@ -204,13 +221,13 @@ function targetWords(words: readonly string[]): string[] {
   return words.filter((word, index) => !USER_OPTION.test(words[index - 1] ?? '') && !USER_ATTACHED.test(word))
 }
 
-// A database the client names wins over one a variable picks, `PGDATABASE=x_test psql -d prod` connecting to prod.
+// A database the client names wins over what a variable picks, `PGDATABASE=x_test psql -d prod` or `APP_ENV=test psql -d prod` connecting to prod.
 function isTestScoped(words: readonly string[], client: number, input: ClientInput | null): boolean {
   if (client === -1)
     return targetWords(words).some(isTestWord)
 
   const named = input?.database
-  const before = targetWords(words.slice(0, client)).filter(word => named === undefined || !DATABASE_VARIABLE.test(ASSIGNMENT.exec(word)?.[1] ?? ''))
+  const before = targetWords(words.slice(0, client)).filter(word => named === undefined || !ASSIGNMENT.test(word))
 
   return before.some(isTestWord) || (named !== undefined && TEST_SCOPED.test(named))
 }
@@ -273,12 +290,14 @@ export async function sqlViolation(command: string, read: (path: string) => Prom
 
     if (isTestScoped(words, client, input)) {
       // what a test database is fed may still write to another one, which db refuses too; a file that cannot be read is no statement here
-      const fed = input === null ? null : await clientStatements(pieces, index, input, read)
-
       const dialect = clientDialect(programOf(words[client] ?? ''))
 
-      if (dialect !== undefined && fed?.statements.some(statement => hasWrite(statement) && otherDatabases(statement, dialect, input?.database ?? '').length > 0) === true)
-        return SQL_OTHER_DATABASE
+      if (input !== null && dialect !== undefined) {
+        const { statements } = await clientStatements(pieces, index, input, read)
+
+        if (statements.some(statement => hasWrite(statement) && otherDatabases(statement, dialect, input.database ?? '').length > 0))
+          return SQL_OTHER_DATABASE
+      }
 
       continue
     }

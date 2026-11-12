@@ -90,6 +90,11 @@ describe('gitViolation', () => {
   test('subcommandOf skips the options before the subcommand', () => {
     expect(subcommandOf(['-C', 'dir', 'status', '-s'])).toEqual({ name: 'status', rest: ['-s'] })
   })
+
+  test('subcommandOf leaves the value of a commit short option as it is, a long option after it written out', () => {
+    expect(subcommandOf(['commit', '-m', '--al', '--al'])).toEqual({ name: 'commit', rest: ['-m', '--al', '--all'] })
+    expect(subcommandOf(['commit', '-am', '--al'])).toEqual({ name: 'commit', rest: ['-am', '--al'] })
+  })
 })
 
 describe('commit messages', () => {
