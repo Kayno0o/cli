@@ -11,7 +11,7 @@ export interface FakeMilestone { id: number, title: string, state: string, descr
 export interface FakeFailure { match: string, message: string, times?: number, exit?: number }
 // Calls whose arguments contain `match` (and `method`) wait until `parties` of them arrived, so two sessions reach that step together.
 export interface FakeBarrier { match: string, method?: string, parties: number }
-export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, beforeComment?: Record<number, string[]>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -183,7 +183,10 @@ if (command === 'api') {
     console.log(JSON.stringify(view(found)))
   }
   else if (one !== null && one[2] !== undefined && method === 'POST') {
-    state.comments = { ...state.comments, [one[1]]: [...(state.comments?.[one[1]] ?? []), fields.body, ...(state.afterComment?.[one[1]] ?? [])] }
+    // Other sessions' comments landing right before or after the first one posted here, once.
+    state.comments = { ...state.comments, [one[1]]: [...(state.comments?.[one[1]] ?? []), ...(state.beforeComment?.[one[1]] ?? []), fields.body, ...(state.afterComment?.[one[1]] ?? [])] }
+    delete state.beforeComment?.[one[1]]
+    delete state.afterComment?.[one[1]]
     console.log(JSON.stringify({ id: 1, body: fields.body }))
   }
   else if (run !== null)

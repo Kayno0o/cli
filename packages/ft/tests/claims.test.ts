@@ -3,7 +3,7 @@ import type { Issue } from '../src/issues'
 import process from 'node:process'
 import { currentSession } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
-import { claimable, holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../src/claims'
+import { claimable, firstClaimSince, holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment, withdrawnComment } from '../src/claims'
 import { heldBy, renderBoard, standing } from '../src/commands/board'
 
 const session = (name: string, pid = 1): Session => ({ name, pid, status: 'busy', cwd: '/w' })
@@ -110,6 +110,29 @@ describe('latestNote', () => {
 
     expect(latestNote(comments)?.body).toBe('Partly landed in a384daa.')
     expect(latestNote([{ body: 'Taken by session kayjs-12.', created_at: at(1) }])).toBeUndefined()
+    expect(latestNote([{ body: withdrawnComment('kayjs-12'), created_at: at(1) }])).toBeUndefined()
+  })
+})
+
+describe('a withdrawn take', () => {
+  const race = [
+    { body: takenComment('a-1'), created_at: at(1) },
+    { body: takenComment('b-2'), created_at: at(1) },
+    { body: takenComment('c-3'), created_at: at(1) },
+    { body: withdrawnComment('b-2'), created_at: at(2) },
+  ]
+
+  test('reads as never made, the claim before it standing again', () => {
+    expect(latestClaim(race)?.holder).toBe('c-3')
+    expect(latestClaim([...race, { body: withdrawnComment('c-3'), created_at: at(3) }])?.holder).toBe('a-1')
+    expect(latestClaim([{ body: withdrawnComment('a-1'), created_at: at(1) }])).toBeUndefined()
+  })
+
+  test('leaves the first claim posted after the checked comments as the race winner', () => {
+    expect(firstClaimSince(race, 0)).toBe('a-1')
+    expect(firstClaimSince(race, 1)).toBe('c-3')
+    expect(firstClaimSince(race.slice(0, 1), 1)).toBeUndefined()
+    expect(firstClaimSince([race[1]!, race[3]!, race[2]!], 0)).toBe('c-3')
   })
 })
 

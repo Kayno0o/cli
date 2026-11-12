@@ -3,6 +3,7 @@ import type { Session } from '@kaynooo/cli-kit'
 // The comments sessions post to take an issue and to give it back, a name being any text on that one line.
 const TAKEN = /^taken by session (.+)$/i
 const RELEASED = /^released by session (.+)$/i
+const WITHDRAWN = /^withdrawn by session (.+)$/i
 // What a claim comment could not carry and read back as the same name, and the clause punctuation that marks a sentence going on past a name.
 const UNCLAIMABLE = /^\s|\s$|[\p{Cc}\u2028\u2029]|[,;:]\s/u
 // A kayjs lane is named lane-<n>-<issue> after the session it runs in, whose name ends in -<n>.
@@ -17,6 +18,11 @@ export function takenComment(name: string): string {
 
 export function releasedComment(name: string): string {
   return `Released by session ${name}.`
+}
+
+// Posted by a session that lost a take race, so its claim reads as never made.
+export function withdrawnComment(name: string): string {
+  return `Withdrawn by session ${name}.`
 }
 
 // Whether a claim comment reads the name back as it is.
@@ -37,11 +43,37 @@ function isClaimant(comment: Comment, author: string | undefined): boolean {
   return author === undefined || comment.user === undefined || comment.user.login === author
 }
 
-// The claim the comments leave standing: the latest one taking the issue, unless its holder released it since.
+function inOrder<T extends Comment>(comments: T[]): T[] {
+  return comments.toSorted((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+}
+
+// The claimant's comments in order, each withdrawal dropped along with the take it withdraws.
+function claimEvents(comments: Comment[], author: string | undefined): Comment[] {
+  const kept: Comment[] = []
+
+  for (const comment of comments.filter(each => isClaimant(each, author))) {
+    const withdrawn = named(WITHDRAWN, comment.body)
+
+    if (withdrawn === undefined) {
+      kept.push(comment)
+
+      continue
+    }
+
+    const take = kept.findLastIndex(each => named(TAKEN, each.body) === withdrawn)
+
+    if (take !== -1)
+      kept.splice(take, 1)
+  }
+
+  return kept
+}
+
+// The claim the comments leave standing: the latest one taking the issue, unless its holder released or withdrew it since.
 export function latestClaim(comments: Comment[], author?: string): Claim | undefined {
   let claim: Claim | undefined
 
-  for (const comment of comments.filter(each => isClaimant(each, author)).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))) {
+  for (const comment of claimEvents(inOrder(comments), author)) {
     const taken = named(TAKEN, comment.body)
 
     if (taken !== undefined) {
@@ -57,6 +89,20 @@ export function latestClaim(comments: Comment[], author?: string): Claim | undef
   return claim
 }
 
+// Who won a take race: the first claim among the comments posted after the `seen` ones a session checked, as a later taker always sees it, while the first may confirm before the others post.
+export function firstClaimSince(comments: Comment[], seen: number, author?: string): string | undefined {
+  const fresh = new Set(inOrder(comments).slice(seen))
+
+  for (const comment of claimEvents(inOrder(comments), author)) {
+    const taken = fresh.has(comment) ? named(TAKEN, comment.body) : undefined
+
+    if (taken !== undefined)
+      return taken
+  }
+
+  return undefined
+}
+
 // What a lane started from this session is named after: the part of its name after the last dash.
 export function laneSuffix(session: string): string | undefined {
   const suffix = session.slice(session.lastIndexOf('-') + 1)
@@ -66,7 +112,7 @@ export function laneSuffix(session: string): string | undefined {
 
 // The latest comment that neither takes nor gives back the issue, which says where its work stands.
 export function latestNote<T extends Comment>(comments: T[]): T | undefined {
-  return comments.filter(comment => named(TAKEN, comment.body) === undefined && named(RELEASED, comment.body) === undefined).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).at(-1)
+  return inOrder(comments.filter(comment => [TAKEN, RELEASED, WITHDRAWN].every(sentence => named(sentence, comment.body) === undefined))).at(-1)
 }
 
 // The live session holding a claim: the one of that name, or for a lane the session it runs in.

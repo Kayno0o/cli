@@ -4,7 +4,7 @@ import type { Issue, IssueComment } from '../issues'
 import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHeader, printHint, printJson, problem, role, runHint, section, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
-import { claimable, holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
+import { claimable, firstClaimSince, holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment, withdrawnComment } from '../claims'
 import { good } from '../good'
 import { comment, commentsOf, commentsOfAll, getIssue, openIssues, sessionAuthor } from '../issues'
 import { findMilestone } from '../milestones'
@@ -289,11 +289,13 @@ export async function take(args: string[]): Promise<number> {
 
     await comment(number, takenComment(name), values.repo)
 
-    // Two sessions can pass the check above together; the latest claim stands, so the one it is not fails.
-    const standingNow = latestClaim(await commentsOf(number, values.repo), author)
+    // Two sessions can pass the check above together; the first claim posted after it stands, and the others withdraw theirs.
+    const winner = firstClaimSince(await commentsOf(number, values.repo), comments.length, author)
 
-    if (standingNow?.holder !== name)
-      fail(`#${number} was taken by ${standingNow?.holder ?? 'another session'} at the same moment`, 1)
+    if (winner !== name) {
+      await comment(number, withdrawnComment(name), values.repo)
+      fail(`#${number} was taken by ${winner ?? 'another session'} at the same moment`, 1)
+    }
 
     console.log(good(`took #${number} as ${name}: ${found.title}`))
   })

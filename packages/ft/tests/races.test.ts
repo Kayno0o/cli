@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { latestClaim } from '../src/claims'
 import { drop, take } from '../src/commands/board'
 import { edit, tick } from '../src/commands/issue'
 import { comment, createIssue, editBody } from '../src/issues'
@@ -33,9 +34,18 @@ describe('a lost update', () => {
 })
 
 describe('take', () => {
-  test('fails when another session claimed the issue at the same moment', async () => {
-    const state = await withFakeTea({ issues: [open(5, 'x')], afterComment: { 5: ['Taken by session other-1.'] } }, async () => {
+  test('fails and withdraws when another session claimed the issue just before', async () => {
+    const state = await withFakeTea({ issues: [open(5, 'x')], beforeComment: { 5: ['Taken by session other-1.'] } }, async () => {
       expect(await refusal(take(['5', '--as', 'a-1']))).toContain('#5 was taken by other-1 at the same moment')
+    })
+
+    expect(state.comments?.[5]).toEqual(['Taken by session other-1.', 'Taken by session a-1.', 'Withdrawn by session a-1.'])
+    expect(latestClaim((state.comments?.[5] ?? []).map(body => ({ body, created_at: '2026-10-23T10:00:00Z' })))?.holder).toBe('other-1')
+  })
+
+  test('holds the issue when another session claimed it just after, as that one sees this claim first', async () => {
+    const state = await withFakeTea({ issues: [open(5, 'x')], afterComment: { 5: ['Taken by session other-1.'] } }, async () => {
+      expect(await take(['5', '--as', 'a-1'])).toBe(0)
     })
 
     expect(state.comments?.[5]).toEqual(['Taken by session a-1.', 'Taken by session other-1.'])
@@ -48,9 +58,11 @@ describe('take', () => {
       refusals = await Promise.all([refusal(take(['5', '--as', 'a-1'])), refusal(take(['5', '--as', 'b-2']))])
     })
 
+    const winner = refusals[0] === '' ? 'a-1' : 'b-2'
+
     expect(refusals.filter(each => each !== '')).toHaveLength(1)
-    expect(refusals.join('')).toContain('at the same moment')
-    expect(state.comments?.[5]).toHaveLength(2)
+    expect(refusals.join('')).toContain(`taken by ${winner} at the same moment`)
+    expect(latestClaim((state.comments?.[5] ?? []).map(body => ({ body, created_at: '2026-10-23T10:00:00Z' })))?.holder).toBe(winner)
   })
 
   test('takes an issue nobody raced for', async () => {
