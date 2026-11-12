@@ -151,6 +151,22 @@ describe('maskLine keyword values', () => {
     }
   })
 
+  test('masks the value under any secret name, camelCase and run-together ones included', () => {
+    for (const line of ['PGPASSWORD=hunter22', 'MYSQL_PWD=hunter22', 'DB_PASS=hunter22', 'DBPASS=hunter22', 'GPG_PASSPHRASE=hunter22', 'clientSecret=hunter22', '{"clientSecret": "hunter22"}', '{"refreshToken":"hunter22x1"}', 'spring.datasource.password=hunter22'])
+      expect(maskLine(line)).not.toContain('hunter22')
+  })
+
+  test('masks a printed variable to the end of its line, and each of several on one line', () => {
+    expect(maskLine('DB_PASSWORD=my secret value here')).toBe('DB_PASSWORD=my ***(20)')
+    expect(maskLine('PGPASSWORD=hunter2hunter2 MYSQL_PWD=hunter2hunter2')).not.toContain('hunter2hunter2')
+    expect(maskLine('log: password=hunter22 user=bob')).toBe('log: password=hu***(8) user=bob')
+  })
+
+  test('leaves settings and counts under a secret name alone', () => {
+    for (const line of ['TOKEN_TTL=3600', 'AUTH_URL=https://auth.example.com/login', 'PASSWORD_FILE=/run/secrets/db', 'max_tokens=4096', 'key=value', 'SESSION_DRIVER=redis'])
+      expect(maskLine(line)).toBe(line)
+  })
+
   test('masks a password given on a command line', () => {
     expect(maskLine('mysql -u root -phunter22 db')).toBe('mysql -u root -phu***(8) db')
     expect(maskLine('sshpass -p hunter22 ssh host')).toBe('sshpass -p hu***(8) ssh host')

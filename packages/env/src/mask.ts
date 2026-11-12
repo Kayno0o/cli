@@ -28,8 +28,8 @@ const ESCAPE = /[.*+?^${}()|[\]\\]/g
 interface TokenFormat {
   kind: string
   pattern: RegExp
-  // Skips a candidate that is a placeholder or a plain word. `before` is the line text ahead of it.
-  skip?: (value: string, before: string) => boolean
+  // Skips a candidate that is a placeholder or a plain word. `before` is the line text ahead of it, `name` the key a pattern names `name`.
+  skip?: (value: string, before: string, name?: string) => boolean
 }
 
 // A secret value starting like this is a reference or a placeholder, not the secret.
@@ -57,7 +57,29 @@ function isWeak(value: string, before: string): boolean {
 
 // A key name holding one of the words: `AWS_SECRET_ACCESS_KEY`, `X-Api-Key`, `access_token`.
 function keyed(names: string, value: string): RegExp {
-  return new RegExp(`(?<![\\w-])["']?(?:[\\w-]{0,30}[_-])?(?:${names})(?:[_-][\\w-]{0,30})?["']?${KEY_VALUE_GAP}${value}`, 'dgi')
+  return new RegExp(`(?<![\\w-])["']?(?<name>(?:[\\w-]{0,30}[_-])?(?:${names})(?:[_-][\\w-]{0,30})?)["']?${KEY_VALUE_GAP}${value}`, 'dgi')
+}
+
+// Any key name, which `isSecretName` then judges, so `PGPASSWORD`, `MYSQL_PWD` and `clientSecret` count as `DB_PASSWORD` does.
+const ANY_NAME = '(?<![\\w.-])["\']?(?<name>[a-z_][\\w.-]{0,60})["\']?'
+// Names a value under is a secret even when short and without a digit, as under `password`.
+const PASSWORD_NAME = new RegExp(`${STRONG_NAME}|pass|pwd`, 'i')
+// Name endings of a setting about a secret rather than the secret (`TOKEN_TTL`, `PASSWORD_FILE`).
+const SETTING_SUFFIX = /[_.-](?:TTL|FILE|PATH|DIR|NAME|URL|TIMEOUT|EXPIRY|EXPIRES|LIFETIME|LENGTH|ENABLED|ALGORITHM|HEADER|PREFIX|COUNT|MAX|MIN)$/i
+
+const NUMBER = /^\d+$/
+
+// A value under a setting's name, or a count under a weak one (`max_tokens=4096`), is no secret.
+function isSetting(value: string, name: string): boolean {
+  return SETTING_SUFFIX.test(name) || (!PASSWORD_NAME.test(name) && NUMBER.test(value))
+}
+
+// The skip of a key the name alone does not settle: a private key is masked by its own markers.
+function isPlainNamed(value: string, before: string, name = ''): boolean {
+  if (!isSecretName(name) || isSetting(value, name) || value.length < 4 || value.includes('-----BEGIN '))
+    return true
+
+  return PASSWORD_NAME.test(name) ? isProse(value, before) : isWeak(value, before)
 }
 
 // A pattern with a group masks that group only, else the whole match.
@@ -80,10 +102,14 @@ const TOKEN_FORMATS: TokenFormat[] = [
   { kind: 'SendGrid key', pattern: /\bSG\.[\w-]{16,}\.[\w-]{16,}/dg },
   { kind: 'Authorization header', pattern: /\bAuthorization["']?\s*[:=]\s*["']?(?:Bearer|Basic|Token|Digest)\s+([^\s"',;]{8,})/dgi, skip: isPlaceholder },
   { kind: 'Bearer token', pattern: /\bBearer\s+((?=[\w.~+/=-]*\d)[\w.~+/=-]{20,})/dg },
-  { kind: 'password', pattern: keyed(STRONG_NAME, '([^\\s"\'&;,]{4,})'), skip: isProse },
-  { kind: 'password', pattern: keyed(WEAK_NAME, '([^\\s"\'&;,]{4,})'), skip: isWeak },
-  { kind: 'password', pattern: keyed(STRONG_NAME, '(["\'])((?:\\\\.|(?!\\1)[^\\\\\\n]){4,})\\1'), skip: isPlaceholder },
-  { kind: 'password', pattern: keyed(WEAK_NAME, '(["\'])((?:\\\\.|(?!\\1)[^\\\\\\n]){4,})\\1'), skip: isWeak },
+  { kind: 'password', pattern: keyed(STRONG_NAME, '([^\\s"\'&;,]{4,})'), skip: (value, before, name = '') => isSetting(value, name) || isProse(value, before) },
+  { kind: 'password', pattern: keyed(WEAK_NAME, '([^\\s"\'&;,]{4,})'), skip: (value, before, name = '') => isSetting(value, name) || isWeak(value, before) },
+  { kind: 'password', pattern: keyed(STRONG_NAME, '(["\'])((?:\\\\.|(?!\\2)[^\\\\\\n]){4,})\\2'), skip: (value, _, name = '') => isSetting(value, name) || isPlaceholder(value) },
+  { kind: 'password', pattern: keyed(WEAK_NAME, '(["\'])((?:\\\\.|(?!\\2)[^\\\\\\n]){4,})\\2'), skip: (value, before, name = '') => isSetting(value, name) || isWeak(value, before) },
+  { kind: 'password', pattern: new RegExp(`${ANY_NAME}${KEY_VALUE_GAP}([^\\s"'&;,]{4,})`, 'dgi'), skip: isPlainNamed },
+  { kind: 'password', pattern: new RegExp(`${ANY_NAME}${KEY_VALUE_GAP}(["'])((?:\\\\.|(?!\\2)[^\\\\\\n]){4,})\\2`, 'dgi'), skip: isPlainNamed },
+  // A variable as printenv or env prints it, whose value runs to the end of the line, spaces included.
+  { kind: 'password', pattern: /^\s*(?:export\s+)?(?<name>[A-Za-z_]\w{0,60})=(?!["'])(\S(?:.*\S)?)/dg, skip: isPlainNamed },
 ]
 
 // A private key block (PEM, PGP). Its body is masked from just after the BEGIN marker to the END marker or the end of the line, so one line may hold the whole key escaped as JSON.
@@ -238,7 +264,7 @@ export function findSecrets(line: string, known?: KnownSecrets): Match[] {
 
       const value = line.slice(start, end)
 
-      if (!skip?.(value, line.slice(0, start)))
+      if (!skip?.(value, line.slice(0, start), token.groups?.name))
         found.push({ start, end, kind, mask: hint(value) })
     }
   }
