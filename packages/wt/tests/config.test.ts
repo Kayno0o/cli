@@ -1,6 +1,7 @@
-import { homedir } from 'node:os'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { fillTemplate, resolveConfig } from '../src/config'
 import { tasksDir } from '../src/project'
 import { shellWrapper } from '../src/shell'
@@ -38,9 +39,37 @@ describe('tasksDir', () => {
 })
 
 describe('shellWrapper', () => {
-  test('wraps fish, and names the shells it has no wrapper for', () => {
-    expect(shellWrapper('fish')).toContain('builtin cd $dir')
-    expect(shellWrapper('fish')).not.toContain('complete -c wt')
-    expect(() => shellWrapper('bash')).toThrow('no wrapper for bash yet, only fish')
+  let dir: string
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'wt-shell-'))
+    mkdirSync(join(dir, 'bin'))
+    mkdirSync(join(dir, 'there'))
+    // A wt answering `path` alone, logging every other call
+    writeFileSync(join(dir, 'bin', 'wt'), `#!/bin/sh\n[ "$1" = path ] && { echo ${join(dir, 'there')}; exit 0; }\necho "wt $*" >> ${join(dir, 'calls')}\n`, { mode: 0o755 })
+  })
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+
+  test.each(['fish', 'bash', 'zsh'])('wraps %s with its completion inline, so reading it runs nothing, and cd goes where wt path says', (shell) => {
+    const wrapper = shellWrapper(shell)
+    const file = join(dir, `wt.${shell}`)
+
+    expect(wrapper).toContain('__kaynooo_cli_complete')
+    expect(wrapper).not.toContain('--completions fish |')
+    writeFileSync(file, wrapper)
+
+    if (Bun.which(shell) === null)
+      return
+
+    const script = shell === 'fish' ? `source ${file}; wt cd planning; and pwd` : `source ${file}; wt cd planning && pwd`
+    const run = Bun.spawnSync([shell, '-c', script], { env: { PATH: `${join(dir, 'bin')}:/usr/bin:/bin`, HOME: dir } })
+
+    expect(run.stdout.toString()).toBe(`${join(dir, 'there')}\n`)
+    expect(existsSync(join(dir, 'calls'))).toBe(false)
+  })
+
+  test('names the shells it has a wrapper for when asked for another', () => {
+    expect(() => shellWrapper('nu')).toThrow('no wrapper for nu, only fish, bash, zsh')
   })
 })

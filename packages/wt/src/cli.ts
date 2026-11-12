@@ -226,9 +226,9 @@ async function startOrStop(verb: 'up' | 'down', args: string[]): Promise<number>
 
 const SHELL_USAGE = `wt shell <shell>
 
-Prints the shell function that lets \`wt cd\` change directory and \`wt rm\` leave the folder it removes: \`wt shell fish | source\` in config.fish.
+Prints the shell function that lets \`wt cd\` change directory and \`wt rm\` leave the folder it removes, with wt's completion. Save it where the shell reads it at start, so no process runs then, and again after upgrading wt: \`wt shell fish > ~/.config/fish/conf.d/wt.fish\`; for bash or zsh, a file sourced from ~/.bashrc, or from ~/.zshrc after compinit.
 
-Exits 0 when it printed the wrapper, 1 for a shell it has none for, 2 on a usage error.`
+Exits 0 when it printed the wrapper, 1 for a shell it has none for (fish, bash and zsh have one), 2 on a usage error.`
 
 const LS_USAGE = `wt ls [-a] [-p <name>] [--json]
 
@@ -268,7 +268,7 @@ Exits 0 once the browser is started, 1 when there is no such worktree, no URL or
 
 const CD_USAGE = `wt cd [task] [-p <name>]
 
-Goes to a worktree's directory, or main's when no task is given. A program cannot change its shell's directory, so this runs in the shell function \`wt shell fish | source\` defines; run as a program, it says so.
+Goes to a worktree's directory, or main's when no task is given. A program cannot change its shell's directory, so this runs in the shell function \`wt shell\` prints; run as a program, it says so.
 
 Exits 0 once there, 1 when there is no such worktree or the shell function is missing, 2 on a usage error.`
 
@@ -403,7 +403,7 @@ process.exitCode = await runCli({
 
           // Checked first, so a task that does not exist says so rather than the wrapper's absence
           await printPath(task, values)
-          console.error('wt: cd needs the shell function, which a program cannot replace: `wt shell fish | source` in config.fish, or cd to the path above')
+          console.error('wt: cd needs the shell function `wt shell <shell>` prints, as a program cannot change its shell\'s directory: cd to the path above')
 
           return 1
         })
@@ -462,7 +462,7 @@ process.exitCode = await runCli({
     shell: {
       summary: 'print the shell function letting `wt cd` change directory',
       run: async (args) => {
-        const { positionals: [shell] } = parse(args, SHELL_USAGE, {}, { positionals: ['<shell>'], candidates: { '<shell>': async () => Promise.resolve(['fish']) } })
+        const { positionals: [shell] } = parse(args, SHELL_USAGE, {}, { positionals: ['<shell>'], candidates: { '<shell>': async () => Promise.resolve(['fish', 'bash', 'zsh']) } })
 
         return guarded(async () => {
           console.log((await import('./shell')).shellWrapper(shell))

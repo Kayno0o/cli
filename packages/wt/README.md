@@ -26,11 +26,11 @@ bun install -g @kaynooo/cli-wt
 | `wt init [dir]` | drafts a manifest from the compose project in `dir` into the manifests folder (`--print` to stdout) |
 | `wt run <task> -- <cmd>` | runs a command in a throwaway container of the manifest's `run.service`, against a test database of the worktree's own |
 | `wt heavy -- <cmd>` | runs a command once the heavy ones queued before it, from any session, are done |
-| `wt shell fish` | the shell function giving `wt cd <task>`, and `wt rm` leaving the folder it removed |
+| `wt shell fish\|bash\|zsh` | the shell function giving `wt cd <task>`, and `wt rm` leaving the folder it removed, with the completion |
 
 A task defaults to the worktree the current directory is in, and `-p <name>` picks the project when the current directory is in none. `add`, `rm`, `up` and `down` take `--bg` to run detached, ending with a desktop notification. One action runs per stack at a time: a second one is refused, naming what holds it.
 
-Put `wt shell fish | source` in `config.fish` for `wt cd`.
+For `wt cd`, save the wrapper where the shell reads it at start, so no process runs then (again after upgrading wt): `wt shell fish > ~/.config/fish/conf.d/wt.fish`, or `wt shell bash > ~/.local/share/wt/wt.bash` sourced from `~/.bashrc` (zsh likewise, after `compinit`).
 
 ## Manifests
 
