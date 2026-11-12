@@ -839,7 +839,7 @@ describe('up and down with no runner', () => {
       `${dirOf('planning')} compose up -d --build`,
       `${dirOf('planning')} compose down --remove-orphans`,
     ])
-    expect(sandbox.calls().filter(call => call === 'devproxy up')).toHaveLength(2)
+    expect(sandbox.calls().filter(call => call.startsWith('devproxy'))).toEqual(['devproxy up', 'devproxy up'])
     expect(readFileSync(join(dirOf('planning'), 'setup.log'), 'utf8')).toBe('ran\n')
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
@@ -890,7 +890,7 @@ describe('up and down with no runner', () => {
     const { sandbox, wt } = env
 
     expect((await wt('add', 'planning')).code).toBe(0)
-    sandbox.seed('devproxy-unconfigured', '')
+    rmSync(join(sandbox.home, '.config', 'devproxy', 'config.ts'))
 
     const run = await wt('up', 'planning')
 

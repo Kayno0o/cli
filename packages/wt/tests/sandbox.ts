@@ -104,10 +104,10 @@ while [ $# -gt 0 ]; do
 done
 `
 
-// The shared proxy: logs what it was asked, lists the hosts of `devproxy-hosts` (none by default), fails `up` when `devproxy-fails` exists, and has no config to serve when `devproxy-unconfigured` does; `up` creates the proxy network.
+// The shared proxy: logs what it was asked, lists the hosts of `devproxy-hosts` (none by default), fails `up` when `devproxy-fails` exists, and has no config to serve when its config file is gone; `up` creates the proxy network.
 const DEVPROXY = `#!/bin/sh
 echo "devproxy $*" >> "$FAKE_DIR/calls.log"
-[ -f "$FAKE_DIR/devproxy-unconfigured" ] && exit 1
+[ -f "$XDG_CONFIG_HOME/devproxy/config.ts" ] || exit 1
 case "$1" in
   hosts) cat "$FAKE_DIR/devproxy-hosts" 2>/dev/null || echo '[]' ;;
   up)
@@ -189,6 +189,9 @@ export function makeSandbox(): Sandbox {
 
   for (const file of ['docker.log', 'calls.log', 'forbidden.log', 'paused'])
     writeFileSync(join(state, file), '')
+
+  mkdirSync(join(home, '.config', 'devproxy'), { recursive: true })
+  writeFileSync(join(home, '.config', 'devproxy', 'config.ts'), 'export default {}\n')
 
   // The system tools git, cp and ss come from, the fakes first so they shadow the real ones
   const path = `${bin}:/usr/bin:/bin:${dirname(process.execPath)}`

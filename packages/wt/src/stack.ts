@@ -72,7 +72,7 @@ export async function stackUp(worktree: Worktree): Promise<void> {
     return runTemplate('up', up, worktree)
 
   // The override puts routed services on the proxy's network, which must exist before compose starts them
-  if (await hasDevproxy())
+  if (hasDevproxy())
     await devproxyUp()
 
   const network = worktree.project.settings.proxyNetwork

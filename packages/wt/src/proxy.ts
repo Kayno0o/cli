@@ -1,6 +1,8 @@
 /** The shared proxy is devproxy (@kaynooo/devproxy): the one on PATH, else the copy installed with wt. */
 
+import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { configBase } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { WtError } from './project'
 
@@ -27,11 +29,9 @@ export function devproxyArgv(path = process.env.PATH ?? ''): string[] {
   }
 }
 
-/** Whether devproxy is installed and has a config to serve, so wt routes through it. */
-export async function hasDevproxy(): Promise<boolean> {
-  const argv = devproxyArgv()
-
-  return argv.length > 0 && (await $`${argv} hosts --json`.quiet().nothrow()).exitCode === 0
+/** Whether devproxy is installed and has a config to serve, so wt routes through it: its config file looked up as devproxy does, so `up` spawns it once. */
+export function hasDevproxy(): boolean {
+  return devproxyArgv().length > 0 && existsSync(process.env.DEVPROXY_CONFIG ?? join(configBase(), 'devproxy', 'config.ts'))
 }
 
 /** Every host the proxy serves; empty without devproxy or its config. */
