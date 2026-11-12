@@ -30,6 +30,13 @@ const INDENTED = /\.(?:py|yml|yaml)$/i
 const INDENT = /^\s*/
 const CONTINUES = /(?:[=(,[{:?|&+\-*/<>]|=>)$/
 const BODY_OPENER = /\s*\{\s*$/
+// A class property or object key holding an arrow function or a function: `prop = () =>`, `prop: Handler = async x =>`, `key: function`.
+const PROPERTY_FUNCTION = /^[#\w$]+\s*(?:[?!]?:[^=]*)?[:=]\s*(?:async\s+)?(?:function\b|(?:\([^)]*\)|[\w$]+)\s*(?::[^=]+)?=>)/
+// What comes before a brace opening an object literal rather than a block.
+const OBJECT_POSITION = /(?:[=(,[:?]|\breturn|\bdefault)\s*$/
+// A Rust char literal, so the quote of a lifetime (`'a`) opens nothing.
+const RUST_CHAR = /^'(?:\\(?:u\{[\da-f]{1,6}\}|x[\da-f]{2}|.)|[^'\\])'/i
+const RUST = /\.rs$/i
 const LONGEST_DEFINITION = 400
 const LONGEST_SIGNATURE = 160
 
@@ -41,8 +48,8 @@ function escaped(name: string): string {
   return name.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 }
 
-// Whether the line declares the name: a declaration keyword before it, or a member whose parameters follow it.
-export function declares(line: string, name: string): boolean {
+// Whether the line declares the name: a declaration keyword before it, or, inside a class body or an object literal, a member whose parameters follow it or a property holding a function.
+export function declares(line: string, name: string, inMembers = true): boolean {
   const text = line.trim()
   const word = new RegExp(String.raw`^${escaped(name)}\b`)
 
@@ -52,14 +59,16 @@ export function declares(line: string, name: string): boolean {
     return word.test(rest.replace(STAR, ''))
   }
 
-  return line !== text && MEMBER.test(text) && !CALL_KEYWORDS.test(text) && word.test(text.replace(MODIFIERS, '')) && (text.endsWith('{') || text.endsWith(':'))
+  if (!inMembers || line === text || CALL_KEYWORDS.test(text))
+    return false
+
+  const named = text.replace(MODIFIERS, '')
+
+  return word.test(named) && ((MEMBER.test(text) && (text.endsWith('{') || text.endsWith(':'))) || PROPERTY_FUNCTION.test(named))
 }
 
-// The counts a line changes, strings and line comments skipped.
-function depthChange(line: string, quote: { open: string }): { braces: number, parens: number } {
-  let braces = 0
-  let parens = 0
-
+// Calls `each` with every character of the line outside strings and line comments, with its index.
+function codeChars(line: string, quote: { open: string }, rust: boolean, each: (char: string, index: number) => void): void {
   for (let i = 0; i < line.length; i++) {
     const char = line[i] ?? ''
 
@@ -75,9 +84,26 @@ function depthChange(line: string, quote: { open: string }): { braces: number, p
     if (char === '/' && line[i + 1] === '/')
       break
 
-    if (char === '"' || char === '\'' || char === '`')
+    if (rust && char === '\'')
+      i += (RUST_CHAR.exec(line.slice(i))?.[0].length ?? 1) - 1
+    else if (char === '"' || char === '\'' || char === '`')
       quote.open = char
-    else if (char === '{')
+    else
+      each(char, i)
+  }
+
+  // a line ends a single-quoted string, never a template literal
+  if (quote.open !== '`')
+    quote.open = ''
+}
+
+// The counts a line changes, strings and line comments skipped.
+function depthChange(line: string, quote: { open: string }, rust: boolean): { braces: number, parens: number } {
+  let braces = 0
+  let parens = 0
+
+  codeChars(line, quote, rust, (char) => {
+    if (char === '{')
       braces++
     else if (char === '}')
       braces--
@@ -85,13 +111,45 @@ function depthChange(line: string, quote: { open: string }): { braces: number, p
       parens++
     else if (char === ')' || char === ']')
       parens--
-  }
-
-  // a line ends a single-quoted string, never a template literal
-  if (quote.open !== '`')
-    quote.open = ''
+  })
 
   return { braces, parens }
+}
+
+// For each line, whether it sits in a class body or an object literal, where members are declared, rather than among statements; every line of a file without braces (Python, YAML) may hold members.
+function memberLines(lines: readonly string[], path: string): boolean[] {
+  if (INDENTED.test(path))
+    return lines.map(() => true)
+
+  const quote = { open: '' }
+  const rust = RUST.test(path)
+  const open: boolean[] = []
+  let previous = ''
+
+  return lines.map((line) => {
+    const inMembers = open.at(-1) === true
+
+    codeChars(line, quote, rust, (char, index) => {
+      if (char === '}') {
+        open.pop()
+
+        return
+      }
+
+      if (char !== '{')
+        return
+
+      // A brace alone on its line opens what the line above declared.
+      const before = line.slice(0, index).trim() === '' ? previous : line.slice(0, index)
+
+      open.push(HOLDS_MEMBERS.test(before) || OBJECT_POSITION.test(before.trimEnd()))
+    })
+
+    if (line.trim() !== '')
+      previous = line
+
+    return inMembers
+  })
 }
 
 // The last line of the declaration starting at `start` (0-based): its braces closed, the line its indentation ends for Python or YAML.
@@ -116,13 +174,14 @@ function endOf(lines: readonly string[], start: number, path: string): number {
   }
 
   const quote = { open: '' }
+  const rust = RUST.test(path)
   let braces = 0
   let parens = 0
   let opened = false
 
   for (let i = start; i <= last; i++) {
     const line = lines[i] ?? ''
-    const change = depthChange(line, quote)
+    const change = depthChange(line, quote, rust)
 
     opened ||= change.braces > 0 || line.includes('{')
     braces += change.braces
@@ -148,10 +207,11 @@ function leadingStart(lines: readonly string[], start: number): number {
 // Each declaration of the name in the text, with its comments, as spans.
 export function definitions(text: string, path: string, name: string): Span[] {
   const lines = text.split('\n')
+  const members = memberLines(lines, path)
   const spans: Span[] = []
 
   for (let i = 0; i < lines.length; i++) {
-    if (!declares(lines[i] ?? '', name))
+    if (!declares(lines[i] ?? '', name, members[i]))
       continue
 
     const end = endOf(lines, i, path)

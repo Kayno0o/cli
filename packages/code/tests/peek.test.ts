@@ -194,6 +194,25 @@ describe('peek', () => {
 describe('declarations in other languages', () => {
   const find = (source: string, path: string, name: string) => definitions(source, path, name).map(span => span.from)
 
+  test('reads a Rust function whose lifetimes leave an odd number of quotes', () => {
+    expect(definitions('fn first<\'a>(x: &\'a str) -> &\'a str {\n    x\n}\n', 'd.rs', 'first')).toEqual([{ path: 'd.rs', from: 1, to: 3 }])
+    expect(definitions('fn brace() -> char {\n    let c = \'{\';\n    c\n}\n', 'd.rs', 'brace')).toEqual([{ path: 'd.rs', from: 1, to: 4 }])
+  })
+
+  test('reads members of classes and object literals, not calls among statements', () => {
+    expect(definitions('export function load(a) {\n}\nfunction o() {\n  load(1, {\n  })\n}\n', 'b.ts', 'load')).toEqual([{ path: 'b.ts', from: 1, to: 2 }])
+    expect(find('function App() {\n  useThing(() => {\n  })\n}\n', 'a.tsx', 'useThing')).toEqual([])
+    expect(find('const api = {\n  load(a) {\n  },\n  save: async (b) => {\n  },\n}\n', 'a.ts', 'load')).toEqual([2])
+    expect(find('const api = {\n  load(a) {\n  },\n  save: async (b) => {\n  },\n}\n', 'a.ts', 'save')).toEqual([4])
+  })
+
+  test('reads a class property holding an arrow function', () => {
+    const source = 'class A {\n  private onClick = (event: Event): void => {\n  }\n\n  handler: Handler = async x => x\n}\n'
+
+    expect(find(source, 'a.ts', 'onClick')).toEqual([2])
+    expect(find(source, 'a.ts', 'handler')).toEqual([5])
+  })
+
   test('reads a PHP method and a Rust item with their visibility', () => {
     const php = '<?php\nclass A\n{\n    public function hello()\n    {\n        return 1;\n    }\n}\n'
     const rust = 'pub struct S {\n    a: u8,\n}\n\npub fn run() {\n}\n\npub(crate) fn inner() {\n}\n'
