@@ -94,6 +94,11 @@ describe('complexityOf', () => {
     expect(complexityOf('// don\'t\nif (a) { b = \'x\' }\n')).toBe(2)
   })
 
+  test('blanks a triple-quoted docstring', () => {
+    expect(complexityOf('def f():\n    """Scores a hand if it wins or ties,\n    and loops while it can."""\n    return 1\n')).toBe(1)
+    expect(complexityOf('def f():\n    \'\'\'if or and\'\'\'\n    return 1 if a else 2\n')).toBe(2)
+  })
+
   test('leaves tests and generated paths out', () => {
     expect(['src/a.ts', 'lib/b.py', 'src/c.kay', 'app/d.vue', 'src/E.php'].map(isCandidate)).toEqual([true, true, true, true, true])
     expect(['tests/a.ts', 'src/a.test.ts', 'dist/a.js', 'src/a.d.ts', 'README.md', 'bun.lock'].map(isCandidate)).toEqual([false, false, false, false, false, false])
