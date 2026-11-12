@@ -38,20 +38,38 @@ function dev(args: string[], stdin?: string) {
 }
 
 describe('dev password', () => {
+  test('leaves the clipboard alone unless --copy', () => {
+    const bin = temp()
+    const clip = join(bin, 'clip')
+
+    for (const tool of ['wl-copy', 'xclip', 'xsel', 'pbcopy'])
+      writeFileSync(join(bin, tool), `#!/bin/sh\n/bin/cat > ${clip}\n`, { mode: 0o755 })
+
+    const run = (args: string[]) => Bun.spawnSync([process.execPath, CLI, 'password', ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, PATH: bin, WAYLAND_DISPLAY: 'wayland-0', DISPLAY: ':0', NO_COLOR: '1' } })
+
+    expect(run([]).exitCode).toBe(0)
+    expect(Bun.file(clip).size).toBe(0)
+
+    const copied = run(['--copy'])
+
+    expect(copied.stderr.toString()).toContain('copied to clipboard')
+    expect(Bun.spawnSync(['cat', clip]).stdout.toString().trim()).toBe(copied.stdout.toString().trim())
+  })
+
   test('defaults to 32 bytes of base64', () => {
-    const { code, out } = dev(['password', '--no-copy'])
+    const { code, out } = dev(['password'])
 
     expect(code).toBe(0)
     expect(out).toMatch(/^[\w+/]{43}=\n$/)
   })
 
   test('takes a length and a format', () => {
-    expect(dev(['password', '8', 'hex', '--no-copy']).out).toMatch(/^[0-9a-f]{16}\n$/)
-    expect(dev(['password', '32', 'base64url', '--no-copy']).out).toMatch(/^[\w-]{43}\n$/)
+    expect(dev(['password', '8', 'hex']).out).toMatch(/^[0-9a-f]{16}\n$/)
+    expect(dev(['password', '32', 'base64url']).out).toMatch(/^[\w-]{43}\n$/)
   })
 
   test('--bcrypt hashes the given password with $2y$', async () => {
-    const { code, out } = dev(['password', '--bcrypt', 'hunter2', '--no-copy'])
+    const { code, out } = dev(['password', '--bcrypt', 'hunter2'])
     const hash = out.trim()
 
     expect(code).toBe(0)
@@ -60,18 +78,18 @@ describe('dev password', () => {
   })
 
   test('--bcrypt alone hashes a generated password and prints that one on stderr', async () => {
-    const { out, err } = dev(['password', '-b', '--no-copy'])
+    const { out, err } = dev(['password', '-b'])
 
     expect(out.trim()).toStartWith('$2y$10$')
     expect(await Bun.password.verify(err.trim(), out.trim().replace('$2y$', '$2b$'))).toBe(true)
   })
 
   test('--bcrypt - reads the password from stdin, or asks for it masked on a terminal', async () => {
-    const piped = dev(['password', '--bcrypt', '-', '--no-copy'], 'hunter2\n').out.trim()
+    const piped = dev(['password', '--bcrypt', '-'], 'hunter2\n').out.trim()
 
     expect(await Bun.password.verify('hunter2', piped.replace('$2y$', '$2b$'))).toBe(true)
 
-    const { code, screen } = await onTerminal(['password', '--bcrypt', '-', '--no-copy'], 'the password', 'typed_pw_42')
+    const { code, screen } = await onTerminal(['password', '--bcrypt', '-'], 'the password', 'typed_pw_42')
     const hash = (/\$2y\$10\$\S+/).exec(screen)?.[0] ?? ''
 
     expect(code).toBe(0)
@@ -80,8 +98,8 @@ describe('dev password', () => {
   })
 
   test('--json', () => {
-    expect(JSON.parse(dev(['password', '4', 'hex', '--no-copy', '--json']).out)).toMatchObject({ format: 'hex', bytes: 4, copied: false, password: expect.stringMatching(/^[0-9a-f]{8}$/) })
-    expect(JSON.parse(dev(['password', '--bcrypt', 'x', '--no-copy', '--json']).out)).toMatchObject({ hash: expect.stringMatching(/^\$2y\$/) })
+    expect(JSON.parse(dev(['password', '4', 'hex', '--json']).out)).toMatchObject({ format: 'hex', bytes: 4, copied: false, password: expect.stringMatching(/^[0-9a-f]{8}$/) })
+    expect(JSON.parse(dev(['password', '--bcrypt', 'x', '--json']).out)).toMatchObject({ hash: expect.stringMatching(/^\$2y\$/) })
   })
 
   test('usage errors exit 2', () => {

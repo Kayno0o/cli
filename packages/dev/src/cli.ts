@@ -4,7 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Algorithm } from './hash'
 import type { Format } from './password'
 import process from 'node:process'
-import { badUsage, copyText, fail, isInteractive, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, copyOption, copyText, fail, isInteractive, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { b64Decode, b64Encode } from './encode'
 import { ALGORITHMS, hashHex, hashStream } from './hash'
@@ -79,16 +79,16 @@ function printRows(rows: [label: string, value: string][]): void {
     console.log(`${cyan(label.padEnd(width))}  ${value}`)
 }
 
-const PASSWORD_USAGE = `dev password [length] [format] [-b|--bcrypt [password]]: a random password of <length> bytes (default ${DEFAULT_LENGTH}) as hex, base64 (default) or base64url
+const PASSWORD_USAGE = `dev password [length] [format] [-b|--bcrypt [password]] [--copy]: a random password of <length> bytes (default ${DEFAULT_LENGTH}) as hex, base64 (default) or base64url
 
-Printed on stdout and copied to the clipboard when a tool for it (wl-copy, xclip, xsel, pbcopy) exists (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given (- asks for it masked on a terminal, or reads it from stdin, keeping it out of the shell history), or of a generated one, which then prints on stderr and is the one copied. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.`
+Printed on stdout; --copy also copies it to the clipboard through wl-copy, xclip, xsel or pbcopy (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given (- asks for it masked on a terminal, or reads it from stdin, keeping it out of the shell history), or of a generated one, which then prints on stderr and is the one --copy copies. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.`
 
 const PASSWORD_EXITS: ExitRow[] = [[0, 'it printed the password or hash'], [2, 'a usage error'], [130, 'the prompt was cancelled']]
 
 const PASSWORD_OPTIONS = {
-  'bcrypt': { type: 'string', short: 'b', optional: { bare: '', accepts: STDIN_OR_VALUE }, description: 'print the bcrypt hash of the password given, or of a generated one' },
-  'no-copy': { type: 'boolean', description: 'leave the clipboard alone' },
-  'json': jsonOption('{password?, hash?, format, bytes, copied}'),
+  bcrypt: { type: 'string', short: 'b', optional: { bare: '', accepts: STDIN_OR_VALUE }, description: 'print the bcrypt hash of the password given, or of a generated one' },
+  copy: copyOption('the password, or the hash of a password given'),
+  json: jsonOption('{password?, hash?, format, bytes, copied}'),
 } as const
 
 const FORMAT_NOTES: Record<Format, string> = { hex: 'hexadecimal', base64: 'base64', base64url: 'url-safe base64' }
@@ -111,7 +111,7 @@ export async function password(args: string[]): Promise<number> {
   const given = bcrypt === '-' ? await secretInput('the password') : bcrypt
   const secret = given ?? generatePassword(bytes, format)
   const hash = values.bcrypt === undefined ? undefined : await bcryptHash(secret)
-  const copied = values['no-copy'] === true ? false : await copyText(given === undefined ? secret : hash ?? secret)
+  const copied = values.copy === true && await copyText(given === undefined ? secret : hash ?? secret)
 
   if (values.json === true) {
     printJson({ ...hash === undefined ? {} : { hash }, ...given === undefined ? { password: secret } : {}, format, bytes, copied })
@@ -411,7 +411,7 @@ if (import.meta.main) {
     replaces: 'openssl rand, htpasswd, jwt.io, date -d, uuidgen, base64, sha256sum and one-off scripts for each',
     examples: ['dev password', ['dev jwt <token>', 'header, payload and expiry'], ['dev ts 1700000000', 'an epoch as dates']],
     commands: {
-      password: { summary: 'a random password, copied to the clipboard, or its bcrypt hash', run: password },
+      password: { summary: 'a random password, or its bcrypt hash', run: password },
       jwt: { summary: 'decode a JWT without verifying it, expiry shown as dates', run: jwt },
       ts: { summary: 'convert epochs, ISO dates and durations, local and UTC', run: ts },
       uuid: { summary: 'random UUIDs, v4 or v7', run: async args => Promise.resolve(uuid(args)) },

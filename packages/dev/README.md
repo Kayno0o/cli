@@ -8,7 +8,7 @@ bun add -g @kaynooo/cli-dev
 
 | Command | What it does |
 | --- | --- |
-| `dev password [length] [format] [-b\|--bcrypt [password]]` | `length` random bytes (default 32) as `hex`, `base64` (default) or `base64url`, printed and copied with `wl-copy` when it exists; `--bcrypt` prints the hash of the password given, or of a generated one |
+| `dev password [length] [format] [-b\|--bcrypt [password]] [--copy]` | `length` random bytes (default 32) as `hex`, `base64` (default) or `base64url`, printed, and copied with `wl-copy` under `--copy`; `--bcrypt` prints the hash of the password given, or of a generated one |
 | `dev jwt [token]` | header and payload of a JWT, `iat`, `nbf` and `exp` as local and UTC dates with how far from now; the signature is not verified |
 | `dev ts [value]` | epoch seconds or milliseconds (told apart by size), an ISO date or date-time, or a duration such as `90m` or `2h30m`, as local and UTC dates; no value is now, `-` reads stdin |
 | `dev uuid [-n <count>] [--v7]` | random UUIDs, version 4 or 7 |
@@ -24,9 +24,9 @@ Fish completes it through the bin itself: `dev __complete`, installed for every 
 
 ## Passwords and bcrypt
 
-The password is read from `crypto.getRandomValues` and written as `openssl rand -hex|-base64` does, `base64url` being that base64 with `+/` swapped for `-_` and the padding dropped. With a clipboard tool (`wl-copy`) the password is copied and `copied to clipboard` is said on stderr; `--no-copy` leaves the clipboard alone.
+The password is read from `crypto.getRandomValues` and written as `openssl rand -hex|-base64` does, `base64url` being that base64 with `+/` swapped for `-_` and the padding dropped. `--copy` also puts the password on the clipboard through `wl-copy` (or xclip, xsel, pbcopy) and says `copied to clipboard` on stderr; without it the clipboard is left alone.
 
-`--bcrypt` hashes at cost 10. Bun writes bcrypt hashes with the `$2b$` prefix where `htpasswd -B` writes `$2y$`: the algorithm is identical, so `dev` rewrites the prefix to `$2y$`, the one Apache, nginx and traefik basic auth all accept (`$2b$` is accepted by fewer of them). With a generated password the hash prints on stdout, the password on stderr, and it is the password that is copied, as the password it replaces did.
+`--bcrypt` hashes at cost 10. Bun writes bcrypt hashes with the `$2b$` prefix where `htpasswd -B` writes `$2y$`: the algorithm is identical, so `dev` rewrites the prefix to `$2y$`, the one Apache, nginx and traefik basic auth all accept (`$2b$` is accepted by fewer of them). With a generated password the hash prints on stdout, the password on stderr, and it is the password that `--copy` copies, as the password it replaces did.
 
 ## Notes
 
