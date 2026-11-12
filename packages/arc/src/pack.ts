@@ -85,20 +85,28 @@ export async function pack(args: string[]): Promise<number> {
 
   say('checking every file against the archive')
 
-  if ((await probe(['zstd', '-t', '-q', ZSTD_LONG, '--', out])).code !== 0)
-    return fail(`'${out}' fails its checksum, '${source}' kept`, 1)
+  // A refused archive goes, so a later run does not find it in the way.
+  const refuse = (reason: string): never => {
+    rmSync(out, { force: true })
 
-  const onDisk = lines((await probe([...as, 'find', source, '-xdev'])).stdout).length
+    return fail(`${reason}, '${source}' kept and the archive removed`, 1)
+  }
+
+  if ((await probe(['zstd', '-t', '-q', ZSTD_LONG, '--', out])).code !== 0)
+    return refuse(`'${out}' fails its checksum`)
+
+  // NUL-separated, as a file name may hold a newline; tar lists one escaped on one line.
+  const onDisk = (await probe([...as, 'find', source, '-xdev', '-print0'])).stdout.split('\0').filter(Boolean).length
   const listed = await pipeline(['zstd', '-dc', ZSTD_LONG, '--', out], ['tar', '--list', '--file=-'], true)
   const inArchive = lines(listed.stdout).length
 
   if (onDisk !== inArchive)
-    return fail(`'${source}' holds ${onDisk} entries but the archive ${inArchive} (a socket, or a file added meanwhile), '${source}' kept`, 1)
+    return refuse(`'${source}' holds ${onDisk} entries but the archive ${inArchive} (a socket, or a file added meanwhile)`)
 
   const compared = await pipeline(['zstd', '-dc', ZSTD_LONG, '--', out], [...as, 'tar', '--compare', '--file=-', `--directory=${parent}`, ...TAR_FIDELITY])
 
   if (compared.codes.some(code => code !== 0))
-    return fail(`the archive differs from '${source}', '${source}' kept`, 1)
+    return refuse(`the archive differs from '${source}'`)
 
   const bytes = statSync(out).size
 

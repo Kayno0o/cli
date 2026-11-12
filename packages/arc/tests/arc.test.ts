@@ -50,6 +50,32 @@ describe.skipIf(!GNU)('arc pack', () => {
     expect(existsSync(join(dest, 'project.tar.zst'))).toBe(true)
   })
 
+  test('packs a folder holding a file name with a newline', () => {
+    const { folder, dest } = project()
+
+    writeFileSync(join(folder, 'nl\nname'), 'x')
+
+    expect(arc(['pack', folder, dest]).code).toBe(0)
+  })
+
+  test('a refused pack removes the archive it wrote', () => {
+    const { folder, dest } = project()
+    const socket = Bun.listen({ unix: join(folder, 'held.sock'), socket: { data() {
+      // held open only, so the folder holds a socket tar skips
+    } } })
+
+    try {
+      const result = arc(['pack', folder, dest])
+
+      expect(result.code).toBe(1)
+      expect(result.err).toContain('archive removed')
+      expect(existsSync(join(dest, 'project.tar.zst'))).toBe(false)
+    }
+    finally {
+      socket.stop(true)
+    }
+  })
+
   test('packs into the current folder when no destination is given', () => {
     const { folder, dest } = project()
 
