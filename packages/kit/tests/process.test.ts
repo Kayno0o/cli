@@ -176,6 +176,14 @@ describe('runCommand', () => {
     expect(ran.output.length).toBeLessThanOrEqual(1000)
   })
 
+  test('keeps what came first up to maxBytes, the chunk passing it cut and nothing after', async () => {
+    const ran = await runCommand(['sh', '-c', 'printf aaaaaa; sleep 0.1; printf bbbbbbbb; sleep 0.1; printf ccc'], { maxBytes: 10 })
+
+    expect(ran.text).toBe('aaaaaabbbb')
+    expect((await runCommand(['sh', '-c', 'printf abcdefghijkl'], { maxBytes: 5 })).text).toBe('abcde')
+    expect((await runCommand(['sh', '-c', 'printf aaaé'], { maxBytes: 4 })).text).toBe('aaa')
+  })
+
   test('ends the command and rethrows when the collector throws', async () => {
     const seen: number[] = []
     let thrown: unknown

@@ -202,14 +202,26 @@ export async function runCommand(argv: string[], { cwd, env, stdin = 'ignore', i
         continue
       }
 
-      if (state.kept + data.length > maxBytes) {
-        state.truncated = true
-
+      if (state.truncated)
         continue
+
+      let kept = data
+
+      // The chunk passing the cap is cut there, back to the start of a character it would split; nothing after it is kept.
+      if (state.kept + data.length > maxBytes) {
+        let cut = maxBytes - state.kept
+
+        while (cut > 0 && ((data[cut] ?? 0) & 0xC0) === 0x80)
+          cut--
+
+        kept = data.subarray(0, cut)
+        state.truncated = true
       }
 
-      state.kept += data.length
-      chunks.push({ stream: name, data })
+      state.kept += kept.length
+
+      if (kept.length > 0)
+        chunks.push({ stream: name, data: kept })
     }
   }
 
