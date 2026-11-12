@@ -7,7 +7,8 @@ const PLAIN_BREAKERS = new Set(['<', '>', '(', ')', '&', '|'])
 const GLOB_CHARS = new Set(['*', '?', '['])
 const COMMENT_PREFIXES = new Set([';', '&', '|', '(', ')'])
 const WHITESPACE = /\s/
-const ASSIGNMENT = /^\w+=/
+// `name=`, `name+=` and `name[i]=`, each an assignment the shell makes before the program.
+const ASSIGNMENT = /^\w+(?:\[[^\]]*\])?\+?=/
 const TRAILING_SLASHES = /\/+$/
 const TRAILING_CR = /\r$/
 const LEADING_TILDE = /^~(?=\/|$)/
@@ -29,8 +30,10 @@ const OCTAL = /^[0-7]{1,3}/
 
 // Keywords opening a command of a compound statement, which the command following them is the one that counts.
 export const KEYWORDS = new Set(['then', 'do', 'else', 'if', 'elif', 'while', 'until', '!', '{', '}'])
-// `<` or `0<` reading a file, not a heredoc, a duplication, a process substitution or a read-write open.
-const INPUT_REDIRECT = /^\d*<(?![<&(>])/
+// A redirection before the program (`2>/dev/null git stash`, `< in cat`), its target in the same word or, for an operator alone, the next; a process substitution is no redirection.
+const LEADING_REDIRECT = /^(?:\d+|\{\w+\})?(?:<<<|<<-?|<>|<&|<(?!\()|>>|>&|>\||>|&>>|&>)/
+// fish's combiners, which run the command following them.
+const FISH_COMBINERS = new Set(['and', 'or', 'not'])
 const MAX_DEPTH = 8
 const MAX_BRACES = 256
 
@@ -292,6 +295,11 @@ export function isPlain(text: string): boolean {
 
 // How many `(` the text leaves open, as the start of a subshell does, and how many `)` it closes without opening, as its end does; quoted ones count for nothing.
 export function parenBalance(text: string): { opened: number, closed: number } {
+  return balance(text, '(', ')')
+}
+
+// The same for any pair of brackets: `{` and `}` for a group, `${...}` being one the text opens and closes.
+function balance(text: string, open: string, close: string): { opened: number, closed: number } {
   let depth = 0
   let unmatched = 0
   let quote: string | null = null
@@ -312,11 +320,11 @@ export function parenBalance(text: string): { opened: number, closed: number } {
       quote = null
     else if (quote === null && (char === '"' || char === '\''))
       quote = char
-    else if (quote === null && char === '(')
+    else if (quote === null && char === open)
       depth++
-    else if (quote === null && char === ')' && depth > 0)
+    else if (quote === null && char === close && depth > 0)
       depth--
-    else if (quote === null && char === ')')
+    else if (quote === null && char === close)
       unmatched++
   }
 
@@ -473,12 +481,15 @@ export function words(text: string): Word[] {
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i] ?? ''
-    const isContinuation = char === '\\' && quote !== '\'' && text[i + 1] === '\n'
 
-    if (isContinuation)
+    // A line continuation is removed, joining what stands either side of it, `gi\<newline>t` being `git`.
+    if (char === '\\' && quote !== '\'' && text[i + 1] === '\n') {
       i++
 
-    if (quote === null && (isContinuation || WHITESPACE.test(char))) {
+      continue
+    }
+
+    if (quote === null && WHITESPACE.test(char)) {
       if (isStarted)
         found.push({ text: current, isProse, hasGlob, hasBrace })
 
@@ -490,9 +501,6 @@ export function words(text: string): Word[] {
 
       continue
     }
-
-    if (isContinuation)
-      continue
 
     isStarted = true
 
@@ -579,16 +587,31 @@ function skipOptions(tokens: string[], spec: WrapperSpec): void {
 
 // The program a piece runs, by its base name, past any subshell opener, keyword, variable assignment or wrapper such as `env` or `sudo`.
 export function parseCommand(text: string): Invocation {
-  const tokens = tokenize(text)
+  const found = words(text)
+  const tokens = found.map(word => word.text)
+  // The words whose braces the shell expands, a quoted `'{a,b}'` being left as it is.
+  const braced = new Set(found.filter(word => word.hasBrace).map(word => word.text))
   const assignments: string[] = []
   const strings: string[] = []
   let isWrapped = false
+  // The subshells and groups opened before the program, whose closers end the piece.
+  let opened = 0
 
   for (;;) {
     const first = tokens[0] ?? ''
     const spec = WRAPPERS.get(first.split('/').pop() ?? '')
+    const expanded = braced.has(first) ? braceExpand(first) : []
 
-    if (first === 'function' && tokens.length > 1) {
+    // `{git,stash}` runs `git stash`.
+    if (expanded.length > 1) {
+      tokens.splice(0, 1, ...expanded)
+      braced.delete(first)
+    }
+    // A redirection may come before the program: `2>/dev/null git stash` runs git, the `} < /dev/null` closing a group runs nothing.
+    else if (LEADING_REDIRECT.test(first)) {
+      tokens.splice(0, first.replace(LEADING_REDIRECT, '') === '' ? 2 : 1)
+    }
+    else if (first === 'function' && tokens.length > 1) {
       isWrapped = true
       tokens.splice(0, 2)
 
@@ -607,6 +630,8 @@ export function parseCommand(text: string): Invocation {
       isWrapped = true
       const rest = first.replace(OPENERS, '')
 
+      opened += first.length - rest.length
+
       if (rest === '')
         tokens.shift()
       else tokens[0] = rest
@@ -614,7 +639,7 @@ export function parseCommand(text: string): Invocation {
     else if (ASSIGNMENT.test(first)) {
       assignments.push(tokens.shift() ?? '')
     }
-    else if (KEYWORDS.has(first)) {
+    else if (KEYWORDS.has(first) || FISH_COMBINERS.has(first)) {
       isWrapped = true
       tokens.shift()
     }
@@ -628,10 +653,6 @@ export function parseCommand(text: string): Invocation {
       isWrapped = true
       tokens.shift()
     }
-    // An input redirection may come before the program: `< in.txt cat` runs cat, the `} < /dev/null` closing a group runs nothing.
-    else if (INPUT_REDIRECT.test(first)) {
-      tokens.splice(0, first.replace(INPUT_REDIRECT, '') === '' ? 2 : 1)
-    }
     else if (spec !== undefined) {
       isWrapped = true
       tokens.shift()
@@ -644,8 +665,8 @@ export function parseCommand(text: string): Invocation {
       break
     }
   }
-  // the closing of a subshell or a group, `(git stash)` or `{ cd x && npm i; }`, ends the last word; a closer inside quotes (`-e "f(g(x))"`) is the word's own
-  const closers = CLOSERS.exec(text.trimEnd())?.[0].length ?? 0
+  // the closing of a subshell or a group the piece did not open, `git stash)` or `npm i}`, ends the last word; a closer inside quotes (`-e "f(g(x))"`) or closing what the word opened (`${f}`) is the word's own
+  const closers = Math.min(CLOSERS.exec(text.trimEnd())?.[0].length ?? 0, opened + parenBalance(text).closed + balance(text, '{', '}').closed)
   const word = tokens.at(-1) ?? ''
   const trimmed = word.length - (CLOSERS.exec(word)?.[0].length ?? 0)
   const last = word.slice(0, Math.max(trimmed, word.length - closers))
@@ -690,7 +711,17 @@ function commandStrings(tokens: readonly string[]): string[] {
         continue
       }
 
+      // fish runs its `-C` init command before anything else.
+      if (name === 'fish' && option.startsWith('--init-command=')) {
+        found.push(option.slice('--init-command='.length))
+
+        continue
+      }
+
       if (SHELL_VALUE_OPTIONS.has(option) || (name === 'fish' && FISH_VALUE_OPTIONS.has(option))) {
+        if (name === 'fish' && FISH_VALUE_OPTIONS.has(option))
+          found.push(tokens[j + 1] ?? '')
+
         isValue = true
 
         continue

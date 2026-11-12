@@ -109,7 +109,20 @@ describe('parseCommand wrappers', () => {
       expect(parseCommand(text)).toMatchObject({ program: 'cat', args: ['-n'] })
 
     expect(parseCommand('} < /dev/null').program).toBe('')
-    expect(parseCommand('<<EOF cat').program).toBe('<<EOF')
+    expect(parseCommand('<<EOF cat').program).toBe('cat')
+  })
+
+  test('reads the program past any redirection, a continued word, an append or index assignment, a brace list and a fish combiner', () => {
+    for (const text of ['2>/dev/null git stash', '>out git stash', '2>&1 git stash', '&> log git stash', 'gi\\\nt stash', 'FOO+=1 git stash', 'A[0]=1 git stash', '{git,stash}', 'and git stash', 'or not git stash'])
+      expect(parseCommand(text)).toMatchObject({ program: 'git', args: ['stash'] })
+  })
+
+  test('the last word keeps a closer it opened, losing only what closes the subshell', () => {
+    const variable = ['$', '{f}'].join('')
+
+    expect(parseCommand(`cat ${variable}`).args).toEqual([variable])
+    expect(parseCommand('(echo $(pwd))').args).toEqual(['$(pwd)'])
+    expect(parseCommand(`cat ${variable})`).args).toEqual([variable])
   })
 
   test('leaves what is no wrapper alone', () => {

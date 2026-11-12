@@ -56,6 +56,11 @@ describe('git', () => {
   })
 })
 
+describe('shapes bash and fish run as the real command', () => {
+  cases('git', ['2>/dev/null git stash', '>out git stash', '&>/dev/null git stash', 'gi\\\nt stash', 'FOO+=1 git stash', 'A[0]=1 git stash', '{git,stash}', 'fish -c \'true; and git push\'', 'fish -c \'false; or git stash\'', 'fish -c \'not git stash\'', 'fish -C \'git stash\' -c true', 'fish --init-command=\'git stash\''], [`cat ${['$', '{f}'].join('')}`, 'echo \'{git,stash}\''])
+  cases('remote', ['2>/dev/null ssh prod uptime'], [])
+})
+
 describe('remote machines', () => {
   cases('remote', ['ssh prod', 'ssh -p 2222 deploy@staging.example.com uptime', 'scp dump.sql qualif:/tmp', 'rsync -az dist/ recette:/srv/app', 'DOCKER_HOST=ssh://prod docker ps', 'docker -H ssh://prod ps', 'cd x && sftp host', 'python3 -c "import os; os.system(\'ssh prod uptime\')"'], ['ssh-keygen -t ed25519', 'ssh-add -l', 'rsync -a src/ dist/', 'git fetch origin', 'grep ssh notes.md'])
 })
