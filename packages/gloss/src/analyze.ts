@@ -1,5 +1,6 @@
 import type { Note } from './match'
 import type { Operator, Redirect, Word } from './shell'
+import { basename } from 'node:path'
 import { loadHelp } from './help'
 import { loadPage } from './man'
 import { explain } from './match'
@@ -83,8 +84,10 @@ export function analyze(line: string, settings: AnalyzeSettings = {}, depth = 0)
   for (const { command, next } of parseLine(line)) {
     const [head, second] = command.words
     const name = head?.text ?? ''
-    const sub = head === undefined ? undefined : describeSubcommand(name, second, env)
-    const manual = sub?.page ?? (head === undefined ? undefined : loadPage(name, env))
+    // A command given by its path has its page under its name.
+    const paged = basename(name)
+    const sub = head === undefined ? undefined : describeSubcommand(paged, second, env)
+    const manual = sub?.page ?? (head === undefined ? undefined : loadPage(paged, env))
     const page = manual ?? (runHelp && head !== undefined ? loadHelp(name, second?.text, env) : undefined)
     const fromHelp = manual === undefined && page !== undefined
     const words = command.words.slice(sub === undefined && !(fromHelp && page?.name.includes(' ')) ? 1 : 2)

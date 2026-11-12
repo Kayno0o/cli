@@ -30,7 +30,7 @@ export interface Step {
 }
 
 const REDIRECT = /&>>?|>&|<&|<<<|<<-?|>>|>\||>|</y
-const CONTROL = /\|&|\|\||\||&&|[&;\n]/y
+const CONTROL = /\|[&|]?|&&|&(?!>)|[;\n]/y
 const ASSIGN = /^[A-Z_]\w*\+?=/i
 const FD = /\d+(?=[<>])/y
 

@@ -25,6 +25,13 @@ describe('parseLine', () => {
     expect(step?.command.redirects.map(redirect => [redirect.fd, redirect.op, redirect.target?.text])).toEqual([[undefined, '>', 'out'], ['2', '>&', '1'], [undefined, '<', 'in']])
   })
 
+  test('reads &> and &>> as redirections, not a background operator', () => {
+    const steps = parseLine('ls -l &> out.txt; ls &>> log')
+
+    expect(steps.map(step => step.next)).toEqual([';', undefined])
+    expect(steps.map(step => step.command.redirects.map(redirect => [redirect.op, redirect.target?.text]))).toEqual([[['&>', 'out.txt']], [['&>>', 'log']]])
+  })
+
   test('collects leading assignments apart from the words', () => {
     const [step] = parseLine('A=1 B="x y" cmd C=3')
 

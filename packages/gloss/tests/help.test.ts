@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
@@ -27,6 +27,17 @@ tool('zzmark', `echo ran > "${dir}/marker"`)
 const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, MANPATH: '/nonexistent' }
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
+
+describe('man pages', () => {
+  test('finds the page of a command given by its path under its name', () => {
+    mkdirSync(join(dir, 'man/man1'), { recursive: true })
+    writeFileSync(join(dir, 'man/man1/zzpage.1'), '.TH ZZPAGE 1\n.SH NAME\nzzpage \\- a demo\n.SH OPTIONS\n.TP\n\\fB\\-l\\fR\nuse a long listing format\n')
+
+    const [command] = analyze('/usr/bin/zzpage -l', { env: { ...env, MANPATH: join(dir, 'man') } }).commands
+
+    expect(command?.notes[0]?.text).toContain('use a long listing format')
+  })
+})
 
 describe('--run-help', () => {
   test('reads the options of a command with no man page from its help', () => {
