@@ -2,14 +2,15 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
+import { NPM_INSTALLS } from './pin'
 
 // A redirect, `2>` once `2>&1` is split at its `&`, `>log`, or a bare `>` whose target is the next word.
 const REDIRECT = /^\d*[<>]/
 const BARE_REDIRECT = /^\d*(?:[<>]|>>)$/
-// The subcommands adding a package, per package manager: `bun install <name>` adds it as `bun add` does.
+// The subcommands adding a package, per package manager: `bun install <name>` adds it as `bun add` does, and `npm install-test <name>` installs it before the tests.
 const ADDS: Record<string, Set<string>> = {
   bun: new Set(['add', 'a', 'install', 'i']),
-  npm: new Set(['install', 'i', 'add', 'in', 'isntall']),
+  npm: new Set([...NPM_INSTALLS, 'add', 'it', 'install-test']),
   pnpm: new Set(['add', 'i', 'install']),
   yarn: new Set(['add']),
 }
@@ -24,9 +25,11 @@ const RUNNERS = new Set(['bunx', 'npx'])
 // Flags whose value is a package to run.
 const PACKAGE_FLAGS = new Set(['-p', '--package'])
 // Flags whose value is the next word, not a package.
-const VALUE_FLAGS = new Set(['--cwd', '--filter', '-F', '-c', '--call', '--workspace', '--registry', '--prefix', '-C', '--dir', '--config', '--cache-dir', '--loglevel', '--tag', '--save-prefix', '--userconfig', '--omit', '--include', '--fetch-timeout', '--fetch-retries', '--install-strategy', '--cache', ...PACKAGE_FLAGS])
-// A specifier no registry serves: a path, a tarball, a workspace or a git repository, `owner/repo` included.
-const NOT_REGISTRY = /^(?:[./~]|file:|link:|portal:|workspace:|git[+:]|github:|gitlab:|bitbucket:|https?:)|\.tgz$|^[\w.-]+\/[\w.-]+(?:#.*)?$/
+const VALUE_FLAGS = new Set(['--cwd', '--filter', '-F', '-c', '--call', '--workspace', '--registry', '--prefix', '-C', '--dir', '--config', '--cache-dir', '--loglevel', '--tag', '--save-prefix', '--userconfig', '--omit', '--include', '--fetch-timeout', '--fetch-retries', '--install-strategy', '--cache', '--linker', ...PACKAGE_FLAGS])
+// The value flags of one manager alone: npm's `-w` names a workspace, where pnpm's is the boolean --workspace-root.
+const OWN_VALUE_FLAGS: Record<string, Set<string>> = { npm: new Set(['-w']) }
+// A specifier no registry serves: a path, a tarball, a workspace, a catalog entry or a git repository, `owner/repo` included.
+const NOT_REGISTRY = /^(?:[./~]|file:|link:|portal:|workspace:|catalog:|git[+:]|github:|gitlab:|bitbucket:|https?:)|\.tgz$|^[\w.-]+\/[\w.-]+(?:#.*)?$/
 // `alias@npm:real@1.0.0` installs the real one.
 const NPM_ALIAS = /^(?:@[^/]+\/)?[^@]+@npm:(.+)$/
 // A step publishing a package: `ft release` (or its source run as `cli.ts release`), `bun publish`, `npm publish`, a lib's `just patch|minor|major`.
@@ -108,15 +111,22 @@ function piecePackages(program: string, sub: string, args: string[], rest: strin
   if (!ADDS[program]?.has(sub))
     return []
 
-  return rest.flatMap((word, index) => isSkipped(word, rest[index - 1] ?? '') ? [] : registryName(word))
+  return rest.flatMap((word, index) => isSkipped(word, rest[index - 1] ?? '', program) ? [] : registryName(word))
 }
 
-function isSkipped(word: string, previous: string): boolean {
-  return word.startsWith('-') || REDIRECT.test(word) || VALUE_FLAGS.has(previous) || BARE_REDIRECT.test(previous)
+function isSkipped(word: string, previous: string, program = ''): boolean {
+  return word.startsWith('-') || REDIRECT.test(word) || VALUE_FLAGS.has(previous) || OWN_VALUE_FLAGS[program]?.has(previous) === true || BARE_REDIRECT.test(previous)
 }
 
+// The registry package a word names, none for a source no registry serves, given bare or as the spec of `name@<spec>`.
 function registryName(word: string): string[] {
-  return NOT_REGISTRY.test(word) ? [] : [NPM_ALIAS.exec(word)?.[1] ?? word]
+  const at = word.indexOf('@', 1)
+  const spec = at === -1 ? word : word.slice(at + 1)
+
+  if (NOT_REGISTRY.test(word) || (at !== -1 && !spec.startsWith('npm:') && NOT_REGISTRY.test(spec)))
+    return []
+
+  return [NPM_ALIAS.exec(word)?.[1] ?? word]
 }
 
 // What `bunx`, `npx`, `bun x` and `pnpm dlx` fetch and run: the packages named with -p/--package, else the first word that is not a flag, the rest being the program's own arguments.
