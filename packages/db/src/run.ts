@@ -68,11 +68,16 @@ export function dialectOf(url: URL): Dialect {
   return fail(`the connection URL is ${url.protocol.replace(':', '')}://, but db reads Postgres (postgres://), MySQL and MariaDB (mysql://, mariadb://) only`)
 }
 
-// The hosts a URL connects to: its `host` parameter, which Bun SQL takes over the authority, else the authority, and a `hostaddr` parameter as libpq reads one. Empty or a path stands for a local socket.
-function hostsOf(url: URL): string[] {
-  const address = url.searchParams.get('hostaddr')
+// The values of a URL parameter whatever the case of its name, as Bun SQL reads it, an empty one left out as Bun SQL ignores it.
+function paramValues(url: URL, name: string): string[] {
+  return [...url.searchParams].filter(([key, value]) => key.toLowerCase() === name && value !== '').map(([, value]) => value)
+}
 
-  return [url.searchParams.get('host') ?? url.hostname, ...address === null ? [] : [address]].map(host => host.replace(BRACKETS, '').toLowerCase())
+// The hosts a URL connects to: its `host` parameters, which Bun SQL takes over the authority, else the authority, and the `hostaddr` ones as libpq reads them. Empty or a path stands for a local socket.
+function hostsOf(url: URL): string[] {
+  const named = paramValues(url, 'host')
+
+  return [...named.length === 0 ? [url.hostname] : named, ...paramValues(url, 'hostaddr')].map(host => host.replace(BRACKETS, '').toLowerCase())
 }
 
 const isLocal = (host: string) => host === '' || host.startsWith('/') || LOCAL_HOSTS.has(host)
@@ -128,8 +133,9 @@ export async function reachable(value: string, home?: string): Promise<URL> {
 
   if (service !== undefined) {
     // The service's address goes in the authority, where no parameter overrides it any more.
-    url.searchParams.delete('host')
-    url.searchParams.delete('port')
+    for (const key of [...url.searchParams.keys()].filter(each => ['host', 'port'].includes(each.toLowerCase())))
+      url.searchParams.delete(key)
+
     url.hostname = service.host.includes(':') ? `[${service.host}]` : service.host
     url.port = String(service.port)
 

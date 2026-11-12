@@ -267,6 +267,18 @@ describe.skipIf(reason !== '')('db against Postgres', () => {
     expect(result.out).toContain('150')
   })
 
+  test.skipIf(!compose.loopback)('reaches a URL naming the service in its host parameter, the parameters giving way to the service\'s address', async () => {
+    const named = new URL(url)
+
+    named.hostname = 'localhost'
+    named.search = '?HOST=database&port=1'
+
+    const result = await db(['select count(*) as n from users'], { PATH: compose.path, DATABASE_URL: named.href })
+
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('150')
+  })
+
   test.skipIf(!compose.loopback)('reaches a URL naming the service by a network alias', async () => {
     const aliased = new URL(url)
 

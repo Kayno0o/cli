@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
-import { NPM_INSTALLS } from './pin'
+import { NPM_INSTALLS, NPM_TEST_INSTALLS } from './pin'
 
 // A redirect, `2>` once `2>&1` is split at its `&`, `>log`, or a bare `>` whose target is the next word.
 const REDIRECT = /^\d*[<>]/
@@ -10,7 +10,7 @@ const BARE_REDIRECT = /^\d*(?:[<>]|>>)$/
 // The subcommands adding a package, per package manager: `bun install <name>` adds it as `bun add` does, and `npm install-test <name>` installs it before the tests.
 const ADDS: Record<string, Set<string>> = {
   bun: new Set(['add', 'a', 'install', 'i']),
-  npm: new Set([...NPM_INSTALLS, 'add', 'it', 'install-test']),
+  npm: new Set([...NPM_INSTALLS, ...NPM_TEST_INSTALLS, 'add']),
   pnpm: new Set(['add', 'i', 'install']),
   yarn: new Set(['add']),
 }
@@ -29,7 +29,7 @@ const VALUE_FLAGS = new Set(['--cwd', '--filter', '-F', '-c', '--call', '--works
 // The value flags of one manager alone: npm's `-w` names a workspace, where pnpm's is the boolean --workspace-root.
 const OWN_VALUE_FLAGS: Record<string, Set<string>> = { npm: new Set(['-w']) }
 // A specifier no registry serves: a path, a tarball, a workspace, a catalog entry or a git repository, `owner/repo` included.
-const NOT_REGISTRY = /^(?:[./~]|file:|link:|portal:|workspace:|catalog:|git[+:]|github:|gitlab:|bitbucket:|https?:)|\.tgz$|^[\w.-]+\/[\w.-]+(?:#.*)?$/
+const NOT_REGISTRY = /^(?:[./]|~(?:\/|$)|file:|link:|portal:|workspace:|catalog:|git[+:]|github:|gitlab:|bitbucket:|https?:)|\.tgz$|^[\w.-]+\/[\w.-]+(?:#.*)?$/
 // `alias@npm:real@1.0.0` installs the real one.
 const NPM_ALIAS = /^(?:@[^/]+\/)?[^@]+@npm:(.+)$/
 // A step publishing a package: `ft release` (or its source run as `cli.ts release`), `bun publish`, `npm publish`, a lib's `just patch|minor|major`.

@@ -22,9 +22,9 @@ bun add -g @kaynooo/cli-probe
 
 ## JSON output
 
-One target prints one object, `{target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, warnings}`, unchanged by the other options (`--json` is always the full report). Several targets print an array of those in the order given, an unreachable one being `{target, error}`.
+One target prints one object, `{target, url, version, status, chain, timings, addresses, tls, certificate, headers, cdn, offers, httpRedirect, failedHop, warnings}`, unchanged by the other options (`--json` is always the full report). Several targets print an array of those in the order given, an unreachable one being `{target, error}`.
 
-Redirects are followed hop by hop, at most 10. The HTTP version and timings come from `curl --write-out '%{json}'`, the certificate from `node:tls`, which Bun's fetch exposes neither of. HTTP/3 is spoken only when `curl --version` lists it, otherwise h3 is reported from `alt-svc` alone.
+Redirects are followed hop by hop, at most 10; a redirect to a target that does not answer is kept as `failedHop`, `{url, error}`, with a warning. The HTTP version and timings come from `curl --write-out '%{json}'`, the certificate from `node:tls`, which Bun's fetch exposes neither of. HTTP/3 is spoken only when `curl --version` lists it, otherwise h3 is reported from `alt-svc` alone.
 
 Warnings: a certificate with fewer than 14 days left, expired or not trusted, an `http://` twin that does not redirect to https (checked for a bare domain or an https URL on the default port), more than 10 redirects, a site not served over https.
 
@@ -40,4 +40,4 @@ Warnings: the system resolver behind the zone (`sudo resolvectl flush-caches` dr
 
 `--cors <origin>` sends `OPTIONS` with `Origin`, `Access-Control-Request-Method` and `Access-Control-Request-Headers`, the way a browser does, then applies the Fetch standard's checks: a 2xx status, `access-control-allow-origin` being `*` or the origin, `access-control-allow-methods` listing a method other than GET, HEAD or POST (or `*`), `access-control-allow-headers` covering every header (`*` covers all but `authorization`). The method is uppercased when it is one of the six fetch normalizes (DELETE, GET, HEAD, OPTIONS, POST, PUT) and otherwise sent and matched as typed, `patch` needing `patch` listed. `accept`, `accept-language` and `content-language` are left out of the preflight, a browser letting them through unlisted. Warnings: credentials allowed alongside a `*`, which a credentialed request does not get, and the request's origin allowed without `vary: origin`. `--json` is `{target, url, status, request, allowed, reasons, warnings, headers}`. `-H`, `--resolve`, `-k` and `-t` apply to the preflight too.
 
-Exits 0 when every site answered, 1 when one could not be reached, a CORS preflight was refused or no resolver knows a name, 2 on a usage error (a bad URL, header, origin or `--resolve` is refused before any request is made).
+Exits 0 when every site answered, 1 when one could not be reached or one of its redirects led nowhere, a CORS preflight was refused or no resolver knows a name, 2 on a usage error (a bad URL, header, origin or `--resolve` is refused before any request is made).

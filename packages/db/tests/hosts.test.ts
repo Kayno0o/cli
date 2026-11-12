@@ -53,6 +53,9 @@ describe('reachable', () => {
     ['postgres:///app?host=db.example.com', 'db.example.com'],
     ['postgres://u:secret-pw@localhost/app?host=db.example.com', 'db.example.com'],
     ['postgres://u:secret-pw@localhost/app?hostaddr=10.1.2.3', '10.1.2.3'],
+    ['postgres://u:secret-pw@db.example.com/app?host=', 'db.example.com'],
+    ['postgres://u:secret-pw@localhost/app?HOST=db.example.com', 'db.example.com'],
+    ['postgres://u:secret-pw@localhost/app?host=127.0.0.1&host=db.example.com', 'db.example.com'],
   ])('refuses %p, naming the host and the config but never the password', async (value, host) => {
     const error = await refusal(value, home)
 

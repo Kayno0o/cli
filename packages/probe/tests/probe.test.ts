@@ -20,6 +20,7 @@ interface Json {
   tls: { protocol: string } | null
   certificate: { names: string[], daysLeft: number } | null
   headers: Record<string, string>
+  failedHop: { url: string, error: string } | null
   warnings: string[]
 }
 
@@ -213,6 +214,11 @@ describe('probe against a local http server', () => {
 
     expect(code).toBe(1)
     expect(out).toContain('the redirect to http://127.0.0.1:1/x got no answer:')
+
+    const json = await probe([`${base}/dead`, '--json'])
+
+    expect(json.code).toBe(1)
+    expect(parsed(json.out).failedHop).toMatchObject({ url: 'http://127.0.0.1:1/x', error: expect.any(String) })
   })
 
   test('a bare domain falls back to http when https is not served', async () => {

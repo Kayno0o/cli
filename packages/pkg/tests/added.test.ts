@@ -56,6 +56,7 @@ describe('addedPackages', () => {
     ['npm i -w web foo', ['foo']],
     ['pnpm add -w foo', ['foo']],
     ['bun add foo@workspace:* bar', ['bar']],
+    ['bun add evil@~1.2.3 @s/evil@~1.0.0 foo@~/lib', ['evil@~1.2.3', '@s/evil@~1.0.0']],
   ]
 
   for (const [command, names] of checked) {

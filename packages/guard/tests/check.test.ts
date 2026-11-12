@@ -175,7 +175,7 @@ describe('package managers', () => {
   })
 
   test('refuses what it cannot translate, keeping the command as given', async () => {
-    for (const command of ['pnpm --filter=web add zod', 'npm install --legacy-peer-deps']) {
+    for (const command of ['pnpm --filter=web add zod', 'npm install --legacy-peer-deps', 'npm it', 'npm cit']) {
       const verdict = await checkCommand(command, context(command.startsWith('npm') ? pnpm : { [`${REPO}/package-lock.json`]: '' }))
 
       expect(verdict.violations.map(violation => violation.rule)).toEqual(['package-manager'])

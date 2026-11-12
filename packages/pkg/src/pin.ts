@@ -20,19 +20,21 @@ export const LOCKFILES: readonly [string, Manager][] = [
 
 // npm's install and its aliases and typos, per its own help.
 export const NPM_INSTALLS = ['install', 'i', 'in', 'ins', 'inst', 'insta', 'instal', 'isnt', 'isnta', 'isntal', 'isntall'] as const
+export const NPM_TEST_INSTALLS = ['it', 'install-test', 'cit', 'clean-install-test', 'install-ci-test'] as const
 
 // The subcommands and aliases that install or rewrite dependencies, per each tool's own help, and what each does; null for one with no counterpart elsewhere. A bare `yarn` installs, hence "".
 const ACTIONS: Record<Manager, ReadonlyMap<string, Action | null>> = {
   bun: actions({ install: ['install', 'i'], add: ['add', 'a'], remove: ['remove', 'rm'], update: ['update'] }),
   pnpm: actions({ install: ['install', 'i'], add: ['add'], remove: ['remove', 'rm'], update: ['update', 'up'] }),
   yarn: new Map([...actions({ install: ['', 'install'], add: ['add'], remove: ['remove'], update: ['upgrade'] }), ['upgrade-interactive', null], ['import', null]]),
-  npm: actions({
+  // An install that runs the tests after it has no counterpart elsewhere.
+  npm: new Map([...actions({
     install: NPM_INSTALLS,
     add: ['add'],
     frozen: ['ci', 'clean-install', 'ic', 'install-clean', 'isntall-clean'],
     remove: ['uninstall', 'unlink', 'remove', 'rm', 'r', 'un'],
     update: ['update', 'u', 'up', 'upgrade', 'udpate'],
-  }),
+  }), ...NPM_TEST_INSTALLS.map(name => [name, null] as const)]),
 }
 
 // What each manager runs for an action; a missing one has no faithful translation.
