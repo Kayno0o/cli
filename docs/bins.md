@@ -44,7 +44,7 @@ changelog undo v1.2.0 --dry-run  # what undoing that release would remove
 
 ## check
 
-runs the repo's check, typecheck, lint and test steps, from package.json scripts (through bun run), composer.json, a Justfile or a Makefile, and for PHP from phpstan.neon (typecheck), .php-cs-fixer.dist.php (lint, dry-run) and phpunit.xml.dist (test) when composer.json has no such script. Package `check`.
+runs the repo's check, typecheck, lint and test steps, found in package.json scripts, composer.json, a Justfile, a Makefile or the PHP tools' configs; a folder with no steps runs its subfolders' (api/, client/). Package `check`.
 
 Instead of: chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail, and with --fix each fixer and formatter run by hand
 
@@ -126,7 +126,7 @@ dl ls  # what dl installed or ran
 
 ## dlog
 
-one line per compose service with its state and health, then the last distinct error lines of the services that log some or are not healthy, repeats collapsed to one line with a count and secrets masked as redact does. Package `docker`.
+one line per compose service with its state and health, then the last distinct error lines of those that log some or are not healthy, repeats collapsed with a count and secrets masked. Package `docker`.
 
 Instead of: docker compose ps, logs --tail | grep -i error and docker inspect for health
 
@@ -143,7 +143,7 @@ dlog --json  # the report as JSON
 
 ## doctor
 
-checks this host's @kaynooo/cli-* install, one line per check, the command that fixes a failing one beside it, and installs the packages it picks. Package `doctor`.
+checks this host's @kaynooo/cli-* install, one line per check with the fix beside a failing one, and installs the packages it picks. Package `doctor`.
 
 Instead of: checking each bin's version, tea's login and the hooks by hand
 
@@ -160,7 +160,7 @@ doctor --install all --dry-run  # what installing everything would run
 
 ## dx
 
-without a terminal (a script, a pipe, an agent) `dx` lists the services with their state, ports and image: that listing is the form to use there, `--json` giving the full record. On a terminal it picks one instead: enter opens its shell (or brings a stopped service up), ctrl-l follows its logs, ctrl-r restarts, ctrl-x stops and ctrl-b rebuilds it. The services last acted on come first, per folder. Package `docker`.
+picks a compose service on a terminal to open its shell, follow its logs, restart, stop or rebuild it; without a terminal (a script, a pipe, an agent) it lists the services with their state, ports and image, the form to use there. Package `docker`.
 
 Instead of: docker compose exec <service> bash, logs -f and restart typed per service
 
@@ -175,7 +175,7 @@ dx -  # the last action again
 
 ## errs
 
-prints one `file:line:col: message (rule)` line per error found in a tsc, tsgo, vue-tsc, bun check, kay check, eslint, keslint, bun test, vitest, playwright (list and line reporters), phpunit, paratest, phpstan (table, raw and json), php-cs-fixer, go (build, vet), cargo (rustc), ruff (concise and full) or pytest log, or any line shaped `file:line[:col]: error|warning: message` (mypy, gcc, clang, `shellcheck -f gcc`, golangci-lint), read from the file given, from stdin (no argument or -), or from the output of the command run after --. Package `check`.
+prints one `file:line:col: message (rule)` line per error found in a tsc, eslint, bun test, vitest, playwright, phpunit, phpstan, php-cs-fixer, go, cargo, ruff or pytest log, or any `file:line[:col]: error|warning: message` line, read from a file, from stdin or from the output of the command run after --. Package `check`.
 
 Instead of: reading raw tsc, eslint, phpunit, phpstan or playwright logs, or grepping a test summary out of them
 
@@ -212,7 +212,7 @@ ft issue 12 -c  # an issue with its boxes numbered and its comments
 
 ## gb
 
-without a branch, picks one when a terminal is attached: the branches last checked out first, as the reflog has them, then the other local ones, then the remote ones with no local branch yet. The header says where HEAD stands, each row how its branch stands against its upstream and whether it is merged into the base. enter switches to it (a remote one gets its local tracking branch), ctrl-n creates a branch named after the query, ctrl-d deletes the highlighted local branch with `git branch -d`, which refuses one not merged yet, and ctrl-r fetches, prunes and lists again. Without a terminal it lists the branches instead. Package `git`.
+picks a git branch and switches to it. Package `git`.
 
 Instead of: git switch, git branch -d and git checkout typed per branch
 
@@ -317,7 +317,7 @@ gm --abort  # give the merge up
 
 ## gp
 
-pushes the current branch of the repository, or of each dir's, when it is ahead of its upstream as of the last fetch or has none yet, the latter with -u to origin (the only remote when there is no origin). Package `git`.
+pushes the current branch of the repository, or of each dir, when it is ahead of its upstream or has none yet. Package `git`.
 
 Instead of: git push, git push -u origin <branch> and a git -C <repo> push per nested repository
 
@@ -370,7 +370,7 @@ guard path .env  # whether a file tool may open a path
 
 ## j
 
-without a name, picks a recipe, target, script or task of this folder, its parents and its child folders when a terminal is attached, and runs it. The ones run last come first, per folder. Without a terminal it lists them instead. Package `check`.
+without a name, picks a recipe, script or task of this folder, its parents and its child folders and runs it, the ones run last first; without a terminal it lists them instead. Package `check`.
 
 Instead of: reading the Justfile, Makefile, package.json scripts or composer scripts to find what to run, then retyping it
 
@@ -454,7 +454,7 @@ proc procs  # the leftover or heavy processes, dry-run first
 
 ## sf
 
-without a terminal (a script, a pipe, an agent) `sf` lists the commands, one per line with its description: that listing is the form to use there, and `sf --list --json` gives each with its arguments and options. On a terminal it picks a Symfony console command instead and runs it, asking for each required argument it needs. The commands last run come first, per folder, and the picker opens on the list cached from the last run while the console answers. Package `docker`.
+picks a Symfony console command on a terminal and runs it, asking for each required argument; without a terminal (a script, a pipe, an agent) it lists the commands, the form to use there. Package `docker`.
 
 Instead of: bin/console typed in the php container, with the command names and arguments looked up by hand
 
