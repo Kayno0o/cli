@@ -11,10 +11,9 @@ import { everything, id, justFlags, key, readKind, resolve, shortest, signature 
 const usage = `j [name] [args...]
 j -
 
-Without a name, picks a recipe, target, script or task of this folder, its parents and its child folders when a terminal is attached, and runs it. The ones run last come first, per folder. Without a terminal it lists them instead.
-\`j -\` runs the last one again with the same arguments, \`j <name> [args...]\` runs without the picker, the words after the name filling the parameters in order and the required ones left being asked for.
-The sources are a Justfile, a Makefile, the scripts of a package.json (through its package manager), composer.json scripts, deno tasks, a Taskfile, mise tasks and a pyproject (poe tasks and entry points).
-A name is the key behind the folder it runs from, \`api/test\`, bare for this folder. A name several entries share offers them, unless it comes qualified by its runner: \`just:check\`, \`bun:api/test\`.`
+Without a name, picks a recipe, script or task of this folder, its parents and its child folders and runs it, the ones run last first; without a terminal it lists them instead.
+\`j -\` runs the last one again with the same arguments, \`j <name> [args...]\` runs without the picker, the words after the name filling the parameters in order.
+The sources are a Justfile, a Makefile, package.json and composer.json scripts, deno tasks, a Taskfile, mise tasks and a pyproject; a name several share offers them, unless qualified by its runner (\`just:check\`).`
 
 const EXITS: ExitRow[] = [['its own', 'the code of the command it ran'], [1, 'there is nothing to run here or nothing by that name']]
 

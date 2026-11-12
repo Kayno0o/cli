@@ -16,12 +16,10 @@ import { checkPackage } from './check'
 
 const usage = `pkg bump <name> [version]
 
-Waits until the registry serves the version (the latest when none is given, an exact version otherwise), vets it as \`pkg check\` does (advisories, licence allowlist, and a minimum age only when --min-age asks for one), then runs \`bun add --exact --no-cache\` in each folder under --root whose package.json depends on the package, the kind of dependency kept, a line per folder.
-A version the vetting blocks is refused before any folder is touched, unless --force is given.
-A dependency declared through an alias of the package (\`"kay": "npm:@kaynooo/kayjs@~1.77.0"\`) is bumped under its own key, keeping the \`~\` or \`^\` of its range; --only and --except narrow the folders by name or glob (\`app\`, \`kay-*\`, a path relative to --root).
-A dependency that is not a registry version (workspace:, link:, file:, git, a URL, an npm: alias of another package, catalog:), a peer range, a folder already on the version and one whose lockfile pins another manager are left as they are, each said so.
-On a terminal with no --only or --except, a checklist asks which consumers to bump (those left out last time are unchecked, and what is unchecked is remembered in ~/.config/kaynooo-cli/pkg-excluded.json), then the plan is printed and confirmed; --yes skips both, as a pipe or --dry-run does.
-With --all-consumers a folder whose package.json or lockfile already has uncommitted changes is left alone, and each folder whose install went through then runs its own \`check\` (the check bin) and is committed with \`gc 'chore(deps): bump <name> to <version>' -- package.json <lockfile>\` only when that passes; a failing one is left uncommitted and listed in the summary with the skipped ones, and nothing is ever pushed.`
+Waits until the registry serves the version, vets it as \`pkg check\` does, then runs \`bun add --exact --no-cache\` in each folder under --root whose package.json depends on the package, the kind of dependency kept; a version the vetting blocks is refused before any folder is touched, unless --force is given.
+A dependency that is not a registry version (\`workspace:\`, \`link:\`, \`file:\`, git, a URL, \`catalog:\`), a peer range, a folder already on the version and one whose lockfile pins another manager are left as they are, each said so.
+On a terminal with no --only or --except, a checklist asks which consumers to bump, then the plan is printed and confirmed.
+With --all-consumers, a folder with uncommitted changes in its package.json or lockfile is left alone, and each folder whose install went through runs its own \`check\` and is committed with \`gc\` only when that passes; nothing is ever pushed.`
 const EXITS: ExitRow[] = [[0, 'every install ran or was left as it is (with --all-consumers, and every check passed and every commit landed)'], [1, 'the vetting refuses the version, an install, a check or a commit fails or the registry has no such package'], [2, 'the version never shows within the timeout (a registry that cannot be reached is retried until then) or a usage error']]
 
 export const ROOT_OPTION = { type: 'string', description: 'the folder holding the repositories (the workspace of the user config or KAYNOOO_WORKSPACE, ~/Workspace by default)' } as const

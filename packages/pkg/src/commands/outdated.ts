@@ -13,7 +13,7 @@ import { fetchPackument } from '../registry'
 
 const usage = `pkg outdated [dir]
 
-Lists the dependencies of the package.json in the folder (the current one by default, registry versions only) that have a newer version safe to take: the highest stable one at least --min-age days old, the \`safe\` of \`pkg check\`. The version in use is the highest one the folder's bun.lock pins that the range allows, else the exact version written, else the first version in the range. A dependency whose newest version is still too fresh shows it under \`latest\`.
+Lists the dependencies of the package.json of the folder that have a newer version safe to take: the highest stable one at least --min-age days old, the \`safe\` of \`pkg check\`.
 It reads only the registry's metadata, no advisories, and changes nothing: \`bun add --exact name@version\` adopts a row.`
 
 const EXITS: ExitRow[] = [[0, 'it listed what is outdated, nothing included'], [2, 'the registry could not be reached or answered badly, no package.json, or a usage error']]
