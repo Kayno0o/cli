@@ -1,3 +1,4 @@
+import type { TCPSocketListener } from 'bun'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -16,8 +17,13 @@ const SCRIPT_V2 = '#!/bin/sh\n# writes a marker\necho "ran again $*" > "$MARK"\n
 
 let script = SCRIPT_V1
 let archive: Uint8Array
+// /big.bin answers ranges asked with an If-Range matching its ETag, unless `ranges` is off; `cut` makes its next answer break off halfway.
+const BIG = new Uint8Array(256 * 1024).map((_, index) => (index * 7) % 253)
+const big = { body: BIG, etag: '"v1"', ranges: true, cut: false, asked: [] as string[] }
 let sums: string
 let server: ReturnType<typeof Bun.serve>
+// Answers the whole length of /big.bin and drops the connection halfway, as a network does; Bun.serve would fix the length to what it sends.
+let cutter: TCPSocketListener
 // Two gpg keys of a keyring of the tests' own, the first exported to a file; the signatures are served beside the files.
 const hasGpg = Bun.which('gpg') !== null
 const gpgHome = temp('dl-gnupg-')
@@ -72,6 +78,18 @@ beforeAll(async () => {
     signatures.set('/SHA256SUMS.asc', await sign(signer, sums))
   }
 
+  cutter = Bun.listen({
+    hostname: '127.0.0.1',
+    port: 0,
+    socket: {
+      data(socket) {
+        socket.write(`HTTP/1.1 200 OK\r\nContent-Length: ${big.body.length}\r\nETag: ${big.etag}\r\nContent-Type: application/octet-stream\r\n\r\n`)
+        socket.write(big.body.subarray(0, big.body.length / 2))
+        socket.flush()
+        setTimeout(() => socket.end(), 20)
+      },
+    },
+  })
   server = Bun.serve({
     port: 0,
     routes: {
@@ -79,6 +97,23 @@ beforeAll(async () => {
       '/bad.bin': () => new Response(BINARY),
       '/tool.tar.gz': () => new Response(archive, { headers: { 'content-type': 'application/gzip' } }),
       '/SHA256SUMS': () => new Response(sums),
+      '/big.bin': (request) => {
+        const range = request.headers.get('range')
+        const start = Number((/^bytes=(\d+)-$/).exec(range ?? '')?.[1] ?? 0)
+        const partial = big.ranges && range !== null && request.headers.get('if-range') === big.etag
+        const body = partial ? big.body.subarray(start) : big.body
+        const init = { status: partial ? 206 : 200, headers: { 'etag': big.etag, 'content-type': 'application/octet-stream', ...partial ? { 'content-range': `bytes ${start}-${big.body.length - 1}/${big.body.length}` } : {} } }
+
+        if (range !== null)
+          big.asked.push(range)
+
+        if (!big.cut)
+          return new Response(body, init)
+
+        big.cut = false
+
+        return Response.redirect(`http://127.0.0.1:${cutter.port}/big.bin`, 302)
+      },
       '/sig/*': request => new Response(signatures.get(new URL(request.url).pathname.slice('/sig'.length)) ?? 'none', { status: signatures.has(new URL(request.url).pathname.slice('/sig'.length)) ? 200 : 404 }),
       '/install.sh': () => new Response(script, { headers: { 'content-type': 'text/plain' } }),
       '/page': () => new Response(HTML, { headers: { 'content-type': 'text/html' } }),
@@ -93,6 +128,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await server.stop(true)
+  cutter.stop(true)
 
   if (hasGpg)
     await Bun.spawn(['gpgconf', '--homedir', gpgHome, '--kill', 'all']).exited
@@ -285,6 +321,54 @@ describe('checking', () => {
     expect(pathUnder('https://x.org/v1/SHA256SUMS', 'https://x.org/v1/mac/foo')).toBe('mac/foo')
     expect(pathUnder('https://x.org/v1/SHA256SUMS', 'https://y.org/v1/mac/foo')).toBeUndefined()
     expect(pathUnder('https://x.org/v1/SHA256SUMS', 'https://x.org/v1/a%zz')).toBe('a%zz')
+  })
+})
+
+describe('resuming', () => {
+  function reset(ranges = true): void {
+    Object.assign(big, { body: BIG, etag: '"v1"', ranges, cut: true, asked: [] })
+  }
+
+  async function parts(dir: string): Promise<string[]> {
+    return Array.fromAsync(new Bun.Glob('**/part*').scan({ cwd: join(dir, 'state'), dot: true }))
+  }
+
+  test('a download that broke off is resumed by the next one with a Range request, the sha covering the whole file', async () => {
+    const dir = home()
+
+    reset()
+
+    const broken = await dl([url('/big.bin')], dir)
+
+    expect(broken.code).toBe(1)
+    expect(broken.err).toContain('broke off')
+    expect(broken.err).toContain('run the same dl again to resume it')
+    expect((await parts(dir)).length).toBe(2)
+
+    const resumed = await dl([url('/big.bin'), '--sha256', sha256(BIG)], dir)
+
+    expect(resumed.code).toBe(0)
+    expect(resumed.out).toContain(`${sha256(BIG)} verified`)
+    expect(big.asked).toHaveLength(1)
+    expect(big.asked[0]).not.toBe('bytes=0-')
+    expect(await parts(dir)).toEqual([])
+  })
+
+  test('a file changed since, or a server without ranges, starts over from zero', async () => {
+    const changed = home()
+    const v2 = BIG.map(byte => 255 - byte)
+
+    reset()
+    expect((await dl([url('/big.bin')], changed)).code).toBe(1)
+    Object.assign(big, { body: v2, etag: '"v2"' })
+    expect((await dl([url('/big.bin'), '--sha256', sha256(v2)], changed)).code).toBe(0)
+
+    const rangeless = home()
+
+    reset(false)
+    expect((await dl([url('/big.bin')], rangeless)).code).toBe(1)
+    expect((await dl([url('/big.bin'), '--sha256', sha256(BIG)], rangeless)).code).toBe(0)
+    expect(big.asked).toHaveLength(1)
   })
 })
 

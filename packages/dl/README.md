@@ -25,6 +25,8 @@ bun add -g @kaynooo/cli-dl
 
 An HTML page arriving where a file was expected (an error or sign-in page answered with 200) fails instead of being kept.
 
+A download that breaks off keeps its bytes under `~/.local/state/kaynooo-cli/dl`, and the next `dl` of the same URL resumes it with a Range request, when the server gave an ETag or Last-Modified to tell the file did not change; a changed file or a server without ranges starts over, and the sha256 covers the whole file either way. A part left a week unresumed is dropped.
+
 ## Install scripts
 
 `curl -fsSL https://bun.sh/install | bash` runs code nobody read. With `dl`:
