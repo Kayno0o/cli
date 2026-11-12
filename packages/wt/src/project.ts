@@ -72,7 +72,7 @@ export interface Worktree {
 
 export class WtError extends KnownError {}
 
-// A DNS label, as the task prefixes every host of the worktree.
+// A DNS label, as the task prefixes every host of the worktree, without the `--` that joins a project to its task in a slug: task b--c of project a would share a--b--c with task c of project a--b.
 const TASK_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 
 const ROUTE_TARGET = /^client$|^[\w.-]+:\d+$/
@@ -138,8 +138,8 @@ export async function findProject(name: string): Promise<Project> {
 export const tasksDir = (project: Project) => fillTemplate([project.settings.worktrees], { root: dirname(project.root), repo: basename(project.root) })[0]!
 
 export function worktreeOf(project: Project, task: string): Worktree {
-  if (task === 'main' || !TASK_PATTERN.test(task))
-    throw new WtError(`invalid task name "${task}": lowercase letters, digits and inner dashes, at most 63, and not "main"`)
+  if (task === 'main' || !TASK_PATTERN.test(task) || task.includes('--'))
+    throw new WtError(`invalid task name "${task}": lowercase letters, digits and single inner dashes, at most 63, and not "main"`)
 
   const mainHosts = new Set(project.routes.map(route => route.host))
   const taken = project.routes.find(route => mainHosts.has(worktreeHost(route.host, task)))

@@ -447,7 +447,7 @@ describe('worktreeOf', () => {
   })
 
   test('refuses what is no DNS label', () => {
-    for (const task of ['plan-', '-plan', 'Plan', 'a'.repeat(64), 'main'])
+    for (const task of ['plan-', '-plan', 'Plan', 'a'.repeat(64), 'main', 'b--c'])
       expect(() => worktreeOf(project, task)).toThrow('invalid task name')
 
     expect(worktreeOf(project, 'plan-2').task).toBe('plan-2')
