@@ -51,10 +51,11 @@ export function dueDate(milestone: Milestone): string {
   return milestone.due_on.slice(0, 10)
 }
 
+// Rounded down, so it reads 100% only once every issue is closed.
 export function progress(milestone: Milestone): string {
   const total = milestone.open_issues + milestone.closed_issues
 
-  return total === 0 ? '' : `${Math.round(milestone.closed_issues / total * 100)}%`
+  return total === 0 ? '' : `${Math.floor(milestone.closed_issues / total * 100)}%`
 }
 
 export async function createMilestone(title: string, description: string | undefined, due: string | undefined, repo?: string): Promise<Milestone> {

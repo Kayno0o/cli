@@ -1,10 +1,11 @@
+import type { Milestone } from '../src/milestones'
 import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { board } from '../src/commands/board'
 import { edit, newIssue } from '../src/commands/issue'
 import { milestone, milestones } from '../src/commands/milestone'
 import { settleMilestone } from '../src/commands/release'
-import { dueDate, dueOn } from '../src/milestones'
+import { dueDate, dueOn, progress } from '../src/milestones'
 import { refusal, withFakeTea } from './fake-tea'
 
 const v1 = { id: 1, title: '1.0.0', state: 'open', due_on: '2026-12-01T00:00:00Z' }
@@ -15,6 +16,13 @@ const inV1 = { id: 1, title: '1.0.0' }
 function issue(number: number, title: string, state: string, milestone?: typeof inV1) {
   return { number, title, body: '- [ ] a\n- [x] b', state, milestone }
 }
+
+describe('progress', () => {
+  test('reads 100% only once every issue is closed', () => {
+    expect(progress({ open_issues: 1, closed_issues: 250 } as Milestone)).toBe('99%')
+    expect(progress({ open_issues: 0, closed_issues: 3 } as Milestone)).toBe('100%')
+  })
+})
 
 describe('dueOn', () => {
   test('turns a date into the timestamp Forgejo takes and refuses a zero or malformed one', () => {
@@ -39,7 +47,7 @@ describe('ft milestones', () => {
       expect(out).toContain('1.0.0')
       expect(out).toContain('1 open')
       expect(out).toContain('2 closed')
-      expect(out).toContain('67%')
+      expect(out).toContain('66%')
       expect(out).toContain('due 2026-12-01')
       expect(out).toContain('2.0.0')
       expect(out).not.toContain('due 9999')
