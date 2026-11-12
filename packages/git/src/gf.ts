@@ -4,6 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { SyncResult } from './sync'
 import process from 'node:process'
 import { jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
+import { askpass } from '@kaynooo/cli-kit/askpass'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { dirsOf, repoState } from './repos'
 import { sync } from './sync'
@@ -40,14 +41,20 @@ async function main(argv: string[]): Promise<number> {
   const repos = await Promise.all((await dirsOf(positionals, values.repos === true)).map(repoState))
   const results: SyncResult[] = []
   const progress = progressLine()
+  const prompts = askpass(progress.pause)
+  const env = prompts === undefined ? undefined : { ...process.env, ...prompts.env }
 
-  // One repository at a time, so a passphrase asks one question at a time.
-  for (const [at, repo] of repos.entries()) {
-    progress.update(repos.length > 1 ? { step: `fetching ${repo.path}`, done: at, total: repos.length, unit: 'repositories' } : { step: `fetching ${repo.path}` })
-    results.push(await sync(repo, { pull: values['no-pull'] !== true }))
+  try {
+    // One repository at a time, so a passphrase asks one question at a time.
+    for (const [at, repo] of repos.entries()) {
+      progress.update(repos.length > 1 ? { step: `fetching ${repo.path}`, done: at, total: repos.length, unit: 'repositories' } : { step: `fetching ${repo.path}` })
+      results.push(await sync(repo, { pull: values['no-pull'] !== true, env }))
+    }
   }
-
-  progress.stop()
+  finally {
+    prompts?.close()
+    progress.stop()
+  }
 
   if (values.json === true)
     printJson(results)

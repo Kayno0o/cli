@@ -52,11 +52,11 @@ function whyFailed(stderr: string, fallback: string): string {
 }
 
 /** Fetches with prune, then fast-forwards the branch onto its upstream: a branch that has diverged, or a tree a fast-forward would overwrite, is refused and left as it was. */
-export async function sync(repo: Repo, { pull }: { pull: boolean }): Promise<SyncResult> {
+export async function sync(repo: Repo, { pull, env }: { pull: boolean, env?: Record<string, string | undefined> | undefined }): Promise<SyncResult> {
   const { path, dir } = repo
   const refused = (reason: string, branch: string | null = null, upstream: string | null = null): SyncResult => ({ path, branch, upstream, commits: null, outcome: 'refused', reason })
 
-  const fetched = await git(['-C', dir, 'fetch', '--prune'])
+  const fetched = await git(['-C', dir, 'fetch', '--prune'], env)
 
   if (fetched.code !== 0)
     return refused(whyFailed(fetched.stderr, 'git fetch failed'), repo.status?.branch ?? null)

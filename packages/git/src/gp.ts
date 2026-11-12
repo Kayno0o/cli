@@ -4,6 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Repo } from './repos'
 import process from 'node:process'
 import { jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
+import { askpass } from '@kaynooo/cli-kit/askpass'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { git } from './git'
 import { dirsOf, repoState } from './repos'
@@ -60,7 +61,7 @@ async function unpushed(dir: string, branch: string): Promise<number | null> {
   return count.code === 0 ? Number(count.stdout.trim()) : null
 }
 
-async function push(repo: Repo, { dryRun, extra }: { dryRun: boolean, extra: string[] }): Promise<Result> {
+async function push(repo: Repo, { dryRun, extra, env }: { dryRun: boolean, extra: string[], env?: Record<string, string | undefined> | undefined }): Promise<Result> {
   const { path, dir, status } = repo
   const skipped = (reason: string, branch: string | null = null): Result => ({ path, branch, remote: null, commits: null, outcome: 'skipped', reason })
 
@@ -99,7 +100,7 @@ async function push(repo: Repo, { dryRun, extra }: { dryRun: boolean, extra: str
   if (dryRun)
     return { path, branch, remote, commits, outcome: 'would-push' }
 
-  const pushed = await git(['-C', dir, ...args])
+  const pushed = await git(['-C', dir, ...args], env)
 
   return pushed.code === 0 ? { path, branch, remote, commits, outcome: 'pushed' } : { path, branch, remote, commits, outcome: 'refused', reason: whyRefused(pushed.stderr) }
 }
@@ -126,14 +127,20 @@ async function main(argv: string[]): Promise<number> {
 
   // The count shows only with several repositories to push.
   const progress = progressLine()
+  const prompts = askpass(progress.pause)
+  const env = prompts === undefined ? undefined : { ...process.env, ...prompts.env }
 
-  // One push at a time, so a passphrase or a hook asks one question at a time.
-  for (const [at, repo] of repos.entries()) {
-    progress.update(repos.length > 1 ? { step: `pushing ${repo.path}`, done: at, total: repos.length, unit: 'repositories' } : { step: `pushing ${repo.path}` })
-    results.push(await push(repo, { dryRun: values['dry-run'] === true, extra: rest }))
+  try {
+    // One push at a time, so a passphrase or a hook asks one question at a time.
+    for (const [at, repo] of repos.entries()) {
+      progress.update(repos.length > 1 ? { step: `pushing ${repo.path}`, done: at, total: repos.length, unit: 'repositories' } : { step: `pushing ${repo.path}` })
+      results.push(await push(repo, { dryRun: values['dry-run'] === true, extra: rest, env }))
+    }
   }
-
-  progress.stop()
+  finally {
+    prompts?.close()
+    progress.stop()
+  }
 
   if (values.json === true)
     printJson(results)
