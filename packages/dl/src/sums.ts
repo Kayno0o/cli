@@ -62,7 +62,12 @@ export function sumFor(text: string, name: string, path?: string): string | unde
   return entries.length === 1 && only![1] === undefined ? only![0].toLowerCase() : undefined
 }
 
-// Fetches the checksums file at `url` and answers the sha256 it gives for the download at `fileUrl`, named `name`.
-export async function fetchSum(url: string, fileUrl: string, name: string): Promise<string> {
-  return sumFor(await (await reach(url)).text(), name, pathUnder(url, fileUrl)) ?? fail(`${url} holds no sha256 for ${name}`, 1)
+// The checksums file at `url`, as bytes so a signature over it can be checked.
+export async function fetchSums(url: string): Promise<Uint8Array> {
+  return (await reach(url)).bytes()
+}
+
+// The sha256 the checksums file `sums`, fetched from `url`, gives for the download at `fileUrl`, named `name`.
+export function sumIn(sums: Uint8Array, url: string, fileUrl: string, name: string): string {
+  return sumFor(new TextDecoder().decode(sums), name, pathUnder(url, fileUrl)) ?? fail(`${url} holds no sha256 for ${name}`, 1)
 }

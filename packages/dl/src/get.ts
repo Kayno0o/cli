@@ -1,6 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Downloaded } from './download'
 import type { Summary } from './script'
+import type { Key } from './signature'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
@@ -10,19 +11,21 @@ import { badUsage, escapeControls, fail, formatAge, formatSize, jsonOption, pain
 import { download } from './download'
 import { binDir, binDirOnPath, installBinary, pickBinary } from './install'
 import { summarize } from './script'
+import { readKey, verifySignature } from './signature'
 import { lastSeen, record, remember } from './state'
-import { fetchSum } from './sums'
+import { fetchSums, sumIn } from './sums'
 
 const USAGE = `dl [options] <url> [-- <script args>]: downloads a file into a new folder of its own, checks its sha256, then extracts it, installs it as a command or runs it as a script
 
 Without -o the file lands in a new folder under the temp folder. It prints where the file went, its size, final URL, type and sha256, and how it compares with the last download of the same URL (a changed text file shows its diff).
 An HTML page arriving where a file was expected fails, as does a download over --max-size.
---exec lists what the script does and runs it only when --sha256 or --sums pins it, or with --yes; arguments after -- go to the script.
+--sig checks a detached signature with --key: of the file, or of the checksums file when --sums names one. A gpg key is a fingerprint of your keyring or a key file, a minisign key its string or file, a cosign key its PEM file; the tool has to be on PATH.
+--exec lists what the script does and runs it only when --sha256, --sums or --sig pins it, or with --yes; arguments after -- go to the script.
 --bin and --exec record what they installed or ran in the ledger dl ls lists.`
 
 const EXITS: ExitRow[] = [
   [0, 'downloaded, and extracted, installed or run as asked'],
-  [1, 'an unreachable URL, an error status, a sha256 mismatch, an HTML page in place of a file, a download over --max-size, a script nothing pins, or one that failed'],
+  [1, 'an unreachable URL, an error status, a sha256 mismatch, a signature that does not verify or a missing tool to check it, an HTML page in place of a file, a download over --max-size, a script nothing pins, or one that failed'],
   [2, 'a usage error'],
 ]
 
@@ -30,10 +33,12 @@ const OPTIONS = {
   'output': { type: 'string', short: 'o', description: 'the folder to download into, created if missing, instead of a new one under the temp folder' },
   'sha256': { type: 'string', description: 'the sha256 the file must have', conflicts: ['sums'] },
   'sums': { type: 'string', description: 'the URL of a checksums file (SHA256SUMS) giving the file\'s sha256' },
+  'sig': { type: 'string', description: 'the URL of a detached signature of the file, or of the --sums file when there is one' },
+  'key': { type: 'string', description: 'the key --sig is checked with: a gpg fingerprint or key file, a minisign key or key file, a cosign PEM file' },
   'extract': { type: 'boolean', short: 'x', description: 'unpack the archive into a new folder beside it' },
   'bin': { type: 'string', optional: { bare: '' }, description: 'install the file, or the one executable its archive holds, in ~/.local/bin, under the name given or its own', conflicts: ['exec'] },
   'force': { type: 'boolean', description: 'let --bin replace a command of the same name' },
-  'exec': { type: 'boolean', description: 'run the file as a script, once --sha256 or --sums pins it, or with --yes' },
+  'exec': { type: 'boolean', description: 'run the file as a script, once --sha256, --sums or --sig pins it, or with --yes' },
   'yes': { type: 'boolean', description: 'run an --exec script that nothing pins' },
   'max-size': { type: 'string', description: 'the largest download taken, 2G by default' },
   'json': jsonOption(),
@@ -52,6 +57,7 @@ interface Report {
   type: string
   sha256: string
   verified: boolean
+  signature?: string
   seen: string
   diff?: string
   extracted?: string
@@ -70,6 +76,7 @@ export async function get(args: string[]): Promise<number> {
       ['dl https://bun.sh/install --exec --sha256 <sha>', 'run the script that was read'],
       ['dl https://example.com/releases/tool-linux-amd64 --sums https://example.com/releases/SHA256SUMS --bin tool', 'a checked binary, installed'],
       ['dl https://example.com/tool.tar.gz -x', 'download and unpack'],
+      ['dl https://example.com/tool.tar.gz --sums https://example.com/SHA256SUMS --sig https://example.com/SHA256SUMS.asc --key <fingerprint>', 'checked against checksums its publisher signed'],
     ],
   })
 
@@ -91,6 +98,13 @@ export async function get(args: string[]): Promise<number> {
   if (values.bin !== undefined && (values.bin.includes('/') || values.bin === '.' || values.bin === '..'))
     badUsage(`--bin takes a command name, not '${values.bin}'`)
 
+  if ((values.sig === undefined) !== (values.key === undefined))
+    badUsage('--sig and --key go together')
+
+  if (values.sig !== undefined && (!URL.canParse(values.sig) || !['http:', 'https:'].includes(new URL(values.sig).protocol)))
+    badUsage(`--sig takes an http or https URL, not '${values.sig}'`)
+
+  const key = values.key === undefined ? undefined : readKey(values.key)
   const maxSize = parseSize(values['max-size'] ?? DEFAULT_MAX_SIZE) ?? badUsage(`--max-size takes a size such as 500M or 2G, not '${values['max-size']}'`)
   const created = values.output === undefined
   const dir = created ? mkdtempSync(join(tmpdir(), 'dl-')) : resolve(values.output!)
@@ -98,9 +112,9 @@ export async function get(args: string[]): Promise<number> {
   mkdirSync(dir, { recursive: true })
 
   const expectsFile = values.exec === true || values.bin !== undefined || values.extract === true
-  const { file, verified } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: values.sha256?.toLowerCase(), sums: values.sums })
+  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: values.sha256?.toLowerCase(), sums: values.sums, sig: values.sig, key })
   const last = lastSeen(url)
-  const report: Report = { path: file.path, size: file.size, url: file.url, type: file.type, sha256: file.sha256, verified, seen: 'first download' }
+  const report: Report = { path: file.path, size: file.size, url: file.url, type: file.type, sha256: file.sha256, verified, ...signature === undefined ? {} : { signature }, seen: 'first download' }
 
   if (last !== undefined && last.seen.sha256 === file.sha256)
     report.seen = `same as the download of ${formatAge(last.seen.at)}`
@@ -134,7 +148,7 @@ export async function get(args: string[]): Promise<number> {
     return 0
 
   if (!verified && values.yes !== true)
-    return fail('not run: no --sha256 or --sums pins this script', 1, `read ${file.path}, then: dl ${url} --exec --sha256 ${file.sha256}`)
+    return fail('not run: no --sha256, --sums or --sig pins this script', 1, `read ${file.path}, then: dl ${url} --exec --sha256 ${file.sha256}`)
 
   return runScript(file, url, rest)
 }
@@ -144,10 +158,13 @@ interface Checks {
   expectsFile: boolean
   sha256: string | undefined
   sums: string | undefined
+  sig: string | undefined
+  key: Key | undefined
 }
 
-// Downloads `url` and checks it is no HTML page where a file was expected and has the sha256 asked; on a failure the file goes, and the folder too when dl made it.
-async function fetchChecked(url: string, dir: string, created: boolean, checks: Checks): Promise<{ file: Downloaded, verified: boolean }> {
+// Downloads `url` and checks it is no HTML page where a file was expected, has the sha256 asked and carries the signature asked; on a failure the file goes, and the folder too when dl made it.
+// With --sums the signature is the checksums file's, which then vouches for the sha256: how most projects sign their releases.
+async function fetchChecked(url: string, dir: string, created: boolean, checks: Checks): Promise<{ file: Downloaded, verified: boolean, signature?: string }> {
   let file: Downloaded | undefined
 
   try {
@@ -156,12 +173,14 @@ async function fetchChecked(url: string, dir: string, created: boolean, checks: 
     if (file.html && (checks.expectsFile || !HTML_EXTENSIONS.has(extname(file.name).toLowerCase())))
       fail(`${url} answered an HTML page, not a file`, 1)
 
-    const expected = checks.sha256 ?? (checks.sums === undefined ? undefined : await fetchSum(checks.sums, url, file.name))
+    const sums = checks.sums === undefined ? undefined : await fetchSums(checks.sums)
+    const signed = checks.sig === undefined || checks.key === undefined ? undefined : await verifySignature(sums ?? file.path, checks.sig, checks.key)
+    const expected = checks.sha256 ?? (sums === undefined ? undefined : sumIn(sums, checks.sums!, url, file.name))
 
     if (expected !== undefined && expected !== file.sha256)
       fail(`sha256 mismatch for ${file.name}: expected ${expected}, got ${file.sha256}; the file was deleted`, 1)
 
-    return { file, verified: expected !== undefined }
+    return { file, verified: expected !== undefined || signed !== undefined, ...signed === undefined ? {} : { signature: signed } }
   }
   catch (error) {
     if (file !== undefined)
@@ -235,6 +254,7 @@ function print(report: Report, url: string, json: boolean): void {
     ...report.url === url ? [] : [['url', report.url]],
     ['type', report.type === '' ? '-' : report.type],
     ['sha256', `${report.sha256}${report.verified ? ' verified' : ''}`],
+    ...report.signature === undefined ? [] : [['signature', `${report.signature}, verified`]],
     ['seen', report.seen],
     ...report.extracted === undefined ? [] : [['extracted', report.extracted]],
     ...report.installed === undefined ? [] : [['installed', report.installed]],

@@ -16,7 +16,37 @@ const SCRIPT_V2 = '#!/bin/sh\n# writes a marker\necho "ran again $*" > "$MARK"\n
 
 let script = SCRIPT_V1
 let archive: Uint8Array
+let sums: string
 let server: ReturnType<typeof Bun.serve>
+// Two gpg keys of a keyring of the tests' own, the first exported to a file; the signatures are served beside the files.
+const hasGpg = Bun.which('gpg') !== null
+const gpgHome = temp('dl-gnupg-')
+const signatures = new Map<string, string>()
+let signer = ''
+let stranger = ''
+let signerFile = ''
+
+async function gpg(...args: string[]): Promise<string> {
+  const child = Bun.spawn(['gpg', '--batch', '--homedir', gpgHome, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' })
+  const [out] = await Promise.all([child.stdout.text(), child.exited])
+
+  return out
+}
+
+async function newKey(name: string): Promise<string> {
+  await gpg('--passphrase', '', '--quick-gen-key', `${name} <${name}@example.com>`, 'ed25519', 'sign', 'never')
+
+  return (await gpg('--with-colons', '--list-keys', `${name}@example.com`)).split('\n').find(line => line.startsWith('fpr:'))!.split(':')[9]!
+}
+
+async function sign(fingerprint: string, data: Uint8Array | string): Promise<string> {
+  const file = join(gpgHome, `${signatures.size}.data`)
+
+  writeFileSync(file, data)
+  await gpg('--local-user', fingerprint, '--armor', '--detach-sign', '-o', `${file}.asc`, file)
+
+  return readFileSync(`${file}.asc`, 'utf8')
+}
 
 function sha256(data: Uint8Array | string): string {
   return new Bun.CryptoHasher('sha256').update(data).digest('hex')
@@ -30,6 +60,17 @@ beforeAll(async () => {
   writeFileSync(join(source, 'tool-1.0', 'README'), 'read me\n')
   await Bun.spawn(['tar', 'czf', join(source, 'tool.tar.gz'), '-C', source, 'tool-1.0']).exited
   archive = await Bun.file(join(source, 'tool.tar.gz')).bytes()
+  sums = `${sha256(BINARY)}  tool.bin\n${sha256(archive)} *tool.tar.gz\n${'0'.repeat(64)}  bad.bin\n`
+
+  if (hasGpg) {
+    signer = await newKey('signer')
+    stranger = await newKey('stranger')
+    signerFile = join(gpgHome, 'signer.asc')
+    writeFileSync(signerFile, await gpg('--armor', '--export', signer))
+    signatures.set('/tool.bin.asc', await sign(signer, BINARY))
+    signatures.set('/tool.bin.stranger.asc', await sign(stranger, BINARY))
+    signatures.set('/SHA256SUMS.asc', await sign(signer, sums))
+  }
 
   server = Bun.serve({
     port: 0,
@@ -37,7 +78,8 @@ beforeAll(async () => {
       '/tool.bin': () => new Response(BINARY, { headers: { 'content-type': 'application/octet-stream' } }),
       '/bad.bin': () => new Response(BINARY),
       '/tool.tar.gz': () => new Response(archive, { headers: { 'content-type': 'application/gzip' } }),
-      '/SHA256SUMS': () => new Response(`${sha256(BINARY)}  tool.bin\n${sha256(archive)} *tool.tar.gz\n${'0'.repeat(64)}  bad.bin\n`),
+      '/SHA256SUMS': () => new Response(sums),
+      '/sig/*': request => new Response(signatures.get(new URL(request.url).pathname.slice('/sig'.length)) ?? 'none', { status: signatures.has(new URL(request.url).pathname.slice('/sig'.length)) ? 200 : 404 }),
       '/install.sh': () => new Response(script, { headers: { 'content-type': 'text/plain' } }),
       '/page': () => new Response(HTML, { headers: { 'content-type': 'text/html' } }),
       '/fake.zip': () => new Response(HTML, { headers: { 'content-type': 'text/html' } }),
@@ -49,17 +91,22 @@ beforeAll(async () => {
   })
 })
 
-afterAll(async () => server.stop(true))
+afterAll(async () => {
+  await server.stop(true)
+
+  if (hasGpg)
+    await Bun.spawn(['gpgconf', '--homedir', gpgHome, '--kill', 'all']).exited
+})
 
 interface Ran { code: number, out: string, err: string }
 
 // Spawned, not run in-process, and awaited, so the server in this process answers meanwhile; in agent mode, tables come tab-separated.
-async function dl(args: string[], home: string): Promise<Ran> {
+async function dl(args: string[], home: string, env: Record<string, string> = {}): Promise<Ran> {
   const child = Bun.spawn([process.execPath, CLI, ...args], {
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env, NO_COLOR: '1', KIT_MODE: 'agent', HOME: home, XDG_STATE_HOME: join(home, 'state'), TMPDIR: join(home, 'tmp'), MARK: join(home, 'mark') },
+    env: { ...process.env, NO_COLOR: '1', KIT_MODE: 'agent', HOME: home, XDG_STATE_HOME: join(home, 'state'), TMPDIR: join(home, 'tmp'), MARK: join(home, 'mark'), ...env },
   })
   const [out, err, code] = await Promise.all([child.stdout.text(), child.stderr.text(), child.exited])
 
@@ -174,6 +221,46 @@ describe('checking', () => {
     expect(summed.code).toBe(1)
     expect(unlisted.code).toBe(1)
     expect(unlisted.err).toContain('holds no sha256 for notes.txt')
+    expect(readdirSync(join(dir, 'tmp'))).toEqual([])
+  })
+
+  test.skipIf(!hasGpg)('--sig checks a gpg signature of the file, or of the checksums file, with a key file or a fingerprint of the keyring', async () => {
+    const dir = home()
+    const byFile = await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.asc'), '--key', signerFile], dir)
+    const byFingerprint = await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.asc'), '--key', signer.match(/.{4}/g)!.join(' ')], dir, { GNUPGHOME: gpgHome })
+    const bySums = await dl([url('/tool.bin'), '--sums', url('/SHA256SUMS'), '--sig', url('/sig/SHA256SUMS.asc'), '--key', signerFile], dir)
+
+    expect(byFile).toMatchObject({ code: 0, out: expect.stringContaining(`signature\tgpg, by ${signer}, verified`) })
+    expect(byFingerprint).toMatchObject({ code: 0, out: expect.stringContaining(`gpg, by ${signer}`) })
+    expect(bySums.code).toBe(0)
+    expect(bySums.out).toContain(`${sha256(BINARY)} verified`)
+    expect(bySums.out).toContain(`gpg, by ${signer}`)
+  })
+
+  test.skipIf(!hasGpg)('a signature by another key, or over other bytes, deletes the file', async () => {
+    const dir = home()
+    const otherKey = await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.stranger.asc'), '--key', signer], dir, { GNUPGHOME: gpgHome })
+    const notInFile = await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.stranger.asc'), '--key', signerFile], dir)
+    const otherBytes = await dl([url('/tool.tar.gz'), '--sig', url('/sig/tool.bin.asc'), '--key', signerFile], dir)
+
+    expect(otherKey).toMatchObject({ code: 1, err: expect.stringContaining(`the gpg signature is by ${stranger}, not ${signer}`) })
+    expect(notInFile).toMatchObject({ code: 1, err: expect.stringContaining('the gpg signature does not verify') })
+    expect(otherBytes).toMatchObject({ code: 1, err: expect.stringContaining('the gpg signature does not verify') })
+    expect(readdirSync(join(dir, 'tmp'))).toEqual([])
+  })
+
+  test('--sig and --key go together, and a key whose tool is missing is refused before the download', async () => {
+    const dir = home()
+    const pem = join(dir, 'cosign.pub')
+    const empty = temp('dl-path-')
+
+    writeFileSync(pem, '-----BEGIN PUBLIC KEY-----\nMFkw\n-----END PUBLIC KEY-----\n')
+
+    expect((await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.asc')], dir)).code).toBe(2)
+    expect((await dl([url('/tool.bin'), '--key', pem], dir)).code).toBe(2)
+    expect((await dl([url('/tool.bin'), '--sig', url('/sig/tool.bin.asc'), '--key', 'nonsense'], dir)).code).toBe(2)
+    expect(await dl([url('/tool.bin'), '--sig', url('/sig/x.minisig'), '--key', `RW${'A'.repeat(54)}`], dir, { PATH: empty })).toMatchObject({ code: 1, err: expect.stringContaining('--key is a minisign key and minisign is not on PATH') })
+    expect(await dl([url('/tool.bin'), '--sig', url('/sig/x.sig'), '--key', pem], dir, { PATH: empty })).toMatchObject({ code: 1, err: expect.stringContaining('--key is a cosign key and cosign is not on PATH') })
     expect(readdirSync(join(dir, 'tmp'))).toEqual([])
   })
 
