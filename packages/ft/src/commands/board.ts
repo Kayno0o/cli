@@ -4,7 +4,7 @@ import type { Issue, IssueComment } from '../issues'
 import { badUsage, capped, currentSession, Exit, fail, formatAge, hyperlink, jsonOption, limitOf, limitOptions, liveSessions, paint, parse, printHeader, printHint, printJson, problem, role, runHint, section, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
 import { issueNumbers, repoOption } from '../args'
 import { boxes } from '../checklist'
-import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
+import { claimable, holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../claims'
 import { good } from '../good'
 import { comment, commentsOf, commentsOfAll, getIssue, openIssues, sessionAuthor } from '../issues'
 import { findMilestone } from '../milestones'
@@ -188,15 +188,15 @@ export async function board(args: string[]): Promise<number> {
 }
 
 async function me(as: string | undefined, sessions: Session[]): Promise<string> {
-  if (as !== undefined)
-    return as
+  const name = as ?? (await currentSession(sessions))?.name
 
-  const session = await currentSession(sessions)
-
-  if (session === undefined)
+  if (name === undefined)
     fail('not run from a Claude Code session: pass --as <name>')
 
-  return session.name
+  if (!claimable(name))
+    fail(`a claim cannot carry the name ${JSON.stringify(name)}, empty, padded or holding a line break: pass --as`)
+
+  return name
 }
 
 const takeUsage = `ft take <n>...

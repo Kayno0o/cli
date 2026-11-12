@@ -3,7 +3,7 @@ import type { Issue } from '../src/issues'
 import process from 'node:process'
 import { currentSession } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
-import { holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../src/claims'
+import { claimable, holderSession, laneSuffix, latestClaim, latestNote, releasedComment, takenComment } from '../src/claims'
 import { heldBy, renderBoard, standing } from '../src/commands/board'
 
 const session = (name: string, pid = 1): Session => ({ name, pid, status: 'busy', cwd: '/w' })
@@ -29,11 +29,25 @@ describe('latestClaim', () => {
     expect(latestClaim([{ body: 'as the "Taken by session x-1." comment said', created_at: at(1) }])).toBeUndefined()
   })
 
+  test('reads back a name holding a space, an accent, a slash or a final dot', () => {
+    for (const name of ['fix login', 'café-1', 'a/b', 'v1.'])
+      expect(latestClaim([{ body: takenComment(name), created_at: at(1) }])?.holder).toBe(name)
+
+    expect(latestClaim([{ body: takenComment('fix login'), created_at: at(1) }, { body: releasedComment('fix login'), created_at: at(2) }])).toBeUndefined()
+  })
+
   test('counts only the claims of the given author', () => {
     const comments = [{ body: takenComment('a-1'), created_at: at(1), user: { login: 'kaynooo' } }, { body: takenComment('b-2'), created_at: at(2), user: { login: 'stranger' } }]
 
     expect(latestClaim(comments, 'kaynooo')?.holder).toBe('a-1')
     expect(latestClaim(comments)?.holder).toBe('b-2')
+  })
+})
+
+describe('claimable', () => {
+  test('refuses a name a claim would not read back as it is', () => {
+    expect(['fix login', 'café-1', 'a/b'].every(claimable)).toBe(true)
+    expect(['', ' a', 'a ', 'a\nb', `a${String.fromCharCode(0x2028)}b`].some(claimable)).toBe(false)
   })
 })
 
