@@ -70,8 +70,16 @@ function firstLineHint(text: string, from: string): string {
   return lines.length === 0 ? '' : ` (its first line is on ${plural('line', lines.length)} ${listLines(lines)})`
 }
 
+// Unicode-aware, so `.` takes a whole emoji and `\p{L}` is a letter class; a pattern only the legacy syntax accepts, such as `\-` outside a class, still compiles without it.
 export function compile(source: string, { ignoreCase, dotAll }: Pick<Pair, 'ignoreCase' | 'dotAll'> = {}): RegExp {
-  return new RegExp(source, `gm${ignoreCase === true ? 'i' : ''}${dotAll === true ? 's' : ''}`)
+  const flags = `gm${ignoreCase === true ? 'i' : ''}${dotAll === true ? 's' : ''}`
+
+  try {
+    return new RegExp(source, `${flags}u`)
+  }
+  catch {
+    return new RegExp(source, flags)
+  }
 }
 
 function escapes(to: string): string {

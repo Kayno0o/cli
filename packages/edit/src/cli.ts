@@ -4,7 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Diff } from './diff'
 import type { Pair } from './replace'
 import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { normalize, resolve } from 'node:path'
+import { dirname, normalize, resolve } from 'node:path'
 import process from 'node:process'
 import { Exit, fail, jsonOption, parse, printJson, readInput, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
 import { counted, plural } from '@kaynooo/utils/text'
@@ -125,9 +125,11 @@ async function readPairs(path: string, defaults: Defaults): Promise<Pair[]> {
   return items.map((item, i) => pairFrom(item, i, defaults))
 }
 
+// The file and the folder its temp file is written in, which the rename needs too.
 function writable(path: string): boolean {
   try {
     accessSync(path, constants.W_OK)
+    accessSync(dirname(realpathSync(path)), constants.W_OK)
 
     return true
   }
@@ -171,21 +173,34 @@ function dedupe(paths: string[]): string[] {
   return [...byFile.values()]
 }
 
-// Writes next to the target then renames over it, so a crash never leaves half a file; a symlink is followed and the mode kept.
-function writeAtomic(path: string, text: string) {
-  const target = realpathSync(path)
-  const temp = `${target}.sub-${process.pid}`
+interface Staged { temp: string, target: string }
+interface Problem { path: string, problem: string }
 
-  try {
-    writeFileSync(temp, text)
-    chmodSync(temp, (statSync(target, { throwIfNoEntry: false })?.mode ?? 0o644) & 0o7777)
+// Writes every new text next to its target first, then renames them all over their targets, so a write that fails leaves every file as it was and is answered; a symlink is followed and the mode kept.
+function writeAll(writes: { path: string, text: string }[]): Problem | undefined {
+  const staged: Staged[] = []
+
+  for (const { path, text } of writes) {
+    try {
+      const target = realpathSync(path)
+      const temp = `${target}.sub-${process.pid}`
+
+      staged.push({ temp, target })
+      writeFileSync(temp, text)
+      chmodSync(temp, (statSync(target, { throwIfNoEntry: false })?.mode ?? 0o644) & 0o7777)
+    }
+    catch (error) {
+      for (const { temp } of staged)
+        rmSync(temp, { force: true })
+
+      return { path, problem: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  for (const { temp, target } of staged)
     renameSync(temp, target)
-  }
-  catch (error) {
-    rmSync(temp, { force: true })
 
-    throw error
-  }
+  return undefined
 }
 
 // How long stdin may stay silent before it is taken for one that will never close, as in a tool call with no heredoc.
@@ -317,7 +332,7 @@ async function main(argv: string[]): Promise<number> {
   const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true, regex: values.regex === true, ignoreCase: values['ignore-case'] === true, dotAll: values.dotall === true }
   const edits = await plan(values, files, defaults)
   const changes: { path: string, before: string, after: string, lines: number[], diff?: Diff }[] = []
-  const problems: { path: string, problem: string }[] = []
+  const problems: Problem[] = []
   const skipped: string[] = []
 
   for (const [path, pairs] of edits) {
@@ -377,12 +392,17 @@ async function main(argv: string[]): Promise<number> {
 
   const done: { path: string, replacements: number, lines: number[], added: number, removed: number, diff?: string }[] = []
 
-  for (const { path, before, after, lines, diff } of changes) {
+  const failed = values['dry-run'] === true ? undefined : writeAll(changes.filter(({ before, after, diff }) => diff !== undefined && after !== before).map(({ path, after }) => ({ path, text: after })))
+
+  if (failed !== undefined) {
+    console.error(json ? JSON.stringify({ error: 'nothing written', failures: [failed] }) : `${role('problem', process.stderr)('sub: nothing written')}\n${failed.path}: ${failed.problem}`)
+
+    return 1
+  }
+
+  for (const { path, lines, diff } of changes) {
     if (diff === undefined)
       continue
-
-    if (values['dry-run'] !== true && after !== before)
-      writeAtomic(path, after)
 
     if (json) {
       done.push({ path, replacements: lines.length, lines, added: diff.added, removed: diff.removed, ...values.diff === true ? { diff: diff.unified } : {} })

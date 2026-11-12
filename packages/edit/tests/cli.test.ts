@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
@@ -49,6 +50,28 @@ describe('sub', () => {
     expect(sub(['--from', 'nothing', '--to', 'x', '--all', '--skip-missing', 'a.ts', 'b.ts']).code).toBe(1)
     expect(sub(['--from', 'a', '--to', 'x', '--skip-missing', 'a.ts']).code).toBe(2)
     expect(sub(['--from', 'nothing', '--to', 'x', '--all', 'a.ts', 'b.ts']).code).toBe(1)
+  })
+
+  test('--regex reads an emoji as one character and \\p{L} as a letter, and still takes the legacy \\- escape', () => {
+    file('u.txt', 'a😀b é-1 c-d\n')
+
+    expect(sub(['--regex', '--from', 'a.', '--to', 'X', 'u.txt']).code).toBe(0)
+    expect(sub(['--regex', '--from', String.raw`\p{L}-1`, '--to', 'Y', 'u.txt']).code).toBe(0)
+    expect(sub(['--regex', '--from', String.raw`c\-d`, '--to', 'Z', 'u.txt']).code).toBe(0)
+    expect(read('u.txt')).toBe('Xb Y Z\n')
+  })
+
+  test.skipIf(process.getuid?.() === 0)('writes no file when the folder of a later one is not writable', () => {
+    file('g.txt', 'old\n')
+    mkdirSync(join(dir, 'ro'))
+    file('ro/f.txt', 'old\n')
+    chmodSync(join(dir, 'ro'), 0o555)
+
+    const result = sub(['--from', 'old', '--to', 'new', 'g.txt', 'ro/f.txt'])
+
+    chmodSync(join(dir, 'ro'), 0o755)
+    expect(result).toMatchObject({ code: 1, err: 'sub: nothing written\nro/f.txt: not writable\n' })
+    expect(read('g.txt')).toBe('old\n')
   })
 
   test('--ignore-case and --dotall need --regex, and a pair takes ignoreCase and dotAll', () => {
