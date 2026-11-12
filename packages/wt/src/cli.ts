@@ -297,7 +297,7 @@ process.exitCode = await runCli({
           const worktree = worktreeOf((await locate(process.cwd(), values.project)).project, task)
 
           return asWorktreeJob(values.up ? 'add --up' : 'add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch]), ...(values.up ? ['--up'] : [])], async () => (await commands()).addTask(task, branch, values))
-        }, bgName(values, 'add', task))
+        }, bgName(values, values.up ? 'add --up' : 'add', task))
       },
     },
     sync: {
