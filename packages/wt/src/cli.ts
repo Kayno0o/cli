@@ -1,6 +1,7 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import type { GlobalOptions } from './commands'
+import type { Worktree } from './project'
 import process from 'node:process'
 import { badUsage, parse, runCli } from '@kaynooo/cli-kit'
 import { addTask, assertRemovable, downTask, printPath, printTasks, printUrls, removeTask, syncTask, upTask } from './commands'
@@ -9,7 +10,7 @@ import { failKnown } from './errors'
 import { initProject } from './init'
 import { Jobs } from './jobs'
 import { listWorktrees } from './list'
-import { listTasks, loadProjects, locate, locateWorktree } from './project'
+import { assertWorktreeExists, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
 import { runHeavy, runTask } from './run'
 import { shellWrapper } from './shell'
 import { slugOf } from './stack'
@@ -49,9 +50,8 @@ const PROJECT_OPTION = { type: 'string', short: 'p', candidates: projectNames, d
 
 const BG_OPTION = { type: 'boolean', description: 'run it away from any terminal, its output in the worktree\'s job log, a notification saying how it went' } as const
 
-// Every action on a worktree holds its stack's lock, so an up cannot race a removal, and --bg detaches it.
-async function asWorktreeJob(verb: 'add' | 'sync' | 'rm' | 'up' | 'down', task: string, options: GlobalOptions & { bg?: boolean }, argv: string[], work: () => Promise<void>): Promise<number> {
-  const { project } = await locate(process.cwd(), options.project)
+// Every action on a worktree holds its stack's lock, so an up cannot race a removal, and --bg detaches it. Its caller checks the worktree first: a job claimed for one that cannot be acted on leaves a record behind, or a `--bg` one failing out of sight.
+async function asWorktreeJob(verb: 'add' | 'sync' | 'rm' | 'up' | 'down', { project, task }: Worktree, options: GlobalOptions & { bg?: boolean }, argv: string[], work: () => Promise<void>): Promise<number> {
   const ref = `${project.name}/${task}`
   const stack = { ref, slug: slugOf(ref) }
   const queue = await jobs()
@@ -169,7 +169,11 @@ process.exitCode = await runCli({
       run: async (args) => {
         const { values, positionals: [task, branch] } = parse(args, ADD_USAGE, { project: PROJECT_OPTION, bg: BG_OPTION }, { positionals: ['<task>', '[branch]'] })
 
-        return guarded(async () => asWorktreeJob('add', task, values, ['add', task, ...(branch === undefined ? [] : [branch])], async () => addTask(task, branch, values)))
+        return guarded(async () => {
+          const worktree = worktreeOf((await locate(process.cwd(), values.project)).project, task)
+
+          return asWorktreeJob('add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch])], async () => addTask(task, branch, values))
+        })
       },
     },
     sync: {
@@ -178,9 +182,11 @@ process.exitCode = await runCli({
         const { values, positionals: [task] } = parse(args, SYNC_USAGE, { project: PROJECT_OPTION }, { positionals: ['[task]'], candidates: TASK })
 
         return guarded(async () => {
-          const { task: name } = await locateWorktree(process.cwd(), task, values.project)
+          const worktree = await locateWorktree(process.cwd(), task, values.project)
 
-          return asWorktreeJob('sync', name, values, ['sync', name], async () => syncTask(name, values))
+          assertWorktreeExists(worktree)
+
+          return asWorktreeJob('sync', worktree, values, ['sync', worktree.task], async () => syncTask(worktree.task, values))
         })
       },
     },
@@ -194,9 +200,9 @@ process.exitCode = await runCli({
         }, { positionals: ['<task>'], candidates: TASK })
 
         return guarded(async () => {
-          await assertRemovable(task, values)
+          const worktree = await assertRemovable(task, values)
 
-          return asWorktreeJob('rm', task, values, ['rm', task, ...(values.force ? ['--force'] : [])], async () => removeTask(task, values))
+          return asWorktreeJob('rm', worktree, values, ['rm', task, ...(values.force ? ['--force'] : [])], async () => removeTask(task, values))
         })
       },
     },
@@ -208,7 +214,9 @@ process.exitCode = await runCli({
         return guarded(async () => {
           const worktree = await locateWorktree(process.cwd(), task, values.project)
 
-          return asWorktreeJob('up', worktree.task, values, ['up', worktree.task], async () => upTask(worktree))
+          assertWorktreeExists(worktree)
+
+          return asWorktreeJob('up', worktree, values, ['up', worktree.task], async () => upTask(worktree))
         })
       },
     },
@@ -220,7 +228,9 @@ process.exitCode = await runCli({
         return guarded(async () => {
           const worktree = await locateWorktree(process.cwd(), task, values.project)
 
-          return asWorktreeJob('down', worktree.task, values, ['down', worktree.task], async () => downTask(worktree))
+          assertWorktreeExists(worktree)
+
+          return asWorktreeJob('down', worktree, values, ['down', worktree.task], async () => downTask(worktree))
         })
       },
     },

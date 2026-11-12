@@ -98,13 +98,15 @@ async function refuseLosingWork(worktree: Worktree, force: boolean): Promise<voi
 }
 
 /** Refuses a removal with nothing to remove, or work it would lose, before it claims a job: a job left recording a worktree never there, or a `--bg` one failing out of sight. */
-export async function assertRemovable(task: string, options: GlobalOptions & { force?: boolean }): Promise<void> {
+export async function assertRemovable(task: string, options: GlobalOptions & { force?: boolean }): Promise<Worktree> {
   const worktree = await locateWorktree(process.cwd(), task, options.project)
 
   if (!existsSync(worktree.dir) && !Object.values(worktree.files).some(file => existsSync(file)) && !await isRegistered(worktree))
     throw new WtError(`no worktree ${worktree.task} of ${worktree.project.name}, nothing removed`)
 
   await refuseLosingWork(worktree, options.force === true)
+
+  return worktree
 }
 
 export async function removeTask(task: string, options: GlobalOptions & { force?: boolean }): Promise<void> {

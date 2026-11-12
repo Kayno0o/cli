@@ -312,6 +312,20 @@ describe('removeTask', () => {
     expect(run.err).toContain('no worktree nothing of times, nothing removed')
     expect(existsSync(join(env.sandbox.home, '.cache', 'wt', 'jobs', 'times--nothing.json'))).toBe(false)
   })
+
+  test.each([
+    [['up', 'nothing'], 'no worktree nothing'],
+    [['down', 'nothing'], 'no worktree nothing'],
+    [['sync', 'nothing'], 'no worktree nothing'],
+    [['add', 'Bad_Name'], 'invalid task name "Bad_Name"'],
+  ])('%p fails before claiming a job, leaving no job record', async (args, message) => {
+    const jobs = join(env.sandbox.home, '.cache', 'wt', 'jobs')
+    const run = await env.wt(...args)
+
+    expect(run.code).toBe(1)
+    expect(run.err).toContain(message)
+    expect((existsSync(jobs) ? readdirSync(jobs) : []).filter(file => file.startsWith(`times--${args[1]}.`))).toEqual([])
+  })
 })
 
 describe('whilePaused', () => {
@@ -650,6 +664,7 @@ describe('wt sync as a job', () => {
     const { sandbox, wt } = env
     const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')
 
+    mkdirSync(env.dirOf('zzsync'), { recursive: true })
     mkdirSync(jobs, { recursive: true })
     writeFileSync(join(jobs, 'times--zzsync.lock'), String(process.pid))
     writeFileSync(join(jobs, 'times--zzsync.json'), JSON.stringify({ ref: 'times/zzsync', verb: 'up', pid: process.pid, startedAt: Date.now(), log: '' }))
