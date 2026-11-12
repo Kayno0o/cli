@@ -47,6 +47,11 @@ const PINNED_RUN = '`dl <url>` downloads it and prints its path and sha256; read
 export const PIPE_TO_SHELL = `Never run what \`curl\`/\`wget\` fetches straight in a shell (\`| sh\`, \`bash <(curl ...)\`, \`eval "$(curl ...)"\`): it runs code nobody read. ${PINNED_RUN} Or hand the command to the user.`
 export const UNPINNED_EXEC = `Never \`dl --exec --yes\` a script no \`--sha256\` or \`--sums\` pins: it runs code nobody read. ${PINNED_RUN}`
 
+// GNU rm takes any unambiguous prefix of a long option, `--rec` for `--recursive`, and `--r` or `--n` are unambiguous already.
+function isLongPrefix(arg: string, option: string): boolean {
+  return arg.length > 2 && option.startsWith(arg)
+}
+
 // Whether a short or long option is among the arguments before a `--`.
 function hasOption(args: readonly string[], long: readonly string[], shorts: string): boolean {
   for (const arg of args) {
@@ -93,7 +98,7 @@ export function isBroadPath(path: string, homePath?: string): boolean {
 // The paths a recursive removal names, none when it is not recursive.
 function recursiveTargets(args: readonly string[]): string[] {
   const options = args.slice(0, args.includes('--') ? args.indexOf('--') : args.length)
-  const isRecursive = options.some(arg => arg === '--recursive' || (SHORT_CLUSTER.test(arg) && RECURSIVE_LETTER.test(arg)))
+  const isRecursive = options.some(arg => isLongPrefix(arg, '--recursive') || (SHORT_CLUSTER.test(arg) && RECURSIVE_LETTER.test(arg)))
 
   return isRecursive ? args.filter((arg, i) => !arg.startsWith('-') || (args.includes('--') && i > args.indexOf('--'))) : []
 }
@@ -127,7 +132,7 @@ function dockerPrunesAll(args: readonly string[]): boolean {
 }
 
 function removesBroadly(args: readonly string[], home?: string): boolean {
-  return args.includes('--no-preserve-root') || recursiveTargets(args).some(path => isBroadPath(path, home))
+  return args.some(arg => isLongPrefix(arg, '--no-preserve-root')) || recursiveTargets(args).some(path => isBroadPath(path, home))
 }
 
 // Whether a checkout restores the whole tree from its pathspecs: after a `--`, or past the first operand, which is the tree-ish, or alone.

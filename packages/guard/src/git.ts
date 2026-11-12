@@ -12,6 +12,48 @@ export const COMMIT_VALUE_SHORTS = new Set(['m', 'F', 'c', 'C', 't'])
 export const COMMIT_ATTACHED_SHORTS = new Set(['u', 'S'])
 
 export const COMMIT_VALUE_LONGS = new Set(['--message', '--file', '--reuse-message', '--reedit-message', '--template', '--author', '--date', '--fixup', '--squash', '--cleanup', '--trailer', '--pathspec-from-file'])
+// The long options of each subcommand the rules read, the ones they guard first: git takes any prefix of one, and a prefix of several is an error, so the first it fits stands for it.
+const LONG_OPTIONS: Record<string, readonly string[]> = {
+  add: ['--all', '--update', '--no-ignore-removal', '--dry-run', '--patch', '--intent-to-add', '--force', '--pathspec-from-file'],
+  branch: ['--delete', '--force', '--move', '--copy', '--list', '--show-current'],
+  checkout: ['--force', '--patch', '--ours', '--theirs', '--merge', '--detach', '--orphan', '--track', '--quiet', '--progress', '--pathspec-from-file'],
+  clean: ['--force', '--dry-run', '--quiet', '--exclude', '--interactive'],
+  commit: ['--all', '--signoff', ...COMMIT_VALUE_LONGS, '--amend', '--no-verify', '--edit', '--no-edit', '--quiet', '--patch', '--include', '--only', '--interactive', '--dry-run', '--allow-empty', '--allow-empty-message', '--reset-author', '--gpg-sign', '--status', '--verbose'],
+  push: ['--force', '--mirror', '--delete', '--tags', '--follow-tags', '--force-with-lease', '--force-if-includes', '--atomic', '--all', '--branches', '--prune', '--dry-run', '--set-upstream', '--no-verify', '--porcelain', '--quiet', '--verbose', '--progress', '--push-option', '--repo', '--recurse-submodules', '--signed', '--thin'],
+  reset: ['--hard', '--soft', '--mixed', '--merge', '--keep', '--patch', '--quiet', '--recurse-submodules', '--pathspec-from-file'],
+  restore: ['--staged', '--worktree', '--patch', '--source', '--ours', '--theirs', '--merge', '--quiet', '--progress', '--overlay', '--no-overlay', '--ignore-unmerged', '--pathspec-from-file'],
+  rm: ['--cached', '--dry-run', '--force', '--quiet', '--ignore-unmatch', '--sparse', '--pathspec-from-file'],
+  switch: ['--force', '--discard-changes', '--create', '--force-create', '--detach', '--guess', '--merge', '--orphan', '--track', '--quiet', '--progress'],
+}
+// Long options whose value is the next word, which is never read as an option.
+const LONG_VALUES = new Set([...COMMIT_VALUE_LONGS, '--source', '--push-option', '--repo', '--exclude'])
+
+// A subcommand's words with each long option written out whole, `--ha` as `--hard` and `--mess=x` as `--message=x`, up to a `--`.
+function fullLongOptions(name: string, rest: readonly string[]): string[] {
+  const known = LONG_OPTIONS[name] ?? []
+  const words = [...rest]
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i] ?? ''
+
+    if (word === '--')
+      break
+
+    if (!word.startsWith('--'))
+      continue
+
+    const [spelled = '', ...value] = word.split('=')
+    const option = known.includes(spelled) || spelled.length <= 2 ? spelled : known.find(each => each.startsWith(spelled)) ?? spelled
+
+    words[i] = value.length > 0 ? `${option}=${value.join('=')}` : option
+
+    if (value.length === 0 && LONG_VALUES.has(option))
+      i++
+  }
+
+  return words
+}
+
 export const SHORT_CLUSTER = /^-[A-Z]+$/i
 // A short option cluster that may end in an attached value, `-m"fix: x"` reaching the parser as `-mfix: x`.
 export const SHORT_OPTIONS = /^-[A-Z]/i
@@ -36,7 +78,7 @@ export const TAGS_APART = 'A tag goes out with its branch in one `git push --ato
 /** The git subcommand a command runs: git's own, or `push` for `gp` (@kaynooo/cli-git), what follows its `--` being the push's flags. */
 export function gitCommandOf(program: string, args: readonly string[]): { name: string, rest: string[] } | undefined {
   if (program === 'gp')
-    return { name: 'push', rest: args.includes('--') ? args.slice(args.indexOf('--') + 1) : [] }
+    return { name: 'push', rest: fullLongOptions('push', args.includes('--') ? args.slice(args.indexOf('--') + 1) : []) }
 
   return program === 'git' ? subcommandOf(args) : undefined
 }
@@ -48,7 +90,7 @@ export function subcommandOf(args: readonly string[]): { name: string, rest: str
     if (GLOBAL_VALUE_OPTIONS.has(arg))
       i++
     else if (!arg.startsWith('-'))
-      return { name: arg, rest: args.slice(i + 1) }
+      return { name: arg, rest: fullLongOptions(arg, args.slice(i + 1)) }
   }
 
   return { name: '', rest: [] }

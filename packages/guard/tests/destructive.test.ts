@@ -118,6 +118,24 @@ describe('destructive', () => {
     expect(await destructive(command)).toBeNull()
   })
 
+  test.each([
+    ['git reset --ha', RESET_HARD],
+    ['git clean --for', CLEAN],
+    ['git switch --disc main', DISCARD_TREE],
+    ['git checkout --forc main', DISCARD_TREE],
+    ['git push --forc', FORCE_PUSH],
+    ['gp -- --mir', FORCE_PUSH],
+    ['git branch --del --for x', BRANCH_DELETE],
+    ['rm --rec -f /', BROAD_RM],
+    ['rm -r --no-p x', BROAD_RM],
+  ])('reads a long option cut short as git and rm do: %p', async (command, message) => {
+    expect(await destructive(command)).toBe(message)
+  })
+
+  test.each(['git push --force-w origin main', 'git restore --stag .', 'git rm --cach -r .'])('lets a safe option cut short through: %p', async (command) => {
+    expect(await destructive(command)).toBeNull()
+  })
+
   test('isBroadPath', () => {
     expect(['/', '~', '.', '..', '../..', '*', '/etc', '$HOME/*', '/etc/nginx', '/usr/lib', '/var/lib/', '/home/me', '/home/other/.'].filter(path => !isBroadPath(path))).toEqual([])
     expect(['dist', 'a/b', '~/x', './dist/*', '/tmp/x', '/data/backups', '/home/me/x', '/usr/lib/x'].filter(path => isBroadPath(path))).toEqual([])
