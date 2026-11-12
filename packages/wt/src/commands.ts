@@ -66,7 +66,7 @@ export async function addTask(task: string, branch: string | undefined, options:
     const message = knownMessage(error)
 
     if (message !== undefined)
-      throw new WtError(`${message}\n${way}`)
+      throw new WtError(message, way)
 
     // A bug keeps its stack trace
     warn(way)
@@ -113,7 +113,7 @@ async function refuseLosingWork(worktree: Worktree, force: boolean): Promise<voi
   const dirty = await dirtyRepos(worktree)
 
   if (dirty.length)
-    throw new WtError(`uncommitted changes in ${dirty.join(', ')}, commit them or pass --force`)
+    throw new WtError(`uncommitted changes in ${dirty.join(', ')}`, 'commit them, or pass --force to drop them')
 
   const unreachable = await unreachableCommits(worktree)
 

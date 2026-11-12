@@ -233,7 +233,7 @@ describe('addTask', () => {
     const broken = await wt('add', 'other')
 
     expect(broken.code).toBe(1)
-    expect(broken.err).toContain('the worktree is checked out but not ready: `wt sync other -p times` resumes it')
+    expect(broken.err).toContain('\n  hint: the worktree is checked out but not ready: `wt sync other -p times` resumes it')
     expect(existsSync(dirOf('other'))).toBe(true)
   })
 })
@@ -262,7 +262,7 @@ describe('removeTask', () => {
     const run = await wt('rm', 'planning')
 
     expect(run.code).toBe(1)
-    expect(run.err).toContain('uncommitted changes in root, commit them or pass --force')
+    expect(run.err).toContain('uncommitted changes in root\n  hint: commit them, or pass --force to drop them')
     expect(existsSync(dirOf('planning'))).toBe(true)
     expect(existsSync(override('times--planning'))).toBe(true)
     expect(removals()).toEqual([])
@@ -658,7 +658,8 @@ describe('cloneData', () => {
     const failed = await clone(['mailpit'])
 
     expect(failed.code).toBe(1)
-    expect(failed.error).toContain('clone failed, `wt sync planning` starts it again')
+    expect(failed.error).toContain('clone failed:')
+    expect(failed.error).toContain('\n`wt sync planning` starts it again')
     expect(failed.error).toContain('no space left on device')
     expect(readFileSync(pending(), 'utf8')).toBe('times--planning_mailpit\n')
     expect(sandbox.read('paused')).toBe('')
@@ -1107,7 +1108,7 @@ describe('locate', () => {
 
     const lost = await wtIn(nowhere, `rmdir "${nowhere}" &&`, 'tasks')
 
-    expect(lost.err).toContain(`the current directory ${nowhere} is gone: cd into a project or worktree, or pass --project`)
+    expect(lost.err).toContain(`the current directory ${nowhere} is gone\n  hint: cd into a project or worktree, or pass --project`)
     expect(lost.err).not.toContain('ENOENT')
   }, 30_000)
 })

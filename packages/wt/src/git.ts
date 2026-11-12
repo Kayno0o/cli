@@ -51,7 +51,7 @@ export async function addWorktrees(worktree: Worktree, branch: string, from?: st
   const { project, dir } = worktree
 
   if (existsSync(dir))
-    throw new WtError(`${dir} already exists: \`wt sync ${worktree.task} -p ${project.name}\` finishes it, \`wt rm ${worktree.task} -p ${project.name}\` removes it`)
+    throw new WtError(`${dir} already exists`, `\`wt sync ${worktree.task} -p ${project.name}\` finishes it, \`wt rm ${worktree.task} -p ${project.name}\` removes it`)
 
   if (from !== undefined) {
     for (const repo of project.repos.length ? project.repos : ['.']) {

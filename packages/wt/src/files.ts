@@ -282,7 +282,7 @@ async function cloneInLine(worktree: Worktree, main: ComposeConfig): Promise<str
       const removed = await $`docker volume rm ${targetVolume}`.quiet().nothrow()
 
       if (removed.exitCode !== 0)
-        throw new WtError(`clone: volume ${targetVolume} was cut short mid-copy and cannot be emptied (${removed.stderr.toString().trim()}), \`wt down ${worktree.task}\` then \`wt sync ${worktree.task}\``)
+        throw new WtError(`clone: volume ${targetVolume} was cut short mid-copy and cannot be emptied (${removed.stderr.toString().trim()})`, `\`wt down ${worktree.task}\` then \`wt sync ${worktree.task}\``)
     }
 
     if (!await volumeExists(sourceVolume)) {
@@ -319,7 +319,7 @@ async function cloneInLine(worktree: Worktree, main: ComposeConfig): Promise<str
   writePending(worktree.files.clonesPending, unfinished)
 
   if (failures.length)
-    throw new WtError(`clone failed, \`wt sync ${worktree.task}\` starts it again:\n${failures.map(failureText).join('\n')}`)
+    throw new WtError(`clone failed:\n${failures.map(failureText).join('\n')}`, `\`wt sync ${worktree.task}\` starts it again`)
 
   return warnings
 }

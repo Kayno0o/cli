@@ -4,6 +4,7 @@ import type { ComposeConfig } from '../src/compose'
 import type { Project } from '../src/project'
 
 import { wtConfig } from '../src/config'
+import { failureText } from '../src/errors'
 import { cloneData, whilePaused } from '../src/files'
 import { worktreeOf } from '../src/project'
 import { writeStackCerts } from '../src/routes'
@@ -29,7 +30,7 @@ if (scenario === 'clone') {
     console.log(JSON.stringify(await cloneData(await worktree(input), input.main)))
   }
   catch (error) {
-    console.log(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }))
+    console.log(JSON.stringify({ error: failureText(error) }))
     process.exitCode = 1
   }
 }

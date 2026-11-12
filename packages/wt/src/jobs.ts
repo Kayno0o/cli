@@ -8,7 +8,7 @@ import { closeSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, r
 import { join } from 'node:path'
 import { formatAge, printError } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
-import { alive, bootTime, failKnown, failureText, KnownError, knownMessage } from './errors'
+import { alive, bootTime, failKnown, failureText, KnownError, knownHint, knownMessage } from './errors'
 
 export interface Job {
   ref: string
@@ -457,7 +457,7 @@ async function attempt(prefix: string, work: () => Promise<void>): Promise<numbe
     const message = knownMessage(error)
 
     if (message !== undefined)
-      printError(prefix, message)
+      printError(prefix, message, knownHint(error))
     else
       console.error(error)
 

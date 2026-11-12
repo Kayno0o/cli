@@ -143,12 +143,12 @@ export async function loadProjects(): Promise<Project[]> {
   // A worktree's stack is named after its checkout's folder, kept so that running stacks keep their containers and volumes.
   for (const [index, project] of projects.entries()) {
     if (stackName(project) === '')
-      throw new WtError(`${project.name}.ts: the checkout folder ${basename(project.root)} holds no letter or digit to name its compose stacks after: rename the folder`)
+      throw new WtError(`${project.name}.ts: the checkout folder ${basename(project.root)} holds no letter or digit to name its compose stacks after`, 'rename the folder')
 
     const twin = projects.slice(0, index).find(other => stackName(other) === stackName(project))
 
     if (twin)
-      throw new WtError(`${twin.name}.ts and ${project.name}.ts both have a checkout compose names ${stackName(project)}, so their worktrees would share stacks and volumes: rename the folder of a checkout that has no worktrees yet, or remove one of the files`)
+      throw new WtError(`${twin.name}.ts and ${project.name}.ts both have a checkout compose names ${stackName(project)}, so their worktrees would share stacks and volumes`, 'rename the folder of a checkout that has no worktrees yet, or remove one of the files')
   }
 
   return projects
@@ -194,7 +194,7 @@ export function worktreeOf(project: Project, task: string): Worktree {
 
 export function assertWorktreeExists(worktree: Worktree): void {
   if (!existsSync(worktree.dir))
-    throw new WtError(`no worktree ${worktree.task}, create it with \`wt add ${worktree.task}\``)
+    throw new WtError(`no worktree ${worktree.task}`, `create it with \`wt add ${worktree.task}\``)
 }
 
 export function listTasks(project: Project): string[] {
@@ -252,7 +252,7 @@ export async function locate(cwd: string, projectName?: string): Promise<{ proje
     return { project: projects[0]!, task: 'main' }
 
   if (!existsSync(cwd))
-    throw new WtError(`the current directory ${cwd} is gone: cd into a project or worktree, or pass --project`)
+    throw new WtError(`the current directory ${cwd} is gone`, 'cd into a project or worktree, or pass --project')
 
   throw new WtError('not inside a known project or worktree (cd into one, or pass --project)')
 }

@@ -2,8 +2,12 @@ import { readFileSync } from 'node:fs'
 import { fail } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 
-/** A failure the user is to fix (a manifest, a ref, an action refused): its message alone ends the command, where anything else shows its stack trace. */
-export class KnownError extends Error {}
+/** A failure the user is to fix (a manifest, a ref, an action refused): its message alone ends the command, where anything else shows its stack trace; `hint` says how to go on, under it. */
+export class KnownError extends Error {
+  constructor(message: string, readonly hint?: string) {
+    super(message)
+  }
+}
 
 const BOOT_TIME_LINE = /^btime (\d+)$/m
 
@@ -36,17 +40,23 @@ export function knownMessage(error: unknown): string | undefined {
   return error instanceof $.ShellError ? error.stderr.toString().trim() || error.message : undefined
 }
 
-/** What a failed command said, else the error's message. */
-export function failureText(error: unknown): string {
-  return knownMessage(error) ?? (error instanceof Error ? error.message : String(error))
+export function knownHint(error: unknown): string | undefined {
+  return error instanceof KnownError ? error.hint : undefined
 }
 
-/** Ends the command on a known failure with its message and exit code 1; anything else is thrown on. */
+/** What a failed command said, else the error's message, its hint after it. */
+export function failureText(error: unknown): string {
+  const hint = knownHint(error)
+
+  return `${knownMessage(error) ?? (error instanceof Error ? error.message : String(error))}${hint === undefined ? '' : `\n${hint}`}`
+}
+
+/** Ends the command on a known failure with its message, its hint and exit code 1; anything else is thrown on. */
 export function failKnown(error: unknown): never {
   const message = knownMessage(error)
 
   if (message !== undefined)
-    fail(message, 1)
+    fail(message, 1, knownHint(error))
 
   throw error
 }
