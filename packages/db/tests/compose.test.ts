@@ -10,18 +10,18 @@ import { describeNamedContainer, describeServices, pickService, serviceUrl } fro
 const temp = tempDirs()
 
 const PS = [
-  { ID: 'aaa111', Service: 'tilid-db', State: 'running', Image: 'postgres:17-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: 45000 }] },
+  { ID: 'aaa111', Service: 'shop-db', State: 'running', Image: 'postgres:17-alpine', Publishers: [{ URL: '0.0.0.0', TargetPort: 5432, PublishedPort: 45000 }] },
   { ID: 'bbb222', Service: 'supervisor-db', State: 'running', Image: 'acme-db', Publishers: [{ URL: '', TargetPort: 5432, PublishedPort: 0 }] },
   { ID: 'ccc333', Service: 'mysql', State: 'running', Image: 'mariadb:10.8', Publishers: null },
   { ID: 'ddd444', Service: 'php', State: 'running', Image: 'acme-php', Publishers: [] },
 ]
 
 const INSPECT = [
-  { Id: 'aaa111ffff', Name: '/tilid-tilid-db-1', Config: { Env: ['POSTGRES_USER=ticketing', 'POSTGRES_PASSWORD=p@ss/word', 'POSTGRES_DB=ticketing', 'PG_MAJOR=17'] }, NetworkSettings: { Networks: { tilid: { IPAddress: '172.30.0.5', Aliases: ['tilid-db'], DNSNames: ['tilid-tilid-db-1', 'tilid-db'] } } } },
+  { Id: 'aaa111ffff', Name: '/shop-shop-db-1', Config: { Env: ['POSTGRES_USER=ticketing', 'POSTGRES_PASSWORD=p@ss/word', 'POSTGRES_DB=ticketing', 'PG_MAJOR=17'] }, NetworkSettings: { Networks: { shop: { IPAddress: '172.30.0.5', Aliases: ['shop-db'], DNSNames: ['shop-shop-db-1', 'shop-db'] } } } },
   // A project image built FROM postgres keeps PG_MAJOR, and is reached on its network address when it publishes nothing.
-  { Id: 'bbb222ffff', Name: '/tilid-supervisor-db-1', Config: { Env: ['PG_MAJOR=17'] }, NetworkSettings: { Networks: { tilid: { IPAddress: '172.30.0.9', Aliases: null, DNSNames: null } } } },
+  { Id: 'bbb222ffff', Name: '/shop-supervisor-db-1', Config: { Env: ['PG_MAJOR=17'] }, NetworkSettings: { Networks: { shop: { IPAddress: '172.30.0.9', Aliases: null, DNSNames: null } } } },
   { Id: 'ccc333ffff', Name: '/dorad_db', Config: { Env: ['MARIADB_MAJOR=10.8'] }, NetworkSettings: { Networks: { dorad: { IPAddress: '172.31.0.2' } } } },
-  { Id: 'ddd444ffff', Name: '/php', Config: { Env: ['PHP_VERSION=8.4'] }, NetworkSettings: { Networks: { tilid: { IPAddress: '172.30.0.7' } } } },
+  { Id: 'ddd444ffff', Name: '/php', Config: { Env: ['PHP_VERSION=8.4'] }, NetworkSettings: { Networks: { shop: { IPAddress: '172.30.0.7' } } } },
 ]
 
 const services = describeServices(PS, INSPECT)
@@ -40,7 +40,7 @@ function failure(run: () => unknown): string {
 
 describe('describeServices', () => {
   test('tells the engines apart by image and environment', () => {
-    expect(services.map(service => [service.name, service.engine])).toEqual([['tilid-db', 'postgres'], ['supervisor-db', 'postgres'], ['mysql', 'mysql'], ['php', 'other']])
+    expect(services.map(service => [service.name, service.engine])).toEqual([['shop-db', 'postgres'], ['supervisor-db', 'postgres'], ['mysql', 'mysql'], ['php', 'other']])
   })
 
   test('reaches a published port on the loopback, else the network address', () => {
@@ -49,13 +49,13 @@ describe('describeServices', () => {
   })
 
   test('knows every name a service answers to', () => {
-    expect(services[0]?.names).toEqual(['tilid-db', 'tilid-tilid-db-1'])
+    expect(services[0]?.names).toEqual(['shop-db', 'shop-shop-db-1'])
   })
 })
 
 describe('pickService', () => {
   test('asks for --service when several run, and takes the one named', () => {
-    expect(failure(() => pickService(services, undefined))).toContain('several database services run here (tilid-db, supervisor-db, mysql): pick one with --service')
+    expect(failure(() => pickService(services, undefined))).toContain('several database services run here (shop-db, supervisor-db, mysql): pick one with --service')
     expect(pickService(services, 'supervisor-db').name).toBe('supervisor-db')
     expect(pickService(services, 'mysql').engine).toBe('mysql')
   })
@@ -67,7 +67,7 @@ describe('pickService', () => {
 
   test('refuses a service that is no database, an unknown name and an empty project, saying why', () => {
     expect(failure(() => pickService(services, 'php'))).toContain('php is no Postgres, MySQL or MariaDB service')
-    expect(failure(() => pickService(services, 'nope'))).toContain('no running service nope in this compose project, running: tilid-db')
+    expect(failure(() => pickService(services, 'nope'))).toContain('no running service nope in this compose project, running: shop-db')
     expect(failure(() => pickService([], undefined))).toContain('no DATABASE_URL and no running Postgres, MySQL or MariaDB service')
   })
 })

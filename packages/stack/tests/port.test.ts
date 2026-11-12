@@ -21,12 +21,12 @@ describe('stringToPort', () => {
   test('keeps long names exact, below the ephemeral range by default', () => {
     expect(stringToPort('a'.repeat(200))).toBe(1024 + (fnv('a'.repeat(200)) % 31744))
 
-    for (const name of ['proxy-manager', 'c14', 'a-rather-long-service-name-for-overflow'])
+    for (const name of ['proxy-manager', 'inventory', 'a-rather-long-service-name-for-overflow'])
       expect(stringToPort(name)).toBeWithin(1024, 32768)
   })
 
   test('stays inside min and max', () => {
-    for (const name of ['a', 'proxy-manager', 'c14', 'é', ''])
+    for (const name of ['a', 'proxy-manager', 'inventory', 'é', ''])
       expect(stringToPort(name, 3000, 3010)).toBeWithin(3000, 3011)
   })
 })
