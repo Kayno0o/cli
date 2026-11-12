@@ -73,7 +73,7 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 `gd [path]...` lists the tracked files that changed with their added and removed lines, staged apart from unstaged; untracked files are `gst`'s. With paths, or `--patch` (`-p`), it prints the patch instead, through `view --diff` on a terminal when `view` is installed.
 
 - `--staged` (`-s`) keeps what is staged; `--ref <rev>` compares the working tree to a commit, branch or tag, and `--ref a..b` two commits.
-- `--json` prints `[{title, files: [{path, added, removed}]}]`, the counts being null for a binary file.
+- `--json` prints `[{title, files: [{path, added, removed}], patch?}]`, the counts being null for a binary file; with paths or `--patch` each section also holds its patch, its files narrowed to the paths.
 - Exit codes: 0, 1 git refused (an unknown ref), 2 outside a repository or a usage error.
 
 ## gu

@@ -193,6 +193,18 @@ describe('gd', () => {
     expect(bin('gd', work, 'a.txt').out).toContain('+two')
   })
 
+  test('--json with a path gives the files and the patch of that path as JSON', () => {
+    commit(work, 'other.txt', 'x\n')
+    writeFileSync(join(work, 'a.txt'), 'one\ntwo\n')
+    writeFileSync(join(work, 'other.txt'), 'y\n')
+
+    const sections = JSON.parse(bin('gd', work, 'a.txt', '--json').out) as { title: string, files: { path: string, added: number, removed: number }[], patch: string }[]
+    const unstaged = sections.find(section => section.files.length > 0)
+
+    expect(unstaged?.files).toEqual([{ path: 'a.txt', added: 1, removed: 0 }])
+    expect(unstaged?.patch).toContain('+two')
+  })
+
   test('--ref takes no option-looking value and not --staged', () => {
     expect(bin('gd', work, '--ref=--output=x').code).toBe(2)
     expect(bin('gd', work, '--ref', 'HEAD', '--staged').code).toBe(2)
