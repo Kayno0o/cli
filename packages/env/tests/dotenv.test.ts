@@ -63,6 +63,21 @@ describe('editing', () => {
     expect(serializeDotenv(empty)).toBe('A=x\n')
   })
 
+  test('keeps a replaced line\'s CRLF and inline comment, and appends with CRLF', () => {
+    const file = parseDotenv('A=1\r\nB=2 # note\r\nC="3" # quoted\r\n')
+
+    setLine(file, 'B', 'x')
+    setLine(file, 'C', 'y z')
+    setLine(file, 'D', 'd')
+
+    expect(serializeDotenv(file)).toBe('A=1\r\nB=x # note\r\nC="y z" # quoted\r\nD=d\r\n')
+
+    const unended = parseDotenv('A=1\r\nB=2')
+
+    setLine(unended, 'C', '3')
+    expect(serializeDotenv(unended)).toBe('A=1\r\nB=2\r\nC=3\r\n')
+  })
+
   test('quotes and escapes a value that needs it, and reads it back', () => {
     const file = parseDotenv('')
 

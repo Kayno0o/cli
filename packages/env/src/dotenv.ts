@@ -15,6 +15,8 @@ const ASSIGNMENT = /^\s*(?:export\s+)?([A-Z_][\w.-]*)\s*=(.*)$/i
 const EXPORTED = /^\s*export\s/
 const INLINE_COMMENT = /\s+#.*$/
 const CARRIAGE_RETURN = /\r$/
+const CARRIAGE_RETURNS = /\r$/gm
+const COMMENT_AFTER_QUOTE = /\s*#.*$/
 const ESCAPES: Record<string, string> = { 'n': '\n', 'r': '\r', 't': '\t', '"': '"', '\\': '\\', '$': '$' }
 
 export const LINE_BREAK = /[\r\n]/
@@ -141,28 +143,50 @@ export function formatAssignment(key: string, value: string): string {
   return `${key}="${escapeDouble(value)}"`
 }
 
-// Replaces the last assignment of a key keeping its `export`, or appends before the trailing newline. `raw` is the whole line to store when given.
+// The inline comment after an assignment's value, on its last line.
+function inlineComment(raw: string): string {
+  const lines = raw.replaceAll(CARRIAGE_RETURNS, '').split('\n')
+  const start = (ASSIGNMENT.exec(lines[0] ?? '')?.[2] ?? '').trimStart()
+  const quote = start[0]
+
+  if (quote !== '"' && quote !== '\'' && quote !== '`')
+    return INLINE_COMMENT.exec(start)?.[0] ?? ''
+
+  const last = lines.length === 1 ? start.slice(1) : lines.at(-1) ?? ''
+  const end = closingQuote(last, quote)
+
+  return end === -1 ? '' : COMMENT_AFTER_QUOTE.exec(last.slice(end + 1))?.[0] ?? ''
+}
+
+// Replaces the last assignment of a key keeping its `export`, inline comment and line ending, or appends before the trailing newline in the file's line ending. `raw` is the whole line to store when given.
 export function setLine(file: Dotenv, key: string, value: string, raw?: string): void {
   const index = file.lines.findLastIndex(line => line.key === key)
   const existing = file.lines[index]
 
   if (existing !== undefined) {
     const exported = EXPORTED.test(existing.raw) ? 'export ' : ''
+    const ending = existing.raw.endsWith('\r') ? '\r' : ''
+    const line = raw?.replace(CARRIAGE_RETURN, '') ?? `${exported}${formatAssignment(key, value)}${inlineComment(existing.raw)}`
 
-    file.lines[index] = { raw: raw ?? `${exported}${formatAssignment(key, value)}`, key, value }
+    file.lines[index] = { raw: `${line}${ending}`, key, value }
 
     return
   }
 
-  const line = { raw: raw ?? formatAssignment(key, value), key, value }
+  const ending = file.lines.some(line => line.raw.endsWith('\r')) ? '\r' : ''
+  const line = { raw: `${raw?.replace(CARRIAGE_RETURN, '') ?? formatAssignment(key, value)}${ending}`, key, value }
   const last = file.lines.at(-1)
 
-  if (last === undefined)
+  if (last === undefined) {
     file.lines.push(line, { raw: '' })
-  else if (last.raw === '')
+  }
+  else if (last.raw === '') {
     file.lines.splice(-1, 0, line)
-  else
+  }
+  else {
+    last.raw = `${last.raw.replace(CARRIAGE_RETURN, '')}${ending}`
     file.lines.push(line, { raw: '' })
+  }
 }
 
 // Drops every assignment of the key and returns how many went.
