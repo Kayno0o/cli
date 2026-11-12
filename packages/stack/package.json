@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-stack",
   "type": "module",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "stack: a stable host port per service name, the same on every machine.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
