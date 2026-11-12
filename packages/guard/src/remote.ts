@@ -7,8 +7,8 @@ const SOCKET_PROGRAMS = new Set(['nc', 'ncat', 'netcat', 'telnet', 'socat'])
 // Programs whose ssh:// URL, or whose option, points them at a remote machine.
 const URL_PROGRAMS = new Set(['git', 'docker', 'docker-compose'])
 const DECLARERS = new Set(['export', 'declare', 'typeset'])
-// `host:path` as rsync spells a remote end, a Windows drive letter and a local path with a colon aside.
-const RSYNC_REMOTE = /^(?:[\w.-]+@)?[\w.-]{2,}:/
+// `host:path` as rsync spells a remote end, a host of one letter included as rsync reads it so; a local path with a colon after a slash aside.
+const RSYNC_REMOTE = /^(?:[\w.-]+@)?[\w.-]+:/
 // git's scp-style address: a colon before any slash, outside a URL.
 const SCP_ADDRESS = /^[^/:\s-][^/:\s]*:(?!\/\/)/
 // The same with a user or a dotted host, which tells it from a `branch:branch` refspec.
@@ -16,12 +16,15 @@ const SCP_HOST_ADDRESS = /^(?:[\w.-]+@[\w.-]+|[\w-]+(?:\.[\w-]+)+):(?!\/\/)/
 const GIT_TRANSPORTS = new Set(['clone', 'fetch', 'pull', 'push', 'ls-remote'])
 // The transport commands' own options taking the next word as their value.
 const TRANSPORT_VALUE_OPTIONS = new Set(['--depth', '-b', '--branch', '-o', '--origin', '--push-option', '-c', '--config', '--reference', '--separate-git-dir', '--template', '-j', '--jobs', '--filter', '--shallow-since', '--shallow-exclude', '-u', '--upload-pack', '--receive-pack', '--exec', '--server-option', '--repo', '--deepen'])
-const SSH_URL = /^ssh:\/\//
 const SSH_URL_WORD = /^(?:[\w-]+=)?ssh:\/\//
 const LOOPBACK = /(?:^|[:=@[])(?:localhost|127(?:\.\d+){3}|::1)(?:[:\]/]|$)/
 const LISTENS = /^-[A-KM-Z]*L[A-Z]*$/i
 // docker's own options taking a value, before the subcommand.
 const DOCKER_VALUE_OPTIONS = new Set(['-c', '--context', '-H', '--host', '-l', '--log-level', '--config', '--tlscacert', '--tlscert', '--tlskey'])
+// docker's short options taking a value, which may be attached to it (`-Hssh://box`, `-cprod`).
+const DOCKER_SHORT_VALUE = /^-([cHl])(.+)$/
+// A docker daemon address on this machine: a socket, or tcp to a loopback address.
+const LOCAL_DAEMON = /^(?:unix|npipe|fd):\/\/|^tcp:\/\/(?:localhost|127(?:\.\d+){3}|\[::1\])(?::\d+)?\/?$/
 const CONTEXT_CHANGES = new Set(['use', 'create', 'update', 'import'])
 const KUBECTL_SERVER = /^(?:--server(?:=|$)|-s$)/
 // Variables naming the program git connects with.
@@ -29,31 +32,48 @@ const REMOTE_VARIABLE = /^GIT_SSH(?:_COMMAND)?=/
 
 export const REMOTE = 'Remote servers are off limits (no SSH, no deploys, no remote commands). Hand the user the exact command to run themselves.'
 
-// The docker context a command selects, and its subcommand, past the options taking a value.
-function dockerContext(args: readonly string[]): { context: string | null, name: string, rest: string[] } {
+// Whether a docker daemon address, from -H or DOCKER_HOST, lies off this machine; a quoted or variable one is read as written.
+function isRemoteDaemon(address: string): boolean {
+  return address !== '' && !LOCAL_DAEMON.test(address)
+}
+
+// The docker context and daemon a command selects, and its subcommand, past the options taking a value, attached or not.
+function dockerContext(args: readonly string[]): { context: string | null, hosts: string[], name: string, rest: string[] } {
   let context: string | null = null
+  const hosts: string[] = []
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? ''
+    const equals = arg.indexOf('=')
+    const attached = DOCKER_SHORT_VALUE.exec(arg)
+    let [option, value]: [string, string | undefined] = [arg, undefined]
 
-    if (arg.startsWith('--context='))
-      context = arg.slice('--context='.length)
-    else if (arg === '-c' || arg === '--context')
-      context = args[++i] ?? null
+    if (arg.startsWith('--') && equals !== -1)
+      [option, value] = [arg.slice(0, equals), arg.slice(equals + 1)]
+    else if (attached !== null)
+      [option, value] = [`-${attached[1]}`, attached[2]]
     else if (DOCKER_VALUE_OPTIONS.has(arg))
-      i++
+      value = args[++i]
+
+    if (option === '-c' || option === '--context')
+      context = value ?? null
+    else if ((option === '-H' || option === '--host') && value !== undefined)
+      hosts.push(value)
     else if (!arg.startsWith('-'))
-      return { context, name: arg, rest: args.slice(i + 1) }
+      return { context, hosts, name: arg, rest: args.slice(i + 1) }
   }
 
-  return { context, name: '', rest: [] }
+  return { context, hosts, name: '', rest: [] }
 }
 
 function isDockerRemote(args: readonly string[], assignments: readonly string[]): boolean {
-  const { context, name, rest } = dockerContext(args)
+  const { context, hosts, name, rest } = dockerContext(args)
   const fromEnv = assignments.find(assignment => assignment.startsWith('DOCKER_CONTEXT='))?.slice('DOCKER_CONTEXT='.length)
 
   if ([context, fromEnv].some(each => each !== null && each !== undefined && each !== 'default'))
+    return true
+
+  if (hosts.some(isRemoteDaemon))
     return true
 
   return name === 'context' && CONTEXT_CHANGES.has(rest[0] ?? '')
@@ -113,7 +133,7 @@ function isRemote(text: string): boolean {
   if ([...assignments, ...declared].some(assignment => REMOTE_VARIABLE.test(assignment)))
     return true
 
-  if ([...assignments, ...declared].some(assignment => assignment.startsWith('DOCKER_HOST=') && SSH_URL.test(assignment.slice('DOCKER_HOST='.length))))
+  if ([...assignments, ...declared].some(assignment => assignment.startsWith('DOCKER_HOST=') && isRemoteDaemon(assignment.slice('DOCKER_HOST='.length))))
     return true
 
   if (program === 'docker' && isDockerRemote(args, assignments))

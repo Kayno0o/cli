@@ -57,7 +57,7 @@ describe('git', () => {
 })
 
 describe('remote machines', () => {
-  cases('remote', ['ssh prod', 'ssh -p 2222 deploy@staging.example.com uptime', 'scp dump.sql qualif:/tmp', 'rsync -az dist/ recette:/srv/app', 'DOCKER_HOST=ssh://prod docker ps', 'docker -H ssh://prod ps', 'cd x && sftp host'], ['ssh-keygen -t ed25519', 'ssh-add -l', 'rsync -a src/ dist/', 'git fetch origin', 'grep ssh notes.md'])
+  cases('remote', ['ssh prod', 'ssh -p 2222 deploy@staging.example.com uptime', 'scp dump.sql qualif:/tmp', 'rsync -az dist/ recette:/srv/app', 'DOCKER_HOST=ssh://prod docker ps', 'docker -H ssh://prod ps', 'cd x && sftp host', 'python3 -c "import os; os.system(\'ssh prod uptime\')"'], ['ssh-keygen -t ed25519', 'ssh-add -l', 'rsync -a src/ dist/', 'git fetch origin', 'grep ssh notes.md'])
 })
 
 describe('commit messages', () => {

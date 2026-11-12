@@ -122,7 +122,7 @@ export async function checkCommand(command: string, context: Context): Promise<V
 
   const shown = commandsRun(command)
   const run = [...shown, ...shown.flatMap(fedCommands).flatMap(each => commandsRun(each))]
-  // what interpreters' inline code runs is only held to the git and destructive rules, as it is read loosely
+  // what interpreters' inline code runs is only held to the remote, git and destructive rules, as it is read loosely
   const scripted = run.flatMap(scriptedCommands).flatMap(each => commandsRun(each))
   const first = (messages: (string | null)[]) => messages.find(message => message !== null) ?? null
   // a rule that throws refuses the command: a crash must not let it through
@@ -138,7 +138,7 @@ export async function checkCommand(command: string, context: Context): Promise<V
   }
   const readSql = async (path: string) => Promise.resolve(context.read(absolute(path, context.cwd)))
 
-  add('remote', await guarded('remote', () => first(run.map(remoteViolation))))
+  add('remote', await guarded('remote', () => first([...run, ...scripted].map(remoteViolation))))
   add('git', await guarded('git', () => first([...run, ...scripted].map(each => gitViolation(each, context.isPushAsked)))))
   add('destructive', await guarded('destructive', () => first([...run, ...scripted].map(destructiveViolation))))
 

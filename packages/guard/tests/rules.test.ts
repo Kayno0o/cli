@@ -17,6 +17,12 @@ describe('remoteViolation', () => {
     'GIT_SSH_COMMAND="ssh -i k" git fetch',
     'kubectl --server https://k8s get pods',
     'ssh-wrapper=1 true && ssh prod',
+    'docker -Hssh://host ps',
+    'docker --host=ssh://host ps',
+    'docker -H tcp://192.168.1.20:2375 ps',
+    'docker -cprod ps',
+    'DOCKER_HOST=tcp://box:2376 docker ps',
+    'rsync -avz ./a/ b:/c',
   ])('refuses %p', (command) => {
     expect(remoteViolation(command)).toBe(REMOTE)
   })
@@ -30,6 +36,11 @@ describe('remoteViolation', () => {
     'docker --context default ps',
     'git fetch origin',
     'echo ssh prod',
+    'docker -H unix:///run/user/1000/docker.sock ps',
+    'docker -Htcp://127.0.0.1:2375 ps',
+    'DOCKER_HOST=unix:///var/run/docker.sock docker ps',
+    'docker -ldebug ps',
+    'rsync -a ./a:b/ ./out/',
   ])('lets %p through', (command) => {
     expect(remoteViolation(command)).toBeNull()
   })
