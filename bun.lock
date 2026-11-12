@@ -21,7 +21,7 @@
     },
     "packages/base": {
       "name": "@kaynooo/cli-base",
-      "version": "0.12.1",
+      "version": "0.12.2",
       "bin": {
         "base": "./dist/cli.js",
       },
