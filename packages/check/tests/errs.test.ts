@@ -54,6 +54,12 @@ describe('parseErrors', () => {
     expect(errors[3]).toMatchObject({ file: '/repo/src/c.ts', rule: undefined, message: 'Parsing error: Unexpected token' })
   })
 
+  test('eslint: a stray line between problems leaves them under their file', () => {
+    const { errors } = parseErrors('/x/a.ts\n  1:1  error  A  r\nsome stray warning line\n  2:2  error  B  r\n')
+
+    expect(errors.map(error => `${error.file}:${error.line}:${error.column}`)).toEqual(['/x/a.ts:1:1', '/x/a.ts:2:2'])
+  })
+
   test('bun check: the code is the rule and the source frame is dropped', async () => {
     const { errors, unrecognised } = parseErrors(await fixture('bun-check.txt'))
 

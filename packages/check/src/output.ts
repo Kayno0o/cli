@@ -22,6 +22,8 @@ const TSC_PRETTY_ERROR = /^(.+?):(\d+):(\d+) - error (TS\d+): (.*)$/
 const TSC_SOURCE_LINE = /^\d+ /
 const ESLINT_FIELDS = /^ +(\d+):(\d+) +(error|warning) +(\S.*)$/
 const ESLINT_RULE = / {2,}(\S+)$/
+// The path line opening a file's problems: absolute, home or dot relative (spaces allowed), or a word holding a separator.
+const ESLINT_FILE = /^(?:\/|~\/|\.{1,2}[/\\]|[a-z]:\\)|^[^\s/\\]+[/\\]\S*$/i
 const BUN_TEST_EXPECTED = /^Expected: (.*)$/
 const BUN_TEST_RECEIVED = /^Received: (.*)$/
 const BUN_TEST_FRAME = /^\s+at (?:.*? \()?(.+?):(\d+):(\d+)\)?$/
@@ -184,7 +186,7 @@ const collectEslint: Collector = (lines, used) => {
       used.add(index)
       used.add(file)
     }
-    else if (!isNoise(line)) {
+    else if (!isNoise(line) && !line.includes(': ') && ESLINT_FILE.test(line.trimEnd())) {
       file = index
     }
   }
