@@ -11,7 +11,7 @@ import { stringToPort } from './port'
 import { WtError } from './project'
 import { proxyHostList } from './proxy'
 
-type Draft = Omit<Project, 'link' | 'env' | 'setup' | 'settings'> & Required<Pick<Project, 'copy' | 'clone' | 'skip'>>
+export type Draft = Omit<Project, 'link' | 'env' | 'setup' | 'settings'> & Required<Pick<Project, 'copy' | 'clone' | 'skip'>>
 
 const CERT_PATH = /cert/i
 // devproxy's upstreams: `http://<container>:<port>` or `host:<port>`, and `<container>:<port>` for a passthrough.
@@ -94,7 +94,7 @@ async function draftFor(dir: string, given?: string): Promise<Draft> {
 
   return {
     name,
-    root: root.replace(homedir(), '~'),
+    root: fromHome(root, homedir()),
     repos,
     copy: [...secrets, ...ignoredMounts.filter(path => CERT_PATH.test(path))],
     clone: [...ignoredMounts.filter(path => !CERT_PATH.test(path)), ...volumes.filter((_, index) => volumesExist[index]).map(([key]) => key)],
@@ -104,22 +104,32 @@ async function draftFor(dir: string, given?: string): Promise<Draft> {
   }
 }
 
-const list = (values: string[]) => `[${values.map(value => `'${value}'`).join(', ')}]`
+/** The path as `~/…` when it lies under home, as it is otherwise. */
+export function fromHome(path: string, home: string): string {
+  return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path
+}
 
-function render(draft: Draft): string {
-  const routes = draft.routes.map(route => `    { host: '${route.host}', to: '${route.to}'${route.passthrough ? ', passthrough: true' : ''} },`)
+const QUOTED = /['\\\n\r]/g
+const ESCAPES: Record<string, string> = { '\'': '\\\'', '\\': '\\\\', '\n': '\\n', '\r': '\\r' }
+
+// A single-quoted TypeScript string, its quotes, backslashes and line breaks escaped.
+const str = (value: string) => `'${value.replace(QUOTED, char => ESCAPES[char]!)}'`
+const list = (values: string[]) => `[${values.map(str).join(', ')}]`
+
+export function render(draft: Draft): string {
+  const routes = draft.routes.map(route => `    { host: ${str(route.host)}, to: ${str(route.to)}${route.passthrough ? ', passthrough: true' : ''} },`)
 
   return [
     `import type { ProjectConfig } from '@kaynooo/cli-wt'`,
     '',
     '// Drafted by `wt init`: check every list against the stack before the first `wt add`.',
     'export default {',
-    `  root: '${draft.root}',`,
+    `  root: ${str(draft.root)},`,
     `  repos: ${list(draft.repos)},`,
     `  copy: ${list(draft.copy)},`,
     `  clone: ${list(draft.clone)},`,
     ...draft.skip.length ? [`  skip: ${list(draft.skip)},`] : [],
-    ...draft.certs !== undefined ? [`  certs: '${draft.certs}',`] : [],
+    ...draft.certs !== undefined ? [`  certs: ${str(draft.certs)},`] : [],
     '  setup: [],',
     '  routes: [',
     ...routes,

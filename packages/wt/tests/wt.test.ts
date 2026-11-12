@@ -1,6 +1,7 @@
 import type { ComposeConfig } from '../src/compose'
+import type { Draft } from '../src/init'
 import type { Project, Route, Worktree } from '../src/project'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { $ } from 'bun'
@@ -9,6 +10,7 @@ import { overrideWarnings, proxyLabels, renderOverride } from '../src/compose'
 import { resolveConfig } from '../src/config'
 import { copyFromMain, expandEnvValue, rewriteHosts, setEnvValue, settle, whilePaused, writeEnvFiles } from '../src/files'
 import { addWorktrees, currentBranch, isRegistered, unreachableCommits } from '../src/git'
+import { fromHome, render } from '../src/init'
 import { changedFiles } from '../src/list'
 import { listTasks, worktreeHost, worktreeOf } from '../src/project'
 import { inLine, liveTickets } from '../src/queue'
@@ -21,6 +23,38 @@ const routes: Route[] = [
 ]
 
 const project: Project = { name: 'booki', root: '/w/booki-docker', repos: [], skip: ['booki-client'], routeHosts: ['client'], routes, settings: resolveConfig({ overrides: '/o', state: '/s' }) }
+
+describe('wt init draft', () => {
+  test('shortens a root under home to ~, and keeps one that only holds the home path further in', () => {
+    expect(fromHome('/home/me/Workspace/times', '/home/me')).toBe('~/Workspace/times')
+    expect(fromHome('/home/me', '/home/me')).toBe('~')
+    expect(fromHome('/mnt/home/me/times', '/home/me')).toBe('/mnt/home/me/times')
+    expect(fromHome('/home/meadow/times', '/home/me')).toBe('/home/meadow/times')
+  })
+
+  test('renders values holding quotes, backslashes and line breaks as a manifest that loads back to them', async () => {
+    const manifest: Omit<Draft, 'name'> = {
+      root: '~/Workspace/it\'s',
+      repos: ['a\\b'],
+      copy: ['.env\n.env.local'],
+      clone: [],
+      skip: ['o\'neil'],
+      certs: 'certs\r',
+      routes: [{ host: 'it\'s.localhost', to: 'web:80', passthrough: true }],
+    }
+    const dir = mkdtempSync(join(tmpdir(), 'wt-init-'))
+    const file = join(dir, 'odd.ts')
+
+    writeFileSync(file, render({ name: 'odd', ...manifest }))
+
+    try {
+      expect((await import(file) as { default: unknown }).default).toEqual({ ...manifest, setup: [] })
+    }
+    finally {
+      rmSync(dir, { recursive: true })
+    }
+  })
+})
 
 describe('worktreeHost', () => {
   test('prefixes the task, keeping a wildcard leftmost', () => {
