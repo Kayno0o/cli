@@ -179,6 +179,19 @@ describe('gp', () => {
     expect(gp().out.trim().split(COLUMNS)).toEqual(['.', 'detached HEAD'])
   })
 
+  test('a branch with no commit yet is skipped as nothing to push', () => {
+    const fresh = join(root, 'fresh')
+
+    mkdirSync(fresh)
+    git(fresh, 'init', '-q', '-b', 'main')
+    git(fresh, 'remote', 'add', 'origin', join(top, 'none.git'))
+
+    const { code, out } = gp('fresh')
+
+    expect(code).toBe(0)
+    expect(out.trim().split(COLUMNS)).toEqual(['fresh', 'no commit yet, nothing to push'])
+  })
+
   test('outside a repository it is a usage error', () => {
     expect(run([process.execPath, GP], top).code).toBe(2)
   })

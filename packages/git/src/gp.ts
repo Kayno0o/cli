@@ -78,6 +78,9 @@ async function push(repo: Repo, { dryRun, extra, env }: { dryRun: boolean, extra
   let commits: number | null
 
   if (upstream === null) {
+    if ((await git(['-C', dir, 'rev-parse', '--verify', '--quiet', 'HEAD'])).code !== 0)
+      return skipped('no commit yet, nothing to push', branch)
+
     const name = await remoteFor(dir)
 
     if (name === undefined)
