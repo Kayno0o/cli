@@ -64,6 +64,15 @@ describe('marksIn', () => {
     expect(marksIn('// the TODO and FIXME comments\nconst s = \'a // TODO: in a string\'\n', 'a.ts')).toEqual([])
     expect(marksIn('// see kaynooo/kayjs#823 and acme/x#2\n', 'a.ts')[0]?.refs).toEqual([{ repo: 'kaynooo/kayjs', number: 823 }, { repo: 'acme/x', number: 2 }])
   })
+
+  test('reads a comment after an apostrophe inside a string of the other quote', () => {
+    expect(marksIn('foo("it\'s") // TODO: fix\n', 'a.ts').map(mark => mark.line)).toEqual([1])
+    expect(marksIn('foo(\'say "a // TODO: no\')\n', 'a.ts')).toEqual([])
+  })
+
+  test('reads a file anchor as no issue, a dotted repository name still as one', () => {
+    expect(marksIn('// TODO: see docs/guide.md#12 and kaynooo/kaynooo.fr#3\n', 'a.ts')[0]?.refs).toEqual([{ repo: 'kaynooo/kaynooo.fr', number: 3 }])
+  })
 })
 
 describe('todo-scan', () => {

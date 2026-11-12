@@ -25,17 +25,26 @@ const MARKUP_COMMENT = /<!--/
 const CLOSERS = /\s*(?:\*\/|-->)\s*$/
 // A marker opens the comment, so one naming the word in prose is no TODO.
 const MARKER = /^(?:@|\[)?(TODO|FIXME|HACK|XXX)\b/
-const QUOTES = ['\'', '"', '`']
+const QUOTES = new Set(['\'', '"', '`'])
 const ESCAPE = /\\./g
 const AFTER_FIRST_LINE = /\n[\s\S]*/
 // An owner and a repository as a forge names them, never `.` or `..` and no leading dash, so a match is neither a path nor an option.
 const REF = /(?<![\w./-])(\w[\w.-]*\/(?!\.+#)[\w.][\w.-]*)#(\d+)\b/g
+// A file's anchor such as docs/guide.md#12, which names no repository.
+const FILE_ANCHOR = /\.(?:md|mdx|markdown|txt|rst|adoc|html?|[cm]?[jt]sx?|json|ya?ml|toml|py|go|rs|php|rb|vue|svelte|css|scss)$/i
 
-// Whether the index sits inside a string the line opened, a quote of one kind left unclosed before it.
+// Whether the index sits inside a string the line opened, the quote that opened it left unclosed before it.
 function isQuoted(line: string, index: number): boolean {
-  const before = line.slice(0, index).replaceAll(ESCAPE, '')
+  let open: string | undefined
 
-  return QUOTES.some(quote => before.split(quote).length % 2 === 0)
+  for (const char of line.slice(0, index).replaceAll(ESCAPE, '')) {
+    if (open === undefined && QUOTES.has(char))
+      open = char
+    else if (char === open)
+      open = undefined
+  }
+
+  return open !== undefined
 }
 
 const BLAME_HEADER = /^[0-9a-f]{40} \d+ (\d+)/
@@ -98,7 +107,7 @@ export function marksIn(text: string, path: string): Mark[] {
 
     const body = line.slice(opener.index + opener[0].length).replace(CLOSERS, '').trim()
     const marker = MARKER.exec(body)?.[1] as Mark['kind'] | undefined
-    const refs = [...body.matchAll(REF)].map(found => ({ repo: found[1] ?? '', number: Number(found[2]) }))
+    const refs = [...body.matchAll(REF)].filter(found => !FILE_ANCHOR.test(found[1] ?? '')).map(found => ({ repo: found[1] ?? '', number: Number(found[2]) }))
 
     if (marker !== undefined || refs.length > 0)
       marks.push({ path, line: i + 1, kind: marker ?? 'ref', text: body, refs })
