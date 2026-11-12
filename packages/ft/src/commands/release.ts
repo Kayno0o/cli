@@ -3,11 +3,11 @@ import type { Manifest } from './release-version'
 import type { Followed } from './watch'
 import { basename, join } from 'node:path'
 import process from 'node:process'
-import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, runTool } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { defaultBranch, fetchBranch, git, tagsAt } from '../git'
 import { ciJson, recentRuns } from '../runs'
-import { limits, NO_RUN, testsPass } from './release-checks'
+import { NO_RUN, pushToOrigin, testsPass } from './release-checks'
 import { parseTargets, publishable } from './release-many'
 import { printPlan } from './release-plan'
 import { commitPackageBump, packageDir, rollBack, settleMilestone, waitForRegistry } from './release-steps'
@@ -156,7 +156,7 @@ export async function release(args: string[]): Promise<number> {
 
     // One push for every package, so the branch's runs test the bumps once.
     try {
-      push = await runTool('git push', ['git', 'push', '--atomic', 'origin', `HEAD:refs/heads/${branch}`, ...tags.map(tag => `refs/tags/${tag}`)], { timeoutMs: limits.pushMs, onStart: child => held.forward(child) })
+      push = await pushToOrigin(['--atomic', 'origin', `HEAD:refs/heads/${branch}`, ...tags.map(tag => `refs/tags/${tag}`)], child => held.forward(child))
     }
     catch (error) {
       isPushUnknown = true

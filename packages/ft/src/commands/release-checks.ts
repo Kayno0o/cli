@@ -1,10 +1,24 @@
+import type { RunSettings, ToolRun } from '@kaynooo/cli-kit'
 import { exitCodeOf, fail, holdSignals, runTool } from '@kaynooo/cli-kit'
+import { askpass } from '@kaynooo/cli-kit/askpass'
 import { gitOk } from '../git'
 import { FINISHED, newestPerWorkflow, overall, recentRuns } from '../runs'
 import { watchRuns } from './watch'
 
 // How long a push may take before it is given up; tests shorten it.
 export const limits = { pushMs: 5 * 60_000 }
+
+// The push runs in its own session for its timeout, where ssh has no terminal to ask a passphrase on: askpass asks it on this one.
+export async function pushToOrigin(refspecs: string[], onStart: RunSettings['onStart']): Promise<ToolRun> {
+  const prompts = askpass()
+
+  try {
+    return await runTool('git push', ['git', 'push', ...refspecs], { timeoutMs: limits.pushMs, onStart, env: prompts?.env })
+  }
+  finally {
+    prompts?.close()
+  }
+}
 // How long a pushed commit may go without a run before the release goes on: a push touching only ignored paths starts none.
 export const NO_RUN = 3 * 60_000
 // How many of the newest runs are searched for a commit's own, as `ft watch` does.
@@ -32,7 +46,7 @@ export async function testsPass(sha: string, branch: string, timeout: number, js
     let push
 
     try {
-      push = await runTool('git push', ['git', 'push', 'origin', `${sha}:refs/heads/${branch}`], { timeoutMs: limits.pushMs, onStart: child => held.forward(child) })
+      push = await pushToOrigin(['origin', `${sha}:refs/heads/${branch}`], child => held.forward(child))
     }
     finally {
       held.release()
