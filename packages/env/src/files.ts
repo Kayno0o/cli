@@ -2,7 +2,7 @@ import type { Dirent } from 'node:fs'
 import type { Dotenv } from './dotenv'
 import type { KnownSecrets } from './mask'
 import { chmod, chown, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { fail, ignoredFolders, isSecretName } from '@kaynooo/cli-kit'
 import { entries, parseDotenv, serializeDotenv } from './dotenv'
 import { knownSecrets, urlPasswords } from './mask'
@@ -145,8 +145,11 @@ export async function withLocks<T>(paths: string[], fn: () => Promise<T>): Promi
   const held: string[] = []
 
   try {
-    for (const path of [...new Set(paths)].sort())
-      held.push(await acquire(path))
+    // One file spelled two ways, or through a symlink, takes its lock once.
+    const locks = new Map(await Promise.all(paths.map(async path => [await lockFor(path), path] as const)))
+
+    for (const [lock, path] of [...locks].sort(([a], [b]) => a.localeCompare(b)))
+      held.push(await acquire(lock, path))
 
     return await fn()
   }
@@ -187,8 +190,9 @@ async function reap(lock: string): Promise<void> {
   }
 }
 
-async function acquire(path: string): Promise<string> {
-  let real = path
+// The lock file of a path, beside the file it resolves to.
+async function lockFor(path: string): Promise<string> {
+  let real = resolve(path)
 
   try {
     real = await realpath(path)
@@ -197,7 +201,10 @@ async function acquire(path: string): Promise<string> {
     // a missing file is locked by its own name
   }
 
-  const lock = join(dirname(real), `.${basename(real)}.lock`)
+  return join(dirname(real), `.${basename(real)}.lock`)
+}
+
+async function acquire(lock: string, path: string): Promise<string> {
   const deadline = Date.now() + LOCK_WAIT_MS
 
   while (true) {

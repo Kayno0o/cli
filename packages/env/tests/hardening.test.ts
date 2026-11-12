@@ -180,6 +180,15 @@ describe('dotenv writes', () => {
     }
   })
 
+  test('one file spelled two ways or through a symlink takes its lock once', async () => {
+    const path = join(dir, 'f')
+
+    await writeFile(path, 'A=1\n')
+    await symlink(path, join(dir, 'link'))
+
+    expect(await withLocks([path, `${dir}/./f`, join(dir, 'link')], async () => 'ran')).toBe('ran')
+  })
+
   test('a lock held by another run makes the write wait for it', async () => {
     const path = join(dir, 'f')
     let inside = 0
