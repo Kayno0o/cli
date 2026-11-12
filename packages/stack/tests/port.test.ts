@@ -70,14 +70,11 @@ describe('stack port', () => {
     }
   })
 
-  test('a --min at or above the default ceiling prints that port', async () => {
-    const { out } = await capture(async () => port(['--min', '32768', 'x']))
+  test('a --min at or above the default ceiling alone spreads the names up to the highest port', async () => {
+    const ports = await Promise.all(['api', 'web', 'db'].map(async name => Number((await capture(async () => port(['--min', '40000', name]))).out)))
 
-    expect(out).toBe('32768\n')
-
-    const high = await capture(async () => port(['--min', '40000', 'x']))
-
-    expect(high.out).toBe('40000\n')
+    expect(new Set(ports).size).toBe(3)
+    expect(ports.every(each => each >= 40000 && each <= 65535)).toBe(true)
   })
 
   test('needs a name and a sane range', async () => {
@@ -89,5 +86,7 @@ describe('stack port', () => {
     await expect(capture(async () => port(['--max', '99999', 'x']))).rejects.toThrow('--max goes up to 65535')
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
     await expect(capture(async () => port(['--min', '0', 'x']))).rejects.toThrow('--min takes a whole number from 1024')
+    // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+    await expect(capture(async () => port(['--min', '70000', 'x']))).rejects.toThrow('--min goes up to 65535')
   })
 })

@@ -8,7 +8,7 @@ Says on stderr when something already listens on it; the exit code stays 0.\n\nE
 
 const options = {
   min: { type: 'string', description: `lowest port (${MIN_PORT}, nothing lower is allowed)` },
-  max: { type: 'string', description: `highest port (${DEFAULT_MAX_PORT}, up to ${MAX_PORT})` },
+  max: { type: 'string', description: `highest port (${DEFAULT_MAX_PORT}, or ${MAX_PORT} when --min reaches it, up to ${MAX_PORT})` },
   json: jsonOption('{name, port, listening}'),
 } as const
 
@@ -22,7 +22,12 @@ export async function port(args: string[]): Promise<number> {
     fail('a name is needed')
 
   const min = wholeNumber(parsed.values.min, 'min', MIN_PORT, MIN_PORT)
-  const max = wholeNumber(parsed.values.max, 'max', Math.max(DEFAULT_MAX_PORT, min), min)
+
+  if (min > MAX_PORT)
+    fail(`--min goes up to ${MAX_PORT}, not ${min}`)
+
+  // Past the default range, --min alone reaches up to the highest port, so the names still spread.
+  const max = wholeNumber(parsed.values.max, 'max', min < DEFAULT_MAX_PORT ? DEFAULT_MAX_PORT : MAX_PORT, min)
 
   if (max > MAX_PORT)
     fail(`--max goes up to ${MAX_PORT}, not ${max}`)
