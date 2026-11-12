@@ -92,14 +92,21 @@ function regexEnd(line: string, start: number): number {
   return -1
 }
 
-// Calls `each` with every character of the line outside strings, regex literals and comments, with its index; `quote.open` carries a template literal or a block comment (`/*`) over to the next line.
-function codeChars(line: string, quote: { open: string }, rust: boolean, each: (char: string, index: number) => void): void {
+interface Quote { open: string, depth: number }
+
+// Calls `each` with every character of the line outside strings, regex literals and comments, with its index; `quote.open` carries a template literal or a block comment (`/*`) over to the next line, and `quote.depth` how deep Rust's nested block comments go.
+function codeChars(line: string, quote: Quote, rust: boolean, each: (char: string, index: number) => void): void {
   for (let i = 0; i < line.length; i++) {
     const char = line[i] ?? ''
 
     if (quote.open === '/*') {
-      if (char === '*' && line[i + 1] === '/') {
-        quote.open = ''
+      if (rust && char === '/' && line[i + 1] === '*') {
+        quote.depth++
+        i++
+      }
+      else if (char === '*' && line[i + 1] === '/') {
+        quote.depth--
+        quote.open = quote.depth === 0 ? '' : '/*'
         i++
       }
 
@@ -120,6 +127,7 @@ function codeChars(line: string, quote: { open: string }, rust: boolean, each: (
 
     if (char === '/' && line[i + 1] === '*') {
       quote.open = '/*'
+      quote.depth = 1
       i++
 
       continue
@@ -143,7 +151,7 @@ function codeChars(line: string, quote: { open: string }, rust: boolean, each: (
 }
 
 // The counts a line changes, strings and line comments skipped.
-function depthChange(line: string, quote: { open: string }, rust: boolean): { braces: number, parens: number } {
+function depthChange(line: string, quote: Quote, rust: boolean): { braces: number, parens: number } {
   let braces = 0
   let parens = 0
 
@@ -168,7 +176,7 @@ function memberLines(lines: readonly string[], path: string): boolean[] {
   if (INDENTED.test(path))
     return everywhere
 
-  const quote = { open: '' }
+  const quote = { open: '', depth: 0 }
   const rust = RUST.test(path)
   const open: boolean[] = []
   let previous = ''
@@ -223,7 +231,7 @@ function endOf(lines: readonly string[], start: number, path: string): number {
     return end
   }
 
-  const quote = { open: '' }
+  const quote = { open: '', depth: 0 }
   const rust = RUST.test(path)
   let braces = 0
   let parens = 0

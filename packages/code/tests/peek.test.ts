@@ -199,6 +199,12 @@ describe('declarations in other languages', () => {
     expect(definitions('fn brace() -> char {\n    let c = \'{\';\n    c\n}\n', 'd.rs', 'brace')).toEqual([{ path: 'd.rs', from: 1, to: 4 }])
   })
 
+  test('reads a Rust block comment nested in another to its last */, a JS one to its first', () => {
+    expect(definitions('fn a() {\n    /* x /* y */ } */\n    1\n}\n', 'd.rs', 'a')).toEqual([{ path: 'd.rs', from: 1, to: 4 }])
+    expect(definitions('fn a() {\n    /* x\n /* y */ { */\n    1\n}\n', 'd.rs', 'a')).toEqual([{ path: 'd.rs', from: 1, to: 5 }])
+    expect(definitions('function a() {\n  /* x /* y */ }\n}\n', 'd.ts', 'a')).toEqual([{ path: 'd.ts', from: 1, to: 2 }])
+  })
+
   test('reads members of classes and object literals, not calls among statements', () => {
     expect(definitions('export function load(a) {\n}\nfunction o() {\n  load(1, {\n  })\n}\n', 'b.ts', 'load')).toEqual([{ path: 'b.ts', from: 1, to: 2 }])
     expect(find('function App() {\n  useThing(() => {\n  })\n}\n', 'a.tsx', 'useThing')).toEqual([])
