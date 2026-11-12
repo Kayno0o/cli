@@ -396,6 +396,22 @@ describe('parseErrors: pytest frames', () => {
       ['t.py::test_x[a b]', 'RuntimeError: left open'],
     ])
   })
+
+  test('--tb=native splits a summary line at the dash leaving a parametrized id that holds one', () => {
+    const { errors } = parseErrors([
+      '=================================== FAILURES ===================================',
+      '_________________________________ test_x[a - b] _________________________________',
+      'Traceback (most recent call last):',
+      '  File "/w/t.py", line 9, in test_x',
+      '    assert value == "c"',
+      'AssertionError: assert \'a - b\' == \'c\'',
+      '=========================== short test summary info ============================',
+      'FAILED t.py::test_x[a - b] - AssertionError: assert \'a - b\' == \'c\'',
+      '============================== 1 failed in 0.02s ===============================',
+    ].join('\n'))
+
+    expect(errors.map(error => [error.test, error.message])).toEqual([['t.py::test_x[a - b]', 'AssertionError: assert \'a - b\' == \'c\'']])
+  })
 })
 
 describe('parseErrors: the generic file:line:col matcher', () => {

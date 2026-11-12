@@ -49,8 +49,8 @@ const PYTEST_FAILURES = new Set(['FAILURES', 'ERRORS'])
 const PYTEST_SUMMARY_LINE = /^(?:FAILED|ERROR) \S/
 const PYTEST_FRAME = /^in \S/
 const PYTEST_SECTION = /^_{3,} (.*) _{3,}$/
-// A node id may hold spaces inside its parameters (`t.py::test_x[a b]`), and a collection error's names the file alone.
-const PYTEST_SUMMARY = /^(?:FAILED|ERROR) ([^\s:]+?\.py)(?:::(.+?))?(?: - (.*))?$/
+// A collection error's node id names the file alone; the rest of the line, the test and its reason, is split by `summaryParts`.
+const PYTEST_SUMMARY = /^(?:FAILED|ERROR) ([^\s:]+?\.py)(?:::(.*)| - (.*))?$/
 // The section of a setup, teardown or collection error is titled after its test or file with this before it.
 const PYTEST_ERROR_SECTION = /^ERROR (?:at (?:setup|teardown) of |collecting )/
 const PYTEST_EXCEPTION_END = /[\s:]/
@@ -363,19 +363,41 @@ const collectPytest: Collector = (lines, used) => {
 
     used.add(index)
 
-    const [, file = '', name, reason] = PYTEST_SUMMARY.exec(lines[index] ?? '') ?? []
-    // pytest titles the section of `t.py::Class::test` as `Class.test`, and that of a collection error after the file.
-    const key = name === undefined ? file : name.replaceAll('::', '.')
-    const left = silent.get(key) ?? 0
+    const [, file = '', rest, fileReason] = PYTEST_SUMMARY.exec(lines[index] ?? '') ?? []
+    const parts = summaryParts(file, rest, fileReason, silent)
 
-    if (left === 0)
+    if (parts === undefined)
       continue
+
+    const { key, name, reason } = parts
+    const left = silent.get(key) ?? 0
 
     silent.set(key, left - 1)
     errors.push({ tool: 'pytest', file, line: 0, column: 0, severity: 'error', message: reason ?? 'failed', test: name === undefined ? file : `${file}::${name}` })
   }
 
   return errors
+}
+
+// The test and reason of a summary line whose section printed no location: a node id may hold ` - ` inside its parameters (`test_x[a - b]`), so the split is at whichever one leaves the title of such a section.
+function summaryParts(file: string, rest: string | undefined, fileReason: string | undefined, silent: Map<string, number>): { key: string, name: string | undefined, reason: string | undefined } | undefined {
+  // pytest titles the section of `t.py::Class::test` as `Class.test`, and that of a collection error after the file.
+  const keyOf = (name: string | undefined) => name === undefined ? file : name.replaceAll('::', '.')
+  const candidates: { name: string | undefined, reason: string | undefined }[] = []
+
+  if (rest === undefined) {
+    candidates.push({ name: undefined, reason: fileReason })
+  }
+  else {
+    for (let at = rest.indexOf(' - '); at !== -1; at = rest.indexOf(' - ', at + 1))
+      candidates.push({ name: rest.slice(0, at), reason: rest.slice(at + 3) })
+
+    candidates.push({ name: rest, reason: undefined })
+  }
+
+  const found = candidates.find(candidate => (silent.get(keyOf(candidate.name)) ?? 0) > 0)
+
+  return found === undefined ? undefined : { key: keyOf(found.name), ...found }
 }
 
 // Any line of the `file:line[:col]: severity: message` shape no format above took. Notes only add context to the error before them, so they are counted as read and not listed.
