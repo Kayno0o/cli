@@ -120,7 +120,7 @@ export async function loadProjects(): Promise<Project[]> {
     const twin = projects.slice(0, index).find(other => basename(other.root) === basename(project.root))
 
     if (twin)
-      throw new WtError(`${twin.name}.ts and ${project.name}.ts both have a checkout named ${basename(project.root)}, so their worktrees would share stacks and volumes: rename one of the folders`)
+      throw new WtError(`${twin.name}.ts and ${project.name}.ts both have a checkout named ${basename(project.root)}, so their worktrees would share stacks and volumes: rename the folder of a checkout that has no worktrees yet, or remove one of the files`)
   }
 
   return projects

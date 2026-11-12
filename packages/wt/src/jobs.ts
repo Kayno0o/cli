@@ -7,7 +7,7 @@
 import { closeSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { $ } from 'bun'
-import { alive, bootTime, failKnown, KnownError, knownMessage } from './errors'
+import { alive, bootTime, failKnown, failureText, KnownError, knownMessage } from './errors'
 
 export interface Job {
   ref: string
@@ -354,7 +354,7 @@ export class Jobs {
       return await action() ?? 0
     }
     catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = failureText(error)
 
       await this.failDetached(message)
 

@@ -312,8 +312,19 @@ describe('removeTask', () => {
     expect(run.err).toContain('no worktree nothing of times, nothing removed')
     expect(existsSync(join(env.sandbox.home, '.cache', 'wt', 'jobs', 'times--nothing.json'))).toBe(false)
   })
+})
 
-  test('refuses two projects whose checkouts share a folder name, as their worktrees would share stacks', async () => {
+describe('commands checking their target before any job', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+  })
+
+  afterAll(() => env?.stop())
+
+  test('refuse two projects whose checkouts share a folder name, as their worktrees would share stacks', async () => {
     writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/times' })}\n`)
 
     const run = await env.wt('up', 'planning')
@@ -334,6 +345,16 @@ describe('removeTask', () => {
     expect(run.code).toBe(1)
     expect(run.err).toContain(message)
     expect((existsSync(jobs) ? readdirSync(jobs) : []).filter(file => file.startsWith(`times--${args[1]}.`))).toEqual([])
+  })
+
+  test('notify a --bg refusal, as its caller may be a popup that closed meanwhile', async () => {
+    const run = await env.wt('up', 'nothing', '--bg')
+    const notified = env.sandbox.calls().filter(call => call.startsWith('notify-send'))
+
+    expect(run.code).toBe(1)
+    expect(notified).toHaveLength(1)
+    expect(notified[0]).toContain('wt up nothing not started')
+    expect(notified[0]).toContain('no worktree nothing')
   })
 })
 

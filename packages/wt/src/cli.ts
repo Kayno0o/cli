@@ -19,18 +19,28 @@ async function jobs(): Promise<Jobs> {
   return new Jobs({ dir: (await wtConfig()).jobs, app: 'wt' })
 }
 
-// A config that does not load fails like any other known error.
-async function guarded(action: () => Promise<number | void>): Promise<number> {
+// A config that does not load fails like any other known error; `bg` names a `--bg` command, whose refusal is notified too.
+async function guarded(action: () => Promise<number | void>, bg?: string): Promise<number> {
   try {
-    return await (await jobs()).guarded(action)
+    return await (await jobs()).guarded(action, bg)
   }
   catch (error) {
     return failKnown(error)
   }
 }
 
+// The name a `--bg` command is notified under, none without `--bg`.
+function bgName(values: { bg?: boolean }, ...words: (string | undefined)[]): string | undefined {
+  return values.bg ? ['wt', ...words.filter(word => word !== undefined)].join(' ') : undefined
+}
+
 async function projectNames(): Promise<string[]> {
-  return (await loadProjects()).map(project => project.name)
+  try {
+    return (await loadProjects()).map(project => project.name)
+  }
+  catch {
+    return []
+  }
 }
 
 // The worktrees of the project the current directory belongs to, none outside one.
@@ -66,16 +76,9 @@ async function asWorktreeJob(verb: 'add' | 'sync' | 'rm' | 'up' | 'down', { proj
     return code
   }
 
-  try {
-    const job = queue.detach(stack, verb, [import.meta.path, ...argv, '-p', project.name])
+  const job = queue.detach(stack, verb, [import.meta.path, ...argv, '-p', project.name])
 
-    console.log(`wt: ${verb} ${ref} runs out of sight, its output in ${job.log}`)
-  }
-  catch (error) {
-    await queue.notifyRefused(`wt ${verb} ${ref}`, error instanceof Error ? error.message : String(error))
-
-    throw error
-  }
+  console.log(`wt: ${verb} ${ref} runs out of sight, its output in ${job.log}`)
 
   return 0
 }
@@ -173,7 +176,7 @@ process.exitCode = await runCli({
           const worktree = worktreeOf((await locate(process.cwd(), values.project)).project, task)
 
           return asWorktreeJob('add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch])], async () => addTask(task, branch, values))
-        })
+        }, bgName(values, 'add', task))
       },
     },
     sync: {
@@ -203,7 +206,7 @@ process.exitCode = await runCli({
           const worktree = await assertRemovable(task, values)
 
           return asWorktreeJob('rm', worktree, values, ['rm', task, ...(values.force ? ['--force'] : [])], async () => removeTask(task, values))
-        })
+        }, bgName(values, 'rm', task))
       },
     },
     up: {
@@ -217,7 +220,7 @@ process.exitCode = await runCli({
           assertWorktreeExists(worktree)
 
           return asWorktreeJob('up', worktree, values, ['up', worktree.task], async () => upTask(worktree))
-        })
+        }, bgName(values, 'up', task))
       },
     },
     down: {
@@ -231,7 +234,7 @@ process.exitCode = await runCli({
           assertWorktreeExists(worktree)
 
           return asWorktreeJob('down', worktree, values, ['down', worktree.task], async () => downTask(worktree))
-        })
+        }, bgName(values, 'down', task))
       },
     },
     ls: {
