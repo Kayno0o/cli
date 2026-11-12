@@ -36,7 +36,7 @@ const OPTIONS = {
   'count': { type: 'string', short: 'n', description: 'matches expected in each file (default 1)' },
   'all': { type: 'boolean', short: 'a', description: 'replace every match, expecting at least one in each file' },
   'skip-missing': { type: 'boolean', description: 'with --all, leave a file where no pair matches alone and list it, instead of failing; the counts still hold for the files that match' },
-  'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1, ${1}, $<name> and ${name}, and a \n or \t in it is a newline or a tab' }, // eslint-disable-line no-template-curly-in-string
+  'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1, ${1}, $<name> and ${name}, and a \\n or \\t in it is a newline or a tab, \\\\ a backslash' }, // eslint-disable-line no-template-curly-in-string
   'ignore-case': { type: 'boolean', short: 'i', description: 'with --regex, match without regard to case' },
   'dotall': { type: 'boolean', short: 's', description: 'with --regex, let . match a newline too' },
   'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?, ignoreCase?, dotAll?} applied in order: inline when it starts with [, else a file or - for stdin' },

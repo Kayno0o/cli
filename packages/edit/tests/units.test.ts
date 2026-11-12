@@ -71,12 +71,19 @@ describe('applyPairs', () => {
     expect(applyPairs('a\r\nb\r\n', [{ from: 'a\nb', to: 'c\nd' }]).text).toBe('c\r\nd\r\n')
   })
 
+  test('a multi-line --from matches a file mixing LF and CRLF, each replacement keeping the ending it replaced', () => {
+    expect(applyPairs('a\nb\r\nc\n', [{ from: 'a\nb', to: 'X' }]).text).toBe('X\r\nc\n')
+    expect(applyPairs('a\nb\r\nc\r\nd\n', [{ from: 'b\nc', to: 'x\ny' }]).text).toBe('a\nx\r\ny\r\nd\n')
+    expect(applyPairs('a\nb\r\na\nb\n', [{ from: 'a\nb', to: 'x\ny', all: true }]).text).toBe('x\ny\r\nx\ny\n')
+    expect(applyPairs('a.b $1', [{ from: '.b $1', to: '$&' }]).text).toBe('a$&')
+  })
+
   test('regex flags: case-insensitive and dot matching a newline, \\n and \\t in --to', () => {
     expect(applyPairs('Foo\nfoo', [{ from: 'foo', to: 'x', regex: true, all: true, ignoreCase: true }]).text).toBe('x\nx')
     expect(applyPairs('Foo\nfoo', [{ from: 'foo', to: 'x', regex: true, all: true }]).text).toBe('Foo\nx')
     expect(applyPairs('a\nb', [{ from: 'a.b', to: 'x', regex: true }]).problems).toHaveLength(1)
     expect(applyPairs('a\nb', [{ from: 'a.b', to: 'x', regex: true, dotAll: true }]).text).toBe('x')
-    expect(applyPairs('a,b', [{ from: ',', to: '\\n\\t\\\\n', regex: true }]).text).toBe('a\n\t\\\\nb')
+    expect(applyPairs('a,b', [{ from: ',', to: '\\n\\t\\\\n', regex: true }]).text).toBe('a\n\t\\nb')
     expect(applyPairs('a,b', [{ from: ',', to: '\\n', regex: false }]).text).toBe('a\\nb')
   })
 

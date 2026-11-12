@@ -25,8 +25,9 @@ const CRLF = /\r?\n/g
 // A ${1} or ${name} reference in a regex --to, an escaped $$ matched first so it stays literal.
 const BRACED_GROUP = /\$\$|\$\{(\w+)\}/g
 const DIGITS = /^\d+$/
-// A \n or \t typed in a regex --to, an escaped backslash matched first so \\n stays literal.
+// A \n or \t typed in a regex --to, an escaped backslash matched first so \\n writes a backslash and an n.
 const ESCAPE = /\\\\|\\([nt])/g
+const SPECIAL = /[.*+?^${}()|[\]\\]/g
 const LONGEST_LIST = 8
 
 function linesOf(text: string, indexes: number[]): number[] {
@@ -52,13 +53,9 @@ export function listLines(lines: number[]): string {
   return lines.length > LONGEST_LIST ? `${shown} and ${lines.length - LONGEST_LIST} more` : shown
 }
 
-function literalIndexes(text: string, from: string): number[] {
-  const found: number[] = []
-
-  for (let at = text.indexOf(from); at !== -1; at = text.indexOf(from, at + from.length))
-    found.push(at)
-
-  return found
+// A literal --from as a pattern whose line breaks match either ending, so a file mixing LF and CRLF still matches it.
+function literal(from: string): RegExp {
+  return new RegExp(from.split(CRLF).map(part => part.replaceAll(SPECIAL, String.raw`\$&`)).join(String.raw`\r?\n`), 'g')
 }
 
 // Where the first line of a text that matched nowhere does appear, the usual sign of an indentation or neighbouring-line mismatch.
@@ -80,7 +77,7 @@ export function compile(source: string, { ignoreCase, dotAll }: Pick<Pair, 'igno
 function escapes(to: string): string {
   return to.replace(ESCAPE, (whole, letter: string | undefined) => {
     if (letter === undefined)
-      return whole
+      return whole.slice(1)
 
     return letter === 'n' ? '\n' : '\t'
   })
@@ -109,12 +106,11 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
 
   for (const [i, pair] of pairs.entries()) {
     const label = pairs.length > 1 ? `pair ${i + 1}: ` : ''
-    // A file with CRLF endings still matches a --from typed with plain newlines.
-    const from = crlf && pair.regex !== true ? pair.from.replace(CRLF, '\r\n') : pair.from
+    const from = pair.from
     const typed = pair.regex === true ? escapes(pair.to) : pair.to
     const to = crlf ? typed.replace(CRLF, '\r\n') : typed
-    const pattern = pair.regex === true ? compile(from, pair) : undefined
-    const indexes = pattern === undefined ? literalIndexes(text, from) : [...text.matchAll(pattern)].map(match => match.index)
+    const pattern = pair.regex === true ? compile(from, pair) : literal(from)
+    const indexes = [...text.matchAll(pattern)].map(match => match.index)
     const found = linesOf(text, indexes)
 
     matched += indexes.length
@@ -126,7 +122,7 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
       let where = ` on lines ${listLines(found)}: add context to --from, or pass --count ${indexes.length} or --all`
 
       if (indexes.length === 0)
-        where = pattern === undefined ? firstLineHint(text, from) : ''
+        where = pair.regex === true ? '' : firstLineHint(text, from)
 
       problems.push(`${label}matched ${counted(indexes.length, 'time')}, expected ${wanted}${where}`)
 
@@ -134,7 +130,8 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
     }
 
     lines.push(...found)
-    text = pattern === undefined ? text.split(from).join(to) : text.replace(pattern, bracedGroups(to))
+    // A literal replacement takes the line ending of the text it replaces, the file's own when that holds none.
+    text = pair.regex === true ? text.replace(pattern, bracedGroups(to)) : text.replace(pattern, match => match.includes('\n') ? typed.replace(CRLF, match.includes('\r\n') ? '\r\n' : '\n') : to)
   }
 
   return { text, lines, problems, matched }
