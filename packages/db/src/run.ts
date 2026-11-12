@@ -68,11 +68,11 @@ export function dialectOf(url: URL): Dialect {
   return fail(`the connection URL is ${url.protocol.replace(':', '')}://, but db reads Postgres (postgres://), MySQL and MariaDB (mysql://, mariadb://) only`)
 }
 
-// The host a URL connects to: its authority, else the `host` parameter some drivers take in its place. Empty or a path stands for a local socket.
-function hostOf(url: URL): string {
-  const host = url.hostname === '' ? url.searchParams.get('host') ?? '' : url.hostname
+// The hosts a URL connects to: its `host` parameter, which Bun SQL takes over the authority, else the authority, and a `hostaddr` parameter as libpq reads one. Empty or a path stands for a local socket.
+function hostsOf(url: URL): string[] {
+  const address = url.searchParams.get('hostaddr')
 
-  return host.replace(BRACKETS, '').toLowerCase()
+  return [url.searchParams.get('host') ?? url.hostname, ...address === null ? [] : [address]].map(host => host.replace(BRACKETS, '').toLowerCase())
 }
 
 const isLocal = (host: string) => host === '' || host.startsWith('/') || LOCAL_HOSTS.has(host)
@@ -83,9 +83,7 @@ const DOCKER_NETWORK = /^172\.(?:1[6-9]|2\d|3[01])\./
 // MySQL 8's default login sends the password under the server's RSA key when there is no TLS: fetching that key is only safe where nobody sits on the path, this machine or its docker networks.
 export function allowsKeyRetrieval(url: string): boolean {
   try {
-    const host = hostOf(new URL(url))
-
-    return isLocal(host) || (isIP(host) !== 0 && DOCKER_NETWORK.test(host))
+    return hostsOf(new URL(url)).every(host => isLocal(host) || (isIP(host) !== 0 && DOCKER_NETWORK.test(host)))
   }
   catch {
     return false
@@ -120,22 +118,29 @@ export async function reachable(value: string, home?: string): Promise<URL> {
   }
 
   const dialect = dialectOf(url)
-  const host = hostOf(url)
+  const hosts = hostsOf(url)
+  const [host = ''] = hosts
 
-  if (isLocal(host))
+  if (hosts.every(isLocal))
     return url
 
-  const service = isIP(host) === 0 ? serviceNamed(await composeServices(), host, dialect) : undefined
+  const service = hosts.length === 1 && isIP(host) === 0 ? serviceNamed(await composeServices(), host, dialect) : undefined
 
   if (service !== undefined) {
+    // The service's address goes in the authority, where no parameter overrides it any more.
+    url.searchParams.delete('host')
+    url.searchParams.delete('port')
     url.hostname = service.host.includes(':') ? `[${service.host}]` : service.host
     url.port = String(service.port)
 
     return url
   }
 
-  if (!((await loadSettings(home)).allowedHosts ?? []).some(allowed => allowed.toLowerCase().replace(BRACKETS, '') === host))
-    fail(`${host} is neither local nor a compose service, so db does not connect to it: list it in "allowedHosts" in ${settingsPath(home)} to allow it`)
+  const allowed = ((await loadSettings(home)).allowedHosts ?? []).map(each => each.toLowerCase().replace(BRACKETS, ''))
+  const refused = hosts.find(each => !isLocal(each) && !allowed.includes(each))
+
+  if (refused !== undefined)
+    fail(`${refused} is neither local nor a compose service, so db does not connect to it: list it in "allowedHosts" in ${settingsPath(home)} to allow it`)
 
   return url
 }

@@ -381,7 +381,7 @@ describe('allowsKeyRetrieval, MySQL 8 logging in without TLS', () => {
     for (const url of ['mysql://app:pw@127.0.0.1:43306/app_test', 'mysql://app:pw@localhost/app', 'mysql://app:pw@[::1]:3306/app', 'mysql://app:pw@172.18.0.3:3306/app', 'mysql://app:pw@172.31.255.1/app'])
       expect(allowsKeyRetrieval(url)).toBe(true)
 
-    for (const url of ['mysql://app:pw@db.example.com/app', 'mysql://app:pw@192.168.1.20/app', 'mysql://app:pw@172.32.0.1/app', 'mysql://app:pw@10.0.0.5/app', 'mysql://app:pw@172.20.evil.com/app', 'mysql://app:pw@172.20.1.1.evil.com/app', 'not a url'])
+    for (const url of ['mysql://app:pw@db.example.com/app', 'mysql://app:pw@192.168.1.20/app', 'mysql://app:pw@172.32.0.1/app', 'mysql://app:pw@10.0.0.5/app', 'mysql://app:pw@172.20.evil.com/app', 'mysql://app:pw@172.20.1.1.evil.com/app', 'mysql://app:pw@localhost/app?host=db.example.com', 'not a url'])
       expect(allowsKeyRetrieval(url)).toBe(false)
   })
 })
