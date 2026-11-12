@@ -34,7 +34,7 @@ For `wt cd`, save the wrapper where the shell reads it at start, so no process r
 
 ## Manifests
 
-One file per project in `~/.config/wt/projects/<name>.ts`, `wt init` writing a first draft:
+One file per project in `~/.config/wt/projects/<name>.ts`, `wt init` writing a first draft, and a `tsconfig.json` beside it pointing `@kaynooo/cli-wt` at the installed wt so an editor type-checks the manifests (delete it to have the next `wt init` write it again after moving wt):
 
 ```ts
 import type { ProjectConfig } from '@kaynooo/cli-wt'

@@ -155,5 +155,29 @@ export async function initProject(dir: string, options: { print?: boolean, name?
     throw new WtError(`${file} already exists, compare with \`wt init --print\``)
 
   writeFileSync(file, content)
+  writeTsconfig(manifests)
   console.log(`wt: drafted ${file}, review it before \`wt add\``)
+}
+
+// wt's own folder, from src/ or the built dist/ alike; the package ships its sources.
+const PACKAGE_ROOT = join(import.meta.dir, '..')
+
+// Nothing resolves the manifests' `@kaynooo/cli-wt` import where they live, so a tsconfig beside them points it at the wt that wrote it, for an editor to type-check them. One already there is the user's and stays.
+function writeTsconfig(manifests: string): void {
+  const file = join(manifests, 'tsconfig.json')
+
+  if (existsSync(file))
+    return
+
+  const compilerOptions = {
+    target: 'ESNext',
+    module: 'Preserve',
+    moduleResolution: 'bundler',
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    paths: { '@kaynooo/cli-wt': [join(PACKAGE_ROOT, 'src', 'index.ts')] },
+  }
+
+  writeFileSync(file, `${JSON.stringify({ compilerOptions }, null, 2)}\n`)
 }

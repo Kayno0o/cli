@@ -1230,6 +1230,10 @@ describe('wt init', () => {
     expect((await wt('init', root)).code).toBe(0)
     // The manifest's name is its file's, so the draft is the one printed, less the newline console.log adds
     expect(`${readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), 'utf8')}\n`).toBe(printed.out)
+
+    const { compilerOptions } = JSON.parse(readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'tsconfig.json'), 'utf8')) as { compilerOptions: { paths: Record<string, string[]> } }
+
+    expect(compilerOptions.paths['@kaynooo/cli-wt']).toEqual([join(import.meta.dir, '..', 'src', 'index.ts')])
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
 })
