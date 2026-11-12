@@ -89,8 +89,18 @@ describe('gf', () => {
     const done = bin('gf', work, '--json')
 
     expect(done.code).toBe(1)
-    expect(json<{ outcome: string }[]>(done.out)[0]?.outcome).toBe('refused')
+    expect(json<unknown[]>(done.out)[0]).toMatchObject({ outcome: 'refused', reason: 'uncommitted changes in files the fast-forward changes (a.txt): commit them first (gc), or set them aside as a patch (gu)' })
     expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('changed here\n')
+  })
+
+  test('names the untracked files a fast-forward would overwrite', () => {
+    commit(origin, 'b.txt', 'upstream\n')
+    writeFileSync(join(work, 'b.txt'), 'mine\n')
+
+    const done = bin('gf', work, '--json')
+
+    expect(json<unknown[]>(done.out)[0]).toMatchObject({ outcome: 'refused', reason: 'untracked files the fast-forward would overwrite (b.txt): move them aside first' })
+    expect(readFileSync(join(work, 'b.txt'), 'utf8')).toBe('mine\n')
   })
 
   test('fetches only a branch with no upstream', () => {

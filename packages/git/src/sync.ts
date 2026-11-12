@@ -15,12 +15,40 @@ export interface SyncResult {
 }
 
 const GIT_FAILURE = /^(?:error: |fatal: )/
+const LISTED = /^\s/
+const LOCAL_CHANGES = /local changes .* would be overwritten/
+const UNTRACKED = /untracked working tree files would be overwritten/
 
-// The line of git's output saying why it failed.
+// The line of git's output saying why it failed, with the indented paths git lists below it; the two ways a fast-forward is refused over the working tree are said with the paths and what to do.
 function whyFailed(stderr: string, fallback: string): string {
   const lines = stderr.split('\n').map(line => line.trimEnd()).filter(Boolean)
+  const at = lines.findIndex(line => GIT_FAILURE.test(line))
 
-  return (lines.find(line => GIT_FAILURE.test(line)) ?? lines.at(-1) ?? fallback).trim()
+  if (at === -1)
+    return (lines.at(-1) ?? fallback).trim()
+
+  const line = lines[at]!.trim()
+  const listed: string[] = []
+
+  for (const next of lines.slice(at + 1)) {
+    if (!LISTED.test(next))
+      break
+
+    listed.push(next.trim())
+  }
+
+  if (listed.length === 0)
+    return line
+
+  const paths = listed.join(', ')
+
+  if (LOCAL_CHANGES.test(line))
+    return `uncommitted changes in files the fast-forward changes (${paths}): commit them first (gc), or set them aside as a patch (gu)`
+
+  if (UNTRACKED.test(line))
+    return `untracked files the fast-forward would overwrite (${paths}): move them aside first`
+
+  return `${line} ${paths}`
 }
 
 /** Fetches with prune, then fast-forwards the branch onto its upstream: a branch that has diverged, or a tree a fast-forward would overwrite, is refused and left as it was. */
