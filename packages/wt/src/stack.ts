@@ -10,14 +10,6 @@ import { configPath, fillTemplate } from './config'
 import { WtError } from './project'
 import { devproxyUp, hasDevproxy } from './proxy'
 
-const LEADING_ROOT = /^[/~]+/
-const UNSAFE_IN_FILE_NAME = /[^\w.-]+/g
-
-/** The name a stack's job files go by: `booki/planning` gives `booki--planning`, as other tools name them. */
-export function slugOf(ref: string): string {
-  return ref.replace(LEADING_ROOT, '').replace(UNSAFE_IN_FILE_NAME, '--')
-}
-
 // The env is always passed: a spawn given none gets the env the process started with, missing the WT_JOBS_HELD a job sets since.
 async function spawnInherit(argv: string[], cwd: string, env: Record<string, string | undefined> = process.env): Promise<number> {
   return Bun.spawn(argv, { cwd, env, stdio: ['inherit', 'inherit', 'inherit'] }).exited

@@ -85,19 +85,18 @@ export function runInputs(root: string, run: RunConfig, config: ComposeConfig, h
   return { target, image: service.image ?? `${config.name}-${run.service}`, databaseImage: databaseImage(config, host) }
 }
 
-// The files main's compose config is read from, each with its size and time, unless one is missing.
-function inputsKey(root: string, overrides: string, run: RunConfig, host: string): string | undefined {
-  try {
-    const files = ['.env', ...baseComposeFiles(root, overrides)].map(file => resolve(root, file))
+// The files main's compose config is read from, each with its size and time, a missing one (a project with no .env) as null.
+function inputsKey(root: string, overrides: string, run: RunConfig, host: string): string {
+  const files = ['.env', ...baseComposeFiles(root, overrides)].map(file => resolve(root, file))
 
-    return JSON.stringify([run.service, run.dir, host, ...files.map(file => [file, statSync(file).mtimeMs, statSync(file).size])])
-  }
-  catch {
-    return undefined
-  }
+  return JSON.stringify([run.service, run.dir, host, ...files.map((file) => {
+    const stat = statSync(file, { throwIfNoEntry: false })
+
+    return [file, stat?.mtimeMs ?? null, stat?.size ?? null]
+  })])
 }
 
-// Kept until main's .env or compose files change, so a repeated run skips `docker compose config`.
+// Kept until main's .env or compose files change, so a repeated run skips `docker compose config`; a file they pull in (`include:`, `env_file`) is not in the key, so a change to it alone needs `<state>/<name>.run.json` deleted.
 async function cachedRunInputs(worktree: Worktree, run: RunConfig, host: string): Promise<RunInputs> {
   const { root, name, settings } = worktree.project
   const file = join(settings.state, `${name}.run.json`)
@@ -106,17 +105,15 @@ async function cachedRunInputs(worktree: Worktree, run: RunConfig, host: string)
   try {
     const cached = JSON.parse(readFileSync(file, 'utf8')) as { key: string, inputs: RunInputs }
 
-    if (key !== undefined && cached.key === key)
+    if (cached.key === key)
       return cached.inputs
   }
   catch {}
 
   const inputs = runInputs(root, run, await composeConfig(root), host)
 
-  if (key !== undefined) {
-    mkdirSync(settings.state, { recursive: true })
-    writeFileSync(file, JSON.stringify({ key, inputs }))
-  }
+  mkdirSync(settings.state, { recursive: true })
+  writeFileSync(file, JSON.stringify({ key, inputs }))
 
   return inputs
 }

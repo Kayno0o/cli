@@ -1,14 +1,14 @@
 import type { GlobalOptions } from './commands'
 import type { Jobs } from './jobs'
 import type { Worktree } from './project'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { openUrl } from '@kaynooo/cli-kit'
+import { slugOf } from './jobs'
 import { assertWorktreeExists, listTasks, locate, locateWorktree, worktreeOf, WtError } from './project'
 import { urlsOf } from './routes'
-import { slugOf } from './stack'
 
 /** Prints the log of the worktree's last --bg job: a job run in a terminal printed there and kept none, which a note says when it came after. */
-export function printJobLog(worktree: Worktree, jobs: Jobs): void {
+export async function printJobLog(worktree: Worktree, jobs: Jobs): Promise<void> {
   const ref = `${worktree.project.name}/${worktree.task}`
   const slug = slugOf(ref)
   const { log } = jobs.paths(slug)
@@ -17,12 +17,13 @@ export function printJobLog(worktree: Worktree, jobs: Jobs): void {
     throw new WtError(`no job of ${ref} ran with --bg, which alone keeps a log`)
 
   const state = jobs.states().get(slug) ?? {}
-  const latest = state.running ?? state.last
 
-  if (latest !== undefined && latest.log === '')
+  if (state.running?.log === '')
+    console.error(`wt: ${ref} is ${jobs.summary(state)} in a terminal; this log is of the last --bg one`)
+  else if (state.running === undefined && state.last?.log === '')
     console.error(`wt: the last job (${jobs.summary(state)}) ran in a terminal; this log is of the last --bg one`)
 
-  process.stdout.write(readFileSync(log))
+  await Bun.write(Bun.stdout, Bun.file(log))
 }
 
 export async function printUrls(task: string | undefined, options: GlobalOptions): Promise<void> {

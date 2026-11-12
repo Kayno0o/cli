@@ -101,7 +101,6 @@ export async function readEnv(path: string, { scanned = false } = {}): Promise<D
   return dotenv
 }
 
-// Writes through a temp file in the same folder renamed over the target, so a crash or a full disk never leaves a half-written file. The target keeps its mode, owner and group and a new file is 0600.
 // The keys of a file named on the command line, or of one of the folder's own .env* files (`scanned`): a JSON, YAML or TOML one by dotted paths.
 export async function readEntries(path: string, { scanned = false } = {}): Promise<Map<string, string>> {
   if (scanned || structuredFormat(path) === undefined)
@@ -115,6 +114,7 @@ export async function readEntries(path: string, { scanned = false } = {}): Promi
   return parseStructured(path, await file.text())
 }
 
+// Writes through a temp file in the same folder renamed over the target, so a crash or a full disk never leaves a half-written file. The target keeps its mode, owner and group and a new file is 0600.
 export async function writeAtomic(path: string, text: string): Promise<void> {
   let target = path
   let mode = 0o600

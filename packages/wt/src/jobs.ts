@@ -45,9 +45,9 @@ const STARTING_MS = 30_000
 const TAKEOVER_MS = 5_000
 const TAIL_BYTES = 4096
 /** What a refusal says of wt's own actions; another tool sharing the folder adds its verbs through `words`. */
-const DOING: Record<string, string> = { up: 'coming up', down: 'stopping', add: 'being made', sync: 'syncing', rm: 'being removed' }
+const DOING: Record<string, string> = { 'up': 'coming up', 'down': 'stopping', 'add': 'being made', 'add --up': 'being made and brought up', 'sync': 'syncing', 'rm': 'being removed' }
 /** The actions a notification reports the success of, as a title and a body. */
-const DONE: Record<string, [string, string]> = { up: ['is up', 'Its stack came up'], add: ['is ready', 'The worktree is made, its stack still down'] }
+const DONE: Record<string, [string, string]> = { 'up': ['is up', 'Its stack came up'], 'add': ['is ready', 'The worktree is made, its stack still down'], 'add --up': ['is up', 'The worktree is made and its stack came up'] }
 
 /** How a job ended, by its exit code: null for one killed before it could say, any other code a failure. */
 const OUTCOMES: Record<string, string> = { 0: 'ok', null: 'killed' }
@@ -55,6 +55,14 @@ const OUTCOMES: Record<string, string> = { 0: 'ok', null: 'killed' }
 export interface JobWords {
   doing?: Record<string, string>
   done?: Record<string, [string, string]>
+}
+
+const LEADING_ROOT = /^[/~]+/
+const UNSAFE_IN_FILE_NAME = /[^\w.-]+/g
+
+/** The name a stack's job files go by: `booki/planning` gives `booki--planning`, as other tools name them. */
+export function slugOf(ref: string): string {
+  return ref.replace(LEADING_ROOT, '').replace(UNSAFE_IN_FILE_NAME, '--')
 }
 
 /** Written beside the file and renamed over it, so a mod reading it meanwhile never sees half of it. */

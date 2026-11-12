@@ -866,6 +866,16 @@ describe('wt run', () => {
     expect(first.slice(added).filter(args => args.startsWith('compose config'))).toHaveLength(1)
     expect((await wt('run', 'planning', '--', 'check')).code).toBe(0)
     expect(commands().slice(first.length).map(args => args.split(' ').slice(0, 2).join(' '))).toEqual(['exec wt-times-test-db', 'run --rm'])
+
+    // A compose file changed is read again; with no .env the cache still holds
+    const configReads = () => commands().filter(args => args.startsWith('compose config')).length
+    const before = configReads()
+
+    writeFileSync(join(root, 'compose.yml'), 'services: { db: {} }\n')
+    rmSync(join(root, '.env'))
+    expect((await wt('run', 'planning', '--', 'check')).code).toBe(0)
+    expect((await wt('run', 'planning', '--', 'check')).code).toBe(0)
+    expect(configReads()).toBe(before + 1)
   }, 30_000)
 })
 
@@ -957,6 +967,24 @@ describe('up and down with no runner', () => {
     expect(both.code).toBe(2)
     expect(both.err).toContain('wt up takes a task or --all, not both')
     expect(sandbox.forbidden()).toEqual([])
+  }, 30_000)
+
+  test('add --up --bg notifies the stack is up, under a verb of its own', async () => {
+    const { sandbox, wt, dirOf } = env
+    const lock = join(sandbox.home, '.cache', 'wt', 'jobs', 'times--planning.lock')
+
+    expect((await wt('add', 'planning', '--up', '--bg')).out).toContain('wt: add --up times/planning runs out of sight')
+
+    for (let tries = 0; tries < 100 && (existsSync(lock) || !sandbox.calls().some(call => call.startsWith('notify-send'))); tries++)
+      await Bun.sleep(100)
+
+    const notified = sandbox.calls().filter(call => call.startsWith('notify-send'))
+
+    expect(notified).toHaveLength(1)
+    expect(notified[0]).toContain('times/planning is up')
+    expect(notified[0]).toContain('The worktree is made and its stack came up')
+    expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose up')).map(call => call.cwd)).toEqual([dirOf('planning')])
+    expect((await wt('ls')).out).toContain('add --up ok just now')
   }, 30_000)
 
   test('ls lists the checkouts under a header, with how each worktree\'s last job ended', async () => {

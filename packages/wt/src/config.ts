@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { configBase } from '@kaynooo/cli-kit'
 import { KnownError } from './errors'
+import { Jobs } from './jobs'
 
 export interface WtConfig {
   /** The folder of `<name>.ts` manifests. */
@@ -81,4 +82,9 @@ export async function wtConfig(): Promise<Resolved> {
 /** Fills a runner template's placeholders. */
 export function fillTemplate(argv: string[], values: Record<string, string>): string[] {
   return argv.map(arg => arg.replaceAll(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match))
+}
+
+/** The job records of wt's stacks, in the config's jobs folder. */
+export async function wtJobs(): Promise<Jobs> {
+  return new Jobs({ dir: (await wtConfig()).jobs, app: 'wt' })
 }

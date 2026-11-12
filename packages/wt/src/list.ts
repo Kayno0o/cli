@@ -1,15 +1,14 @@
 import type { GlobalOptions } from './commands'
-import type { JobState } from './jobs'
+import type { Jobs, JobState } from './jobs'
 import type { Project } from './project'
 import { basename, join } from 'node:path'
 import { table } from '@kaynooo/cli-kit'
 import { runningProjects } from './compose'
-import { wtConfig } from './config'
+import { wtJobs } from './config'
 import { currentBranch, git, unreachableCount } from './git'
-import { Jobs } from './jobs'
+import { slugOf } from './jobs'
 import { listTasks, loadProjects, locate, stackName, worktreeOf } from './project'
 import { urlsOf } from './routes'
-import { slugOf } from './stack'
 
 export interface Checkout {
   project: string
@@ -89,8 +88,7 @@ async function checkoutsOf(project: Project, running: Set<string>, jobs: Jobs, s
 
 // One row per checkout under a header, `*` marking a stack that is up; as JSON, `{ project, checkouts }`, project being the one the directory is in, null outside every one.
 export async function listWorktrees(options: ListOptions): Promise<void> {
-  const [running, { here, projects }, config] = await Promise.all([runningProjects(), projectsToList(options), wtConfig()])
-  const jobs = new Jobs({ dir: config.jobs, app: 'wt' })
+  const [running, { here, projects }, jobs] = await Promise.all([runningProjects(), projectsToList(options), wtJobs()])
   const states = jobs.states()
   const checkouts = (await Promise.all(projects.map(async project => checkoutsOf(project, running, jobs, states)))).flat()
 

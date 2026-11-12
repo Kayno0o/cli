@@ -1,12 +1,13 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import type { GlobalOptions } from './commands'
+import type { Jobs } from './jobs'
 import type { Worktree } from './project'
 import process from 'node:process'
 import { badUsage, isInteractive, parse, runCli } from '@kaynooo/cli-kit'
-import { wtConfig } from './config'
+import { wtJobs } from './config'
 import { failKnown, failureText, knownMessage } from './errors'
-import { Jobs, notifyRefused } from './jobs'
+import { notifyRefused, slugOf } from './jobs'
 import { assertWorktreeExists, listTasks, loadProjects, locate, locateWorktree, worktreeOf } from './project'
 
 // Each command loads its modules when it runs, so `wt path`, `wt tasks` and Tab completion do not pay for the whole tool.
@@ -15,9 +16,7 @@ const printing = async () => import('./print')
 
 const APP = 'wt'
 
-async function jobs(): Promise<Jobs> {
-  return new Jobs({ dir: (await wtConfig()).jobs, app: APP })
-}
+const jobs = wtJobs
 
 // A config that does not load fails like any other known error; `bg` names a `--bg` command, whose refusal is notified too.
 async function guarded(action: () => Promise<number | void>, bg?: string): Promise<number> {
@@ -68,9 +67,8 @@ const PROJECT_OPTION = { type: 'string', short: 'p', candidates: projectNames, d
 const BG_OPTION = { type: 'boolean', description: 'run it away from any terminal, its output in the worktree\'s job log, a notification saying how it went' } as const
 
 // Every action on a worktree holds its stack's lock, so an up cannot race a removal, and --bg detaches it. Its caller checks the worktree first: a job claimed for one that cannot be acted on leaves a record behind, or a `--bg` one failing out of sight.
-async function asWorktreeJob(verb: 'add' | 'sync' | 'rm' | 'up' | 'down', { project, task }: Worktree, options: GlobalOptions & { bg?: boolean }, argv: string[], work: () => Promise<void>): Promise<number> {
+async function asWorktreeJob(verb: 'add' | 'add --up' | 'sync' | 'rm' | 'up' | 'down', { project, task }: Worktree, options: GlobalOptions & { bg?: boolean }, argv: string[], work: () => Promise<void>): Promise<number> {
   const ref = `${project.name}/${task}`
-  const { slugOf } = await import('./stack')
   const stack = { ref, slug: slugOf(ref) }
   const queue = await jobs()
 
@@ -158,7 +156,7 @@ async function prune(options: GlobalOptions & { all?: boolean, yes?: boolean }):
   return code
 }
 
-const ALL_OPTION = { type: 'boolean', short: 'a', description: 'every worktree of the project, one after the other' } as const
+const ALL_OPTION = { type: 'boolean', description: 'every worktree of the project, one after the other' } as const
 
 const ADD_USAGE = `wt add <task> [branch] [--up] [-p <name>] [--bg]
 
@@ -201,6 +199,30 @@ const PRUNE_USAGE = `wt prune [-a] [-y] [-p <name>]
 Lists what worktrees removed by hand, or an add that crashed, left behind: wt's files, job records, queues, containers and volumes, and git's registrations of folders gone. Once confirmed, removes each as \`wt rm --force\` would. The current project, or every project with -a.
 
 Exits 0 once removed, or when nothing is left or nothing could be asked, 1 when a removal fails or is declined, 2 on a usage error.`
+
+// `wt up` and `wt down`, of one worktree or with --all of each in turn.
+async function startOrStop(verb: 'up' | 'down', args: string[]): Promise<number> {
+  const { values, positionals: [task] } = parse(args, verb === 'up' ? UP_USAGE : DOWN_USAGE, { project: PROJECT_OPTION, all: ALL_OPTION, bg: BG_OPTION }, { positionals: ['[task]'], candidates: TASK })
+  const act = async (worktree: Worktree) => asWorktreeJob(verb, worktree, values, [verb, worktree.task], async () => {
+    const { downTask, upTask } = await commands()
+
+    return verb === 'up' ? upTask(worktree) : downTask(worktree)
+  })
+
+  if (values.all && task !== undefined)
+    badUsage(`wt ${verb} takes a task or --all, not both`)
+
+  return guarded(async () => {
+    if (values.all)
+      return eachWorktree(values.project, act)
+
+    const worktree = await locateWorktree(process.cwd(), task, values.project)
+
+    assertWorktreeExists(worktree)
+
+    return act(worktree)
+  }, bgName(values, verb, values.all ? '--all' : task))
+}
 
 const SHELL_USAGE = `wt shell <shell>
 
@@ -274,7 +296,7 @@ process.exitCode = await runCli({
         return guarded(async () => {
           const worktree = worktreeOf((await locate(process.cwd(), values.project)).project, task)
 
-          return asWorktreeJob('add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch]), ...(values.up ? ['--up'] : [])], async () => (await commands()).addTask(task, branch, values))
+          return asWorktreeJob(values.up ? 'add --up' : 'add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch]), ...(values.up ? ['--up'] : [])], async () => (await commands()).addTask(task, branch, values))
         }, bgName(values, 'add', task))
       },
     },
@@ -311,45 +333,11 @@ process.exitCode = await runCli({
     },
     up: {
       summary: 'start a worktree stack',
-      run: async (args) => {
-        const { values, positionals: [task] } = parse(args, UP_USAGE, { project: PROJECT_OPTION, all: ALL_OPTION, bg: BG_OPTION }, { positionals: ['[task]'], candidates: TASK })
-        const up = async (worktree: Worktree) => asWorktreeJob('up', worktree, values, ['up', worktree.task], async () => (await commands()).upTask(worktree))
-
-        if (values.all && task !== undefined)
-          badUsage('wt up takes a task or --all, not both')
-
-        return guarded(async () => {
-          if (values.all)
-            return eachWorktree(values.project, up)
-
-          const worktree = await locateWorktree(process.cwd(), task, values.project)
-
-          assertWorktreeExists(worktree)
-
-          return up(worktree)
-        }, bgName(values, 'up', values.all ? '--all' : task))
-      },
+      run: async args => startOrStop('up', args),
     },
     down: {
       summary: 'stop a worktree stack',
-      run: async (args) => {
-        const { values, positionals: [task] } = parse(args, DOWN_USAGE, { project: PROJECT_OPTION, all: ALL_OPTION, bg: BG_OPTION }, { positionals: ['[task]'], candidates: TASK })
-        const down = async (worktree: Worktree) => asWorktreeJob('down', worktree, values, ['down', worktree.task], async () => (await commands()).downTask(worktree))
-
-        if (values.all && task !== undefined)
-          badUsage('wt down takes a task or --all, not both')
-
-        return guarded(async () => {
-          if (values.all)
-            return eachWorktree(values.project, down)
-
-          const worktree = await locateWorktree(process.cwd(), task, values.project)
-
-          assertWorktreeExists(worktree)
-
-          return down(worktree)
-        }, bgName(values, 'down', values.all ? '--all' : task))
-      },
+      run: async args => startOrStop('down', args),
     },
     logs: {
       summary: 'print the log of a worktree\'s last --bg job, or follow its stack\'s compose logs',
@@ -369,7 +357,7 @@ process.exitCode = await runCli({
 
           const { printJobLog } = await printing()
 
-          printJobLog(worktree, await jobs())
+          await printJobLog(worktree, await jobs())
 
           return 0
         })

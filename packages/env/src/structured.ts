@@ -24,7 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null
 }
 
-// Each leaf under its dotted path (`database.password`, `servers.0.host`); a TOML date prints as written, a null as nothing.
+// Each leaf under its dotted path (`database.password`, `servers.0.host`); a TOML date prints as written, a null as nothing. An empty object or list leaves no key, a key holding a dot reads like a nested one, and a number prints as JavaScript reads it (`1.0` as `1`).
 function flatten(value: unknown, path: string, into: Map<string, string>): void {
   if (Array.isArray(value) || isRecord(value)) {
     for (const [key, each] of Object.entries(value))

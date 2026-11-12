@@ -159,6 +159,9 @@ describe('ev', () => {
     expect(unset.err).toContain('app.json is JSON, which ev reads but does not write: it writes dotenv files (KEY=value lines)')
     expect(ev(['set', 'TOKEN', 'new.yaml'], 'x').err).toContain('new.yaml is YAML, which ev reads but does not write')
     expect(await Bun.file(join(dir, 'new.yaml')).exists()).toBe(false)
+    expect(ev(['cp', 'database.password', '--from', 'app.json', '--to', 'copy.env'])).toMatchObject({ code: 2, err: expect.stringContaining('app.json is JSON, which ev reads but does not write') })
+    expect(ev(['mv', 'database.password', '--from', 'app.toml', '--to', 'copy.env'])).toMatchObject({ code: 2, err: expect.stringContaining('app.toml is TOML, which ev reads but does not write') })
+    expect(await Bun.file(join(dir, 'copy.env')).exists()).toBe(false)
   })
 
   test('refuses a JSON, YAML or TOML file that does not parse or holds no keys', async () => {
