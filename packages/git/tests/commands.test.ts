@@ -231,6 +231,23 @@ describe('gu', () => {
     expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\nlost?\n')
   })
 
+  test('takes an intent-to-add file out of the index and off the disk, so its patch puts it back', () => {
+    mkdirSync(join(work, 'sub'))
+    writeFileSync(join(work, 'sub', 'new.txt'), 'new\n')
+    git(work, 'add', '-N', 'sub/new.txt')
+    writeFileSync(join(work, 'a.txt'), 'one\nlost?\n')
+
+    const done = bin('gu', join(work, 'sub'), 'new.txt', '../a.txt', '--json')
+    const { saved } = json<{ saved: string }>(done.out)
+
+    expect(done.code).toBe(0)
+    expect(existsSync(join(work, 'sub', 'new.txt'))).toBe(false)
+    expect(git(work, 'status', '--porcelain')).toBe('')
+    expect(run(['git', 'apply', saved], work).code).toBe(0)
+    expect(readFileSync(join(work, 'sub', 'new.txt'), 'utf8')).toBe('new\n')
+    expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\nlost?\n')
+  })
+
   test('saves a patch git apply takes whatever the diff config says', () => {
     for (const [key, value] of Object.entries({ 'diff.external': 'echo side by side view', 'color.diff': 'always', 'diff.noprefix': 'true', 'diff.relative': 'true', 'diff.view.textconv': 'tr a-z A-Z' }))
       git(work, 'config', key, value)

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import type { ExitRow } from '@kaynooo/cli-kit'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { badUsage, fail, jsonOption, parse, printJson, runMain } from '@kaynooo/cli-kit'
@@ -36,7 +36,7 @@ async function checked(args: string[]): Promise<string> {
 
 // The tracked paths among the given ones that differ, from the index (or from HEAD with `cached`).
 async function changed(paths: string[], cached: boolean): Promise<string[]> {
-  const out = await checked(['diff', ...cached ? ['--cached'] : [], '--name-only', '-z', '--', ...paths])
+  const out = await checked(['diff', ...cached ? ['--cached'] : [], '--name-only', '--no-relative', '-z', '--', ...paths])
 
   return out.split('\0').filter(Boolean)
 }
@@ -120,7 +120,19 @@ async function main(argv: string[]): Promise<number> {
   if (reverts.code !== 0)
     fail(`the patch saved to ${saved} would not put the change back, nothing discarded:\n${reverts.stderr.trim()}`, 1)
 
-  await checked(['restore', '--', ...positionals])
+  // A path added with `git add -N` would be emptied by restore and kept in the index, where `git apply` refuses to create it again: it leaves the index and the disk instead.
+  const intended = (await checked(['diff', '--name-only', '--no-relative', '--diff-filter=A', '-z', '--', ...positionals])).split('\0').filter(Boolean)
+  const tracked = paths.filter(path => !intended.includes(path))
+
+  if (intended.length > 0) {
+    await checked(['-C', top, 'rm', '--cached', '--quiet', '--', ...intended])
+
+    for (const path of intended)
+      rmSync(join(top, path), { force: true })
+  }
+
+  if (tracked.length > 0)
+    await checked(['-C', top, 'restore', '--', ...tracked])
 
   if (values.json === true)
     printJson({ action: 'discard', paths, saved })
