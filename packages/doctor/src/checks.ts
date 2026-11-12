@@ -378,8 +378,34 @@ export async function checkWakatime(host: Host): Promise<Result> {
 }
 
 const toolCheck = (name: string) => name.slice(name.indexOf('/') + 1)
-const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'dead-bins', 'workspace', 'wakatime']
+const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'dead-bins', 'workspace', 'wakatime', 'dl-bins']
 const FORGEJO = '@kaynooo/cli-forgejo'
+const DL = '@kaynooo/cli-dl'
+
+interface DlEntry { name: string, state: 'current' | 'changed' | 'unreachable', error?: string }
+
+// The commands `dl --bin` installed whose source changed since, as the installed dl's `outdated` tells; a source it cannot reach is said, not failed, as the network is no fault of the install.
+export async function checkDlBins(host: Host): Promise<Result> {
+  const bin = ownBin(host, DL, 'dl')
+
+  if (bin === undefined)
+    return { check: 'dl-bins', ok: true, detail: 'dl is not installed' }
+
+  const ran = await host.run(['bun', bin, 'outdated', '--bins', '--json'])
+  const entries = readJsonText<DlEntry[]>(ran.stdout)
+
+  if (!Array.isArray(entries))
+    return { check: 'dl-bins', ok: true, detail: `the installed dl cannot tell: ${firstLine(ran.stderr) || `exit ${ran.code}`}` }
+
+  const changed = entries.filter(entry => entry.state === 'changed').map(entry => entry.name)
+  const unreachable = entries.filter(entry => entry.state === 'unreachable').map(entry => entry.name)
+  const asked = unreachable.length > 0 ? `, the source of ${unreachable.join(', ')} did not answer` : ''
+
+  if (changed.length > 0)
+    return { check: 'dl-bins', ok: false, detail: `${changed.join(', ')} changed at the source${asked}`, fix: `dl update ${changed.join(' ')}` }
+
+  return { check: 'dl-bins', ok: true, detail: entries.length === 0 ? 'dl installed no command' : `${entries.length - unreachable.length} commands dl installed are current${asked}` }
+}
 const WORKSPACE = '@kaynooo/cli-workspace'
 
 // The folder repos, sweep and pkg bump look under, and whether it exists.
@@ -416,5 +442,6 @@ export async function runChecks(host: Host, only: readonly string[] = []): Promi
     ...wanted('dead-bins') ? [checkDeadBins(host)] : [],
     ...wanted('workspace') && (only.length > 0 || isInstalled(host, WORKSPACE) || isInstalled(host, '@kaynooo/cli-pkg')) ? [checkWorkspace(host)] : [],
     ...wanted('wakatime') && existsSync(join(host.home, '.wakatime.cfg')) ? [await checkWakatime(host)] : [],
+    ...wanted('dl-bins') && (only.length > 0 || isInstalled(host, DL)) ? [await checkDlBins(host)] : [],
   ]
 }

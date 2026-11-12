@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { checkBun, checkDeadBins, checkHooks, checkNeeds, checkTea, checkTool, checkWakatime, checkWorkspace, runChecks, TOOLS } from '../src/checks'
+import { checkBun, checkDeadBins, checkDlBins, checkHooks, checkNeeds, checkTea, checkTool, checkWakatime, checkWorkspace, runChecks, TOOLS } from '../src/checks'
 import { configReport } from '../src/config-report'
 import { main } from '../src/doctor'
 
@@ -43,6 +43,20 @@ const LATEST = { 'bun info @kaynooo/cli-forgejo version --no-cache': { stdout: '
 
 beforeEach(() => {
   home = temp('doctor-')
+})
+
+describe('checkDlBins', () => {
+  test('fails on the commands dl installed whose source changed, its fix dl update naming them, and only says one that did not answer', async () => {
+    write(join(home, MODULES, '@kaynooo/cli-dl', 'package.json'), { name: '@kaynooo/cli-dl', version: '0.3.0', bin: { dl: './dist/cli.js' } })
+
+    const asked = `bun ${join(home, MODULES, '@kaynooo/cli-dl', 'dist', 'cli.js')} outdated --bins --json`
+    const answering = (entries: unknown[]) => fakeHost({ [asked]: { code: 1, stdout: JSON.stringify(entries) } })
+
+    expect(await checkDlBins(answering([{ name: 'a', state: 'changed' }, { name: 'b', state: 'current' }, { name: 'c', state: 'unreachable', error: 'x' }]))).toEqual({ check: 'dl-bins', ok: false, detail: 'a changed at the source, the source of c did not answer', fix: 'dl update a' })
+    expect(await checkDlBins(answering([{ name: 'b', state: 'current' }, { name: 'c', state: 'unreachable' }]))).toEqual({ check: 'dl-bins', ok: true, detail: '1 commands dl installed are current, the source of c did not answer' })
+    expect(await checkDlBins(fakeHost({ [asked]: { code: 2, stderr: 'error: dl: unknown command outdated\n' } }))).toEqual({ check: 'dl-bins', ok: true, detail: 'the installed dl cannot tell: error: dl: unknown command outdated' })
+    expect((await runChecks(answering([]))).find(result => result.check === 'dl-bins')).toEqual({ check: 'dl-bins', ok: true, detail: 'dl installed no command' })
+  })
 })
 
 describe('checkDeadBins', () => {

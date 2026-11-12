@@ -10,7 +10,7 @@ import { install } from './install'
 
 const USAGE = `doctor [--only <check>] [--quiet] [--fix | --install [<name>...|all]] [--list] [--dry-run] [--force] [--json]: checks this host's @kaynooo/cli-* install, one line per check with the fix beside a failing one, and installs the packages it picks
 
-Checks the installed packages are current, their system tools, tea's login, the Claude Code hooks, Bun, the fish completions and dead bin links; a package not installed is no failure.
+Checks the installed packages are current, their system tools, tea's login, the Claude Code hooks, Bun, the fish completions, dead bin links and the commands dl installed; a package not installed is no failure.
 --fix runs the printed fixes, then checks again; a fix that installs a system package or only describes a step is printed, never run.
 --install adds the packages named (\`forgejo\`, \`ft\`, \`hooks\`, \`all\`) or picked from a checklist, leaving out one whose required tool is missing unless --force.`
 

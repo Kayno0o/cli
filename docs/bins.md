@@ -122,6 +122,8 @@ dl https://bun.sh/install  # download a script to read it
 dl https://bun.sh/install --exec --sha256 <sha>  # run the script that was read
 dl https://example.com/tool.tar.gz --sums https://example.com/SHA256SUMS --bin tool  # a checked binary, installed
 dl ls  # what dl installed or ran
+dl outdated  # what changed at its source
+dl update  # install it again
 ```
 
 ## dlog

@@ -20,6 +20,15 @@ export interface LedgerEntry {
   // Where a bin was installed.
   path?: string
   at: string
+  // How it was checked, for `dl update` to check the next one the same way: a checksums file, a signature and the key (a file as an absolute path).
+  sums?: string
+  sig?: string
+  key?: string
+  // What tells `dl outdated` the source did not change without downloading it again.
+  etag?: string
+  lastModified?: string
+  // The arguments a script ran with.
+  args?: string[]
 }
 
 /** A download that broke off, kept for the next `dl` of its URL to resume: what the server called it and what tells the file did not change since. */

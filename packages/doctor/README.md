@@ -23,6 +23,7 @@ doctor --install forgejo check hooks   # or name them: a package, one of its bin
 | `bun` | Bun satisfies the `engines.bun` range of every installed package | `bun upgrade` |
 | `completions` | fish is missing, or its folder holds a completion for every installed bin and none of ours for a bin no longer installed | `cli completions fish --install` |
 | `dead-bins` | no link in Bun's bin folder points at a file of our packages that is gone, as `bun install -g` leaves the bins a newer version dropped | `rm` of those links, which `--fix` runs |
+| `dl-bins` | `dl` is installed and no command it installed with `--bin` changed at its source, as `dl outdated --bins` tells; a source that does not answer is only noted | `dl update <name>...`, printed, not run |
 
 Only the packages that are installed are checked: a package left out is no failure, and the last line counts them. A registry that does not answer leaves a package passing, with a note. Exit codes: 0 every check passed, 1 one failed, 2 a usage error.
 

@@ -18,6 +18,8 @@ export interface Downloaded {
   html: boolean
   // Whether the first bytes hold no NUL, so a diff of two versions can be read.
   text: boolean
+  etag?: string
+  lastModified?: string
 }
 
 // How much of the start is kept to tell an HTML page or a binary apart.
@@ -167,6 +169,7 @@ export async function download(url: string, dir: string, maxSize: number): Promi
     sha256: hasher.digest('hex'),
     html: HTML_START.test(start.toString('utf8')),
     text: !start.includes(0),
+    ...validators(part),
   }
 }
 

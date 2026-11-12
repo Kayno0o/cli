@@ -20,6 +20,8 @@ let archive: Uint8Array
 // /big.bin answers ranges asked with an If-Range matching its ETag, unless `ranges` is off; `cut` makes its next answer break off halfway.
 const BIG = new Uint8Array(256 * 1024).map((_, index) => (index * 7) % 253)
 const big = { body: BIG, etag: '"v1"', ranges: true, cut: false, asked: [] as string[] }
+// /moving.bin answers 304 to an If-None-Match of its current ETag; /moving.sums lists `sums` as its sha.
+const moving = { body: 'v1\n', sums: 'v1\n', conditional: 0 }
 let sums: string
 let server: ReturnType<typeof Bun.serve>
 // Answers the whole length of /big.bin and drops the connection halfway, as a network does; Bun.serve would fix the length to what it sends.
@@ -97,6 +99,18 @@ beforeAll(async () => {
       '/bad.bin': () => new Response(BINARY),
       '/tool.tar.gz': () => new Response(archive, { headers: { 'content-type': 'application/gzip' } }),
       '/SHA256SUMS': () => new Response(sums),
+      '/moving.bin': (request) => {
+        const etag = `"${sha256(moving.body).slice(0, 16)}"`
+
+        if (request.headers.get('if-none-match') === etag) {
+          moving.conditional++
+
+          return new Response(null, { status: 304, headers: { etag } })
+        }
+
+        return new Response(moving.body, { headers: { etag, 'content-type': 'application/octet-stream' } })
+      },
+      '/moving.sums': () => new Response(`${sha256(moving.sums)}  moving.bin\n`),
       '/big.bin': (request) => {
         const range = request.headers.get('range')
         const start = Number((/^bytes=(\d+)-$/).exec(range ?? '')?.[1] ?? 0)
@@ -445,6 +459,59 @@ describe('extracting and installing', () => {
 
     expect(wrong.code).toBe(1)
     expect(wrong.err).toContain('no executable named other: tool-1.0/tool')
+  })
+})
+
+describe('outdated and update', () => {
+  test('outdated asks each source with its ETag, and update installs what changed, checked by the same --sums', async () => {
+    const dir = home()
+    const installed = join(dir, '.local', 'bin', 'mover')
+
+    Object.assign(moving, { body: 'v1\n', sums: 'v1\n', conditional: 0 })
+    expect((await dl([url('/moving.bin'), '--bin', 'mover', '--sums', url('/moving.sums')], dir)).code).toBe(0)
+    expect(await dl(['outdated'], dir)).toMatchObject({ code: 0, out: 'all 1 current\n' })
+    expect(moving.conditional).toBe(1)
+
+    Object.assign(moving, { body: 'v2\n', sums: 'v2\n' })
+
+    const behind = await dl(['outdated'], dir)
+
+    expect(behind.code).toBe(1)
+    expect(behind.out).toContain(`mover\tbin\tjust now\tchanged, ${sha256('v1\n').slice(0, 12)} now ${sha256('v2\n').slice(0, 12)}`)
+    expect(behind.out).toContain('update them: dl update mover')
+    expect(JSON.parse((await dl(['outdated', '--json'], dir)).out)).toMatchObject([{ name: 'mover', kind: 'bin', state: 'changed', now: sha256('v2\n') }])
+
+    expect((await dl(['update'], dir)).code).toBe(0)
+    expect(readFileSync(installed, 'utf8')).toBe('v2\n')
+    expect((await dl(['outdated', 'mover'], dir)).code).toBe(0)
+
+    moving.body = 'v3\n'
+
+    const refused = await dl(['update', 'mover'], dir)
+
+    expect(refused.code).toBe(1)
+    expect(refused.err).toContain('mover: sha256 mismatch for moving.bin')
+    expect(readFileSync(installed, 'utf8')).toBe('v2\n')
+    expect((await dl(['update', 'nothing'], dir)).code).toBe(2)
+  })
+
+  test('update shows a changed script and runs it with its arguments, unpinned only with --yes', async () => {
+    const dir = home()
+
+    script = SCRIPT_V1
+    expect((await dl([url('/install.sh'), '--exec', '--sha256', sha256(SCRIPT_V1), '--', 'a', 'b'], dir)).code).toBe(0)
+    script = SCRIPT_V2
+
+    const unpinned = await dl(['update'], dir)
+
+    expect(unpinned.code).toBe(1)
+    expect(unpinned.out).toContain('+echo "ran again $*" > "$MARK"')
+    expect(unpinned.err).toContain('not run: no --sha256, --sums or --sig pins this script')
+    expect(readFileSync(join(dir, 'mark'), 'utf8')).toBe('ran a b\n')
+
+    expect((await dl(['update', '--yes'], dir)).code).toBe(0)
+    script = SCRIPT_V1
+    expect(readFileSync(join(dir, 'mark'), 'utf8')).toBe('ran again a b\n')
   })
 })
 

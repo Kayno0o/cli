@@ -2,6 +2,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Downloaded } from './download'
 import type { Summary } from './script'
 import type { Key } from './signature'
+import type { LedgerEntry } from './state'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
@@ -136,7 +137,7 @@ export async function get(args: string[]): Promise<number> {
     const name = values.bin === '' ? basename(source) : values.bin
 
     report.installed = installBinary(source, name, values.force === true)
-    record({ kind: 'bin', name, url, sha256: file.sha256, path: report.installed, at: new Date().toISOString() })
+    record({ kind: 'bin', name, url, sha256: file.sha256, path: report.installed, at: new Date().toISOString(), ...checkedBy(file, values) })
   }
 
   if (values.exec === true)
@@ -150,7 +151,15 @@ export async function get(args: string[]): Promise<number> {
   if (!verified && values.yes !== true)
     return fail('not run: no --sha256, --sums or --sig pins this script', 1, `read ${file.path}, then: dl ${url} --exec --sha256 ${file.sha256}`)
 
-  return runScript(file, url, rest)
+  return runScript(file, url, rest, checkedBy(file, values))
+}
+
+// How a download was checked and what tells it changed, for the ledger: `dl update` checks the next one the same way.
+function checkedBy(file: Downloaded, values: { sums?: string, sig?: string, key?: string }): Partial<LedgerEntry> {
+  const key = values.key !== undefined && existsSync(values.key) ? resolve(values.key) : values.key
+  const fields = { sums: values.sums, sig: values.sig, key, etag: file.etag, lastModified: file.lastModified }
+
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined))
 }
 
 interface Checks {
@@ -279,7 +288,7 @@ function print(report: Report, url: string, json: boolean): void {
 }
 
 // Runs the script by its shebang, or with sh without one, on the terminal, and records it in the ledger once it succeeds.
-async function runScript(file: Downloaded, url: string, args: string[]): Promise<number> {
+async function runScript(file: Downloaded, url: string, args: string[], checked: Partial<LedgerEntry>): Promise<number> {
   const shebang = (await Bun.file(file.path).text()).startsWith('#!')
 
   chmodSync(file.path, 0o700)
@@ -291,7 +300,7 @@ async function runScript(file: Downloaded, url: string, args: string[]): Promise
 
   const { host, pathname } = new URL(url)
 
-  record({ kind: 'script', name: `${host}${pathname}`, url, sha256: file.sha256, at: new Date().toISOString() })
+  record({ kind: 'script', name: `${host}${pathname}`, url, sha256: file.sha256, at: new Date().toISOString(), ...checked, ...args.length > 0 ? { args } : {} })
 
   return 0
 }
