@@ -73,6 +73,11 @@ const WILDCARD_LABEL = /^\*\./
 // Main hosts become the worktree's; the lookbehind keeps api.booki.localhost whole and makes a second pass a no-op.
 export function rewriteHosts(text: string, routes: Route[], task: string): string {
   const hosts = [...new Set(routes.map(route => route.host.replace(WILDCARD_LABEL, '')))].sort((a, b) => b.length - a.length)
+
+  // An empty alternation would match the empty string between any two characters.
+  if (hosts.length === 0)
+    return text
+
   const pattern = new RegExp(`(?<![\\w.-])(\\.?)(${hosts.map(escapeRegExp).join('|')})(?![\\w.-])`, 'g')
 
   return text.replace(pattern, (_, dot: string, host: string) => `${dot}${worktreeHost(host, task)}`)
@@ -83,7 +88,7 @@ export function setEnvValue(text: string, key: string, value: string): string {
   const pattern = new RegExp(`^${escapeRegExp(key)}=.*$`, 'm')
 
   if (pattern.test(text))
-    return text.replace(pattern, line)
+    return text.replace(pattern, () => line)
 
   return `${text}${text === '' || text.endsWith('\n') ? '' : '\n'}${line}\n`
 }

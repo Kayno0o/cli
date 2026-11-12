@@ -42,6 +42,10 @@ describe('rewriteHosts', () => {
     expect(rewriteHosts(once, routes, 'planning')).toBe(once)
   })
 
+  test('leaves the text as it is when the project has no routes', () => {
+    expect(rewriteHosts('A=\nB=x\n\nC=1 2\n', [], 'planning')).toBe('A=\nB=x\n\nC=1 2\n')
+  })
+
   test('leaves hosts that merely end like a main host alone', () => {
     expect(rewriteHosts('A=https://notbooki.localhost\nB=https://booki.localhost.example\n', routes, 'planning')).toBe('A=https://notbooki.localhost\nB=https://booki.localhost.example\n')
   })
@@ -52,9 +56,21 @@ describe('setEnvValue', () => {
     expect(setEnvValue('A=1\nCOMPOSE_FILE=x.yml\nB=2\n', 'COMPOSE_FILE', 'x.yml:y.yml')).toBe('A=1\nCOMPOSE_FILE=x.yml:y.yml\nB=2\n')
   })
 
+  test('writes a value holding replacement patterns as it is', () => {
+    expect(setEnvValue('DB_PASS=old\n', 'DB_PASS', 'a$&b$\'c$`d$$e$1')).toBe('DB_PASS=a$&b$\'c$`d$$e$1\n')
+  })
+
   test('appends a missing key on its own line', () => {
     expect(setEnvValue('A=1', 'B', '2')).toBe('A=1\nB=2\n')
     expect(setEnvValue('', 'B', '2')).toBe('B=2\n')
+  })
+})
+
+describe('worktreeOf', () => {
+  test('names the stack as compose names the checkout folder, lower case and without dots', () => {
+    expect(worktreeOf({ ...project, root: '/w/Booki.Docker' }, 'planning').id).toBe('bookidocker--planning')
+    expect(worktreeOf({ ...project, root: '/w/_Booki' }, 'planning').id).toBe('booki--planning')
+    expect(worktreeOf(project, 'planning').id).toBe('booki-docker--planning')
   })
 })
 
