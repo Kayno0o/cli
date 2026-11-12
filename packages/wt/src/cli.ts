@@ -158,9 +158,9 @@ async function prune(options: GlobalOptions & { all?: boolean, yes?: boolean }):
 
 const ALL_OPTION = { type: 'boolean', description: 'every worktree of the project, one after the other' } as const
 
-const ADD_USAGE = `wt add <task> [branch] [--up] [-p <name>] [--bg]
+const ADD_USAGE = `wt add <task> [branch] [--from <ref>] [--up] [-p <name>] [--bg]
 
-Creates a worktree, copies its files and data from main, and routes its subdomains; --up starts its stack too. The task is a lowercase name, also the subdomain label; the branch defaults to wt/<task>.
+Creates a worktree, copies its files and data from main, and routes its subdomains; --up starts its stack too. The task is a lowercase name, also the subdomain label; the branch defaults to wt/<task>. A branch that does not exist yet forks from main's current commit, or from --from, and the output says which.
 
 Exits 0 once the worktree is ready (and up), 1 when it cannot be made, provisioned or started, 2 on a usage error.`
 
@@ -296,13 +296,14 @@ process.exitCode = await runCli({
         const { values, positionals: [task, branch] } = parse(args, ADD_USAGE, {
           project: PROJECT_OPTION,
           up: { type: 'boolean', description: 'start its stack once it is ready, as `wt up` does' },
+          from: { type: 'string', description: 'the commit, branch or tag a new branch forks from, main\'s current commit by default' },
           bg: BG_OPTION,
         }, { positionals: ['<task>', '[branch]'] })
 
         return guarded(async () => {
           const worktree = worktreeOf((await locate(process.cwd(), values.project)).project, task)
 
-          return asWorktreeJob(values.up ? 'add --up' : 'add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch]), ...(values.up ? ['--up'] : [])], async () => (await commands()).addTask(task, branch, values))
+          return asWorktreeJob(values.up ? 'add --up' : 'add', worktree, values, ['add', task, ...(branch === undefined ? [] : [branch]), ...(values.from === undefined ? [] : ['--from', values.from]), ...(values.up ? ['--up'] : [])], async () => (await commands()).addTask(task, branch, values))
         }, bgName(values, values.up ? 'add --up' : 'add', task))
       },
     },

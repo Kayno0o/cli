@@ -17,34 +17,80 @@ async function branchExists(repo: string, branch: string): Promise<boolean> {
   return (await git(repo, 'for-each-ref', '--format=%(refname)', `refs/remotes/*/${branch}`)).out !== ''
 }
 
-// A branch neither local nor remote is created from the repo's current HEAD; a remote one is checked out tracking it.
-async function onBranch(repo: string, dir: string, branch: string): Promise<{ ok: boolean, out: string }> {
-  return git(repo, 'worktree', 'add', ...await branchExists(repo, branch) ? [dir, branch] : ['-b', branch, dir])
+// What a new branch forks from, named as the user knows it: `main (1a2b3c4)`, the ref given, or `a detached HEAD (1a2b3c4)`.
+async function forkPoint(repo: string, from: string | undefined): Promise<string | undefined> {
+  const sha = await git(repo, 'rev-parse', '--short', `${from ?? 'HEAD'}^{commit}`)
+
+  if (!sha.ok)
+    return undefined
+
+  if (from !== undefined)
+    return `${from} (${sha.out})`
+
+  const name = (await git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')).out
+
+  return name === 'HEAD' ? `a detached HEAD (${sha.out})` : `${name} (${sha.out})`
+}
+
+// A branch neither local nor remote is created from `from`, the repo's current HEAD by default; one that exists, a remote one tracked, is checked out as it is. Says which, for the user to see where the work starts.
+async function onBranch(repo: string, dir: string, branch: string, from: string | undefined): Promise<{ ok: boolean, out: string, start: string }> {
+  if (await branchExists(repo, branch))
+    return { ...await git(repo, 'worktree', 'add', dir, branch), start: `on ${branch} as it is` }
+
+  const point = await forkPoint(repo, from)
+
+  if (point === undefined)
+    return { ok: false, out: `no commit ${from ?? 'HEAD'} in ${repo}`, start: '' }
+
+  return { ...await git(repo, 'worktree', 'add', '-b', branch, dir, ...from === undefined ? [] : [from]), start: `on ${branch}, forked from ${point}` }
 }
 
 // Every repo inside the root checks out the branch; the root does too when it is the only repo, and is detached otherwise, its nested repos holding the work.
-export async function addWorktrees(worktree: Worktree, branch: string): Promise<void> {
+/** Checks the worktree out, `from` the ref a new branch forks from; says where each repo starts, the root first. */
+export async function addWorktrees(worktree: Worktree, branch: string, from?: string): Promise<string[]> {
   const { project, dir } = worktree
 
   if (existsSync(dir))
     throw new WtError(`${dir} already exists: \`wt sync ${worktree.task} -p ${project.name}\` finishes it, \`wt rm ${worktree.task} -p ${project.name}\` removes it`)
 
+  if (from !== undefined) {
+    for (const repo of project.repos.length ? project.repos : ['.']) {
+      if (await branchExists(join(project.root, repo), branch))
+        throw new WtError(`${branch} already exists${repo === '.' ? '' : ` in ${repo}`}, so it is checked out as it is: drop --from, or name a new branch`)
+    }
+  }
+
   mkdirSync(dirname(dir), { recursive: true })
 
-  const root = project.repos.length ? await git(project.root, 'worktree', 'add', '--detach', dir) : await onBranch(project.root, dir, branch)
+  if (!project.repos.length) {
+    const root = await onBranch(project.root, dir, branch, from)
+
+    if (!root.ok)
+      throw new WtError(`git worktree add failed for the root:\n${root.out}`)
+
+    return [root.start]
+  }
+
+  const root = await git(project.root, 'worktree', 'add', '--detach', dir)
 
   if (!root.ok)
     throw new WtError(`git worktree add failed for the root:\n${root.out}`)
 
+  const starts: string[] = []
+
   for (const repo of project.repos) {
-    const added = await onBranch(join(project.root, repo), join(dir, repo), branch)
+    const added = await onBranch(join(project.root, repo), join(dir, repo), branch, from)
 
     if (!added.ok) {
       await removeWorktrees(worktree)
 
       throw new WtError(`git worktree add failed for ${repo}, rolled back:\n${added.out}`)
     }
+
+    starts.push(`${repo} ${added.start}`)
   }
+
+  return starts
 }
 
 export async function removeWorktrees(worktree: Worktree): Promise<void> {

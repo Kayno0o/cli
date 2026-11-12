@@ -46,12 +46,12 @@ async function removeVolumes(worktree: Worktree, anonymous: string[]): Promise<v
 }
 
 /** Creates the worktree, then starts its stack with `up`, else names the command that would. */
-export async function addTask(task: string, branch: string | undefined, options: GlobalOptions & { up?: boolean }): Promise<void> {
+export async function addTask(task: string, branch: string | undefined, options: GlobalOptions & { up?: boolean, from?: string }): Promise<void> {
   const { project } = await locate(process.cwd(), options.project)
   const worktree = worktreeOf(project, task)
   const checkout = branch ?? `wt/${task}`
 
-  await addWorktrees(worktree, checkout)
+  const starts = await addWorktrees(worktree, checkout, options.from)
 
   try {
     await syncWorktree(worktree)
@@ -70,7 +70,12 @@ export async function addTask(task: string, branch: string | undefined, options:
     throw error
   }
 
-  console.log(`wt: created ${worktree.dir} on ${checkout}`)
+  console.log(`wt: created ${worktree.dir}${project.repos.length ? '' : ` ${starts[0]!}`}`)
+
+  if (project.repos.length) {
+    for (const start of starts)
+      console.log(`    ${start}`)
+  }
 
   for (const url of urlsOf(worktree))
     console.log(`    ${url}`)

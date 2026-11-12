@@ -115,6 +115,37 @@ describe('addTask', () => {
     expect(sandbox.forbidden()).toEqual([])
   })
 
+  test('says what a new branch forks from, main\'s current commit or the ref --from names', async () => {
+    const { root, wt, git, dirOf } = env
+    const first = await git(root, 'rev-parse', '--short', 'HEAD')
+
+    await git(root, 'commit', '-q', '--allow-empty', '-m', 'second')
+
+    const second = await git(root, 'rev-parse', '--short', 'HEAD')
+    const fresh = await wt('add', 'planning')
+
+    expect(fresh.code).toBe(0)
+    expect(fresh.out).toContain(`on wt/planning, forked from main (${second})`)
+
+    const picked = await wt('add', 'other', '--from', 'HEAD~1')
+
+    expect(picked.code).toBe(0)
+    expect(picked.out).toContain(`on wt/other, forked from HEAD~1 (${first})`)
+    expect(await git(dirOf('other'), 'rev-parse', '--short', 'HEAD')).toBe(first)
+  })
+
+  test('refuses --from on a branch that already exists, before making anything', async () => {
+    const { root, wt, git, dirOf } = env
+
+    await git(root, 'branch', 'wt/planning')
+
+    const run = await wt('add', 'planning', '--from', 'main')
+
+    expect(run.code).toBe(1)
+    expect(run.err).toContain('wt/planning already exists, so it is checked out as it is: drop --from, or name a new branch')
+    expect(existsSync(dirOf('planning'))).toBe(false)
+  })
+
   test('reads main and the worktree through compose with the worktree\'s own project name, and the tidy env after', async () => {
     const { sandbox, wt, root, dirOf } = env
 
