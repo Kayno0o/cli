@@ -1,4 +1,4 @@
-import type { Worktree } from './project'
+import type { Project, Worktree } from './project'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { compose } from '@kaynooo/cli-kit'
@@ -198,6 +198,20 @@ export function overrideWarnings(worktree: Worktree, config: ComposeConfig): str
   }
 
   return warnings
+}
+
+/** The manifest's service names compose does not know, each a setting that would quietly do nothing (or fail `wt run`). */
+export function unknownServices(project: Project, config: ComposeConfig): string[] {
+  const named: [setting: string, names: string[]][] = [
+    ['skip', project.skip ?? []],
+    ['routeHosts', project.routeHosts ?? []],
+    ['routes', project.routes.filter(route => route.to !== 'client').map(route => SERVICE.exec(route.to)![0])],
+    ['run.service', project.run ? [project.run.service] : []],
+  ]
+
+  return named.flatMap(([setting, names]) => [...new Set(names)]
+    .filter(name => config.services[name] === undefined)
+    .map(name => `${project.name}: ${setting} names ${name}, which is not a service of ${config.name}`))
 }
 
 export async function runningProjects(): Promise<Set<string>> {

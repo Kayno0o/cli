@@ -1,6 +1,7 @@
 import type { Resolved } from './config'
 import { existsSync, readdirSync, realpathSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import { warn } from '@kaynooo/cli-kit'
 import { expandHome, fillTemplate, wtConfig } from './config'
 import { KnownError } from './errors'
 import { stringToPort } from './port'
@@ -93,8 +94,29 @@ export function worktreeHost(host: string, task: string): string {
   return host.startsWith('*.') ? `*.${task}.${host.slice(2)}` : `${task}.${host}`
 }
 
+const PROJECT_KEYS = new Set(['root', 'repos', 'copy', 'clone', 'link', 'skip', 'routeHosts', 'env', 'certs', 'setup', 'run', 'routes'])
+const RUN_KEYS = new Set(['service', 'dir', 'provision', 'dns', 'env'])
+
+// A misspelt key is ignored as if it were absent, so it is named rather than silently dropped.
+function warnUnknownKeys(name: string, config: ProjectConfig): void {
+  const unknown = [
+    ...Object.keys(config).filter(key => !PROJECT_KEYS.has(key)),
+    ...Object.keys(config.run ?? {}).filter(key => !RUN_KEYS.has(key)).map(key => `run.${key}`),
+  ]
+
+  for (const key of unknown)
+    warn(`${name}.ts: unknown key ${key}, ignored`)
+}
+
 // Caught when the manifest loads, not halfway through a `wt add` that has already cloned data.
 function assertValid(project: Project): void {
+  for (const repo of ['.', ...project.repos]) {
+    const dir = join(project.root, repo)
+
+    if (!existsSync(join(dir, '.git')))
+      throw new WtError(`${project.name}: ${repo === '.' ? `root ${dir}` : `repo ${repo}`} is not a git checkout${existsSync(dir) ? '' : ', the folder is missing'}`)
+  }
+
   for (const route of project.routes) {
     if (!ROUTE_TARGET.test(route.to))
       throw new WtError(`${project.name}: route ${route.host} goes to "${route.to}", expected "client" or "<service>:<port>"`)
@@ -112,6 +134,7 @@ export async function loadProjects(): Promise<Project[]> {
     const { default: config } = await import(join(settings.manifests, file)) as { default: ProjectConfig }
     const project = { ...config, root: expandHome(config.root), name: basename(file, '.ts'), settings }
 
+    warnUnknownKeys(project.name, config)
     assertValid(project)
 
     return project

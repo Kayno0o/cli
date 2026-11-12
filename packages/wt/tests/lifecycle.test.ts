@@ -115,6 +115,20 @@ describe('addTask', () => {
     expect(sandbox.forbidden()).toEqual([])
   })
 
+  test('warns about manifest settings naming a service compose does not know', async () => {
+    const { sandbox, wt } = env
+
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, skip: ['mailhog', 'ghost'], run: { service: 'php', dir: '.', provision: [] } })}\n`)
+
+    const run = await wt('add', 'planning')
+
+    expect(run.code).toBe(0)
+    expect(run.err).toContain('times: skip names ghost, which is not a service of times')
+    expect(run.err).toContain('times: run.service names php, which is not a service of times')
+    expect(run.err).not.toContain('names mailhog')
+    expect(run.err).not.toContain('names api-php')
+  })
+
   test('says what a new branch forks from, main\'s current commit or the ref --from names', async () => {
     const { root, wt, git, dirOf } = env
     const first = await git(root, 'rev-parse', '--short', 'HEAD')
@@ -455,8 +469,14 @@ describe('commands checking their target before any job', () => {
 
   afterAll(() => env?.stop())
 
+  // A manifest of a second project checked out at `root`, under the sandbox's home
+  const other = (root: string, extra: object = {}) => {
+    mkdirSync(join(env.sandbox.home, root, '.git'), { recursive: true })
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: `~/${root}`, ...extra })}\n`)
+  }
+
   test('refuse two projects whose checkout folders compose names alike, as their worktrees would share stacks', async () => {
-    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/Times.' })}\n`)
+    other('Elsewhere/Times.')
 
     const run = await env.wt('up', 'planning')
 
@@ -465,12 +485,36 @@ describe('commands checking their target before any job', () => {
   })
 
   test('refuse a checkout folder that leaves compose no stack name', async () => {
-    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/__' })}\n`)
+    other('Elsewhere/__')
 
     const run = await env.wt('up', 'planning')
 
     expect(run.code).toBe(1)
     expect(run.err).toContain('other.ts: the checkout folder __ holds no letter or digit')
+  })
+
+  test('refuse a manifest whose root or repos are no git checkout, as git worktree add would fail late', async () => {
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Gone' })}\n`)
+
+    expect((await env.wt('up', 'planning')).err).toContain(`other: root ${join(env.sandbox.home, 'Gone')} is not a git checkout, the folder is missing`)
+
+    other('Elsewhere/other', { repos: ['api'] })
+    mkdirSync(join(env.sandbox.home, 'Elsewhere', 'other', 'api'))
+
+    const run = await env.wt('up', 'planning')
+
+    expect(run.code).toBe(1)
+    expect(run.err).toContain('other: repo api is not a git checkout\n')
+  })
+
+  test('warns about a key the manifest does not know, naming it, and goes on', async () => {
+    other('Elsewhere/other', { skp: ['web'], run: { service: 'php', dir: '.', provision: [], dsn: '1.1.1.1' } })
+
+    const run = await env.wt('path', '-p', 'other')
+
+    expect(run.code).toBe(0)
+    expect(run.err).toContain('other.ts: unknown key skp, ignored')
+    expect(run.err).toContain('other.ts: unknown key run.dsn, ignored')
   })
 
   test.each([
