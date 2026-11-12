@@ -50,6 +50,12 @@ describe('pick fzf options', () => {
     expect(pick(['--read0', '--print0', '--multi', '--filter', 'a'], 'a b\0xa\0c\0')).toMatchObject({ code: 0, out: 'a b\0xa\0' })
   })
 
+  test('prints a line that is not UTF-8 as the bytes it came in', () => {
+    const result = Bun.spawnSync([process.execPath, CLI, '--read0', '--print0', '--filter', 'caf'], { stdin: new Uint8Array([0x63, 0x61, 0x66, 0xE9, 0, 0x62, 0]), stdout: 'pipe', stderr: 'pipe' })
+
+    expect([...result.stdout]).toEqual([0x63, 0x61, 0x66, 0xE9, 0])
+  })
+
   test('--header and --with-nth are accepted', () => {
     expect(pick(['--header', 'Pick one', '--with-nth', '2', '--filter', 'b'], 'a b\n')).toMatchObject({ code: 0, out: 'a b\n' })
   })

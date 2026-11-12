@@ -33,11 +33,27 @@ const OPTIONS = {
   'json': jsonOption('{picked: [lines]}, the choice or the marked lines in input order'),
 } as const
 
-function print(chosen: string[], json: boolean, end: string): void {
+// The chosen lines as JSON, or each as the bytes it came in (a name that is not UTF-8 kept as it is) followed by `end`.
+function print(chosen: string[], json: boolean, end: string, bytesOf: Map<string, Uint8Array>): void {
   if (json)
     printJson({ picked: chosen })
   else
-    process.stdout.write(chosen.map(line => line + end).join(''))
+    process.stdout.write(Buffer.concat(chosen.flatMap(line => [bytesOf.get(line) ?? Buffer.from(line), Buffer.from(end)])))
+}
+
+// The non-empty runs of bytes between separators.
+function splitBytes(bytes: Uint8Array, separator: number): Uint8Array[] {
+  const parts: Uint8Array[] = []
+  let start = 0
+
+  for (let at = bytes.indexOf(separator); at !== -1; at = bytes.indexOf(separator, start)) {
+    parts.push(bytes.subarray(start, at))
+    start = at + 1
+  }
+
+  parts.push(bytes.subarray(start))
+
+  return parts.filter(part => part.length > 0)
 }
 
 async function main(args: string[]): Promise<number> {
@@ -73,7 +89,16 @@ async function main(args: string[]): Promise<number> {
     badUsage(`--delimiter is a regex, not ${values.delimiter}`)
   }
 
-  const lines = (await Bun.stdin.text()).split(values.read0 === true ? '\0' : '\n').filter(line => line !== '')
+  // Lines are matched as text and printed as the bytes they came in.
+  const raw = splitBytes(await Bun.stdin.bytes(), values.read0 === true ? 0 : 10)
+  const decoder = new TextDecoder()
+  const lines = raw.map(bytes => decoder.decode(bytes))
+  const bytesOf = new Map<string, Uint8Array>()
+
+  for (const [index, line] of lines.entries()) {
+    if (!bytesOf.has(line))
+      bytesOf.set(line, raw[index]!)
+  }
 
   if (lines.length === 0)
     fail('nothing to pick from', 1)
@@ -89,13 +114,13 @@ async function main(args: string[]): Promise<number> {
 
   // Nobody to choose, so the lines the query matches are the choice: all of them with --multi or --filter, else the first.
   if (values.filter !== undefined || !process.stderr.isTTY) {
-    print(values.multi === true || values.filter !== undefined ? matching : matching.slice(0, 1), json, end)
+    print(values.multi === true || values.filter !== undefined ? matching : matching.slice(0, 1), json, end, bytesOf)
 
     return 0
   }
 
   if (values['select-1'] === true && matching.length === 1) {
-    print(matching, json, end)
+    print(matching, json, end, bytesOf)
 
     return 0
   }
@@ -106,7 +131,7 @@ async function main(args: string[]): Promise<number> {
   if (picked === undefined)
     return 130
 
-  print(picked.rows.map(row => row.hidden[0]!), json, end)
+  print(picked.rows.map(row => row.hidden[0]!), json, end, bytesOf)
 
   return 0
 }
