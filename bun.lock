@@ -87,7 +87,7 @@
     },
     "packages/dl": {
       "name": "@kaynooo/cli-dl",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "bin": {
         "dl": "./dist/cli.js",
       },
