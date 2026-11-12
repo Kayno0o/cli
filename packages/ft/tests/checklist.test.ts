@@ -32,6 +32,12 @@ describe('boxes in code and odd text', () => {
     expect(texts('~~~\n```\n- [ ] inside\n~~~\n- [ ] out')).toEqual(['out'])
   })
 
+  test('a backtick line whose info string holds a backtick is an inline span, opening no fence', () => {
+    expect(texts('```code``` then text\n- [ ] a')).toEqual(['a'])
+    expect(texts('````js `x`\n- [ ] a')).toEqual(['a'])
+    expect(texts('~~~ `x`\n- [ ] inside\n~~~\n- [ ] out')).toEqual(['out'])
+  })
+
   test('four spaces after a paragraph are code, but under a list item they nest', () => {
     expect(texts('text\n\n    - [ ] code')).toEqual([])
     expect(texts('- [ ] a\n    - [ ] nested')).toEqual(['a', 'nested'])

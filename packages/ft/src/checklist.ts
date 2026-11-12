@@ -1,6 +1,7 @@
 // The dotAll flag keeps a U+2028 or U+2029 in a box's text from ending the match.
 const BOX = /^(\s*[-*+] \[)([ x])(\]\s)(.*?)\r?$/is
-const FENCE = /^\s*(`{3,}|~{3,})/
+// A backtick fence's info string holds no backtick, so a line opening on an inline code span is a paragraph.
+const FENCE = /^\s*(`{3,}(?!.*`)|~{3,})/
 const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s/
 const INDENT_CODE = /^(?: {4}|\t)/
 
