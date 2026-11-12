@@ -1,11 +1,13 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
+import { copyFileSync, existsSync, renameSync, rmSync } from 'node:fs'
+import { isAbsolute, join, relative } from 'node:path'
 import process from 'node:process'
 import { exitCodeOf, fail, holdSignals, jsonOption, parse, printError, printJson, runHint, runMain } from '@kaynooo/cli-kit'
 import { git } from './git'
 import { commitMessageViolation, RULE, TICKET } from './message'
 
-const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged\n\nExits 0 when it committed, 1 when the message is refused or git fails (nothing is committed), 2 on a usage error or outside a git repository, 128 plus the signal when interrupted.'
+const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged; a merge, cherry-pick or revert in progress is refused, as git commits it only whole\n\nExits 0 when it committed, 1 when the message is refused, a merge, cherry-pick or revert is in progress, or git fails (nothing is committed, the index is put back as it was), 2 on a usage error or outside a git repository, 128 plus the signal when interrupted.'
 
 const OPTIONS = {
   message: { type: 'string', short: 'm', multiple: true, description: 'a line on what changed, at most two' },
@@ -16,6 +18,9 @@ const OPTIONS = {
 
 const RENAME = /^[RC]\d*$/
 const NOT_A_REPOSITORY = /not a git repository/i
+const TRAILING_SLASHES = /\/+$/
+// What git can be in the middle of that it commits only whole, and what finishes it.
+const SEQUENCES = [['MERGE_HEAD', 'a merge', 'gm --continue'], ['CHERRY_PICK_HEAD', 'a cherry-pick', 'git cherry-pick --continue'], ['REVERT_HEAD', 'a revert', 'git revert --continue']] as const
 // Every path given is a file name, never a glob or a pathspec magic like :(top).
 const LITERAL = { ...process.env, GIT_LITERAL_PATHSPECS: '1' }
 
@@ -35,15 +40,19 @@ async function checked(args: string[]): Promise<string> {
 
 // The paths staged beyond the given ones, which a plain commit would carry along.
 async function stagedElsewhere(paths: string[]): Promise<string[]> {
-  const [all, given] = await Promise.all([checked(['diff', '--cached', '--name-only', '-z']), checked(['diff', '--cached', '--name-only', '-z', '--', ...paths])])
+  const [all, given] = await Promise.all([checked(['diff', '--cached', '--name-only', '--no-relative', '-z']), checked(['diff', '--cached', '--name-only', '--no-relative', '-z', '--', ...paths])])
   const ours = new Set(given.split('\0'))
 
   return all.split('\0').filter(path => path !== '' && !ours.has(path))
 }
 
-// The old side of each staged rename whose new side is among the given paths: a rename is one change, which a pathspec on the new side alone would split.
+// The old side of each staged rename whose new side the given paths cover, relative to the current folder: a rename is one change, which a pathspec on the new side alone would split.
 async function renameSources(paths: string[]): Promise<string[]> {
-  const fields = (await checked(['diff', '--cached', '-M', '--name-status', '-z'])).split('\0')
+  const [top = '', prefix = ''] = (await checked(['rev-parse', '--show-toplevel', '--show-prefix'])).split('\n')
+  // Each path as git names it from the repository top, a folder covering what it holds.
+  const specs = paths.map(path => (isAbsolute(path) ? relative(top, path) : join(prefix, path)).replace(TRAILING_SLASHES, '') || '.')
+  const covered = (name: string) => specs.some(spec => spec === '.' || name === spec || name.startsWith(`${spec}/`))
+  const fields = (await checked(['diff', '--cached', '-M', '--name-status', '--no-relative', '-z'])).split('\0')
   const sources: string[] = []
 
   for (let i = 0; i < fields.length; i++) {
@@ -53,8 +62,8 @@ async function renameSources(paths: string[]): Promise<string[]> {
     const from = fields[i + 1] ?? ''
     const to = fields[i + 2] ?? ''
 
-    if (paths.includes(to) && !paths.includes(from))
-      sources.push(from)
+    if (covered(to) && !covered(from))
+      sources.push(relative(prefix, from))
 
     i += 2
   }
@@ -62,11 +71,26 @@ async function renameSources(paths: string[]): Promise<string[]> {
   return sources
 }
 
-// Puts the index back as it was for the given paths after a refused commit.
-async function unstage(paths: string[]): Promise<void> {
-  const hasHead = (await git(['rev-parse', '--verify', '-q', 'HEAD'], LITERAL)).code === 0
+// The merge, cherry-pick or revert git is in the middle of, if any.
+async function inProgress(): Promise<typeof SEQUENCES[number] | undefined> {
+  const found = await Promise.all(SEQUENCES.map(async ([ref]) => (await git(['rev-parse', '-q', '--verify', ref])).code === 0))
 
-  await git(hasHead ? ['reset', '-q', '--', ...paths] : ['rm', '-r', '-q', '--cached', '--', ...paths], LITERAL)
+  return SEQUENCES.find((_, i) => found[i])
+}
+
+// A copy of the index as gc found it, put back when no commit happens: a reset of the paths would drop what was staged on them before, a merge's resolution included.
+async function snapshotIndex(): Promise<{ restore: () => void, drop: () => void }> {
+  const index = (await checked(['rev-parse', '--path-format=absolute', '--git-path', 'index'])).trim()
+  const copy = `${index}.gc-${process.pid}`
+  const existed = existsSync(index)
+
+  if (existed)
+    copyFileSync(index, copy)
+
+  return {
+    restore: () => existed ? renameSync(copy, index) : rmSync(index, { force: true }),
+    drop: () => rmSync(copy, { force: true }),
+  }
 }
 
 function fileLine(line: string): string {
@@ -103,6 +127,11 @@ async function main(argv: string[]): Promise<number> {
   if (violation !== null)
     fail(`nothing staged: ${violation}`, 1)
 
+  const sequence = await inProgress()
+
+  if (sequence !== undefined)
+    fail(`nothing staged: ${sequence[1]} is in progress, which git commits only whole`, 1, runHint(sequence[2], `finish ${sequence[1]}`))
+
   const statuses = await Promise.all(given.map(async path => checked(['status', '--porcelain', '--untracked-files=all', '--', path])))
   const unchanged = given.filter((_, i) => statuses[i] === '')
   // A path whose only change is a staged deletion (a git rm, the old side of a git mv) is in neither the tree nor the index, so git add refuses it, while commit --only still takes it.
@@ -118,6 +147,7 @@ async function main(argv: string[]): Promise<number> {
   if (others.length > 0)
     fail(`nothing staged: the index already holds ${others.join(', ')}, which this commit would carry along`, 1, runHint(`git restore --staged -- ${others.join(' ')}`, 'unstage them, or name them in the paths too'))
 
+  const index = await snapshotIndex()
   const signals = holdSignals()
 
   try {
@@ -125,7 +155,7 @@ async function main(argv: string[]): Promise<number> {
       await checked(['add', '--', ...addable])
 
     if (signals.signal !== undefined) {
-      await unstage(paths)
+      index.restore()
 
       return exitCodeOf(null, signals.signal)
     }
@@ -134,9 +164,9 @@ async function main(argv: string[]): Promise<number> {
     const commit = await git(['commit', '--only', '--cleanup=whitespace', '-m', message, '--', ...paths.map(path => `:(literal)${path}`)])
 
     if (commit.code !== 0) {
-      await unstage(paths)
+      index.restore()
 
-      const refusal = `git commit failed, the paths were unstaged:\n${(commit.stderr + commit.stdout).trim()}`
+      const refusal = `git commit failed, the index was put back as it was:\n${(commit.stderr + commit.stdout).trim()}`
 
       if (values.json === true)
         fail(refusal, 1)
@@ -165,6 +195,7 @@ async function main(argv: string[]): Promise<number> {
     return signals.signal === undefined ? 0 : exitCodeOf(null, signals.signal)
   }
   finally {
+    index.drop()
     signals.release()
   }
 }

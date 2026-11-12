@@ -264,8 +264,55 @@ describe('gc', () => {
     const result = gc('fix: a', '--', 'a.ts')
 
     expect(result.code).toBe(1)
-    expect(result.err).toContain('git commit failed, the paths were unstaged')
+    expect(result.err).toContain('git commit failed, the index was put back as it was')
     expect(git('status', '--porcelain')).toBe('?? a.ts')
+  })
+
+  test('a refused commit leaves what was staged on a path before staged', () => {
+    mkdirSync(join(dir, '.git/hooks'), { recursive: true })
+    writeFileSync(join(dir, '.git/hooks/pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+    file('base.ts', 'staged\n')
+    git('add', 'base.ts')
+    file('base.ts', 'worktree\n')
+
+    expect(gc('fix: base', '--', 'base.ts').code).toBe(1)
+    expect(git('show', ':base.ts')).toBe('staged')
+    expect(git('status', '--porcelain')).toBe('MM base.ts')
+  })
+
+  test('refuses a merge in progress before staging, its resolution left as it was', () => {
+    git('checkout', '-q', '-b', 'feat')
+    file('base.ts', 'feat\n')
+    git('commit', '-q', '-am', 'feat')
+    git('checkout', '-q', 'main')
+    file('base.ts', 'main\n')
+    git('commit', '-q', '-am', 'main')
+    git('merge', 'feat')
+    file('base.ts', 'resolved\n')
+    const result = gc('fix: resolve', '--', 'base.ts')
+
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('nothing staged: a merge is in progress, which git commits only whole')
+    expect(result.err).toContain('hint: run `gm --continue` to finish a merge')
+    expect(git('status', '--porcelain')).toBe('UU base.ts')
+  })
+
+  test('from a subfolder, or given a folder, commits the old side of a rename too', () => {
+    mkdirSync(join(dir, 'sub'))
+    file('sub/old.ts')
+    git('add', 'sub/old.ts')
+    git('commit', '-q', '-m', 'chore: old')
+    git('mv', 'sub/old.ts', 'sub/new.ts')
+    const fromSub = Bun.spawnSync([process.execPath, GC, 'refactor: rename', '--', 'new.ts'], { cwd: join(dir, 'sub'), env: ENV, stdout: 'pipe', stderr: 'pipe' })
+
+    expect(fromSub.exitCode).toBe(0)
+    expect(fromSub.stdout.toString()).toContain('also committed old.ts')
+    expect(git('status', '--porcelain')).toBe('')
+
+    git('mv', 'base.ts', 'sub/base2.ts')
+
+    expect(gc('refactor: move base', '--', 'sub/').code).toBe(0)
+    expect(git('status', '--porcelain')).toBe('')
   })
 
   test('a hook globbing the index still sees the new file, the literal pathspecs staying out of its environment', () => {

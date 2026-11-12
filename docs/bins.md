@@ -227,7 +227,7 @@ gb -d old  # delete a merged local branch
 
 ## gc
 
-commits exactly the paths given, its message checked before anything is staged. Package `git`.
+commits exactly the paths given, its message checked before anything is staged; a merge, cherry-pick or revert in progress is refused, as git commits it only whole. Package `git`.
 
 Instead of: git add, git status and git commit chained
 
