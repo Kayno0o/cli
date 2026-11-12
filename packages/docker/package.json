@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-docker",
   "type": "module",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "dc, dx, dlog and sf: docker compose on the stack found here, including one only its containers tell of, a compose service's shell, logs, restart, stop or rebuild, every service's health and recent errors in one call, and a Symfony console command picked and run.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
