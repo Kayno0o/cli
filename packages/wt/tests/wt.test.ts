@@ -12,7 +12,7 @@ import { addWorktrees, currentBranch, isRegistered, unreachableCommits } from '.
 import { changedFiles } from '../src/list'
 import { listTasks, worktreeHost, worktreeOf } from '../src/project'
 import { inLine, liveTickets } from '../src/queue'
-import { runPlan, testDatabase } from '../src/run'
+import { runInputs, runPlan, testDatabase } from '../src/run'
 
 const routes: Route[] = [
   { host: 'booki.localhost', to: 'client' },
@@ -223,7 +223,8 @@ describe('runPlan', () => {
   const run = { service: 'booki-php', dir: 'api', provision: [], env: { COMPOSER_HOME: '/tmp/composer', APP_ENV: 'test' } }
   const database = { host: 'igesa-db', port: 5432, user: 'booki', password: 'secret' }
   const worktree = worktreeOf(project, 'big-task')
-  const plan = runPlan(worktree, run, config, database, { uid: 1000, gid: 1001 })
+  const inputs = runInputs(worktree.project.root, run, config, database.host)
+  const plan = runPlan(worktree, run, inputs, database, { uid: 1000, gid: 1001 })
 
   test('starts a project-wide Postgres on a network of its own, answering to the test host, its password kept off the command line', () => {
     expect(plan.network).toBe('wt-booki-test')
@@ -280,14 +281,14 @@ describe('runPlan', () => {
   })
 
   test('gives the container the resolver the manifest names', () => {
-    const runner = runPlan(worktree, { ...run, dns: '127.0.0.1' }, config, database, { uid: 1000, gid: 1001 }).runner(['true'])
+    const runner = runPlan(worktree, { ...run, dns: '127.0.0.1' }, inputs, database, { uid: 1000, gid: 1001 }).runner(['true'])
 
     expect(runner.slice(runner.indexOf('--network'), runner.indexOf('-u'))).toEqual(['--network', 'wt-booki-test', '--dns', '127.0.0.1'])
   })
 
   test('refuses a service that does not mount the run dir, and a database host no service answers to', () => {
-    expect(() => runPlan(worktree, { ...run, dir: 'client' }, config, database, { uid: 1, gid: 1 })).toThrow('does not bind-mount /w/booki-docker/client')
-    expect(() => runPlan(worktree, run, config, { ...database, host: 'elsewhere' }, { uid: 1, gid: 1 })).toThrow('no service of booki-docker answers to elsewhere')
+    expect(() => runInputs(worktree.project.root, { ...run, dir: 'client' }, config, database.host)).toThrow('does not bind-mount /w/booki-docker/client')
+    expect(() => runInputs(worktree.project.root, run, config, 'elsewhere')).toThrow('no service of booki-docker answers to elsewhere')
   })
 })
 

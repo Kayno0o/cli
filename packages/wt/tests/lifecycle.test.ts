@@ -790,6 +790,40 @@ describe('a config runner naming no executable', () => {
   }, 30_000)
 })
 
+describe('wt run', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+  })
+
+  afterAll(() => env?.stop())
+
+  test('a repeat on an unchanged stack makes one docker call before the command', async () => {
+    const { sandbox, wt, dirOf, root } = env
+    const manifest = join(sandbox.home, '.config', 'wt', 'projects', 'times.ts')
+
+    writeFileSync(manifest, `export default ${JSON.stringify({ ...MANIFEST, run: { service: 'api-php', dir: 'api', provision: ['true'] } })}\n`)
+    expect((await wt('add', 'planning')).code).toBe(0)
+    writeFileSync(join(dirOf('planning'), 'api', '.env.dist'), 'DATABASE_URL=postgresql://app:pw@db:5432/app\n')
+    sandbox.seed('config-times.json', JSON.stringify({ ...MAIN_CONFIG, services: { ...MAIN_CONFIG.services, 'api-php': { volumes: [{ type: 'bind', source: join(root, 'api'), target: '/app' }] }, 'db': { image: 'postgres:16' } } }))
+    sandbox.seed('test-db-id', 'abcdef1234567890')
+
+    const commands = () => sandbox.dockerCalls().map(call => call.args).filter(args => !args.startsWith('run --rm') || args.endsWith(' check'))
+
+    const added = commands().length
+
+    expect((await wt('run', 'planning', '--', 'check')).code).toBe(0)
+
+    const first = commands()
+
+    expect(first.slice(added).filter(args => args.startsWith('compose config'))).toHaveLength(1)
+    expect((await wt('run', 'planning', '--', 'check')).code).toBe(0)
+    expect(commands().slice(first.length).map(args => args.split(' ').slice(0, 2).join(' '))).toEqual(['exec wt-times-test-db', 'run --rm'])
+  }, 30_000)
+})
+
 describe('a wt config that does not load', () => {
   let env: Awaited<ReturnType<typeof timesSandbox>>
 

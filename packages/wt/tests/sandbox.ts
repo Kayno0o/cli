@@ -52,6 +52,7 @@ case "$1" in
     esac ;;
   exec)
     case "$*" in
+      *pg_isready*hostname*) [ -s "$d/test-db-id" ] || exit 1; head -c 12 "$d/test-db-id"; echo ;;
       *pg_database*) list databases ;;
       *dropdb*)
         eval "name=\\\${$#}"

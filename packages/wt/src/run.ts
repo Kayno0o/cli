@@ -1,10 +1,10 @@
 import type { ComposeConfig } from './compose'
 import type { RunConfig, Worktree } from './project'
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { userInfo } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { $ } from 'bun'
-import { composeConfig } from './compose'
+import { baseComposeFiles, composeConfig } from './compose'
 import { wtConfig } from './config'
 import { readEnvFile } from './env_file'
 import { assertWorktreeExists, locateWorktree, WtError } from './project'
@@ -16,6 +16,13 @@ export interface TestDatabase {
   port: number
   user: string
   password: string
+}
+
+// What a run needs of main's compose config: where the service mounts the run dir, its image, and the test database's image.
+export interface RunInputs {
+  target: string
+  image: string
+  databaseImage: string
 }
 
 export interface RunPlan {
@@ -63,19 +70,60 @@ function databaseImage(config: ComposeConfig, host: string): string {
   return service.image
 }
 
-// The worktree's `dir` goes where the service mounts main's, so the image finds it where it expects; the database is one container per project, on a network of its own, so neither touches the user's stack.
-export function runPlan(worktree: Worktree, run: RunConfig, config: ComposeConfig, database: TestDatabase, ids: { uid: number, gid: number } = userInfo(), tty = false): RunPlan {
+export function runInputs(root: string, run: RunConfig, config: ComposeConfig, host: string): RunInputs {
   const service = config.services[run.service]
 
   if (!service)
     throw new WtError(`${config.name} has no service ${run.service}`)
 
-  const source = join(worktree.project.root, run.dir)
+  const source = join(root, run.dir)
   const target = service.volumes?.find(volume => volume.type === 'bind' && volume.source === source)?.target
 
   if (target === undefined)
     throw new WtError(`${run.service} does not bind-mount ${source}, so wt cannot tell where the worktree's copy goes`)
 
+  return { target, image: service.image ?? `${config.name}-${run.service}`, databaseImage: databaseImage(config, host) }
+}
+
+// The files main's compose config is read from, each with its size and time, unless one is missing.
+function inputsKey(root: string, overrides: string, run: RunConfig, host: string): string | undefined {
+  try {
+    const files = ['.env', ...baseComposeFiles(root, overrides)].map(file => resolve(root, file))
+
+    return JSON.stringify([run.service, run.dir, host, ...files.map(file => [file, statSync(file).mtimeMs, statSync(file).size])])
+  }
+  catch {
+    return undefined
+  }
+}
+
+// Kept until main's .env or compose files change, so a repeated run skips `docker compose config`.
+async function cachedRunInputs(worktree: Worktree, run: RunConfig, host: string): Promise<RunInputs> {
+  const { root, name, settings } = worktree.project
+  const file = join(settings.state, `${name}.run.json`)
+  const key = inputsKey(root, settings.overrides, run, host)
+
+  try {
+    const cached = JSON.parse(readFileSync(file, 'utf8')) as { key: string, inputs: RunInputs }
+
+    if (key !== undefined && cached.key === key)
+      return cached.inputs
+  }
+  catch {}
+
+  const inputs = runInputs(root, run, await composeConfig(root), host)
+
+  if (key !== undefined) {
+    mkdirSync(settings.state, { recursive: true })
+    writeFileSync(file, JSON.stringify({ key, inputs }))
+  }
+
+  return inputs
+}
+
+// The worktree's `dir` goes where the service mounts main's, so the image finds it where it expects; the database is one container per project, on a network of its own, so neither touches the user's stack.
+export function runPlan(worktree: Worktree, run: RunConfig, inputs: RunInputs, database: TestDatabase, ids: { uid: number, gid: number } = userInfo(), tty = false): RunPlan {
+  const { target } = inputs
   const network = `wt-${worktree.project.name}-test`
   const container = testContainer(worktree)
 
@@ -99,7 +147,7 @@ export function runPlan(worktree: Worktree, run: RunConfig, config: ComposeConfi
       'POSTGRES_PASSWORD',
       '-e',
       `PGPORT=${database.port}`,
-      databaseImage(config, database.host),
+      inputs.databaseImage,
     ],
     runner: command => [
       'run',
@@ -122,7 +170,7 @@ export function runPlan(worktree: Worktree, run: RunConfig, config: ComposeConfi
       `${join(worktree.dir, run.dir)}:${target}`,
       '-w',
       target,
-      service.image ?? `${config.name}-${run.service}`,
+      inputs.image,
       ...command,
     ],
   }
@@ -132,6 +180,13 @@ async function runningId(container: string): Promise<string | undefined> {
   const result = await $`docker inspect --format ${'{{if .State.Running}}{{.Id}}{{end}}'} ${container}`.quiet().nothrow()
 
   return result.text().trim() || undefined
+}
+
+// The running database's id when it already answers, in one docker call: pg_isready, then its hostname, which Docker sets to the container's short id.
+async function answeringDatabase(plan: RunPlan, database: TestDatabase): Promise<string | undefined> {
+  const result = await $`docker exec ${plan.container} sh -c ${'pg_isready -q -h 127.0.0.1 -U "$1" && hostname'} sh ${database.user}`.quiet().nothrow()
+
+  return result.exitCode === 0 ? result.text().trim() || undefined : undefined
 }
 
 // Started once and shared by the project's worktrees until it is removed; its data lives in memory, so a restart means fresh databases.
@@ -228,7 +283,7 @@ async function provision(worktree: Worktree, run: RunConfig, plan: RunPlan, data
 
 export async function runTask(task: string, command: string[], project?: string): Promise<number> {
   const worktree = await locateWorktree(process.cwd(), task, project)
-  const { run, name, root } = worktree.project
+  const { run, name } = worktree.project
 
   assertWorktreeExists(worktree)
 
@@ -236,9 +291,9 @@ export async function runTask(task: string, command: string[], project?: string)
     throw new WtError(`${name} has no \`run\` in its manifest, so wt cannot tell which service runs its tests`)
 
   const database = testDatabase(join(worktree.dir, run.dir))
-  const plan = runPlan(worktree, run, await composeConfig(root), database, userInfo(), Boolean(process.stdin.isTTY && process.stdout.isTTY))
+  const plan = runPlan(worktree, run, await cachedRunInputs(worktree, run, database.host), database, userInfo(), Boolean(process.stdin.isTTY && process.stdout.isTTY))
 
-  await provision(worktree, run, plan, await ensureDatabase(plan, database))
+  await provision(worktree, run, plan, await answeringDatabase(plan, database) ?? await ensureDatabase(plan, database))
 
   return runInherit(['docker', ...plan.runner(command)])
 }
