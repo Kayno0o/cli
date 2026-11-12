@@ -327,3 +327,15 @@ describe('exits', () => {
     expect(description('x: does x', { exits }).exits).toEqual([{ code: 0, meaning: 'clean' }, { code: 1, meaning: 'a finding' }, { code: 12, meaning: 'a usage error' }])
   })
 })
+
+describe('Exit', () => {
+  test('is recognised when thrown by another copy of kit, a subclass still checked by its prototype', async () => {
+    const specifier = '../src/args.ts?second-copy'
+    const copy = await import(specifier) as typeof import('../src/args')
+
+    expect(new copy.Exit('stop', 3)).toBeInstanceOf(Exit)
+    expect(new copy.UsageError('bad')).toBeInstanceOf(Exit)
+    expect(new Exit('stop', 3)).not.toBeInstanceOf(UsageError)
+    expect(new Error('x')).not.toBeInstanceOf(Exit)
+  })
+})

@@ -36,10 +36,22 @@ export function copyOption(what: string) {
   return { type: 'boolean', description: `also copy ${what} to the clipboard` } as const
 }
 
+const EXIT = Symbol.for('@kaynooo/cli-kit/Exit')
+
 // Thrown to end a command with this exit code and message, which runCli prints as `error: <cli> <command>: <message>`, the hint on a line of its own.
 export class Exit extends Error {
+  readonly [EXIT] = true
+
   constructor(message: string, readonly code: number, readonly hint?: string) {
     super(message)
+  }
+
+  // A bin and a lib it uses can each bring their own copy of kit, so Exit is recognised by a registry-wide brand; subclasses keep the plain prototype check.
+  static override [Symbol.hasInstance](value: unknown): boolean {
+    if (this !== Exit)
+      return Function.prototype[Symbol.hasInstance].call(this, value)
+
+    return typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[EXIT] === true
   }
 }
 
