@@ -36,8 +36,8 @@ function flatten(value: unknown, path: string, into: Map<string, string>): void 
   into.set(path, value === null || value === undefined ? '' : String(value))
 }
 
-// The keys of a JSON, YAML or TOML file as dotted paths to their values, `name` naming it in a refusal.
-export function parseStructured(name: string, text: string): Map<string, string> {
+/** The value a JSON, YAML or TOML file holds, refused unless it holds keys, `name` naming it in a refusal. */
+export function parseStructuredValue(name: string, text: string): unknown {
   const [format, parse] = PARSERS[extname(name).toLowerCase()] ?? []
 
   if (format === undefined || parse === undefined)
@@ -55,9 +55,14 @@ export function parseStructured(name: string, text: string): Map<string, string>
   if (!Array.isArray(parsed) && !isRecord(parsed))
     fail(`${name} holds a single ${format} value, no keys`)
 
+  return parsed
+}
+
+// The keys of a JSON, YAML or TOML file as dotted paths to their values.
+export function parseStructured(name: string, text: string): Map<string, string> {
   const into = new Map<string, string>()
 
-  flatten(parsed, '', into)
+  flatten(parseStructuredValue(name, text), '', into)
 
   return into
 }

@@ -67,14 +67,14 @@ export function assertReadableName(path: string, redact = `ev redact < ${path}`)
     notDotenv(`${path} is ${format}`, redact)
 }
 
-// ev writes dotenv files only, so any other format is refused before ev reads a file to write it.
+// Past set and unset, ev writes dotenv files only, so any other format is refused before ev reads a file to write it.
 export function assertDotenvName(path: string, redact = `ev redact < ${path}`): void {
   assertReadableName(path, redact)
 
   const format = structuredFormat(path)
 
   if (format !== undefined)
-    fail(`${path} is ${format}, which ev reads but does not write: it writes dotenv files (KEY=value lines)`)
+    fail(`${path} is ${format}, which ev set and unset edit while the other commands that write take dotenv files (KEY=value lines)`)
 }
 
 // A file named on the command line is refused when it holds lines but no assignment, rather than read as empty.

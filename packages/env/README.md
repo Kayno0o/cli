@@ -16,6 +16,7 @@ bun install -g @kaynooo/cli-env
 | `ev show <rev>:<file>` | an env file as a git revision holds it, values masked |
 | `ev set KEY [file]` | sets a key in `.env` (or the file), the value read from stdin or `-F <file>` so it never appears in a command line, `--empty` for an empty value |
 | `ev unset KEY [file]` | removes a key |
+| `ev set`/`unset` on a `.json`, `.yaml` or `.toml` file | the key is a dotted path (`database.password`), and only its value changes: comments, order, indentation and quoting stay, a number or boolean keeps its type, and an edit that would change anything else is refused |
 | `--quiet` (`-q`) | on set, unset, cp and mv, prints nothing on success |
 | `ev cp KEY --from <file> --to <file>` | copies a key's value to another file without printing it, replacing the key there or appending it, `--as NEWKEY` to rename |
 | `ev mv KEY --from <file> --to <file>` | moves a key's line as written, `--force` to replace one the target has |

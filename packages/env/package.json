@@ -36,5 +36,10 @@
   },
   "dependencies": {
     "@kaynooo/cli-kit": "workspace:*"
+  },
+  "devDependencies": {
+    "@decimalturn/toml-patch": "3.3.1",
+    "jsonc-parser": "3.3.1",
+    "yaml": "2.9.1"
   }
 }

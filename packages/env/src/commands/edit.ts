@@ -2,8 +2,10 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import { badUsage, fail, isInteractive, parse, readInput } from '@kaynooo/cli-kit'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { entries, formatAssignment, lastLine, removeKey, setLine, unquotable } from '../dotenv'
-import { assertDotenvName, loadKnown, readEnv, withLocks, writeEnv } from '../files'
+import { assertDotenvName, loadKnown, readEnv, withLocks, writeAtomic, writeEnv } from '../files'
 import { maskValue } from '../mask'
+import { parseStructured, structuredFormat } from '../structured'
+import { setStructured, unsetStructured } from '../structured-write'
 
 const DEFAULT_FILE = '.env'
 const TRAILING_NEWLINE = /\r?\n$/
@@ -13,13 +15,15 @@ const QUIET = { quiet: { type: 'boolean', short: 'q', description: 'print nothin
 
 const setUsage = `ev set KEY [file] [--quiet]
 
-Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; on a terminal with nothing piped it is asked for, masked as it is typed. --empty sets it to an empty value. The value is written in the quoting Bun's --env-file and compose's env_file both read back unchanged, and refused when none does, as for one holding both a dollar sign and a backslash.`
+Sets KEY in the file (.env by default, created when missing), replacing its line in place or appending one. The value is read from stdin, or from -F <file>, so it never appears in a command line; on a terminal with nothing piped it is asked for, masked as it is typed. --empty sets it to an empty value. The value is written in the quoting Bun's --env-file and compose's env_file both read back unchanged, and refused when none does, as for one holding both a dollar sign and a backslash.
+
+In a JSON, YAML or TOML file that exists, KEY is a dotted path (database.password, servers.0.host), and only its value changes: comments, order, indentation and the value's quoting stay, a number or boolean stays one when the value reads as one, and an edit that would change anything else is refused.`
 
 const SET_EXITS: ExitRow[] = [[0, 'it wrote the key'], [1, 'it could not'], [2, 'a usage error'], [130, 'the prompt was cancelled']]
 
 const unsetUsage = `ev unset KEY [file] [--quiet]
 
-Removes every line setting KEY from the file (.env by default), leaving comments and other lines as they are.`
+Removes every line setting KEY from the file (.env by default), leaving comments and other lines as they are. In a JSON, YAML or TOML file KEY is a dotted path to a value, removed with its line.`
 
 const UNSET_EXITS: ExitRow[] = [[0, 'it removed the key'], [1, 'the file does not set it'], [2, 'a usage error']]
 
@@ -54,6 +58,12 @@ function checkKey(key: string): void {
     badUsage(`${JSON.stringify(key)} is not a valid key: letters, digits, _, . and - only, not starting with a digit`)
 }
 
+async function readStructured(path: string): Promise<string> {
+  const file = Bun.file(path)
+
+  return await file.exists() ? file.text() : fail(`${path} does not exist: ev writes into a JSON, YAML or TOML file that is there`, 1)
+}
+
 async function readOrEmpty(path: string) {
   assertDotenvName(path)
 
@@ -78,6 +88,21 @@ export async function set(args: string[]): Promise<number> {
   checkKey(key)
 
   const value = parsed.values.empty === true ? '' : await readValue(key, parsed.values.file)
+
+  if (structuredFormat(target) !== undefined) {
+    const text = await withLocks([target], async () => {
+      const edited = setStructured(target, await readStructured(target), key, value)
+
+      await writeAtomic(target, edited)
+
+      return edited
+    })
+
+    if (parsed.values.quiet !== true)
+      console.log(`${target}: ${key}=${maskValue(key, value, await loadKnown(process.cwd(), [parseStructured(target, text)])).replaceAll('\n', '\\n')}`)
+
+    return 0
+  }
 
   if (formatAssignment(key, value) === undefined)
     fail(`${unquotable(value)}, nothing was written`, 1)
@@ -106,6 +131,12 @@ export async function unset(args: string[]): Promise<number> {
     fail(`missing KEY\n\n${unsetUsage}`)
 
   await withLocks([target], async () => {
+    if (structuredFormat(target) !== undefined) {
+      await writeAtomic(target, unsetStructured(target, await readStructured(target), key) ?? fail(`${key} is not set in ${target}`, 1))
+
+      return
+    }
+
     const file = await readEnv(target)
 
     if (removeKey(file, key) === 0)

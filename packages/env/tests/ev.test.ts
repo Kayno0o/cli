@@ -136,7 +136,7 @@ describe('ev', () => {
     expect(ev(['list']).code).toBe(0)
   })
 
-  test('reads JSON, YAML and TOML keys as dotted paths with secrets masked, and refuses to write them', async () => {
+  test('reads JSON, YAML and TOML keys as dotted paths with secrets masked, and refuses to move or copy them', async () => {
     await write('app.json', '{\n  // a tsconfig-style comment\n  "database": {"password": "hunter2hunter2", "port": 5432},\n  "servers": [{"host": "a"}]\n}\n')
     await write('app.yaml', 'database:\n  password: hunter2hunter2\n  port: 5432\nempty:\n')
     await write('app.toml', '[database]\npassword = "hunter2hunter2"\nport = 5432\nborn = 1979-05-27T07:32:00Z\n')
@@ -153,15 +153,68 @@ describe('ev', () => {
     expect(JSON.parse(ev(['grep', '^empty$', 'app.yaml', '--json']).out)).toEqual([{ file: 'app.yaml', key: 'empty', value: '', secret: false }])
     expect(ev(['diff', 'app.yaml', 'app.toml']).out).toContain('database.born')
 
-    const unset = ev(['unset', 'database.password', 'app.json'])
-
-    expect(unset.code).toBe(2)
-    expect(unset.err).toContain('app.json is JSON, which ev reads but does not write: it writes dotenv files (KEY=value lines)')
-    expect(ev(['set', 'TOKEN', 'new.yaml'], 'x').err).toContain('new.yaml is YAML, which ev reads but does not write')
+    expect(ev(['set', 'TOKEN', 'new.yaml'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('new.yaml does not exist: ev writes into a JSON, YAML or TOML file that is there') })
     expect(await Bun.file(join(dir, 'new.yaml')).exists()).toBe(false)
-    expect(ev(['cp', 'database.password', '--from', 'app.json', '--to', 'copy.env'])).toMatchObject({ code: 2, err: expect.stringContaining('app.json is JSON, which ev reads but does not write') })
-    expect(ev(['mv', 'database.password', '--from', 'app.toml', '--to', 'copy.env'])).toMatchObject({ code: 2, err: expect.stringContaining('app.toml is TOML, which ev reads but does not write') })
+    expect(ev(['cp', 'database.password', '--from', 'app.json', '--to', 'copy.env'])).toMatchObject({ code: 2, err: expect.stringContaining('app.json is JSON, which ev set and unset edit while the other commands that write take dotenv files') })
+    expect(ev(['mv', 'database.password', '--from', 'app.toml', '--to', 'copy.env'])).toMatchObject({ code: 2, err: expect.stringContaining('app.toml is TOML, which ev set and unset edit') })
     expect(await Bun.file(join(dir, 'copy.env')).exists()).toBe(false)
+  })
+
+  // Each file is edited where the key is and nowhere else: the expected text is the original with that one span changed.
+  const edits: Record<string, { text: string, set: string, added: string, unset: string }> = {
+    'app.json': {
+      text: '{\n    // rotated monthly\n    "database": {\n        "password": "old", // inline\n        "port": 5432,\n        "host": "db"\n    },\n    "z": [1, 2]\n}\n',
+      set: '{\n    // rotated monthly\n    "database": {\n        "password": "new pass", // inline\n        "port": 6543,\n        "host": "db"\n    },\n    "z": [1, 2]\n}\n',
+      added: '{\n    // rotated monthly\n    "database": {\n        "password": "new pass", // inline\n        "port": 6543,\n        "host": "db",\n        "user": "me"\n    },\n    "z": [1, 2]\n}\n',
+      unset: '{\n    // rotated monthly\n    "database": {\n        "password": "new pass", // inline\n        "port": 6543,\n        "user": "me"\n    },\n    "z": [1, 2]\n}\n',
+    },
+    'app.yaml': {
+      text: '# Symfony parameters\nparameters:\n    # rotated monthly\n    password: \'old\'   # inline\n    port: 5432\n    host: db\n    list:\n        - a\n',
+      set: '# Symfony parameters\nparameters:\n    # rotated monthly\n    password: \'new pass\'   # inline\n    port: 6543\n    host: db\n    list:\n        - a\n',
+      added: '# Symfony parameters\nparameters:\n    # rotated monthly\n    password: \'new pass\'   # inline\n    port: 6543\n    host: db\n    list:\n        - a\n    user: me\n',
+      unset: '# Symfony parameters\nparameters:\n    # rotated monthly\n    password: \'new pass\'   # inline\n    port: 6543\n    list:\n        - a\n    user: me\n',
+    },
+    'app.toml': {
+      text: '# app\ntitle = "app"\n\n[database]\n# rotated monthly\npassword = \'old\'   # inline\nport = 5432\nhost = "db"\n\n[z]\nk = 1\n',
+      set: '# app\ntitle = "app"\n\n[database]\n# rotated monthly\npassword = \'new pass\'   # inline\nport = 6543\nhost = "db"\n\n[z]\nk = 1\n',
+      added: '# app\ntitle = "app"\n\n[database]\n# rotated monthly\npassword = \'new pass\'   # inline\nport = 6543\nhost = "db"\nuser = "me"\n\n[z]\nk = 1\n',
+      unset: '# app\ntitle = "app"\n\n[database]\n# rotated monthly\npassword = \'new pass\'   # inline\nport = 6543\nuser = "me"\n\n[z]\nk = 1\n',
+    },
+  }
+
+  for (const [name, { text, set, added, unset }] of Object.entries(edits)) {
+    test(`set and unset edit ${name} in place, keeping comments, order, indentation and quoting`, async () => {
+      const at = join(dir, name)
+      const prefix = name === 'app.yaml' ? 'parameters' : 'database'
+
+      await write(name, text)
+      expect(ev(['set', `${prefix}.password`, name, '-q'], 'new pass\n').code).toBe(0)
+      expect(ev(['set', `${prefix}.port`, name, '-q'], '6543\n').code).toBe(0)
+      expect(await readFile(at, 'utf8')).toBe(set)
+      expect(ev(['set', `${prefix}.user`, name], 'me').out).toBe(`${name}: ${prefix}.user=me\n`)
+      expect(await readFile(at, 'utf8')).toBe(added)
+      expect(ev(['unset', `${prefix}.host`, name]).out).toBe(`${name}: removed ${prefix}.host\n`)
+      expect(await readFile(at, 'utf8')).toBe(unset)
+      expect(ev(['get', `${prefix}.password`, name]).out).toBe('ne***(8)\n')
+      expect(ev(['unset', `${prefix}.host`, name])).toMatchObject({ code: 1, err: expect.stringContaining(`${prefix}.host is not set in ${name}`) })
+    })
+  }
+
+  test('refuses a structured edit that would reach past the key, leaving the file as it was', async () => {
+    const json = '{\n  "a": "x", // about a\n  "b": "y"\n}\n'
+    const yaml = 'a: |\n  block\nb: {c: 1}\n'
+
+    await write('c.json', json)
+    await write('c.yaml', yaml)
+    await write('c.json5', '{a: 1}\n')
+
+    expect(ev(['unset', 'b', 'c.json'])).toMatchObject({ code: 1, err: expect.stringContaining('removing b would take a comment beside it') })
+    expect(ev(['set', 'a', 'c.yaml'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('a is a block scalar') })
+    expect(ev(['set', 'b.d', 'c.yaml'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('sits in a flow mapping') })
+    expect(ev(['set', 'a.b', 'c.json'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('c.json: a holds a value, not keys') })
+    expect(ev(['set', 'a', 'c.json5'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('ev reads JSON5 but does not write it') })
+    expect(await readFile(join(dir, 'c.json'), 'utf8')).toBe(json)
+    expect(await readFile(join(dir, 'c.yaml'), 'utf8')).toBe(yaml)
   })
 
   test('refuses a JSON, YAML or TOML file that does not parse or holds no keys', async () => {
