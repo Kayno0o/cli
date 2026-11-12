@@ -162,6 +162,31 @@ describe('release', () => {
     }
   })
 
+  test('plans the push of HEAD when origin has no branch yet, a stale tracking ref dropped', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
+    const origin = join(root, 'origin.git')
+    const work = join(root, 'work')
+    const home = process.cwd()
+
+    try {
+      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.cwd(root).quiet()
+      process.chdir(work)
+      await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
+      await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git update-ref refs/remotes/origin/main HEAD`.cwd(work).quiet()
+
+      const sha = (await $`git rev-parse HEAD`.cwd(work).text()).trim()
+      const { result, out } = await capture(async () => release(['minor', '--dry-run', '--no-registry']))
+
+      expect(result).toBe(0)
+      expect(out).toContain(`1. push main at ${sha.slice(0, 7)}, which origin lacks, then wait for its runs\n`)
+      expect((await $`git rev-parse --verify -q origin/main`.cwd(work).nothrow().quiet()).exitCode).toBe(1)
+    }
+    finally {
+      process.chdir(home)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test('stops before the bump when the runs on the commit fail, leaving no tag', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
     const origin = join(root, 'origin.git')

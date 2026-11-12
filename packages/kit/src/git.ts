@@ -32,11 +32,26 @@ export async function resolveCommit(ref: string): Promise<string> {
 }
 
 // Fetches one branch of origin; a name that is no branch, such as `--upload-pack=<command>`, is refused before git reads it, and the refspec is spelled out so it can never be an option.
-export async function fetchBranch(branch: string): Promise<void> {
+// False when origin has no such branch yet, a new repository, its remote-tracking ref then dropped so nothing reads a stale one.
+export async function fetchBranch(branch: string): Promise<boolean> {
   if (branch.startsWith('-') || !await gitOk(['check-ref-format', '--branch', branch]))
     fail(`${branch} is not a branch name`)
 
-  await git(['fetch', '-q', 'origin', `refs/heads/${branch}`], GIT_NETWORK_MS)
+  const ref = `refs/heads/${branch}`
+  const fetched = await runTool('git fetch', ['git', 'fetch', '-q', 'origin', ref], { timeoutMs: GIT_NETWORK_MS })
+
+  if (fetched.code === 0)
+    return true
+
+  // ls-remote exits 2 only when origin answered without the ref, where a fetch fails alike for a network error
+  const listed = await runTool('git ls-remote', ['git', 'ls-remote', '--exit-code', 'origin', ref], { timeoutMs: GIT_NETWORK_MS })
+
+  if (listed.code !== 2)
+    throw new Error(`git fetch -q origin ${ref}: ${fetched.stderr.trim() || `exit ${fetched.code}`}`)
+
+  await gitOk(['update-ref', '-d', `refs/remotes/origin/${branch}`])
+
+  return false
 }
 
 // The branch origin's HEAD names, which is the repository's default branch once cloned or `git remote set-head origin -a` ran.

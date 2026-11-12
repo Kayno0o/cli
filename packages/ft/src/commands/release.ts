@@ -93,10 +93,8 @@ export async function release(args: string[]): Promise<number> {
   if (await git(['status', '--porcelain']) !== '')
     fail('the tree has uncommitted changes', 2, runHint('gst', 'see them, then commit them with gc'))
 
-  await fetchBranch(branch)
-
-  // A push origin would refuse is caught before the bump.
-  if ((await $`git merge-base --is-ancestor ${`origin/${branch}`} HEAD`.quiet().nothrow()).exitCode !== 0)
+  // A push origin would refuse is caught before the bump; a new repository's origin has no branch yet, which the push of HEAD makes.
+  if (await fetchBranch(branch) && (await $`git merge-base --is-ancestor ${`origin/${branch}`} HEAD`.quiet().nothrow()).exitCode !== 0)
     fail(`origin/${branch} has commits HEAD lacks`, 2, runHint(`git pull --rebase origin ${branch}`))
 
   // With --tagged, HEAD is the version commit and the tests run on the one below it.
