@@ -16,9 +16,7 @@ const FISH = `function wt --description 'git worktrees of a compose project, eac
       command wt $argv
   end
 end
-command wt --completions fish | source
-complete -c wt -n __fish_use_subcommand -a cd -d 'go to a worktree, or main'
-complete -c wt -n '__fish_seen_subcommand_from cd' -f -a '(command wt tasks) main'`
+command wt --completions fish | source`
 
 export function shellWrapper(shell: string | undefined): string {
   if (shell !== 'fish')

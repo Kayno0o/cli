@@ -40,6 +40,7 @@ describe('tasksDir', () => {
 describe('shellWrapper', () => {
   test('wraps fish, and names the shells it has no wrapper for', () => {
     expect(shellWrapper('fish')).toContain('builtin cd $dir')
+    expect(shellWrapper('fish')).not.toContain('complete -c wt')
     expect(() => shellWrapper('bash')).toThrow('no wrapper for bash yet, only fish')
   })
 })

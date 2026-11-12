@@ -71,8 +71,6 @@ export async function openTask(task: string | undefined, options: GlobalOptions)
 }
 
 export async function printTasks(options: GlobalOptions): Promise<void> {
-  try {
-    console.log(listTasks((await locate(process.cwd(), options.project)).project).join('\n'))
-  }
-  catch {}
+  for (const task of listTasks((await locate(process.cwd(), options.project)).project))
+    console.log(task)
 }

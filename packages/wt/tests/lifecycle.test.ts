@@ -359,6 +359,42 @@ describe('wt prune', () => {
   }, 30_000)
 })
 
+describe('cd, url and tasks', () => {
+  let env: Awaited<ReturnType<typeof timesSandbox>>
+
+  beforeEach(async () => {
+    env?.stop()
+    env = await timesSandbox()
+  })
+
+  afterAll(() => env?.stop())
+
+  test('are listed in --help; tasks prints nothing for none and says why a manifest does not load; cd run as a program points at the wrapper', async () => {
+    const { sandbox, wt, dirOf } = env
+    const help = (await wt('--help')).out
+
+    for (const command of ['cd', 'url', 'tasks'])
+      expect(help).toMatch(new RegExp(`^\\s+${command}\\s`, 'm'))
+
+    expect(await wt('tasks')).toMatchObject({ code: 0, out: '' })
+    expect((await wt('add', 'planning')).code).toBe(0)
+    expect((await wt('tasks')).out).toBe('planning\n')
+
+    const cd = await wt('cd', 'planning')
+
+    expect(cd).toMatchObject({ code: 1, out: `${dirOf('planning')}\n` })
+    expect(cd.err).toContain('cd needs the shell function')
+    expect((await wt('cd', 'nothing')).err).toContain('no worktree nothing')
+
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), 'export default {\n')
+
+    const broken = await wt('tasks')
+
+    expect(broken.code).toBe(1)
+    expect(broken.err).toContain('Expected identifier but found end of file')
+  }, 30_000)
+})
+
 describe('commands checking their target before any job', () => {
   let env: Awaited<ReturnType<typeof timesSandbox>>
 

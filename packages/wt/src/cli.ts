@@ -266,6 +266,12 @@ Opens the worktree's main URL in the browser ($BROWSER, else the system's opener
 
 Exits 0 once the browser is started, 1 when there is no such worktree, no URL or no browser, 2 on a usage error.`
 
+const CD_USAGE = `wt cd [task] [-p <name>]
+
+Goes to a worktree's directory, or main's when no task is given. A program cannot change its shell's directory, so this runs in the shell function \`wt shell fish | source\` defines; run as a program, it says so.
+
+Exits 0 once there, 1 when there is no such worktree or the shell function is missing, 2 on a usage error.`
+
 const URL_USAGE = `wt url [task] [-p <name>]
 
 Prints the URLs of a worktree.
@@ -274,9 +280,9 @@ Exits 0 when it printed it, 1 when there is no such worktree or project, 2 on a 
 
 const TASKS_USAGE = `wt tasks [-p <name>]
 
-Prints the worktree names of the project, one per line.
+Prints the worktree names of the project, one per line, nothing when it has none.
 
-Exits 0 when it printed them, 1 when there is no such project, 2 on a usage error.`
+Exits 0 when it printed them, 1 when there is no such project or its manifest does not load, 2 on a usage error.`
 
 process.exitCode = await runCli({
   name: APP,
@@ -387,6 +393,22 @@ process.exitCode = await runCli({
         return guarded(async () => (await import('./list')).listWorktrees(values))
       },
     },
+    cd: {
+      summary: 'go to a worktree, or main (through the shell function of `wt shell`)',
+      run: async (args) => {
+        const { values, positionals: [task] } = parse(args, CD_USAGE, { project: PROJECT_OPTION }, { positionals: ['[task]'], candidates: { '[task]': async () => [...await taskNames(), 'main'] } })
+
+        return guarded(async () => {
+          const { printPath } = await printing()
+
+          // Checked first, so a task that does not exist says so rather than the wrapper's absence
+          await printPath(task, values)
+          console.error('wt: cd needs the shell function, which a program cannot replace: `wt shell fish | source` in config.fish, or cd to the path above')
+
+          return 1
+        })
+      },
+    },
     path: {
       summary: 'print the directory of a worktree, or of main',
       run: async (args) => {
@@ -457,7 +479,6 @@ process.exitCode = await runCli({
     },
     url: {
       summary: 'print the URLs of a worktree',
-      hidden: true,
       run: async (args) => {
         const { values, positionals: [task] } = parse(args, URL_USAGE, { project: PROJECT_OPTION }, { positionals: ['[task]'], candidates: TASK })
 
@@ -466,7 +487,6 @@ process.exitCode = await runCli({
     },
     tasks: {
       summary: 'print the worktree names of the project',
-      hidden: true,
       run: async (args) => {
         const { values } = parse(args, TASKS_USAGE, { project: PROJECT_OPTION }, { positionals: [] })
 

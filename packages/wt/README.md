@@ -20,7 +20,9 @@ bun install -g @kaynooo/cli-wt
 | `wt logs [task] [-f]` | prints the log of its last `--bg` job, or with `-f` follows its stack's compose logs |
 | `wt prune [-a] [-y]` | lists what worktrees deleted by hand left behind (files, job records, volumes, git registrations) and removes it once confirmed |
 | `wt ls` | main and the worktrees of the current project (`-a` every project), with their last job and changed files |
+| `wt cd [task]` | goes to a worktree, or main, through the shell function of `wt shell` |
 | `wt path [task]` | the directory of a worktree, or of main |
+| `wt url [task]` / `wt tasks` | its URLs; the worktree names of the project, one per line |
 | `wt init [dir]` | drafts a manifest from the compose project in `dir` into the manifests folder (`--print` to stdout) |
 | `wt run <task> -- <cmd>` | runs a command in a throwaway container of the manifest's `run.service`, against a test database of the worktree's own |
 | `wt heavy -- <cmd>` | runs a command once the heavy ones queued before it, from any session, are done |
