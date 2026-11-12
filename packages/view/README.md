@@ -19,4 +19,5 @@ The text is a file, or what is piped on stdin. A diff is recognised by its first
 
 Code blocks in markdown are highlighted by their language too. The highlighting is a light tokenizer, not a parser: it gets comments, strings, numbers and keywords right for the common languages, and leaves a language it does not know uncoloured.
 
-Not yet: word-level diff highlighting.
+
+Lines wrap to `COLUMNS`, or 80 when the output is not a terminal. A long output on a terminal goes through `$PAGER`, or `less -FRX` when it is unset or `less`. In a diff the code is highlighted by the file's extension and the changed words of a paired removed and added line are reversed. A source file is recognised by its extension or `--lang`, and more languages than the table lists are known.

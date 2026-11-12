@@ -4,9 +4,9 @@ import { basename, dirname, join } from 'node:path'
 import { fail, parse, role } from '@kaynooo/cli-kit'
 import { lines, need, pipeline, probe, run, TAR_FIDELITY, ZSTD_LONG } from './proc'
 
-const USAGE = `arc pack [--delete] <folder> [dest dir]: packs a folder into <dest dir>/<name>.tar.zst (the current folder by default) and checks every file against the archive, the folder kept unless --delete
+const USAGE = `arc pack [--delete] <folder> [dest dir]: packs a folder into <dest dir>/<name>.tar.zst (the current folder by default), checks every file against it and keeps the folder unless --delete
 
-The archive is written as <name>.tar.zst.partial and only renamed once complete; nothing is overwritten. With --delete, the folder is deleted only after the archive passes zstd's checksum, holds as many entries as the folder and compares equal to it file by file (owners, ACLs and extended attributes included). A symlink, a mount point, a folder with a file system mounted inside, a destination inside the folder and a destination with less free space than the folder holds are refused. A folder that is not readable or writable by you is packed, and deleted, through sudo.`
+The archive is written as <name>.tar.zst.partial and renamed once complete; nothing is overwritten. With --delete, the folder is deleted only after the archive passes zstd's checksum and compares equal to it file by file. A symlink, a mount point, a destination inside the folder and a destination with too little free space are refused, and a folder you cannot read or write is packed, and deleted, through sudo.`
 
 const EXITS: ExitRow[] = [[0, 'the archive is verified (and the folder deleted with --delete)'], [1, 'anything was refused or failed, with the folder kept'], [2, 'a usage error']]
 

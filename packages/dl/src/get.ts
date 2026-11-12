@@ -15,11 +15,9 @@ import { fetchSum } from './sums'
 
 const USAGE = `dl [options] <url> [-- <script args>]: downloads a file into a new folder of its own, checks its sha256, then extracts it, installs it as a command or runs it as a script
 
-Without -o the file lands in a new folder under the temp folder; with -o in that folder, created if missing, where nothing is overwritten.
-Prints where the file went, its size, final URL, type and sha256, and how it compares with the last download of the same URL: a text file that changed since shows its diff.
---sha256 or --sums checks the file, which is deleted on a mismatch. An HTML page arriving where a file was expected fails, as does a download over --max-size.
---extract unpacks an archive into a new folder beside it, through arc's extractor. --bin installs the file, or the one executable its archive holds, in ~/.local/bin.
---exec lists what the script does (what it fetches, sudo, recursive removals, shell profiles and system folders it touches, code it runs in a shell, the variables it reads) and runs it only when --sha256 or --sums pins it, the content then being the one that was read, or with --yes. Arguments after -- go to the script.
+Without -o the file lands in a new folder under the temp folder. It prints where the file went, its size, final URL, type and sha256, and how it compares with the last download of the same URL (a changed text file shows its diff).
+An HTML page arriving where a file was expected fails, as does a download over --max-size.
+--exec lists what the script does and runs it only when --sha256 or --sums pins it, or with --yes; arguments after -- go to the script.
 --bin and --exec record what they installed or ran in the ledger dl ls lists.`
 
 const EXITS: ExitRow[] = [

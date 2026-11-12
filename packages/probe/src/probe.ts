@@ -17,14 +17,10 @@ const LABEL_WIDTH = 13
 
 const USAGE = `probe [options] <url|domain>...: reports each site's negotiated HTTP version, redirect chain, timings, addresses, TLS and certificate, the headers worth knowing and what warrants a warning
 
-By default one line per target: the HTTP version, status, final URL, total time, redirects, certificate expiry, first address and the warnings. --verbose prints the whole table.
-A bare domain is tried over https first and over http when that fails. Redirects are followed hop by hop (at most ${MAX_HOPS}), each hop's status and HTTP version listed. HTTP/3 is spoken only when the installed curl lists it, otherwise it is reported from alt-svc. The certificate is read even when it is not trusted, and --insecure also lets curl go on with it.
--H adds a header to every request, --resolve host:ip reaches a host at that address instead of the DNS answer (the certificate and the Host header stay the host's), both repeatable.
-
-Warns on a certificate with fewer than 14 days left or not trusted, and on an http:// twin that does not redirect to https (checked for a bare domain or an https URL on the default port).
-
---dns makes no HTTP request: it asks the system resolver, Cloudflare, Google, Quad9 and each nameserver of the host's zone for its A, AAAA and CNAME records with their TTL, and warns on a resolver answering otherwise than the zone's nameservers, a change not reached it yet.
---cors <origin> sends the preflight a browser on that origin would send before a --method request carrying --cors-headers, and says whether the browser would go on, with each reason when it would not.`
+A bare domain is tried over https first, then http, and redirects are followed hop by hop (at most ${MAX_HOPS}).
+Warns on a certificate with fewer than 14 days left or not trusted, and on an http:// twin that does not redirect to https.
+--dns makes no HTTP request and compares the records the system resolver, public resolvers and the zone's nameservers give.
+--cors <origin> sends the preflight a browser on that origin would send and says whether it would go on, with each reason when not.`
 
 const EXITS: ExitRow[] = [[0, 'every site answered, warnings or not'], [1, 'a site could not be reached, a CORS preflight was refused, or no resolver knows a name'], [2, 'a usage error']]
 

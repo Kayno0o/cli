@@ -8,8 +8,8 @@ import { readSql } from './query'
 
 const usage = `db explain "<sql>" [--analyze]
 
-Prints the plan the engine would run for one read (the SQL as an argument, or on stdin) without running it: EXPLAIN alone. The statement must start with SELECT, WITH, VALUES or TABLE and passes the same read-only guard as a query; EXPLAIN and ANALYZE written by hand are refused.
---analyze runs the read for real to time it, inside the READ ONLY transaction that is rolled back: EXPLAIN ANALYZE on Postgres and MySQL 8.0.18 or later, ANALYZE on MariaDB, refused on an older MySQL.
+Prints the plan the engine would run for one read (the SQL as an argument, or on stdin) without running it.
+The statement must start with SELECT, WITH, VALUES or TABLE and passes the query's read-only guard, so a hand-written EXPLAIN or ANALYZE is refused. --analyze runs the read to time it, inside the rolled-back READ ONLY transaction (refused on a MySQL before 8.0.18).
 
 ${HOSTS_NOTE}`
 

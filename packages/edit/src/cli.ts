@@ -15,9 +15,9 @@ import { filesIn } from './walk'
 
 const USAGE = `sub [options] <file>...: replaces text in files, writing nothing unless every replacement matches as often as expected
 
-A folder given as a file is walked, .gitignore respected and binary files left out; a file in it where nothing matches is skipped and listed, the count checks holding for the others.
+A folder given as a file is walked, .gitignore respected and binary files left out.
 
-Multi-line text: give no --from, --to or --pairs and pipe SEARCH/REPLACE blocks on stdin from a quoted heredoc, which needs no escaping; a producer silent for 3 s is taken for no heredoc at all, so write a slow one to a file first. The blocks apply in order to the files on the command line, each matching exactly once unless --count or --all says otherwise:
+Multi-line text: give no --from, --to or --pairs and pipe SEARCH/REPLACE blocks on stdin from a quoted heredoc, which needs no escaping. The blocks apply in order to the files on the command line, each matching exactly once unless --count or --all says otherwise:
 
 sub src/a.php <<'EOF'
 <<<<<<< SEARCH
@@ -27,7 +27,7 @@ new lines
 >>>>>>> REPLACE
 EOF
 
-A line naming a file before a block makes it apply to that file alone, so one call edits several files (no file argument needed when every block names one). An empty REPLACE deletes the SEARCH text; to drop whole lines, put the neighbouring line in both. When the text holds a marker line itself (a Markdown '=======' underline), open with more characters, '<<<<<<<<<< SEARCH', and divide and close with as many '=' and '>' too.`
+A line naming a file before a block makes it apply to that file alone, and an empty REPLACE deletes the SEARCH text.`
 const EXITS: ExitRow[] = [[0, 'it wrote every replacement'], [1, 'one did not match or a file cannot be written (nothing is written)'], [2, 'a usage error']]
 
 const OPTIONS = {

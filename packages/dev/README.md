@@ -26,7 +26,7 @@ Fish completes it through the bin itself: `dev __complete`, installed for every 
 
 The password is read from `crypto.getRandomValues` and written as `openssl rand -hex|-base64` does, `base64url` being that base64 with `+/` swapped for `-_` and the padding dropped. `--copy` also puts the password on the clipboard through `wl-copy` (or xclip, xsel, pbcopy) and says `copied to clipboard` on stderr; without it the clipboard is left alone.
 
-`--bcrypt` hashes at cost 10. Bun writes bcrypt hashes with the `$2b$` prefix where `htpasswd -B` writes `$2y$`: the algorithm is identical, so `dev` rewrites the prefix to `$2y$`, the one Apache, nginx and traefik basic auth all accept (`$2b$` is accepted by fewer of them). With a generated password the hash prints on stdout, the password on stderr, and it is the password that `--copy` copies, as the password it replaces did.
+`--bcrypt -` asks for the password masked on a terminal, or reads it from stdin, which keeps it out of the shell history. `--bcrypt` hashes at cost 10. Bun writes bcrypt hashes with the `$2b$` prefix where `htpasswd -B` writes `$2y$`: the algorithm is identical, so `dev` rewrites the prefix to `$2y$`, the one Apache, nginx and traefik basic auth all accept (`$2b$` is accepted by fewer of them). With a generated password the hash prints on stdout, the password on stderr, and it is the password that `--copy` copies, as the password it replaces did.
 
 ## Notes
 

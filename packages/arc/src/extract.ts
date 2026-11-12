@@ -7,7 +7,7 @@ import { interactive } from './proc'
 
 const USAGE = `arc extract [--overwrite] <file>: extracts an archive of any common kind into the current folder, by its extension, never replacing a file that is there unless --overwrite
 
-Understands .tar, .tar.gz, .tgz, .tar.bz2, .tbz2, .tbz, .tar.xz, .txz, .tar.zst, .tzst, .gz, .bz2, .xz, .zst, .zip, .Z, .rar and .7z, whatever the case; a lone .gz, .bz2, .xz, .zst or .Z keeps its archive. Unlike arc unpack it checks nothing against the archive. A file already there is kept: a lone compressed file whose output exists is refused, tar reports each such file as an error and extracts the others, unzip, unrar and 7z skip them.`
+Understands .tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst, .gz, .bz2, .xz, .zst, .zip, .Z, .rar and .7z, whatever the case. Unlike arc unpack it checks nothing against the archive, and a file already there is kept (a lone compressed file whose output exists is refused).`
 
 const EXITS: ExitRow[] = [[0, 'the extractor succeeded'], [1, 'a missing file, an extension it does not know, an output already there or a failing extractor'], [2, 'a usage error']]
 

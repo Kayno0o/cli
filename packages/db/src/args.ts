@@ -14,7 +14,7 @@ export const EXITS: ExitRow[] = [[0, 'it ran'], [1, 'the database refused it, wa
 
 export const HOSTS_NOTE = 'db connects to a local host (localhost, 127.0.0.1, ::1) or a compose service only: any other host is refused (exit 2) unless it is listed under "allowedHosts" in ~/.config/kaynooo-cli/db.json.'
 
-export const WRITE_NOTE = 'A write runs only when the database actually connected to has a name ending in _test (checked on the server, and a statement that names another database, or uses USE, SET, files or server objects, is not run); any other write is printed for you to run.'
+export const WRITE_NOTE = 'A write is printed for you to run (exit 1), and runs only on a database whose name ends in _test, checked on the server.'
 
 export const connectionOptions = {
   env: { type: 'string', short: 'e', description: `environment key holding the connection URL (${DEFAULT_ENV}, postgres:// or mysql://), a compose service's host in it reached from here` },

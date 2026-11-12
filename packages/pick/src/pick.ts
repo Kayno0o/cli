@@ -8,14 +8,10 @@ import { parseFields, pickFields } from './fields'
 
 const USAGE = `pick [options]: a fuzzy selector, the lines on stdin in, the chosen one on stdout out
 
-Type to filter: the query matches as a subsequence, best matches first (a word start, a run of characters or a prefix scores higher; a lowercase query ignores case, an uppercase letter makes it exact). Up and down or ctrl-p and ctrl-n move, enter picks, esc and ctrl-c cancel, left, right, ctrl-a and ctrl-e move in the query (ctrl or alt for a word), ctrl-u and ctrl-k erase back to its start and on to its end, ctrl-y puts back what they erased, ctrl-z suspends, ctrl-/ or f1 shows the keys.
-The keys are read from the terminal and the selector is drawn on stderr, so \`pick\` in a pipe or a command substitution prints only the choice. With --multi, tab marks the highlighted line and enter prints the marked lines in input order (the highlighted one when none is marked).
---preview runs a command for the highlighted line, \`{}\` standing for it shell-quoted, in a pane on the right when the terminal is at least 80 columns wide; its output is cut at 64 KiB and 200 lines.
-
---delimiter splits each line into fields (a regex, whitespace by default), --nth names the fields the query is matched against and --with-nth the ones shown, in fzf's syntax: 1-based, \`-1\` the last, \`2..\`, \`..3\`, \`2..4\`, comma-separated. The printed line is always the whole input line. --read0 reads NUL-separated lines and --print0 ends each printed one with NUL.
---filter takes the query and prints every match best first with no terminal; --select-1 prints the only match without opening the selector, --exit-0 exits 1 at once when nothing matches.
-
-Without a terminal on stderr there is nobody to choose: it prints the best line the query matches, as the selector would rank it, or every match best first with --multi.`
+Type to filter: the query matches as a subsequence, best matches first, and ctrl-/ or f1 shows the keys; enter picks, esc and ctrl-c cancel.
+The keys are read from the terminal and the selector is drawn on stderr, so \`pick\` in a pipe or a command substitution prints only the choice. With --multi, tab marks lines and enter prints them in input order.
+--delimiter, --nth and --with-nth split lines into fields in fzf's syntax, and the printed line is always the whole input line.
+Without a terminal on stderr it prints the best match, or every match with --multi.`
 const EXITS: ExitRow[] = [[0, 'it printed a choice'], [1, 'nothing matches or there are no lines'], [2, 'a usage error'], [130, 'cancelled']]
 
 const OPTIONS = {

@@ -35,3 +35,5 @@ EOF
 - `--quiet` prints nothing on success. Each written file prints `<path>: N replacements on lines L, +added -removed`; `--diff` adds its unified diff (through the system's `diff`), `--dry-run` shows the same without writing.
 - The file is rewritten in place, so its mode, owner and missing trailing newline stay.
 - Exit codes: 0 written, 1 a replacement did not match as expected, 2 a usage error.
+- A folder given as a file is walked, `.gitignore` respected and binary files left out; a file in it where nothing matches is skipped and listed (`--skip-missing`), the count checks holding for the others.
+- A producer silent on stdin for 3 s is taken for no heredoc at all, so write a slow one to a file first.

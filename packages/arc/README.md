@@ -17,6 +17,8 @@ It needs `tar` and `zstd` on the machine (`findmnt`, `mountpoint` and `df` from 
 | `arc cat <archive> <file>` | prints a file of the archive on stdout |
 | `arc extract [--overwrite] <file>` | extracts `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`, `.tar.zst`, `.gz`, `.bz2`, `.zip`, `.Z`, `.rar` or `.7z` into the current folder, checking nothing against the archive; a file already there is kept unless `--overwrite` |
 
+`arc extract` also knows `.tbz2`, `.tbz`, `.txz`, `.tzst`, `.xz` and `.zst`, whatever the case of the extension; a lone `.gz`, `.bz2`, `.xz`, `.zst` or `.Z` keeps its archive. A lone compressed file whose output exists is refused, `tar` reports each such file as an error and extracts the others, `unzip`, `unrar` and `7z` skip them.
+
 `ls`, `tree` and `cat` read `.tar`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tar.xz`, `.tar.zst` and `.zip`. Folders an archive holds no entry for, as one made from a file list, are shown all the same.
 
 ## What `pack --delete` checks before it deletes

@@ -81,7 +81,7 @@ function printRows(rows: [label: string, value: string][]): void {
 
 const PASSWORD_USAGE = `dev password [length] [format] [-b|--bcrypt [password]] [--copy]: a random password of <length> bytes (default ${DEFAULT_LENGTH}) as hex, base64 (default) or base64url
 
-Printed on stdout; --copy also copies it to the clipboard through wl-copy, xclip, xsel or pbcopy (the copy is said on stderr). With --bcrypt it is the bcrypt hash (cost 10) that prints: of the password given (- asks for it masked on a terminal, or reads it from stdin, keeping it out of the shell history), or of a generated one, which then prints on stderr and is the one --copy copies. Bun writes bcrypt as $2b$, the hash prints with the $2y$ prefix htpasswd -B writes, the one Apache, nginx and traefik basic auth all accept.`
+Printed on stdout, and copied with --copy. With --bcrypt the bcrypt hash (cost 10) prints, of the password given (- asks for it masked on a terminal, or reads stdin, keeping it out of the shell history) or of a generated one, which prints on stderr and is the one --copy copies. The hash has the $2y$ prefix htpasswd -B writes.`
 
 const PASSWORD_EXITS: ExitRow[] = [[0, 'it printed the password or hash'], [2, 'a usage error'], [130, 'the prompt was cancelled']]
 
