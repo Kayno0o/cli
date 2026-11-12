@@ -5,8 +5,9 @@ import { knownMessage } from './errors'
 import { addWorktrees, dirtyRepos, isRegistered, removeWorktrees, unreachableCommits } from './git'
 import { assertWorktreeExists, locate, locateWorktree, worktreeOf, WtError } from './project'
 import { removeQueues } from './prune'
+import { holders } from './queue'
 import { urlsOf } from './routes'
-import { forgetTestDatabases } from './run'
+import { forgetTestDatabases, runsDir } from './run'
 import { afterRemove, hasContainers, stackDown, stackUp } from './stack'
 import { syncWorktree } from './sync'
 
@@ -86,6 +87,14 @@ export async function syncTask(task: string | undefined, options: GlobalOptions)
   console.log(`wt: synced ${worktree.id}`)
 }
 
+/** Refuses a removal while a `wt run` uses the worktree, forced or not: its container has the worktree mounted. */
+function refuseWhileRun(worktree: Worktree): void {
+  const runs = holders(runsDir(worktree))
+
+  if (runs.length)
+    throw new WtError(`${worktree.task} is in use by wt run (${runs.map(command => `\`${command}\``).join(', ')}), remove it once that ends`)
+}
+
 /** Refuses a removal that would lose uncommitted changes or commits on no branch, unless forced. */
 async function refuseLosingWork(worktree: Worktree, force: boolean): Promise<void> {
   if (force || !existsSync(worktree.dir))
@@ -109,6 +118,7 @@ export async function assertRemovable(task: string, options: GlobalOptions & { f
   if (!existsSync(worktree.dir) && !Object.values(worktree.files).some(file => existsSync(file)) && !await isRegistered(worktree))
     throw new WtError(`no worktree ${worktree.task} of ${worktree.project.name}, nothing removed`)
 
+  refuseWhileRun(worktree)
   await refuseLosingWork(worktree, options.force === true)
 
   return worktree
@@ -123,6 +133,7 @@ export async function removeTask(task: string, options: GlobalOptions & { force?
   const anonymous = await anonymousVolumes(worktree)
 
   // Again inside the job: the tree may have changed since the check before it
+  refuseWhileRun(worktree)
   await refuseLosingWork(worktree, options.force === true)
 
   // With the folder gone, its containers may still hold its volumes

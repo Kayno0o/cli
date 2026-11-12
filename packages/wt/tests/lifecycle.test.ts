@@ -881,7 +881,8 @@ describe('wt run', () => {
 
   afterAll(() => env?.stop())
 
-  test('a repeat on an unchanged stack makes one docker call before the command', async () => {
+  // The planning worktree, with a run service and a test database answering
+  async function runnable() {
     const { sandbox, wt, dirOf, root } = env
     const manifest = join(sandbox.home, '.config', 'wt', 'projects', 'times.ts')
 
@@ -890,6 +891,33 @@ describe('wt run', () => {
     writeFileSync(join(dirOf('planning'), 'api', '.env.dist'), 'DATABASE_URL=postgresql://app:pw@db:5432/app\n')
     sandbox.seed('config-times.json', JSON.stringify({ ...MAIN_CONFIG, services: { ...MAIN_CONFIG.services, 'api-php': { volumes: [{ type: 'bind', source: join(root, 'api'), target: '/app' }] }, 'db': { image: 'postgres:16' } } }))
     sandbox.seed('test-db-id', 'abcdef1234567890')
+  }
+
+  test('keeps wt rm off the worktree while it runs, forced or not', async () => {
+    const { sandbox, wt, dirOf } = env
+    const runs = join(sandbox.home, '.cache', 'wt', 'queues', 'times--planning.runs')
+
+    await runnable()
+    sandbox.seed('delay-run', '2')
+
+    const running = wt('run', 'planning', '--', 'phpunit')
+
+    for (let tries = 0; tries < 100 && !(existsSync(runs) && readdirSync(runs).length); tries++)
+      await Bun.sleep(20)
+
+    const refused = await wt('rm', 'planning', '--force')
+
+    expect(refused.code).toBe(1)
+    expect(refused.err).toContain('planning is in use by wt run (`phpunit`), remove it once that ends')
+    expect(existsSync(dirOf('planning'))).toBe(true)
+    expect((await running).code).toBe(0)
+    expect((await wt('rm', 'planning', '--force')).code).toBe(0)
+  }, 30_000)
+
+  test('a repeat on an unchanged stack makes one docker call before the command', async () => {
+    const { sandbox, wt, root } = env
+
+    await runnable()
 
     const commands = () => sandbox.dockerCalls().map(call => call.args).filter(args => !args.startsWith('run --rm') || args.endsWith(' check'))
 

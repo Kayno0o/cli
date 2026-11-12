@@ -8,7 +8,7 @@ import { baseComposeFiles, composeConfig } from './compose'
 import { wtConfig } from './config'
 import { readEnvFile } from './env_file'
 import { assertWorktreeExists, locateWorktree, WtError } from './project'
-import { inLine, queueDir } from './queue'
+import { holding, inLine, queueDir } from './queue'
 
 export interface TestDatabase {
   // The host the test env dials, which the throwaway database answers to on the private network.
@@ -287,12 +287,20 @@ export async function runTask(task: string, command: string[], project?: string)
   if (!run)
     throw new WtError(`${name} has no \`run\` in its manifest, so wt cannot tell which service runs its tests`)
 
-  const database = testDatabase(join(worktree.dir, run.dir))
-  const plan = runPlan(worktree, run, await cachedRunInputs(worktree, run, database.host), database, userInfo(), Boolean(process.stdin.isTTY && process.stdout.isTTY))
+  // Held while it runs, so `wt rm` does not pull the worktree from under its container
+  return holding(runsDir(worktree), command.join(' '), async () => {
+    const database = testDatabase(join(worktree.dir, run.dir))
+    const plan = runPlan(worktree, run, await cachedRunInputs(worktree, run, database.host), database, userInfo(), Boolean(process.stdin.isTTY && process.stdout.isTTY))
 
-  await provision(worktree, run, plan, await answeringDatabase(plan, database) ?? await ensureDatabase(plan, database))
+    await provision(worktree, run, plan, await answeringDatabase(plan, database) ?? await ensureDatabase(plan, database))
 
-  return runInherit(['docker', ...plan.runner(command)])
+    return runInherit(['docker', ...plan.runner(command)])
+  })
+}
+
+/** The folder each `wt run` of the worktree holds a ticket in while it runs. */
+export function runsDir(worktree: Worktree): string {
+  return queueDir(worktree.project.settings, `${worktree.id}.runs`)
 }
 
 // One heavy command at a time across every session on the machine, the rest waiting their turn in arrival order.
