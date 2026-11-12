@@ -24,7 +24,7 @@ A missing pid exits 1. What the calling user cannot read of another user's proce
 
 Sockets come from `/proc/net/{tcp,tcp6,udp,udp6}` and are mapped to their owner through the inode in `/proc/<pid>/fd`, so only the calling user's processes show an owner; the others show `-`. A socket without a readable owner, or held by `docker-proxy`, takes the container publishing its port when `docker ps` answers (skipped quietly when docker is missing or its daemon unreachable).
 
-`proc ports <port>` exits 1 when nothing listens there. `--kill` refuses a process of another user, pid 1, this command and its ancestors, and a container's port, for which it prints the `docker stop <container>` to run instead.
+A socket of another user shows `-` as its owner. `proc ports <port>` exits 1 when nothing listens there. `--kill` refuses a process of another user, pid 1, this command and its ancestors, and a container's port, for which it prints the `docker stop <container>` to run instead.
 
 ## proc procs
 
@@ -35,6 +35,6 @@ A process is listed when it is a dev tool (bun, node, vite, nuxt, next, chromium
 
 The dev processes below a listed one, and those sharing its `--user-data-dir`, are listed with it, so a chromium whose main process was killed groups with its leftover helpers. Groups are named after the git root (else the nearest package manifest) of the working directory under the home folder, the browser profile, or else the command.
 
-`--min-mem <size>` (`500M`, `1.5G`, a bare number counting megabytes) sets the heavy bar and the least a left over process must use; `--older <duration>` (`30m`, `2h`, `1d`) keeps the processes at least that old. `--kill` never touches pid 1, shells, terminals, this command and its ancestors, or other users' processes, and counts the ones it left out.
+`--min-mem <size>` (`500M`, `1.5G`, a bare number counting megabytes) sets the heavy bar and the least a left over process must use; `--older <duration>` (`30m`, `2h`, `1d`) keeps the processes at least that old. `--kill` sends SIGTERM, then SIGKILL after `--grace` to what is still there, and never touches pid 1, shells, terminals, this command and its ancestors, or other users' processes, and counts the ones it left out.
 
 Linux only. Start times assume the usual 100 clock ticks per second.

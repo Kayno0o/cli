@@ -39,7 +39,7 @@ Every rule reads the command with one shell parser (`packages/kit/src/shell.ts`)
 
 `guard hook <event>` speaks Claude Code's hook protocol, the event JSON on stdin and the reply JSON on stdout; the `cli-hooks` plugin at the repo root registers it (see the root README).
 
-- `pre-tool-use`: a Bash call breaking a rule is denied with the routes, an install with the wrong manager with the command to run instead, an install `pkg` refuses with its report; a Read, Edit or Write of an env file is denied.
+- `pre-tool-use`: a Bash call breaking a rule is denied with the routes, an install with the wrong manager with the command to run instead, an install `pkg` refuses (or fails to check) with its report; a file tool (Read, Edit, MultiEdit, Write, NotebookEdit, Grep, Glob) reaching an env file is denied.
 - `user-prompt-submit`: a prompt naming a push lets `git push` through until the next prompt; the state sits in `$XDG_STATE_HOME/guard/push-asked/<session>`, an empty file left behind by each session that ended on such a prompt. Claude Code sends no origin with the event, so a prompt it sends itself (a notification, a peer session's message) counts too, where the dotfiles mod counts only what the user typed.
-- `session-start`: the installed @kaynooo/cli-* bins, one line each, handed to Claude as context.
+- `session-start`: the installed `@kaynooo/cli-*` bins, one line each, handed to Claude as context.
 - Nothing printed lets the call go ahead. Any failure exits 1, which Claude Code reports without blocking, never 2, which would block.

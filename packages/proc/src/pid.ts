@@ -7,10 +7,10 @@ import { maskArgs, maskEnviron } from './mask'
 import { parseCgroup, parseEnviron, parseLimits, parseStat, parseStatus, statusBytes } from './parse'
 import { bootMs, fdCount, readProc, readSockets, readText, socketsOf, userName } from './read'
 
-const usage = `proc pid <pid>
+const usage = `proc pid <pid>: shows what a process is, from its executable and command line to its parent chain, memory, open files, listening ports and cgroup
 
-Shows what a process is: its executable, working directory, command line, parent chain up to init, user, start time and age, memory, open files and limits, the TCP and UDP ports it listens on and its cgroup. Everything is read from /proc; what the calling user cannot read of another user's process is left out and named at the end.
-The environment is not shown unless --env is given, with every value that looks like a secret masked.`
+Everything is read from \`/proc\`; what the calling user cannot read of another user's process is left out and named at the end.
+The environment is not shown unless --env is given, with every secret masked.`
 const EXITS: ExitRow[] = [[0, 'it showed the process'], [1, 'no process has this pid'], [2, 'a usage error']]
 
 const DIGITS = /^\d+$/

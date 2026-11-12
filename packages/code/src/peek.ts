@@ -16,9 +16,7 @@ src peek --refs <symbol> [path...]         the lines naming the symbol, grouped 
 src peek --outline <file>...               the declarations and class members, a Markdown file's headings
 src peek --around <regex> [-C 3] [path...] the lines around each match, overlapping ones merged
 <output> | src peek [-C 3]                 the lines around each path:line the output opens a line with (errs, rg -n, grep -n, tsc, linters)
-The paths default to the files git keeps here (.gitignore holds).
---refs lists at most 100 lines and --around prints at most 20 spans, the count of the rest after them (--limit <n>, --full for all).
---json prints spans as [{path, from, to, lines}], --refs as [{path, line, text}] ({definitions, references} with --defs-first), --outline as [{path, line, depth, text}], the lines never cut and the rows never counted off unless --limit is given.`
+The paths default to the files git keeps here (\`.gitignore\` holds).`
 const EXITS: ExitRow[] = [[0, 'it printed something'], [1, 'nothing is found, a file cannot be read or a span starts past the end'], [2, 'a usage error or a path outside the repository']]
 
 const REFS_LIMIT = 100
@@ -33,7 +31,7 @@ const OPTIONS = {
   'defs-first': { type: 'boolean', description: 'with --refs, print the symbol\'s declarations before its lines' },
   'context': { type: 'string', short: 'C', description: 'lines on each side of an --around match or a piped location (3)' },
   ...limitOptions(REFS_LIMIT),
-  'json': jsonOption(),
+  'json': jsonOption('spans [{path, from, to, lines}], --refs [{path, line, text}] ({definitions, references} with --defs-first), --outline [{path, line, depth, text}]'),
 } as const
 
 const TARGET = /^(.+?):(\d+)(?:-(\d+))?$/

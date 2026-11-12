@@ -14,8 +14,8 @@ const DEFAULT_FORGE = 'git.kaynooo.fr'
 
 const USAGE = `gcl <repo> [dir]: clones a repository into the workspace folder and prints where it landed
 
-<repo> is a URL, an scp-style address (git@host:owner/name.git), a local path or owner/name, which is read as https://${DEFAULT_FORGE}/owner/name.git (the \`forge\` key of ~/.config/kaynooo-cli/config.json names another host). Without <dir> the clone goes to <workspace>/<name>, the workspace being the one \`cli config\` reports.
-When that folder already holds the repository, nothing is cloned: it is fetched and fast-forwarded as gf does. A folder holding anything else is refused.`
+<repo> is a URL, an scp-style address, a local path or \`owner/name\`, read as \`https://${DEFAULT_FORGE}/owner/name.git\` (the \`forge\` config key names another host). Without <dir> the clone goes to <workspace>/<name>, the workspace \`cli config\` reports.
+A folder that already holds the repository is fetched and fast-forwarded as gf does, not cloned again; one holding anything else is refused.`
 
 const EXITS: ExitRow[] = [[0, 'it cloned the repository, or found it and brought it up to date'], [1, 'git could not clone it, or the folder is taken'], [2, 'a usage error']]
 

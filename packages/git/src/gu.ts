@@ -9,8 +9,8 @@ import { git } from './git'
 
 const USAGE = `gu <path>...: undoes changes to the paths given, keeping what it takes away
 
-By default it discards the unstaged changes of the tracked paths, after saving them as a patch in the git folder (gu/<time>.patch) that \`git apply\` puts back. --staged unstages the paths and loses nothing. --commit undoes the last commit, its changes left staged, and refuses a commit that is already on the upstream or a merge.
-Nothing is discarded without a path: gu alone is a usage error, never "everything". A path with no change is refused with nothing done.`
+By default it discards the unstaged changes of the tracked paths, after saving them as a patch in the git folder (\`gu/<time>.patch\`) that \`git apply\` puts back. --staged unstages the paths. --commit undoes the last commit, its changes left staged, refusing one already on the upstream or a merge.
+Without a path it is a usage error, never "everything"; a path with no change is refused with nothing done.`
 
 const EXITS: ExitRow[] = [[0, 'it undid what was asked'], [1, 'a path has no change, the commit is pushed or git refused'], [2, 'a usage error or outside a git repository']]
 

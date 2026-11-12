@@ -12,11 +12,10 @@ import { checkCommand, checkPath } from './check'
 import { EVENTS, hook } from './hook'
 import { RULES } from './rules'
 
-const checkUsage = `guard check [options] [<command> | -]
+const checkUsage = `guard check [options] [<command> | -]: checks a shell command against the rules and names the route to take instead of each one it breaks
 
-Checks a shell command against the rules: remote machines, git (stash, whole-tree add and commit, push, tags), destructive commands (reset --hard, force push, rebase, broad rm), commit messages, SQL writes, env files, package managers and in-place edits (sed -i and replace scripts, pointed at sub).
-Prints each broken rule with the route to take instead and exits 1, prints nothing and exits 0 when the command is clean.
-The command is read from stdin with - or when none is given; a rule may rewrite it instead (the pinned package manager, a noisy run through out), printed as \`runs as: <command>\`.`
+The rules (\`guard rules\` lists them) cover remote machines, git, destructive commands, commit messages, SQL writes, env files, package managers and in-place edits. A clean command prints nothing and exits 0.
+The command is read from stdin with - or when none is given; a rule may rewrite it instead, printed as \`runs as: <command>\`.`
 
 const CHECK_EXITS: ExitRow[] = [[0, 'the command is clean'], [1, 'a rule is broken'], [2, 'a usage error']]
 
@@ -40,7 +39,7 @@ const pathOptions = {
 const hookUsage = `guard hook <${EVENTS.join('|')}>
 
 Answers a Claude Code hook: reads the event JSON on stdin and prints the reply JSON, nothing when the call goes ahead untouched.
-pre-tool-use refuses a Bash call breaking a rule, an install pkg refuses (or fails to check), and a file tool (Read, Edit, MultiEdit, Write, NotebookEdit, Grep, Glob) reaching an env file; user-prompt-submit remembers whether the prompt asked for a push; session-start lists the installed @kaynooo/cli-* bins.
+\`pre-tool-use\` refuses a Bash call breaking a rule, an install \`pkg\` refuses and a file tool reaching an env file; \`user-prompt-submit\` remembers whether the prompt asked for a push; \`session-start\` lists the installed bins.
 A failure exits 1, which Claude Code reports without blocking the call.`
 
 const HOOK_EXITS: ExitRow[] = [[0, 'it answered'], [1, 'a failure or an unknown event (never 2, which would block the call)']]

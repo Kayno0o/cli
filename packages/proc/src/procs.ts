@@ -9,11 +9,10 @@ import { maskArgs } from './mask'
 import { ancestry, snapshot } from './read'
 import { selectGroups } from './select'
 
-const usage = `proc procs
+const usage = `proc procs: lists the calling user's leftover or heavy dev processes, grouped by project folder, browser profile or command
 
-Lists the leftover or heavy processes of the calling user that are worth cleaning, grouped by origin: the project folder their working directory is in, a browser profile for a chromium and its helpers, else their command. Each group shows its process count, total resident memory and oldest age.
-A process is listed when it is a dev tool (bun, node, vite, nuxt, next, chromium and chrome, playwright and webview browsers and their helpers, language servers, test runners) and either an orphan, reparented to init or to the user's systemd, or heavy (500M resident by default). The processes below a listed one, and those sharing a browser profile with it, are listed too, so a chromium whose main process was killed groups with its leftover helpers.
-\`--kill\` is a dry run that names what it would stop unless --yes is given; it sends SIGTERM, then SIGKILL after --grace to what is still there. It never signals pid 1, shells, terminals, this command and its ancestors, or processes of other users.`
+A process is listed when it is a dev tool (bun, node, vite, chromium, playwright, language servers, test runners) and either an orphan, reparented to init or to the user's systemd, or heavy (500M resident by default); the processes below it and those sharing its browser profile come with it.
+\`--kill\` is a dry run that names what it would stop unless --yes is given. It never signals pid 1, shells, terminals, this command and its ancestors, or processes of other users.`
 const EXITS: ExitRow[] = [[0, 'it listed or stopped everything'], [1, 'a process survived SIGKILL'], [2, 'a usage error']]
 
 const options = {

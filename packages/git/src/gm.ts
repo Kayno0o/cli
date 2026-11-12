@@ -12,11 +12,9 @@ import { git } from './git'
 
 const USAGE = `gm [branch]: merges the branch into the current one with git merge --no-edit, saying what came in
 
-Without a branch, on a terminal, picks one: every branch but the current one with how far it is ahead of and behind it, a preview of what the merge would do (the commits coming in, the files they touch, whether it would conflict and where), enter to merge and ctrl-s to merge with --squash. Without a terminal it lists the branches with that verdict each, clean, conflicts with the files, or merged already. A merge in progress is refused here: gm --continue or gm --abort.
---squash stages the changes of the branch without committing them or recording a merge, to commit with gc; a conflict then leaves the files to resolve and git reset --merge to give up.
-
-Staged changes are refused, and so are unstaged ones in files the merge changes; other unstaged edits stay as they are, through a conflict and gm --abort too. The output names the outcome (fast-forward, merge commit or already up to date), the commits and the files that came in. On a conflict every conflicted file is listed with its conflict regions (the <<<<<<<, ======= and >>>>>>> lines and two lines around them, line numbers included) and the exit is 1.
-gm --dry-run <branch> says whether the merge would conflict and in which files, touching nothing (git merge-tree). gm --continue commits the merge once the markers are gone from the conflicted files, refusing while one remains; gm --abort gives the merge up.`
+Without a branch, on a terminal, picks one with a preview of what merging it would do (enter merges, ctrl-s squashes); without a terminal it lists the branches with that verdict. A merge in progress is refused here: \`gm --continue\` or \`gm --abort\`.
+Staged changes are refused, and so are unstaged ones in files the merge changes; other unstaged edits stay as they are.
+On a conflict every conflicted file is listed with its conflict regions and the exit is 1.`
 const EXITS: ExitRow[] = [[0, 'it merged, the branch was already merged, or --dry-run found no conflict'], [1, 'a conflict, a dirty tree, an unknown branch, a refused step or git failed'], [2, 'outside a git repository or a usage error']]
 
 const OPTIONS = {

@@ -10,10 +10,9 @@ import { tryLock, writeHeld } from './flock'
 const RUN_USAGE = `slot [options] -- <cmd>...: waits for a free machine-wide slot, then runs the command and exits with its code
 slot ls [--json]: lists who holds a slot or a lock and who waits for one (slot ls --help)
 
-The slots and locks are shared by every session, worktree and shell of this user, so heavy jobs (phpunit, playwright, vue-tsc, eslint) queue instead of overloading the machine.
-A slot or lock is freed the moment its holder ends, SIGKILL included, since the kernel drops it with the process.
-A slotted command that runs slot again does not wait for a second slot, so wrapping both a script and the commands inside it cannot deadlock.
-A first word \`ls\` always means the listing, so run the ls command as \`slot -n 4 -- ls\` or by its path.`
+The slots and locks are shared by every session, worktree and shell of this user, so heavy jobs (phpunit, playwright, vue-tsc, eslint) queue instead of overloading the machine; one is freed the moment its holder ends, SIGKILL included.
+A slotted command that runs slot again does not wait for a second slot, so wrapping a script and the commands inside it cannot deadlock.
+A first word \`ls\` always means the listing: run the ls command as \`slot -n 4 -- ls\`.`
 
 const RUN_EXITS: ExitRow[] = [[0, 'the command did'], ['its own', 'the code of a command that failed'], [2, 'it timed out waiting for the slot or a usage error'], [127, 'the command cannot be started']]
 

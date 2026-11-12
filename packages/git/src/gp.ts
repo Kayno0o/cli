@@ -9,7 +9,7 @@ import { progressLine } from '@kaynooo/cli-kit/progress'
 import { git } from './git'
 import { dirsOf, repoState } from './repos'
 
-const USAGE = `gp [dir]...: pushes the current branch of the repository, or of each dir's, when it is ahead of its upstream as of the last fetch or has none yet, the latter with -u to origin (the only remote when there is no origin)
+const USAGE = `gp [dir]...: pushes the current branch of the repository, or of each dir, when it is ahead of its upstream or has none yet
 
 --repos pushes every repository at and below the current one's toplevel, or below each dir given, the way gst --repos lists them. A detached HEAD, a branch with nothing to push and a repository with no remote are skipped, saying so; the pushes run one after another.
 What follows -- goes to every git push as is (gp -- --tags, gp -- --force-with-lease), and a branch with nothing ahead is then pushed too.`

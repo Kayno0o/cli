@@ -8,10 +8,8 @@ import { checkApp } from '../pins'
 const usage = `ev pins [dir] [--except NAME,...]
 
 Checks that an app's tests pin the env that reaches outside.
-Reads the app's env schema (the file calling defineEnv, src/env.ts) and lists its optional URL, key, token, secret, password and host variables, then the ones no \`.env.test\` entry, test-level overrideEnv or local bunfig preload dropping what .env sets pins, and each test file that calls testSite or proxyKeyTests without pinning them all.
-A file whose pages reach none of them says so with a \`// ev pins: none reached, <why>\` comment.
-The dir is an app, or a monorepo holding apps one level down (the current folder by default).
-Reads variable names only, never a value.`
+Lists the optional URL, key, token, secret, password and host variables of the app's \`defineEnv\` schema that no \`.env.test\` entry, \`overrideEnv\` or bunfig preload pins, and each test file calling \`testSite\` or \`proxyKeyTests\` without pinning them all; a file reaching none says so with a \`// ev pins: none reached, <why>\` comment.
+The dir is an app, or a monorepo holding apps one level down (the current folder by default). It reads variable names only, never a value.`
 
 const EXITS: ExitRow[] = [[0, 'everything is pinned'], [1, 'something is not'], [2, 'a usage error']]
 

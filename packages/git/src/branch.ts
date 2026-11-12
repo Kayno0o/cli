@@ -22,14 +22,14 @@ export interface Branch {
   merged: boolean
 }
 
-const usage = `gb [branch]
+const usage = `gb [branch]: picks a git branch and switches to it
 gb -
 gb -c <name>
 gb -d <branch>
 
-Without a branch, picks one when a terminal is attached: the branches last checked out first, as the reflog has them, then the other local ones, then the remote ones with no local branch yet. The header says where HEAD stands, each row how its branch stands against its upstream and whether it is merged into the base. enter switches to it (a remote one gets its local tracking branch), ctrl-n creates a branch named after the query, ctrl-d deletes the highlighted local branch with \`git branch -d\`, which refuses one not merged yet, and ctrl-r fetches, prunes and lists again. Without a terminal it lists the branches instead.
-\`gb <branch>\` switches without the picker, a bare name finding the remote branch it would create. \`gb -\` goes back to the previous branch, \`gb -c <name>\` creates one and switches to it, \`gb -d <branch>\` deletes a local one.
-A branch checked out in another worktree cannot be switched to: gb prints that worktree's path on stdout and a hint on stderr, since a command cannot change its parent shell's folder.`
+Without a branch, on a terminal, picks one: the recently checked out first, then the other local ones, then the remote ones with no local branch yet (enter switches, ctrl-n creates, ctrl-d deletes a merged local branch with \`git branch -d\`, ctrl-r fetches and prunes); without a terminal it lists them.
+\`gb <branch>\` switches without the picker, \`gb -\` goes back to the previous branch, \`gb -c <name>\` creates one and switches to it, \`gb -d <branch>\` deletes a local one.
+A branch checked out in another worktree cannot be switched to: gb prints that worktree's path, since a command cannot change its shell's folder.`
 
 const EXITS: ExitRow[] = [[0, 'it switched, created, deleted or listed'], ['git', 'the code of the git command it ran, when that failed'], [1, 'there is no branch by that name or nothing was picked'], [2, 'outside a git repository or a usage error']]
 

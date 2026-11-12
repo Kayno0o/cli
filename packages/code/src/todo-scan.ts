@@ -8,11 +8,8 @@ import { addAges, lookUp, marksIn, refKey } from './todo'
 
 const USAGE = `src todo-scan [options] [path...]: lists the TODO, FIXME, HACK, XXX and owner/repo#N comments under the paths (here by default), each as <file>:<line>: <comment>, honouring .gitignore
 
---older <duration> keeps only the comments whose line last changed longer ago than that (30d, 12w, 6m: git blame dates each one, a file git cannot blame is left out) and shows each one's age.
-
---stale keeps only the comments naming a closed issue, each issue's state looked up with ft, or gh for a GitHub repository, and exits 1 when it finds one.
-
-Lists at most 100 comments, the count of the rest after them (--limit <n>, --full for all); --json is never cut unless --limit is given.`
+--older <duration> keeps the comments whose line last changed longer ago than that (\`30d\`, \`12w\`, \`6m\`, dated by git blame) and shows each one's age.
+--stale keeps the comments naming a closed issue, looked up with \`ft\`, or \`gh\` for a GitHub repository, and exits 1 when it finds one.`
 const EXITS: ExitRow[] = [[0, 'it listed the comments or found no stale one'], [1, '--stale finds one'], [2, 'a usage error or when --stale could not look a repository up (ft and gh both failed)']]
 
 const LIST_LIMIT = 100

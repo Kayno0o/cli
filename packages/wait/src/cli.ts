@@ -12,8 +12,7 @@ import { exitCode, isTranscript, pidAlive, taskEnd, taskFile } from './task'
 const USAGE = `waitfor [options]: waits until a file shows a line, a port listens, a URL answers 2xx, a process exits or a command exits 0
 waitfor task <task id | file>: waits for a Claude Code background task to end (waitfor task --help)
 
-Every condition given must be met, or with --any the first of them to be; --port and --url may be repeated, and --status and --body then apply to every --url. A --fail line in --file ends the wait at once. A timeout or a --fail line comes with an excerpt of what it saw last.
---json prints {met, ms, line, conditions} once met or on a --fail line, conditions naming each one met as {name, ms}, line being the last --until line or the --fail one as {number, text} (null when none), and the progress lines go to stderr.`
+Every condition given must be met, or with --any the first of them to be; --port and --url may be repeated. A --fail line in --file ends the wait at once, and a timeout or a --fail line comes with an excerpt of what was seen last.`
 
 const TASK_USAGE = `waitfor task [options] <task id | file>: waits for a Claude Code background task to end, then prints its exit code, its last lines and the (fail) and error: lines above them
 
@@ -46,7 +45,7 @@ const OPTIONS = {
   interval: { type: 'string', description: 'how long between two runs of --cmd (1s)' },
   any: { type: 'boolean', description: 'met by the first condition that is, not all of them (needs two)' },
   timeout: TIMEOUT,
-  json: jsonOption('{met, ms, line}'),
+  json: jsonOption('{met, ms, line, conditions: [{name, ms}]}, line being the last --until line or the --fail one as {number, text}; the progress lines go to stderr'),
   quiet: { type: 'boolean', short: 'q', description: 'no live progress line: only what was met and the failure' },
 } as const
 

@@ -57,7 +57,7 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 
 - On a conflict every conflicted file is listed with its conflict regions (the markers and two lines around them, line numbers included) and the exit is 1; `gm --continue` commits once the markers are gone, refusing while one remains, and `gm --abort` gives the merge up.
 - `gm --dry-run <branch>` says whether the merge would conflict, and in which files, with `git merge-tree` and nothing touched.
-- `--squash` stages the branch's changes without committing them, to commit with `gc`.
+- `--squash` stages the branch's changes without committing them or recording a merge, to commit with `gc`; a conflict then leaves the files to resolve and `git reset --merge` gives up.
 - With no branch, a terminal gets a picker of the other branches (ahead and behind the current one, a preview of the commits, files and verdict; enter merges, ctrl-s squashes); without a terminal the branches are listed with their verdict, `--json` giving `[{name, ahead, behind, outcome, conflicts}]`.
 - Exit codes: 0 merged, already merged or no conflict in a dry run, 1 a conflict, a dirty tree or a refusal, 2 outside a repository or a usage error.
 

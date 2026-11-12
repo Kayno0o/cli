@@ -9,11 +9,10 @@ import { shellQuote } from '@kaynooo/cli-kit/shell'
 import { audit as findExposed } from '../audit'
 import { fixCompose, shutOthersOut } from '../fix'
 
-const usage = `ev audit [dir...] [--fix]
+const usage = `ev audit [dir...] [--fix]: lists the .env files any account can read or git tracks and the compose files writing a secret out, never printing a value
 
-Lists the .env files any account on the machine can read or git tracks, and the compose files any account can read that write a secret out (a secret-named value or a URL password) instead of reading it from a .env, never printing a value.
-Looks under each folder (the current one by default) down to 5 levels, skipping node_modules, vendor and .git, and leaves .example, .sample, .template and .dist files out. A folder it cannot read is named on stderr.
-With --fix, moves each secret a listed compose file writes out into the .env beside it as \${KEY}, puts it back when \`docker compose config\` resolves differently after, and shuts other accounts out of both files and of every listed .env; a key the .env already sets to another value stays put.`
+It looks under each folder (the current one by default) down to 5 levels, skipping \`node_modules\`, \`vendor\` and \`.git\`, and leaves \`.example\`, \`.sample\`, \`.template\` and \`.dist\` files out.
+With --fix, each secret a listed compose file writes out moves into the .env beside it as \`\${KEY}\` and goes back when \`docker compose config\` resolves differently after; a key the .env already sets to another value stays put.`
 
 const EXITS: ExitRow[] = [[0, 'it finds none (with --fix, when none is left)'], [1, 'it finds one'], [2, 'a usage error']]
 

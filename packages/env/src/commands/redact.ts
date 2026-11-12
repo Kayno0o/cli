@@ -6,7 +6,7 @@ import { check, Redactor } from '../redactor'
 
 const usage = `ev redact [--check]
 
-Copies stdin to stdout line by line with secrets masked: known token formats (GitHub, GitLab, Slack, AWS, npm, Stripe, Google and SendGrid keys, sk-, JWTs, Authorization headers, password= and secret= pairs), private key blocks, the password and the tokens of any URL and the values of secret-looking keys in this folder's .env* files.
+Copies stdin to stdout line by line with secrets masked: known token formats, private key blocks, the password and tokens of any URL and the values of secret-looking keys in this folder's .env* files.
 --check prints nothing of the input and lists the file and line of each secret found, exiting 1 when there is any: \`git diff --cached | ev redact --check\`.`
 
 const EXITS: ExitRow[] = [[0, 'it copied the input or found no secret'], [1, '--check finds one'], [2, 'a usage error']]

@@ -9,7 +9,7 @@ import { isSecretKey, maskValue } from '../mask'
 
 const listUsage = `ev list [file]
 
-Prints every key of the folder's .env* files, or of one file, with secret values masked: a few leading characters and the length under a key named like TOKEN, SECRET, PASSWORD, PASS, PWD, KEY, PRIVATE, DSN, AUTH, SALT or COOKIE, any value equal to a secret of the folder's .env* files, and the password and tokens of any URL.
+Prints every key of the folder's .env* files, or of one file, with secret values masked to a few leading characters and the length.
 
 --json prints [{file, key, value, secret}], value masked and secret true when a value was.`
 
