@@ -58,6 +58,8 @@ SIGINT, SIGTERM and SIGHUP go to the running step's whole process group and `che
 
 Exit code 0 when every step passed, 1 when one failed, 2 on bad usage, when no step is found or when a step timed out.
 
+`--json` prints `[{name, command, in?, ok, ms, log, failed?}]` once every step ran, `in` naming the compose service the step ran in; `--list --json` prints `[{name, command, source, in?}]`, and `--fix --json` `{fixers: [{name, command, in?, ok, ms, log, failed?} or {name, command, skipped}], changed}`, `changed` being null outside a git repository.
+
 `--failed` reads the last finished run's folder of logs, where each run leaves a `results.json` of its steps' names and results, and runs the steps that failed there again. When that run had none, or there was no run, it says so and exits 2. The re-run leaves its own `results.json`.
 
 ## check --fix

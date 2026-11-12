@@ -7,7 +7,7 @@ export const options = {
   'only': { type: 'string', short: 'o', description: `comma separated steps to run, among ${STEP_NAMES.join(', ')}; with --fix the fixers to run, by the names --list prints`, candidates: () => [...STEP_NAMES] },
   'timeout': { type: 'string', short: 't', description: 'longest a step or fixer may run before it is ended (30s, 5m, 1h), none by default' },
   ...placeOptions,
-  'json': jsonOption(),
+  'json': jsonOption('[{name, command, in?, ok, ms, log, failed?}], with --list [{name, command, source, in?}], with --fix {fixers, changed}'),
   'fix': { type: 'boolean', short: 'f', description: 'run the folder\'s fixers and formatters instead of the steps' },
   'quiet': { type: 'boolean', short: 'q', description: 'print nothing for a passing step, and nothing at all when every step passes' },
   'failed': { type: 'boolean', description: 'run only the steps that failed in the last run of this folder, read from the run folder' },

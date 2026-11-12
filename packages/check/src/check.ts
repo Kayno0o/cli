@@ -16,18 +16,10 @@ import { discoverProjects, STEP_NAMES } from './steps'
 const usage = `check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot | --no-slot] [--parallel] [--in <service> | --host] [--list]
 check --fix [--only <fixers>] [--timeout <duration>] [--in <service> | --host] [--list]
 
-Runs the repo's check, typecheck, lint and test steps, from package.json scripts (through bun run), composer.json, a Justfile or a Makefile, and for PHP from phpstan.neon (typecheck), .php-cs-fixer.dist.php (lint, dry-run) and phpunit.xml.dist (test) when composer.json has no such script.
-A folder without steps but with subfolders that have some (api/ and client/) runs each one's, each line naming its subfolder.
-A step runs inside the docker compose service that bind-mounts its folder (found in compose.yml, compose.yaml or docker-compose.yml, up to the repository root), at the matching path; a service that is down is never started, the step fails naming it. --in picks the service, --host forces the host.
-A passing step is one line, a failing one shows only what failed, and each step's full output is saved to the file whose path ends its line.
-With --changed, lint and test run on the files changed against HEAD (staged, unstaged and untracked) when their script is a bare linter (keslint, eslint, oxlint) or a bare \`bun test\`: lint on the changed source files, test on the changed test files and the tests next to the changed sources. Every other step, and a test step finding no test for the diff, runs in full and the line says so.
-Each step queues for one of the machine-wide slots shared by every session (slot, half the CPUs) when the slot bin is installed, so concurrent runs do not overload the machine; --no-slot skips the queue, --slot fails when the bin is missing.
-With --parallel, the steps run at the same time, each one's output held and printed in step order as the earlier ones finish; each still queues for its own slot. Steps writing the same files may trip over each other.
-With --quiet, passing steps print nothing, and a fully passing run prints nothing at all: only the failing steps and the closing summary of a run that failed.
-A step still running after --timeout is ended with everything it started, but not what it started inside a container.
-With --failed, only the steps that failed in the last run of this folder run again, read from that run's folder of logs; when no last run failed, it says so and exits 2.
-With --fix, the folder's fixers and formatters run instead of the steps: the project's own \`fix\` script, else its \`lint:fix\` and \`format\` ones, from the same sources as the steps, then the formatters its files call for: php-cs-fixer where configured and composer.json has no fixer, just --fmt, go fmt and go mod tidy, cargo fmt, ruff where configured, and every Makefile target declared .PHONY. The scripts and php-cs-fixer run in the compose service, the formatters on the host. One line per fixer, then the files the run changed. --only then names fixers, as --list prints them; --changed, --failed, --slot, --no-slot and --parallel do not apply.
---json prints [{name, command, in?, ok, ms, log, failed?}] once every step ran, --list --json [{name, command, source, in?}], in the compose service the step ran in; with --fix {fixers: [{name, command, in?, ok, ms, log, failed?} or {name, command, skipped}], changed}, changed null outside a git repository.`
+Runs the repo's check, typecheck, lint and test steps, found in package.json scripts, composer.json, a Justfile, a Makefile or the PHP tools' configs; a folder with no steps runs its subfolders' (api/, client/).
+A step runs inside the running compose service that mounts its folder and never starts one, and queues for a machine-wide slot when \`slot\` is installed.
+A passing step prints one line, a failing one only what failed, and each step's full log is saved to the file its line ends with.
+With --fix, the project's fix, lint:fix and format scripts run instead, then the formatters its files call for (php-cs-fixer, \`just --fmt\`, go fmt, cargo fmt, ruff), and the files they changed are listed.`
 
 const EXITS: ExitRow[] = [[0, 'every step passed'], [1, 'one failed'], [2, 'bad usage, no step is found or a step timed out']]
 
