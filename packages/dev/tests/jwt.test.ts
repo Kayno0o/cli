@@ -44,6 +44,13 @@ describe('claimTimes', () => {
     ])
   })
 
+  test('a claim time past the dates JavaScript holds reads as out of range, the others still dated', () => {
+    expect(claimTimes(decodeJwt(token({ exp: 99_999_999_999_999, iat: 1_516_239_022 })).payload, now, 'UTC')).toEqual([
+      { claim: 'iat', epoch: 1_516_239_022, local: '2018-01-18 01:30:22 UTC', utc: '2018-01-18 01:30:22 UTC', relative: expect.any(String) },
+      { claim: 'exp', epoch: 99_999_999_999_999, local: 'out of range', utc: '', relative: '' },
+    ])
+  })
+
   test('the sample token issued date', () => {
     expect(claimTimes(decodeJwt(SAMPLE).payload, now, 'UTC')).toMatchObject([{ claim: 'iat', utc: '2018-01-18 01:30:22 UTC' }])
   })

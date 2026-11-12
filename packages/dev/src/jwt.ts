@@ -44,11 +44,17 @@ export function decodeJwt(token: string): Jwt {
   return { header: segment(header, 'header'), payload: segment(payload, 'payload'), signatureBytes: Buffer.from(signature, 'base64url').length }
 }
 
-// The iat, nbf and exp claims that hold a number, as dates against `now`.
+// The iat, nbf and exp claims that hold a number, as dates against `now`; one past the dates JavaScript holds (microseconds, say) reads as out of range.
 export function claimTimes(payload: Record<string, unknown>, now = Date.now(), timeZone?: string): Claim[] {
   return TIME_CLAIMS.flatMap((claim) => {
     const epoch = payload[claim]
 
-    return typeof epoch === 'number' && Number.isFinite(epoch) ? [{ claim, epoch, ...zoned(epoch * 1000, timeZone), relative: relative(epoch * 1000, now) }] : []
+    if (typeof epoch !== 'number' || !Number.isFinite(epoch))
+      return []
+
+    if (Number.isNaN(new Date(epoch * 1000).getTime()))
+      return [{ claim, epoch, local: 'out of range', utc: '', relative: '' }]
+
+    return [{ claim, epoch, ...zoned(epoch * 1000, timeZone), relative: relative(epoch * 1000, now) }]
   })
 }
