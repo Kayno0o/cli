@@ -136,8 +136,8 @@ export async function reachable(value: string, home?: string): Promise<URL> {
     return url
   }
 
-  const allowed = ((await loadSettings(home)).allowedHosts ?? []).map(each => each.toLowerCase().replace(BRACKETS, ''))
-  const refused = hosts.find(each => !isLocal(each) && !allowed.includes(each))
+  const allowed = new Set(((await loadSettings(home)).allowedHosts ?? []).map(each => each.toLowerCase().replace(BRACKETS, '')))
+  const refused = hosts.find(each => !isLocal(each) && !allowed.has(each))
 
   if (refused !== undefined)
     fail(`${refused} is neither local nor a compose service, so db does not connect to it: list it in "allowedHosts" in ${settingsPath(home)} to allow it`)
