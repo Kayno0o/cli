@@ -46,21 +46,57 @@ export function boxes(body: string): Box[] {
 }
 
 const INDENT = /^\s*/
+const LINE_END = /\r?\n/
 
-// New unticked boxes after the body's last box, indented like it, or at the end of a body without any.
+function indentOf(line: string): number {
+  return INDENT.exec(line)?.[0].length ?? 0
+}
+
+export function lineEnding(body: string): string {
+  return body.includes('\r\n') ? '\r\n' : '\n'
+}
+
+// The index after a box line and the lines continuing it: those indented deeper, with the blank lines between them.
+export function afterBox(lines: string[], line: number): number {
+  const depth = indentOf(lines[line] ?? '')
+  let end = line + 1
+
+  for (let next = line + 1; next < lines.length; next++) {
+    const text = lines[next] ?? ''
+
+    if (text.trim() === '')
+      continue
+
+    if (indentOf(text) <= depth)
+      break
+
+    end = next + 1
+  }
+
+  return end
+}
+
+// The body with lines inserted before its line at the index, every line in the body's line ending.
+export function insertLines(body: string, at: number, added: string[]): string {
+  const lines = body.split(LINE_END)
+
+  lines.splice(at, 0, ...added)
+
+  return lines.join(lineEnding(body))
+}
+
+// New unticked boxes after the body's last box and its notes, indented like it, or at the end of a body without any.
 export function appendBoxes(body: string, texts: string[]): string {
-  const end = body.includes('\r\n') ? '\r' : ''
+  const eol = lineEnding(body)
   const last = boxes(body).at(-1)
-  const lines = body.split('\n')
+  const lines = body.split(LINE_END)
   const indent = last === undefined ? '' : INDENT.exec(lines[last.line] ?? '')?.[0] ?? ''
-  const added = texts.map(text => `${indent}- [ ] ${text}${end}`)
+  const added = texts.map(text => `${indent}- [ ] ${text}`)
 
   if (last === undefined)
-    return body.trim() === '' ? added.join('\n') : `${body.trimEnd()}${end}\n${end}\n${added.join('\n')}`
+    return body.trim() === '' ? added.join(eol) : `${body.trimEnd()}${eol}${eol}${added.join(eol)}${body.endsWith('\n') ? eol : ''}`
 
-  lines.splice(last.line + 1, 0, ...added)
-
-  return lines.join('\n')
+  return insertLines(body, afterBox(lines, last.line), added)
 }
 
 // The body as it reads, each box line carrying its number as `ft tick` takes it in place of the list marker.

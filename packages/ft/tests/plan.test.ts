@@ -24,6 +24,12 @@ describe('addLines', () => {
 
   test('keeps a Windows line end', () => {
     expect(addLines('Bugs:\r\n- [ ] #1 one\r\n', ['- [ ] #9 nine'], 'Bugs:')).toBe('Bugs:\r\n- [ ] #1 one\r\n- [ ] #9 nine\r\n')
+    expect(addLines('Bugs:\r\n- [ ] #1 one', ['- [ ] #9 nine'])).toBe('Bugs:\r\n- [ ] #1 one\r\n- [ ] #9 nine')
+  })
+
+  test('keeps a box\'s notes under it', () => {
+    expect(addLines('Bugs:\n- [ ] #1 one\n  why\n\nMore', ['- [ ] #9 nine'], 'Bugs:')).toBe('Bugs:\n- [ ] #1 one\n  why\n- [ ] #9 nine\n\nMore')
+    expect(addLines('- [ ] #1 one\n  why\n', ['- [ ] #9 nine'])).toBe('- [ ] #1 one\n  why\n- [ ] #9 nine\n')
   })
 })
 

@@ -1,4 +1,4 @@
-import { boxes, referencedBoxes } from './checklist'
+import { afterBox, boxes, insertLines, lineEnding, referencedBoxes } from './checklist'
 
 const MARKUP = /^[#*_\s]+|[*_\s]+$/g
 
@@ -6,12 +6,13 @@ function heading(line: string): string {
   return line.replaceAll(MARKUP, '').toLowerCase()
 }
 
-// Where new box lines go: after the last box of the section, right under its heading when it has none, or after the last box of the body.
+// Where new box lines go: after the last box of the section and its notes, right under its heading when it has none, or after the last box of the body.
 function insertionPoint(lines: string[], body: string, section: string | undefined): number | undefined {
   const all = boxes(body)
+  const last = all.at(-1)
 
   if (section === undefined)
-    return all.length === 0 ? undefined : (all.at(-1)?.line ?? 0) + 1
+    return last === undefined ? undefined : afterBox(lines, last.line)
 
   const title = heading(section)
   const at = lines.findIndex(line => heading(line) === title)
@@ -21,12 +22,19 @@ function insertionPoint(lines: string[], body: string, section: string | undefin
 
   const lineOfBox = new Set(all.map(box => box.line))
   let end = at + 1
+  let next = at + 1
 
-  for (let next = at + 1; next < lines.length; next++) {
-    if (lineOfBox.has(next))
-      end = next + 1
-    else if (lines[next]?.trim() !== '')
+  while (next < lines.length) {
+    if (lineOfBox.has(next)) {
+      end = afterBox(lines, next)
+      next = end
+    }
+    else if (lines[next]?.trim() === '') {
+      next++
+    }
+    else {
       break
+    }
   }
 
   return end
@@ -37,20 +45,15 @@ export function addLines(body: string, added: string[], section?: string): strin
   if (added.length === 0)
     return body
 
-  const eol = body.includes('\r\n') ? '\r' : ''
-  const lines = body.split('\n')
-  const at = insertionPoint(lines, body, section)
-  const fresh = added.map(line => `${line}${eol}`)
+  const eol = lineEnding(body)
+  const at = insertionPoint(body.split('\n'), body, section)
 
-  if (at !== undefined) {
-    lines.splice(at, 0, ...fresh)
-
-    return lines.join('\n')
-  }
+  if (at !== undefined)
+    return insertLines(body, at, added)
 
   const text = body.trimEnd()
 
-  return `${text}${text === '' ? '' : `${eol}\n${eol}\n`}${section === undefined ? '' : `${section}${eol}\n`}${fresh.join('\n')}${body.endsWith('\n') ? '\n' : ''}`
+  return `${text}${text === '' ? '' : `${eol}${eol}`}${section === undefined ? '' : `${section}${eol}`}${added.join(eol)}${body.endsWith('\n') ? eol : ''}`
 }
 
 export function listedIssues(body: string): Set<number> {

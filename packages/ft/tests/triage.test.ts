@@ -26,8 +26,17 @@ describe('appendBoxes', () => {
   })
 
   test('starts a list at the end of a body without boxes, keeping CRLF', () => {
-    expect(appendBoxes('Intro\r\n', ['a'])).toBe('Intro\r\n\r\n- [ ] a\r')
+    expect(appendBoxes('Intro\r\n', ['a'])).toBe('Intro\r\n\r\n- [ ] a\r\n')
     expect(appendBoxes('', ['a', 'b'])).toBe('- [ ] a\n- [ ] b')
+  })
+
+  test('adds after the notes under the last box, not between them', () => {
+    expect(appendBoxes('- [ ] b\n  detail\n', ['c'])).toBe('- [ ] b\n  detail\n- [ ] c\n')
+    expect(appendBoxes('- [ ] b\n  detail\n\n  more\n\nTail', ['c'])).toBe('- [ ] b\n  detail\n\n  more\n- [ ] c\n\nTail')
+  })
+
+  test('writes CRLF throughout on a CRLF body without a final line end', () => {
+    expect(appendBoxes('- [ ] b\r\n  detail', ['c'])).toBe('- [ ] b\r\n  detail\r\n- [ ] c')
   })
 })
 
