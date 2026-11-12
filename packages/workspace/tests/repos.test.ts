@@ -106,9 +106,8 @@ beforeAll(() => {
 })
 
 describe('repos', () => {
-  test('leaves out a clean repository, the skipped ones and what is too deep or hidden', () => {
-    expect(names().toSorted()).toEqual(['ahead', 'dirty', 'mono', 'released'])
-    expect(names()).not.toContain('clean')
+  test('leaves out a clean repository, one with only unreleased commits, the skipped ones and what is too deep or hidden', () => {
+    expect(names().toSorted()).toEqual(['ahead', 'dirty'])
   })
 
   test('--all keeps the clean repositories', () => {
@@ -132,11 +131,11 @@ describe('repos', () => {
   })
 
   test('counts the commits since the latest tag', () => {
-    expect(listed().find(state => state.name === 'released')).toMatchObject({ tag: 'v1.0.0', unreleased: 2, reasons: ['unreleased'] })
+    expect(listed(['--all']).find(state => state.name === 'released')).toMatchObject({ tag: 'v1.0.0', unreleased: 2, reasons: ['unreleased'] })
   })
 
   test('counts a monorepo per package folder tag', () => {
-    const mono = listed().find(state => state.name === 'mono')
+    const mono = listed(['--all']).find(state => state.name === 'mono')
 
     expect(mono?.packages).toEqual([{ name: 'a', tag: 'a-v1.0.0', unreleased: 2 }, { name: 'b', tag: 'b-v1.0.0', unreleased: 0 }])
     expect(mono?.unreleased).toBe(2)
@@ -150,8 +149,13 @@ describe('repos', () => {
     expect(repos(['--only', 'nope']).code).toBe(2)
   })
 
+  test('--only repeated keeps the repositories with any of the reasons', () => {
+    expect(names(['--only', 'dirty', '--only', 'unpushed']).toSorted()).toEqual(['ahead', 'dirty'])
+    expect(names(['--only', 'dirty', '--only', 'unreleased']).toSorted()).toEqual(['dirty', 'mono', 'released'])
+  })
+
   test('prints a table with the footer on the last fetch, and says when nothing needs attention', () => {
-    const { code, out } = repos()
+    const { code, out } = repos(['--only', 'unreleased'])
 
     expect(code).toBe(0)
     expect(out).toContain('unreleased')

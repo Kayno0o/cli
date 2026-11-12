@@ -12,9 +12,9 @@ bun add -g @kaynooo/cli-workspace
 
 | Command | What it does |
 | --- | --- |
-| `ws repos [root]` | one row per repository with something to report: branch, dirty files, ahead/behind its upstream, linked worktrees, commits since its latest tag |
-| `ws repos --all` | the clean repositories too |
-| `ws repos --only dirty\|unpushed\|unreleased\|behind` | only the repositories with that reason |
+| `ws repos [root]` | one row per repository with something to report: branch, dirty files, ahead/behind its upstream, linked worktrees, commits since its latest tag; one whose only news is unreleased commits is left out |
+| `ws repos --all` | the clean and the only-unreleased repositories too |
+| `ws repos --only dirty\|unpushed\|unreleased\|behind` | only the repositories with that reason, repeatable for any of several |
 | `ws repos --fetch` | refreshes each upstream first; it reaches the remote, so it is never done without the flag |
 | `ws repos --pull` | fetches, then fast-forwards the repositories listed that are clean, on a branch and only behind their upstream; each is reported as `pulled` or `skipped` with the reason (dirty, diverged and ahead, no upstream, detached HEAD, fetch failed), and nothing but a fast-forward is ever attempted. A repository pulled is listed again as it now stands. Combine with `--only behind` to touch only those |
 | `ws repos --path` | only the paths of the repositories listed, one per line, for `xargs -d '\n'` (the pull report, if any, goes to stderr) |

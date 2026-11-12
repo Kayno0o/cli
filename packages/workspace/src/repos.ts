@@ -9,7 +9,7 @@ import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, R
 
 const USAGE = `ws repos [options] [root]: the git repositories under root (the configured workspace, ~/Workspace by default) that need attention, with their branch, dirty files, ahead/behind their upstream, linked worktrees and commits since their latest tag
 
-A repository with nothing to report is left out unless --all. A monorepo tagging its packages <folder>-v<version> counts the unreleased commits per package folder. The walk goes ${MAX_DEPTH} levels deep, stops at a .git and skips node_modules, hidden folders and the names in "skip" of ~/.config/kaynooo-cli/repos.json.
+A repository with nothing to report, or only unreleased commits, is left out unless --all or --only unreleased. A monorepo tagging its packages <folder>-v<version> counts the unreleased commits per package folder. The walk goes ${MAX_DEPTH} levels deep, stops at a .git and skips node_modules, hidden folders and the names in "skip" of ~/.config/kaynooo-cli/repos.json.
 
 Ahead and behind are those of the last fetch unless --fetch refreshes the upstreams first, which reaches the remote.
 --pull fetches, then fast-forwards the repositories listed that are clean, on a branch and only behind their upstream, and touches nothing else: a dirty, ahead, diverged or detached one is reported as skipped. A repository pulled is listed again as it now stands.
@@ -19,7 +19,7 @@ const EXITS: ExitRow[] = [[0, 'it listed the repositories, including when none n
 
 const OPTIONS = {
   all: { type: 'boolean', short: 'a', description: 'list the repositories with nothing to report too' },
-  only: { type: 'string', choices: REASONS, description: 'only the repositories with this reason: dirty, unpushed, unreleased or behind' },
+  only: { type: 'string', multiple: true, choices: REASONS, description: 'only the repositories with this reason: dirty, unpushed, unreleased or behind, repeatable' },
   watch: watchOption('the repositories'),
   fetch: { type: 'boolean', conflicts: ['watch'], description: 'refresh the upstreams first (reaches the remote)' },
   pull: { type: 'boolean', conflicts: ['watch'], description: 'fetch, then fast-forward the clean repositories listed that are only behind their upstream (reaches the remote)' },
@@ -108,7 +108,7 @@ export async function repos(args: string[], watched = false): Promise<number> {
   if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`no folder ${root}`)
 
-  const only = values.only
+  const only = values.only ?? []
   const progress = watched ? undefined : progressLine()
   const fetching = values.fetch === true || values.pull === true
   const step = fetching ? 'fetching' : 'reading'
@@ -128,7 +128,10 @@ export async function repos(args: string[], watched = false): Promise<number> {
   const keeps = (repo: RepoState) => {
     const reasons = reasonsOf(repo)
 
-    return only === undefined ? values.all === true || reasons.length > 0 || repo.unreadable : reasons.includes(only)
+    if (only.length > 0)
+      return reasons.some(reason => only.includes(reason))
+
+    return values.all === true || reasons.some(reason => reason !== 'unreleased') || repo.unreadable
   }
   let failedPulls = 0
 
