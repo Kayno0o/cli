@@ -828,7 +828,8 @@ describe('up and down with no runner', () => {
 
     expect(up.code).toBe(0)
     expect(up.out).toContain(`wt: up times/planning runs out of sight, its output in ${join(jobs, 'times--planning.log')}`)
-    await settled(() => !existsSync(lock))
+    // The job releases its lock before it notifies, so the wait is on both.
+    await settled(() => !existsSync(lock) && sandbox.calls().some(call => call.startsWith('notify-send')))
     expect(JSON.parse(readFileSync(job, 'utf8'))).toMatchObject({ ref: 'times/planning', verb: 'up', code: 0 })
     expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose up')).map(call => call.cwd)).toEqual([dirOf('planning')])
     const notified = sandbox.calls().filter(call => call.startsWith('notify-send'))
