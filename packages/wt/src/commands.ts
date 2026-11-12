@@ -1,5 +1,6 @@
 import type { Worktree } from './project'
 import { existsSync, rmSync } from 'node:fs'
+import { warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { knownMessage } from './errors'
 import { addWorktrees, dirtyRepos, isRegistered, removeWorktrees, unreachableCommits } from './git'
@@ -64,7 +65,7 @@ export async function addTask(task: string, branch: string | undefined, options:
       throw new WtError(`${message}\n${way}`)
 
     // A bug keeps its stack trace
-    console.error(`wt: ${way}`)
+    warn(way)
 
     throw error
   }

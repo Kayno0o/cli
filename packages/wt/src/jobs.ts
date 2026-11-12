@@ -6,7 +6,7 @@
 
 import { closeSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { formatAge } from '@kaynooo/cli-kit'
+import { formatAge, printError } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { alive, bootTime, failKnown, failureText, KnownError, knownMessage } from './errors'
 
@@ -322,7 +322,7 @@ export class Jobs {
    */
   async run(stack: JobStack, verb: string, work: (detached: boolean) => Promise<void>, service?: string): Promise<number> {
     if (this.holds(stack))
-      return attempt(async () => work(false))
+      return attempt(`${this.app} ${verb}`, async () => work(false))
 
     const detached = process.env[this.env] === stack.slug
     const job = detached ? this.adopt(stack) : this.claim(stack, verb, false, service)
@@ -335,7 +335,7 @@ export class Jobs {
     let code = 1
 
     try {
-      code = await attempt(async () => work(detached))
+      code = await attempt(`${this.app} ${verb}`, async () => work(detached))
     }
     finally {
       if (before === undefined)
@@ -434,7 +434,7 @@ export class Jobs {
   }
 }
 
-async function attempt(work: () => Promise<void>): Promise<number> {
+async function attempt(prefix: string, work: () => Promise<void>): Promise<number> {
   try {
     await work()
 
@@ -443,7 +443,10 @@ async function attempt(work: () => Promise<void>): Promise<number> {
   catch (error) {
     const message = knownMessage(error)
 
-    console.error(message !== undefined ? `error: ${message}` : error)
+    if (message !== undefined)
+      printError(prefix, message)
+    else
+      console.error(error)
 
     return 1
   }

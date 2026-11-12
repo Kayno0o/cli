@@ -4,6 +4,7 @@ import type { Worktree } from './project'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
+import { warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { composeEnv } from './compose'
 import { configPath, fillTemplate } from './config'
@@ -109,14 +110,14 @@ export async function afterRemove(worktree: Worktree): Promise<void> {
 
   try {
     if (await spawnRunner('removed', argv, worktree.project.root) !== 0)
-      console.warn(`wt: \`${argv.join(' ')}\` failed after removing ${worktree.id}`)
+      warn(`\`${argv.join(' ')}\` failed after removing ${worktree.id}`)
   }
   catch (error) {
     // The worktree is gone already: what is left to do is said, not failed on
     if (!(error instanceof WtError))
       throw error
 
-    console.warn(`wt: ${error.message}, after removing ${worktree.id}`)
+    warn(`${error.message}, after removing ${worktree.id}`)
   }
 }
 

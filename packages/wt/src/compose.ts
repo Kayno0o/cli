@@ -1,7 +1,7 @@
 import type { Worktree } from './project'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { $ } from 'bun'
+import { compose } from '@kaynooo/cli-kit'
 import { worktreeHost, WtError } from './project'
 
 interface ServiceNetwork {
@@ -35,20 +35,18 @@ export interface ComposeConfig {
 export const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml']
 const SKIP_PROFILE = 'wt-skip'
 
-// Compose settings wt decides on, so a COMPOSE_FILE exported in the calling shell cannot leak in.
+// Compose settings wt decides on, so a COMPOSE_FILE exported in the calling shell cannot leak in: set to undefined, a spawn leaves them out.
 export function composeEnv(overrides: Record<string, string> = {}): Record<string, string | undefined> {
-  const env = Object.entries(process.env).filter(([key]) => key !== 'COMPOSE_FILE' && key !== 'COMPOSE_PROJECT_NAME')
-
-  return { ...Object.fromEntries(env), ...overrides }
+  return { ...process.env, COMPOSE_FILE: undefined, COMPOSE_PROJECT_NAME: undefined, ...overrides }
 }
 
 export async function composeConfig(dir: string, env: Record<string, string> = {}): Promise<ComposeConfig> {
-  const result = await $`docker compose config --format json`.cwd(dir).env(composeEnv(env)).quiet().nothrow()
+  const result = await compose(['config', '--format', 'json'], { cwd: dir, env: composeEnv(env) })
 
-  if (result.exitCode !== 0)
-    throw new WtError(`docker compose config failed in ${dir}:\n${result.stderr.toString()}`)
+  if (result.code !== 0)
+    throw new WtError(`docker compose config failed in ${dir}:\n${result.stderr}`)
 
-  return JSON.parse(result.stdout.toString()) as ComposeConfig
+  return JSON.parse(result.stdout) as ComposeConfig
 }
 
 const COMPOSE_FILE_LINE = /^COMPOSE_FILE=(.*)$/m
@@ -203,10 +201,10 @@ export function overrideWarnings(worktree: Worktree, config: ComposeConfig): str
 }
 
 export async function runningProjects(): Promise<Set<string>> {
-  const result = await $`docker compose ls --format json`.quiet().nothrow()
+  const result = await compose(['ls', '--format', 'json'])
 
-  if (result.exitCode !== 0)
+  if (result.code !== 0)
     return new Set()
 
-  return new Set((JSON.parse(result.stdout.toString()) as { Name: string }[]).map(stack => stack.Name))
+  return new Set((JSON.parse(result.stdout) as { Name: string }[]).map(stack => stack.Name))
 }

@@ -3,6 +3,7 @@ import type { RunConfig, Worktree } from './project'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
+import { holdSignals } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { baseComposeFiles, composeConfig } from './compose'
 import { wtConfig } from './config'
@@ -218,18 +219,16 @@ async function ensureDatabase(plan: RunPlan, database: TestDatabase): Promise<st
 
 // Forwards an interrupt to the child, a `docker run` passing it on to the container, and resolves with its exit code.
 export async function runInherit(command: string[]): Promise<number> {
+  const held = holdSignals()
   const child = Bun.spawn(command, { stdio: ['inherit', 'inherit', 'inherit'] })
-  const forward = (signal: NodeJS.Signals) => child.kill(signal)
 
-  process.on('SIGINT', forward)
-  process.on('SIGTERM', forward)
+  held.forward(child)
 
   try {
     return await child.exited
   }
   finally {
-    process.off('SIGINT', forward)
-    process.off('SIGTERM', forward)
+    held.release()
   }
 }
 

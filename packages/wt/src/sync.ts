@@ -1,4 +1,5 @@
 import type { Worktree } from './project'
+import { warn } from '@kaynooo/cli-kit'
 import { baseComposeFiles, composeConfig, overrideWarnings, renderOverride } from './compose'
 import { cloneData, copyFromMain, linkFromMain, writeEnvFiles, writeIfChanged } from './files'
 import { assertWorktreeExists } from './project'
@@ -24,5 +25,5 @@ export async function syncWorktree(worktree: Worktree): Promise<void> {
   await writeStackCerts(worktree)
 
   for (const warning of warnings)
-    console.warn(`wt: ${warning}`)
+    warn(warning)
 }

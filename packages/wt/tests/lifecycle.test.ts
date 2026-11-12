@@ -867,7 +867,7 @@ describe('a config runner naming no executable', () => {
     const run = await wt('up', 'planning')
 
     expect(run.code).toBe(1)
-    expect(run.err).toBe(`error: \`no-such-runner\` is not on PATH: fix runner.up in ${join(env.sandbox.home, '.config', 'wt', 'config.ts')}\n`)
+    expect(run.err).toBe(`error: wt up: \`no-such-runner\` is not on PATH: fix runner.up in ${join(env.sandbox.home, '.config', 'wt', 'config.ts')}\n`)
   }, 30_000)
 })
 
@@ -1233,6 +1233,13 @@ describe('wt ls --json', () => {
       ],
     })
   }, 30_000)
+
+  test('prints a failure as JSON too', async () => {
+    const run = await env.wt('ls', '--json', '-p', 'nothing')
+
+    expect(run.code).toBe(1)
+    expect(JSON.parse(run.err)).toMatchObject({ error: expect.stringContaining('nothing') })
+  })
 
   test('finds main running under the name compose gives a folder with capitals and dots', async () => {
     const { sandbox, wt } = env

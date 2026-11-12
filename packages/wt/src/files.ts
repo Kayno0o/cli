@@ -1,8 +1,8 @@
 import type { ComposeConfig } from './compose'
 import type { Route, Worktree } from './project'
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
-import { constants } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { holdSignals } from '@kaynooo/cli-kit'
 import { escapeRegExp } from '@kaynooo/utils/text'
 import { $ } from 'bun'
 import { baseComposeFiles } from './compose'
@@ -12,7 +12,6 @@ import { inLine, queueDir } from './queue'
 
 // A copy lands under this suffix and is renamed once whole, so one cut short is never taken for done.
 const PARTIAL = '.wt-partial'
-const PAUSE_SIGNALS: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP']
 
 export function writeIfChanged(path: string, content: string): boolean {
   if (existsSync(path) && readFileSync(path, 'utf8') === content)
@@ -155,14 +154,11 @@ export async function whilePaused<T>(ids: string[], work: () => Promise<T>, abor
     if (record !== undefined)
       rmSync(record, { force: true })
   }
-  const onSignal = (signal: NodeJS.Signals) => {
+  // A signal aborts the copies and unpauses main, then ends the process as it would have
+  const held = holdSignals(() => {
     abort?.()
     release()
-    process.exit(128 + constants.signals[signal])
-  }
-
-  for (const signal of PAUSE_SIGNALS)
-    process.once(signal, onSignal)
+  })
 
   try {
     if (ids.length) {
@@ -177,9 +173,7 @@ export async function whilePaused<T>(ids: string[], work: () => Promise<T>, abor
     return await work()
   }
   finally {
-    for (const signal of PAUSE_SIGNALS)
-      process.off(signal, onSignal)
-
+    held.release()
     release()
   }
 }

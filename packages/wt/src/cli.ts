@@ -4,7 +4,7 @@ import type { GlobalOptions } from './commands'
 import type { Jobs } from './jobs'
 import type { Worktree } from './project'
 import process from 'node:process'
-import { badUsage, isInteractive, parse, runCli } from '@kaynooo/cli-kit'
+import { badUsage, fail, isInteractive, jsonOption, parse, printError, runCli, warn } from '@kaynooo/cli-kit'
 import { wtJobs } from './config'
 import { failKnown, failureText, knownMessage } from './errors'
 import { notifyRefused, slugOf } from './jobs'
@@ -90,7 +90,7 @@ async function asWorktreeJob(verb: 'add' | 'add --up' | 'sync' | 'rm' | 'up' | '
 }
 
 // Acts on each worktree in turn, one refused or failed not stopping the rest: 1 when any failed.
-async function inTurn(worktrees: Worktree[], act: (worktree: Worktree) => Promise<number>): Promise<number> {
+async function inTurn(command: string, worktrees: Worktree[], act: (worktree: Worktree) => Promise<number>): Promise<number> {
   let code = 0
 
   for (const worktree of worktrees) {
@@ -103,7 +103,7 @@ async function inTurn(worktrees: Worktree[], act: (worktree: Worktree) => Promis
       if (message === undefined)
         throw error
 
-      console.error(`error: ${message}`)
+      printError(`${APP} ${command}`, message)
       code = 1
     }
   }
@@ -111,14 +111,14 @@ async function inTurn(worktrees: Worktree[], act: (worktree: Worktree) => Promis
   return code
 }
 
-async function eachWorktree(projectName: string | undefined, act: (worktree: Worktree) => Promise<number>): Promise<number> {
+async function eachWorktree(command: string, projectName: string | undefined, act: (worktree: Worktree) => Promise<number>): Promise<number> {
   const { project } = await locate(process.cwd(), projectName)
   const tasks = listTasks(project)
 
   if (!tasks.length)
     console.log(`wt: ${project.name} has no worktree`)
 
-  return inTurn(tasks.map(task => worktreeOf(project, task)), act)
+  return inTurn(command, tasks.map(task => worktreeOf(project, task)), act)
 }
 
 // Lists what removed worktrees left behind and, once confirmed, removes each as `wt rm --force` would, then git's stale registrations.
@@ -136,7 +136,7 @@ async function prune(options: GlobalOptions & { all?: boolean, yes?: boolean }):
 
   if (!options.yes) {
     if (!isInteractive()) {
-      console.error('wt: nothing removed, `wt prune -y` removes it')
+      warn('nothing removed, `wt prune -y` removes it')
 
       return 0
     }
@@ -148,7 +148,7 @@ async function prune(options: GlobalOptions & { all?: boolean, yes?: boolean }):
   }
 
   const { removeTask } = await commands()
-  const code = await inTurn(found.flatMap(each => each.orphans.map(orphan => orphan.worktree)), async worktree => asWorktreeJob('rm', worktree, { project: worktree.project.name }, [], async () => removeTask(worktree.task, { project: worktree.project.name, force: true })))
+  const code = await inTurn('prune', found.flatMap(each => each.orphans.map(orphan => orphan.worktree)), async worktree => asWorktreeJob('rm', worktree, { project: worktree.project.name }, [], async () => removeTask(worktree.task, { project: worktree.project.name, force: true })))
 
   for (const { project } of found)
     await pruneRegistrations(project)
@@ -214,7 +214,7 @@ async function startOrStop(verb: 'up' | 'down', args: string[]): Promise<number>
 
   return guarded(async () => {
     if (values.all)
-      return eachWorktree(values.project, act)
+      return eachWorktree(verb, values.project, act)
 
     const worktree = await locateWorktree(process.cwd(), task, values.project)
 
@@ -387,7 +387,7 @@ process.exitCode = await runCli({
         const { values } = parse(args, LS_USAGE, {
           project: PROJECT_OPTION,
           all: { type: 'boolean', short: 'a', description: 'every project, even from inside one' },
-          json: { type: 'boolean', description: 'print { project, checkouts }, project being the one the directory is in, null outside every one' },
+          json: jsonOption('{ project, checkouts }, project being the one the directory is in, null outside every one'),
         }, { positionals: [] })
 
         return guarded(async () => (await import('./list')).listWorktrees(values))
@@ -403,9 +403,7 @@ process.exitCode = await runCli({
 
           // Checked first, so a task that does not exist says so rather than the wrapper's absence
           await printPath(task, values)
-          console.error('wt: cd needs the shell function `wt shell <shell>` prints, as a program cannot change its shell\'s directory: cd to the path above')
-
-          return 1
+          fail('cd needs the shell function `wt shell <shell>` prints, as a program cannot change its shell\'s directory', 1, 'cd to the path above')
         })
       },
     },

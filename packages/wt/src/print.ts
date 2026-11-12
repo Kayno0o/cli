@@ -2,7 +2,7 @@ import type { GlobalOptions } from './commands'
 import type { Jobs } from './jobs'
 import type { Worktree } from './project'
 import { existsSync } from 'node:fs'
-import { openUrl } from '@kaynooo/cli-kit'
+import { openUrl, warn } from '@kaynooo/cli-kit'
 import { slugOf } from './jobs'
 import { assertWorktreeExists, listTasks, locate, locateWorktree, worktreeOf, WtError } from './project'
 import { urlsOf } from './routes'
@@ -19,9 +19,9 @@ export async function printJobLog(worktree: Worktree, jobs: Jobs): Promise<void>
   const state = jobs.states().get(slug) ?? {}
 
   if (state.running?.log === '')
-    console.error(`wt: ${ref} is ${jobs.summary(state)} in a terminal; this log is of the last --bg one`)
+    warn(`${ref} is ${jobs.summary(state)} in a terminal; this log is of the last --bg one`)
   else if (state.running === undefined && state.last?.log === '')
-    console.error(`wt: the last job (${jobs.summary(state)}) ran in a terminal; this log is of the last --bg one`)
+    warn(`the last job (${jobs.summary(state)}) ran in a terminal; this log is of the last --bg one`)
 
   await Bun.write(Bun.stdout, Bun.file(log))
 }

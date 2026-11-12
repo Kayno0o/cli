@@ -2,7 +2,7 @@ import type { GlobalOptions } from './commands'
 import type { Jobs, JobState } from './jobs'
 import type { Project } from './project'
 import { basename, join } from 'node:path'
-import { table } from '@kaynooo/cli-kit'
+import { printJson, table } from '@kaynooo/cli-kit'
 import { runningProjects } from './compose'
 import { wtJobs } from './config'
 import { currentBranch, git, unreachableCount } from './git'
@@ -43,7 +43,11 @@ async function projectsToList(options: ListOptions): Promise<{ here: Project | n
   try {
     here = (await locate(process.cwd(), options.project)).project
   }
-  catch {}
+  catch (error) {
+    // A project named on the command line that does not load is the user's to hear of
+    if (options.project !== undefined)
+      throw error
+  }
 
   const everywhere = options.all === true || (!here && !options.json)
 
@@ -93,7 +97,7 @@ export async function listWorktrees(options: ListOptions): Promise<void> {
   const checkouts = (await Promise.all(projects.map(async project => checkoutsOf(project, running, jobs, states)))).flat()
 
   if (options.json) {
-    console.log(JSON.stringify({ project: here?.name ?? null, checkouts }))
+    printJson({ project: here?.name ?? null, checkouts })
 
     return
   }

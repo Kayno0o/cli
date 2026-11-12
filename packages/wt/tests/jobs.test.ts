@@ -101,7 +101,7 @@ describe('Jobs', () => {
       spy.mockRestore()
     }
 
-    expect(printed).toEqual(['error: cannot reach docker'])
+    expect(printed).toEqual(['error: test down: cannot reach docker'])
   })
 
   test('records how an action ended, its lock let go either way', async () => {
