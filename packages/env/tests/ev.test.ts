@@ -191,6 +191,8 @@ describe('ev', () => {
 
   test('set refuses an empty value unless --empty says so', async () => {
     expect(ev(['set', 'A'], '').err).toContain('--empty')
+    expect(ev(['set', 'A'], '\n').err).toContain('--empty')
+    expect(ev(['set', 'A'], '\r\n').err).toContain('--empty')
     expect(ev(['set', 'A', '--empty']).code).toBe(0)
     expect(await read('.env')).toBe('A=\n')
     expect(ev(['set', 'A', '--empty', '-F', 'x']).code).toBe(2)

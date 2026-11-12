@@ -40,10 +40,12 @@ async function readValue(key: string, from: string | undefined): Promise<string>
     ? await input(`value of ${key}`, { mask: true }) ?? fail('cancelled, nothing was written', 130)
     : await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
 
-  if (value === '')
+  const stripped = value.replace(TRAILING_NEWLINE, '')
+
+  if (stripped === '')
     fail('the value is empty, nothing was written: --empty sets an empty value')
 
-  return value.replace(TRAILING_NEWLINE, '')
+  return stripped
 }
 
 // A key that is not a plain name could carry a line break or an `=` and write more than one line.
