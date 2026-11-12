@@ -172,7 +172,7 @@ Exits 0 once it is provisioned, 1 when a step fails, 2 on a usage error.`
 
 const RM_USAGE = `wt rm <task> [-f] [-p <name>] [--bg]
 
-Stops a worktree stack and deletes its checkouts, volumes, certificates and routes, keeping its branches.
+Stops a worktree stack and deletes its checkouts, volumes, certificates and routes, keeping its branches. Gitignored files go with the folder unchecked: edits to a copied .env.local, uploads and the like are lost, so save them first.
 
 Exits 0 once it is gone, 1 when uncommitted changes or lost commits refuse it (unless --force) or a step fails, 2 on a usage error.`
 
