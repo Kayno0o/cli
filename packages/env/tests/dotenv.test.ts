@@ -100,7 +100,7 @@ describe('editing', () => {
 })
 
 describe('unterminated quote', () => {
-  test('ends at its own line when an assignment follows, as Bun reads it', () => {
+  test('ends at its own line when no quote closes it, as Bun reads it', () => {
     const file = parseDotenv('A=1\nKEY="oops\nB=2\nC=3\n')
     const map = entries(file)
 
@@ -116,5 +116,21 @@ describe('unterminated quote', () => {
 
     expect(map.get('PEM')).toBe('a\nb\nc')
     expect(map.get('B')).toBe('2')
+  })
+
+  test('reads a body line shaped like an assignment as part of the value, and set and unset take every line', () => {
+    const text = 'K="-----BEGIN-----\nQmFzZTY0IGVuZGluZw==\n-----END-----"\nB=2\n'
+
+    expect([...entries(parseDotenv(text))]).toEqual([['K', '-----BEGIN-----\nQmFzZTY0IGVuZGluZw==\n-----END-----'], ['B', '2']])
+
+    const set = parseDotenv(text)
+
+    setLine(set, 'K', 'new')
+    expect(serializeDotenv(set)).toBe('K=new\nB=2\n')
+
+    const unset = parseDotenv(text)
+
+    expect(removeKey(unset, 'K')).toBe(1)
+    expect(serializeDotenv(unset)).toBe('B=2\n')
   })
 })

@@ -95,21 +95,23 @@ export function parseDotenv(text: string): Dotenv {
 
     const first = index
 
-    while (end === -1 && index + 1 < physical.length && !ASSIGNMENT.test(physical[index + 1] ?? '')) {
+    // A quoted value runs to its closing quote whatever the lines between look like, as Bun and compose read it: a PEM body line can look like an assignment.
+    while (end === -1 && index + 1 < physical.length) {
       index++
       body += `\n${(physical[index] ?? '').replace(CARRIAGE_RETURN, '')}`
       raw += `\n${physical[index] ?? ''}`
       end = closingQuote(body, quote)
     }
 
-    if (end === -1 && index + 1 < physical.length) {
+    // With no closing quote anywhere, Bun keeps the line as it is and reads the next ones on their own.
+    if (end === -1) {
       index = first
       lines.push({ raw: line, key, value: unescapeDollar(start.replace(INLINE_COMMENT, '').trim()), unterminated: true })
 
       continue
     }
 
-    const inner = end === -1 ? body : body.slice(0, end)
+    const inner = body.slice(0, end)
 
     lines.push({ raw, key, value: quote === '"' ? unescapeDouble(inner) : unescapeDollar(inner) })
   }
