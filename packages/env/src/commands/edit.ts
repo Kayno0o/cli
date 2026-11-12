@@ -25,13 +25,13 @@ const UNSET_EXITS: ExitRow[] = [[0, 'it removed the key'], [1, 'the file does no
 
 const mvUsage = `ev mv KEY --from <file> --to <file> [--quiet]
 
-Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force.`
+Moves KEY's line from one file to another, as written. Refuses to replace a key the target already sets unless --force, and with --force a value no quoting keeps for both Bun and compose, as ev set does.`
 
 const MV_EXITS: ExitRow[] = [[0, 'it moved the key'], [1, 'the source lacks it, the target already sets it, or its value cannot be rewritten'], [2, 'a usage error']]
 
 const cpUsage = `ev cp KEY --from <file> --to <file> [--as NEWKEY] [--quiet]
 
-Copies KEY's value from one file to another without printing it, replacing the key's line in the target in place or appending one, and prints the masked result as ev set does. --as stores the copy under another key.`
+Copies KEY's value from one file to another without printing it, replacing the key's line in the target in place or appending one, and prints the masked result as ev set does. --as stores the copy under another key. A value it has to rewrite is refused when no quoting keeps it for both Bun and compose, as ev set does.`
 
 const CP_EXITS: ExitRow[] = [[0, 'it copied the key'], [1, 'the source lacks it or its value cannot be rewritten'], [2, 'a usage error']]
 

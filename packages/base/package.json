@@ -2,7 +2,7 @@
   "name": "@kaynooo/cli-base",
   "type": "module",
   "version": "0.12.1",
-  "description": "base: a command run at HEAD or another ref in a temporary worktree, the working tree left untouched.",
+  "description": "base: a command run at HEAD or another ref in a temporary worktree, sharing node_modules and env files with the working tree.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/base#readme",

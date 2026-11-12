@@ -41,6 +41,15 @@ describe('fold', () => {
     expect(folded(text, 20)).toContain(' FAIL src/{a,b,c,d,e}.test.ts (x5)')
   })
 
+  test('keeps a folded error line whole however many files it names, and names them again where it comes back', () => {
+    const fails = (from: number) => Array.from({ length: 200 }, (_, i) => ` FAIL src/module-${from + i}.test.ts > renders the signup form`).join('\n')
+    const steps = (count: number) => Array.from({ length: count }, (_, i) => `step ${i} ok`).join('\n')
+    const out = folded(`${steps(50)}\n${fails(0)}\n${steps(50)}\n${fails(0)}\n${'done\n'.repeat(50)}`, 40)
+
+    expect(out).toContain(`FAIL src/module-{${Array.from({ length: 200 }, (_, i) => i).join(',')}}.test.ts > renders the signup form (x200)`)
+    expect(out).toMatch(/FAIL src\/module-\{0,1,[\d,]+,199\}\.test\.ts > renders the signup form \(same as line 51, repeated 200 times\)$/m)
+  })
+
   test('folds lines alike in shape into one with a count and the last line', async () => {
     const out = folded(await fixture('build.txt'))
 

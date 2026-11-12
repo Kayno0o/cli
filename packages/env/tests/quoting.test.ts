@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { entries, formatAssignment, parseDotenv, unquotable } from '../src/dotenv'
 
 // Values each reader treats specially somewhere: quotes, backslashes, dollars, comments, line breaks and edge whitespace.
-const QUOTABLE = ['plain', 'C:\\dir\\', 'p"q', 'a\\"b', 'it\'s', 'it\'s $5', 'a$b', '$HOME', 'two\nlines $y', 'two\nlines', 'a #b', 'a#b', ' lead', 'trail ', 'say "hi" # now', 'back\\slash', '"quoted"', '\'quoted\'', '`tick`', 'x=y', 'a\tb', '"a" #b', 'a\rb']
+const QUOTABLE = ['plain', 'C:\\dir\\', 'p"q', 'a\\"b', 'it\'s', 'it\'s $5', 'a$b', '$HOME', 'two\nlines $y', 'two\nlines', 'a #b', 'a#b', ' lead', 'trail ', 'say "hi" # now', 'back\\slash', '"quoted"', '\'quoted\'', '`tick`', 'x=y', 'a\tb', '"a" #b', 'a\rb', 'a"b\'c', 'it\'s "x"', 'a\\b\nc "d"', 'C:\\new\\table', 'a"b\\', 'x \'y\' \\z']
 const REFUSED = ['a $b "c"', 'back\\slash $x', 'it\'s "x"\nnext', 'a\\$b', 'a\rb\\']
 const EXPECTED = Object.fromEntries(QUOTABLE.map((value, index) => [`K${index}`, value]))
 const WRITTEN = `${QUOTABLE.map((value, index) => formatAssignment(`K${index}`, value)).join('\n')}\n`
@@ -33,7 +33,9 @@ describe('formatAssignment', () => {
 
   test.skipIf(Bun.which('docker') === null)('writes a value compose reads back as it is', async () => {
     await writeFile(join(dir, 'compose.yaml'), 'services:\n  app:\n    image: scratch\n    env_file: values\n')
-    const run = Bun.spawnSync(['docker', 'compose', 'config', '--format', 'json'], { cwd: dir, env: { PATH: process.env.PATH ?? '' } })
+    const run = Bun.spawnSync(['docker', 'compose', 'config', '--format', 'json'], { cwd: dir, env: { ...process.env, COMPOSE_FILE: undefined, COMPOSE_PROJECT_NAME: undefined } })
+
+    expect(run.exitCode).toBe(0)
 
     const { environment } = (JSON.parse(run.stdout.toString()) as { services: { app: { environment: Record<string, string> } } }).services.app
 

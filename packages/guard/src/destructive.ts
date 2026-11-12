@@ -25,7 +25,7 @@ const VERSION_SUFFIX = /[\d.]+$/
 const PASS_THROUGH = new Set(['tee', 'cat', 'pv', 'tr', 'sed'])
 
 const COMMIT_FIRST = 'Commit what you want to keep with `gc` first.'
-const SAFE_BASE = '`base -- <cmd>` runs a command at HEAD with the working tree untouched, and `git worktree add` gives a clean tree.'
+const SAFE_BASE = '`base -- <cmd>` runs a command at HEAD in a temporary worktree, its changes left out, and `git worktree add` gives a clean tree.'
 
 export const RESET_HARD = `Never \`git reset --hard\`: it throws away uncommitted work, and peer sessions edit this tree live. ${COMMIT_FIRST} \`git reset --soft\` or \`--mixed\` moves HEAD and keeps the changes; ${SAFE_BASE}`
 export const DISCARD_TREE = `Never discard the whole working tree (\`git checkout -- .\`, \`git checkout -f\`, \`git restore .\`, \`git rm -r .\`, \`git switch -f\`): it throws away uncommitted work, and peer sessions edit this tree live. ${COMMIT_FIRST} Restore named paths only, and \`git restore --staged\` just unstages. ${SAFE_BASE}`

@@ -30,7 +30,7 @@ interface Unit {
   lines: string[]
   // The last repetition's final line, to show where a run of lookalikes ended.
   last: string
-  // Every line of a run of single lines.
+  // Every line of a run of single lines, empty for a block.
   run: string[]
   key: string
   important: boolean
@@ -41,6 +41,8 @@ interface Entry {
   text: string
   important: boolean
   covers: number
+  // An error line naming every file it was printed for, kept whole however wide.
+  whole?: boolean
 }
 
 export function lineCount(text: string): number {
@@ -113,7 +115,7 @@ function toUnits(lines: string[], keys: string[]): Unit[] {
       reps,
       lines: slice,
       last: lines[at + size * reps - 1] ?? '',
-      run: size === 1 ? lines.slice(at, at + reps) : slice,
+      run: size === 1 ? lines.slice(at, at + reps) : [],
       key: keys.slice(at, at + size).join('\n'),
       important: slice.some(line => isImportant(line)),
     })
@@ -172,7 +174,7 @@ function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repe
       const times = unit.reps > 1 ? `, repeated ${unit.reps} times` : ''
       const prefix = unit.important ? `${unit.size === 1 ? merged(unit.run.map(line => line.trim())) : clip(unit.lines[0] ?? '')} ` : ''
 
-      entries.push({ text: `${prefix}(${where}${times})`, important: unit.important, covers })
+      entries.push({ text: `${prefix}(${where}${times})`, important: unit.important, covers, whole: unit.important && unit.size === 1 })
 
       continue
     }
@@ -187,7 +189,7 @@ function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repe
 
     // An error line names every file it was printed for, so none of them hides in the log.
     if (unit.size === 1 && unit.important) {
-      entries.push({ text: `${merged(unit.run)} (x${unit.reps})`, important: true, covers })
+      entries.push({ text: `${merged(unit.run)} (x${unit.reps})`, important: true, covers, whole: true })
 
       continue
     }
@@ -219,7 +221,7 @@ export function fold(text: string, { threshold, logPath }: FoldOptions): string 
   const lines = splitLines(text)
   const { entries, references, repeated } = toEntries(toUnits(lines, lines.map(line => shape(line))))
 
-  for (const entry of entries)
+  for (const entry of entries.filter(each => each.whole !== true))
     entry.text = cutWide(entry.text)
 
   const heavy = entries.reduce((sum, { text }) => sum + text.length + 1, 0) > threshold * BYTES_PER_LINE
