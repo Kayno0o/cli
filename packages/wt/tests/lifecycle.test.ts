@@ -914,6 +914,20 @@ describe('up and down with no runner', () => {
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
 
+  test('ls lists the checkouts under a header, with how each worktree\'s last job ended', async () => {
+    const { wt } = env
+
+    expect((await wt('add', 'planning')).code).toBe(0)
+    expect((await wt('add', 'other')).code).toBe(0)
+    expect((await wt('up', 'planning')).code).toBe(0)
+
+    const [header, ...rows] = (await wt('ls')).out.trim().split('\n')
+
+    expect(header).toMatch(/^up\s+project\s+task\s+branch\s+url\s+job\s+changes$/)
+    expect(rows.find(row => row.includes('wt/planning'))).toContain('up ok just now')
+    expect(rows.find(row => row.includes('wt/other'))).toContain('add ok just now')
+  }, 30_000)
+
   test('run up and rm with --bg as detached jobs, their output in the job log, a notification once up', async () => {
     const { sandbox, wt, dirOf } = env
     const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')
@@ -1025,8 +1039,8 @@ describe('wt ls --json', () => {
     expect(JSON.parse(run.out)).toEqual({
       project: 'times',
       checkouts: [
-        { project: 'times', task: 'main', dir: root, branch: 'main', url: 'https://times.localhost', running: false, dirty: 0, unbranched: 0, session: 'times' },
-        { project: 'times', task: 'planning', dir: dirOf('planning'), branch: 'wt/planning', url: 'https://planning.times.localhost', running: true, dirty: 0, unbranched: 0, session: 'times--planning' },
+        { project: 'times', task: 'main', dir: root, branch: 'main', url: 'https://times.localhost', running: false, dirty: 0, unbranched: 0, session: 'times', job: '' },
+        { project: 'times', task: 'planning', dir: dirOf('planning'), branch: 'wt/planning', url: 'https://planning.times.localhost', running: true, dirty: 0, unbranched: 0, session: 'times--planning', job: 'add ok just now' },
       ],
     })
   }, 30_000)

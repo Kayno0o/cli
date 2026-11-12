@@ -32,6 +32,19 @@ describe('Jobs', () => {
     expect(() => jobs.claim(stack, 'down', false)).not.toThrow()
   })
 
+  test('sums a stack\'s job up in a few words: what runs, else how the last one ended and when', () => {
+    const jobs = jobsIn()
+    const now = 10 * 60_000
+    const started = { ref: stack.ref, pid: 1, startedAt: 0, log: '' }
+    const ended = { ...started, endedAt: now - 5 * 60_000 }
+
+    expect(jobs.summary({})).toBe('')
+    expect(jobs.summary({ running: { ...started, verb: 'up' } })).toBe('coming up')
+    expect(jobs.summary({ last: { ...ended, verb: 'up', code: 0 } }, now)).toBe('up ok 5m ago')
+    expect(jobs.summary({ last: { ...ended, verb: 'restart', service: 'php', code: 1 } }, now)).toBe('restart php failed 5m ago')
+    expect(jobs.summary({ last: { ...ended, verb: 'rm', code: null } }, now)).toBe('rm killed 5m ago')
+  })
+
   test('holds the lock of a detached job before its process has started', () => {
     const jobs = jobsIn()
 

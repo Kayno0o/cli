@@ -6,6 +6,7 @@
 
 import { closeSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { formatAge } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { alive, bootTime, failKnown, failureText, KnownError, knownMessage } from './errors'
 
@@ -47,6 +48,9 @@ const TAIL_BYTES = 4096
 const DOING: Record<string, string> = { up: 'coming up', down: 'stopping', add: 'being made', sync: 'syncing', rm: 'being removed' }
 /** The actions a notification reports the success of, as a title and a body. */
 const DONE: Record<string, [string, string]> = { up: ['is up', 'Its stack came up'], add: ['is ready', 'The worktree is made, its stack still down'] }
+
+/** How a job ended, by its exit code: null for one killed before it could say, any other code a failure. */
+const OUTCOMES: Record<string, string> = { 0: 'ok', null: 'killed' }
 
 export interface JobWords {
   doing?: Record<string, string>
@@ -284,6 +288,17 @@ export class Jobs {
     }
 
     return states
+  }
+
+  /** A stack's job in a few words: "coming up" while one runs, else how the last ended, "up ok 5m ago", "rm failed 2h ago"; empty when it never had one. */
+  summary({ running, last }: JobState, now = Date.now()): string {
+    if (running !== undefined)
+      return doing(this.doing, running)
+
+    if (last === undefined)
+      return ''
+
+    return [last.verb, last.service, OUTCOMES[String(last.code)] ?? 'failed', formatAge(last.endedAt ?? last.startedAt, now)].filter(word => word !== undefined).join(' ')
   }
 
   /** Drops what a stack's jobs left, for a worktree removed for good: one made again under its name starts with no history. */

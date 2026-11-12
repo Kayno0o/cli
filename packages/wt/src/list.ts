@@ -1,10 +1,15 @@
 import type { GlobalOptions } from './commands'
+import type { JobState } from './jobs'
 import type { Project } from './project'
 import { basename, join } from 'node:path'
+import { table } from '@kaynooo/cli-kit'
 import { runningProjects } from './compose'
+import { wtConfig } from './config'
 import { currentBranch, git, unreachableCount } from './git'
+import { Jobs } from './jobs'
 import { listTasks, loadProjects, locate, stackName, worktreeOf } from './project'
 import { urlsOf } from './routes'
+import { slugOf } from './stack'
 
 export interface Checkout {
   project: string
@@ -19,6 +24,8 @@ export interface Checkout {
   unbranched: number
   /** The terminal session name of the checkout: its folder's name for main, `<repo>--<task>` for a worktree, as Herdr spaces are named. */
   session: string
+  /** The job running on its stack, or how the last one ended: "coming up", "up ok 5m ago"; empty when it never had one. */
+  job: string
 }
 
 // A session name holds no "." or ":" (nor a slash or a blank), which a terminal's address reads as separators.
@@ -56,7 +63,7 @@ async function dirtyCount(dir: string, repos: string[]): Promise<number> {
   return changedFiles(statuses.filter(status => status.ok).map(status => status.out))
 }
 
-async function checkoutsOf(project: Project, running: Set<string>): Promise<Checkout[]> {
+async function checkoutsOf(project: Project, running: Set<string>, jobs: Jobs, states: Map<string, JobState>): Promise<Checkout[]> {
   const branchDir = project.repos[0] ?? '.'
   const mainHost = project.routes.find(route => !route.host.startsWith('*.'))?.host
   const main = { id: stackName(project), task: 'main', dir: project.root, url: mainHost !== undefined ? `https://${mainHost}` : '' }
@@ -76,13 +83,16 @@ async function checkoutsOf(project: Project, running: Set<string>): Promise<Chec
     dirty: await dirtyCount(dir, project.repos),
     unbranched: task === 'main' ? 0 : await unreachableCount(dir, project.repos),
     session: sessionOf(task === 'main' ? basename(dir) : id),
+    job: jobs.summary(states.get(slugOf(`${project.name}/${task}`)) ?? {}),
   })))
 }
 
-// One row per checkout, `*` marking a stack that is up; as JSON, `{ project, checkouts }`, project being the one the directory is in, null outside every one.
+// One row per checkout under a header, `*` marking a stack that is up; as JSON, `{ project, checkouts }`, project being the one the directory is in, null outside every one.
 export async function listWorktrees(options: ListOptions): Promise<void> {
-  const [running, { here, projects }] = await Promise.all([runningProjects(), projectsToList(options)])
-  const checkouts = (await Promise.all(projects.map(async project => checkoutsOf(project, running)))).flat()
+  const [running, { here, projects }, config] = await Promise.all([runningProjects(), projectsToList(options), wtConfig()])
+  const jobs = new Jobs({ dir: config.jobs, app: 'wt' })
+  const states = jobs.states()
+  const checkouts = (await Promise.all(projects.map(async project => checkoutsOf(project, running, jobs, states)))).flat()
 
   if (options.json) {
     console.log(JSON.stringify({ project: here?.name ?? null, checkouts }))
@@ -90,9 +100,10 @@ export async function listWorktrees(options: ListOptions): Promise<void> {
     return
   }
 
-  const rows = checkouts.map(checkout => [checkout.running ? '*' : ' ', checkout.project, checkout.task, checkout.branch, checkout.url, [checkout.dirty ? `${checkout.dirty} changed` : '', checkout.unbranched ? `${checkout.unbranched} on no branch` : ''].filter(Boolean).join(', ')])
-  const widths = rows[0]?.map((_, column) => Math.max(...rows.map(row => row[column]!.length))) ?? []
+  if (!checkouts.length)
+    return
 
-  for (const row of rows)
-    console.log(row.map((cell, column) => cell.padEnd(widths[column]!)).join('  ').trimEnd())
+  const rows = checkouts.map(checkout => [checkout.running ? '*' : '', checkout.project, checkout.task, checkout.branch, checkout.url, checkout.job, [checkout.dirty ? `${checkout.dirty} changed` : '', checkout.unbranched ? `${checkout.unbranched} on no branch` : ''].filter(Boolean).join(', ')])
+
+  console.log(table([['up', 'project', 'task', 'branch', 'url', 'job', 'changes'], ...rows], { header: true }))
 }
