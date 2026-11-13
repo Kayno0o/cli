@@ -329,6 +329,7 @@ gp
 gp --repos  # every repository nested in this one
 gp --repos --dry-run  # what would go out
 gp . ../other  # this repository and a sibling
+gp -b feature  # a branch other than the current one
 gp -- --force-with-lease  # flags for git push
 ```
 

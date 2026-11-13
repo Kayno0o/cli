@@ -179,6 +179,39 @@ describe('gp', () => {
     expect(gp().out.trim().split(COLUMNS)).toEqual(['.', 'detached HEAD'])
   })
 
+  test('--branch pushes a branch that is not checked out, with -u when it has no upstream, leaving the current one', () => {
+    const bare = remote(root, 'project')
+
+    git(root, 'branch', 'feature')
+    git(root, 'checkout', '-q', 'feature')
+    commit(root, 'feature work')
+    git(root, 'checkout', '-q', 'main')
+    commit(root, 'main work')
+
+    expect(gp('-b', 'feature', '--dry-run').out.trim().split(COLUMNS)).toEqual(['.', 'would push feature -> origin/feature, 1 commit'])
+    expect(gp('-b', 'feature').code).toBe(0)
+    expect(git(top, '--git-dir', bare, 'log', '-1', '--format=%s', 'feature')).toBe('feature work')
+    expect(git(top, '--git-dir', bare, 'log', '-1', '--format=%s', 'main')).not.toBe('main work')
+    expect(git(root, 'rev-parse', '--abbrev-ref', 'feature@{upstream}')).toBe('origin/feature')
+  })
+
+  test('--branch pushes to the upstream it tracks, under its name there, and skips what is even or missing', () => {
+    const bare = remote(root, 'project')
+
+    git(root, 'branch', 'local')
+    git(root, 'push', '-q', '-u', 'origin', 'local:shared')
+    git(root, 'checkout', '-q', 'local')
+    commit(root, 'local work')
+    git(root, 'checkout', '-q', 'main')
+
+    expect(JSON.parse(gp('-b', 'local', '-b', 'main', '-b', 'nope', '--json').out)).toEqual([
+      { path: '.', branch: 'local', remote: 'origin/shared', commits: 1, outcome: 'pushed' },
+      { path: '.', branch: 'main', remote: null, commits: null, outcome: 'skipped', reason: 'nothing to push' },
+      { path: '.', branch: 'nope', remote: null, commits: null, outcome: 'skipped', reason: 'no branch nope' },
+    ])
+    expect(git(top, '--git-dir', bare, 'log', '-1', '--format=%s', 'shared')).toBe('local work')
+  })
+
   test('a branch with no commit yet is skipped as nothing to push', () => {
     const fresh = join(root, 'fresh')
 

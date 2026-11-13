@@ -18,6 +18,7 @@ Prints one line with the branch, its upstream and how far ahead and behind it is
 
 `gp [dir]...` pushes the current branch of the repository, or of each dir's, when it is ahead of its upstream as of the last fetch, and with `-u` to origin (the only remote when there is no origin) when it has no upstream yet. `--repos` (`-r`) pushes every repository `gst --repos` lists, one after another.
 
+- `--branch <name>` (`-b`, repeatable) pushes that local branch instead of the current one: to the upstream it tracks, under its name there, else with `-u` to origin; a repository without it is skipped.
 - A detached HEAD, a branch with nothing ahead and a repository with no remote are skipped, saying so; a refused push shows git's reason and the next repository is still pushed.
 - What follows `--` goes to each `git push` (`gp -- --tags`, `gp -- --force-with-lease`), and a branch with nothing ahead is then pushed too.
 - `--dry-run` says what would be pushed; `--json` prints `{path, branch, remote, commits, outcome, reason?}` per repository, `outcome` being `pushed`, `would-push`, `skipped` or `refused`.
