@@ -74,6 +74,30 @@ describe('replace scripts', () => {
     expect(suggested('python3 - <<\'EOF\'\nimport sys\np = sys.argv[1]\ns = open(p).read()\nopen(p, \'w\').write(s.replace(f\'{x}\', \'y\'))\nEOF')).toBe('generic')
   })
 
+  test('lets a script that writes only files it never read through', () => {
+    const commands = [
+      // eslint-disable-next-line no-template-curly-in-string -- the script's own template string
+      'bun -e "const [dir, out] = process.argv.slice(2); const parts = []; for (let i = 1; i <= 4; i++) parts.push(await Bun.file(`${dir}/part${i}.json`).text()); await Bun.write(out, parts.map(s => s.replace(/\\s+/g, \' \')).join())"',
+      'bun -e "writeFileSync(\'b.json\', readFileSync(\'a.json\', \'utf8\').replace(\'x\', \'y\'))"',
+      'python3 -c "s = open(\'a.txt\').read().replace(\'x\', \'y\'); open(\'b.txt\', \'w\').write(s)"',
+    ]
+
+    for (const command of commands)
+      expect(replaceViolation(command)).toBeNull()
+  })
+
+  test('still refuses a script writing back a file it read, however it names it', () => {
+    expect(suggested('bun -e "const p = process.argv[2]; writeFileSync(p, readFileSync(p, \'utf8\').replace(\'a\', \'b\'))"')).toBe('sub --from a --to b <file>')
+    expect(suggested('bun -e "for (const f of files) { const t = await Bun.file(f).text(); await Bun.write(f, t.replace(\'a\', \'b\')) }"')).toBe('sub --from a --to b <file>')
+    expect(suggested('bun -e "const f = Bun.file(\'a.ts\'); await Bun.write(f, (await f.text()).replace(\'a\', \'b\'))"')).toBe('sub --from a --to b a.ts')
+    expect(suggested('python3 -c "from pathlib import Path; import sys; p = sys.argv[1]; Path(p).write_text(Path(p).read_text().replace(\'a\', \'b\'))"')).toBe('sub --from a --to b --all <file>')
+    expect(suggested('python3 - <<\'EOF\'\nwith open(\'a.txt\') as fh:\n    s = fh.read()\nwith open(\'a.txt\', mode=\'w\') as fh:\n    fh.write(s.replace(\'x\', \'y\'))\nEOF')).toBe('sub --from x --to y --all a.txt')
+  })
+
+  test('hands no sub command when it cannot tell which file a script writes', () => {
+    expect(suggested('python3 -c "s = paths[1].read_text().replace(\'a\', \'b\'); paths[0].write_text(s)"')).toBe('generic')
+  })
+
   test('lets a script that writes no file through', () => {
     for (const command of ['python3 -c "print(\'a-b\'.replace(\'-\', \'_\'))"', 'bun -e "console.log(\'a\'.replace(\'a\', \'b\'))"', 'python3 script.py'])
       expect(replaceViolation(command)).toBeNull()

@@ -5,12 +5,25 @@ import { HEREDOC_OPENER, heredocBody } from './commit'
 const PYTHON = /^python[\d.]*$/
 const SCRIPT_RUNNERS = new Set(['bun', 'node'])
 const EVAL_FLAGS = new Set(['-e', '--eval', '-p', '--print'])
-// What a replace script writes a file with.
-const WRITES = /\bwrite_text\(|\bBun\.write\(|\bwriteFileSync\(|\bwriteFile\(|\bopen\([^)\n]*,\s*['"](?:w|a|r\+)/
 const REPLACE_CALL = /\.(replace|replaceAll)\(/g
-// The calls a script opens or writes a file through, their first argument the path or a variable holding it.
-const FILE_CALL = /\b(?:Path|open|Bun\.file|Bun\.write|readFileSync|writeFileSync|readFile|writeFile)\(\s*/g
+// Calls taking the path they write or read as first argument, methods reading or writing the file they are called on, and `open` in either form.
+const WRITE_CALL = /\b(?:Bun\.write|writeFileSync|writeFile)\(/g
+const READ_CALL = /\b(?:readFileSync|readFile)\(/g
+const WRITE_METHOD = /\.(?:write_text|write_bytes)\(/g
+const READ_METHOD = /\.(?:text|json|bytes|arrayBuffer|read_text|read_bytes)\(/g
+const OPEN_CALL = /(\.)open\(|(?<![\w$.])open\(/g
+// A handle on a file, its first argument the path: `Bun.file(p)`, `Path(p)`, `open(p)`.
+const HANDLE = /^(?:await\s+)?(?:Bun\.file|(?:pathlib\.)?Path|open)\(/
+const HANDLE_BEFORE = /(?:Bun\.file|(?<![\w$])Path|(?<![\w$.])open)$/
+const RECEIVER_NAME = /[A-Z_$][\w$.]*$/i
+const NAME_BEFORE = /[\w$.]*$/
+const OPEN_MODE = /^[rwaxbt+U]+$/
+const WRITE_MODE = /[wax+]/
+const READ_MODE = /[r+]/
+const MODE_KEYWORD = /^mode\s*=\s*/
+const WHITESPACE = /\s+/g
 const IDENTIFIER = /^[A-Z_$][\w$]*/i
+const ONLY_IDENTIFIER = /^[A-Z_$][\w$]*$/i
 const COUNT_CHECK = /\.count\(/g
 const COUNT_EQUALS = /^\s*\)\s*==\s*(\d+)/
 const PYTHON_COUNT = /^\s*,\s*(\d+)\s*\)/
@@ -125,18 +138,159 @@ function valueAt(script: string, at: number, regex = false): Literal | undefined
   return assigned === undefined ? undefined : { ...assigned, end: at + name.length }
 }
 
-// The paths the script reads or writes.
-function scriptPaths(script: string): string[] {
-  const paths = new Set<string>()
+// The index past a quoted string opening at `at`, or the script's length when it never closes.
+function quotedEnd(script: string, at: number): number {
+  const quote = script[at]
 
-  for (const call of script.matchAll(FILE_CALL)) {
-    const path = valueAt(script, call.index + call[0].length)?.value
-
-    if (path !== undefined && path !== '')
-      paths.add(path)
+  for (let i = at + 1; i < script.length; i++) {
+    if (script[i] === '\\')
+      i++
+    else if (script[i] === quote)
+      return i + 1
   }
 
-  return [...paths]
+  return script.length
+}
+
+// The expression from `at` up to the comma, closing bracket or statement end that ends it at its own depth.
+function expressionAt(script: string, at: number): string {
+  let depth = 0
+
+  for (let i = at; i < script.length;) {
+    const char = script[i] ?? ''
+
+    if (char === '\'' || char === '"' || char === '`') {
+      i = quotedEnd(script, i)
+
+      continue
+    }
+
+    if ('([{'.includes(char))
+      depth++
+    else if (')]}'.includes(char) && depth-- === 0)
+      return script.slice(at, i)
+    else if (depth === 0 && (char === ',' || char === ';' || char === '\n'))
+      return script.slice(at, i)
+
+    i++
+  }
+
+  return script.slice(at)
+}
+
+// The `(` opening the bracket that closes at `close`, undefined when it opens nowhere.
+function openingParen(script: string, close: number): number | undefined {
+  let depth = 0
+
+  for (let i = close; i >= 0; i--) {
+    if (script[i] === ')')
+      depth++
+    else if (script[i] === '(' && --depth === 0)
+      return i
+  }
+
+  return undefined
+}
+
+// A file a script reads or writes: `key` the same for two references to the same file, `path` the path when it is written out.
+interface Target { key: string, path?: string }
+
+// The file the expression at `at` names: a literal path, a handle on one, a variable followed to what it was assigned, or else the expression's own text.
+function targetAt(script: string, at: number, depth = 0): Target | undefined {
+  const start = skip(script, at, SPACE) ?? at
+  const literal = literalAt(script, start)
+
+  if (literal !== undefined)
+    return { key: literal.value, path: literal.value }
+
+  const text = expressionAt(script, start).trimEnd()
+  const handle = HANDLE.exec(text)
+
+  if (handle !== null && depth < 8)
+    return targetAt(script, start + handle[0].length, depth + 1)
+
+  if (ONLY_IDENTIFIER.test(text))
+    return nameTarget(script, text, start, depth)
+
+  return text === '' ? undefined : { key: text.replaceAll(WHITESPACE, '') }
+}
+
+// The file a variable names, from its last assignment before `at` when that is a path, a handle or another variable; the name itself otherwise, such as one read from argv.
+function nameTarget(script: string, name: string, at: number, depth: number): Target {
+  const assignments = [...script.slice(0, at).matchAll(new RegExp(String.raw`(?<![\w.$])${name.replaceAll('$', String.raw`\$`)}\s*=(?!=)\s*`, 'g'))]
+  const last = assignments.at(-1)
+
+  if (last === undefined || depth >= 8)
+    return { key: name }
+
+  const from = last.index + last[0].length
+  const text = expressionAt(script, from).trimEnd()
+  const followed = literalAt(script, from) !== undefined || HANDLE.test(text) || ONLY_IDENTIFIER.test(text)
+
+  return followed ? targetAt(script, from, depth + 1) ?? { key: name } : { key: name }
+}
+
+// The file the method called at `.` index `dot` acts on: `Path(p).read_text()`, `p.read_text()`, `(await Bun.file(p).text())`.
+function receiverTarget(script: string, dot: number): Target | undefined {
+  if (script[dot - 1] === ')') {
+    const open = openingParen(script, dot - 1)
+
+    if (open === undefined)
+      return undefined
+
+    const before = script.slice(0, open)
+
+    if (HANDLE_BEFORE.test(before))
+      return targetAt(script, open + 1)
+
+    const name = NAME_BEFORE.exec(before)?.[0] ?? ''
+
+    return { key: (name + script.slice(open, dot)).replaceAll(WHITESPACE, '') }
+  }
+
+  const name = RECEIVER_NAME.exec(script.slice(0, dot))?.[0]
+
+  if (name === undefined)
+    return undefined
+
+  return ONLY_IDENTIFIER.test(name) ? nameTarget(script, name, dot - name.length, 0) : { key: name }
+}
+
+// The files the script reads and those it writes, a write undefined when its file cannot be told; an `open` whose mode is not written out counts as a read.
+function fileAccess(script: string): { reads: Set<string>, writes: (Target | undefined)[] } {
+  const reads = new Set<string>()
+  const writes: (Target | undefined)[] = []
+  const read = (target: Target | undefined) => target !== undefined && reads.add(target.key)
+
+  for (const call of script.matchAll(WRITE_CALL))
+    writes.push(targetAt(script, call.index + call[0].length))
+
+  for (const call of script.matchAll(READ_CALL))
+    read(targetAt(script, call.index + call[0].length))
+
+  for (const call of script.matchAll(WRITE_METHOD))
+    writes.push(receiverTarget(script, call.index))
+
+  for (const call of script.matchAll(READ_METHOD))
+    read(receiverTarget(script, call.index))
+
+  for (const call of script.matchAll(OPEN_CALL)) {
+    const after = call.index + call[0].length
+    const isMethod = call[1] !== undefined
+    const target = isMethod ? receiverTarget(script, call.index) : targetAt(script, after)
+    const modeAt = isMethod ? after : skip(script, after + expressionAt(script, after).length, COMMA)
+    const mode = modeAt === undefined || script[modeAt] === ')' ? 'r' : literalAt(script, skip(script, modeAt, MODE_KEYWORD) ?? modeAt)?.value
+
+    const isWrite = mode !== undefined && OPEN_MODE.test(mode) && WRITE_MODE.test(mode)
+
+    if (isWrite)
+      writes.push(target)
+
+    if (!isWrite || READ_MODE.test(mode))
+      read(target)
+  }
+
+  return { reads, writes }
 }
 
 // The count a Python script asserts for each text, `assert s.count(old) == 1`.
@@ -472,12 +626,20 @@ export function replaceViolation(command: string): string | null {
     const isPython = PYTHON.test(program)
     const script = isPython || SCRIPT_RUNNERS.has(program) ? inlineScript(program, args, piece.text) : null
 
-    if (script === null || !WRITES.test(script) || script.search(REPLACE_CALL) === -1)
+    if (script === null || script.search(REPLACE_CALL) === -1)
       continue
 
-    const pairs = scriptPairs(script, isPython)
+    const { reads, writes } = fileAccess(script)
+    const edited = writes.filter(target => target !== undefined && reads.has(target.key))
 
-    return route(`A ${isPython ? 'python' : program} script replacing text in a file is what \`sub\` does with a match-count check.`, pairs, scriptPaths(script))
+    // A script writing only files it never reads, such as a merge into a new file, edits nothing in place; one whose writes cannot all be told gets no sub command, its replace calls maybe unrelated to them.
+    if (edited.length === 0 && !writes.includes(undefined))
+      continue
+
+    const pairs = edited.length === 0 ? undefined : scriptPairs(script, isPython)
+    const paths = new Set(edited.flatMap(target => target?.path ?? []))
+
+    return route(`A ${isPython ? 'python' : program} script replacing text in a file is what \`sub\` does with a match-count check.`, pairs, [...paths])
   }
 
   return null
