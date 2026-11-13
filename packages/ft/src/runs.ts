@@ -155,22 +155,34 @@ export function overall(runs: Run[]): string {
 
 export interface Stall { reason: string, certain: boolean }
 
-// Why the queued runs are not moving, certain when no online runner carries a job's labels; undefined when it cannot tell, as the runner list needs an admin login.
+// The repo's own runners, which the admin list leaves out; undefined when the login may not read them.
+async function repoRunners(repo?: string): Promise<Runner[] | undefined> {
+  try {
+    return await repoApi<Runner[]>('actions/runners', repo)
+  }
+  catch {
+    return undefined
+  }
+}
+
+// Why the queued runs are not moving, certain when no online runner carries a job's labels; undefined when it cannot tell, as the instance's runner list needs an admin login.
 export async function stallReason(runs: Run[], repo?: string): Promise<Stall | undefined> {
   const queued = runs.filter(run => QUEUED.has(run.status))
 
   if (queued.length === 0)
     return undefined
 
-  let runners: Runner[]
+  let instance: Runner[]
 
   try {
-    runners = await api<Runner[]>('admin/actions/runners')
+    instance = await api<Runner[]>('admin/actions/runners')
   }
   catch {
     return undefined
   }
 
+  const own = await repoRunners(repo)
+  const runners = [...instance, ...own ?? []]
   const online = runners.filter(runner => runner.status !== 'offline')
 
   if (online.length === 0)
@@ -181,7 +193,7 @@ export async function stallReason(runs: Run[], repo?: string): Promise<Stall | u
       const labels = job.runs_on ?? []
 
       if (QUEUED.has(job.status) && !online.some(runner => labels.every(label => (runner.labels ?? []).includes(label))))
-        return { reason: `job ${job.name} of ${run.workflow_id} runs on ${labels.join(', ')}, which no online runner carries (${online.map(runner => `${runner.name}: ${(runner.labels ?? []).join(', ')}`).join('; ')})`, certain: true }
+        return { reason: `job ${job.name} of ${run.workflow_id} runs on ${labels.join(', ')}, which no online runner carries (${online.map(runner => `${runner.name}: ${(runner.labels ?? []).join(', ')}`).join('; ')})`, certain: own !== undefined }
     }
   }
 

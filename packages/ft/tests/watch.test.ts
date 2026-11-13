@@ -1,8 +1,9 @@
+import type { Run } from '../src/runs'
 import type { FakeState } from './fake-tea'
 import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { timing, watch, watchRuns } from '../src/commands/watch'
-import { failureText, jobLog, runLine, runsOn } from '../src/runs'
+import { failureText, jobLog, runLine, runsOn, stallReason } from '../src/runs'
 import { refusal, withFakeTea } from './fake-tea'
 
 const run = (id: number, status: string) => ({ id, commit_sha: 'abc', event: 'push', status, workflow_id: 'test.yml', prettyref: 'main', html_url: `https://forge/runs/${id}`, title: 'x' })
@@ -221,5 +222,29 @@ describe('failureText', () => {
 
     expect(Bun.stripANSI(drawn)).toBe('job test of test.yml failed:\nit broke')
     expect(drawn.endsWith('failed\x1B[39m:\nit broke')).toBe(true)
+  })
+})
+
+describe('stallReason', () => {
+  const queued: Run[] = [{ ...run(1, 'waiting'), workflow_id: 'deploy.yml', index_in_repo: 1, started: '', stopped: '', duration: 0 }]
+  const jobs = { 1: [{ id: 1, name: 'deploy', status: 'waiting', runs_on: ['deploy'] }] }
+  const instance = [{ name: 'docker-runner', status: 'active', labels: ['alpine'] }]
+
+  test('counts the repo\'s own runners, which the admin list leaves out', async () => {
+    await withFakeTea({ issues: [], jobs, runners: instance, repoRunners: [{ name: 'deploy', status: 'active', labels: ['deploy'] }] }, async () => {
+      expect(await stallReason(queued)).toBeUndefined()
+    })
+  })
+
+  test('is certain when neither list holds a runner for the job', async () => {
+    await withFakeTea({ issues: [], jobs, runners: instance, repoRunners: [] }, async () => {
+      expect(await stallReason(queued)).toMatchObject({ certain: true })
+    })
+  })
+
+  test('is not certain when the repo\'s runners cannot be read', async () => {
+    await withFakeTea({ issues: [], jobs, runners: instance }, async () => {
+      expect(await stallReason(queued)).toMatchObject({ certain: false })
+    })
   })
 })

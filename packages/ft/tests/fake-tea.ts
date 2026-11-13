@@ -11,7 +11,7 @@ export interface FakeMilestone { id: number, title: string, state: string, descr
 export interface FakeFailure { match: string, message: string, times?: number, exit?: number }
 // Calls whose arguments contain `match` (and `method`) wait until `parties` of them arrived, so two sessions reach that step together.
 export interface FakeBarrier { match: string, method?: string, parties: number }
-export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, beforeComment?: Record<number, string[]>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier, workflows?: string[], defaultBranch?: string, dispatchStatus?: string, noRunInfo?: boolean }
+export interface FakeState { issues: FakeIssue[], milestones?: FakeMilestone[], comments?: Record<number, string[]>, runs?: Record<string, unknown>[], runners?: Record<string, unknown>[], repoRunners?: Record<string, unknown>[], jobs?: Record<number, unknown[]>, logs?: Record<number, string>, calls?: string[][], labels?: string[], seen?: { token?: string, host?: string }[], clobber?: Record<number, string>, beforeComment?: Record<number, string[]>, afterComment?: Record<number, string[]>, failures?: FakeFailure[], barrier?: FakeBarrier, workflows?: string[], defaultBranch?: string, dispatchStatus?: string, noRunInfo?: boolean }
 
 // A stand-in for the `tea` binary keeping issues in a JSON file, refusing the flag tea 0.15 lacks.
 const SCRIPT = `#!/usr/bin/env bun
@@ -208,6 +208,11 @@ if (command === 'api') {
   }
   else if (run !== null)
     { const found = state.runs?.find(each => each.id === Number(run[1])); if (found === undefined) reject({ message: 'not found', url: '' }); else console.log(JSON.stringify(found)) }
+  else if (path === 'admin/actions/runners' || path === 'actions/runners') {
+    const runners = path === 'actions/runners' ? state.repoRunners : state.runners
+
+    if (runners === undefined) reject({ message: 'forbidden', url: '' }); else console.log(JSON.stringify(runners))
+  }
   else if (RUN_JOBS.test(path))
     console.log(JSON.stringify(state.jobs?.[path.split('/')[2]] ?? []))
   else if (JOB_LOGS.test(path) && state.logs?.[path.split('/')[2]] !== undefined)
