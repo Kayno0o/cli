@@ -203,7 +203,7 @@
     },
     "packages/guard": {
       "name": "@kaynooo/cli-guard",
-      "version": "0.14.3",
+      "version": "0.14.4",
       "bin": {
         "guard": "./dist/cli.js",
       },
