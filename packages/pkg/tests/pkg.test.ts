@@ -317,6 +317,17 @@ describe('analyze edge cases', () => {
     expect(private_.blocked).toBe(false)
   })
 
+  test('a fresh version is held back on the public registry, only warned about on a private one', async () => {
+    const now = Date.parse('2026-11-01')
+    const fetcher = dated({ '1.0.0': '2020-01-01T00:00:00.000Z', '1.1.0': '2026-10-29T00:00:00.000Z' })
+    const publicRegistry = await checkPackage('some-lib@1.1.0', { configs: [], minAgeDays: 14, now, fetcher })
+    const private_ = await checkPackage('some-lib@1.1.0', { configs: [parseNpmrc('registry=https://private.test/', {})], minAgeDays: 14, now, fetcher })
+
+    expect(publicRegistry.blocked).toBe(true)
+    expect(private_.blocked).toBe(false)
+    expect(private_.warnings.join()).toContain('under 14 days, not held back on private.test')
+  })
+
   test('a fresh version fixing a high advisory of the safe one is not held back for its age', async () => {
     const now = Date.parse('2026-11-01')
     const fetcher = (severity: string, vulnerable: string): Fetcher => async (url) => {

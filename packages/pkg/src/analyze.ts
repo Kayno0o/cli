@@ -207,6 +207,10 @@ export function analyze(input: AnalyzeInput): Report {
   else if (age < minAgeDays && report.fixes.length > 0) {
     report.warnings.push(`${version} was published ${daysAgo(age)} ago, under ${minAgeDays} days, but it fixes ${report.fixes.map(each => `${each.ghsa ?? each.id} (${each.severity})`).join(', ')} that ${report.safe?.version} has, so its age does not hold it back`)
   }
+  else if (age < minAgeDays && registry !== PUBLIC_HOST) {
+    // The age check waits out a hijacked release on npmjs.org; a private registry serves the user's own releases, wanted as soon as they are out.
+    report.warnings.push(`${version} was published ${daysAgo(age)} ago, under ${minAgeDays} days, not held back on ${registry}`)
+  }
   else if (age < minAgeDays) {
     report.blocked = true
     report.warnings.push(`${version} was published ${daysAgo(age)} ago, under ${minAgeDays} days${report.safe === undefined ? ', and no older stable version exists' : `, use ${spec.name}@${report.safe.version}`}`)
