@@ -152,7 +152,7 @@
     },
     "packages/ft": {
       "name": "@kaynooo/cli-forgejo",
-      "version": "0.30.7",
+      "version": "0.30.8",
       "bin": {
         "ft": "./dist/cli.js",
       },
