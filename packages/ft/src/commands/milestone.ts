@@ -168,11 +168,11 @@ async function closeOne(args: string[]): Promise<number> {
   return 0
 }
 
-const showUsage = `ft milestone <title|id>
+const showUsage = `ft milestone [<title|id>]
 ft milestone new <title> [-d <text>] [--due <YYYY-MM-DD>]
 ft milestone close <title|id> [--force]
 
-Shows a milestone with its open issues as \`ft board\` does: available, taken by a session running here, or claimed by one gone, each with its boxes left, at most 30 of each kind (--full for all).
+Shows a milestone with its open issues as \`ft board\` does: available, taken by a session running here, or claimed by one gone, each with its boxes left, at most 30 of each kind (--full for all); with no title or id it lists the milestones as \`ft milestones\` does.
 \`ft milestone new\` and \`ft milestone close\` have their own --help; a milestone titled new or close is named by its id.`
 const showExits: ExitRow[] = [[0, 'it showed the milestone'], [1, 'it cannot be read'], [2, 'a usage error or an unknown milestone']]
 
@@ -189,7 +189,7 @@ async function show(args: string[]): Promise<number> {
   const reference = positionals.join(' ').trim()
 
   if (reference === '')
-    fail(`name the milestone, or see them all with \`ft milestones\`\n\n${showUsage}`)
+    return milestones(args)
 
   const found = await findMilestone(reference, values.repo)
   const [issues, sessions] = await Promise.all([openIssues(undefined, values.repo, found.id), liveSessions()])

@@ -17,16 +17,32 @@ export function wholeNumber(value: string | undefined, name: string, fallback: n
   return number
 }
 
-const DURATION = /^(\d+(?:\.\d+)?)(ms|[smhd])?$/
-const UNIT_MS = { ms: 1, s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 } as const
+const BARE_DURATION = /^\d+(?:\.\d+)?$/
+const DURATION = /^(?:\d+(?:\.\d+)?(?:ms|min|[smhd]))+$/
+const DURATION_PART = /(\d+(?:\.\d+)?)(ms|min|[smhd])/g
+const UNIT_MS = { ms: 1, s: 1000, m: 60_000, min: 60_000, h: 3_600_000, d: 86_400_000 } as const
 
-// A duration such as `500ms`, `90s`, `5m`, `1h` or `7d` in milliseconds, a bare number counting in `unit`.
+function durationMs(text: string, unit: 's' | 'm' | 'h'): number {
+  if (BARE_DURATION.test(text))
+    return Number(text) * UNIT_MS[unit]
+
+  if (!DURATION.test(text))
+    return 0
+
+  let ms = 0
+
+  for (const [, amount, part] of text.matchAll(DURATION_PART))
+    ms += Number(amount) * UNIT_MS[part as keyof typeof UNIT_MS]
+
+  return ms
+}
+
+// A duration such as `500ms`, `90s`, `5m` (or `5min`), `1h`, `7d` or `1m30s` in milliseconds, a bare number counting in `unit`.
 export function duration(value: string | undefined, name: string, fallback: number, unit: 's' | 'm' | 'h' = 's'): number {
   if (value === undefined)
     return fallback
 
-  const match = DURATION.exec(value.trim())
-  const ms = match === null ? 0 : Number(match[1]) * UNIT_MS[(match[2] ?? unit) as keyof typeof UNIT_MS]
+  const ms = durationMs(value.trim(), unit)
 
   if (ms < 1)
     badUsage(`--${name} takes a duration such as 30s, 5m, 1h or 7d, not ${value}`)

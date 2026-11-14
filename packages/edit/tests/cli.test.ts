@@ -301,12 +301,20 @@ describe('sub', () => {
     expect(read('a.ts')).toBe('keep\n')
   })
 
+  test('--count with --all checks the exact count', () => {
+    file('a.ts', 'a\na\n')
+
+    expect(sub(['-f', 'a', '-t', 'b', '-n', '3', '--all', 'a.ts']).err).toContain('matched 2 times, expected 3')
+    expect(sub(['-f', 'a', '-t', 'b', '-n', '2', '--all', 'a.ts']).code).toBe(0)
+    expect(read('a.ts')).toBe('b\nb\n')
+  })
+
   test('refuses unclear arguments', () => {
     file('a.ts', 'a\n')
 
     expect(sub(['-f', 'a', 'a.ts']).err).toContain('give --from and --to')
     expect(sub(['-f', 'a', '-t', 'b']).err).toContain('give at least one file')
-    expect(sub(['-f', 'a', '-t', 'b', '-n', '2', '--all', 'a.ts']).err).toContain('--count and --all exclude each other')
+
     expect(sub(['-f', '', '-t', 'b', 'a.ts']).err).toContain('--from is empty')
     expect(sub(['-p', '-', '-f', 'a', 'a.ts'], '[]').err).toContain('give either --pairs or --from and --to')
   })

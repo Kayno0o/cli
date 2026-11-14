@@ -127,11 +127,15 @@ describe('duration', () => {
     expect(duration('15', 't', 0, 'm')).toBe(900_000)
     expect(duration('1h', 't', 0, 'm')).toBe(3_600_000)
     expect(duration(undefined, 't', 42)).toBe(42)
+    expect(duration('9m30s', 't', 0)).toBe(570_000)
+    expect(duration('10min', 't', 0)).toBe(600_000)
+    expect(duration('1h30min', 't', 0)).toBe(5_400_000)
   })
 
   test('refuses anything else', () => {
     expect(() => duration('5 min', 'timeout', 0)).toThrow(new Exit('--timeout takes a duration such as 30s, 5m, 1h or 7d, not 5 min', 2))
     expect(() => duration('0', 'timeout', 0)).toThrow(Exit)
+    expect(() => duration('5m5', 'timeout', 0)).toThrow(Exit)
   })
 })
 

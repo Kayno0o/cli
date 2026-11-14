@@ -34,7 +34,7 @@ const OPTIONS = {
   'from': { type: 'string', short: 'f', description: 'text to find, taken literally' },
   'to': { type: 'string', short: 't', description: 'text to put in its place, empty to delete it' },
   'count': { type: 'string', short: 'n', description: 'matches expected in each file (default 1)' },
-  'all': { type: 'boolean', short: 'a', description: 'replace every match, expecting at least one in each file' },
+  'all': { type: 'boolean', short: 'a', description: 'replace every match, expecting at least one in each file, or exactly --count' },
   'skip-missing': { type: 'boolean', description: 'with --all, leave a file where no pair matches alone and list it, instead of failing; the counts still hold for the files that match' },
   'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1, ${1}, $<name> and ${name}, and a \\n or \\t in it is a newline or a tab, \\\\ a backslash' }, // eslint-disable-line no-template-curly-in-string
   'ignore-case': { type: 'boolean', short: 'i', description: 'with --regex, match without regard to case' },
@@ -96,7 +96,7 @@ function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   if (!isFlag(all) || !isFlag(regex) || !isFlag(ignoreCase) || !isFlag(dotAll))
     fail(`${label}all, regex, ignoreCase and dotAll take true or false`)
 
-  const pair: Pair = { from, to, count: count ?? defaults.count ?? 1, all: all ?? defaults.all, regex: regex ?? defaults.regex, ignoreCase: ignoreCase ?? defaults.ignoreCase, dotAll: dotAll ?? defaults.dotAll }
+  const pair: Pair = { from, to, count: count ?? defaults.count ?? 1, all: count === undefined ? all ?? defaults.all : false, regex: regex ?? defaults.regex, ignoreCase: ignoreCase ?? defaults.ignoreCase, dotAll: dotAll ?? defaults.dotAll }
 
   if ((pair.ignoreCase === true || pair.dotAll === true) && pair.regex !== true)
     fail(`${label}ignoreCase and dotAll need regex`)
@@ -336,16 +336,14 @@ async function main(argv: string[]): Promise<number> {
   }))
   const files = dedupe(given.flat())
 
-  if (values.count !== undefined && values.all === true)
-    fail('--count and --all exclude each other')
-
   if (values['skip-missing'] === true && values.all !== true)
     fail('--skip-missing needs --all')
 
   if ((values['ignore-case'] === true || values.dotall === true) && values.regex !== true)
     fail('--ignore-case and --dotall need --regex')
 
-  const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true, regex: values.regex === true, ignoreCase: values['ignore-case'] === true, dotAll: values.dotall === true }
+  // --count with --all checks the exact count, the stricter reading of what both ask for.
+  const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true && values.count === undefined, regex: values.regex === true, ignoreCase: values['ignore-case'] === true, dotAll: values.dotall === true }
   const edits = await plan(values, files, defaults)
   const changes: { path: string, before: string, after: string, lines: number[], diff?: Diff }[] = []
   const problems: Problem[] = []

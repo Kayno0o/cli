@@ -138,11 +138,12 @@ A lane's claim (lane-<n>-<issue>) is held while the session whose name ends in -
 const boardExits: ExitRow[] = [[0, 'it listed them'], [1, 'the issues cannot be read'], [2, 'a usage error']]
 
 const BOARD_LIMIT = 30
+const INLINE_IGNORE_CASE = /^\(\?i\)/
 
 const boardOptions = {
   labels: { type: 'string', short: 'L', description: 'only issues with these labels, comma separated' },
   milestone: { type: 'string', short: 'm', description: 'only issues of this milestone, a title or an id' },
-  query: { type: 'string', description: 'only issues whose title matches this, a case-insensitive regex such as dom|eager' },
+  query: { type: 'string', short: 'q', description: 'only issues whose title matches this, a case-insensitive regex such as dom|eager' },
   state: { type: 'string', choices: ['available', 'taken', 'away'], description: 'only issues in this state (away: claimed, no live session here)' },
   ...limitOptions(BOARD_LIMIT),
   json: jsonOption('number, title, labels, state, holder, since, session, boxesTotal, boxesLeft and note (author, at, body of the latest comment that is not a claim)'),
@@ -164,7 +165,8 @@ export async function board(args: string[]): Promise<number> {
   let query: RegExp | undefined
 
   try {
-    query = values.query === undefined ? undefined : new RegExp(values.query, 'i')
+    // A leading (?i), the inline flag of other regex flavours, says what the 'i' flag already does.
+    query = values.query === undefined ? undefined : new RegExp(values.query.replace(INLINE_IGNORE_CASE, ''), 'i')
   }
   catch (error) {
     fail(`--query: ${error instanceof Error ? error.message : String(error)}`)

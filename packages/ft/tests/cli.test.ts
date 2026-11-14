@@ -65,6 +65,7 @@ describe('ft', () => {
   test('refuses an unknown board state or a broken query before reading the board', () => {
     expect(ft('board', '--state', 'stale').err.trim()).toBe('error: ft board: --state takes one of available, taken, away, not stale\n  hint: run ft board --help for its options')
     expect(ft('board', '--query', '(').err).toStartWith('error: ft board: --query:')
+    expect(ft('issues', '--query', '(').err).toStartWith('error: ft issues: --query:')
   })
 
   test('exits 2 on an unknown command, an unknown flag or a missing argument', () => {

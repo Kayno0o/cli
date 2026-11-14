@@ -77,6 +77,10 @@ describe('slot', () => {
     expect(await finished(slot(['--', 'sh', '-c', 'echo hi; exit 7']))).toEqual({ code: 7, out: 'hi\n', err: '' })
   })
 
+  test('finds the command after its options without --', async () => {
+    expect(await finished(slot(['-n', '4', '--lock', 'slot-test', '-t', '5s', 'sh', '-c', 'echo hi -t; exit 3']))).toEqual({ code: 3, out: 'hi -t\n', err: '' })
+  })
+
   test('asks for a command after --', async () => {
     const { code, err } = await finished(slot(['-n', '1']))
 

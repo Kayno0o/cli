@@ -89,6 +89,18 @@ describe('--json with --limit', () => {
     })
   })
 
+  test('ft milestone with no name lists them as ft milestones does', async () => {
+    await withFakeTea({ issues: open, milestones: [v1, old] }, async () => {
+      expect((await capture(async () => milestone(['--json']))).out).toBe((await capture(async () => milestones(['--json']))).out)
+    })
+  })
+
+  test('ft board -q filters by title, a leading (?i) dropped', async () => {
+    await withFakeTea({ issues: open, milestones: [] }, async () => {
+      expect(JSON.parse((await capture(async () => board(['--json', '-q', `(?i)${open[0]!.title.toUpperCase()}`]))).out)).toHaveLength(1)
+    })
+  })
+
   test('ft board --json is cut only by an explicit --limit', async () => {
     await withFakeTea({ issues: open, milestones: [] }, async () => {
       expect(JSON.parse((await capture(async () => board(['--json']))).out)).toHaveLength(3)

@@ -46,5 +46,5 @@ process.exitCode = await runCli({
     milestone: { run: milestone, summary: 'show a milestone\'s issues like the board, `new` creates one, `close` closes it', group: 'Repo' },
     remote: { run: remote, summary: 'check or fix an origin using an ssh alias tea cannot match', group: 'Repo' },
   },
-  aliases: { show: 'issue', view: 'issue' },
+  aliases: { show: 'issue', view: 'issue', issues: 'board' },
 })

@@ -193,6 +193,15 @@ describe('gd', () => {
     expect(bin('gd', work, 'a.txt').out).toContain('+two')
   })
 
+  test('--stat lists the paths given without their patch', () => {
+    commit(work, 'other.txt', 'x\n')
+    writeFileSync(join(work, 'a.txt'), 'one\ntwo\n')
+    writeFileSync(join(work, 'other.txt'), 'y\n')
+
+    expect(squeezed(bin('gd', work, '--stat', 'a.txt').out)).toBe('unstaged a.txt +1 -0')
+    expect(bin('gd', work, '--stat', '--patch').code).toBe(2)
+  })
+
   test('--json with a path gives the files and the patch of that path as JSON', () => {
     commit(work, 'other.txt', 'x\n')
     writeFileSync(join(work, 'a.txt'), 'one\ntwo\n')

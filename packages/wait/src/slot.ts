@@ -181,12 +181,30 @@ async function acquire(dir: string, resources: Resource[], holder: Holder, deadl
   }
 }
 
-export async function runSlotted(args: string[]): Promise<number> {
-  // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
-  const bare = args[0] !== undefined && !args[0].startsWith('-')
-  const parsed = parse(bare ? [] : args, RUN_USAGE, RUN_OPTIONS, { rest: true, exits: RUN_EXITS, replaces: 'flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database', examples: [['slot -- bunx vue-tsc', 'wait for a free slot, then type-check'], ['slot --lock booki-test-db -- vendor/bin/phpunit', 'one phpunit at a time on the shared test database'], 'slot ls'] })
-  const { values } = parsed
-  const rest = bare ? args : parsed.rest
+// Where the command starts when no `--` comes before it: the first word that is neither an option nor an option's value, so `slot -l db phpunit` needs no `--`. Bun drops a leading `--` before the script sees it, which makes this the case of `slot -- cmd` too.
+function withSeparator(args: string[]): string[] {
+  const takesValue = (word: string) => Object.entries(RUN_OPTIONS).some(([name, option]) => option.type === 'string' && (word === `--${name}` || ('short' in option && word === `-${option.short}`)))
+
+  for (let at = 0; at < args.length; at++) {
+    const word = args[at]!
+
+    if (word === '--')
+      return args
+
+    if (!word.startsWith('-'))
+      return [...args.slice(0, at), '--', ...args.slice(at)]
+
+    if (takesValue(word))
+      at++
+  }
+
+  return args
+}
+
+export async function runSlotted(given: string[]): Promise<number> {
+  const args = withSeparator(given)
+  const parsed = parse(args, RUN_USAGE, RUN_OPTIONS, { rest: true, exits: RUN_EXITS, replaces: 'flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database', examples: [['slot -- bunx vue-tsc', 'wait for a free slot, then type-check'], ['slot --lock booki-test-db -- vendor/bin/phpunit', 'one phpunit at a time on the shared test database'], 'slot ls'] })
+  const { values, rest } = parsed
 
   if (rest === undefined || rest.length === 0)
     fail(`give the command after --\n\n${RUN_USAGE}`)

@@ -17,6 +17,7 @@ const OPTIONS = {
   staged: { type: 'boolean', short: 's', description: 'only what is staged' },
   ref: { type: 'string', description: 'compare to this commit, branch or tag, or a..b, instead of the index' },
   patch: { type: 'boolean', short: 'p', description: 'print the patch of every file listed, not just of the paths given' },
+  stat: { type: 'boolean', description: 'list the files with their added and removed lines, the paths given too, never a patch' },
   json: jsonOption('[{title, files: [{path, added, removed}], patch?}] per section, added and removed being null for a binary file, patch there with paths or --patch, the files then those of the paths'),
 } as const
 
@@ -100,11 +101,14 @@ async function main(argv: string[]): Promise<number> {
   if (values.ref !== undefined && values.staged === true)
     badUsage('--ref and --staged exclude each other: --ref compares the working tree')
 
+  if (values.stat === true && values.patch === true)
+    badUsage('--stat and --patch exclude each other')
+
   if (await toplevelOf('.') === undefined)
     fail('not inside a git repository', 2)
 
   const wanted = sections(values)
-  const patched = positionals.length > 0 || values.patch === true
+  const patched = (positionals.length > 0 || values.patch === true) && values.stat !== true
 
   if (values.json === true) {
     printJson(await Promise.all(wanted.map(async ({ title, args }) => ({
@@ -124,7 +128,7 @@ async function main(argv: string[]): Promise<number> {
     return 0
   }
 
-  const found: Section[] = await Promise.all(wanted.map(async each => ({ ...each, files: parseNumstat(await diff([...each.args, '--numstat', '-z'], [])) })))
+  const found: Section[] = await Promise.all(wanted.map(async each => ({ ...each, files: parseNumstat(await diff([...each.args, '--numstat', '-z'], positionals)) })))
 
   const { dim } = paint(process.stdout)
   const green = role('ok', process.stdout)
