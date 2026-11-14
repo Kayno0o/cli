@@ -29,6 +29,8 @@ let server: ReturnType<typeof Bun.serve>
 let cutter: TCPSocketListener
 // Two gpg keys of a keyring of the tests' own, the first exported to a file; the signatures are served beside the files.
 const hasGpg = Bun.which('gpg') !== null
+// The tests running dl through several gpg checks outlast bun's 5 s default on a busy CI runner.
+const GPG_TIMEOUT = 20_000
 const gpgHome = temp('dl-gnupg-')
 const signatures = new Map<string, string>()
 let signer = ''
@@ -333,7 +335,7 @@ describe('checking', () => {
     expect(bySums.code).toBe(0)
     expect(bySums.out).toContain(`${sha256(BINARY)} verified`)
     expect(bySums.out).toContain(`gpg, by ${signer}`)
-  })
+  }, GPG_TIMEOUT)
 
   test.skipIf(!hasGpg)('a signature by another key, or over other bytes, deletes the file', async () => {
     const dir = home()
@@ -345,7 +347,7 @@ describe('checking', () => {
     expect(notInFile).toMatchObject({ code: 1, err: expect.stringContaining('the gpg signature does not verify') })
     expect(otherBytes).toMatchObject({ code: 1, err: expect.stringContaining('the gpg signature does not verify') })
     expect(readdirSync(join(dir, 'tmp'))).toEqual([])
-  })
+  }, GPG_TIMEOUT)
 
   test('--sig and --key go together, and a key whose tool is missing is refused before the download', async () => {
     const dir = home()
@@ -599,7 +601,7 @@ describe('outdated and update', () => {
     signatures.set('/moving.bin.asc', await sign(signer, 'v2\n'))
     expect((await dl(['update', 'signed'], dir)).code).toBe(0)
     expect(readFileSync(installed, 'utf8')).toBe('v2\n')
-  })
+  }, GPG_TIMEOUT)
 
   test('update shows a changed script and runs it with its arguments, unpinned only with --yes', async () => {
     const dir = home()
