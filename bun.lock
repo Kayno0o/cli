@@ -219,7 +219,7 @@
     },
     "packages/kit": {
       "name": "@kaynooo/cli-kit",
-      "version": "0.46.1",
+      "version": "0.46.2",
       "dependencies": {
         "@kaynooo/utils": "3.1.0",
       },
