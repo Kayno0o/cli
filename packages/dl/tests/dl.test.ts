@@ -129,7 +129,8 @@ beforeAll(async () => {
         socket.write(`HTTP/1.1 200 OK\r\nContent-Length: ${big.body.length}\r\nETag: ${big.etag}\r\nContent-Type: application/octet-stream\r\n\r\n`)
         socket.write(big.body.subarray(0, big.body.length / 2))
         socket.flush()
-        setTimeout(() => socket.end(), 20)
+        // Bun's fetch drops the bytes it holds when the socket closes before they are read, so a busy runner needs time to read the half first.
+        setTimeout(() => socket.end(), 250)
       },
     },
   })
