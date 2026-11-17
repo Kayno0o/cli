@@ -44,7 +44,7 @@ changelog undo v1.2.0 --dry-run  # what undoing that release would remove
 
 ## check
 
-runs the repo's check, typecheck, lint and test steps, found in package.json scripts, composer.json, a Justfile, a Makefile or the PHP tools' configs; a folder with no steps runs its subfolders' (api/, client/). Package `check`.
+runs the repo's check, typecheck, lint, fmt (its fmt:check or format:check script) and test steps, found in package.json scripts, composer.json, a Justfile, a Makefile or the PHP tools' configs; a folder with no steps runs its subfolders' (api/, client/). Package `check`.
 
 Instead of: chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail, and with --fix each fixer and formatter run by hand
 
