@@ -1,6 +1,6 @@
 import type { Piece } from '@kaynooo/cli-kit/shell'
 import { parseCommand, splitCommand, substitutions, tokenize } from '@kaynooo/cli-kit/shell'
-import { dumpsContainerEnv, dumpsEnvironment, printsTrackedEnv } from './guard-dumps'
+import { discardsStdout, dumpsContainerEnv, dumpsEnvironment, printsTrackedEnv, withoutRedirects } from './guard-dumps'
 import { readsEnv, variablesOf } from './guard-names'
 import { loopReadsListedEnv, runnerReadsListedEnv } from './guard-pipes'
 import { searchesEnv } from './guard-search'
@@ -27,9 +27,11 @@ export function touchingPieces(command: string, options: { hasTrackedEnv?: boole
     if (readsEnv(piece, variables) || searchesEnv(program, args) || runnerReadsListedEnv(pieces, index, variables) || loopReadsListedEnv(pieces, index, variables))
       return true
 
-    const isDump = dumpsContainerEnv(program, args) || dumpsEnvironment(program, args, tokenize(piece.command)) || (options.hasTrackedEnv === true && printsTrackedEnv(program, args))
+    const operands = withoutRedirects(args)
+    const isDump = dumpsContainerEnv(program, operands) || dumpsEnvironment(program, operands, tokenize(piece.command)) || (options.hasTrackedEnv === true && printsTrackedEnv(program, operands))
 
-    if (!isDump)
+    // a dump whose stdout goes to /dev/null prints nothing, as a parse gate like `docker compose config >/dev/null`
+    if (!isDump || discardsStdout(tokenize(piece.command)))
       return false
 
     // an `ev redact` further down its pipeline masks what the command prints
@@ -44,7 +46,7 @@ export function touchingPieces(command: string, options: { hasTrackedEnv?: boole
   })
 }
 
-// True when the command would read, write or print an env file or the whole environment; an env file named only inside a quoted message or a heredoc body is text, and a container's environment piped through `ev redact` is masked.
+// True when the command would read, write or print an env file or the whole environment; an env file named only inside a quoted message or a heredoc body is text, a container's environment piped through `ev redact` is masked, and one sent to /dev/null is never printed.
 export function touchesEnv(command: string, options: { hasTrackedEnv?: boolean } = {}): boolean {
   return touchingPieces(command, options).length > 0
 }

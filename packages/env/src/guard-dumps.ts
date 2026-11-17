@@ -132,3 +132,45 @@ export function printsTrackedEnv(program: string, args: readonly string[]): bool
 
   return !rest.some(arg => GIT_NO_PATCH.has(arg))
 }
+
+// A redirection word: the fd it moves (none for stdout, `&` for both), the operator, and its target when written in the same word.
+const REDIRECT = /^(\d*|&)(>>|>&|>|<)(.*)$/
+// A redirection operator alone, its target being the next word.
+const BARE_REDIRECT = /^(?:\d*|&)(?:>>|>&|>|<)$/
+const FD = /^\d$/
+
+// The words less the redirections and their targets, so `printenv > out.txt` names no variable.
+export function withoutRedirects(words: readonly string[]): string[] {
+  return words.filter((word, at) => !REDIRECT.test(word) && !BARE_REDIRECT.test(words[at - 1] ?? ''))
+}
+
+// Where a redirection sends its fd: an fd copied from the current targets, a closed one (`>&-`) counting as /dev/null.
+function resolveTarget(operator: string, to: string, target: Readonly<Record<string, string>>): string {
+  if (operator === '>&' && FD.test(to))
+    return target[to] ?? 'other'
+
+  return to === '-' ? '/dev/null' : to
+}
+
+// Whether the words send the piece's stdout to /dev/null (or close it), followed through `2>&1` and `1>&2` in the order bash applies them.
+export function discardsStdout(words: readonly string[]): boolean {
+  const target: Record<string, string> = { 1: 'tty', 2: 'tty' }
+
+  for (let at = 0; at < words.length; at++) {
+    const match = REDIRECT.exec(words[at] ?? '')
+
+    if (match === null || match[2] === '<')
+      continue
+
+    const [, fd = '', operator, written] = match
+    const to = written === '' ? (words[++at] ?? '') : written as string
+    const resolved = resolveTarget(operator as string, to, target)
+
+    if (fd === '&' || (operator === '>&' && fd === '' && !FD.test(to)))
+      target[1] = target[2] = resolved
+    else
+      target[fd === '' ? 1 : fd] = resolved
+  }
+
+  return target[1] === '/dev/null'
+}

@@ -113,3 +113,21 @@ describe('touchesEnv, the shapes that once got through', () => {
     })
   }
 })
+
+describe('a dump whose stdout goes to /dev/null', () => {
+  const allowed = ['docker compose -f a.yaml config --no-interpolate >/dev/null && echo ok', 'docker compose config > /dev/null', 'printenv 1>/dev/null', 'env &>/dev/null', 'env &> /dev/null', 'docker exec app env >>/dev/null', 'docker inspect app 2>&1 >/dev/null', 'docker compose config >/dev/null 2>&1', 'env >&-', 'env >& /dev/null']
+
+  for (const command of allowed) {
+    test(`lets ${command} through`, () => {
+      expect(touchesEnv(command)).toBe(false)
+    })
+  }
+
+  const refused = ['docker compose -f a.yaml config > out.yaml', 'docker compose config 2>/dev/null', 'env >/dev/null 1>&2', 'printenv > /dev/null.txt', 'printenv >out.txt', 'export -p 2>&1 > out.txt', 'env >/dev/null; env']
+
+  for (const command of refused) {
+    test(`refuses ${command}`, () => {
+      expect(touchesEnv(command)).toBe(true)
+    })
+  }
+})
