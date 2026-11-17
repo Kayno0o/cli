@@ -56,6 +56,9 @@ describe('fixers', () => {
 
     scripts({ 'lint-fix': 'x', 'format': 'x', 'lint': 'x' })
     expect(await names()).toEqual(['lint-fix', 'format'])
+
+    scripts({ 'fmt': 'x', 'fmt:check': 'x', 'format': 'x' })
+    expect(await names()).toEqual(['fmt'])
   })
 
   test('skips a fix script calling check, and takes a Justfile recipe or Makefile target', async () => {

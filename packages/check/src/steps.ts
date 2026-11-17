@@ -10,7 +10,9 @@ export interface Step {
 }
 
 // Validation steps in the order they run.
-export const STEP_NAMES = ['check', 'typecheck', 'lint', 'test'] as const
+export const STEP_NAMES = ['check', 'typecheck', 'lint', 'fmt', 'test'] as const
+// The scripts or recipes a step runs, in order of preference, when not the one bearing its name: `fmt` runs a format check, never the `fmt` script rewriting the files.
+const STEP_SOURCES: Record<string, string[]> = { fmt: ['fmt:check', 'format:check', 'fmt-check', 'format-check'] }
 
 // A recipe or target line, `@` and parameters included, which a variable set with := is not.
 const TARGET = /^@?([\w-]+)(?:[ \t][^:=\n]*)?:(?!=)/gm
@@ -186,15 +188,15 @@ export async function discoverProjects(dir: string): Promise<Project[]> {
   return projects
 }
 
-// The repo's steps: each of STEP_NAMES once, from package.json, else composer.json, else a Justfile, else a Makefile.
+// The repo's steps: each of STEP_NAMES once, from package.json, else composer.json, else a Justfile, else a Makefile; `fmt` runs a fmt:check or format:check script.
 // A Justfile or Makefile `check` comes first, as a task runner's check is the repo's whole validation and usually wraps the script of that name.
 export async function discover(dir: string): Promise<Step[]> {
   const found = await candidates(dir, 'check')
   const runnerCheck = found.find(candidate => candidate.name === 'check' && TASK_RUNNERS.has(candidate.source))
 
   return STEP_NAMES.flatMap((name) => {
-    const step = name === 'check' && runnerCheck !== undefined ? runnerCheck : found.find(candidate => candidate.name === name)
+    const step = name === 'check' && runnerCheck !== undefined ? runnerCheck : (STEP_SOURCES[name] ?? [name]).map(each => found.find(candidate => candidate.name === each)).find(each => each !== undefined)
 
-    return step === undefined ? [] : [step]
+    return step === undefined ? [] : [{ ...step, name }]
   })
 }

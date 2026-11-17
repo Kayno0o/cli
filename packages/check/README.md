@@ -19,7 +19,7 @@ check --json     # [{name, command, in?, ok, ms, log, failed?}] once every step 
 
 ## Steps
 
-`check`, `typecheck`, `lint` and `test`, run in that order, from the first source that has each one, but for a Justfile or Makefile `check`, which wins over a script of that name: a task runner's check is the repo's whole validation and usually wraps the script, as `check: bun run check -p tsconfig.json` does.
+`check`, `typecheck`, `lint`, `fmt` and `test`, run in that order, from the first source that has each one (`fmt` runs a `fmt:check` or `format:check` script, or a `fmt-check` or `format-check` recipe or target), but for a Justfile or Makefile `check`, which wins over a script of that name: a task runner's check is the repo's whole validation and usually wraps the script, as `check: bun run check -p tsconfig.json` does.
 
 | Source | Command |
 | --- | --- |
@@ -74,7 +74,7 @@ check --fix --in app     # run the scripts in this compose service; --host force
 check --fix --json       # {fixers, changed}, a skipped fixer as {name, command, skipped}
 ```
 
-The project's own `fix` script, recipe or target when it has one, else its `lint:fix` (or `lint-fix`) and `format` ones, found in the same sources as `check`'s steps. Then the formatters the folder's files call for:
+The project's own `fix` script, recipe or target when it has one, else its `lint:fix` (or `lint-fix`) and `fmt` (or `format`) ones, found in the same sources as `check`'s steps. Then the formatters the folder's files call for:
 
 | Fixer | When | Runs |
 | --- | --- | --- |

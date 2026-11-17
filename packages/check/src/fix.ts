@@ -37,7 +37,7 @@ async function replaceFile(path: string, content: string): Promise<void> {
   await rename(temporary, path)
 }
 
-// The project's own fix script, recipe or target when it has one, else its lint:fix and format ones.
+// The project's own fix script, recipe or target when it has one, else its lint:fix and fmt or format ones.
 async function projectFixers(dir: string): Promise<Fixer[]> {
   const found = await candidates(dir, 'check')
   const named = (name: string) => found.find(step => step.name === name)
@@ -46,7 +46,7 @@ async function projectFixers(dir: string): Promise<Fixer[]> {
   if (all !== undefined)
     return [all]
 
-  return [named('lint:fix') ?? named('lint-fix'), named('format')].filter(step => step !== undefined)
+  return [named('lint:fix') ?? named('lint-fix'), named('fmt') ?? named('format')].filter(step => step !== undefined)
 }
 
 async function toolFixers(dir: string): Promise<Fixer[]> {
@@ -146,7 +146,7 @@ export async function runFixers(values: FixValues, cwd: string): Promise<number>
   const found = await fixers(cwd)
 
   if (found.length === 0)
-    fail('nothing to fix here: no fix, lint:fix or format script, php-cs-fixer config, Makefile, Justfile, go.mod, Cargo.toml nor ruff config')
+    fail('nothing to fix here: no fix, lint:fix, fmt or format script, php-cs-fixer config, Makefile, Justfile, go.mod, Cargo.toml nor ruff config')
 
   const picked = pick(found, parsed.values.only, 'fixer')
   const placements = new Map<Fixer, Placement | undefined>()

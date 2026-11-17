@@ -34,6 +34,16 @@ describe('discover', () => {
     expect(steps.every(step => step.source === 'package.json')).toBe(true)
   })
 
+  test('a fmt:check or format:check script runs as the fmt step, after lint', async () => {
+    const dir = temp('check-fmt-')
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { 'test': 'bun test', 'fmt': 'kay fmt', 'fmt:check': 'kay fmt --check', 'lint': 'eslint .' } }))
+    expect(await discover(dir)).toEqual([{ name: 'lint', command: 'bun run lint', source: 'package.json' }, { name: 'fmt', command: 'bun run fmt:check', source: 'package.json' }, { name: 'test', command: 'bun run test', source: 'package.json' }])
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { 'format': 'prettier -w .', 'format:check': 'prettier -c .' } }))
+    expect((await discover(dir)).map(step => `${step.name} ${step.command}`)).toEqual(['fmt bun run format:check'])
+  })
+
   test('skips a script that calls this bin by name', async () => {
     expect((await discover(repo('self'))).map(step => step.name)).toEqual(['lint'])
   })
@@ -258,7 +268,7 @@ describe('check', () => {
   })
 
   test('a folder without steps fails', async () => {
-    expect(await failure(check([], new URL('fixtures', import.meta.url).pathname))).toContain('no check, typecheck, lint, test step')
+    expect(await failure(check([], new URL('fixtures', import.meta.url).pathname))).toContain('no check, typecheck, lint, fmt, test step')
   })
 })
 

@@ -16,10 +16,10 @@ import { discoverProjects, STEP_NAMES } from './steps'
 const usage = `check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot | --no-slot] [--parallel] [--in <service> | --host] [--list]
 check --fix [--only <fixers>] [--timeout <duration>] [--in <service> | --host] [--list]
 
-Runs the repo's check, typecheck, lint and test steps, found in package.json scripts, composer.json, a Justfile, a Makefile or the PHP tools' configs; a folder with no steps runs its subfolders' (api/, client/).
+Runs the repo's check, typecheck, lint, fmt (its fmt:check or format:check script) and test steps, found in package.json scripts, composer.json, a Justfile, a Makefile or the PHP tools' configs; a folder with no steps runs its subfolders' (api/, client/).
 A step runs inside the running compose service that mounts its folder and never starts one, and queues for a machine-wide slot when \`slot\` is installed.
 A passing step prints one line, a failing one only what failed, and each step's full log is saved to the file its line ends with.
-With --fix, the project's fix, lint:fix and format scripts run instead, then the formatters its files call for (php-cs-fixer, \`just --fmt\`, go fmt, cargo fmt, ruff), and the files they changed are listed.`
+With --fix, the project's fix, lint:fix and fmt or format scripts run instead, then the formatters its files call for (php-cs-fixer, \`just --fmt\`, go fmt, cargo fmt, ruff), and the files they changed are listed.`
 
 const EXITS: ExitRow[] = [[0, 'every step passed'], [1, 'one failed'], [2, 'bad usage, no step is found or a step timed out']]
 
