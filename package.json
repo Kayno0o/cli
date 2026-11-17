@@ -7,7 +7,7 @@
   "license": "MIT",
   "workspaces": ["packages/*"],
   "scripts": {
-    "check": "$npm_execpath check",
+    "check": "$npm_execpath check && $npm_execpath check --no-script -p packages/page/inpage && $npm_execpath check --no-script -p packages/pkg/scripts",
     "lint": "keslint --cache",
     "lint:fix": "keslint --fix --cache",
     "test": "$npm_execpath test --parallel --timings=tests/timings.json",

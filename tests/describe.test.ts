@@ -1,9 +1,12 @@
 import type { Description } from '../packages/kit/src/args'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { bins, run } from './bins'
+
+// A package keeping a dependency out of its bundle (`--external playwright-core`) says so in its build script.
+const EXTERNAL = /--external (\S+)/g
 
 // What `cli list` reads off each bin, so a bin that stops describing itself fails here rather than drops off the list.
 describe('every bin describes itself', () => {
@@ -29,7 +32,9 @@ describe('every built bin answers as itself', () => {
 
   for (const [dir, packageBins] of byPackage) {
     test(packageBins.map(({ bin }) => bin).join(', '), async () => {
-      const built = await Bun.build({ entrypoints: packageBins.map(({ source }) => source), target: 'bun', root: dir, outdir: join(outdir, basename(dirname(dir))) })
+      const { scripts } = JSON.parse(readFileSync(join(dirname(dir), 'package.json'), 'utf8')) as { scripts?: { build?: string } }
+      const external = [...(scripts?.build ?? '').matchAll(EXTERNAL)].map(match => match[1] ?? '')
+      const built = await Bun.build({ entrypoints: packageBins.map(({ source }) => source), target: 'bun', root: dir, outdir: join(outdir, basename(dirname(dir))), external })
 
       expect(built.success).toBe(true)
 

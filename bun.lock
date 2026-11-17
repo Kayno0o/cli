@@ -237,6 +237,19 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
+    "packages/page": {
+      "name": "@kaynooo/cli-page",
+      "version": "0.0.0",
+      "bin": {
+        "page": "./dist/cli.js",
+      },
+      "dependencies": {
+        "playwright-core": "1.64.1",
+      },
+      "devDependencies": {
+        "@kaynooo/cli-kit": "workspace:*",
+      },
+    },
     "packages/pick": {
       "name": "@kaynooo/cli-pick",
       "version": "0.11.4",
@@ -424,6 +437,8 @@
     "@kaynooo/cli-kit": ["@kaynooo/cli-kit@workspace:packages/kit"],
 
     "@kaynooo/cli-out": ["@kaynooo/cli-out@workspace:packages/out"],
+
+    "@kaynooo/cli-page": ["@kaynooo/cli-page@workspace:packages/page"],
 
     "@kaynooo/cli-pick": ["@kaynooo/cli-pick@workspace:packages/pick"],
 
@@ -824,6 +839,8 @@
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 
     "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
+
+    "playwright-core": ["playwright-core@1.64.1", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ=="],
 
     "pluralize": ["pluralize@8.0.0", "", {}, "sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA=="],
 

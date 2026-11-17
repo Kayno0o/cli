@@ -31,6 +31,7 @@ export const ABOUT: Record<string, string> = {
   '@kaynooo/cli-gloss': 'explains a shell command line from its man pages',
   '@kaynooo/cli-guard': 'the safety rules a Claude Code Bash call is held to',
   '@kaynooo/cli-out': 'shortens a noisy command\'s output, keeping the errors',
+  '@kaynooo/cli-page': 'layout defects of a page from a local Chromium, and a pixel diff against its mockup',
   '@kaynooo/cli-pick': 'a fuzzy selector for pipes',
   '@kaynooo/cli-pkg': 'vets npm packages before they are added, and bumps a lib in its consumers',
   '@kaynooo/cli-probe': 'a site\'s HTTP version, redirects, timings and TLS',

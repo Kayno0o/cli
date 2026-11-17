@@ -36,6 +36,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 | `XDG_CACHE_HOME`, `XDG_STATE_HOME`, `XDG_RUNTIME_DIR` | `doctor`, `out`, `check`, the usage log | where completions, saved logs, state and run logs live |
 | `BUN_INSTALL` | `doctor` | where Bun's global packages are looked for |
 | `SLOT_DIR` | `slot` | where the slot locks are kept |
+| `PAGE_CHROMIUM`, `PLAYWRIGHT_BROWSERS_PATH` | `page` | the Chrome or Chromium binary to drive, else the folder of Playwright's downloaded builds (`~/.cache/ms-playwright`) |
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | `check`, `docker`, `env`, `stack` | the compose files, as `docker compose` reads them |
 | `POSTGRES_*`, `MYSQL_*`, `MARIADB_*` | `db` | the credentials of a database service, read from its compose environment, `*_FILE` variants included |
 | `GITHUB_TOKEN` | `changelog` | the Forgejo token when `--token` is not given |
