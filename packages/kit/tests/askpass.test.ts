@@ -21,8 +21,8 @@ async function until(done: () => boolean): Promise<void> {
 }
 
 describe('askpass', () => {
-  test('off a terminal it leaves git and ssh to ask as they always do', () => {
-    expect(askpass(() => () => undefined)).toBeUndefined()
+  test('off a terminal git and ssh are kept from asking, through a terminal or a desktop askpass', () => {
+    expect(askpass(() => () => undefined).env).toEqual({ GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '', SSH_ASKPASS_REQUIRE: 'never' })
   })
 
   test('git asks through the paused progress line, the password masked, and the server gets what was typed', async () => {

@@ -18,6 +18,14 @@ function run(argv: string[], cwd: string, env: Record<string, string> = {}) {
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
 
+// For a bin talking to a server of the test's own, which a blocked event loop could not answer.
+async function runAsync(argv: string[], cwd: string, env: Record<string, string> = {}) {
+  const child = Bun.spawn(argv, { cwd, env: { ...ENV, ...env }, stdout: 'pipe', stderr: 'pipe' })
+  const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited])
+
+  return { code, out, err }
+}
+
 // The table pads its columns, so a test reads the words and not the spacing.
 const json = <T>(text: string): T => JSON.parse(text) as T
 const squeezed = (text: string) => text.trim().split(WHITESPACE).join(' ')
@@ -164,9 +172,66 @@ describe('gcl', () => {
     expect(readdirSync(taken)).toEqual(['f'])
   })
 
-  test('reads owner/name as a URL on the forge', async () => {
-    const { urlOf, nameOf } = await import('../src/gcl')
+  // A forge refusing every anonymous clone as Forgejo does a private repository, owner/name read on it through the config.
+  function privateForge(config: Record<string, string>) {
+    const server = Bun.serve({ port: 0, fetch: () => new Response('login needed', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="forge"' } }) })
+    const home = join(root, 'config')
+    const marker = join(root, 'asked')
+    const asker = join(root, 'asker')
 
+    mkdirSync(join(home, 'kaynooo-cli'), { recursive: true })
+    writeFileSync(join(home, 'kaynooo-cli', 'config.json'), JSON.stringify({ forge: `http://127.0.0.1:${server.port}`, ...config }))
+    // Stands for the desktop's password window: it must never open.
+    writeFileSync(asker, `#!/bin/sh\ntouch ${marker}\necho secret\n`, { mode: 0o755 })
+
+    return { server, marker, env: { XDG_CONFIG_HOME: home, GIT_ASKPASS: asker, SSH_ASKPASS: asker, SSH_ASKPASS_REQUIRE: 'force', DISPLAY: ':0' } }
+  }
+
+  test('off a terminal a private owner/name opens no password window and names the ssh address', async () => {
+    const forge = privateForge({})
+
+    try {
+      const done = await runAsync([process.execPath, BINS.gcl!, 'kaynooo/secret', join(root, 'secret')], root, forge.env)
+
+      expect(done.code).toBe(1)
+      expect(done.err).toContain('kaynooo/secret may be private')
+      expect(done.err).toContain('gcl git@127.0.0.1:kaynooo/secret.git')
+      expect(existsSync(forge.marker)).toBe(false)
+    }
+    finally {
+      void forge.server.stop(true)
+    }
+  })
+
+  test('a private owner/name is cloned over ssh from the forgeSsh address', async () => {
+    const forge = privateForge({ forgeSsh: `${root}/` })
+
+    mkdirSync(join(root, 'kaynooo'))
+    run(['git', 'clone', '-q', '--bare', origin, join(root, 'kaynooo', 'secret.git')], root)
+
+    try {
+      const done = await runAsync([process.execPath, BINS.gcl!, 'kaynooo/secret', join(root, 'secret'), '--json'], root, forge.env)
+
+      expect(done.code).toBe(0)
+      expect(done.err).toContain('cloning over ssh')
+      expect(JSON.parse(done.out)).toMatchObject({ url: `${root}/kaynooo/secret.git`, outcome: 'cloned' })
+      expect(existsSync(join(root, 'secret', 'a.txt'))).toBe(true)
+      expect(existsSync(forge.marker)).toBe(false)
+
+      // run again, the ssh clone is the same repository as owner/name
+      expect(JSON.parse((await runAsync([process.execPath, BINS.gcl!, 'kaynooo/secret', join(root, 'secret'), '--json'], root, forge.env)).out)).toMatchObject({ outcome: 'existing' })
+    }
+    finally {
+      void forge.server.stop(true)
+    }
+  })
+
+  test('reads owner/name as a URL on the forge, and its ssh address', async () => {
+    const { urlOf, nameOf, sshUrlOf } = await import('../src/gcl')
+
+    expect(sshUrlOf('kaynooo/cli', 'git@git.example.org')).toBe('git@git.example.org:kaynooo/cli.git')
+    expect(sshUrlOf('kaynooo/cli.git', 'ssh://git@git.example.org:22022')).toBe('ssh://git@git.example.org:22022/kaynooo/cli.git')
+    expect(urlOf('kaynooo/cli', 'http://127.0.0.1:3000/')).toBe('http://127.0.0.1:3000/kaynooo/cli.git')
     expect(urlOf('kaynooo/cli', 'git.example.org')).toBe('https://git.example.org/kaynooo/cli.git')
     expect(urlOf('git@github.com:oven-sh/bun.git', 'x')).toBe('git@github.com:oven-sh/bun.git')
     expect(nameOf('git@github.com:oven-sh/bun.git')).toBe('bun')

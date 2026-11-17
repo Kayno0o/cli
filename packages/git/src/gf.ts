@@ -42,7 +42,7 @@ async function main(argv: string[]): Promise<number> {
   const results: SyncResult[] = []
   const progress = progressLine()
   const prompts = askpass(progress.pause)
-  const env = prompts === undefined ? undefined : { ...process.env, ...prompts.env }
+  const env = { ...process.env, ...prompts.env }
 
   try {
     // One repository at a time, so a passphrase asks one question at a time.
@@ -52,7 +52,7 @@ async function main(argv: string[]): Promise<number> {
     }
   }
   finally {
-    prompts?.close()
+    prompts.close()
     progress.stop()
   }
 

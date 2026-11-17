@@ -13,10 +13,10 @@ export async function pushToOrigin(refspecs: string[], onStart: RunSettings['onS
   const prompts = askpass()
 
   try {
-    return await runTool('git push', ['git', 'push', ...refspecs], { timeoutMs: limits.pushMs, onStart, env: prompts?.env })
+    return await runTool('git push', ['git', 'push', ...refspecs], { timeoutMs: limits.pushMs, onStart, env: prompts.env })
   }
   finally {
-    prompts?.close()
+    prompts.close()
   }
 }
 // How long a pushed commit may go without a run before the release goes on: a push touching only ignored paths starts none.

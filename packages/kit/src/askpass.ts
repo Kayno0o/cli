@@ -17,12 +17,15 @@ export interface Askpass {
   close: () => void
 }
 
+// Off a terminal git and ssh may not ask at all: they would fall back on the desktop's askpass and open a password window. An empty GIT_ASKPASS stops git from reading core.askPass and SSH_ASKPASS, so they fail at once instead.
+export const NO_PROMPTS: Readonly<Record<string, string>> = { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '', SSH_ASKPASS_REQUIRE: 'never' }
+
 const quoted = (text: string) => `'${text.replaceAll('\'', `'\\''`)}'`
 
-/** While a live region is drawn, git and ssh cannot ask on the terminal: the region erases their prompt at its next frame and races them for the keys; run in their own session, as a timeout does, they have no terminal to ask on at all. Run them with `env` and each prompt is asked here instead, the region paused by `pause` until it is answered. Off a terminal it returns undefined and they ask as they always do. */
-export function askpass(pause: () => () => void = () => () => undefined): Askpass | undefined {
+/** While a live region is drawn, git and ssh cannot ask on the terminal: the region erases their prompt at its next frame and races them for the keys; run in their own session, as a timeout does, they have no terminal to ask on at all. Run them with `env` and each prompt is asked here instead, the region paused by `pause` until it is answered. Off a terminal `env` is NO_PROMPTS, so they fail where they would ask. */
+export function askpass(pause: () => () => void = () => () => undefined): Askpass {
   if (process.stdin.isTTY !== true || process.stderr.isTTY !== true || process.argv[1] === undefined)
-    return undefined
+    return { env: { ...NO_PROMPTS }, close: () => undefined }
 
   const dir = mkdtempSync(join(tmpdir(), 'kaynooo-askpass-'))
   const socketPath = join(dir, 'socket')
