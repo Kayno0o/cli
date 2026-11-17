@@ -241,14 +241,15 @@ gc "feat(ui): a dark theme" -m "The toggle sits in the header." --ticket "#12 - 
 
 ## gcl
 
-clones a repository into the workspace folder and prints where it landed. Package `git`.
+clones a repository into the current folder and prints where it landed. Package `git`.
 
-Instead of: git clone with the url and the folder typed out, then a cd
+Instead of: git clone with the url typed out, then a cd
 
 ```sh
 gcl <repo> [dir]
 gcl kaynooo/cli
 gcl git@github.com:oven-sh/bun.git  # an scp address
+gcl git@git.example.org:22022:kaynooo/cli  # an scp address with a port
 gcl kaynooo/cli ~/tmp/cli  # a folder of your own
 ```
 

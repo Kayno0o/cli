@@ -133,15 +133,15 @@ describe('gcl', () => {
     expect(existsSync(join(target, 'a.txt'))).toBe(true)
   })
 
-  test('clones into <workspace>/<name> by default', () => {
-    const workspace = join(root, 'space')
+  test('clones into ./<name> by default, as git clone does', () => {
+    const here = join(root, 'here')
 
-    mkdirSync(workspace)
-    const done = run([process.execPath, BINS.gcl!, origin, '--json'], root, { KAYNOOO_WORKSPACE: workspace })
+    mkdirSync(here)
+    const done = run([process.execPath, BINS.gcl!, origin, '--json'], here, { KAYNOOO_WORKSPACE: join(root, 'space') })
 
     expect(done.code).toBe(0)
-    expect(JSON.parse(done.out)).toMatchObject({ path: join(workspace, 'origin'), outcome: 'cloned' })
-    expect(existsSync(join(workspace, 'origin', 'a.txt'))).toBe(true)
+    expect(JSON.parse(done.out)).toMatchObject({ path: join(here, 'origin'), outcome: 'cloned' })
+    expect(existsSync(join(here, 'origin', 'a.txt'))).toBe(true)
   })
 
   test('brings an existing clone up to date instead of cloning again', () => {
@@ -213,7 +213,6 @@ describe('gcl', () => {
       const done = await runAsync([process.execPath, BINS.gcl!, 'kaynooo/secret', join(root, 'secret'), '--json'], root, forge.env)
 
       expect(done.code).toBe(0)
-      expect(done.err).toContain('cloning over ssh')
       expect(JSON.parse(done.out)).toMatchObject({ url: `${root}/kaynooo/secret.git`, outcome: 'cloned' })
       expect(existsSync(join(root, 'secret', 'a.txt'))).toBe(true)
       expect(existsSync(forge.marker)).toBe(false)
@@ -226,6 +225,21 @@ describe('gcl', () => {
     }
   })
 
+  test('an owner/name ssh cannot reach is cloned anonymously over https', () => {
+    const home = join(root, 'config')
+
+    mkdirSync(join(home, 'kaynooo-cli'), { recursive: true })
+    mkdirSync(join(root, 'public', 'kaynooo'), { recursive: true })
+    run(['git', 'clone', '-q', '--bare', origin, join(root, 'public', 'kaynooo', 'open.git')], root)
+    writeFileSync(join(home, 'kaynooo-cli', 'config.json'), JSON.stringify({ forge: `file://${root}/public`, forgeSsh: `${root}/nowhere/` }))
+
+    const done = run([process.execPath, BINS.gcl!, 'kaynooo/open', join(root, 'open'), '--json'], root, { XDG_CONFIG_HOME: home })
+
+    expect(done.code).toBe(0)
+    expect(JSON.parse(done.out)).toMatchObject({ url: `file://${root}/public/kaynooo/open.git`, outcome: 'cloned' })
+    expect(existsSync(join(root, 'open', 'a.txt'))).toBe(true)
+  })
+
   test('reads owner/name as a URL on the forge, and its ssh address', async () => {
     const { urlOf, nameOf, sshUrlOf } = await import('../src/gcl')
 
@@ -234,6 +248,7 @@ describe('gcl', () => {
     expect(urlOf('kaynooo/cli', 'http://127.0.0.1:3000/')).toBe('http://127.0.0.1:3000/kaynooo/cli.git')
     expect(urlOf('kaynooo/cli', 'git.example.org')).toBe('https://git.example.org/kaynooo/cli.git')
     expect(urlOf('git@github.com:oven-sh/bun.git', 'x')).toBe('git@github.com:oven-sh/bun.git')
+    expect(urlOf('git@git.example.org:22022:kaynooo/cli.git', 'x')).toBe('ssh://git@git.example.org:22022/kaynooo/cli.git')
     expect(nameOf('git@github.com:oven-sh/bun.git')).toBe('bun')
     expect(nameOf('https://git.example.org/kaynooo/cli.git')).toBe('cli')
   })
