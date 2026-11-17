@@ -95,7 +95,8 @@ export function askpass(pause: () => () => void = () => () => undefined): Askpas
   chmodSync(script, 0o700)
 
   return {
-    env: { GIT_ASKPASS: script, SSH_ASKPASS: script, SSH_ASKPASS_REQUIRE: 'force' },
+    // A prompt cancelled here fails git's askpass, after which git would ask again on the bare terminal; prompts off makes it give up instead.
+    env: { GIT_ASKPASS: script, GIT_TERMINAL_PROMPT: '0', SSH_ASKPASS: script, SSH_ASKPASS_REQUIRE: 'force' },
     close: () => {
       server.stop(true)
       rmSync(dir, { recursive: true, force: true })

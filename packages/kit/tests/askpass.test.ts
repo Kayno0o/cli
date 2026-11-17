@@ -65,4 +65,24 @@ describe('askpass', () => {
     expect(screen).toContain('alice')
     expect(screen).not.toContain('s3cret')
   })
+
+  test('a cancelled prompt ends git, which does not ask again on the bare terminal', async () => {
+    server = Bun.serve({ port: 0, fetch: () => new Response('', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="test"' } }) })
+
+    const decoder = new TextDecoder()
+    let screen = ''
+    const proc = Bun.spawn([process.execPath, FIXTURE, `http://127.0.0.1:${server.port}/repo.git`], { env: { ...process.env, NO_COLOR: undefined, KIT_MODE: 'terminal' }, terminal: { cols: 100, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+
+    try {
+      await until(() => screen.includes('Username for'))
+      proc.terminal?.write('\u0003')
+      await until(() => screen.includes('git done'))
+    }
+    finally {
+      proc.kill()
+      proc.terminal?.close()
+    }
+
+    expect(screen.slice(screen.indexOf('cancelled'))).not.toContain('Username for')
+  })
 })
