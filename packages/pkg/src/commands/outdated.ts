@@ -13,7 +13,7 @@ import { fetchPackument } from '../registry'
 
 const usage = `pkg outdated [dir]
 
-Lists the dependencies of the package.json of the folder that have a newer version safe to take: the highest stable one at least --min-age days old, the \`safe\` of \`pkg check\`.
+Lists the dependencies of the package.json of the folder that have a newer version safe to take: the highest stable one at least --min-age days old (any age for a \`trusted\` name), the \`safe\` of \`pkg check\`.
 It reads only the registry's metadata, no advisories, and changes nothing: \`bun add --exact name@version\` adopts a row.`
 
 const EXITS: ExitRow[] = [[0, 'it listed what is outdated, nothing included'], [2, 'the registry could not be reached or answered badly, no package.json, or a usage error']]
@@ -49,6 +49,8 @@ export interface OutdatedContext {
   concurrency?: number | undefined
   // The versions a lockfile pins.
   locked: Locked[]
+  // Names or `@scope/*` globs whose newest version is taken whatever its age.
+  trusted?: string[] | undefined
 }
 
 function currentOf(name: string, spec: string, locked: Locked[]): string | undefined {
@@ -82,7 +84,7 @@ export async function outdated(manifest: string, context: OutdatedContext): Prom
       return undefined
     }
 
-    const { safe, latest } = analyze({ spec: { name }, packument, registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays })
+    const { safe, latest } = analyze({ spec: { name }, packument, registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, trusted: context.trusted })
     const current = currentOf(name, spec, context.locked)
 
     if (safe === undefined || current === undefined || Bun.semver.order(safe.version, current) <= 0)
@@ -107,7 +109,7 @@ export async function outdatedCommand(args: string[]): Promise<number> {
   const lockPath = join(folder, 'bun.lock')
   const locked = existsSync(lockPath) ? parseBunLock(await Bun.file(lockPath).text()) : []
   const settings = await loadSettings(folder)
-  const rows = await outdated(await manifest.text(), { minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0), concurrency: settings.concurrency, locked })
+  const rows = await outdated(await manifest.text(), { minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0), concurrency: settings.concurrency, locked, trusted: settings.trusted })
   const { shown, footer } = capped(rows, limitOf(values, OUTDATED_LIMIT))
 
   if (values.json === true)

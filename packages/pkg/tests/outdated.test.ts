@@ -37,6 +37,13 @@ describe('outdated', () => {
     expect(rows).toEqual([{ name: 'esbuild', kind: 'dependencies', spec: '^0.27.0', current: '0.27.7', safe: '0.28.1', change: 'minor', published: '2026-06-11T22:47:05.085Z', latest: '0.28.2' }])
   })
 
+  test('takes a trusted dependency\'s newest version whatever its age', async () => {
+    const locked = parseBunLock(JSON.stringify({ packages: { esbuild: ['esbuild@0.27.7', '', {}, 'x'] } }))
+    const rows = await outdated(manifest, { fetcher, now: ESBUILD_LATEST + 3 * DAY, minAgeDays: 14, locked, trusted: ['esbuild'] })
+
+    expect(rows.map(row => [row.safe, row.latest])).toEqual([['0.28.2', undefined]])
+  })
+
   test('reads the version in use from the range when there is no lockfile, and lists nothing once on the safe one', async () => {
     const pinned = JSON.stringify({ dependencies: { esbuild: '0.28.1' } })
 

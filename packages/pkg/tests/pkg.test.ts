@@ -291,11 +291,11 @@ describe('registry failures end on exit 2', () => {
 })
 
 describe('analyze edge cases', () => {
-  const dated = (time: Record<string, string>): Fetcher => async (url) => {
+  const dated = (time: Record<string, string>, name = 'some-lib'): Fetcher => async (url) => {
     if (url.endsWith('/bulk'))
       return Response.json({})
 
-    return Response.json({ 'name': 'some-lib', 'dist-tags': { latest: '1.0.0' }, time, 'versions': { '1.0.0': { version: '1.0.0' }, '1.1.0': { version: '1.1.0' } } })
+    return Response.json({ name, 'dist-tags': { latest: '1.0.0' }, time, 'versions': { '1.0.0': { version: '1.0.0' }, '1.1.0': { version: '1.1.0' } } })
   }
 
   test('an invalid range resolves to nothing instead of the highest version', async () => {
@@ -326,6 +326,28 @@ describe('analyze edge cases', () => {
     expect(publicRegistry.blocked).toBe(true)
     expect(private_.blocked).toBe(false)
     expect(private_.warnings.join()).toContain('under 14 days, not held back on private.test')
+  })
+
+  test('a trusted scope or name skips the age check alone, the user\'s own scopes by default', async () => {
+    const now = Date.parse('2026-11-01')
+    const time = { '1.0.0': '2020-01-01T00:00:00.000Z', '1.1.0': '2026-10-29T00:00:00.000Z' }
+    const fetcher = dated(time, '@kaynooo/eslint')
+    const own = await checkPackage('@kaynooo/eslint@1.1.0', { configs: [], minAgeDays: 14, now, fetcher })
+    const named = await checkPackage('some-lib@1.1.0', { configs: [], minAgeDays: 14, now, fetcher: dated(time), settings: { trusted: ['some-lib'] } })
+    const untrusted = await checkPackage('@kaynooo/eslint@1.1.0', { configs: [], minAgeDays: 14, now, fetcher, settings: { trusted: [] } })
+    const undated = await checkPackage('@kayjs/ui', { configs: [], minAgeDays: 14, fetcher: dated({}, '@kayjs/ui') })
+    const licensed = await checkPackage('@kaynooo/eslint@1.1.0', { configs: [], minAgeDays: 14, now, fetcher, settings: { licenses: ['MIT'] } })
+
+    expect(own.blocked).toBe(false)
+    expect(own.safe?.version).toBe('1.1.0')
+    expect(own.warnings.join()).toContain('1.1.0 was published 3 days ago, under 14 days, its age not checked as @kaynooo/* is trusted')
+    expect(named.blocked).toBe(false)
+    expect(named.warnings.join()).toContain('as some-lib is trusted')
+    expect(untrusted.blocked).toBe(true)
+    expect(untrusted.safe?.version).toBe('1.0.0')
+    expect(undated.blocked).toBe(false)
+    // the licence is still checked
+    expect(licensed.blocked).toBe(true)
   })
 
   test('a fresh version fixing a high advisory of the safe one is not held back for its age', async () => {

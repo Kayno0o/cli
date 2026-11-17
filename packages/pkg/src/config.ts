@@ -192,6 +192,8 @@ export interface PkgSettings {
   minAge?: number | undefined
   // Registry lookups in flight at once in `audit` and `outdated`.
   concurrency?: number | undefined
+  // Names or `@scope/*` globs whose age is not checked, the user's own scopes by default.
+  trusted?: string[] | undefined
 }
 
 const SETTINGS_FILE = '.pkgrc.json'
@@ -202,7 +204,7 @@ export function isSeverity(value: unknown): value is Severity {
 
 // The settings in one config file's text, a key of the wrong shape left out.
 export function parseSettings(text: string): PkgSettings {
-  const raw = Bun.JSONC.parse(text) as { licenses?: unknown, blockSeverity?: unknown, minAge?: unknown, concurrency?: unknown } | null
+  const raw = Bun.JSONC.parse(text) as { licenses?: unknown, blockSeverity?: unknown, minAge?: unknown, concurrency?: unknown, trusted?: unknown } | null
   const settings: PkgSettings = {}
 
   if (Array.isArray(raw?.licenses) && raw.licenses.every(each => typeof each === 'string'))
@@ -216,6 +218,9 @@ export function parseSettings(text: string): PkgSettings {
 
   if (typeof raw?.concurrency === 'number' && Number.isInteger(raw.concurrency) && raw.concurrency > 0)
     settings.concurrency = raw.concurrency
+
+  if (Array.isArray(raw?.trusted) && raw.trusted.every(each => typeof each === 'string'))
+    settings.trusted = raw.trusted
 
   return settings
 }
@@ -243,6 +248,7 @@ export async function loadSettings(cwd = process.cwd(), home?: string): Promise<
     settings.blockSeverity ??= found.blockSeverity
     settings.minAge ??= found.minAge
     settings.concurrency ??= found.concurrency
+    settings.trusted ??= found.trusted
   }
 
   return settings

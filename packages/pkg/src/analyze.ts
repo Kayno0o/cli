@@ -9,6 +9,8 @@ import { PUBLIC_REGISTRY } from './registry'
 import { isRange } from './semver'
 
 export const DEFAULT_MIN_AGE_DAYS = 14
+// The user's own scopes, published by the user: waiting out their releases only holds back the user's own work.
+export const DEFAULT_TRUSTED = ['@kaynooo/*', '@kayjs/*']
 const DAY = 86_400_000
 const PUBLIC_HOST = new URL(PUBLIC_REGISTRY).host
 const INSTALL_SCRIPTS = ['preinstall', 'install', 'postinstall'] as const
@@ -104,6 +106,11 @@ function installScriptsOf(version: Version | undefined): Record<string, string> 
   return Object.fromEntries(INSTALL_SCRIPTS.flatMap(name => version?.scripts?.[name] === undefined ? [] : [[name, version.scripts[name]]]))
 }
 
+// The first of the trusted names or globs (`@scope/*`) matching the package's name.
+export function trustedBy(name: string, trusted: readonly string[]): string | undefined {
+  return trusted.find(pattern => pattern === name || new Bun.Glob(pattern).match(name))
+}
+
 function safeRelease(packument: Packument, now: number, minAgeDays: number): Release | undefined {
   const old = Object.keys(packument.versions ?? {}).filter(version => isStable(version) && (ageDays(packument.time?.[version], now) ?? 0) >= minAgeDays && packument.time?.[version] !== undefined)
   const version = old.sort(Bun.semver.order).at(-1)
@@ -155,6 +162,8 @@ export interface AnalyzeInput {
   // The advisories of the safe version severe enough that a fresh version fixing them is let through, already filtered by the caller.
   safeAdvisories?: VersionAdvisory[] | undefined
   blockSeverity?: Severity | undefined
+  // Names or `@scope/*` globs whose age is not checked, DEFAULT_TRUSTED when not given.
+  trusted?: string[] | undefined
 }
 
 export function analyze(input: AnalyzeInput): Report {
@@ -179,7 +188,9 @@ export function analyze(input: AnalyzeInput): Report {
   report.license = licenseOf(entry?.license) ?? licenseOf(packument.license)
   report.repository = repositoryOf(packument)
   report.latest = latest === undefined ? undefined : { version: latest, published: packument.time?.[latest] }
-  report.safe = safeRelease(packument, now, minAgeDays)
+  const trust = trustedBy(spec.name, input.trusted ?? DEFAULT_TRUSTED)
+
+  report.safe = safeRelease(packument, now, trust === undefined ? minAgeDays : 0)
   report.version = version
   report.published = version === undefined ? undefined : packument.time?.[version]
   report.installScripts = installScriptsOf(entry)
@@ -199,13 +210,16 @@ export function analyze(input: AnalyzeInput): Report {
 
   if (age === undefined) {
     // npmjs.org always dates a version, so a missing date there is a way round the age check
-    const isBlocking = minAgeDays > 0 && registry === PUBLIC_HOST
+    const isBlocking = minAgeDays > 0 && registry === PUBLIC_HOST && trust === undefined
 
     report.blocked ||= isBlocking
     report.warnings.push(`${registry} gives no publish date for ${version}, its age cannot be checked${isBlocking ? ' and it is refused' : ''}`)
   }
   else if (age < minAgeDays && report.fixes.length > 0) {
     report.warnings.push(`${version} was published ${daysAgo(age)} ago, under ${minAgeDays} days, but it fixes ${report.fixes.map(each => `${each.ghsa ?? each.id} (${each.severity})`).join(', ')} that ${report.safe?.version} has, so its age does not hold it back`)
+  }
+  else if (age < minAgeDays && trust !== undefined) {
+    report.warnings.push(`${version} was published ${daysAgo(age)} ago, under ${minAgeDays} days, its age not checked as ${trust} is trusted`)
   }
   else if (age < minAgeDays && registry !== PUBLIC_HOST) {
     // The age check waits out a hijacked release on npmjs.org; a private registry serves the user's own releases, wanted as soon as they are out.

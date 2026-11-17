@@ -83,6 +83,9 @@ describe('settings', () => {
     expect(parseSettings('{ "concurrency": 3 }')).toEqual({ concurrency: 3 })
     expect(parseSettings('{ "concurrency": 0 }')).toEqual({})
     expect(parseSettings('{ "concurrency": 2.5 }')).toEqual({})
+    expect(parseSettings('{ "trusted": ["@me/*", "left-pad"] }')).toEqual({ trusted: ['@me/*', 'left-pad'] })
+    expect(parseSettings('{ "trusted": [] }')).toEqual({ trusted: [] })
+    expect(parseSettings('{ "trusted": "@me/*" }')).toEqual({})
   })
 
   test('each key comes from the nearest file that sets it', async () => {

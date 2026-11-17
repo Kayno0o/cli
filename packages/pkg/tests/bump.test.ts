@@ -268,7 +268,8 @@ describe('vet', () => {
   })
 
   test('refuses a version under the minimum age, a licence outside the allowlist or an advisory', async () => {
-    const fresh = await capture(async () => vet(NAME, '0.8.0', settings({ fetcher: served('0.8.0', {}, new Date().toISOString()), minAgeDays: 14 })))
+    const fresh = await capture(async () => vet(NAME, '0.8.0', settings({ fetcher: served('0.8.0', {}, new Date().toISOString()), minAgeDays: 14, pkgSettings: { trusted: [] } })))
+    const trusted = await capture(async () => vet(NAME, '0.8.0', settings({ fetcher: served('0.8.0', {}, new Date().toISOString()), minAgeDays: 14 })))
     const licence = await capture(async () => vet(NAME, '0.8.0', settings({ fetcher: served('0.8.0'), pkgSettings: { licenses: ['Apache-2.0'] } })))
     const advisory = await capture(async () => vet(NAME, '0.8.0', settings({
       fetcher: async (url, init) => {
@@ -281,6 +282,7 @@ describe('vet', () => {
 
     expect(fresh.result).toBe(false)
     expect(fresh.err).toContain('is refused')
+    expect(trusted.result).toBe(true)
     expect(licence.result).toBe(false)
     expect(licence.err).toContain('not in the allowlist')
     expect(advisory.result).toBe(false)
