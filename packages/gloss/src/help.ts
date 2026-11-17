@@ -1,5 +1,7 @@
 import type { ManPage } from './man'
+import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { basename } from 'node:path'
 import process from 'node:process'
 import { stripAnsi } from '@kaynooo/cli-kit'
 import { parsePage } from './man'
@@ -9,11 +11,48 @@ const TIMEOUT_MS = 3000
 const MAX_BYTES = 512 * 1024
 const MAX_SUMMARY = 100
 const USAGE_LINE = /^usage/i
+const HEADER_LINE = /:$/
+const VERSION_BANNER = /^\S+(?:\s+[-–]|\s+version)?\s+v?\d+(?:\.\d+)+\b/i
 
+// The first sentence at the margin above the options, past the usage lines and a `name - 1.2.3` banner: GNU puts it right under the usage line, others under the banner.
 function summaryOf(text: string): string | undefined {
-  const first = text.split('\n').map(line => line.trim()).find(line => line !== '')
+  const candidates: string[] = []
 
-  return first === undefined || first.length > MAX_SUMMARY || USAGE_LINE.test(first) || first.startsWith('-') ? undefined : first
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim()
+
+    if (trimmed.startsWith('-') || (HEADER_LINE.test(trimmed) && !USAGE_LINE.test(trimmed)))
+      break
+
+    if (VERSION_BANNER.test(trimmed))
+      candidates.length = 0
+    else if (trimmed !== '' && line === trimmed && !USAGE_LINE.test(trimmed))
+      candidates.push(trimmed)
+  }
+
+  const [first] = candidates
+
+  return first === undefined || first.length > MAX_SUMMARY ? undefined : first
+}
+
+// The program to run for `name`: a bare name found on PATH, or an absolute path that is that same program, never a script elsewhere.
+function programOf(name: string, env: Record<string, string | undefined>): string | undefined {
+  const bare = name.startsWith('/') ? basename(name) : name
+
+  if (!SAFE_NAME.test(bare))
+    return undefined
+
+  const path = Bun.which(bare, { PATH: env.PATH ?? '' })
+
+  if (path === null || bare === name)
+    return path ?? undefined
+
+  try {
+    return realpathSync(name) === realpathSync(path) ? path : undefined
+  }
+  catch {
+    return undefined
+  }
 }
 
 function helpOf(path: string, args: string[], env: Record<string, string | undefined>): string | undefined {
@@ -33,14 +72,11 @@ function helpOf(path: string, args: string[], env: Record<string, string | undef
   return text.trim() === '' ? undefined : text
 }
 
-// Runs `<name> [subcommand] --help` and reads its option list like a man page. Only a bare name found on PATH is run, never a path or a script in the current folder, with no stdin and a timeout.
+// Runs `<name> [subcommand] --help` and reads its option list like a man page. Only a program on PATH is run, never a script in the current folder, with no stdin and a timeout.
 export function loadHelp(name: string, subcommand: string | undefined, env: Record<string, string | undefined> = process.env): ManPage | undefined {
-  if (!SAFE_NAME.test(name))
-    return undefined
+  const path = programOf(name, env)
 
-  const path = Bun.which(name, { PATH: env.PATH ?? '' })
-
-  if (path === null)
+  if (path === undefined)
     return undefined
 
   const attempts = subcommand !== undefined && SAFE_NAME.test(subcommand) && !subcommand.startsWith('-') ? [[subcommand], []] : [[]]

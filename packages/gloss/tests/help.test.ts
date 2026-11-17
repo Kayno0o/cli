@@ -23,6 +23,23 @@ Usage: zzdemo [options] FILE
 TEXT`)
 tool('zzsub', `if [ "$1" = run ]; then echo "  -w, --watch   rerun on change" >&2; else echo "Usage: zzsub <command>"; fi`)
 tool('zzmark', `echo ran > "${dir}/marker"`)
+tool('zzgnu', `cat <<'TEXT'
+Usage: zzgnu [OPTION]... [FILE]...
+List the FILEs.
+
+Mandatory arguments to long options are mandatory for short options too.
+  -a, --all                  do not ignore entries starting with .
+TEXT`)
+tool('zzbanner', `cat <<'TEXT'
+Usage: zzbanner [options] [url]
+Accepts an optional zz:// URL.
+
+ZzBanner - 8.12.36
+The demo desktop experience.
+
+Options:
+  --lock          lock it
+TEXT`)
 
 const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, MANPATH: '/nonexistent' }
 
@@ -59,7 +76,16 @@ describe('--run-help', () => {
     expect(gloss?.notes.map(note => note.token)).toEqual(['-w'])
   })
 
-  test('runs only a bare name found on PATH', () => {
+  test('reads the summary under the usage line, or under a version banner', () => {
+    expect(analyze('zzgnu', { env, runHelp: true }).commands[0]?.summary).toBe('List the FILEs.')
+    expect(analyze('zzbanner', { env, runHelp: true }).commands[0]?.summary).toBe('The demo desktop experience.')
+  })
+
+  test('runs a command given by the absolute path of the program PATH finds', () => {
+    expect(analyze(`${dir}/zzdemo -q`, { env, runHelp: true }).commands[0]).toMatchObject({ source: 'help', summary: 'A demo tool' })
+  })
+
+  test('runs only a program found on PATH', () => {
     analyze('./zzmark', { env: { ...env, PATH: `${dir}:${process.env.PATH}` }, runHelp: true })
     analyze('/nope/zzdemo -q', { env, runHelp: true })
 

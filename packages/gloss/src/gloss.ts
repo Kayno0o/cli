@@ -9,7 +9,7 @@ import { render } from './render'
 const USAGE = `gloss [options] <command line>: explains a shell command line, each option matched to what its man page says
 
 Quote the command line or put it after --: gloss -- tar -xzvf a.tgz. Without arguments it is read from stdin.
-A command is looked up in the man pages on this machine; one with no man page is listed with its words unexplained, unless --run-help reads its options from '<command> --help', which runs the command (a bare name found on PATH only, 3 seconds), so use it for commands you trust.`
+A command is looked up in the man pages on this machine; one with no man page is listed with its words unexplained, unless --run-help reads its options from '<command> --help', which runs the command (a program found on PATH only, by its name or its absolute path, 3 seconds), so use it for commands you trust.`
 
 const EXITS: ExitRow[] = [[0, 'it explained the line'], [2, 'a usage error']]
 
