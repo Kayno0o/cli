@@ -244,6 +244,7 @@
         "page": "./dist/cli.js",
       },
       "dependencies": {
+        "@kaynooo/audit-engine": "0.1.1",
         "playwright-core": "1.64.1",
       },
       "devDependencies": {
@@ -400,6 +401,8 @@
 
     "@joplin/turndown-plugin-gfm": ["@joplin/turndown-plugin-gfm@1.0.68", "", {}, "sha512-m8DfAQNC/V7g0j5H6Jv60WhekBBjodD+zTPGrU+g2m+ux/z8ZX07KQIl6kaAmbKwfvsQhC04op52g63I78sVgg=="],
 
+    "@kaynooo/audit-engine": ["@kaynooo/audit-engine@0.1.1", "https://git.kaynooo.fr/api/packages/kaynooo/npm/%40kaynooo%2Faudit-engine/-/0.1.1/audit-engine-0.1.1.tgz", { "dependencies": { "axe-core": "4.14.0", "playwright-core": "1.64.1" } }, "sha512-HUw3zYHx+M4wg/WpWzR5xzvACQoGge6my+T8qwnMKwibsexEhzCybRIsEuQzY+w10pZKgsBloaV5SqnNkq6BfQ=="],
+
     "@kaynooo/cli-arc": ["@kaynooo/cli-arc@workspace:packages/arc"],
 
     "@kaynooo/cli-base": ["@kaynooo/cli-base@workspace:packages/base"],
@@ -527,6 +530,8 @@
     "ajv": ["ajv@6.15.0", "", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw=="],
 
     "ansi-styles": ["ansi-styles@4.3.0", "", { "dependencies": { "color-convert": "^2.0.1" } }, "sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg=="],
+
+    "axe-core": ["axe-core@4.14.0", "", {}, "sha512-9WTZxEjsZ7b13TH8JPmbV2z8CHbl80/2hm3XPEG4JgNdQLK81IBRXmSxHfMAOkSqQeRxT/0dwNDz2GOm3zzpcQ=="],
 
     "balanced-match": ["balanced-match@4.0.4", "", {}, "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA=="],
 

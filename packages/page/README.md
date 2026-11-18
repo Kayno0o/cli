@@ -23,6 +23,7 @@ What `check` reports:
 - `overflow`: the page scrolls sideways; the up to three elements where it starts, with their right edge.
 - `console`: console errors and uncaught exceptions. `request`: requests that failed or answered 4xx/5xx. Both once per target, at the first width they show at.
 - `font`: text drawn in another font than its `font-family` asks for, naming the font Chromium drew it with (CDP `CSS.getPlatformFontsForNode`): a named family that is not available, or a generic one such as `system-ui` resolving to a monospace font.
+- `contrast`: text under WCAG AA, 4.5:1 or 3:1 for large text, with both colours and the ratio (measured by `@kaynooo/audit-engine`); text over an image, a gradient or a filter cannot be measured and is left out.
 - `tap-target`: a control under 44px wide or tall below 600px wide, under 24px otherwise; a link inside a sentence is exempt, a checkbox counts its label.
 - `padding`: text touching an edge its box draws, a border side or a background unlike what is behind it.
 - `image`: an image that finished loading with nothing to draw. `layout-shift`: a cumulative layout shift score above 0.1, naming the element that moved most.

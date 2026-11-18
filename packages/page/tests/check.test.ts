@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const FIXTURES = new URL('fixtures/', import.meta.url).pathname
-const KINDS = ['overflow', 'console', 'request', 'font', 'tap-target', 'padding', 'image', 'layout-shift']
+const KINDS = ['overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'image', 'layout-shift']
 const temp = tempDirs()
 
 interface Report {
@@ -66,6 +66,10 @@ describe('page check', () => {
 
     expect(rest).toEqual([])
     expect(line).toMatch(/^1440 font p\.lead: font-family "No Such Font Zz", monospace drawn in .+: No Such Font Zz is not available$/)
+  })
+
+  test('text under WCAG AA contrast, once for every width', () => {
+    expect(lines('contrast.html')).toEqual(['1440 contrast body > p:nth-of-type(2): rgb(153, 153, 153) on rgb(255, 255, 255), 2.84:1, needs 4.5:1'])
   })
 
   test('a tap target under 44px at a phone width, 24px is enough wider', () => {

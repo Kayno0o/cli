@@ -38,6 +38,7 @@
     "page": "$npm_execpath src/cli.ts"
   },
   "dependencies": {
+    "@kaynooo/audit-engine": "0.1.1",
     "playwright-core": "1.64.1"
   },
   "devDependencies": {
