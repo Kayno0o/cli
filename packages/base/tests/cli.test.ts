@@ -67,6 +67,15 @@ describe('base', () => {
     expect(worktrees()).toBe(1)
   })
 
+  test('runs at HEAD on a branch ahead of origin/main too, where proof would take the merge base', () => {
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    git('checkout', '-q', '-b', 'feat')
+    file('a.txt', 'third\n')
+    commit('third')
+
+    expect(base(['--', 'cat', 'a.txt']).out).toBe('third\n')
+  })
+
   test('runs at --ref and exits with the command\'s code, one spaced argument going through sh', () => {
     expect(base(['--ref', 'HEAD~1', '--', 'cat', 'a.txt']).out).toBe('first\n')
     expect(base(['--', 'sh', '-c', 'exit 3']).code).toBe(3)

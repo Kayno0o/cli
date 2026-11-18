@@ -20,7 +20,7 @@ base --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php
 
 ## base proof
 
-`base proof` shows that a test fails before a change and passes after it, the check `base` makes by hand: it runs the command at HEAD (or `--ref <rev>`) in the same temporary worktree as `base`, then in the working tree, both captured.
+`base proof` shows that a test fails before a change and passes after it, the check `base` makes by hand: it runs the command at the merge base with origin's default branch when HEAD is on a branch ahead of it, else at HEAD (or `--ref <rev>`), in the same temporary worktree as `base`, then in the working tree, both captured.
 
 ```sh
 base proof --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php

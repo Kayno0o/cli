@@ -27,7 +27,7 @@ Instead of: git stash, a test run, then git stash pop
 ```sh
 base <command> [options]
 base -- bun test tests/api.test.ts  # the test at HEAD, the working tree changes left out
-base proof -- bun test tests/new.test.ts  # it fails at HEAD and passes in the working tree
+base proof -- bun test tests/new.test.ts  # it fails before the change and passes in the working tree
 ```
 
 ## changelog
