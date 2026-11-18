@@ -132,7 +132,9 @@ describe('out', () => {
     expect(result.out.split('\n').length).toBeLessThan(120)
     expect(result.out).toContain('FAILED: boom')
     expect(path).toBeDefined()
-    expect(readFileSync(path ?? '', 'utf8')).toContain('row 399 of the table is fine\nFAILED: boom\n')
+    // Two pipes, so the stderr line may land before stdout's last row under load.
+    expect(readFileSync(path ?? '', 'utf8')).toContain('row 399 of the table is fine\n')
+    expect(readFileSync(path ?? '', 'utf8')).toContain('FAILED: boom\n')
   })
 
   test('keeps the log private to the user', () => {
