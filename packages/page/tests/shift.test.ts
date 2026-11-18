@@ -9,7 +9,7 @@ const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const temp = tempDirs()
 const PLANS = '<section class="plans">Plans</section>'
 const PAGE = (css: string, plans = PLANS): string => `<!doctype html><meta charset="utf-8"><style>body{margin:0;font-family:monospace}header{height:64px;background:#eee}h1{margin:0}main{padding:16px}section{margin:16px 0;height:100px}footer{height:40px}${css}</style><header class="top"><h1>Site</h1></header><main><section class="intro">Intro</section>${plans}<section class="faq">FAQ</section></main><footer>Footer</footer>`
-const CARD = (tag: string, padding: number, body: string): string => `<!doctype html><meta charset="utf-8"><style>body{margin:16px;font-family:monospace}h2{margin:0 0 8px}.card{padding:${padding}px;border:1px solid}button{font:inherit}</style><h1>Pricing</h1><${tag} class="card"><h2>Pro</h2>${body}<button>Choose Pro</button></${tag}>`
+const CARD = (tag: string, padding: number, body: string): string => `<!doctype html><meta charset="utf-8"><style>body{margin:16px;font:16px/20px monospace}h2{margin:0 0 8px}.card{padding:${padding}px;border:1px solid}button{font:inherit}</style><h1>Pricing</h1><${tag} class="card"><h2>Pro</h2>${body}<button>Choose Pro</button></${tag}>`
 
 async function shift(before: string, after: string): Promise<{ code: number, lines: string[] }> {
   const dir = temp('page-shift-')
@@ -41,7 +41,7 @@ describe('page shift', () => {
   }, 60_000)
 
   test('a mockup against other markup pairs by text and names the padding and the wrapper added', async () => {
-    expect(await shift(CARD('div', 16, '<p>All features</p>'), CARD('article', 24, '<div class="body"><p>All features</p></div>'))).toEqual({ code: 1, lines: ['800 resized article.card: 768×125 to 768×141px, padding 16 to 24px, pushing 2 elements', '800 added div.body: 718×17px at 41,130, pushing 1 element'] })
+    expect(await shift(CARD('div', 16, '<p>All features</p>'), CARD('article', 24, '<div class="body"><p>All features</p></div>'))).toEqual({ code: 1, lines: ['800 resized article.card: 768×132 to 768×148px, padding 16 to 24px, pushing 2 elements', '800 added div.body: 718×20px at 41,124, pushing 1 element'] })
   }, 60_000)
 
   test('prints a line when nothing shifted', async () => {
