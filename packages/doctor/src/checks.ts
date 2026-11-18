@@ -20,7 +20,7 @@ export interface Host {
   // Where `bun install -g` puts the packages.
   globalModules: string
   bunVersion: string
-  // The login shell's name from $SHELL, '' when unset.
+  // The login shell's name, from the password database or else $SHELL, '' when neither has one.
   shell: string
   which: (bin: string) => string | null
   // `env` adds to the environment the command inherits.
