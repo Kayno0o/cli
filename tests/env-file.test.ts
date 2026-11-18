@@ -59,7 +59,6 @@ describe('a built bin starts on a plain sh', () => {
     expect(shellShebang('// a chunk\nexport {}\n')).toBeUndefined()
   })
 
-
   test('a built slot run by its path ignores the cwd bunfig.toml and passes its arguments as given', () => {
     const out = mkdtempSync(join(tmpdir(), 'kaynooo-cli-bin-'))
 
