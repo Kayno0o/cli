@@ -82,7 +82,7 @@ async function find(args: string[], host: Host = hostHere()): Promise<number> {
 const COMPLETIONS_USAGE = `cli completions <fish|bash|zsh> [--install] [--dir <folder>]: shell completions for every installed bin of the @kaynooo/cli-* packages
 
 Writes the script of every bin at once. fish gets one file per bin in ~/.cache/fish/kaynooo-cli (or $XDG_CACHE_HOME) with --install, the stale ones it wrote taken out; put that folder first in fish_complete_path.
-bash and zsh get one script on stdout to source from ~/.bashrc or ~/.zshrc (after compinit); --install and --dir are fish's.`
+bash and zsh get one script on stdout to source from ~/.bashrc or ~/.zshrc; --install and --dir are fish's.`
 
 const COMPLETIONS_OPTIONS = {
   install: { type: 'boolean', description: 'write the files to the folder instead of printing them' },
@@ -90,7 +90,7 @@ const COMPLETIONS_OPTIONS = {
 } as const
 
 export async function completions(args: string[], host: Host = hostHere()): Promise<number> {
-  const { values, positionals } = parse(args, COMPLETIONS_USAGE, COMPLETIONS_OPTIONS, { positionals: ['<shell>'], exits: [[0, 'it printed or wrote them'], [2, 'a usage error or a shell without a script']], candidates: { '<shell>': () => ['fish', 'bash', 'zsh'] }, examples: ['cli completions fish', ['cli completions fish --install', 'write one file per bin'], ['source <(cli completions bash)', 'in ~/.bashrc'], ['source <(cli completions zsh)', 'in ~/.zshrc after compinit']] })
+  const { values, positionals } = parse(args, COMPLETIONS_USAGE, COMPLETIONS_OPTIONS, { positionals: ['<shell>'], exits: [[0, 'it printed or wrote them'], [2, 'a usage error or a shell without a script']], candidates: { '<shell>': () => ['fish', 'bash', 'zsh'] }, examples: ['cli completions fish', ['cli completions fish --install', 'write one file per bin'], ['source <(cli completions bash)', 'in ~/.bashrc'], ['source <(cli completions zsh)', 'in ~/.zshrc']] })
 
   if (positionals[0] !== 'fish' && positionals[0] !== 'bash' && positionals[0] !== 'zsh')
     badUsage('completions exist for fish, bash and zsh: cli completions fish')

@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { appendFile, rm } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { configuredNumber, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
 import { HOOKS_REQUIRES, NEEDS } from './catalog'
@@ -246,19 +246,13 @@ export function checkBun(host: Host): Result {
   return { check: 'bun', ok: true, detail: floors.length === 0 ? host.bunVersion : `${host.bunVersion}, the tools ask for ${[...new Set(floors)].join(' and ')}` }
 }
 
-// Fish completes every installed bin, when fish is installed; a bash or zsh login shell sources the script from its rc file.
+// A bash or zsh login shell sources the script from its rc file; otherwise fish, when installed, completes every installed bin.
 export function checkCompletions(host: Host): Result {
-  if (host.which('fish') === null) {
-    if (host.shell !== 'zsh' && host.shell !== 'bash')
-      return { check: 'completions', ok: true, detail: 'neither fish, nor bash or zsh as the login shell' }
+  if (host.shell === 'zsh' || host.shell === 'bash')
+    return checkRcCompletions(host.home, host.shell)
 
-    const rc = join(host.home, `.${host.shell}rc`)
-    const line = `source <(cli completions ${host.shell})`
-
-    return existsSync(rc) && readFileSync(rc, 'utf8').includes(`cli completions ${host.shell}`)
-      ? { check: 'completions', ok: true, detail: rc }
-      : { check: 'completions', ok: false, detail: `${host.shell} does not load them`, fix: `add ${line} to ${rc}${host.shell === 'zsh' ? ' after compinit' : ''}` }
-  }
+  if (host.which('fish') === null)
+    return { check: 'completions', ok: true, detail: 'neither fish, nor bash or zsh as the login shell' }
 
   const dir = completionDir(host.home)
   const missing = missingCompletions(host, dir)
@@ -268,6 +262,27 @@ export function checkCompletions(host: Host): Result {
     return { check: 'completions', ok: false, detail: [missing.length > 0 ? `no fish completion in ${dir} for ${missing.join(', ')}` : '', stale.length > 0 ? `completions in ${dir} for bins no longer installed: ${stale.join(', ')}` : ''].filter(Boolean).join('; '), fix: 'cli completions fish --install' }
 
   return { check: 'completions', ok: true, detail: dir }
+}
+
+function checkRcCompletions(home: string, shell: 'bash' | 'zsh'): Result {
+  const rc = join(home, `.${shell}rc`)
+  const line = `source <(cli completions ${shell})`
+  const text = existsSync(rc) ? readFileSync(rc, 'utf8') : ''
+
+  if (text.includes(`cli completions ${shell}`))
+    return { check: 'completions', ok: true, detail: rc }
+
+  return {
+    check: 'completions',
+    ok: false,
+    detail: `${shell} does not load them`,
+    fix: `append ${line} to ${rc}`,
+    apply: async () => {
+      await appendFile(rc, `${text === '' || text.endsWith('\n') ? '' : '\n'}${line}\n`)
+
+      return undefined
+    },
+  }
 }
 
 // The folder `bun install -g` links the bins into.

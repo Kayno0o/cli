@@ -21,7 +21,7 @@ doctor --install forgejo check hooks   # or name them: a package, one of its bin
 | `tea` | `ft` is installed, tea is installed, logged in to git.kaynooo.fr and `tea api version` answers, since `ft` goes through it | `tea login add --url https://git.kaynooo.fr --oauth` |
 | `hooks` | `~/.claude/settings.json` wires the hooks one way: the `cli-hooks@kaynooo-cli` plugin enabled, or the `cli` mod listed in `CLAUDE_CODE_PLUGIN_DIRS`; both at once fails, every call being checked twice | `claude plugin install cli-hooks --marketplace ...`, or `claude plugin disable` for the doubled one |
 | `bun` | Bun satisfies the `engines.bun` range of every installed package | `bun upgrade` |
-| `completions` | fish is missing, or its folder holds a completion for every installed bin and none of ours for a bin no longer installed | `cli completions fish --install` |
+| `completions` | a bash or zsh login shell's rc file sources `cli completions <shell>`; otherwise fish is missing, or its folder holds a completion for every installed bin and none of ours for a bin no longer installed | `cli completions fish --install`, or the line appended to the rc file |
 | `dead-bins` | no link in Bun's bin folder points at a file of our packages that is gone, as `bun install -g` leaves the bins a newer version dropped | `rm` of those links, which `--fix` runs |
 | `dl-bins` | `dl` is installed and no command it installed with `--bin` changed at its source, as `dl outdated --bins` tells; a source that does not answer is only noted | `dl update <name>...`, printed, not run |
 
@@ -33,7 +33,7 @@ Only the packages that are installed are checked: a package left out is no failu
 
 ## --fix
 
-`--fix` runs the `fix:` lines it may: the `bun install -g` ones (joined into one call), `cli completions fish --install`, `claude plugin install` or `disable`, and the removal of dead bin links. It then checks again, prints the checks as they stand and exits on those. Nothing that installs a system package is run, and a line that only describes a step (`tea` from its releases page, adding a folder to the PATH, `bun upgrade`, which replaces Bun itself) is printed as `not run`. `--dry-run` prints each line as `would` and runs nothing (alone it implies `--fix`).
+`--fix` runs the `fix:` lines it may: the `bun install -g` ones (joined into one call), `cli completions fish --install`, the `source <(cli completions <shell>)` line appended to a bash or zsh rc file, `claude plugin install` or `disable`, and the removal of dead bin links. It then checks again, prints the checks as they stand and exits on those. Nothing that installs a system package is run, and a line that only describes a step (`tea` from its releases page, adding a folder to the PATH, `bun upgrade`, which replaces Bun itself) is printed as `not run`. `--dry-run` prints each line as `would` and runs nothing (alone it implies `--fix`).
 `--json` keeps its shape and prints the checks after the fixes, the fixes going to stderr; `--quiet` filters it to the failing ones.
 
 ## cli completions
@@ -41,10 +41,10 @@ Only the packages that are installed are checked: a package left out is no failu
 ```sh
 cli completions fish --install            # one file per installed bin in ~/.cache/fish/kaynooo-cli
 source <(cli completions bash)            # in ~/.bashrc
-source <(cli completions zsh)             # in ~/.zshrc, after compinit
+source <(cli completions zsh)             # in ~/.zshrc
 ```
 
-Each bin completes itself through `<bin> __complete`, and these are the scripts `<bin> --completions <shell>` prints (from `@kaynooo/cli-kit`), written for every installed bin at once. fish gets a file per bin, the stale ones this command wrote taken out, in `~/.cache/fish/kaynooo-cli` (or `$XDG_CACHE_HOME`); the folder has to be in `fish_complete_path`, first so a completion fish ships for the same name does not win: `set -p fish_complete_path ~/.cache/fish/kaynooo-cli`. bash and zsh get one script each on stdout, `--install` and `--dir` being fish's; for zsh run `autoload -U +X compinit && compinit` before sourcing it. The zsh one is untested, zsh not being installed here.
+Each bin completes itself through `<bin> __complete`, and these are the scripts `<bin> --completions <shell>` prints (from `@kaynooo/cli-kit`), written for every installed bin at once. fish gets a file per bin, the stale ones this command wrote taken out, in `~/.cache/fish/kaynooo-cli` (or `$XDG_CACHE_HOME`); the folder has to be in `fish_complete_path`, first so a completion fish ships for the same name does not win: `set -p fish_complete_path ~/.cache/fish/kaynooo-cli`. bash and zsh get one script each on stdout, `--install` and `--dir` being fish's, the zsh one loading compinit when the rc file has not. `doctor --fix` appends the line to the login shell's rc file. The zsh one is untested, zsh not being installed here.
 
 ## cli config
 

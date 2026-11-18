@@ -72,15 +72,36 @@ describe('checkCompletions', () => {
   test('without fish, a bash or zsh login shell must source the script from its rc file', () => {
     const home = temp('completions-home-')
 
-    expect(checkCompletions(hostWith(['src'], home, 'zsh'))).toEqual({ check: 'completions', ok: false, detail: 'zsh does not load them', fix: `add source <(cli completions zsh) to ${home}/.zshrc after compinit` })
+    expect(checkCompletions(hostWith(['src'], home, 'zsh'))).toMatchObject({ check: 'completions', ok: false, detail: 'zsh does not load them', fix: `append source <(cli completions zsh) to ${home}/.zshrc` })
 
     writeFileSync(join(home, '.zshrc'), 'autoload -U compinit && compinit\n')
     expect(checkCompletions(hostWith(['src'], home, 'zsh')).ok).toBe(false)
 
     writeFileSync(join(home, '.zshrc'), 'autoload -U compinit && compinit\nsource <(cli completions zsh)\n')
     expect(checkCompletions(hostWith(['src'], home, 'zsh'))).toEqual({ check: 'completions', ok: true, detail: `${home}/.zshrc` })
-    expect(checkCompletions(hostWith(['src'], home, 'bash'))).toMatchObject({ ok: false, fix: `add source <(cli completions bash) to ${home}/.bashrc` })
+    expect(checkCompletions(hostWith(['src'], home, 'bash'))).toMatchObject({ ok: false, fix: `append source <(cli completions bash) to ${home}/.bashrc` })
     expect(checkCompletions(hostWith(['src'], home, 'nu')).ok).toBe(true)
+  })
+
+  test('a zsh login shell is checked on its rc file even with fish installed', () => {
+    const home = temp('completions-home-')
+
+    expect(checkCompletions(hostWith(['fish', 'src'], home, 'zsh'))).toMatchObject({ ok: false, detail: 'zsh does not load them' })
+  })
+
+  test('the fix appends the line to the rc file, creating it when missing', async () => {
+    const home = temp('completions-home-')
+    const host = hostWith(['src'], home, 'zsh')
+
+    expect(await checkCompletions(host).apply?.(host)).toBeUndefined()
+    expect(readFileSync(join(home, '.zshrc'), 'utf8')).toBe('source <(cli completions zsh)\n')
+
+    writeFileSync(join(home, '.bashrc'), 'alias ll="ls -l"')
+    const bash = hostWith(['src'], home, 'bash')
+
+    expect(await checkCompletions(bash).apply?.(bash)).toBeUndefined()
+    expect(readFileSync(join(home, '.bashrc'), 'utf8')).toBe('alias ll="ls -l"\nsource <(cli completions bash)\n')
+    expect(checkCompletions(bash).ok).toBe(true)
   })
 
   test('fails a file of ours left for a bin no longer installed', async () => {
