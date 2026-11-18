@@ -1,34 +1,21 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { tempDirs } from '@kaynooo/cli-kit/test'
+import { onTerminal, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const temp = tempDirs()
 const SAMPLE = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
 
-// Runs dev under a pseudo-terminal, typing `typed` and Enter once `prompt` shows, answering the exit code and everything the terminal showed.
-async function onTerminal(args: string[], prompt: string, typed: string): Promise<{ code: number, screen: string }> {
-  const decoder = new TextDecoder()
-  let screen = ''
-  const proc = Bun.spawn([process.execPath, CLI, ...args], { env: { ...process.env, NO_COLOR: '1', TZ: 'UTC' }, terminal: { cols: 120, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+// Runs dev under a pseudo-terminal, typing `typed` and Enter once `prompt` shows, answering the exit code, the screen and everything the command wrote.
+async function typedOnTerminal(args: string[], prompt: string, typed: string): Promise<{ code: number, screen: string, raw: string }> {
+  return onTerminal([process.execPath, CLI, ...args], async ({ until, type, exited, screen, raw }) => {
+    await until(prompt)
+    type(`${typed}\r`)
+    const code = await exited
 
-  try {
-    for (let tries = 0; !screen.includes(prompt); tries++) {
-      if (tries === 100)
-        throw new Error(`no prompt: ${screen}`)
-
-      await Bun.sleep(20)
-    }
-
-    proc.terminal?.write(`${typed}\r`)
-
-    return { code: await proc.exited, screen }
-  }
-  finally {
-    proc.kill()
-    proc.terminal?.close()
-  }
+    return { code, screen: await screen(), raw: raw() }
+  }, { env: { ...process.env, NO_COLOR: '1', TZ: 'UTC' }, cols: 120 })
 }
 
 function dev(args: string[], stdin?: string) {
@@ -95,11 +82,11 @@ describe('dev password', () => {
 
     expect(await Bun.password.verify('hunter2', piped.replace('$2y$', '$2b$'))).toBe(true)
 
-    const { code, screen } = await onTerminal(['password', '--bcrypt', '-'], 'the password', 'typed_pw_42')
+    const { code, screen, raw } = await typedOnTerminal(['password', '--bcrypt', '-'], 'the password', 'typed_pw_42')
     const hash = (/\$2y\$10\$\S+/).exec(screen)?.[0] ?? ''
 
     expect(code).toBe(0)
-    expect(screen).not.toContain('typed_pw_42')
+    expect(raw).not.toContain('typed_pw_42')
     expect(await Bun.password.verify('typed_pw_42', hash.replace('$2y$', '$2b$'))).toBe(true)
   })
 
@@ -133,11 +120,11 @@ describe('dev jwt', () => {
   })
 
   test('asks for the token masked on a terminal', async () => {
-    const { code, screen } = await onTerminal(['jwt'], 'the token', SAMPLE)
+    const { code, screen, raw } = await typedOnTerminal(['jwt'], 'the token', SAMPLE)
 
     expect(code).toBe(0)
     expect(screen).toContain('John Doe')
-    expect(screen).not.toContain(SAMPLE.split('.')[2])
+    expect(raw).not.toContain(SAMPLE.split('.')[2])
   })
 
   test('exit 1 on a bad token, 2 with nothing given or a bad zone', () => {

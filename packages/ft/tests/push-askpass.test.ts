@@ -2,6 +2,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { onTerminal } from '@kaynooo/cli-kit/test'
 import { afterEach, expect, test } from 'bun:test'
 
 const FIXTURE = `${import.meta.dir}/fixtures/push-askpass.ts`
@@ -15,16 +16,6 @@ afterEach(() => {
   void server?.stop(true)
   rmSync(root, { recursive: true, force: true })
 })
-
-// Fails rather than going on once five seconds have passed, so a prompt that never shows is not mistaken for a slow one.
-async function until(done: () => boolean): Promise<void> {
-  for (let tries = 0; !done(); tries++) {
-    if (tries === 250)
-      throw new Error('the terminal never showed what the test waits for')
-
-    await Bun.sleep(20)
-  }
-}
 
 test('the release push, in its own session, asks a remote\'s password on the terminal', async () => {
   const sent: string[] = []
@@ -49,22 +40,16 @@ test('the release push, in its own session, asks a remote\'s password on the ter
   for (const argv of [['init', '-q', '-b', 'main'], ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '--allow-empty', '-m', 'one'], ['remote', 'add', 'origin', `http://127.0.0.1:${server.port}/repo.git`]])
     Bun.spawnSync(['git', ...argv], { cwd: root, env })
 
-  const decoder = new TextDecoder()
-  let screen = ''
-  const proc = Bun.spawn([process.execPath, FIXTURE], { cwd: root, env, terminal: { cols: 100, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+  const raw = await onTerminal([process.execPath, FIXTURE], async ({ until, type, raw }) => {
+    await until(['Username for', 'push ended'])
+    type('alice\r')
+    await until(['Password for', 'push ended'])
+    type('s3cret\r')
+    await until('push ended')
 
-  try {
-    await until(() => screen.includes('Username for') || screen.includes('push ended'))
-    proc.terminal?.write('alice\r')
-    await until(() => screen.includes('Password for') || screen.includes('push ended'))
-    proc.terminal?.write('s3cret\r')
-    await until(() => screen.includes('push ended'))
-  }
-  finally {
-    proc.kill()
-    proc.terminal?.close()
-  }
+    return raw()
+  }, { cwd: root, env, cols: 100 })
 
   expect(sent).toEqual([`Basic ${btoa('alice:s3cret')}`])
-  expect(screen).not.toContain('s3cret')
+  expect(raw).not.toContain('s3cret')
 })

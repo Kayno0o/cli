@@ -1,6 +1,7 @@
 import { chmod, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { onTerminal } from '@kaynooo/cli-kit/test'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 import { entries, parseDotenv } from '../src/dotenv'
@@ -23,28 +24,14 @@ function ev(args: string[], stdin = '') {
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
 
-// Runs `ev set TOKEN` under a pseudo-terminal, typing `keys` once it asks, answering the exit code and everything the terminal showed.
-async function setOnTerminal(keys: string): Promise<{ code: number, screen: string }> {
-  const decoder = new TextDecoder()
-  let screen = ''
-  const proc = Bun.spawn([process.execPath, CLI, 'set', 'TOKEN'], { cwd: dir, terminal: { cols: 80, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+// Runs `ev set TOKEN` under a pseudo-terminal, typing `keys` once it asks, answering the exit code and everything the command wrote.
+async function setOnTerminal(keys: string): Promise<{ code: number, raw: string }> {
+  return onTerminal([process.execPath, CLI, 'set', 'TOKEN'], async ({ until, type, exited, raw }) => {
+    await until('value of TOKEN')
+    type(keys)
 
-  try {
-    for (let tries = 0; !screen.includes('value of TOKEN'); tries++) {
-      if (tries === 100)
-        throw new Error(`no prompt: ${screen}`)
-
-      await Bun.sleep(20)
-    }
-
-    proc.terminal?.write(keys)
-
-    return { code: await proc.exited, screen }
-  }
-  finally {
-    proc.kill()
-    proc.terminal?.close()
-  }
+    return { code: await exited, raw: raw() }
+  }, { cwd: dir })
 }
 
 async function write(name: string, text: string) {
@@ -277,11 +264,11 @@ describe('ev', () => {
   })
 
   test('set on a terminal asks for the value and never shows it', async () => {
-    const { code, screen } = await setOnTerminal('typed_secret_42\r')
+    const { code, raw } = await setOnTerminal('typed_secret_42\r')
 
     expect(code).toBe(0)
     expect(await read('.env')).toBe('TOKEN=typed_secret_42\n')
-    expect(screen).not.toContain('typed_secret_42')
+    expect(raw).not.toContain('typed_secret_42')
   })
 
   test('set on a terminal exits 130 and writes nothing when the prompt is cancelled', async () => {

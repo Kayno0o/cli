@@ -4,6 +4,7 @@ import type { TCPSocketListener } from 'bun'
 import type { Sandbox } from './sandbox'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { onTerminal } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { stringToPort } from '../src/port'
@@ -465,28 +466,14 @@ describe('wt prune', () => {
     mkdirSync(dirname(override('times--ghost')), { recursive: true })
     writeFileSync(override('times--ghost'), '')
 
-    const decoder = new TextDecoder()
-    let screen = ''
-    const proc = Bun.spawn([process.execPath, '--no-env-file', CLI, 'prune'], { cwd: root, env: { ...sandbox.env, ...IDENTITY }, terminal: { cols: 120, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+    await onTerminal([process.execPath, '--no-env-file', CLI, 'prune'], async ({ until, type, exited, screen }) => {
+      await until('Remove it all?')
+      type('n')
 
-    try {
-      for (let tries = 0; !screen.includes('Remove it all?'); tries++) {
-        if (tries === 250)
-          throw new Error(`no prompt: ${screen}`)
-
-        await Bun.sleep(20)
-      }
-
-      proc.terminal?.write('n')
-
-      expect(await proc.exited).toBe(1)
-      expect(screen).toContain('times/ghost: compose override')
+      expect(await exited).toBe(1)
+      expect(await screen()).toContain('times/ghost: compose override')
       expect(existsSync(override('times--ghost'))).toBe(true)
-    }
-    finally {
-      proc.kill()
-      proc.terminal?.close()
-    }
+    }, { cwd: root, env: { ...sandbox.env, ...IDENTITY }, cols: 120 })
   }, 30_000)
 
   test('looks at the current project only, and at every one with -a', async () => {

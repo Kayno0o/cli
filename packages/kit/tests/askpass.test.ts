@@ -1,6 +1,8 @@
+import type { TerminalRun } from '../src/test'
 import process from 'node:process'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { askpass } from '../src/askpass'
+import { onTerminal } from '../src/test'
 
 const FIXTURE = `${import.meta.dir}/fixtures/askpass-git.ts`
 
@@ -10,14 +12,9 @@ afterEach(() => {
   void server?.stop(true)
 })
 
-// Fails rather than going on once five seconds have passed, so a prompt that never shows is not mistaken for a slow one.
-async function until(done: () => boolean): Promise<void> {
-  for (let tries = 0; !done(); tries++) {
-    if (tries === 250)
-      throw new Error('the terminal never showed what the test waits for')
-
-    await Bun.sleep(20)
-  }
+// Runs the askpass fixture against the test server under a pseudo-terminal, colours and the terminal mode on as a person's run would have them.
+async function onFixtureTerminal<T>(use: (run: TerminalRun) => Promise<T>): Promise<T> {
+  return onTerminal([process.execPath, FIXTURE, `http://127.0.0.1:${server!.port}/repo.git`], use, { env: { ...process.env, NO_COLOR: undefined, KIT_MODE: 'terminal' }, cols: 100 })
 }
 
 describe('askpass', () => {
@@ -42,47 +39,35 @@ describe('askpass', () => {
       },
     })
 
-    const decoder = new TextDecoder()
-    let screen = ''
-    const proc = Bun.spawn([process.execPath, FIXTURE, `http://127.0.0.1:${server.port}/repo.git`], { env: { ...process.env, NO_COLOR: undefined, KIT_MODE: 'terminal' }, terminal: { cols: 100, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
-
-    try {
-      await until(() => screen.includes('Username for'))
+    const { screen, raw } = await onFixtureTerminal(async ({ until, type, screen, raw }) => {
+      await until('Username for')
       // Two frames of the spinner, which would erase the prompt were the line not paused.
       await Bun.sleep(450)
-      expect(screen.slice(screen.lastIndexOf('Username for'))).not.toContain('fetching')
-      proc.terminal?.write('alice\r')
-      await until(() => screen.includes('Password for'))
-      proc.terminal?.write('s3cret\r')
-      await until(() => screen.includes('git done'))
-    }
-    finally {
-      proc.kill()
-      proc.terminal?.close()
-    }
+      expect(raw().slice(raw().lastIndexOf('Username for'))).not.toContain('fetching')
+      type('alice\r')
+      await until('Password for')
+      type('s3cret\r')
+      await until('git done')
+
+      return { screen: await screen(), raw: raw() }
+    })
 
     expect(sent).toEqual([`Basic ${btoa('alice:s3cret')}`])
     expect(screen).toContain('alice')
-    expect(screen).not.toContain('s3cret')
+    expect(raw).not.toContain('s3cret')
   })
 
   test('a cancelled prompt ends git, which does not ask again on the bare terminal', async () => {
     server = Bun.serve({ port: 0, fetch: () => new Response('', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="test"' } }) })
 
-    const decoder = new TextDecoder()
-    let screen = ''
-    const proc = Bun.spawn([process.execPath, FIXTURE, `http://127.0.0.1:${server.port}/repo.git`], { env: { ...process.env, NO_COLOR: undefined, KIT_MODE: 'terminal' }, terminal: { cols: 100, rows: 24, data: (_, data) => void (screen += decoder.decode(data, { stream: true })) } })
+    const raw = await onFixtureTerminal(async ({ until, type, raw }) => {
+      await until('Username for')
+      type('\u0003')
+      await until('git done')
 
-    try {
-      await until(() => screen.includes('Username for'))
-      proc.terminal?.write('\u0003')
-      await until(() => screen.includes('git done'))
-    }
-    finally {
-      proc.kill()
-      proc.terminal?.close()
-    }
+      return raw()
+    })
 
-    expect(screen.slice(screen.indexOf('cancelled'))).not.toContain('Username for')
+    expect(raw.slice(raw.indexOf('cancelled'))).not.toContain('Username for')
   })
 })

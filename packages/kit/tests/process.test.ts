@@ -2,7 +2,7 @@ import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { copyText, distance, escapeControls, exitCodeOf, holdSignals, openUrl, runCommand, stripAnsi, stripControls } from '../src'
-import { tempDirs } from '../src/test'
+import { onTerminal, tempDirs } from '../src/test'
 
 const temp = tempDirs()
 
@@ -68,14 +68,13 @@ describe('holdSignals', () => {
   test('a terminal Ctrl-C reaches a child in the foreground group once, not forwarded a second time', async () => {
     const counter = 'let n = 0; process.on("SIGINT", () => console.log("SIGINT " + ++n)); setTimeout(() => process.exit(0), 800); console.log("ready")'
     const parent = `import * as kit from ${SRC}\nconst held = kit.holdSignals()\nconst child = Bun.spawn([process.execPath, '-e', ${JSON.stringify(counter)}], { stdout: 'inherit' })\nheld.forward(child)\nawait child.exited`
-    let out = ''
-    const run = Bun.spawn([process.execPath, '-e', parent], { terminal: { data: (_, data) => out += new TextDecoder().decode(data) } })
+    const out = await onTerminal([process.execPath, '-e', parent], async ({ until, type, exited, screen }) => {
+      await until('ready')
+      type('\x03')
+      await exited
 
-    while (!out.includes('ready'))
-      await Bun.sleep(10)
-
-    run.terminal?.write('\x03')
-    await run.exited
+      return screen()
+    })
 
     expect(out.match(/SIGINT \d/g)).toEqual(['SIGINT 1'])
   })
