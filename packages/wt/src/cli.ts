@@ -229,7 +229,7 @@ async function startOrStop(verb: 'up' | 'down', args: string[]): Promise<number>
 
 const SHELL_USAGE = `wt shell <shell>
 
-Prints the shell function that lets \`wt cd\` change directory and \`wt rm\` leave the folder it removes, with wt's completion. Save it where the shell reads it at start, so no process runs then, and again after upgrading wt: \`wt shell fish > ~/.config/fish/conf.d/wt.fish\`; for bash or zsh, a file sourced from ~/.bashrc, or from ~/.zshrc after compinit.
+Prints the shell function that lets \`wt cd\` change directory and \`wt rm\` leave the folder it removes, with wt's completion. Save it where the shell reads it at start, so no process runs then, and again after upgrading wt: \`wt shell fish > ~/.config/fish/conf.d/wt.fish\`; for bash or zsh, a file sourced from ~/.bashrc, or from ~/.zshrc.
 
 Exits 0 when it printed the wrapper, 1 for a shell it has none for (fish, bash and zsh have one), 2 on a usage error.`
 

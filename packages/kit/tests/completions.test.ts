@@ -42,6 +42,10 @@ describe('completionScript', () => {
     expect(script).toContain('//:/\\\\:')
     expect(script).toContain('__files__')
   })
+
+  test('zsh loads compinit itself when the rc file has not, so compdef exists wherever the line is sourced', () => {
+    expect(completionScript('zsh', ['demo'])).toContain('(( $+functions[compdef] )) || { autoload -Uz compinit && compinit }\n')
+  })
 })
 
 describe.if(Bun.which('bash') !== null)('the bash script', () => {
