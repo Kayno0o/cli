@@ -9,6 +9,12 @@ const WORDS = /\S{2,}/g
 const WORD_CHAR = /[\p{L}\p{N}]/u
 // Past this a word is shown cut, pieces and all.
 const WORD_CAP = 60
+const QUOTE_CAP = 30
+const SMALLEST_TEXT = 12
+// iOS zooms in on a field drawn under this size when it takes focus.
+const SMALLEST_FIELD = 16
+const FIELDS = 'textarea, select, input:not([type="hidden"], [type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="submit"], [type="button"], [type="reset"], [type="image"])'
+const SVG_SOURCE = /^data:image\/svg|\.svg(?:[?#]|$)/i
 // Longer text no longer names one element, a section holding a whole paragraph say.
 const LABEL_CAP = 80
 const UNBOXED = new Set(['head', 'script', 'style', 'noscript', 'template'])
@@ -81,11 +87,29 @@ function describe(element: Element): string {
   return `${describe(parent)} > ${own}`
 }
 
-function visible(element: Element): boolean {
-  const rect = element.getBoundingClientRect()
+// Whether a box keeps what runs past its edge from being drawn, clipped or scrolled.
+function contains(element: Element): boolean {
   const style = getComputedStyle(element)
 
-  return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.opacity !== '0'
+  return style.overflowX !== 'visible' || style.overflowY !== 'visible'
+}
+
+// The non-blank text nodes an element holds itself, not those of its children.
+function ownTexts(element: Element): Text[] {
+  return [...element.childNodes].filter((node): node is Text => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '')
+}
+
+function quote(text: string): string {
+  const flat = text.replace(SPACES, ' ').trim()
+
+  return `"${flat.length > QUOTE_CAP ? `${flat.slice(0, QUOTE_CAP - 3)}...` : flat}"`
+}
+
+// Drawn and seen: inside a closed <details> or under an ancestor at opacity 0 is neither.
+function visible(element: Element): boolean {
+  const rect = element.getBoundingClientRect()
+
+  return rect.width > 0 && rect.height > 0 && element.checkVisibility({ opacityProperty: true, visibilityProperty: true })
 }
 
 function alpha(color: string): number {
@@ -201,11 +225,13 @@ export function measureDom(phone: boolean): DomFinding[] {
   }
 
   // Padding: text flush against the border or background edge of the box drawing it.
+  // Spill: text running past such an edge, with nothing between clipping or scrolling it.
   const touched = new Map<Element, Set<string>>()
+  const spilled = new Map<Element, { side: string, by: number }>()
   const range = document.createRange()
 
   for (const element of document.body.querySelectorAll('*')) {
-    const texts = [...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '')
+    const texts = ownTexts(element)
 
     if (texts.length === 0 || !visible(element) || ['MARK', 'SCRIPT', 'STYLE', 'NOSCRIPT'].includes(element.tagName))
       continue
@@ -250,12 +276,22 @@ export function measureDom(phone: boolean): DomFinding[] {
     const border = (side: string): number => Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) || 0
     const gaps: Record<string, number> = { top: top - outer.top - border('top'), right: outer.right - border('right') - right, bottom: outer.bottom - border('bottom') - bottom, left: left - outer.left - border('left') }
 
+    let clipped = false
+
+    for (let at: Element | null = element; at !== null && !clipped; at = at === box ? null : at.parentElement)
+      clipped = contains(at)
+
     for (const side of edges) {
       // An inline box is exactly as tall as its text, so only its sides can lack padding.
       if (style.display === 'inline' && (side === 'top' || side === 'bottom'))
         continue
 
-      if (Math.abs(gaps[side] ?? Infinity) < 1) {
+      const gap = gaps[side] ?? Infinity
+
+      if (gap < -1 && !clipped && -gap > (spilled.get(box)?.by ?? 0))
+        spilled.set(box, { side, by: -gap })
+
+      if (Math.abs(gap) < 1) {
         const sides = touched.get(box) ?? new Set<string>()
 
         sides.add(side)
@@ -270,6 +306,9 @@ export function measureDom(phone: boolean): DomFinding[] {
 
     findings.push({ kind: 'padding', selector: describe(box), message: `text touches its ${named} edge, no padding` })
   }
+
+  for (const [box, { side, by }] of spilled)
+    findings.push({ kind: 'spill', selector: describe(box), message: `text runs ${px(by)} past its ${side} edge` })
 
   // Wrap: a word broken between two letters or digits, in a column too narrow for it; a break at a hyphen or slash is the browser's own.
   for (const element of document.body.querySelectorAll('*')) {
@@ -325,6 +364,8 @@ export function measureDom(phone: boolean): DomFinding[] {
     }
   }
 
+  findings.push(...clippedText(range), ...overlappingText(range), ...smallText(phone), ...stretchedImages())
+
   // Images that finished loading with nothing to draw.
   for (const image of document.images) {
     const source = image.currentSrc || image.src
@@ -340,6 +381,233 @@ export function measureDom(phone: boolean): DomFinding[] {
     const element = node instanceof Element ? node : node?.parentElement ?? null
 
     findings.push({ kind: 'layout-shift', selector: element === null ? 'html' : describe(element), message: `layout shift score ${shifts.score.toFixed(2)}, over 0.1` })
+  }
+
+  return findings
+}
+
+// The extent of an element's own text, undefined when nothing of it is laid out.
+function textExtent(element: Element, range: Range): { left: number, right: number, top: number, bottom: number } | undefined {
+  const extent = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity }
+
+  for (const node of ownTexts(element)) {
+    range.selectNodeContents(node)
+
+    for (const rect of range.getClientRects()) {
+      if (rect.width === 0)
+        continue
+
+      extent.left = Math.min(extent.left, rect.left)
+      extent.right = Math.max(extent.right, rect.right)
+      extent.top = Math.min(extent.top, rect.top)
+      extent.bottom = Math.max(extent.bottom, rect.bottom)
+    }
+  }
+
+  return extent.left === Infinity ? undefined : extent
+}
+
+// Clip: text cut by the box hiding what runs past it, an ellipsis included, with no title giving it whole; a 1px visually-hidden box is meant to hide.
+function clippedText(range: Range): DomFinding[] {
+  const cut = new Map<Element, string>()
+
+  for (const element of document.body.querySelectorAll('*')) {
+    if (!visible(element) || ownTexts(element).length === 0 || element.closest('[title]') !== null)
+      continue
+
+    let box: Element | null = element
+
+    while (box !== null && box !== document.body && !['hidden', 'clip'].includes(getComputedStyle(box).overflowX) && !['hidden', 'clip'].includes(getComputedStyle(box).overflowY))
+      box = box.parentElement
+
+    if (box === null || box === document.body || cut.has(box))
+      continue
+
+    const outer = box.getBoundingClientRect()
+
+    if (outer.width <= 1 || outer.height <= 1)
+      continue
+
+    const style = getComputedStyle(box)
+    const ellipsis = getComputedStyle(element).textOverflow === 'ellipsis' && box.scrollWidth > box.clientWidth + 1
+    const extent = textExtent(element, range)
+
+    if (extent === undefined)
+      continue
+
+    // clientWidth and clientHeight are rounded, so the inside is measured from the box's own fractional size.
+    const left = outer.left + box.clientLeft
+    const top = outer.top + box.clientTop
+    const width = box.clientWidth + outer.width - (box as HTMLElement).offsetWidth
+    const height = box.clientHeight + outer.height - (box as HTMLElement).offsetHeight
+    const wide = ellipsis || (style.overflowX !== 'visible' && (extent.right > left + width + 1 || extent.left < left - 1))
+    const tall = style.overflowY !== 'visible' && (extent.bottom > top + height + 1 || extent.top < top - 1)
+    // Text wholly outside the box is a slide or a panel put away, not text cut.
+    const seen = extent.right > left && extent.left < left + width && extent.bottom > top && extent.top < top + height
+
+    if (!seen)
+      continue
+
+    if (wide)
+      cut.set(box, `text cut to ${Math.round(width)}px of ${Math.round(ellipsis ? box.scrollWidth : extent.right - extent.left)}px wide, no title`)
+    else if (tall)
+      cut.set(box, `text cut to ${Math.round(height)}px of ${Math.round(extent.bottom - extent.top)}px tall, no title`)
+  }
+
+  return [...cut].map(([box, message]) => ({ kind: 'clip', selector: describe(box), message }))
+}
+
+interface Run {
+  element: Element
+  node: Text
+  rects: DOMRect[]
+}
+
+function runsOf(element: Element, range: Range): Run[] {
+  return ownTexts(element).map((node) => {
+    range.selectNodeContents(node)
+
+    return { element, node, rects: [...range.getClientRects()].filter(({ width, height }) => width > 0 && height > 0) }
+  })
+}
+
+// How much of the smaller rectangle the two share.
+function shared(a: DOMRect, b: DOMRect): number {
+  const width = Math.min(a.right, b.right) - Math.max(a.left, b.left)
+  const height = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+
+  return width <= 0 || height <= 0 ? 0 : width * height / Math.min(a.width * a.height, b.width * b.height)
+}
+
+function intersection(runs: [Run, Run]): DOMRect | undefined {
+  for (const a of runs[0].rects) {
+    for (const b of runs[1].rects) {
+      // Lines set tight share a sliver; text drawn over text shares a good part of a line.
+      if (shared(a, b) >= 0.25)
+        return new DOMRect(Math.max(a.left, b.left), Math.max(a.top, b.top), Math.min(a.right, b.right) - Math.max(a.left, b.left), Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top))
+    }
+  }
+
+  return undefined
+}
+
+// Overlap: two runs of text drawn over each other with nothing opaque between them, a panel laid over text being fine.
+function overlappingText(range: Range): DomFinding[] {
+  const runs = [...document.body.querySelectorAll('*')].filter(element => visible(element) && !['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA'].includes(element.tagName)).flatMap(element => runsOf(element, range)).filter(run => run.rects.length > 0)
+  const candidates: [Run, Run][] = []
+  const sorted = runs.flatMap(run => run.rects.map(rect => ({ run, rect }))).toSorted((a, b) => a.rect.top - b.rect.top)
+
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i]!
+
+    for (let j = i + 1; j < sorted.length && sorted[j]!.rect.top < a.rect.bottom; j++) {
+      const b = sorted[j]!
+
+      if (a.run.element !== b.run.element && !candidates.some(([x, y]) => (x === a.run && y === b.run) || (x === b.run && y === a.run)) && shared(a.rect, b.rect) >= 0.25)
+        candidates.push([a.run, b.run])
+    }
+  }
+
+  const findings: DomFinding[] = []
+  const reported = new Set<Element>()
+  const { scrollX, scrollY } = window
+
+  for (const pair of candidates) {
+    const first = intersection(pair)
+
+    if (first === undefined)
+      continue
+
+    // The stack under a point is only known in the viewport, so the overlap is brought into it and measured again.
+    window.scrollTo(0, Math.max(0, window.scrollY + first.top - window.innerHeight / 2))
+
+    const fresh = pair.map(run => ({ ...run, rects: runsOf(run.element, range).find(other => other.node === run.node)?.rects ?? [] })) as [Run, Run]
+    const at = intersection(fresh)
+
+    if (at === undefined)
+      continue
+
+    const stack = document.elementsFromPoint(at.left + at.width / 2, at.top + at.height / 2)
+    const [upper, lower] = pair.map(run => stack.indexOf(run.element)).toSorted((a, b) => a - b)
+
+    // An element left out of the stack (pointer-events: none) cannot be ordered.
+    if (upper === undefined || lower === undefined || upper < 0)
+      continue
+
+    const covered = stack.slice(upper + 1, lower).some((element) => {
+      const style = getComputedStyle(element)
+
+      return style.backgroundImage !== 'none' || alpha(style.backgroundColor) >= 1
+    })
+    const top = stack[upper]!
+    const below = pair.find(run => run.element !== top)!
+
+    if (covered || reported.has(top))
+      continue
+
+    reported.add(top)
+    findings.push({ kind: 'overlap', selector: describe(top), message: `${quote(pair.find(run => run.element === top)!.node.textContent ?? '')} drawn over ${quote(below.node.textContent ?? '')} (${describe(below.element)})` })
+  }
+
+  window.scrollTo(scrollX, scrollY)
+
+  return findings
+}
+
+// Text-size: text under 12px anywhere, and at a phone width a form field under 16px.
+function smallText(phone: boolean): DomFinding[] {
+  const lines = new Map<string, DomFinding>()
+  const add = (finding: DomFinding): void => {
+    lines.set(`${finding.selector}|${finding.message}`, finding)
+  }
+
+  for (const element of document.body.querySelectorAll('*')) {
+    if (!visible(element) || ownTexts(element).length === 0 || ['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(element.tagName))
+      continue
+
+    const size = Number.parseFloat(getComputedStyle(element).fontSize)
+
+    if (size > 0 && size < SMALLEST_TEXT)
+      add({ kind: 'text-size', selector: describe(element), message: `${Math.round(size * 10) / 10}px text, under ${SMALLEST_TEXT}px` })
+  }
+
+  if (phone) {
+    for (const field of document.querySelectorAll(FIELDS)) {
+      const size = Number.parseFloat(getComputedStyle(field).fontSize)
+
+      if (visible(field) && size < SMALLEST_FIELD)
+        add({ kind: 'text-size', selector: describe(field), message: `${Math.round(size * 10) / 10}px text in a field, under ${SMALLEST_FIELD}px: iOS zooms in on focus` })
+    }
+  }
+
+  return [...lines.values()]
+}
+
+// Stretch: a raster image drawn at another aspect ratio than its file, object-fit left at fill; an svg letterboxes through its viewBox instead.
+function stretchedImages(): DomFinding[] {
+  const findings: DomFinding[] = []
+
+  for (const image of document.images) {
+    const source = image.currentSrc || image.src
+    const style = getComputedStyle(image)
+
+    if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0 || SVG_SOURCE.test(source) || style.objectFit !== 'fill' || !visible(image))
+      continue
+
+    const rect = image.getBoundingClientRect()
+    const inset = (a: string, b: string): number => ['padding', 'border'].reduce((sum, kind) => sum + (Number.parseFloat(style.getPropertyValue(`${kind}-${a}${kind === 'border' ? '-width' : ''}`)) || 0) + (Number.parseFloat(style.getPropertyValue(`${kind}-${b}${kind === 'border' ? '-width' : ''}`)) || 0), 0)
+    const width = rect.width - inset('left', 'right')
+    const height = rect.height - inset('top', 'bottom')
+
+    if (width <= 1 || height <= 1)
+      continue
+
+    const drawn = width / height
+    const file = image.naturalWidth / image.naturalHeight
+
+    // A pixel of rounding moves the ratio of a small image, so a few percent are let through.
+    if (Math.abs(drawn - file) / file > 0.03)
+      findings.push({ kind: 'stretch', selector: describe(image), message: `drawn ${Math.round(width)}×${Math.round(height)}px, the file is ${image.naturalWidth}×${image.naturalHeight}: stretched` })
   }
 
   return findings

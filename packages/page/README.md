@@ -28,6 +28,11 @@ What `check` reports:
 - `tap-target`: a control under 44px wide or tall below 600px wide, under 24px otherwise; a link inside a sentence is exempt, a checkbox counts its label.
 - `padding`: text touching an edge its box draws, a border side or a background unlike what is behind it.
 - `wrap`: a word broken between two letters or digits, such as a label squeezed to one letter per line or a hostname ending on a line of its own, shown with `|` where it breaks; a break after a hyphen or slash is left alone.
+- `clip`: text cut by a box hiding what runs past it (`overflow: hidden` or `clip`, an ellipsis included) when no `title` holds it whole; a 1px visually-hidden box and text wholly outside the box, a slide put away say, are left out.
+- `spill`: text running past the edge its box draws while nothing clips or scrolls it, with how far and on which side.
+- `overlap`: text drawn over other text with nothing opaque between them, naming both; a panel laid over text is fine.
+- `text-size`: text under 12px, and below 600px wide a form field under 16px, which iOS zooms in on when it takes focus.
+- `stretch`: a raster image drawn at another aspect ratio than its file while `object-fit` stays `fill`; an svg letterboxes instead and is left out.
 - `image`: an image that finished loading with nothing to draw. `layout-shift`: a cumulative layout shift score above 0.1, naming the element that moved most.
 
 `--skip font,padding` leaves kinds out, `--json` prints `{shots, findings, failed}`. `diff` counts a pixel as different when a channel moves by more than `--threshold` (32 of 255) and ignores a lone differing pixel in an 8px cell.

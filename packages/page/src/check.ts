@@ -12,7 +12,7 @@ import { fontFindings } from './fonts'
 import { beforeLoad, inPage } from './inpage'
 import { findingLines, printLines, widthsOf } from './report'
 
-const KINDS = ['redirect', 'overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'image', 'layout-shift'] as const
+const KINDS = ['redirect', 'overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'clip', 'spill', 'overlap', 'text-size', 'stretch', 'image', 'layout-shift'] as const
 // What a page does the same at every width, so it is reported once, at the first width it shows at.
 const ONCE = new Set(['redirect', 'console', 'request', 'font', 'contrast'])
 const URL_CAP = 160
@@ -22,7 +22,7 @@ const EXITS: ExitRow[] = [[0, 'nothing found'], [1, 'a defect was found'], [2, '
 const USAGE = `page check <file|url>...
 
 Opens each HTML file or URL in a local Chromium at every width, writes a full-page PNG per width (next to a file as <name>-<width>.png, into --out, or the cache folder for a URL) and prints its path, then one line per defect: <target> <width>px <kind> <selector>: <measure>.
-Kinds: redirect (the page landed elsewhere, a login page say, so what follows is about that page), overflow (the page scrolls sideways; the elements where it starts), console (errors and uncaught exceptions), request (failed, or answered 4xx/5xx), font (text drawn in another font than its stack asks for, naming the one drawn), contrast (text under WCAG AA, 4.5:1 or 3:1 for large text; text over an image, a gradient or a filter is left out), tap-target (under 44px below ${PHONE_WIDTH}px wide, under 24px otherwise; a link inside a sentence is exempt), padding (text touching the border or background edge of its box), wrap (a word broken between two letters, in a column too narrow for it), image (did not load), layout-shift (a score above 0.1).
+Kinds: redirect (the page landed elsewhere, a login page say, so what follows is about that page), overflow (the page scrolls sideways; the elements where it starts), console (errors and uncaught exceptions), request (failed, or answered 4xx/5xx), font (text drawn in another font than its stack asks for, naming the one drawn), contrast (text under WCAG AA, 4.5:1 or 3:1 for large text; text over an image, a gradient or a filter is left out), tap-target (under 44px below ${PHONE_WIDTH}px wide, under 24px otherwise; a link inside a sentence is exempt), padding (text touching the border or background edge of its box), wrap (a word broken between two letters, in a column too narrow for it), clip (text cut by an overflow: hidden box or an ellipsis, with no title holding it whole), spill (text running past the edge its box draws, nothing clipping it), overlap (text drawn over other text, nothing opaque between), text-size (text under 12px; a form field under 16px below ${PHONE_WIDTH}px wide, where iOS zooms in on focus), stretch (a raster image drawn at another aspect ratio than its file), image (did not load), layout-shift (a score above 0.1).
 It never starts or builds an app: give it a file or a URL already served. A page behind a login takes --cookie, -H or --storage-state; a header goes to the target's origin alone.
 Chromium comes from PAGE_CHROMIUM, ~/.cache/ms-playwright or /usr/bin, never downloaded.
 

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const FIXTURES = new URL('fixtures/', import.meta.url).pathname
-const KINDS = ['overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'image', 'layout-shift']
+const KINDS = ['overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'clip', 'spill', 'overlap', 'text-size', 'stretch', 'image', 'layout-shift']
 const temp = tempDirs()
 
 interface Report {
@@ -82,6 +82,26 @@ describe('page check', () => {
 
   test('a word wrapped inside itself, not text wrapping between words', () => {
     expect(lines('wrap.html')).toEqual(['1440 wrap b.env: "Production" wraps inside the word: P|r|o|d|u|c|t|i|o|n', '1440 wrap code.host: "prod-web-01.example.com" wraps inside the word: prod-web-01.example.co|m', '400 wrap b.env: "Production" wraps inside the word: P|r|o|d|u|c|t|i|o|n', '400 wrap code.host: "prod-web-01.example.com" wraps inside the word: prod-web-01.example.co|m'])
+  })
+
+  test('text cut by its box with nothing holding it whole, not text that fits or has a title', () => {
+    expect(lines('clip.html')).toEqual(['1440 clip div.name: text cut to 96px of 163px wide, no title', '1440 clip div.cut: text cut to 20px of 60px tall, no title', '400 clip div.name: text cut to 96px of 163px wide, no title', '400 clip div.cut: text cut to 20px of 60px tall, no title'])
+  })
+
+  test('text running past the edge its box draws', () => {
+    expect(lines('spill.html')).toEqual(['1440 spill span.tag: text runs 54px past its right edge', '400 spill span.tag: text runs 54px past its right edge'])
+  })
+
+  test('text drawn over other text, not text under an opaque panel', () => {
+    expect(lines('overlap.html')).toEqual(['1440 overlap span.second: "Second label" drawn over "First label" (span.first)', '400 overlap span.second: "Second label" drawn over "First label" (span.first)'])
+  })
+
+  test('text under 12px, and a form field under 16px at a phone width', () => {
+    expect(lines('text-size.html')).toEqual(['1440 text-size p.fine: 10px text, under 12px', '400 text-size p.fine: 10px text, under 12px', '400 text-size input.search: 14px text in a field, under 16px: iOS zooms in on focus'])
+  })
+
+  test('an image drawn at another aspect ratio than its file, not one scaled or covered', () => {
+    expect(lines('stretch.html')).toEqual(['1440 stretch img.hero: drawn 100×100px, the file is 40×20: stretched', '400 stretch img.hero: drawn 100×100px, the file is 40×20: stretched'])
   })
 
   test('an image that did not load', () => {
