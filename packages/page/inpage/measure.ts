@@ -451,7 +451,7 @@ function clippedText(range: Range): DomFinding[] {
     if (wide)
       cut.set(box, `text cut to ${Math.round(width)}px of ${Math.round(ellipsis ? box.scrollWidth : extent.right - extent.left)}px wide, no title`)
     else if (tall)
-      cut.set(box, `text cut to ${Math.round(height)}px of ${Math.round(extent.bottom - extent.top)}px tall, no title`)
+      cut.set(box, `text cut to ${Math.round(height)}px of ${Math.max(box.scrollHeight, Math.round(extent.bottom - extent.top))}px tall, no title`)
   }
 
   return [...cut].map(([box, message]) => ({ kind: 'clip', selector: describe(box), message }))
