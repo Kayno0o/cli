@@ -27,6 +27,7 @@ What `check` reports:
 - `contrast`: text under WCAG AA, 4.5:1 or 3:1 for large text, with both colours and the ratio (measured by `@kaynooo/audit-engine`); text over an image, a gradient or a filter cannot be measured and is left out.
 - `tap-target`: a control under 44px wide or tall below 600px wide, under 24px otherwise; a link inside a sentence is exempt, a checkbox counts its label.
 - `padding`: text touching an edge its box draws, a border side or a background unlike what is behind it.
+- `wrap`: a word broken between two letters or digits, such as a label squeezed to one letter per line or a hostname ending on a line of its own, shown with `|` where it breaks; a break after a hyphen or slash is left alone.
 - `image`: an image that finished loading with nothing to draw. `layout-shift`: a cumulative layout shift score above 0.1, naming the element that moved most.
 
 `--skip font,padding` leaves kinds out, `--json` prints `{shots, findings, failed}`. `diff` counts a pixel as different when a channel moves by more than `--threshold` (32 of 255) and ignores a lone differing pixel in an 8px cell.

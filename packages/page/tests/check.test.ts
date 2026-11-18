@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const FIXTURES = new URL('fixtures/', import.meta.url).pathname
-const KINDS = ['overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'image', 'layout-shift']
+const KINDS = ['overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'image', 'layout-shift']
 const temp = tempDirs()
 
 interface Report {
@@ -78,6 +78,10 @@ describe('page check', () => {
 
   test('text touching the edge of its box', () => {
     expect(lines('padding.html')).toEqual(['1440 padding span.chip: text touches its top, right, bottom and left edge, no padding', '400 padding span.chip: text touches its top, right, bottom and left edge, no padding'])
+  })
+
+  test('a word wrapped inside itself, not text wrapping between words', () => {
+    expect(lines('wrap.html')).toEqual(['1440 wrap b.env: "Production" wraps inside the word: P|r|o|d|u|c|t|i|o|n', '1440 wrap code.host: "prod-web-01.example.com" wraps inside the word: prod-web-01.example.co|m', '400 wrap b.env: "Production" wraps inside the word: P|r|o|d|u|c|t|i|o|n', '400 wrap code.host: "prod-web-01.example.com" wraps inside the word: prod-web-01.example.co|m'])
   })
 
   test('an image that did not load', () => {

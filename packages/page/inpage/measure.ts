@@ -5,6 +5,10 @@ import type { DomFinding, FontSample, LayoutBox } from '../src/types'
 const NUMBERS = /[\d.]+/g
 const NOT_SPACE = /\S/
 const SPACES = /\s+/g
+const WORDS = /\S{2,}/g
+const WORD_CHAR = /[\p{L}\p{N}]/u
+// Past this a word is shown cut, pieces and all.
+const WORD_CAP = 60
 // Longer text no longer names one element, a section holding a whole paragraph say.
 const LABEL_CAP = 80
 const UNBOXED = new Set(['head', 'script', 'style', 'noscript', 'template'])
@@ -265,6 +269,60 @@ export function measureDom(phone: boolean): DomFinding[] {
     const named = order.length === 1 ? order[0] : `${order.slice(0, -1).join(', ')} and ${order.at(-1)}`
 
     findings.push({ kind: 'padding', selector: describe(box), message: `text touches its ${named} edge, no padding` })
+  }
+
+  // Wrap: a word broken between two letters or digits, in a column too narrow for it; a break at a hyphen or slash is the browser's own.
+  for (const element of document.body.querySelectorAll('*')) {
+    if (!visible(element) || ['SCRIPT', 'STYLE', 'NOSCRIPT', 'PRE', 'TEXTAREA'].includes(element.tagName))
+      continue
+
+    for (const node of element.childNodes) {
+      const content = node.nodeType === Node.TEXT_NODE ? node.textContent ?? '' : ''
+
+      range.selectNodeContents(node)
+
+      // Text on one line has nothing broken, and that is most of a page.
+      if (content.trim() === '' || new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size < 2)
+        continue
+
+      const broken = [...content.matchAll(WORDS)].map(({ 0: word, index }) => {
+        range.setStart(node, index)
+        range.setEnd(node, index + word.length)
+
+        // A word on one line is skipped before its letters are measured one by one.
+        if (new Set([...range.getClientRects()].filter(({ width }) => width > 0).map(rect => Math.round(rect.top))).size < 2)
+          return undefined
+
+        const pieces: string[] = []
+        let top: number | undefined
+        let inside = false
+
+        for (let at = 0; at < word.length; at++) {
+          range.setStart(node, index + at)
+          range.setEnd(node, index + at + 1)
+
+          const rect = [...range.getClientRects()].find(({ width }) => width > 0)
+
+          if (rect !== undefined && top !== undefined && Math.abs(rect.top - top) > 1) {
+            inside ||= WORD_CHAR.test(word[at - 1] ?? '') && WORD_CHAR.test(word[at] ?? '')
+            pieces.push('')
+          }
+
+          top = rect?.top ?? top
+          pieces[Math.max(pieces.length - 1, 0)] = (pieces.at(-1) ?? '') + word[at]
+        }
+
+        return inside ? { word, pieces } : undefined
+      }).find(found => found !== undefined)
+
+      if (broken !== undefined) {
+        const shown = broken.pieces.join('|')
+
+        findings.push({ kind: 'wrap', selector: describe(element), message: `"${broken.word}" wraps inside the word: ${shown.length > WORD_CAP ? `${shown.slice(0, WORD_CAP - 3)}...` : shown}` })
+
+        break
+      }
+    }
   }
 
   // Images that finished loading with nothing to draw.

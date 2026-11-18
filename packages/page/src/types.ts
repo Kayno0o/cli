@@ -1,6 +1,6 @@
 // What crosses between the CLI and the code it runs in the page (inpage/).
 
-export type DomKind = 'overflow' | 'tap-target' | 'padding' | 'image' | 'layout-shift'
+export type DomKind = 'overflow' | 'tap-target' | 'padding' | 'wrap' | 'image' | 'layout-shift'
 
 export interface DomFinding {
   kind: DomKind
