@@ -27,30 +27,28 @@ export function widthsOf(given: string | undefined): number[] {
   return widths
 }
 
-/** One line per finding, at most ten of a kind per target and width, then how many more there were. */
+/** A heading per target, width and kind with its findings indented under it, a repeated one counted once, at most ten, then how many more there were. */
 export function findingLines(findings: Finding[], stream: { isTTY?: boolean } = process.stdout): string[] {
   const label = role('label', stream)
   const kind = role('warn', stream)
   const accent = role('accent', stream)
-  const seen = new Map<string, number>()
-  const lines: string[] = []
+  const groups = new Map<string, { heading: string, counts: Map<string, number> }>()
 
   for (const finding of findings) {
-    const group = `${finding.target} ${finding.width}px ${finding.kind}`
-    const count = (seen.get(group) ?? 0) + 1
+    const key = `${finding.target} ${finding.width} ${finding.kind}`
+    const group = groups.get(key) ?? { heading: `${finding.target} ${label(`${finding.width}px`)} ${kind(finding.kind)}`, counts: new Map<string, number>() }
+    const line = finding.selector === undefined ? finding.message : `${accent(finding.selector)}: ${finding.message}`
 
-    seen.set(group, count)
-
-    if (count <= MAX_PER_KIND)
-      lines.push(`${finding.target} ${label(`${finding.width}px`)} ${kind(finding.kind)}${finding.selector === undefined ? '' : ` ${accent(finding.selector)}`}: ${finding.message}`)
+    group.counts.set(line, (group.counts.get(line) ?? 0) + 1)
+    groups.set(key, group)
   }
 
-  for (const [group, count] of seen) {
-    if (count > MAX_PER_KIND)
-      lines.push(`${group}: ${count - MAX_PER_KIND} more`)
-  }
+  return [...groups.values()].flatMap(({ heading, counts }) => {
+    const lines = [...counts].slice(0, MAX_PER_KIND).map(([line, count]) => `  ${line}${count > 1 ? ` ${label(`×${count}`)}` : ''}`)
+    const more = counts.size - MAX_PER_KIND
 
-  return lines
+    return [heading, ...lines, ...more > 0 ? [`  ${more} more`] : []]
+  })
 }
 
 export function printLines(lines: string[], stream: Writable = process.stdout): void {

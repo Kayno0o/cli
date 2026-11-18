@@ -10,7 +10,7 @@ bun install -g @kaynooo/cli-page
 
 | Command | What it does |
 | --- | --- |
-| `page check <file\|url>...` | shoots each target full-page at every width, prints the PNG paths, then one `<target> <width>px <kind> <selector>: <measure>` line per defect |
+| `page check <file\|url>...` | shoots each target full-page at every width, prints the PNG paths, then a `<target> <width>px <kind>` line per kind found with its defects under it, `<selector>: <measure>`, a repeated one counted once |
 | `page diff <mockup> <built>` | shoots both at every width and writes `<name>-side-<width>.png` (mockup left, built right) and `<name>-diff-<width>.png` (built faded, differing pixels red), the differing regions boxed and numbered on both and printed one line each |
 | `page shift <before> <after>` | pairs both pages' elements at every width and prints one line per cause of a change, `<after> <width>px <kind> <selector>: <change>, pushing <n> elements` |
 

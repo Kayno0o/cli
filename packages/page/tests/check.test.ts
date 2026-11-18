@@ -117,12 +117,12 @@ describe('page check', () => {
 })
 
 describe('page check output', () => {
-  test('prints the PNG paths, then one line per finding', async () => {
+  test('prints the PNG paths, then each target, width and kind with its findings under it', async () => {
     const out = temp('page-check-')
     const { code, out: printed } = await page(['check', 'tap-target.html', '-w', '375', '-o', out])
 
     expect(code).toBe(1)
-    expect(printed).toBe(`${out}/tap-target-375.png\ntap-target.html 375px tap-target button.close: 30×30px, under 44px\n`)
+    expect(printed).toBe(`${out}/tap-target-375.png\ntap-target.html 375px tap-target\n  button.close: 30×30px, under 44px\n`)
   }, 60_000)
 
   test('exits 0 on a clean page and --skip leaves a kind out', async () => {

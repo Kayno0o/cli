@@ -409,7 +409,7 @@ Instead of: reading screenshots by eye for overflow, squashed controls and fallb
 
 ```sh
 page <command> [options]
-page check mockup.html  # PNGs at 1440 and 400px, then one line per defect
+page check mockup.html  # PNGs at 1440 and 400px, then the defects by width and kind
 page check http://localhost:5173/ -w 1280,375
 page diff mockup.html http://localhost:5173/  # side-by-side and pixel-diff PNGs, differing regions boxed
 page shift before.html after.html  # what moved or resized, one line per cause
