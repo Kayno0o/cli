@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-page",
   "type": "module",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "page: shoots HTML files or URLs at several widths in a local Chromium and reports their layout defects one line each, or diffs a built page against its mockup.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
