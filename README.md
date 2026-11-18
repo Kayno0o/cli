@@ -1,6 +1,6 @@
 # cli
 
-CLIs built for Claude Code sessions, each published on its own from `packages/` to npmjs as `@kaynooo/cli-<name>`.
+CLIs for Claude Code sessions and for people at a terminal, each published on its own from `packages/` to npmjs as `@kaynooo/cli-<name>`.
 
 ## Install
 
