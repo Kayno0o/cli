@@ -226,7 +226,7 @@
     },
     "packages/out": {
       "name": "@kaynooo/cli-out",
-      "version": "0.14.9",
+      "version": "0.14.10",
       "bin": {
         "out": "./dist/cli.js",
       },
