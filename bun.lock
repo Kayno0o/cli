@@ -286,7 +286,7 @@
     },
     "packages/proc": {
       "name": "@kaynooo/cli-proc",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "bin": {
         "proc": "./dist/proc-cli.js",
       },
