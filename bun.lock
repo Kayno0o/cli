@@ -239,7 +239,7 @@
     },
     "packages/page": {
       "name": "@kaynooo/cli-page",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "bin": {
         "page": "./dist/cli.js",
       },
