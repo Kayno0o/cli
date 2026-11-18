@@ -1,6 +1,21 @@
 # cli
 
-CLIs built for Claude Code sessions, each published on its own from `packages/` to npmjs as `@kaynooo/cli-<name>`: `bun add -g @kaynooo/cli-<name>`. Only `@kaynooo/cli-changelog` stays on the Forgejo registry.
+CLIs built for Claude Code sessions, each published on its own from `packages/` to npmjs as `@kaynooo/cli-<name>`.
+
+## Install
+
+```sh
+bun add -g @kaynooo/cli-doctor
+doctor --install
+```
+
+`doctor --install` lists the packages in a checklist, with what each needs on the machine, and the Claude Code hooks plugin among them; name them instead (`doctor --install forgejo check hooks`, or `all`) off a terminal. A package whose required tool is missing (tea for `ft`, glab for `gl`, docker for `dc`) is left out unless `--force`, and `hooks` brings `guard` along. `doctor` alone checks what is installed and `doctor --fix` repairs it, the hooks plugin and the completions included.
+
+One package alone is `bun add -g @kaynooo/cli-<name>`, from npmjs with no registry setup. Each is also published to the Forgejo registry, which answers without a token, and `@kaynooo/cli-changelog` only there; to install from it, map the scope first: `printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml`.
+
+`~/.bun/bin` must be on the PATH Claude Code starts with, or the hooks find no `guard`: Claude Code then reports a hook error on each call and lets it through.
+
+## Packages
 
 | Package | Bin | What it does |
 | --- | --- | --- |
@@ -36,6 +51,15 @@ CLIs built for Claude Code sessions, each published on its own from `packages/` 
 
 Every bin and command is described in [docs/bins.md](docs/bins.md), every config file and environment variable in [docs/config.md](docs/config.md).
 
+## Claude Code
+
+Two ways wire the bins into Claude Code, never both on one host:
+
+- **The `cli-hooks` plugin** in this repo, for any host: `guard hook` answers each event, refusing a Bash call that breaks a rule (with the command to run instead, the pinned package manager included), an install `pkg` refuses and a Read, Edit or Write of an env file, letting `git push` through only when the latest prompt asked for one, and listing the installed bins at session start. A hook cannot swap the command Claude runs without approving it too, so nothing runs through `out` here.
+- **The `cli` mod** in the user's dotfiles (`zshrc/dotfiles/claude/mods/cli`): the same rules through `guard check`, plus the install rewritten to the pinned manager and noisy runs through `out`.
+
+`doctor --install hooks` installs the plugin from the GitHub marketplace; in a session, `/plugin marketplace add https://github.com/Kayno0o/cli.git` then `/plugin install cli-hooks@kaynooo-cli` does the same. Claude Code caches a plugin by its version, so a change under `plugin/` bumps `plugin/.claude-plugin/plugin.json` to reach the hosts.
+
 ## Development
 
 ```sh
@@ -50,25 +74,3 @@ bun run check && bun run lint && bun run test
 Each CLI releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow builds that folder (`bun run build`, a Bun bundle per bin with `packages/kit` inlined) and publishes it. Kit is published like the CLIs (`just release kit minor`) for the libs outside this repo; the CLIs here take it as `workspace:*` and inline it, so a kit change reaches one of them with its next release.
 
 The same workflow then publishes the package to npmjs (`@kaynooo` org) with the `NPM_STAGE_TOKEN` secret, a granular staged-publish token on `@kaynooo`, through `npm stage publish` since `bun publish` finds no auth for npmjs. The version is staged, not live: approve it with `npm stage approve <stage-id>` (`npm stage list` shows the pending ones). npm ends direct publishing for bypass-2FA tokens around January 2027, and trusted publishing does not support Forgejo, so staged publishing is the fallback; Forgejo has no OIDC, so there is no `--provenance`.
-
-## Claude Code
-
-Two ways wire the bins into Claude Code, never both on one host:
-
-- **The `cli-hooks` plugin** in this repo, for any host: `guard hook` answers each event, refusing a Bash call that breaks a rule (with the command to run instead, the pinned package manager included), an install `pkg` refuses and a Read, Edit or Write of an env file, letting `git push` through only when the latest prompt asked for one, and listing the installed bins at session start. A hook cannot swap the command Claude runs without approving it too, so nothing runs through `out` here.
-- **The `cli` mod** in the user's dotfiles (`zshrc/dotfiles/claude/mods/cli`): the same rules through `guard check`, plus the install rewritten to the pinned manager and noisy runs through `out`.
-
-### A host without the dotfiles
-
-```sh
-bun install -g @kaynooo/cli-doctor
-doctor --install
-```
-
-`doctor --install` lists the packages in a checklist, with what each needs on the machine, and the Claude Code hooks plugin among them; name them instead (`doctor --install forgejo check hooks`, or `all`) off a terminal. A package whose required tool is missing (tea for `ft`, glab for `gl`, docker for `dc`) is left out unless `--force`, and `hooks` brings `guard` along. `doctor` alone checks what is installed and `doctor --fix` repairs it, the hooks plugin and the completions included.
-
-The packages come from npmjs with no registry setup. Each is also published to the Forgejo registry, which answers without a token; to install from it instead, map the scope first: `printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml`. The plugin comes from the Forgejo marketplace either way.
-
-The hooks need `@kaynooo/cli-guard` or later, the first with `guard hook`. Claude Code caches a plugin by its version, so a change under `plugin/` bumps `plugin/.claude-plugin/plugin.json` to reach the hosts.
-
-`~/.bun/bin` must be on the PATH Claude Code starts with, or the hooks find no `guard`: Claude Code then reports a hook error on each call and lets it through. In a session, `/plugin marketplace add https://github.com/Kayno0o/cli.git` then `/plugin install cli-hooks@kaynooo-cli` does the same as the last line.
