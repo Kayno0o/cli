@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+
 import { basename } from 'node:path'
 import process from 'node:process'
 import { describe, expect, test } from 'bun:test'
@@ -20,5 +21,12 @@ describe.if(Bun.which('getent') !== null)('hostHere', () => {
       else
         process.env.SHELL = saved
     }
+  })
+
+  // The Bun bug loginShell works around: once this fails, os.userInfo().shell can replace it.
+  test('Bun\'s os.userInfo().shell still reads $SHELL, oven-sh/bun#25171', () => {
+    const child = Bun.spawnSync([process.execPath, '-e', 'console.log(require("node:os").userInfo().shell)'], { env: { ...process.env, SHELL: '/bin/not-a-shell' } })
+
+    expect(child.stdout.toString().trim()).toBe('/bin/not-a-shell')
   })
 })

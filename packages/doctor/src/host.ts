@@ -7,7 +7,7 @@ import { runCommand } from '@kaynooo/cli-kit'
 // Longest any command a check runs may take, since one network call stuck would hold the whole report.
 const RUN_TIMEOUT_MS = 20_000
 
-// The password database's shell, as $SHELL is the one a tool such as Claude Code runs commands in; Bun's os.userInfo().shell reads $SHELL too.
+// The password database's shell, as $SHELL is the one a tool such as Claude Code runs commands in; Bun's os.userInfo().shell reads $SHELL too (oven-sh/bun#25171).
 function loginShell(): string | undefined {
   if (Bun.which('getent') === null || process.getuid === undefined)
     return undefined
