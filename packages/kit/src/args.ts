@@ -90,6 +90,9 @@ export type Candidates = (typed: string[]) => Candidate[] | Promise<Candidate[]>
 
 export const completion = { active: false }
 
+// The bin a single command's help is headed with, `<name> <version>`, set by runMain while it runs; a runCli command's help has none, its CLI's carrying the version.
+export const heading: { bin: { name: string, version: () => string } | undefined } = { bin: undefined }
+
 // The positionals typed by their names: `<key>` or `KEY` a string, `[file]` an optional one, a name ending in `...` the rest.
 type Slots<Names extends readonly string[]> = Names extends readonly [infer First extends string, ...infer Others extends readonly string[]]
   ? First extends `${string}...` | `${string}...]` ? string[] : First extends `[${string}` ? [string?, ...Slots<Others>] : [string, ...Slots<Others>]
@@ -184,7 +187,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   applyOutput('color' in output ? values.color as string | undefined : undefined, 'plain' in output ? values.plain as boolean | undefined : undefined)
 
   if (values.help === true) {
-    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings, listing)) : helpText(usage, listing, undefined, settings))
+    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings, listing)) : helpText(usage, listing, undefined, { ...settings, bin: heading.bin }))
 
     throw new HelpShown()
   }

@@ -3,7 +3,7 @@ import type { Colors } from './style'
 import { readFileSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { applyOutput, Completing, completion, description, exampleRows, Exit, HelpShown, optionRows, OUTPUT_OPTIONS, UsageError, usageLine, wantsHelpJson } from './args'
+import { applyOutput, Completing, completion, description, exampleRows, Exit, heading, HelpShown, optionRows, OUTPUT_OPTIONS, UsageError, usageLine, wantsHelpJson } from './args'
 import { scriptArgs } from './argv'
 import { askpassClient } from './askpass'
 import { COMPLETION_SHELLS, completionScript } from './completions'
@@ -593,11 +593,16 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
   let code: number
   const started = performance.now()
 
+  heading.bin = { name, version: () => version ?? packageVersion() }
+
   try {
     code = await run(argv)
   }
   catch (error) {
     code = reportThrown(name, error, redact, wantsJson(argv))
+  }
+  finally {
+    heading.bin = undefined
   }
 
   notifyEnd(name, code, performance.now() - started)

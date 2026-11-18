@@ -433,6 +433,16 @@ describe('the help screen', () => {
     expect((await capture(async () => runMain({ name: 'demo', version: '1', run: example }, ['--help']))).out).toEndWith('show this help\n\nExamples:\n  demo a\n')
   })
 
+  test('heads a single command\'s help with its name, version and summary', async () => {
+    const detailed = async (args: string[]) => {
+      parse(args, 'demo\n\nChecks a file.\nThen more.', {})
+
+      return 0
+    }
+
+    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: detailed }, ['--help']))).out).toStartWith('demo 1  checks a file\n\nUsage: demo\n\nThen more.\n\nOptions:')
+  })
+
   test('keeps what a command and a CLI replace out of the help', async () => {
     const replacing = async (args: string[]) => {
       parse(args, 'demo [file]: prints a file', {}, { replaces: 'cat' })
@@ -440,7 +450,7 @@ describe('the help screen', () => {
       return 0
     }
 
-    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: replacing }, ['--help']))).out).toStartWith('Usage: demo [file]\n\nPrints a file\n\nOptions:')
+    expect((await capture(async () => runMain({ name: 'demo', version: '1', run: replacing }, ['--help']))).out).toStartWith('demo 1  prints a file\n\nUsage: demo [file]\n\nOptions:')
     expect((await capture(async () => runCli({ ...cli, replaces: 'echo' }, ['--help']))).out).toContain('Usage: demo <command> [options]\n\nCommands:')
   })
 
