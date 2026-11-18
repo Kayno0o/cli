@@ -16,6 +16,7 @@ function fakeHost(onPath: Record<string, string>, envs: Record<string, string>[]
     home: '/home/x',
     globalModules: '/home/x/modules',
     bunVersion: '1.4.4',
+    shell: '',
     which: bin => bin in onPath ? `/bin/${bin}` : null,
     run: async ([bin], env = {}) => {
       envs.push(env)

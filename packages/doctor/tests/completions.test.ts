@@ -9,8 +9,8 @@ import { completionDir, completionFile, installCompletions, installedBins, missi
 
 const temp = tempDirs()
 
-function hostWith(onPath: string[], home = '/home/x'): Host {
-  return { home, globalModules: '/none', bunVersion: '1.4.4', which: bin => onPath.includes(bin) ? `/bin/${bin}` : null, run: async () => ({ code: 0, stdout: '', stderr: '' }) }
+function hostWith(onPath: string[], home = '/home/x', shell = ''): Host {
+  return { home, globalModules: '/none', bunVersion: '1.4.4', shell, which: bin => onPath.includes(bin) ? `/bin/${bin}` : null, run: async () => ({ code: 0, stdout: '', stderr: '' }) }
 }
 
 describe('completionFile', () => {
@@ -67,6 +67,20 @@ describe('checkCompletions', () => {
     mkdirSync(completionDir(home), { recursive: true })
     await installCompletions(host, completionDir(home))
     expect(checkCompletions(host).ok).toBe(true)
+  })
+
+  test('without fish, a bash or zsh login shell must source the script from its rc file', () => {
+    const home = temp('completions-home-')
+
+    expect(checkCompletions(hostWith(['src'], home, 'zsh'))).toEqual({ check: 'completions', ok: false, detail: 'zsh does not load them', fix: `add source <(cli completions zsh) to ${home}/.zshrc after compinit` })
+
+    writeFileSync(join(home, '.zshrc'), 'autoload -U compinit && compinit\n')
+    expect(checkCompletions(hostWith(['src'], home, 'zsh')).ok).toBe(false)
+
+    writeFileSync(join(home, '.zshrc'), 'autoload -U compinit && compinit\nsource <(cli completions zsh)\n')
+    expect(checkCompletions(hostWith(['src'], home, 'zsh'))).toEqual({ check: 'completions', ok: true, detail: `${home}/.zshrc` })
+    expect(checkCompletions(hostWith(['src'], home, 'bash'))).toMatchObject({ ok: false, fix: `add source <(cli completions bash) to ${home}/.bashrc` })
+    expect(checkCompletions(hostWith(['src'], home, 'nu')).ok).toBe(true)
   })
 
   test('fails a file of ours left for a bin no longer installed', async () => {

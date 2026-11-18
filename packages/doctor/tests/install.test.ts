@@ -26,6 +26,7 @@ function recording(absent: string[]): { host: Host, ran: string[] } {
     home,
     globalModules: join(home, 'modules'),
     bunVersion: '1.4.4',
+    shell: '',
     which: bin => absent.includes(bin) ? null : `/bin/${bin}`,
     run: async (argv) => {
       const line = argv.join(' ')

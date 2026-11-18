@@ -1,6 +1,6 @@
 import type { Host } from './checks'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import process from 'node:process'
 import { runCommand } from '@kaynooo/cli-kit'
 
@@ -15,6 +15,7 @@ export function hostHere(): Host {
     home,
     globalModules: join(process.env.BUN_INSTALL ?? join(home, '.bun'), 'install', 'global', 'node_modules'),
     bunVersion: Bun.version,
+    shell: basename(process.env.SHELL ?? ''),
     which: bin => Bun.which(bin),
     run: async (argv, env) => {
       const ran = await runCommand(argv, { timeoutMs: RUN_TIMEOUT_MS, ...(env === undefined ? {} : { env: { ...process.env, ...env } }) })

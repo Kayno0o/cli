@@ -30,6 +30,7 @@ function fakeHost(answers: Record<string, { code?: number, stdout?: string, stde
     home,
     globalModules: join(home, MODULES),
     bunVersion: '1.4.4',
+    shell: '',
     which: bin => onPath.includes(bin) ? `/bin/${bin}` : null,
     run: async (argv) => {
       const answer = answers[argv.join(' ')] ?? { code: 1, stderr: `no stub for ${argv.join(' ')}` }

@@ -20,6 +20,8 @@ export interface Host {
   // Where `bun install -g` puts the packages.
   globalModules: string
   bunVersion: string
+  // The login shell's name from $SHELL, '' when unset.
+  shell: string
   which: (bin: string) => string | null
   // `env` adds to the environment the command inherits.
   run: (argv: string[], env?: Record<string, string>) => Promise<{ code: number, stdout: string, stderr: string }>
@@ -244,10 +246,19 @@ export function checkBun(host: Host): Result {
   return { check: 'bun', ok: true, detail: floors.length === 0 ? host.bunVersion : `${host.bunVersion}, the tools ask for ${[...new Set(floors)].join(' and ')}` }
 }
 
-// Fish completes every installed bin, when fish is installed.
+// Fish completes every installed bin, when fish is installed; a bash or zsh login shell sources the script from its rc file.
 export function checkCompletions(host: Host): Result {
-  if (host.which('fish') === null)
-    return { check: 'completions', ok: true, detail: 'fish is not installed' }
+  if (host.which('fish') === null) {
+    if (host.shell !== 'zsh' && host.shell !== 'bash')
+      return { check: 'completions', ok: true, detail: 'neither fish, nor bash or zsh as the login shell' }
+
+    const rc = join(host.home, `.${host.shell}rc`)
+    const line = `source <(cli completions ${host.shell})`
+
+    return existsSync(rc) && readFileSync(rc, 'utf8').includes(`cli completions ${host.shell}`)
+      ? { check: 'completions', ok: true, detail: rc }
+      : { check: 'completions', ok: false, detail: `${host.shell} does not load them`, fix: `add ${line} to ${rc}${host.shell === 'zsh' ? ' after compinit' : ''}` }
+  }
 
   const dir = completionDir(host.home)
   const missing = missingCompletions(host, dir)
