@@ -1,7 +1,7 @@
 import type { Finding } from '../src/report'
 import { existsSync } from 'node:fs'
 import { tempDirs } from '@kaynooo/cli-kit/test'
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const FIXTURES = new URL('fixtures/', import.meta.url).pathname
@@ -107,5 +107,67 @@ describe('page check output', () => {
   test('a missing file and an unknown kind are usage errors', async () => {
     expect((await page(['check', 'nope.html'])).code).toBe(2)
     expect((await page(['check', 'clean.html', '--skip', 'colour'])).code).toBe(2)
+  })
+})
+
+describe('page check behind a login', () => {
+  const thirdParty: (string | null)[] = []
+  const assets = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(request) {
+    thirdParty.push(request.headers.get('authorization'))
+
+    return new Response(null, { status: 204 })
+  } })
+  // The app lets in a session cookie or a bearer token and sends anyone else to its login page.
+  const app = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(request) {
+    const url = new URL(request.url)
+    const signedIn = (request.headers.get('cookie') ?? '').includes('session=ok') || request.headers.get('authorization') === 'Bearer t'
+
+    if (url.pathname === '/login')
+      return new Response('<!doctype html><title>login</title><style>body{font-family:monospace}</style><p>Sign in</p>', { headers: { 'content-type': 'text/html' } })
+
+    if (!signedIn)
+      return Response.redirect(`${url.origin}/login`, 302)
+
+    return new Response(`<!doctype html><title>app</title><style>body{font-family:monospace}</style><p>Dashboard</p><script>fetch('${assets.url.href}beacon', { mode: 'no-cors' })</script>`, { headers: { 'content-type': 'text/html' } })
+  } })
+  const home = `${app.url.href}home`
+
+  afterAll(async () => {
+    await app.stop(true)
+    await assets.stop(true)
+  })
+
+  test('a page sent to its login page says where it landed', async () => {
+    const { code, out } = await page(['check', home, '-w', '1024', '-o', temp('page-auth-'), '--json'])
+
+    expect(code).toBe(1)
+    expect((JSON.parse(out) as Report).findings).toEqual([{ target: home, width: 1024, kind: 'redirect', message: `landed on ${app.url.href}login` }])
+  }, 60_000)
+
+  test('a session cookie gets the page itself', async () => {
+    expect((await page(['check', home, '-w', '1024', '-o', temp('page-auth-'), '--cookie', 'session=ok'])).code).toBe(0)
+  }, 60_000)
+
+  test('a header reaches the target\'s origin and no other', async () => {
+    thirdParty.length = 0
+
+    expect((await page(['check', home, '-w', '1024', '-o', temp('page-auth-'), '-H', 'Authorization: Bearer t'])).code).toBe(0)
+    expect(thirdParty).toEqual([null])
+  }, 60_000)
+
+  test('a storage state file starts every page signed in', async () => {
+    const state = `${temp('page-auth-')}/state.json`
+
+    await Bun.write(state, JSON.stringify({ cookies: [{ name: 'session', value: 'ok', domain: '127.0.0.1', path: '/', expires: -1, httpOnly: false, secure: false, sameSite: 'Lax' }], origins: [] }))
+
+    expect((await page(['check', home, '-w', '1024', '-o', temp('page-auth-'), '--storage-state', state])).code).toBe(0)
+  }, 60_000)
+
+  test('a malformed cookie or header is a usage error that does not echo it', async () => {
+    const cookie = await page(['check', home, '--cookie', 'secretvalue'])
+    const header = await page(['check', home, '-H', 'Bearer secretvalue'])
+
+    expect([cookie.code, header.code]).toEqual([2, 2])
+    expect(cookie.err + header.err).not.toContain('secretvalue')
   })
 })

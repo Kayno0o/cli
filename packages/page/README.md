@@ -15,8 +15,11 @@ bun install -g @kaynooo/cli-page
 
 Targets are HTML files or URLs already served: `page` never starts or builds an app. The widths are 1440 and 400 unless `-w 1280,768,375` says otherwise. PNGs go next to a file, into `-o <dir>`, or under `~/.cache/kaynooo-page` for a URL.
 
+A page behind a login takes `--cookie name=value`, `-H "Authorization: Bearer <token>"` (sent to the target's origin only, never to the third-party scripts and fonts it loads) or `--storage-state <file>`, a Playwright storage state with cookies and localStorage. Both commands take them; a malformed value is refused without being echoed.
+
 What `check` reports:
 
+- `redirect`: the page landed on another URL, a login page say, so every other line is about that page. `diff` says so on stderr instead.
 - `overflow`: the page scrolls sideways; the up to three elements where it starts, with their right edge.
 - `console`: console errors and uncaught exceptions. `request`: requests that failed or answered 4xx/5xx. Both once per target, at the first width they show at.
 - `font`: text drawn in another font than its `font-family` asks for, naming the font Chromium drew it with (CDP `CSS.getPlatformFontsForNode`): a named family that is not available, or a generic one such as `system-ui` resolving to a monospace font.

@@ -6,14 +6,14 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import process from 'node:process'
 import { badUsage, jsonOption, marked, parse, printJson, problem, role } from '@kaynooo/cli-kit'
-import { launch, open, PHONE_WIDTH, shoot, targetOf } from './browser'
+import { launch, open, PHONE_WIDTH, redirectedTo, SESSION_OPTIONS, sessionOf, shoot, targetOf } from './browser'
 import { fontFindings } from './fonts'
 import { beforeLoad, inPage } from './inpage'
 import { findingLines, printLines, widthsOf } from './report'
 
-const KINDS = ['overflow', 'console', 'request', 'font', 'tap-target', 'padding', 'image', 'layout-shift'] as const
+const KINDS = ['redirect', 'overflow', 'console', 'request', 'font', 'tap-target', 'padding', 'image', 'layout-shift'] as const
 // What a page does the same at every width, so it is reported once, at the first width it shows at.
-const ONCE = new Set(['console', 'request', 'font'])
+const ONCE = new Set(['redirect', 'console', 'request', 'font'])
 const URL_CAP = 160
 
 const EXITS: ExitRow[] = [[0, 'nothing found'], [1, 'a defect was found'], [2, 'a usage error, or a target that would not load']]
@@ -21,8 +21,9 @@ const EXITS: ExitRow[] = [[0, 'nothing found'], [1, 'a defect was found'], [2, '
 const USAGE = `page check <file|url>...
 
 Opens each HTML file or URL in a local Chromium at every width, writes a full-page PNG per width (next to a file as <name>-<width>.png, into --out, or the cache folder for a URL) and prints its path, then one line per defect: <target> <width>px <kind> <selector>: <measure>.
-Kinds: overflow (the page scrolls sideways; the elements where it starts), console (errors and uncaught exceptions), request (failed, or answered 4xx/5xx), font (text drawn in another font than its stack asks for, naming the one drawn), tap-target (under 44px below ${PHONE_WIDTH}px wide, under 24px otherwise; a link inside a sentence is exempt), padding (text touching the border or background edge of its box), image (did not load), layout-shift (a score above 0.1).
-It never starts or builds an app: give it a file or a URL already served. Chromium comes from PAGE_CHROMIUM, ~/.cache/ms-playwright or /usr/bin, never downloaded.
+Kinds: redirect (the page landed elsewhere, a login page say, so what follows is about that page), overflow (the page scrolls sideways; the elements where it starts), console (errors and uncaught exceptions), request (failed, or answered 4xx/5xx), font (text drawn in another font than its stack asks for, naming the one drawn), tap-target (under 44px below ${PHONE_WIDTH}px wide, under 24px otherwise; a link inside a sentence is exempt), padding (text touching the border or background edge of its box), image (did not load), layout-shift (a score above 0.1).
+It never starts or builds an app: give it a file or a URL already served. A page behind a login takes --cookie, -H or --storage-state; a header goes to the target's origin alone.
+Chromium comes from PAGE_CHROMIUM, ~/.cache/ms-playwright or /usr/bin, never downloaded.
 
 Exits 0 when nothing is found, 1 when something is, 2 on a usage error or when a target would not load.`
 
@@ -30,6 +31,7 @@ const OPTIONS = {
   widths: { type: 'string', short: 'w', description: 'viewport widths, comma separated (1440,400)' },
   out: { type: 'string', short: 'o', description: 'folder the PNGs go to instead of next to each file' },
   skip: { type: 'string', description: `kinds left out, comma separated: ${KINDS.join(', ')}` },
+  ...SESSION_OPTIONS,
   json: jsonOption('{shots: [{target, width, path}], findings: [{target, width, kind, selector, message}], failed: [{target, error}]}'),
 } as const
 
@@ -61,7 +63,7 @@ export async function check(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, {
     positionals: ['<file|url>...'],
     exits: EXITS,
-    examples: [['page check mockup.html', 'mockup-1440.png and mockup-400.png beside it, then the defects'], 'page check http://localhost:5173/settings -w 1280,768,375 -o shots', 'page check index.html --skip font,padding --json'],
+    examples: [['page check mockup.html', 'mockup-1440.png and mockup-400.png beside it, then the defects'], ['page check http://localhost:5173/settings --cookie session=<value>', 'a page behind a login'], 'page check http://localhost:5173/settings -w 1280,768,375 -o shots', 'page check index.html --skip font,padding --json'],
   })
   const widths = widthsOf(values.widths)
   const skipped = new Set(values.skip?.split(',').map(kind => kind.trim()) ?? [])
@@ -71,6 +73,7 @@ export async function check(args: string[]): Promise<number> {
     badUsage(`--skip takes ${KINDS.join(', ')}, not ${unknown}`)
 
   const targets = positionals.map(given => targetOf(given, values.out))
+  const session = sessionOf(values)
   const shots: Shot[] = []
   const findings: Finding[] = []
   const failed: { target: string, error: string }[] = []
@@ -86,7 +89,7 @@ export async function check(args: string[]): Promise<number> {
         let loaded
 
         try {
-          loaded = await open(browser, target.url, width, async (page) => {
+          loaded = await open(browser, target.url, width, session, async (page) => {
             listen(page, heard)
             await beforeLoad(page, 'measure', 'watchShifts')
           })
@@ -99,7 +102,12 @@ export async function check(args: string[]): Promise<number> {
           break
         }
 
-        const { context, page } = loaded
+        const { context, page, landed } = loaded
+        const redirect = redirectedTo(target.url, landed)
+
+        if (redirect !== undefined)
+          heard.unshift({ kind: 'redirect', message: `landed on ${shortUrl(redirect)}` })
+
         const file = `${target.stem}-${width}.png`
 
         mkdirSync(dirname(file), { recursive: true })
