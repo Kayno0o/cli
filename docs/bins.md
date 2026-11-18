@@ -403,7 +403,7 @@ out --stats --since 7d  # the tokens saved this week
 
 ## page
 
-shoots HTML files or URLs at several widths in a local Chromium and reports their layout defects one line each, or diffs a built page against its mockup. Package `page`.
+shoots HTML files or URLs at several widths in a local Chromium and reports their layout defects one line each, or diffs a built page against its mockup, by pixel or by what moved. Package `page`.
 
 Instead of: reading screenshots by eye for overflow, squashed controls and fallback fonts, and one-off Playwright scripts shooting a page
 
@@ -412,6 +412,7 @@ page <command> [options]
 page check mockup.html  # PNGs at 1440 and 400px, then one line per defect
 page check http://localhost:5173/ -w 1280,375
 page diff mockup.html http://localhost:5173/  # side-by-side and pixel-diff PNGs, differing regions boxed
+page shift before.html after.html  # what moved or resized, one line per cause
 ```
 
 ## pick

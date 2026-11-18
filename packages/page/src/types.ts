@@ -18,6 +18,24 @@ export interface FontSample {
   count: number
 }
 
+export interface LayoutBox {
+  // Index of the nearest ancestor drawn, -1 for the root.
+  parent: number
+  id: string
+  selector: string
+  tag: string
+  // Its accessible name or short text, '' when it has neither.
+  label: string
+  // Its border box in page coordinates.
+  x: number
+  y: number
+  width: number
+  height: number
+  // Top, right, bottom and left, in px.
+  padding: number[]
+  border: number[]
+}
+
 export interface Region {
   x: number
   y: number

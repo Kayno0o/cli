@@ -12,6 +12,7 @@ bun install -g @kaynooo/cli-page
 | --- | --- |
 | `page check <file\|url>...` | shoots each target full-page at every width, prints the PNG paths, then one `<target> <width>px <kind> <selector>: <measure>` line per defect |
 | `page diff <mockup> <built>` | shoots both at every width and writes `<name>-side-<width>.png` (mockup left, built right) and `<name>-diff-<width>.png` (built faded, differing pixels red), the differing regions boxed and numbered on both and printed one line each |
+| `page shift <before> <after>` | pairs both pages' elements at every width and prints one line per cause of a change, `<after> <width>px <kind> <selector>: <change>, pushing <n> elements` |
 
 Targets are HTML files or URLs already served: `page` never starts or builds an app. The widths are 1440 and 400 unless `-w 1280,768,375` says otherwise. PNGs go next to a file, into `-o <dir>`, or under `~/.cache/kaynooo-page` for a URL.
 
@@ -30,6 +31,8 @@ What `check` reports:
 
 `--skip font,padding` leaves kinds out, `--json` prints `{shots, findings, failed}`. `diff` counts a pixel as different when a channel moves by more than `--threshold` (32 of 255) and ignores a lone differing pixel in an 8px cell.
 
+What `shift` reports: `resized` with both sizes, `padding` (padding or border changed, size kept), `moved` (a margin say), `added` and `removed`. An element keeping its offset from its parent's content box or its gap to its previous sibling was pushed, so it gets no line and counts in the cause it follows; neither does a box resized by what changed inside it, or one whose width follows its parent's. A header grown 10px is one line, not one per element below it. Elements pair by id, then by tag with their text or accessible name, then by that text alone, when unique on both pages, then by tag in order under parents already paired: two builds of one page pair throughout, and a mockup against the built app pairs on its headings, labels and buttons, the rest showing up as added and removed.
+
 Chromium is never downloaded: `PAGE_CHROMIUM` when set, else the newest full build under `~/.cache/ms-playwright` (then its headless shell, which resolves fonts unlike a desktop browser), else `/usr/bin/chromium`, `chromium-browser`, `google-chrome-stable` or `brave`.
 
-Both commands exit 0 when nothing is found and 1 when something is; `check` exits 2 on a usage error or a target that would not load, `diff` 1 on a page that would not load and 2 on a usage error.
+Both commands exit 0 when nothing is found and 1 when something is; `check` exits 2 on a usage error or a target that would not load, `diff` and `shift` 1 on a page that would not load and 2 on a usage error.

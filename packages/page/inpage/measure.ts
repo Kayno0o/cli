@@ -1,9 +1,13 @@
-import type { DomFinding, FontSample } from '../src/types'
+import type { DomFinding, FontSample, LayoutBox } from '../src/types'
 
 // Runs in the page: src/inpage.ts sends this file's transpiled source with a call to one of its exports, so it may import types alone.
 
 const NUMBERS = /[\d.]+/g
 const NOT_SPACE = /\S/
+const SPACES = /\s+/g
+// Longer text no longer names one element, a section holding a whole paragraph say.
+const LABEL_CAP = 80
+const UNBOXED = new Set(['head', 'script', 'style', 'noscript', 'template'])
 
 interface ShiftState {
   score: number
@@ -333,4 +337,57 @@ export async function fontsReady(): Promise<void> {
 export function unmarkFontSamples(mark: string): void {
   for (const element of document.querySelectorAll(`[${mark}]`))
     element.removeAttribute(mark)
+}
+
+// The accessible name or the text an element shows, when short enough to tell it from the others.
+function labelOf(element: Element): string {
+  const named = element.getAttribute('aria-label') ?? element.getAttribute('alt') ?? element.getAttribute('title') ?? element.getAttribute('placeholder')
+  const text = (named ?? element.textContent ?? '').replace(SPACES, ' ').trim()
+
+  return text.length <= LABEL_CAP ? text : ''
+}
+
+/** Every element drawn with a box, parents before children, its parent being the nearest one drawn; an svg is one box. */
+export function layoutBoxes(): LayoutBox[] {
+  const boxes: LayoutBox[] = []
+  const round = (value: number): number => Math.round(value * 100) / 100
+
+  const walk = (element: Element, parent: number): void => {
+    const tag = element.localName
+
+    if (UNBOXED.has(tag))
+      return
+
+    let own = parent
+
+    if (visible(element)) {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      const sides = ['top', 'right', 'bottom', 'left']
+
+      own = boxes.length
+      boxes.push({
+        parent,
+        id: element.id,
+        selector: describe(element),
+        tag,
+        label: labelOf(element),
+        x: round(rect.left + scrollX),
+        y: round(rect.top + scrollY),
+        width: round(rect.width),
+        height: round(rect.height),
+        padding: sides.map(side => round(Number.parseFloat(style.getPropertyValue(`padding-${side}`)))),
+        border: sides.map(side => round(Number.parseFloat(style.getPropertyValue(`border-${side}-width`)))),
+      })
+    }
+
+    if (tag !== 'svg') {
+      for (const child of element.children)
+        walk(child, own)
+    }
+  }
+
+  walk(document.documentElement, -1)
+
+  return boxes
 }
