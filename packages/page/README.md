@@ -33,6 +33,7 @@ What `check` reports:
 - `overlap`: text drawn over other text with nothing opaque between them, naming both; a panel laid over text is fine.
 - `text-size`: text under 12px, and below 600px wide a form field under 16px, which iOS zooms in on when it takes focus.
 - `stretch`: a raster image drawn at another aspect ratio than its file while `object-fit` stays `fill`; an svg letterboxes instead and is left out.
+- `double-border`: a border drawn against its container's or the next sibling's in the same colour with nothing between, a table's border flush with its card's say; a -1px margin laying one over the other, a collapsed table and an accent against a hairline are left out.
 - `image`: an image that finished loading with nothing to draw. `layout-shift`: a cumulative layout shift score above 0.1, naming the element that moved most.
 
 `--skip font,padding` leaves kinds out, `--json` prints `{shots, findings, failed}`. `diff` counts a pixel as different when a channel moves by more than `--threshold` (32 of 255) and ignores a lone differing pixel in an 8px cell.

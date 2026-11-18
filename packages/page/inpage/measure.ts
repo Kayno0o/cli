@@ -365,7 +365,7 @@ export function measureDom(phone: boolean): DomFinding[] {
     }
   }
 
-  findings.push(...clippedText(range), ...overlappingText(range), ...smallText(phone), ...stretchedImages())
+  findings.push(...clippedText(range), ...overlappingText(range), ...smallText(phone), ...stretchedImages(), ...doubleBorders())
 
   // Images that finished loading with nothing to draw.
   for (const image of document.images) {
@@ -609,6 +609,96 @@ function stretchedImages(): DomFinding[] {
     // A pixel of rounding moves the ratio of a small image, so a few percent are let through.
     if (Math.abs(drawn - file) / file > 0.03)
       findings.push({ kind: 'stretch', selector: describe(image), message: `drawn ${Math.round(width)}×${Math.round(height)}px, the file is ${image.naturalWidth}×${image.naturalHeight}: stretched` })
+  }
+
+  return findings
+}
+
+const SIDES = ['top', 'right', 'bottom', 'left'] as const
+const OPPOSITE = { top: 'bottom', right: 'left', bottom: 'top', left: 'right' } as const
+// Borders this far apart or closer draw one thick line; one laid over the other by a -1px margin draws a single line.
+const TOUCHING = 1
+const MERGED = -0.5
+
+type Side = typeof SIDES[number]
+
+// The sides on which an element draws a border line.
+function borderSides(element: Element): Side[] {
+  const style = getComputedStyle(element)
+
+  return SIDES.filter(side => Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) > 0 && !['none', 'hidden'].includes(style.getPropertyValue(`border-${side}-style`)) && alpha(style.getPropertyValue(`border-${side}-color`)) > 0)
+}
+
+// Two borders of one colour read as one thick line; an accent against a hairline, a selected tab's say, is drawn on purpose.
+function sameColour(a: Element, aSide: Side, b: Element, bSide: Side): boolean {
+  const channels = (element: Element, side: Side): number[] => (getComputedStyle(element).getPropertyValue(`border-${side}-color`).match(NUMBERS) ?? []).map(Number)
+  const [x, y] = [channels(a, aSide), channels(b, bSide)]
+
+  return x.slice(0, 3).every((value, i) => Math.abs(value - (y[i] ?? 0)) <= 32)
+}
+
+// How far apart two edges facing the same way are, inward from `side`.
+function gapInward(side: Side, outer: number, inner: number): number {
+  return side === 'top' || side === 'left' ? inner - outer : outer - inner
+}
+
+function joinSides(sides: Side[]): string {
+  return sides.length === 1 ? sides[0]! : `${sides.slice(0, -1).join(', ')} and ${sides.at(-1)}`
+}
+
+// Parts of one collapsed table share their borders, drawn once.
+function collapsedTogether(a: Element, b: Element): boolean {
+  const table = a.closest('table')
+
+  return table !== null && table === (b.closest('table') ?? (b.tagName === 'TABLE' ? b : null)) && getComputedStyle(table).borderCollapse === 'collapse'
+}
+
+// Double-border: a border drawn against its container's or the next sibling's in the same colour, nothing between, so the eye reads one thick line.
+function doubleBorders(): DomFinding[] {
+  const findings: DomFinding[] = []
+
+  for (const element of document.body.querySelectorAll('*')) {
+    const own = borderSides(element)
+
+    if (own.length === 0 || !visible(element))
+      continue
+
+    const rect = element.getBoundingClientRect()
+    let container = element.parentElement
+
+    while (container !== null && container !== document.body && borderSides(container).length === 0)
+      container = container.parentElement
+
+    if (container !== null && container !== document.body && !collapsedTogether(element, container)) {
+      const outer = container.getBoundingClientRect()
+      const style = getComputedStyle(container)
+      const inner = { top: outer.top + Number.parseFloat(style.borderTopWidth), right: outer.right - Number.parseFloat(style.borderRightWidth), bottom: outer.bottom - Number.parseFloat(style.borderBottomWidth), left: outer.left + Number.parseFloat(style.borderLeftWidth) }
+      const theirs = borderSides(container)
+      const sides = own.filter((side) => {
+        const gap = gapInward(side, inner[side], rect[side])
+
+        return theirs.includes(side) && gap > MERGED && gap <= TOUCHING && sameColour(element, side, container, side)
+      })
+
+      if (sides.length > 0)
+        findings.push({ kind: 'double-border', selector: describe(element), message: `its ${joinSides(sides)} border ${sides.length === 1 ? 'sits' : 'sit'} against ${describe(container)}'s, nothing between` })
+    }
+
+    const next = element.nextElementSibling
+
+    if (next === null || !visible(next) || collapsedTogether(element, next))
+      continue
+
+    const after = next.getBoundingClientRect()
+    const theirs = borderSides(next)
+
+    for (const side of ['bottom', 'right'] as const) {
+      const gap = side === 'bottom' ? after.top - rect.bottom : after.left - rect.right
+      const along = side === 'bottom' ? Math.min(rect.right, after.right) - Math.max(rect.left, after.left) : Math.min(rect.bottom, after.bottom) - Math.max(rect.top, after.top)
+
+      if (own.includes(side) && theirs.includes(OPPOSITE[side]) && gap > MERGED && gap <= TOUCHING && along > 0 && sameColour(element, side, next, OPPOSITE[side]))
+        findings.push({ kind: 'double-border', selector: describe(element), message: `its ${side} border sits against the ${OPPOSITE[side]} border of the next ${describe(next)}` })
+    }
   }
 
   return findings

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const FIXTURES = new URL('fixtures/', import.meta.url).pathname
-const KINDS = ['overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'clip', 'spill', 'overlap', 'text-size', 'stretch', 'image', 'layout-shift']
+const KINDS = ['overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'clip', 'spill', 'overlap', 'text-size', 'stretch', 'double-border', 'image', 'layout-shift']
 const temp = tempDirs()
 
 interface Report {
@@ -106,6 +106,10 @@ describe('page check', () => {
 
   test('an image drawn at another aspect ratio than its file, not one scaled or covered', () => {
     expect(lines('stretch.html')).toEqual(['1440 stretch img.hero: drawn 100×100px, the file is 40×20: stretched', '400 stretch img.hero: drawn 100×100px, the file is 40×20: stretched'])
+  })
+
+  test('a border drawn against another with nothing between, not one padded, merged by a negative margin or collapsed', () => {
+    expect(lines('double-border.html')).toEqual(['1440 double-border table.grid: its top, right, bottom and left border sit against div.card\'s, nothing between', '1440 double-border li.row: its bottom border sits against the top border of the next li.row', '400 double-border table.grid: its top, right, bottom and left border sit against div.card\'s, nothing between', '400 double-border li.row: its bottom border sits against the top border of the next li.row'])
   })
 
   test('an image that did not load', () => {
