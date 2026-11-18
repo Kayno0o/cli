@@ -34,7 +34,7 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist --external playwright-core",
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist --external playwright-core && $npm_execpath ../../scripts/shell-shebang.ts",
     "page": "$npm_execpath src/cli.ts"
   },
   "dependencies": {

@@ -33,7 +33,7 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist",
+    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
     "src": "$npm_execpath src/cli.ts"
   },
   "dependencies": {

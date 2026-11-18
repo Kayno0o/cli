@@ -27,7 +27,7 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "rm -rf dist && $npm_execpath build src/cli.ts --target bun --splitting --outdir dist",
+    "build": "rm -rf dist && $npm_execpath build src/cli.ts --target bun --splitting --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
     "wt": "$npm_execpath src/cli.ts"
   },
   "dependencies": {

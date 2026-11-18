@@ -44,7 +44,7 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/gst.ts src/gc.ts src/gb.ts src/gp.ts src/gf.ts src/gm.ts src/gcl.ts src/gd.ts src/gu.ts --root src --target bun --outdir dist",
+    "build": "$npm_execpath build src/gst.ts src/gc.ts src/gb.ts src/gp.ts src/gf.ts src/gm.ts src/gcl.ts src/gd.ts src/gu.ts --root src --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
     "gst": "$npm_execpath src/gst.ts",
     "gc": "$npm_execpath src/gc.ts",
     "gb": "$npm_execpath src/gb.ts",

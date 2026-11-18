@@ -1,7 +1,8 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
+import { shellShebang } from '../scripts/shell-shebang'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const SHEBANG = /^#!\/usr\/bin\/env -S bun(?: --no-env-file)? --config=\/dev\/null$/
@@ -48,4 +49,32 @@ describe('a bin does not load the cwd bunfig.toml', () => {
 
     expect(run.stdout.toString().trim()).toBe('ran')
   })
+})
+
+// BusyBox env, the Alpine CI image's, has no -S, so a built bin starts through sh instead (#339).
+describe('a built bin starts on a plain sh', () => {
+  test('the env shebang becomes sh handing the file to Bun with its flags, on Bun\'s own pragma line when the build wrote one', () => {
+    expect(shellShebang('#!/usr/bin/env -S bun --no-env-file --config=/dev/null\n// @bun\nconsole.log(1)\n')).toBe('#!/bin/sh\n// @bun 2>/dev/null; exec bun --no-env-file --config=/dev/null "$0" "$@"\nconsole.log(1)\n')
+    expect(shellShebang('#!/usr/bin/env -S bun --config=/dev/null\nconsole.log(1)\n')).toBe('#!/bin/sh\n// 2>/dev/null; exec bun --config=/dev/null "$0" "$@"\nconsole.log(1)\n')
+    expect(shellShebang('// a chunk\nexport {}\n')).toBeUndefined()
+  })
+
+
+  test('a built slot run by its path ignores the cwd bunfig.toml and passes its arguments as given', () => {
+    const out = mkdtempSync(join(tmpdir(), 'kaynooo-cli-bin-'))
+
+    try {
+      expect(Bun.spawnSync([process.execPath, 'build', `${ROOT}packages/wait/src/slot-cli.ts`, '--target', 'bun', '--outdir', out]).exitCode).toBe(0)
+      expect(Bun.spawnSync([process.execPath, `${ROOT}scripts/shell-shebang.ts`, out]).exitCode).toBe(0)
+      chmodSync(join(out, 'slot-cli.js'), 0o755)
+      writeFileSync(join(folder, 'bunfig.toml'), 'preload = ["./missing-plugin.ts"]\n')
+
+      const run = Bun.spawnSync([join(out, 'slot-cli.js'), '--', 'printf', '[%s]', 'a b', '$HOME'], { cwd: folder, stdout: 'pipe', stderr: 'pipe' })
+
+      expect({ out: run.stdout.toString(), err: run.stderr.toString() }).toEqual({ out: '[a b][$HOME]', err: '' })
+    }
+    finally {
+      rmSync(out, { recursive: true, force: true })
+    }
+  }, 30_000)
 })

@@ -25,7 +25,7 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/proc-cli.ts --target bun --outdir dist",
+    "build": "$npm_execpath build src/proc-cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
     "proc": "$npm_execpath src/proc-cli.ts"
   },
   "devDependencies": {

@@ -31,7 +31,7 @@
     "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
-    "build": "$npm_execpath build src/pick.ts --target bun --outdir dist",
+    "build": "$npm_execpath build src/pick.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
     "pick": "$npm_execpath src/pick.ts"
   },
   "devDependencies": {
