@@ -3,13 +3,15 @@ import { existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { badUsage, cacheFolder, fail } from '@kaynooo/cli-kit'
 import { inPage } from './inpage'
 
 const HTTP_URL = /^https?:\/\//
 const HEADER_LINE = /^[\w!#$%&'*+.^`|~-]+:/
 const HTML_EXT = /\.html?$/
+const FILE_URL = /^file:\/\//
+const FRAGMENT = /#[^/]*$/
 const UNSAFE = /[^\w.-]+/g
 const EDGE_DASHES = /^-+|-+$/g
 
@@ -73,14 +75,17 @@ export function targetOf(given: string, out: string | undefined): Target {
     return { label: given, url: given, stem: join(out ?? join(cacheFolder(), 'kaynooo-page'), name) }
   }
 
-  const path = resolve(given)
+  // A file:// URL or a path may end on a #fragment, kept for the page to scroll to.
+  const url = FILE_URL.test(given) ? new URL(given) : undefined
+  const fragment = url?.hash ?? (existsSync(resolve(given)) ? '' : FRAGMENT.exec(given)?.[0] ?? '')
+  const path = url === undefined ? resolve(given.slice(0, given.length - fragment.length)) : fileURLToPath(url)
 
   if (!existsSync(path))
     fail(`${given} does not exist`)
 
   const name = basename(path).replace(HTML_EXT, '')
 
-  return { label: given, url: pathToFileURL(path).href, stem: join(out === undefined ? dirname(path) : resolve(out), name) }
+  return { label: given, url: `${pathToFileURL(path).href}${fragment}`, stem: join(out === undefined ? dirname(path) : resolve(out), name) }
 }
 
 // The options letting a page behind a login be checked, shared by both commands.

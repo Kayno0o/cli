@@ -14,7 +14,7 @@ bun install -g @kaynooo/cli-page
 | `page diff <mockup> <built>` | shoots both at every width and writes `<name>-side-<width>.png` (mockup left, built right) and `<name>-diff-<width>.png` (built faded, differing pixels red), the differing regions boxed and numbered on both and printed one line each |
 | `page shift <before> <after>` | pairs both pages' elements at every width and prints one line per cause of a change, `<after> <width>px <kind> <selector>: <change>, pushing <n> elements` |
 
-Targets are HTML files or URLs already served: `page` never starts or builds an app. The widths are 1440 and 400 unless `-w 1280,768,375` says otherwise. PNGs go next to a file, into `-o <dir>`, or under `~/.cache/kaynooo-page` for a URL.
+Targets are HTML files (a path or a `file://` URL, `#fragment` kept) or URLs already served: `page` never starts or builds an app. The widths are 1440 and 400 unless `-w 1280,768,375` says otherwise. PNGs go next to a file, into `-o <dir>`, or under `~/.cache/kaynooo-page` for a URL.
 
 A page behind a login takes `--cookie name=value`, `-H "Authorization: Bearer <token>"` (sent to the target's origin only, never to the third-party scripts and fonts it loads) or `--storage-state <file>`, a Playwright storage state with cookies and localStorage. Both commands take them; a malformed value is refused without being echoed.
 
