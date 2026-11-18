@@ -28,7 +28,7 @@ describe('page check', () => {
 
   // One run over every fixture, starting Chromium being the slow part.
   beforeAll(async () => {
-    const run = await page(['check', 'clean.html', ...KINDS.map(kind => `${kind}.html`), '-o', out, '--json'])
+    const run = await page(['check', 'clean.html', 'webfont.html', ...KINDS.map(kind => `${kind}.html`), '-o', out, '--json'])
 
     code = run.code
     report = JSON.parse(run.out) as Report
@@ -66,6 +66,10 @@ describe('page check', () => {
 
     expect(rest).toEqual([])
     expect(line).toMatch(/^1440 font p\.lead: font-family "No Such Font Zz", monospace drawn in .+: No Such Font Zz is not available$/)
+  })
+
+  test('a web font whose face is named for its weight, and an element drawn in it holding a child in another font, are no fallback', () => {
+    expect(lines('webfont.html')).toEqual([])
   })
 
   test('text under WCAG AA contrast, once for every width', () => {

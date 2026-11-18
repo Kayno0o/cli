@@ -8,6 +8,13 @@ describe('fallbackOf', () => {
     expect(fallbackOf('"Segoe UI", Arial, sans-serif', 'arial', false)).toBeUndefined()
   })
 
+  test('a face named for its weight, or a web font named otherwise than its @font-face family, is the family asked for', () => {
+    expect(fallbackOf('"IBM Plex Mono", monospace', 'IBM Plex Mono Medium', true)).toBeUndefined()
+    expect(fallbackOf('Brand, sans-serif', 'IBM Plex Sans', false, new Set(['brand']))).toBeUndefined()
+    expect(fallbackOf('Brand, sans-serif', 'DejaVu Sans', false)).toBe('Brand is not available')
+    expect(fallbackOf('"IBM Plex", sans-serif', 'IBM Plexus', false)).toBe('IBM Plex is not available')
+  })
+
   test('a generic stack is fine unless it draws monospace text it did not ask for', () => {
     expect(fallbackOf('system-ui, -apple-system, "Segoe UI", sans-serif', 'Adwaita Mono', true)).toBe('system-ui resolves to a monospace font')
     expect(fallbackOf('system-ui, sans-serif', 'Adwaita Sans', false)).toBeUndefined()

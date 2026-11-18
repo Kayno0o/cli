@@ -5,6 +5,7 @@ import type { DomFinding, FontSample, LayoutBox } from '../src/types'
 const NUMBERS = /[\d.]+/g
 const NOT_SPACE = /\S/
 const SPACES = /\s+/g
+const QUOTES = /^["']|["']$/g
 const WORDS = /\S{2,}/g
 const WORD_CHAR = /[\p{L}\p{N}]/u
 // Past this a word is shown cut, pieces and all.
@@ -641,6 +642,11 @@ export function markFontSamples({ mark, perStyle, max }: { mark: string, perStyl
   }
 
   return samples.map(sample => ({ ...sample, count: counts.get(sample.style) ?? 1 }))
+}
+
+// The families of the web fonts the page loaded, lowercase and unquoted.
+export function loadedWebFonts(): string[] {
+  return [...document.fonts].filter(face => face.status === 'loaded').map(face => face.family.replace(QUOTES, '').toLowerCase())
 }
 
 // Whether the browser draws `family` with every glyph the same width.
