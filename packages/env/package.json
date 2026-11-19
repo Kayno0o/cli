@@ -27,9 +27,6 @@
   "engines": {
     "bun": ">=1.4.3"
   },
-  "publishConfig": {
-    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
-  },
   "scripts": {
     "build": "$npm_execpath build src/ev.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
     "ev": "$npm_execpath src/ev.ts"

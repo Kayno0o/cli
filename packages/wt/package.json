@@ -5,13 +5,13 @@
   "description": "wt: git worktrees of a compose project, each with its own stack, data and <task>.<host> subdomains beside main.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
-  "homepage": "https://git.kaynooo.fr/kaynooo/cli/src/branch/main/packages/wt#readme",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/wt#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://git.kaynooo.fr/kaynooo/cli.git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
     "directory": "packages/wt"
   },
-  "bugs": "https://git.kaynooo.fr/kaynooo/cli/issues",
+  "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": ["git", "worktree", "docker", "compose", "devproxy", "cli", "bun"],
   "exports": {
     ".": "./src/index.ts"
@@ -22,9 +22,6 @@
   "files": ["dist", "src"],
   "engines": {
     "bun": ">=1.4.3"
-  },
-  "publishConfig": {
-    "registry": "https://git.kaynooo.fr/api/packages/kaynooo/npm/"
   },
   "scripts": {
     "build": "rm -rf dist && $npm_execpath build src/cli.ts --target bun --splitting --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
