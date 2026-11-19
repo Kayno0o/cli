@@ -219,7 +219,7 @@
     },
     "packages/kit": {
       "name": "@kaynooo/cli-kit",
-      "version": "0.47.1",
+      "version": "0.48.0",
       "dependencies": {
         "@kaynooo/utils": "3.1.0",
         "@xterm/headless": "6.0.0",
