@@ -69,7 +69,7 @@ export function linkFromMain(worktree: Worktree): void {
 
 const WILDCARD_LABEL = /^\*\./
 
-// Main hosts become the worktree's; the lookbehind keeps api.booki.localhost whole and makes a second pass a no-op.
+// Main hosts become the worktree's; the lookbehind keeps api.shop.localhost whole and makes a second pass a no-op.
 export function rewriteHosts(text: string, routes: Route[], task: string): string {
   const hosts = [...new Set(routes.map(route => route.host.replace(WILDCARD_LABEL, '')))].sort((a, b) => b.length - a.length)
 

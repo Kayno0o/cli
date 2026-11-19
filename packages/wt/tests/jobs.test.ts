@@ -6,7 +6,7 @@ import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { dropStaleGuard, HELD_ENV, Jobs, logTail } from '../src/jobs'
 
 const scratch = mkdtempSync(join(tmpdir(), 'wt-jobs-'))
-const stack = { ref: 'booki/planning', slug: 'booki--planning' }
+const stack = { ref: 'shop/planning', slug: 'shop--planning' }
 const DEAD_PID = '999999999'
 
 let count = 0
@@ -23,7 +23,7 @@ describe('Jobs', () => {
     const jobs = jobsIn()
     const job = jobs.claim(stack, 'up', false)
 
-    expect(() => jobs.claim(stack, 'down', false)).toThrow('booki/planning is already coming up')
+    expect(() => jobs.claim(stack, 'down', false)).toThrow('shop/planning is already coming up')
     expect(jobs.states().get(stack.slug)?.running?.verb).toBe('up')
 
     jobs.finish(stack, job, 1)
@@ -93,7 +93,7 @@ describe('Jobs', () => {
     writeFileSync(lock, DEAD_PID)
     writeFileSync(`${lock}.takeover`, '')
 
-    expect(() => jobs.claim(stack, 'up', false)).toThrow('booki/planning is already coming up')
+    expect(() => jobs.claim(stack, 'up', false)).toThrow('shop/planning is already coming up')
   })
 
   test('takes an abandoned lock over past a takeover whose claimer died in it', () => {
@@ -212,9 +212,9 @@ describe('Jobs', () => {
 
     jobs.claim(stack, 'panes', false, 'php')
 
-    expect(() => jobs.claim(stack, 'up', false)).toThrow('booki/planning is already busy with panes php')
+    expect(() => jobs.claim(stack, 'up', false)).toThrow('shop/planning is already busy with panes php')
     expect(jobs.states().get(stack.slug)?.running).toMatchObject({ verb: 'panes', service: 'php' })
-    expect(jobs.what({ verb: 'restart', ref: 'booki', service: 'php' })).toBe('test restart booki php')
+    expect(jobs.what({ verb: 'restart', ref: 'shop', service: 'php' })).toBe('test restart shop php')
   })
 
   test('takes the words of another tool\'s verbs from its caller', () => {
@@ -222,7 +222,7 @@ describe('Jobs', () => {
 
     jobs.claim(stack, 'restart', false)
 
-    expect(() => jobs.claim(stack, 'up', false)).toThrow('booki/planning is already restarting')
+    expect(() => jobs.claim(stack, 'up', false)).toThrow('shop/planning is already restarting')
   })
 })
 

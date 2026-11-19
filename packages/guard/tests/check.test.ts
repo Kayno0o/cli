@@ -101,8 +101,8 @@ describe('SQL', () => {
     'php artisan migrate',
     'dropdb app',
     // leaving the shot stack again, or a directory merely named like it, is no shot stack
-    'cd ~/w/.worktrees/booki-docker/shot && cd ~/w/booki-docker && docker compose exec db psql -c "DELETE FROM t"',
-    'cd ~/w/.worktrees/booki-docker/screenshot && psql app -c "DELETE FROM t"',
+    'cd ~/w/.worktrees/shop-docker/shot && cd ~/w/shop-docker && docker compose exec db psql -c "DELETE FROM t"',
+    'cd ~/w/.worktrees/shop-docker/screenshot && psql app -c "DELETE FROM t"',
     // writes a quote, a DO body or a MySQL version comment would hide
     'psql app -c \'DO $$ BEGIN DELETE FROM t; END $$\'',
     'mysql app -e "SELECT 1 /*!50000 ; DROP TABLE t */"',
@@ -111,7 +111,7 @@ describe('SQL', () => {
   const allowed = [
     'docker compose exec db psql -U app -c "SELECT * FROM users WHERE status = \'deleted\'"',
     'psql app -c "SELECT created_at, updated_at FROM t"',
-    'psql booki_test -c "DELETE FROM users"',
+    'psql shop_test -c "DELETE FROM users"',
     'docker compose -f compose.test.yaml exec db psql -c "DROP TABLE x"',
     'docker compose exec php bin/console doctrine:migrations:migrate --env=test',
     'php bin/console doctrine:migrations:status',
@@ -126,9 +126,9 @@ describe('SQL', () => {
     'psql app -c \'\\copy t to x.csv\'',
     'mysql app -e "SELECT `drop` FROM t"',
     // the disposable shot stack git-diff captures on: its directory, compose project or container
-    'cd ~/w/.worktrees/booki-docker/shot && docker compose exec -T igesa-db psql -U booki booki -c "UPDATE booking SET x = 1"',
-    'docker compose --project-directory ~/w/.worktrees/booki-docker/shot exec db psql -c "DELETE FROM t"',
-    'docker exec booki-docker--shot-igesa-db-1 psql -U booki -c "DELETE FROM t"',
+    'cd ~/w/.worktrees/shop-docker/shot && docker compose exec -T acme-db psql -U shop shop -c "UPDATE booking SET x = 1"',
+    'docker compose --project-directory ~/w/.worktrees/shop-docker/shot exec db psql -c "DELETE FROM t"',
+    'docker exec shop-docker--shot-acme-db-1 psql -U shop -c "DELETE FROM t"',
   ]
 
   cases('sql', refused, allowed, { [`${REPO}/fix.sql`]: 'INSERT INTO t VALUES (1);' })

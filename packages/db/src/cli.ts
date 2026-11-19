@@ -11,7 +11,7 @@ process.exitCode = await runCli({
   name: 'db',
   about: 'read-only SQL against Postgres, MySQL and MariaDB, credentials never shown, writes only on a _test database',
   replaces: 'psql or mysql with the connection string on the command line, docker exec <container> psql -U ...',
-  examples: ['db "select count(*) from users"', ['db -c booki-db-1 "select count(*) from users"', 'a container outside the compose project'], ['db describe users', 'the columns, indexes and foreign keys of a table'], ['db search email', 'where a field lives'], ['db explain "select * from users where email = \'a\'"', 'the plan, nothing executed'], ['db --format csv "select id, email from users"', 'RFC 4180 CSV, or tsv or vertical']],
+  examples: ['db "select count(*) from users"', ['db -c shop-db-1 "select count(*) from users"', 'a container outside the compose project'], ['db describe users', 'the columns, indexes and foreign keys of a table'], ['db search email', 'where a field lives'], ['db explain "select * from users where email = \'a\'"', 'the plan, nothing executed'], ['db --format csv "select id, email from users"', 'RFC 4180 CSV, or tsv or vertical']],
   commands: {
     query: { run: query, summary: 'run one read-only statement (the default: db "<sql>"), a write runs on a _test database and is printed otherwise' },
     tables: { run: tables, summary: 'list tables and views with an estimated row count' },

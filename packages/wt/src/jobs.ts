@@ -61,7 +61,7 @@ export interface JobWords {
 const LEADING_ROOT = /^[/~]+/
 const UNSAFE_IN_FILE_NAME = /[^\w.-]+/g
 
-/** The name a stack's job files go by: `booki/planning` gives `booki--planning`, as other tools name them. */
+/** The name a stack's job files go by: `shop/planning` gives `shop--planning`, as other tools name them. */
 export function slugOf(ref: string): string {
   return ref.replace(LEADING_ROOT, '').replace(UNSAFE_IN_FILE_NAME, '--')
 }
@@ -475,7 +475,7 @@ export class Jobs {
     return job
   }
 
-  /** The command a job ran, as a notification title names it: "proj restart booki php". */
+  /** The command a job ran, as a notification title names it: "proj restart shop php". */
   what(job: Pick<Job, 'verb' | 'ref' | 'service'>): string {
     return [this.app, job.verb, job.ref, ...job.service !== undefined ? [job.service] : []].join(' ')
   }

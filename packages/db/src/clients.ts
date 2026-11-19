@@ -36,7 +36,7 @@ const ESCAPED = /\\([\s\S]?)/g
 const UNREAD_CONNINFO = 'a conninfo string not read to its end'
 // Console commands that write a schema or rows, Doctrine's and Laravel's.
 const WRITING_CONSOLE = /^(?:doctrine:(?:migrations:(?:migrate|execute|rollup)|schema:(?:update|create|drop)|database:(?:create|drop)|fixtures:load)|migrate(?::\w+)?|db:(?:seed|wipe))$/
-// A database, env file, compose file or service named for tests: `booki_test`, `.env.test`, `compose.test.yaml`, `-e test`, `APP_ENV=test`; "latest" is not one.
+// A database, env file, compose file or service named for tests: `shop_test`, `.env.test`, `compose.test.yaml`, `-e test`, `APP_ENV=test`; "latest" is not one.
 const TEST_SCOPED = /(?:^|[^a-z])test/i
 const ASSIGNMENT = /^([A-Z_]\w*)=/i
 // The variables that pick an environment or a database; `PGUSER=test_user` or `PGPASSWORD=test` pick neither.

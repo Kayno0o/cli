@@ -75,7 +75,7 @@ function optionsOf(command: Command): Option[] {
 
 const NAME_PARTS = /[-_]/
 
-/** The php service by name, `php` itself before `booki-php` or `dorad_php`, never `phpmyadmin`. */
+/** The php service by name, `php` itself before `shop-php` or `blog_php`, never `phpmyadmin`. */
 export function phpService(names: string[]): string | undefined {
   return names.find(name => name === 'php') ?? names.find(name => name.split(NAME_PARTS).includes('php'))
 }

@@ -41,15 +41,15 @@ One file per project in `~/.config/wt/projects/<name>.ts`, `wt init` writing a f
 import type { ProjectConfig } from '@kaynooo/cli-wt'
 
 export default {
-  root: '~/Workspace/times',
+  root: '~/Workspace/notes',
   repos: [],
   copy: ['.env', 'api/.env.local', '.docker/nginx/certs'],
   clone: ['mailpit'],
   certs: '.docker/nginx/certs',
   setup: ['docker compose exec -T api-php composer install'],
   routes: [
-    { host: 'times.localhost', to: 'client' },
-    { host: 'api.times.localhost', to: 'api-php:443', passthrough: true },
+    { host: 'notes.localhost', to: 'client' },
+    { host: 'api.notes.localhost', to: 'api-php:443', passthrough: true },
   ],
 } satisfies ProjectConfig
 ```

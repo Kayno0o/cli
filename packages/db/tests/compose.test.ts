@@ -20,7 +20,7 @@ const INSPECT = [
   { Id: 'aaa111ffff', Name: '/shop-shop-db-1', Config: { Env: ['POSTGRES_USER=ticketing', 'POSTGRES_PASSWORD=p@ss/word', 'POSTGRES_DB=ticketing', 'PG_MAJOR=17'] }, NetworkSettings: { Networks: { shop: { IPAddress: '172.30.0.5', Aliases: ['shop-db'], DNSNames: ['shop-shop-db-1', 'shop-db'] } } } },
   // A project image built FROM postgres keeps PG_MAJOR, and is reached on its network address when it publishes nothing.
   { Id: 'bbb222ffff', Name: '/shop-supervisor-db-1', Config: { Env: ['PG_MAJOR=17'] }, NetworkSettings: { Networks: { shop: { IPAddress: '172.30.0.9', Aliases: null, DNSNames: null } } } },
-  { Id: 'ccc333ffff', Name: '/dorad_db', Config: { Env: ['MARIADB_MAJOR=10.8'] }, NetworkSettings: { Networks: { dorad: { IPAddress: '172.31.0.2' } } } },
+  { Id: 'ccc333ffff', Name: '/blog_db', Config: { Env: ['MARIADB_MAJOR=10.8'] }, NetworkSettings: { Networks: { blog: { IPAddress: '172.31.0.2' } } } },
   { Id: 'ddd444ffff', Name: '/php', Config: { Env: ['PHP_VERSION=8.4'] }, NetworkSettings: { Networks: { shop: { IPAddress: '172.30.0.7' } } } },
 ]
 
@@ -75,17 +75,17 @@ describe('pickService', () => {
 describe('describeNamedContainer', () => {
   const container = {
     Id: 'eee555ffff',
-    Name: '/booki-docker--shot-igesa-db-1',
+    Name: '/shop-docker--shot-acme-db-1',
     State: { Running: true },
-    Config: { Image: 'postgres:17', Env: ['POSTGRES_USER=booki', 'POSTGRES_PASSWORD=s3cret-pw', 'POSTGRES_DB=booki_test'] },
+    Config: { Image: 'postgres:17', Env: ['POSTGRES_USER=shop', 'POSTGRES_PASSWORD=s3cret-pw', 'POSTGRES_DB=shop_test'] },
     NetworkSettings: { Networks: { shot: { IPAddress: '172.40.0.3' } }, Ports: { '5432/tcp': [{ HostIp: '0.0.0.0', HostPort: '45432' }, { HostIp: '::', HostPort: '45432' }], '8080/tcp': null } },
   }
 
   test('reads a container outside any compose project, reached on its published port', () => {
-    const service = describeNamedContainer('booki-docker--shot-igesa-db-1', [container])
+    const service = describeNamedContainer('shop-docker--shot-acme-db-1', [container])
 
-    expect(service).toMatchObject({ name: 'booki-docker--shot-igesa-db-1', engine: 'postgres', host: '127.0.0.1', port: 45432 })
-    expect(serviceUrl(service)).toBe('postgres://booki:s3cret-pw@127.0.0.1:45432/booki_test')
+    expect(service).toMatchObject({ name: 'shop-docker--shot-acme-db-1', engine: 'postgres', host: '127.0.0.1', port: 45432 })
+    expect(serviceUrl(service)).toBe('postgres://shop:s3cret-pw@127.0.0.1:45432/shop_test')
   })
 
   test('falls back on the network address when nothing is published', () => {
@@ -111,9 +111,9 @@ describe('serviceUrl for MySQL and MariaDB', () => {
   const base: Service = { name: 'db', engine: 'mysql', env: {}, names: ['db'], host: '127.0.0.1', port: 33060 }
 
   test('reads MYSQL_USER, MYSQL_PASSWORD and MYSQL_DATABASE', () => {
-    const url = new URL(serviceUrl({ ...base, env: { MYSQL_USER: 'battena', MYSQL_PASSWORD: 'p@ss', MYSQL_DATABASE: 'battena_test', MYSQL_ROOT_PASSWORD: 'rootpw' } }))
+    const url = new URL(serviceUrl({ ...base, env: { MYSQL_USER: 'forum', MYSQL_PASSWORD: 'p@ss', MYSQL_DATABASE: 'forum_test', MYSQL_ROOT_PASSWORD: 'rootpw' } }))
 
-    expect([url.protocol, url.username, decodeURIComponent(url.password), url.host, url.pathname]).toEqual(['mysql:', 'battena', 'p@ss', '127.0.0.1:33060', '/battena_test'])
+    expect([url.protocol, url.username, decodeURIComponent(url.password), url.host, url.pathname]).toEqual(['mysql:', 'forum', 'p@ss', '127.0.0.1:33060', '/forum_test'])
   })
 
   test('reads the MARIADB_ equivalents', () => {
@@ -167,10 +167,10 @@ describe('composeServices', () => {
   }
 
   test('looks a container up by name with docker inspect, a stub standing for docker', async () => {
-    const inspected = JSON.stringify([{ Id: 'abc', Name: '/booki-db-1', State: { Running: true }, Config: { Image: 'mariadb:11', Env: ['MARIADB_ROOT_PASSWORD=rootpw'] }, NetworkSettings: { Networks: {}, Ports: { '3306/tcp': [{ HostIp: '127.0.0.1', HostPort: '33061' }] } } }])
-    const script = `#!/bin/sh\ncase "$1 $2 $3 $4" in "inspect --type container --") [ "$5" = booki-db-1 ] && echo '${inspected}' ;; *) exit 1 ;; esac\n`
+    const inspected = JSON.stringify([{ Id: 'abc', Name: '/shop-db-1', State: { Running: true }, Config: { Image: 'mariadb:11', Env: ['MARIADB_ROOT_PASSWORD=rootpw'] }, NetworkSettings: { Networks: {}, Ports: { '3306/tcp': [{ HostIp: '127.0.0.1', HostPort: '33061' }] } } }])
+    const script = `#!/bin/sh\ncase "$1 $2 $3 $4" in "inspect --type container --") [ "$5" = shop-db-1 ] && echo '${inspected}' ;; *) exit 1 ;; esac\n`
 
-    expect(await listed(script, 'containerService("booki-db-1")')).toMatchObject({ name: 'booki-db-1', engine: 'mysql', host: '127.0.0.1', port: 33061 })
+    expect(await listed(script, 'containerService("shop-db-1")')).toMatchObject({ name: 'shop-db-1', engine: 'mysql', host: '127.0.0.1', port: 33061 })
   })
 
   test('reads output that is not JSON as no project', async () => {

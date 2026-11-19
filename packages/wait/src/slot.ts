@@ -23,7 +23,7 @@ const LS_USAGE = `slot ls [options]: lists the slots and locks held, with the se
 const SLOTS = { type: 'string', short: 'n', description: 'how many commands may hold a slot at once (half the CPU count)' } as const
 
 const RUN_OPTIONS = {
-  'lock': { type: 'string', short: 'l', multiple: true, description: 'a named lock to hold as well, for what must not run twice at once (booki-test-db)' },
+  'lock': { type: 'string', short: 'l', multiple: true, description: 'a named lock to hold as well, for what must not run twice at once (shop-test-db)' },
   'no-slot': { type: 'boolean', description: 'take the --lock alone, without a slot' },
   'slots': SLOTS,
   'timeout': { type: 'string', short: 't', description: 'how long to wait before giving up (30s, 5m, 1h, a bare number in seconds), forever by default' },
@@ -203,7 +203,7 @@ function withSeparator(args: string[]): string[] {
 
 export async function runSlotted(given: string[]): Promise<number> {
   const args = withSeparator(given)
-  const parsed = parse(args, RUN_USAGE, RUN_OPTIONS, { rest: true, exits: RUN_EXITS, replaces: 'flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database', examples: [['slot -- bunx vue-tsc', 'wait for a free slot, then type-check'], ['slot --lock booki-test-db -- vendor/bin/phpunit', 'one phpunit at a time on the shared test database'], 'slot ls'] })
+  const parsed = parse(args, RUN_USAGE, RUN_OPTIONS, { rest: true, exits: RUN_EXITS, replaces: 'flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database', examples: [['slot -- bunx vue-tsc', 'wait for a free slot, then type-check'], ['slot --lock shop-test-db -- vendor/bin/phpunit', 'one phpunit at a time on the shared test database'], 'slot ls'] })
   const { values, rest } = parsed
 
   if (rest === undefined || rest.length === 0)

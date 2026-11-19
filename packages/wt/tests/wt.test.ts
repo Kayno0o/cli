@@ -17,19 +17,19 @@ import { inLine, liveTickets } from '../src/queue'
 import { runInputs, runPlan, testDatabase } from '../src/run'
 
 const routes: Route[] = [
-  { host: 'booki.localhost', to: 'client' },
-  { host: 'api.booki.localhost', to: 'proxy-nginx:80' },
+  { host: 'shop.localhost', to: 'client' },
+  { host: 'api.shop.localhost', to: 'proxy-nginx:80' },
   { host: '*.client.localhost', to: 'nginx:443', passthrough: true },
 ]
 
-const project: Project = { name: 'booki', root: '/w/booki-docker', repos: [], skip: ['booki-client'], routeHosts: ['client'], routes, settings: resolveConfig({ overrides: '/o', state: '/s' }) }
+const project: Project = { name: 'shop', root: '/w/shop-docker', repos: [], skip: ['shop-client'], routeHosts: ['client'], routes, settings: resolveConfig({ overrides: '/o', state: '/s' }) }
 
 describe('wt init draft', () => {
   test('shortens a root under home to ~, and keeps one that only holds the home path further in', () => {
-    expect(fromHome('/home/me/Workspace/times', '/home/me')).toBe('~/Workspace/times')
+    expect(fromHome('/home/me/Workspace/notes', '/home/me')).toBe('~/Workspace/notes')
     expect(fromHome('/home/me', '/home/me')).toBe('~')
-    expect(fromHome('/mnt/home/me/times', '/home/me')).toBe('/mnt/home/me/times')
-    expect(fromHome('/home/meadow/times', '/home/me')).toBe('/home/meadow/times')
+    expect(fromHome('/mnt/home/me/notes', '/home/me')).toBe('/mnt/home/me/notes')
+    expect(fromHome('/home/meadow/notes', '/home/me')).toBe('/home/meadow/notes')
   })
 
   test('renders values holding quotes, backslashes and line breaks as a manifest that loads back to them', async () => {
@@ -58,20 +58,20 @@ describe('wt init draft', () => {
 
 describe('worktreeHost', () => {
   test('prefixes the task, keeping a wildcard leftmost', () => {
-    expect(worktreeHost('api.booki.localhost', 'planning')).toBe('planning.api.booki.localhost')
+    expect(worktreeHost('api.shop.localhost', 'planning')).toBe('planning.api.shop.localhost')
     expect(worktreeHost('*.client.localhost', 'planning')).toBe('*.planning.client.localhost')
   })
 })
 
 describe('rewriteHosts', () => {
   test('rewrites every main host once, the longest match first', () => {
-    const env = 'ORIGIN=https://booki.localhost\nSERVER_URL=https://api.booki.localhost/booki\nCOOKIE_DOMAIN=.client.localhost\n'
+    const env = 'ORIGIN=https://shop.localhost\nSERVER_URL=https://api.shop.localhost/shop\nCOOKIE_DOMAIN=.client.localhost\n'
 
-    expect(rewriteHosts(env, routes, 'planning')).toBe('ORIGIN=https://planning.booki.localhost\nSERVER_URL=https://planning.api.booki.localhost/booki\nCOOKIE_DOMAIN=.planning.client.localhost\n')
+    expect(rewriteHosts(env, routes, 'planning')).toBe('ORIGIN=https://planning.shop.localhost\nSERVER_URL=https://planning.api.shop.localhost/shop\nCOOKIE_DOMAIN=.planning.client.localhost\n')
   })
 
   test('is a no-op on a file it already rewrote', () => {
-    const once = rewriteHosts('API=https://api.booki.localhost\nHOST=client.localhost\n', routes, 'planning')
+    const once = rewriteHosts('API=https://api.shop.localhost\nHOST=client.localhost\n', routes, 'planning')
 
     expect(rewriteHosts(once, routes, 'planning')).toBe(once)
   })
@@ -81,7 +81,7 @@ describe('rewriteHosts', () => {
   })
 
   test('leaves hosts that merely end like a main host alone', () => {
-    expect(rewriteHosts('A=https://notbooki.localhost\nB=https://booki.localhost.example\n', routes, 'planning')).toBe('A=https://notbooki.localhost\nB=https://booki.localhost.example\n')
+    expect(rewriteHosts('A=https://notshop.localhost\nB=https://shop.localhost.example\n', routes, 'planning')).toBe('A=https://notshop.localhost\nB=https://shop.localhost.example\n')
   })
 })
 
@@ -102,9 +102,9 @@ describe('setEnvValue', () => {
 
 describe('worktreeOf', () => {
   test('names the stack as compose names the checkout folder, lower case and without dots', () => {
-    expect(worktreeOf({ ...project, root: '/w/Booki.Docker' }, 'planning').id).toBe('bookidocker--planning')
-    expect(worktreeOf({ ...project, root: '/w/_Booki' }, 'planning').id).toBe('booki--planning')
-    expect(worktreeOf(project, 'planning').id).toBe('booki-docker--planning')
+    expect(worktreeOf({ ...project, root: '/w/Shop.Docker' }, 'planning').id).toBe('shopdocker--planning')
+    expect(worktreeOf({ ...project, root: '/w/_Shop' }, 'planning').id).toBe('shop--planning')
+    expect(worktreeOf(project, 'planning').id).toBe('shop-docker--planning')
   })
 })
 
@@ -112,17 +112,17 @@ describe('expandEnvValue', () => {
   test('fills in the task and the dev server port of the worktree', () => {
     const worktree = worktreeOf(project, 'planning')
 
-    expect(expandEnvValue('{task}.booki.localhost:{port}', worktree)).toBe(`planning.booki.localhost:${worktree.clientPort}`)
+    expect(expandEnvValue('{task}.shop.localhost:{port}', worktree)).toBe(`planning.shop.localhost:${worktree.clientPort}`)
   })
 })
 
 describe('renderOverride', () => {
   const config: ComposeConfig = {
-    name: 'booki-docker--planning',
+    name: 'shop-docker--planning',
     services: {
-      'proxy-nginx': { container_name: 'proxy_nginx', ports: [{}], networks: { default: null, proxy: { aliases: ['booki-proxy'] } } },
+      'proxy-nginx': { container_name: 'proxy_nginx', ports: [{}], networks: { default: null, proxy: { aliases: ['shop-proxy'] } } },
       'client': { networks: { default: null } },
-      'booki-client': { container_name: 'booki-client', network_mode: 'host' },
+      'shop-client': { container_name: 'shop-client', network_mode: 'host' },
       'api-php': { networks: { default: null } },
     },
   }
@@ -134,16 +134,16 @@ describe('renderOverride', () => {
   })
 
   test('labels the routed service with the worktree hosts for devproxy', () => {
-    expect(override).toContain('    labels:\n      "devproxy.wt0.host": "planning.booki.localhost"\n      "devproxy.wt0.to": "host:')
-    expect(override).toContain('      "devproxy.wt1.host": "planning.api.booki.localhost"\n      "devproxy.wt1.port": "80"\n')
+    expect(override).toContain('    labels:\n      "devproxy.wt0.host": "planning.shop.localhost"\n      "devproxy.wt0.to": "host:')
+    expect(override).toContain('      "devproxy.wt1.host": "planning.api.shop.localhost"\n      "devproxy.wt1.port": "80"\n')
   })
 
   test('parks skipped services behind a profile and gives host-network ones no networks', () => {
-    expect(override).toEndWith('  "booki-client":\n    profiles: ["wt-skip"]\n    container_name: !reset null\n')
+    expect(override).toEndWith('  "shop-client":\n    profiles: ["wt-skip"]\n    container_name: !reset null\n')
   })
 
   test('points a routeHosts service at the proxy for the worktree hosts, wildcards aside', () => {
-    expect(override).toContain('  "client":\n    extra_hosts:\n      - "planning.booki.localhost:host-gateway"\n      - "planning.api.booki.localhost:host-gateway"\n')
+    expect(override).toContain('  "client":\n    extra_hosts:\n      - "planning.shop.localhost:host-gateway"\n      - "planning.api.shop.localhost:host-gateway"\n')
     expect(override).not.toContain('planning.client.localhost:host-gateway')
   })
 
@@ -152,9 +152,9 @@ describe('renderOverride', () => {
   })
 
   test('puts a routed service off the proxy network on it, keeping its own networks', () => {
-    const mercure = renderOverride(worktreeOf({ ...project, routes: [{ host: 'mercure.booki.localhost', to: 'mercure:8000' }] }, 'planning'), { name: 'booki-docker--planning', services: { mercure: { networks: { default: null } } } })
+    const mercure = renderOverride(worktreeOf({ ...project, routes: [{ host: 'mercure.shop.localhost', to: 'mercure:8000' }] }, 'planning'), { name: 'shop-docker--planning', services: { mercure: { networks: { default: null } } } })
 
-    expect(mercure).toContain('  "mercure":\n    labels:\n      "devproxy.wt0.host": "planning.mercure.booki.localhost"\n      "devproxy.wt0.port": "8000"\n    networks:\n      "default": {}\n      proxy: {}\n')
+    expect(mercure).toContain('  "mercure":\n    labels:\n      "devproxy.wt0.host": "planning.mercure.shop.localhost"\n      "devproxy.wt0.port": "8000"\n    networks:\n      "default": {}\n      proxy: {}\n')
     expect(mercure).toEndWith('networks:\n  proxy:\n    name: proxy\n    external: true\n')
     expect(override).not.toContain('external')
   })
@@ -162,42 +162,42 @@ describe('renderOverride', () => {
 
 describe('proxyLabels', () => {
   const services: ComposeConfig['services'] = {
-    'booki-client': {},
-    'nginx': { labels: { 'devproxy.web.host': 'booki.localhost, admin.booki.localhost', 'devproxy.web.port': '8080', 'other': 'x' } },
+    'shop-client': {},
+    'nginx': { labels: { 'devproxy.web.host': 'shop.localhost, admin.shop.localhost', 'devproxy.web.port': '8080', 'other': 'x' } },
     'proxy-nginx': {},
   }
-  const labels = (routes: Route[]) => Object.fromEntries(proxyLabels(worktreeOf({ ...project, routes }, 'planning'), { name: 'booki-docker--planning', services }))
+  const labels = (routes: Route[]) => Object.fromEntries(proxyLabels(worktreeOf({ ...project, routes }, 'planning'), { name: 'shop-docker--planning', services }))
 
   const port = worktreeOf(project, 'planning').clientPort
 
   test('routes each host on its service, the dev server on the first routed one, and moves the stack\'s own host labels to the worktree\'s hosts', () => {
     expect(labels(routes)).toEqual({
       'proxy-nginx': [
-        ['devproxy.wt0.host', 'planning.booki.localhost'],
+        ['devproxy.wt0.host', 'planning.shop.localhost'],
         ['devproxy.wt0.to', `host:${port}`],
-        ['devproxy.wt1.host', 'planning.api.booki.localhost'],
+        ['devproxy.wt1.host', 'planning.api.shop.localhost'],
         ['devproxy.wt1.port', '80'],
       ],
       'nginx': [
         ['devproxy.wt2.host', '*.planning.client.localhost'],
         ['devproxy.wt2.port', '443'],
         ['devproxy.wt2.passthrough', 'true'],
-        ['devproxy.web.host', 'planning.booki.localhost,planning.admin.booki.localhost'],
+        ['devproxy.web.host', 'planning.shop.localhost,planning.admin.shop.localhost'],
       ],
     })
   })
 
   test('hangs the dev server on the first service not skipped when no route names one', () => {
-    expect(labels([routes[0]!]).nginx).toEqual([['devproxy.wt0.host', 'planning.booki.localhost'], ['devproxy.wt0.to', `host:${port}`], ['devproxy.web.host', 'planning.booki.localhost,planning.admin.booki.localhost']])
+    expect(labels([routes[0]!]).nginx).toEqual([['devproxy.wt0.host', 'planning.shop.localhost'], ['devproxy.wt0.to', `host:${port}`], ['devproxy.web.host', 'planning.shop.localhost,planning.admin.shop.localhost']])
   })
 })
 
 describe('overrideWarnings', () => {
-  const warn = (services: ComposeConfig['services']) => overrideWarnings(worktreeOf(project, 'planning'), { name: 'booki-docker--planning', services })
+  const warn = (services: ComposeConfig['services']) => overrideWarnings(worktreeOf(project, 'planning'), { name: 'shop-docker--planning', services })
 
   test('flags a proxy alias that is the service name, since the worktree claims it too', () => {
-    expect(warn({ 'booki-app': { networks: { default: null, proxy: { aliases: ['booki-app'] } } } })).toEqual([
-      'service booki-app has no alias of its own on the proxy network, so the worktree answers to booki-app there too and the shared proxy round-robins between them, give it one in the project override',
+    expect(warn({ 'shop-app': { networks: { default: null, proxy: { aliases: ['shop-app'] } } } })).toEqual([
+      'service shop-app has no alias of its own on the proxy network, so the worktree answers to shop-app there too and the shared proxy round-robins between them, give it one in the project override',
     ])
   })
 
@@ -207,12 +207,12 @@ describe('overrideWarnings', () => {
   })
 
   test('stays quiet on an alias main keeps to itself, and off the proxy network', () => {
-    expect(warn({ 'proxy-nginx': { networks: { default: null, proxy: { aliases: ['booki-proxy'] } } } })).toEqual([])
+    expect(warn({ 'proxy-nginx': { networks: { default: null, proxy: { aliases: ['shop-proxy'] } } } })).toEqual([])
     expect(warn({ 'api-php': { networks: { default: null } } })).toEqual([])
   })
 
   test('says nothing about a skipped service, which never runs', () => {
-    expect(warn({ 'booki-client': { networks: { proxy: { aliases: ['booki-client'] } } } })).toEqual([])
+    expect(warn({ 'shop-client': { networks: { proxy: { aliases: ['shop-client'] } } } })).toEqual([])
   })
 })
 
@@ -230,10 +230,10 @@ describe('testDatabase', () => {
     const dir = api({
       '.env': 'DATABASE_URL=postgresql://app:dev@db:5432/app\n',
       '.env.local': 'DATABASE_URL=postgresql://app:local@localhost:5432/app\n',
-      '.env.test': 'DATABASE_URL="postgresql://booki:s%40cret@igesa-db:5433/booki?serverVersion=16"\n',
+      '.env.test': 'DATABASE_URL="postgresql://shop:s%40cret@acme-db:5433/shop?serverVersion=16"\n',
     })
 
-    expect(testDatabase(dir)).toEqual({ host: 'igesa-db', port: 5433, user: 'booki', password: 's@cret' })
+    expect(testDatabase(dir)).toEqual({ host: 'acme-db', port: 5433, user: 'shop', password: 's@cret' })
   })
 
   test('falls back to .env.dist and the default port', () => {
@@ -248,33 +248,33 @@ describe('testDatabase', () => {
 
 describe('runPlan', () => {
   const config: ComposeConfig = {
-    name: 'booki-docker',
+    name: 'shop-docker',
     services: {
-      'booki-php': { volumes: [{ type: 'volume', source: 'cache', target: '/cache' }, { type: 'bind', source: '/w/booki-docker/api', target: '/var/www/html' }] },
-      'database': { image: 'postgres:16-alpine', networks: { default: { aliases: ['igesa-db'] } } },
+      'shop-php': { volumes: [{ type: 'volume', source: 'cache', target: '/cache' }, { type: 'bind', source: '/w/shop-docker/api', target: '/var/www/html' }] },
+      'database': { image: 'postgres:16-alpine', networks: { default: { aliases: ['acme-db'] } } },
     },
   }
-  const run = { service: 'booki-php', dir: 'api', provision: [], env: { COMPOSER_HOME: '/tmp/composer', APP_ENV: 'test' } }
-  const database = { host: 'igesa-db', port: 5432, user: 'booki', password: 'secret' }
+  const run = { service: 'shop-php', dir: 'api', provision: [], env: { COMPOSER_HOME: '/tmp/composer', APP_ENV: 'test' } }
+  const database = { host: 'acme-db', port: 5432, user: 'shop', password: 'secret' }
   const worktree = worktreeOf(project, 'big-task')
   const inputs = runInputs(worktree.project.root, run, config, database.host)
   const plan = runPlan(worktree, run, inputs, database, { uid: 1000, gid: 1001 })
 
   test('starts a project-wide Postgres on a network of its own, answering to the test host, its password kept off the command line', () => {
-    expect(plan.network).toBe('wt-booki-test')
+    expect(plan.network).toBe('wt-shop-test')
     expect(plan.database).toEqual([
       'run',
       '-d',
       '--name',
-      'wt-booki-test-db',
+      'wt-shop-test-db',
       '--network',
-      'wt-booki-test',
+      'wt-shop-test',
       '--network-alias',
-      'igesa-db',
+      'acme-db',
       '--tmpfs',
       '/var/lib/postgresql/data',
       '-e',
-      'POSTGRES_USER=booki',
+      'POSTGRES_USER=shop',
       '-e',
       'POSTGRES_PASSWORD',
       '-e',
@@ -292,7 +292,7 @@ describe('runPlan', () => {
       '--pull',
       'never',
       '--network',
-      'wt-booki-test',
+      'wt-shop-test',
       '-u',
       '1000:1001',
       '-e',
@@ -307,7 +307,7 @@ describe('runPlan', () => {
       `${worktree.dir}/api:/var/www/html`,
       '-w',
       '/var/www/html',
-      'booki-docker-booki-php',
+      'shop-docker-shop-php',
       'vendor/bin/phpunit',
       '--filter',
       'Foo',
@@ -317,12 +317,12 @@ describe('runPlan', () => {
   test('gives the container the resolver the manifest names', () => {
     const runner = runPlan(worktree, { ...run, dns: '127.0.0.1' }, inputs, database, { uid: 1000, gid: 1001 }).runner(['true'])
 
-    expect(runner.slice(runner.indexOf('--network'), runner.indexOf('-u'))).toEqual(['--network', 'wt-booki-test', '--dns', '127.0.0.1'])
+    expect(runner.slice(runner.indexOf('--network'), runner.indexOf('-u'))).toEqual(['--network', 'wt-shop-test', '--dns', '127.0.0.1'])
   })
 
   test('refuses a service that does not mount the run dir, and a database host no service answers to', () => {
-    expect(() => runInputs(worktree.project.root, { ...run, dir: 'client' }, config, database.host)).toThrow('does not bind-mount /w/booki-docker/client')
-    expect(() => runInputs(worktree.project.root, run, config, 'elsewhere')).toThrow('no service of booki-docker answers to elsewhere')
+    expect(() => runInputs(worktree.project.root, { ...run, dir: 'client' }, config, database.host)).toThrow('does not bind-mount /w/shop-docker/client')
+    expect(() => runInputs(worktree.project.root, run, config, 'elsewhere')).toThrow('no service of shop-docker answers to elsewhere')
   })
 })
 
@@ -494,7 +494,7 @@ describe('worktree git', () => {
 
 describe('worktreeOf', () => {
   test('refuses a task whose hosts would be main\'s', () => {
-    expect(() => worktreeOf(project, 'api')).toThrow('api.booki.localhost would be one of main\'s hosts')
+    expect(() => worktreeOf(project, 'api')).toThrow('api.shop.localhost would be one of main\'s hosts')
   })
 
   test('refuses what is no DNS label', () => {

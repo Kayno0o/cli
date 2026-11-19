@@ -301,18 +301,18 @@ describe('__complete', () => {
         return ['l']
       } } }, {
         positionals: ['<stack>', '[service]'],
-        candidates: { '<stack>': () => ['booki'], '[service]': ([stack]) => stack === 'booki' ? ['php', 'nginx'] : [] },
+        candidates: { '<stack>': () => ['shop'], '[service]': ([stack]) => stack === 'shop' ? ['php', 'nginx'] : [] },
       })
 
       return 0
     } } } }
     const complete = async (...words: string[]) => (await capture(async () => runCli(nested, ['__complete', 'restart', ...words]))).out
 
-    expect(await complete('booki', '')).toBe('php\nnginx\n')
-    expect(await complete('--bg', 'booki', '--log', 'x', 'p')).toBe('php\nnginx\n')
+    expect(await complete('shop', '')).toBe('php\nnginx\n')
+    expect(await complete('--bg', 'shop', '--log', 'x', 'p')).toBe('php\nnginx\n')
     expect(await complete('other', '')).toBe('')
-    expect(await complete('booki', '--log', '')).toBe('l\n')
-    expect(seen).toEqual([['booki']])
+    expect(await complete('shop', '--log', '')).toBe('l\n')
+    expect(seen).toEqual([['shop']])
   })
 
   test('still offers paths for a positional with no candidates', async () => {

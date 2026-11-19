@@ -78,7 +78,7 @@ Instead of: psql or mysql with the connection string on the command line, docker
 ```sh
 db <command> [options]
 db "select count(*) from users"
-db -c booki-db-1 "select count(*) from users"  # a container outside the compose project
+db -c shop-db-1 "select count(*) from users"  # a container outside the compose project
 db describe users  # the columns, indexes and foreign keys of a table
 db search email  # where a field lives
 db explain "select * from users where email = 'a'"  # the plan, nothing executed
@@ -493,7 +493,7 @@ Instead of: flock wrappers, hand-written heavy.sh queues and parallel runs fight
 ```sh
 slot [options] -- <cmd>...
 slot -- bunx vue-tsc  # wait for a free slot, then type-check
-slot --lock booki-test-db -- vendor/bin/phpunit  # one phpunit at a time on the shared test database
+slot --lock shop-test-db -- vendor/bin/phpunit  # one phpunit at a time on the shared test database
 slot ls
 ```
 

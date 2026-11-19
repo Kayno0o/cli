@@ -25,16 +25,16 @@ describe('resolveConfig', () => {
 
 describe('fillTemplate', () => {
   test('fills the placeholders it knows and leaves the others', () => {
-    expect(fillTemplate(['up', '{project}/{task}', '{other}'], { project: 'times', task: 'planning' })).toEqual(['up', 'times/planning', '{other}'])
+    expect(fillTemplate(['up', '{project}/{task}', '{other}'], { project: 'notes', task: 'planning' })).toEqual(['up', 'notes/planning', '{other}'])
   })
 })
 
 describe('tasksDir', () => {
   test('puts the worktrees beside the checkout by default, under the folder the config names otherwise', () => {
-    const project = { name: 'times', root: '/w/times', repos: [], routes: [] }
+    const project = { name: 'notes', root: '/w/notes', repos: [], routes: [] }
 
-    expect(tasksDir({ ...project, settings: resolveConfig() })).toBe('/w/.worktrees/times')
-    expect(tasksDir({ ...project, settings: resolveConfig({ worktrees: '/trees/{repo}' }) })).toBe('/trees/times')
+    expect(tasksDir({ ...project, settings: resolveConfig() })).toBe('/w/.worktrees/notes')
+    expect(tasksDir({ ...project, settings: resolveConfig({ worktrees: '/trees/{repo}' }) })).toBe('/trees/notes')
   })
 })
 

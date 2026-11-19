@@ -14,18 +14,18 @@ const CLI = join(import.meta.dir, '..', 'src', 'cli.ts')
 const DRIVER = join(import.meta.dir, 'sandbox_driver.ts')
 const HEX_VOLUME = 'a'.repeat(64)
 const IDENTITY = { GIT_AUTHOR_NAME: 'wt', GIT_AUTHOR_EMAIL: 'wt@test', GIT_COMMITTER_NAME: 'wt', GIT_COMMITTER_EMAIL: 'wt@test' }
-const MAIN_CONFIG = { name: 'times', services: { 'api-php': { networks: { default: null } }, 'mailhog': { container_name: 'times-mailhog', ports: [{}] } }, volumes: { mailpit: {} } }
-const WORKTREE_CONFIG = { ...MAIN_CONFIG, name: 'times--planning' }
+const MAIN_CONFIG = { name: 'notes', services: { 'api-php': { networks: { default: null } }, 'mailhog': { container_name: 'notes-mailhog', ports: [{}] } }, volumes: { mailpit: {} } }
+const WORKTREE_CONFIG = { ...MAIN_CONFIG, name: 'notes--planning' }
 const MANIFEST = {
-  root: '~/Workspace/times',
+  root: '~/Workspace/notes',
   repos: [],
   copy: ['.env', '.docker/nginx/certs', 'api/.env.local', 'api/config/jwt', 'client/.env', 'client/.nuxtrc'],
   clone: ['mailpit'],
   certs: '.docker/nginx/certs',
   routes: [
-    { host: 'times.localhost', to: 'client' },
-    { host: 'api.times.localhost', to: 'api-php:443', passthrough: true },
-    { host: 'mail.times.localhost', to: 'mailhog:8025' },
+    { host: 'notes.localhost', to: 'client' },
+    { host: 'api.notes.localhost', to: 'api-php:443', passthrough: true },
+    { host: 'mail.notes.localhost', to: 'mailhog:8025' },
   ],
 }
 
@@ -42,19 +42,19 @@ async function spawn(argv: string[], cwd: string, sandbox: Sandbox): Promise<Run
   return { code, out, err }
 }
 
-/** A sandbox holding the `times` checkout wt knows by its manifest, with a git history, and every wt path at its default under the sandbox's HOME. */
-async function timesSandbox() {
+/** A sandbox holding the `notes` checkout wt knows by its manifest, with a git history, and every wt path at its default under the sandbox's HOME. */
+async function notesSandbox() {
   const sandbox = makeSandbox()
   const workspace = join(sandbox.home, 'Workspace')
-  const root = join(workspace, 'times')
+  const root = join(workspace, 'notes')
   const manifests = join(sandbox.home, '.config', 'wt', 'projects')
 
   mkdirSync(manifests, { recursive: true })
-  writeFileSync(join(manifests, 'times.ts'), `export default ${JSON.stringify(MANIFEST)}\n`)
+  writeFileSync(join(manifests, 'notes.ts'), `export default ${JSON.stringify(MANIFEST)}\n`)
   mkdirSync(root, { recursive: true })
   writeFileSync(join(root, 'compose.yml'), 'services: {}\n')
   writeFileSync(join(root, '.gitignore'), '.env*\n.nuxtrc\n.docker/\napi/config/jwt\n')
-  writeFileSync(join(root, '.env'), 'APP_HOST=times.localhost\n')
+  writeFileSync(join(root, '.env'), 'APP_HOST=notes.localhost\n')
 
   for (const file of ['api/.env.local', 'api/config/jwt/private.pem', 'client/.env', 'client/.nuxtrc', '.docker/nginx/certs/main.pem']) {
     mkdirSync(dirname(join(root, file)), { recursive: true })
@@ -65,27 +65,27 @@ async function timesSandbox() {
 
   sandbox.seed('config.json', JSON.stringify(MAIN_CONFIG))
   sandbox.seed('config-planning.json', JSON.stringify(WORKTREE_CONFIG))
-  sandbox.seed('config-other.json', JSON.stringify({ ...WORKTREE_CONFIG, name: 'times--other' }))
+  sandbox.seed('config-other.json', JSON.stringify({ ...WORKTREE_CONFIG, name: 'notes--other' }))
 
   return {
     sandbox,
     root,
     wt: async (...args: string[]) => spawn([process.execPath, '--no-env-file', CLI, ...args], root, sandbox),
     git: async (cwd: string, ...args: string[]) => (await $`git -C ${cwd} ${args}`.env({ ...sandbox.env, ...IDENTITY }).quiet().text()).trim(),
-    dirOf: (task: string) => join(workspace, '.worktrees', 'times', task),
+    dirOf: (task: string) => join(workspace, '.worktrees', 'notes', task),
     override: (id: string) => join(sandbox.home, '.local', 'share', 'wt', 'overrides', `${id}.override.yml`),
     stop: () => sandbox.remove(),
   }
 }
 
 describe('addTask', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
     env.sandbox.seed('running', 'main-db\nmain-web\n')
-    env.sandbox.seed('volumes', 'times_mailpit\n')
+    env.sandbox.seed('volumes', 'notes_mailpit\n')
   })
 
   afterAll(() => env?.stop())
@@ -97,39 +97,39 @@ describe('addTask', () => {
     expect(run.err).toBe('')
     expect(run.code).toBe(0)
     expect(run.out).toContain(`wt: created ${dirOf('planning')} on wt/planning`)
-    expect(run.out).toContain('https://planning.times.localhost')
+    expect(run.out).toContain('https://planning.notes.localhost')
     expect(run.out).toContain('wt up planning')
     expect(await git(dirOf('planning'), 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('wt/planning')
 
     const dotenv = readFileSync(join(dirOf('planning'), '.env'), 'utf8')
 
-    expect(dotenv).toContain('APP_HOST=planning.times.localhost')
-    expect(dotenv).toContain('COMPOSE_PROJECT_NAME=times--planning')
-    expect(dotenv).toContain(`COMPOSE_FILE=compose.yml:${override('times--planning')}`)
+    expect(dotenv).toContain('APP_HOST=planning.notes.localhost')
+    expect(dotenv).toContain('COMPOSE_PROJECT_NAME=notes--planning')
+    expect(dotenv).toContain(`COMPOSE_FILE=compose.yml:${override('notes--planning')}`)
 
-    const rendered = readFileSync(override('times--planning'), 'utf8')
+    const rendered = readFileSync(override('notes--planning'), 'utf8')
 
     expect(rendered).toContain('"mailhog":')
     expect(rendered).toContain('container_name: !reset null')
     expect(rendered).toContain('ports: !reset []')
 
-    expect(rendered).toContain('"devproxy.wt0.host": "planning.times.localhost"')
-    expect(existsSync(join(dirOf('planning'), '.docker', 'nginx', 'certs', 'planning.times.localhost.pem'))).toBe(true)
+    expect(rendered).toContain('"devproxy.wt0.host": "planning.notes.localhost"')
+    expect(existsSync(join(dirOf('planning'), '.docker', 'nginx', 'certs', 'planning.notes.localhost.pem'))).toBe(true)
     expect(sandbox.forbidden()).toEqual([])
   })
 
   test('warns about manifest settings naming a service compose does not know', async () => {
     const { sandbox, wt } = env
 
-    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, skip: ['mailhog', 'ghost', 'worker'], run: { service: 'php', dir: '.', provision: [] } })}\n`)
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), `export default ${JSON.stringify({ ...MANIFEST, skip: ['mailhog', 'ghost', 'worker'], run: { service: 'php', dir: '.', provision: [] } })}\n`)
     // worker sits behind a profile, so only `--profile '*'` lists it
     sandbox.seed('services', 'api-php\nmailhog\nworker\n')
 
     const run = await wt('add', 'planning')
 
     expect(run.code).toBe(0)
-    expect(run.err).toContain('times: skip names ghost, which is not a service of times')
-    expect(run.err).toContain('times: run.service names php, which is not a service of times')
+    expect(run.err).toContain('notes: skip names ghost, which is not a service of notes')
+    expect(run.err).toContain('notes: run.service names php, which is not a service of notes')
     expect(run.err).not.toContain('names mailhog')
     expect(run.err).not.toContain('names worker')
     expect(run.err).not.toContain('names api-php')
@@ -137,7 +137,7 @@ describe('addTask', () => {
 
   test('warns when the dev server port is in use or another worktree\'s, and takes the one ports gives', async () => {
     const { sandbox, wt, override } = env
-    const port = stringToPort('times--planning')
+    const port = stringToPort('notes--planning')
     let held: TCPSocketListener | undefined
 
     try {
@@ -156,15 +156,15 @@ describe('addTask', () => {
       held?.stop(true)
     }
 
-    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, ports: { other: port } })}\n`)
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), `export default ${JSON.stringify({ ...MANIFEST, ports: { other: port } })}\n`)
 
     const other = await wt('add', 'other')
 
-    expect(other.err).toContain(`dev server port ${port} of other is also the one of times/planning: give one of them its own in the manifest's ports`)
-    expect(readFileSync(override('times--other'), 'utf8')).toContain(`"devproxy.wt0.to": "host:${port}"`)
+    expect(other.err).toContain(`dev server port ${port} of other is also the one of notes/planning: give one of them its own in the manifest's ports`)
+    expect(readFileSync(override('notes--other'), 'utf8')).toContain(`"devproxy.wt0.to": "host:${port}"`)
 
-    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, ports: { other: 70000 } })}\n`)
-    expect((await wt('path', '-p', 'times')).err).toContain('times: ports gives other 70000, expected a whole number from 1024 to 65535')
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), `export default ${JSON.stringify({ ...MANIFEST, ports: { other: 70000 } })}\n`)
+    expect((await wt('path', '-p', 'notes')).err).toContain('notes: ports gives other 70000, expected a whole number from 1024 to 65535')
   }, 30_000)
 
   test('says what a new branch forks from, main\'s current commit or the ref --from names', async () => {
@@ -213,7 +213,7 @@ describe('addTask', () => {
     const doctor = await wt('doctor')
 
     expect(doctor.code).toBe(1)
-    expect(doctor.out).toMatch(/missing\s+mkcert\s+https:\/\/github\.com\/FiloSottile\/mkcert.*\(times\)/)
+    expect(doctor.out).toMatch(/missing\s+mkcert\s+https:\/\/github\.com\/FiloSottile\/mkcert.*\(notes\)/)
     expect(doctor.out).toMatch(/ok\s+git\s+\S+\/git\s/)
   })
 
@@ -226,7 +226,7 @@ describe('addTask', () => {
 
     expect(configs.map(call => call.cwd)).toEqual([root, dirOf('planning'), dirOf('planning')])
     expect(configs[0]).toMatchObject({ composeFile: '', composeProject: '' })
-    expect(configs[1]).toMatchObject({ composeFile: 'compose.yml', composeProject: 'times--planning' })
+    expect(configs[1]).toMatchObject({ composeFile: 'compose.yml', composeProject: 'notes--planning' })
     expect(configs[2]).toMatchObject({ composeFile: '', composeProject: '' })
   })
 
@@ -239,14 +239,14 @@ describe('addTask', () => {
     const created = calls.find(call => call.args.startsWith('volume create'))
     const copy = calls.find(call => call.args.startsWith('run --rm'))
 
-    expect(created?.args).toContain('com.docker.compose.project=times--planning')
-    expect(created?.args).toEndWith('times--planning_mailpit')
-    expect(copy?.args).toContain('times_mailpit:/from:ro')
-    expect(copy?.args).toContain('times--planning_mailpit:/to')
+    expect(created?.args).toContain('com.docker.compose.project=notes--planning')
+    expect(created?.args).toEndWith('notes--planning_mailpit')
+    expect(copy?.args).toContain('notes_mailpit:/from:ro')
+    expect(copy?.args).toContain('notes--planning_mailpit:/to')
     expect(copy?.paused).toEqual(['main-db', 'main-web'])
     expect(calls.find(call => call.args === 'unpause main-db main-web')).toBeDefined()
     expect(sandbox.read('paused')).toBe('')
-    expect(sandbox.read('volumes')).toContain('times--planning_mailpit')
+    expect(sandbox.read('volumes')).toContain('notes--planning_mailpit')
   })
 
   test('puts the worktree on the branch it is given', async () => {
@@ -271,18 +271,18 @@ describe('addTask', () => {
     const broken = await wt('add', 'other')
 
     expect(broken.code).toBe(1)
-    expect(broken.err).toContain('\n  hint: the worktree is checked out but not ready: `wt sync other -p times` resumes it')
+    expect(broken.err).toContain('\n  hint: the worktree is checked out but not ready: `wt sync other -p notes` resumes it')
     expect(existsSync(dirOf('other'))).toBe(true)
   })
 })
 
 describe('removeTask', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
-    env.sandbox.seed('volumes', 'times_mailpit\n')
+    env = await notesSandbox()
+    env.sandbox.seed('volumes', 'notes_mailpit\n')
     expect((await env.wt('add', 'planning')).code).toBe(0)
   })
 
@@ -302,7 +302,7 @@ describe('removeTask', () => {
     expect(run.code).toBe(1)
     expect(run.err).toContain('uncommitted changes in root\n  hint: commit them, or pass --force to drop them')
     expect(existsSync(dirOf('planning'))).toBe(true)
-    expect(existsSync(override('times--planning'))).toBe(true)
+    expect(existsSync(override('notes--planning'))).toBe(true)
     expect(removals()).toEqual([])
   })
 
@@ -324,27 +324,27 @@ describe('removeTask', () => {
     const { sandbox, wt, git, root, dirOf, override } = env
 
     sandbox.seed('containers', 'c1\n')
-    sandbox.seed('mounts', `${HEX_VOLUME} times--planning_named \n`)
-    sandbox.seed('volumes', 'times--planning_mailpit\ntimes--planning_data\ntimes_mailpit\nfixed_name_volume\n')
+    sandbox.seed('mounts', `${HEX_VOLUME} notes--planning_named \n`)
+    sandbox.seed('volumes', 'notes--planning_mailpit\nnotes--planning_data\nnotes_mailpit\nfixed_name_volume\n')
 
     const run = await wt('rm', 'planning')
 
     expect(run.err).toBe('')
     expect(run.code).toBe(0)
-    expect(run.out).toContain('wt: removed times--planning, its branches are kept')
+    expect(run.out).toContain('wt: removed notes--planning, its branches are kept')
 
     const calls = sandbox.dockerCalls().map(call => `${call.cwd} ${call.args}`)
-    const listed = calls.findIndex(call => call.includes('ps -aq --filter label=com.docker.compose.project=times--planning'))
+    const listed = calls.findIndex(call => call.includes('ps -aq --filter label=com.docker.compose.project=notes--planning'))
     const down = calls.findIndex(call => call === `${dirOf('planning')} compose down --remove-orphans`)
 
     // The anonymous volumes are read before the containers go, as nothing ties them to the worktree afterwards
     expect(listed).toBeGreaterThanOrEqual(0)
     expect(down).toBeGreaterThan(listed)
-    expect(sandbox.read('volumes').split('\n').filter(Boolean)).toEqual(['times_mailpit', 'fixed_name_volume'])
-    expect(sandbox.dockerCalls().find(call => call.args.startsWith('volume rm'))?.args).toBe(`volume rm times--planning_mailpit times--planning_data ${HEX_VOLUME}`)
+    expect(sandbox.read('volumes').split('\n').filter(Boolean)).toEqual(['notes_mailpit', 'fixed_name_volume'])
+    expect(sandbox.dockerCalls().find(call => call.args.startsWith('volume rm'))?.args).toBe(`volume rm notes--planning_mailpit notes--planning_data ${HEX_VOLUME}`)
 
     expect(existsSync(dirOf('planning'))).toBe(false)
-    expect(existsSync(override('times--planning'))).toBe(false)
+    expect(existsSync(override('notes--planning'))).toBe(false)
 
     expect(await git(root, 'branch', '--list', 'wt/planning')).toContain('wt/planning')
     expect(await git(root, 'worktree', 'list')).not.toContain('planning')
@@ -367,15 +367,15 @@ describe('removeTask', () => {
   test('leaves the files in place when its volumes cannot be removed', async () => {
     const { sandbox, wt, dirOf, override } = env
 
-    sandbox.seed('volumes', 'times--planning_mailpit\n')
+    sandbox.seed('volumes', 'notes--planning_mailpit\n')
     sandbox.seed('volume-rm-fails', '')
 
     const run = await wt('rm', 'planning')
 
     expect(run.code).toBe(1)
-    expect(run.err).toContain('could not remove the volumes of times--planning')
+    expect(run.err).toContain('could not remove the volumes of notes--planning')
     expect(run.err).toContain('volume is in use')
-    expect(existsSync(override('times--planning'))).toBe(true)
+    expect(existsSync(override('notes--planning'))).toBe(true)
     expect(existsSync(dirOf('planning'))).toBe(true)
   })
 
@@ -388,7 +388,7 @@ describe('removeTask', () => {
 
     expect(run.code).toBe(0)
     expect(removals().filter(args => args.includes('down'))).toEqual([])
-    expect(existsSync(override('times--planning'))).toBe(false)
+    expect(existsSync(override('notes--planning'))).toBe(false)
     expect(await git(root, 'worktree', 'list')).not.toContain('planning')
     expect(sandbox.forbidden()).toEqual([])
   })
@@ -402,7 +402,7 @@ describe('removeTask', () => {
     const run = await wt('rm', 'planning')
 
     expect(run.code).toBe(0)
-    expect(removals()[0]).toBe('compose -p times--planning down --remove-orphans')
+    expect(removals()[0]).toBe('compose -p notes--planning down --remove-orphans')
     expect(removals().slice(1).every(args => args.startsWith('volume rm'))).toBe(true)
     expect(sandbox.forbidden()).toEqual([])
   })
@@ -411,19 +411,19 @@ describe('removeTask', () => {
     const run = await env.wt('rm', 'nothing')
 
     expect(run.code).toBe(1)
-    expect(run.err).toContain('no worktree nothing of times, nothing removed')
-    expect(existsSync(join(env.sandbox.home, '.cache', 'wt', 'jobs', 'times--nothing.json'))).toBe(false)
+    expect(run.err).toContain('no worktree nothing of notes, nothing removed')
+    expect(existsSync(join(env.sandbox.home, '.cache', 'wt', 'jobs', 'notes--nothing.json'))).toBe(false)
   })
 })
 
 describe('wt prune', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
     env.sandbox.seed('running', 'main-db\nmain-web\n')
-    env.sandbox.seed('volumes', 'times_mailpit\n')
+    env.sandbox.seed('volumes', 'notes_mailpit\n')
   })
 
   afterAll(() => env?.stop())
@@ -435,27 +435,27 @@ describe('wt prune', () => {
 
     expect((await wt('add', 'planning')).code).toBe(0)
     expect((await wt('add', 'other')).code).toBe(0)
-    mkdirSync(join(state, 'queues', 'times--planning.provision'), { recursive: true })
-    writeFileSync(join(jobs, 'times--planning.json'), '{}')
-    writeFileSync(join(jobs, 'times--planning.log'), '')
+    mkdirSync(join(state, 'queues', 'notes--planning.provision'), { recursive: true })
+    writeFileSync(join(jobs, 'notes--planning.json'), '{}')
+    writeFileSync(join(jobs, 'notes--planning.log'), '')
     rmSync(dirOf('planning'), { recursive: true, force: true })
 
     const listed = await wt('prune')
 
     expect(listed.code).toBe(0)
-    expect(listed.out).toBe('times/planning: compose override, queue, job record, volume\ntimes: 1 git worktree registration for a folder gone\n')
+    expect(listed.out).toBe('notes/planning: compose override, queue, job record, volume\nnotes: 1 git worktree registration for a folder gone\n')
     expect(listed.err).toContain('nothing removed, `wt prune -y` removes it')
-    expect(existsSync(override('times--planning'))).toBe(true)
+    expect(existsSync(override('notes--planning'))).toBe(true)
 
     const pruned = await wt('prune', '-y')
 
     expect(pruned.code).toBe(0)
-    expect(existsSync(override('times--planning'))).toBe(false)
-    expect(existsSync(join(state, 'queues', 'times--planning.provision'))).toBe(false)
-    expect(existsSync(join(jobs, 'times--planning.json'))).toBe(false)
-    expect(sandbox.read('volumes')).not.toContain('times--planning_')
+    expect(existsSync(override('notes--planning'))).toBe(false)
+    expect(existsSync(join(state, 'queues', 'notes--planning.provision'))).toBe(false)
+    expect(existsSync(join(jobs, 'notes--planning.json'))).toBe(false)
+    expect(sandbox.read('volumes')).not.toContain('notes--planning_')
     expect(await git(root, 'worktree', 'list')).not.toContain(dirOf('planning'))
-    expect(existsSync(override('times--other'))).toBe(true)
+    expect(existsSync(override('notes--other'))).toBe(true)
     expect((await wt('prune')).out).toBe('wt: nothing left behind\n')
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
@@ -463,16 +463,16 @@ describe('wt prune', () => {
   test('asks on a terminal, and removes nothing when told no', async () => {
     const { sandbox, root, override } = env
 
-    mkdirSync(dirname(override('times--ghost')), { recursive: true })
-    writeFileSync(override('times--ghost'), '')
+    mkdirSync(dirname(override('notes--ghost')), { recursive: true })
+    writeFileSync(override('notes--ghost'), '')
 
     await onTerminal([process.execPath, '--no-env-file', CLI, 'prune'], async ({ until, type, exited, screen }) => {
       await until('Remove it all?')
       type('n')
 
       expect(await exited).toBe(1)
-      expect(await screen()).toContain('times/ghost: compose override')
-      expect(existsSync(override('times--ghost'))).toBe(true)
+      expect(await screen()).toContain('notes/ghost: compose override')
+      expect(existsSync(override('notes--ghost'))).toBe(true)
     }, { cwd: root, env: { ...sandbox.env, ...IDENTITY }, cols: 120 })
   }, 30_000)
 
@@ -481,21 +481,21 @@ describe('wt prune', () => {
 
     mkdirSync(join(sandbox.home, 'Elsewhere', 'other', '.git'), { recursive: true })
     writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/other' })}\n`)
-    mkdirSync(dirname(override('times--ghost')), { recursive: true })
-    writeFileSync(override('times--ghost'), '')
+    mkdirSync(dirname(override('notes--ghost')), { recursive: true })
+    writeFileSync(override('notes--ghost'), '')
     writeFileSync(override('other--ghost'), '')
 
-    expect((await wt('prune')).out).toBe('times/ghost: compose override\n')
-    expect((await wt('prune', '-a')).out).toBe('other/ghost: compose override\ntimes/ghost: compose override\n')
+    expect((await wt('prune')).out).toBe('notes/ghost: compose override\n')
+    expect((await wt('prune', '-a')).out).toBe('notes/ghost: compose override\nother/ghost: compose override\n')
   }, 30_000)
 })
 
 describe('cd, url and tasks', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
   })
 
   afterAll(() => env?.stop())
@@ -517,7 +517,7 @@ describe('cd, url and tasks', () => {
     expect(cd.err).toContain('cd needs the shell function')
     expect((await wt('cd', 'nothing')).err).toContain('no worktree nothing')
 
-    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), 'export default {\n')
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), 'export default {\n')
 
     const broken = await wt('tasks')
 
@@ -527,11 +527,11 @@ describe('cd, url and tasks', () => {
 })
 
 describe('commands checking their target before any job', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
   })
 
   afterAll(() => env?.stop())
@@ -544,7 +544,7 @@ describe('commands checking their target before any job', () => {
     manifest(name, `export default ${JSON.stringify({ ...MANIFEST, root: `~/${root}`, ...extra })}\n`)
   }
 
-  // The times project keeps working beside a manifest skipped, which -p still refuses by name
+  // The notes project keeps working beside a manifest skipped, which -p still refuses by name
   const skipsOther = async (name: string, why: string) => {
     const run = await env.wt('path')
 
@@ -559,12 +559,12 @@ describe('commands checking their target before any job', () => {
   }
 
   test('skip the second of two projects whose checkout folders compose names alike, as their worktrees would share stacks', async () => {
-    other('Elsewhere/Times.', {}, 'twin')
+    other('Elsewhere/Notes.', {}, 'twin')
 
     const run = await env.wt('path')
 
     expect(run.out).toBe(`${env.root}\n`)
-    expect(run.err).toContain('times.ts and twin.ts both have a checkout compose names times, so their worktrees would share stacks and volumes: twin skipped')
+    expect(run.err).toContain('notes.ts and twin.ts both have a checkout compose names notes, so their worktrees would share stacks and volumes: twin skipped')
   })
 
   test('skip a checkout folder that leaves compose no stack name', async () => {
@@ -587,7 +587,7 @@ describe('commands checking their target before any job', () => {
     manifest('other', 'export default {\n')
     await skipsOther('other', `${file} does not load:`)
     // -p reads that one manifest alone
-    expect((await env.wt('path', '-p', 'times')).err).toBe('')
+    expect((await env.wt('path', '-p', 'notes')).err).toBe('')
 
     manifest('other', 'export default { repos: [] }\n')
     await skipsOther('other', `${file} has no default export with a \`root\``)
@@ -622,7 +622,7 @@ describe('commands checking their target before any job', () => {
 
     expect(run.code).toBe(1)
     expect(run.err).toContain(message)
-    expect((existsSync(jobs) ? readdirSync(jobs) : []).filter(file => file.startsWith(`times--${args[1]}.`))).toEqual([])
+    expect((existsSync(jobs) ? readdirSync(jobs) : []).filter(file => file.startsWith(`notes--${args[1]}.`))).toEqual([])
   })
 
   test('notify a --bg refusal, as its caller may be a popup that closed meanwhile', async () => {
@@ -655,7 +655,7 @@ describe('whilePaused', () => {
   })
 
   test('keeps the ids it paused in the record while the work runs, and removes it once they are unpaused', async () => {
-    const record = join(sandbox.home, '.cache', 'wt', 'queues', 'times.paused')
+    const record = join(sandbox.home, '.cache', 'wt', 'queues', 'notes.paused')
     const run = await spawn([process.execPath, DRIVER, 'paused-record', record], sandbox.home, sandbox)
 
     expect(run.out.trim()).toBe('main-db,main-web')
@@ -682,8 +682,8 @@ describe('cloneData', () => {
   let sandbox: Sandbox
   let root: string
 
-  const project = (clone: string[]) => ({ name: 'times', root, repos: [], clone, routes: [] })
-  const main = { name: 'times', services: {}, volumes: { mailpit: {}, shared: { name: 'fixed_shared' }, bound: { driver_opts: { device: '/srv/data' } } } }
+  const project = (clone: string[]) => ({ name: 'notes', root, repos: [], clone, routes: [] })
+  const main = { name: 'notes', services: {}, volumes: { mailpit: {}, shared: { name: 'fixed_shared' }, bound: { driver_opts: { device: '/srv/data' } } } }
 
   async function clone(entries: string[]): Promise<{ warnings?: string[], error?: string, code: number }> {
     const run = await spawn([process.execPath, DRIVER, 'clone', JSON.stringify({ project: project(entries), task: 'planning', main })], sandbox.home, sandbox)
@@ -692,19 +692,19 @@ describe('cloneData', () => {
     return Array.isArray(parsed) ? { warnings: parsed, code: run.code } : { error: parsed.error, code: run.code }
   }
 
-  const pending = () => join(sandbox.home, '.cache', 'wt', 'times--planning.clones-pending')
+  const pending = () => join(sandbox.home, '.cache', 'wt', 'notes--planning.clones-pending')
 
   beforeEach(() => {
     sandbox?.remove()
     sandbox = makeSandbox()
-    root = join(sandbox.home, 'Workspace', 'times')
+    root = join(sandbox.home, 'Workspace', 'notes')
     mkdirSync(root, { recursive: true })
   })
 
   afterAll(() => sandbox?.remove())
 
   test('unpauses the main containers a clone cut short left paused, and says so, leaving one paused by hand', async () => {
-    const record = join(sandbox.home, '.cache', 'wt', 'queues', 'times.paused')
+    const record = join(sandbox.home, '.cache', 'wt', 'queues', 'notes.paused')
 
     sandbox.seed('paused', 'left-1\nleft-2\nby-hand\n')
     mkdirSync(dirname(record), { recursive: true })
@@ -712,14 +712,14 @@ describe('cloneData', () => {
 
     const { warnings } = await clone(['mailpit'])
 
-    expect(warnings).toEqual(['clone: unpaused 2 of main\'s containers a clone cut short had left paused', 'clone: main has no volume times_mailpit yet, the worktree starts with an empty one'])
+    expect(warnings).toEqual(['clone: unpaused 2 of main\'s containers a clone cut short had left paused', 'clone: main has no volume notes_mailpit yet, the worktree starts with an empty one'])
     expect(sandbox.dockerCalls().map(call => call.args)).toContain('unpause left-1 left-2')
     expect(sandbox.read('paused')).toBe('by-hand\n')
     expect(existsSync(record)).toBe(false)
   })
 
   test('copies a volume of main\'s with main paused, and records nothing pending once whole', async () => {
-    sandbox.seed('volumes', 'times_mailpit\nfixed_shared\n')
+    sandbox.seed('volumes', 'notes_mailpit\nfixed_shared\n')
     sandbox.seed('running', 'main-db\n')
 
     const { warnings } = await clone(['mailpit', 'shared'])
@@ -729,15 +729,15 @@ describe('cloneData', () => {
     const copies = sandbox.dockerCalls().filter(call => call.args.startsWith('run --rm'))
 
     // The copies run side by side, so their order is not fixed
-    expect(copies.map(call => call.args.match(/-v (\S+):\/from:ro/)?.[1]).sort()).toEqual(['fixed_shared', 'times_mailpit'])
+    expect(copies.map(call => call.args.match(/-v (\S+):\/from:ro/)?.[1]).sort()).toEqual(['fixed_shared', 'notes_mailpit'])
     expect(copies.every(call => call.paused.join() === 'main-db')).toBe(true)
-    expect(sandbox.read('volumes')).toContain('times--planning_shared')
+    expect(sandbox.read('volumes')).toContain('notes--planning_shared')
     expect(existsSync(pending())).toBe(false)
     expect(sandbox.read('paused')).toBe('')
   })
 
   test('skips a target that exists already, copying nothing and pausing nothing', async () => {
-    sandbox.seed('volumes', 'times_mailpit\ntimes--planning_mailpit\n')
+    sandbox.seed('volumes', 'notes_mailpit\nnotes--planning_mailpit\n')
     sandbox.seed('running', 'main-db\n')
 
     expect((await clone(['mailpit'])).warnings).toEqual([])
@@ -745,7 +745,7 @@ describe('cloneData', () => {
   })
 
   test('keeps a failed copy pending, unpausing main, and redoes it from an empty volume the next time', async () => {
-    sandbox.seed('volumes', 'times_mailpit\n')
+    sandbox.seed('volumes', 'notes_mailpit\n')
     sandbox.seed('running', 'main-db\n')
     sandbox.seed('run-fails', '')
 
@@ -755,9 +755,9 @@ describe('cloneData', () => {
     expect(failed.error).toContain('clone failed:')
     expect(failed.error).toContain('\n`wt sync planning` starts it again')
     expect(failed.error).toContain('no space left on device')
-    expect(readFileSync(pending(), 'utf8')).toBe('times--planning_mailpit\n')
+    expect(readFileSync(pending(), 'utf8')).toBe('notes--planning_mailpit\n')
     expect(sandbox.read('paused')).toBe('')
-    expect(sandbox.read('volumes')).toContain('times--planning_mailpit')
+    expect(sandbox.read('volumes')).toContain('notes--planning_mailpit')
 
     rmSync(join(sandbox.state, 'run-fails'))
 
@@ -766,8 +766,8 @@ describe('cloneData', () => {
     const calls = sandbox.dockerCalls().slice(before).map(call => call.args)
 
     expect(redone.warnings).toEqual([])
-    expect(calls.findIndex(args => args === 'volume rm times--planning_mailpit')).toBeGreaterThanOrEqual(0)
-    expect(calls.findIndex(args => args.startsWith('volume create'))).toBeGreaterThan(calls.indexOf('volume rm times--planning_mailpit'))
+    expect(calls.findIndex(args => args === 'volume rm notes--planning_mailpit')).toBeGreaterThanOrEqual(0)
+    expect(calls.findIndex(args => args.startsWith('volume create'))).toBeGreaterThan(calls.indexOf('volume rm notes--planning_mailpit'))
     expect(existsSync(pending())).toBe(false)
   })
 
@@ -793,7 +793,7 @@ describe('forgetTestDatabases', () => {
   let root: string
 
   const markers = () => join(sandbox.home, '.cache', 'wt')
-  const project = () => ({ name: 'times', root, repos: [], routes: [] })
+  const project = () => ({ name: 'notes', root, repos: [], routes: [] })
 
   async function forget(task: string) {
     return spawn([process.execPath, DRIVER, 'forget', JSON.stringify({ project: project(), task })], sandbox.home, sandbox)
@@ -802,10 +802,10 @@ describe('forgetTestDatabases', () => {
   beforeEach(() => {
     sandbox?.remove()
     sandbox = makeSandbox()
-    root = join(sandbox.home, 'Workspace', 'times')
+    root = join(sandbox.home, 'Workspace', 'notes')
     mkdirSync(markers(), { recursive: true })
 
-    for (const marker of ['times--zz-forget.test-aaa', 'times--zz-forget.test-bbb', 'times--zz-forget.setup', 'times--other.test-aaa'])
+    for (const marker of ['notes--zz-forget.test-aaa', 'notes--zz-forget.test-bbb', 'notes--zz-forget.setup', 'notes--other.test-aaa'])
       writeFileSync(join(markers(), marker), '')
   })
 
@@ -823,8 +823,8 @@ describe('forgetTestDatabases', () => {
     const drops = sandbox.dockerCalls().filter(call => call.args.includes('dropdb'))
 
     expect(drops.map(call => call.args.split(' ').at(-1)).sort()).toEqual(['app_testzz_forget', 'billing_testzz_forget'])
-    expect(drops.every(call => call.args.startsWith('exec wt-times-test-db '))).toBe(true)
-    expect(readdirSync(markers()).filter(name => name.endsWith('.test-aaa') || name.endsWith('.test-bbb') || name.endsWith('.setup')).sort()).toEqual(['times--other.test-aaa', 'times--zz-forget.setup'])
+    expect(drops.every(call => call.args.startsWith('exec wt-notes-test-db '))).toBe(true)
+    expect(readdirSync(markers()).filter(name => name.endsWith('.test-aaa') || name.endsWith('.test-bbb') || name.endsWith('.setup')).sort()).toEqual(['notes--other.test-aaa', 'notes--zz-forget.setup'])
     expect(sandbox.forbidden()).toEqual([])
   })
 
@@ -835,8 +835,8 @@ describe('forgetTestDatabases', () => {
 
     expect(sandbox.dockerCalls().some(call => call.args.startsWith('exec'))).toBe(false)
     expect(sandbox.read('databases')).toBe('app_testzz_forget\n')
-    expect(existsSync(join(markers(), 'times--zz-forget.test-aaa'))).toBe(false)
-    expect(existsSync(join(markers(), 'times--other.test-aaa'))).toBe(true)
+    expect(existsSync(join(markers(), 'notes--zz-forget.test-aaa'))).toBe(false)
+    expect(existsSync(join(markers(), 'notes--other.test-aaa'))).toBe(true)
   })
 })
 
@@ -845,10 +845,10 @@ describe('writeStackCerts', () => {
 
   const task = 'zzroutes'
   const workspace = () => join(sandbox.home, 'Workspace')
-  const dir = () => join(workspace(), '.worktrees', 'times', task, '.docker', 'certs')
-  const name = `${task}.times.localhost`
-  const project = { name: 'times', repos: [], certs: '.docker/certs', routes: [{ host: 'times.localhost', to: 'api-nginx:443', passthrough: true }] }
-  const certs = async () => spawn([process.execPath, DRIVER, 'stack-certs', JSON.stringify({ project: { ...project, root: join(workspace(), 'times') }, task })], sandbox.home, sandbox)
+  const dir = () => join(workspace(), '.worktrees', 'notes', task, '.docker', 'certs')
+  const name = `${task}.notes.localhost`
+  const project = { name: 'notes', repos: [], certs: '.docker/certs', routes: [{ host: 'notes.localhost', to: 'api-nginx:443', passthrough: true }] }
+  const certs = async () => spawn([process.execPath, DRIVER, 'stack-certs', JSON.stringify({ project: { ...project, root: join(workspace(), 'notes') }, task })], sandbox.home, sandbox)
   const mkcerts = () => sandbox.calls().filter(call => call.startsWith('mkcert'))
 
   beforeEach(() => {
@@ -881,14 +881,14 @@ describe('cloneData of two worktrees of one project', () => {
   let sandbox: Sandbox
   let root: string
 
-  const clone = async (task: string) => spawn([process.execPath, DRIVER, 'clone', JSON.stringify({ project: { name: 'times', root, repos: [], clone: ['mailpit'], routes: [] }, task, main: { name: 'times', services: {}, volumes: { mailpit: {} } } })], sandbox.home, sandbox)
+  const clone = async (task: string) => spawn([process.execPath, DRIVER, 'clone', JSON.stringify({ project: { name: 'notes', root, repos: [], clone: ['mailpit'], routes: [] }, task, main: { name: 'notes', services: {}, volumes: { mailpit: {} } } })], sandbox.home, sandbox)
 
   beforeEach(() => {
     sandbox?.remove()
     sandbox = makeSandbox()
-    root = join(sandbox.home, 'Workspace', 'times')
+    root = join(sandbox.home, 'Workspace', 'notes')
     mkdirSync(root, { recursive: true })
-    sandbox.seed('volumes', 'times_mailpit\n')
+    sandbox.seed('volumes', 'notes_mailpit\n')
     sandbox.seed('running', 'main-db\n')
     sandbox.seed('delay-run', '1.5')
   })
@@ -910,7 +910,7 @@ describe('cloneData of two worktrees of one project', () => {
 
     expect(one.code).toBe(0)
     expect(two.code).toBe(0)
-    expect(two.err).toContain('wt: times\'s main is busy cloning zzclonea, waiting')
+    expect(two.err).toContain('wt: notes\'s main is busy cloning zzclonea, waiting')
 
     const pauses = sandbox.dockerCalls().filter(call => (/^(?:pause|unpause) /).test(call.args))
 
@@ -922,19 +922,19 @@ describe('cloneData of two worktrees of one project', () => {
 
     expect(copies).toHaveLength(2)
     expect(copies.every(call => call.paused.join() === 'main-db')).toBe(true)
-    expect(sandbox.read('volumes')).toContain('times--zzclonea_mailpit')
-    expect(sandbox.read('volumes')).toContain('times--zzcloneb_mailpit')
+    expect(sandbox.read('volumes')).toContain('notes--zzclonea_mailpit')
+    expect(sandbox.read('volumes')).toContain('notes--zzcloneb_mailpit')
     expect(sandbox.read('paused')).toBe('')
   }, 30_000)
 })
 
 describe('wt sync as a job', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
-    env.sandbox.seed('config-zzsync.json', JSON.stringify({ ...MAIN_CONFIG, name: 'times--zzsync' }))
+    env = await notesSandbox()
+    env.sandbox.seed('config-zzsync.json', JSON.stringify({ ...MAIN_CONFIG, name: 'notes--zzsync' }))
   })
 
   afterAll(() => env?.stop())
@@ -944,27 +944,27 @@ describe('wt sync as a job', () => {
     const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')
 
     expect((await wt('add', 'zzsync')).code).toBe(0)
-    expect(JSON.parse(readFileSync(join(jobs, 'times--zzsync.json'), 'utf8'))).toMatchObject({ ref: 'times/zzsync', verb: 'add', code: 0 })
+    expect(JSON.parse(readFileSync(join(jobs, 'notes--zzsync.json'), 'utf8'))).toMatchObject({ ref: 'notes/zzsync', verb: 'add', code: 0 })
     sandbox.seed('delay-config', '0.7')
 
     const first = wt('sync', 'zzsync')
 
-    for (let tries = 0; tries < 100 && !existsSync(join(jobs, 'times--zzsync.lock')); tries++)
+    for (let tries = 0; tries < 100 && !existsSync(join(jobs, 'notes--zzsync.lock')); tries++)
       await Bun.sleep(100)
 
-    expect(existsSync(join(jobs, 'times--zzsync.lock'))).toBe(true)
+    expect(existsSync(join(jobs, 'notes--zzsync.lock'))).toBe(true)
 
     const refused = await wt('sync', 'zzsync')
 
     expect(refused.code).toBe(1)
-    expect(refused.err).toContain('times/zzsync is already syncing')
+    expect(refused.err).toContain('notes/zzsync is already syncing')
     expect(refused.out).toBe('')
 
     const done = await first
 
     expect(done.code).toBe(0)
-    expect(existsSync(join(jobs, 'times--zzsync.lock'))).toBe(false)
-    expect(JSON.parse(readFileSync(join(jobs, 'times--zzsync.json'), 'utf8'))).toMatchObject({ ref: 'times/zzsync', verb: 'sync', code: 0 })
+    expect(existsSync(join(jobs, 'notes--zzsync.lock'))).toBe(false)
+    expect(JSON.parse(readFileSync(join(jobs, 'notes--zzsync.json'), 'utf8'))).toMatchObject({ ref: 'notes/zzsync', verb: 'sync', code: 0 })
 
     expect(sandbox.forbidden()).toEqual([])
   }, 30_000)
@@ -975,19 +975,19 @@ describe('wt sync as a job', () => {
 
     mkdirSync(env.dirOf('zzsync'), { recursive: true })
     mkdirSync(jobs, { recursive: true })
-    writeFileSync(join(jobs, 'times--zzsync.lock'), String(process.pid))
-    writeFileSync(join(jobs, 'times--zzsync.json'), JSON.stringify({ ref: 'times/zzsync', verb: 'up', pid: process.pid, startedAt: Date.now(), log: '' }))
+    writeFileSync(join(jobs, 'notes--zzsync.lock'), String(process.pid))
+    writeFileSync(join(jobs, 'notes--zzsync.json'), JSON.stringify({ ref: 'notes/zzsync', verb: 'up', pid: process.pid, startedAt: Date.now(), log: '' }))
 
     const refused = await wt('sync', 'zzsync')
 
     expect(refused.code).toBe(1)
-    expect(refused.err).toContain('times/zzsync is already coming up')
+    expect(refused.err).toContain('notes/zzsync is already coming up')
     expect(sandbox.dockerCalls()).toEqual([])
   })
 })
 
 describe('a config runner', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   // Logs what it was asked and the locks it runs under; as `down`, it brings the stack up again through wt, as a runner calling back into wt would.
   function writeRunner(): string {
@@ -1004,7 +1004,7 @@ exit 0
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
 
     const runner = writeRunner()
     const config = { runner: { up: [runner, 'up', '{project}/{task}'], down: [runner, 'down', '{project}/{task}', '{task}'], removed: [runner, 'removed', '{id}'] } }
@@ -1016,7 +1016,7 @@ exit 0
 
   test('runs the config\'s commands in place of compose, and a wt command they run works inside the job holding the stack', async () => {
     const { sandbox, wt } = env
-    const lock = join(sandbox.home, '.cache', 'wt', 'jobs', 'times--planning.lock')
+    const lock = join(sandbox.home, '.cache', 'wt', 'jobs', 'notes--planning.lock')
 
     expect((await wt('add', 'planning')).code).toBe(0)
     expect((await wt('up', 'planning')).code).toBe(0)
@@ -1027,10 +1027,10 @@ exit 0
     expect(run.code).toBe(0)
     // Each entry names its holder's pid, which differs between the up and the rm
     expect(sandbox.calls().filter(call => call.startsWith('runner')).map(call => call.replace(/held=\d+ /, 'held='))).toEqual([
-      `runner up times/planning held=${lock}`,
-      `runner down times/planning planning held=${lock}`,
-      `runner up times/planning held=${lock}`,
-      `runner removed times--planning held=${lock}`,
+      `runner up notes/planning held=${lock}`,
+      `runner down notes/planning planning held=${lock}`,
+      `runner up notes/planning held=${lock}`,
+      `runner removed notes--planning held=${lock}`,
     ])
     expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose up') || call.args.startsWith('compose down'))).toEqual([])
     expect(sandbox.forbidden()).toEqual([])
@@ -1038,11 +1038,11 @@ exit 0
 })
 
 describe('a config runner naming no executable', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
     writeFileSync(join(env.sandbox.home, '.config', 'wt', 'config.ts'), `export default ${JSON.stringify({ runner: { up: ['no-such-runner', 'up'] } })}\n`)
   })
 
@@ -1061,11 +1061,11 @@ describe('a config runner naming no executable', () => {
 })
 
 describe('wt run', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
   })
 
   afterAll(() => env?.stop())
@@ -1073,18 +1073,18 @@ describe('wt run', () => {
   // The planning worktree, with a run service and a test database answering
   async function runnable() {
     const { sandbox, wt, dirOf, root } = env
-    const manifest = join(sandbox.home, '.config', 'wt', 'projects', 'times.ts')
+    const manifest = join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts')
 
     writeFileSync(manifest, `export default ${JSON.stringify({ ...MANIFEST, run: { service: 'api-php', dir: 'api', provision: ['true'] } })}\n`)
     expect((await wt('add', 'planning')).code).toBe(0)
     writeFileSync(join(dirOf('planning'), 'api', '.env.dist'), 'DATABASE_URL=postgresql://app:pw@db:5432/app\n')
-    sandbox.seed('config-times.json', JSON.stringify({ ...MAIN_CONFIG, services: { ...MAIN_CONFIG.services, 'api-php': { volumes: [{ type: 'bind', source: join(root, 'api'), target: '/app' }] }, 'db': { image: 'postgres:16' } } }))
+    sandbox.seed('config-notes.json', JSON.stringify({ ...MAIN_CONFIG, services: { ...MAIN_CONFIG.services, 'api-php': { volumes: [{ type: 'bind', source: join(root, 'api'), target: '/app' }] }, 'db': { image: 'postgres:16' } } }))
     sandbox.seed('test-db-id', 'abcdef1234567890')
   }
 
   test('keeps wt rm off the worktree while it runs, forced or not', async () => {
     const { sandbox, wt, dirOf } = env
-    const runs = join(sandbox.home, '.cache', 'wt', 'queues', 'times--planning.runs')
+    const runs = join(sandbox.home, '.cache', 'wt', 'queues', 'notes--planning.runs')
 
     await runnable()
     sandbox.seed('delay-run', '2')
@@ -1118,7 +1118,7 @@ describe('wt run', () => {
 
     expect(first.slice(added).filter(args => args.startsWith('compose config'))).toHaveLength(1)
     expect((await wt('run', 'planning', '--', 'check')).code).toBe(0)
-    expect(commands().slice(first.length).map(args => args.split(' ').slice(0, 2).join(' '))).toEqual(['exec wt-times-test-db', 'run --rm'])
+    expect(commands().slice(first.length).map(args => args.split(' ').slice(0, 2).join(' '))).toEqual(['exec wt-notes-test-db', 'run --rm'])
 
     // A compose file changed is read again; with no .env the cache still holds
     const configReads = () => commands().filter(args => args.startsWith('compose config')).length
@@ -1133,11 +1133,11 @@ describe('wt run', () => {
 })
 
 describe('a wt config that does not load', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
     writeFileSync(join(env.sandbox.home, '.config', 'wt', 'config.ts'), 'export default {\n')
   })
 
@@ -1156,11 +1156,11 @@ describe('a wt config that does not load', () => {
 })
 
 describe('locate', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
     // A second project, so a cwd matching neither is not settled by there being only one
     mkdirSync(join(env.sandbox.home, 'Elsewhere', 'other', '.git'), { recursive: true })
     writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'other.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Elsewhere/other' })}\n`)
@@ -1175,7 +1175,7 @@ describe('locate', () => {
     const { sandbox, wt, root, dirOf } = env
 
     symlinkSync(join(sandbox.home, 'Workspace'), join(sandbox.home, 'Linked'))
-    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Linked/times' })}\n`)
+    writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), `export default ${JSON.stringify({ ...MANIFEST, root: '~/Linked/notes' })}\n`)
 
     expect((await wt('add', 'planning')).code).toBe(0)
 
@@ -1183,7 +1183,7 @@ describe('locate', () => {
 
     expect(main.err).toBe('')
     expect(main.out).toBe('planning\n')
-    expect((await wtIn(dirOf('planning'), '', 'path')).out).toBe(`${join(sandbox.home, 'Linked', 'times')}\n`)
+    expect((await wtIn(dirOf('planning'), '', 'path')).out).toBe(`${join(sandbox.home, 'Linked', 'notes')}\n`)
   }, 30_000)
 
   test('reads a deleted cwd as the worktree it was, and says so when it was none', async () => {
@@ -1208,12 +1208,12 @@ describe('locate', () => {
 })
 
 describe('up and down with no runner', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
-    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'times.ts'), `export default ${JSON.stringify({ ...MANIFEST, setup: ['echo ran >> setup.log'] })}\n`)
+    env = await notesSandbox()
+    writeFileSync(join(env.sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), `export default ${JSON.stringify({ ...MANIFEST, setup: ['echo ran >> setup.log'] })}\n`)
   })
 
   afterAll(() => env?.stop())
@@ -1249,10 +1249,10 @@ describe('up and down with no runner', () => {
     expect(nothing.code).toBe(1)
     expect(nothing.err).toContain('no worktree planning')
 
-    sandbox.seed('compose-ls.json', JSON.stringify([{ Name: 'times--planning', Status: 'exited(2)' }]))
+    sandbox.seed('compose-ls.json', JSON.stringify([{ Name: 'notes--planning', Status: 'exited(2)' }]))
 
     expect((await wt('down', 'planning')).code).toBe(0)
-    expect(sandbox.dockerCalls().filter(call => call.args.includes('down')).map(call => call.args)).toEqual(['compose -p times--planning down --remove-orphans'])
+    expect(sandbox.dockerCalls().filter(call => call.args.includes('down')).map(call => call.args)).toEqual(['compose -p notes--planning down --remove-orphans'])
   }, 30_000)
 
   test('add --up starts the stack it made; up and down --all act on every worktree of the project in turn', async () => {
@@ -1293,9 +1293,9 @@ describe('up and down with no runner', () => {
 
   test('add --up --bg notifies the stack is up, under a verb of its own', async () => {
     const { sandbox, wt, dirOf } = env
-    const lock = join(sandbox.home, '.cache', 'wt', 'jobs', 'times--planning.lock')
+    const lock = join(sandbox.home, '.cache', 'wt', 'jobs', 'notes--planning.lock')
 
-    expect((await wt('add', 'planning', '--up', '--bg')).out).toContain('wt: add --up times/planning runs out of sight')
+    expect((await wt('add', 'planning', '--up', '--bg')).out).toContain('wt: add --up notes/planning runs out of sight')
 
     for (let tries = 0; tries < 100 && (existsSync(lock) || !sandbox.calls().some(call => call.startsWith('notify-send'))); tries++)
       await Bun.sleep(100)
@@ -1303,7 +1303,7 @@ describe('up and down with no runner', () => {
     const notified = sandbox.calls().filter(call => call.startsWith('notify-send'))
 
     expect(notified).toHaveLength(1)
-    expect(notified[0]).toContain('times/planning is up')
+    expect(notified[0]).toContain('notes/planning is up')
     expect(notified[0]).toContain('The worktree is made and its stack came up')
     expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose up')).map(call => call.cwd)).toEqual([dirOf('planning')])
     expect((await wt('ls')).out).toContain('add --up ok just now')
@@ -1340,9 +1340,9 @@ describe('up and down with no runner', () => {
     const before = sandbox.calls().length
     const run = await wt('open', 'planning')
 
-    expect(run).toMatchObject({ code: 0, out: 'wt: opened https://planning.times.localhost\n' })
+    expect(run).toMatchObject({ code: 0, out: 'wt: opened https://planning.notes.localhost\n' })
     expect((await wt('open')).code).toBe(0)
-    expect((await opened(before + 2)).slice(before).sort()).toEqual(['browser https://planning.times.localhost', 'browser https://times.localhost'])
+    expect((await opened(before + 2)).slice(before).sort()).toEqual(['browser https://notes.localhost', 'browser https://planning.notes.localhost'])
     expect((await wt('open', 'nothing')).err).toContain('no worktree nothing')
   }, 30_000)
 
@@ -1355,10 +1355,10 @@ describe('up and down with no runner', () => {
     const none = await wt('logs', 'planning')
 
     expect(none.code).toBe(1)
-    expect(none.err).toContain('no job of times/planning ran with --bg, which alone keeps a log')
+    expect(none.err).toContain('no job of notes/planning ran with --bg, which alone keeps a log')
 
-    writeFileSync(join(jobs, 'times--planning.log'), 'compose said this\n')
-    writeFileSync(join(jobs, 'times--planning.json'), JSON.stringify({ ref: 'times/planning', verb: 'up', pid: 1, startedAt: 0, endedAt: Date.now(), code: 0, log: join(jobs, 'times--planning.log') }))
+    writeFileSync(join(jobs, 'notes--planning.log'), 'compose said this\n')
+    writeFileSync(join(jobs, 'notes--planning.json'), JSON.stringify({ ref: 'notes/planning', verb: 'up', pid: 1, startedAt: 0, endedAt: Date.now(), code: 0, log: join(jobs, 'notes--planning.log') }))
 
     const shown = await wt('logs', 'planning')
 
@@ -1378,8 +1378,8 @@ describe('up and down with no runner', () => {
   test('run up and rm with --bg as detached jobs, their output in the job log, a notification once up', async () => {
     const { sandbox, wt, dirOf } = env
     const jobs = join(sandbox.home, '.cache', 'wt', 'jobs')
-    const job = join(jobs, 'times--planning.json')
-    const lock = join(jobs, 'times--planning.lock')
+    const job = join(jobs, 'notes--planning.json')
+    const lock = join(jobs, 'notes--planning.lock')
     const settled = async (done: () => boolean) => {
       for (let tries = 0; tries < 100 && !done(); tries++)
         await Bun.sleep(100)
@@ -1390,15 +1390,15 @@ describe('up and down with no runner', () => {
     const up = await wt('up', 'planning', '--bg')
 
     expect(up.code).toBe(0)
-    expect(up.out).toContain(`wt: up times/planning runs out of sight, its output in ${join(jobs, 'times--planning.log')}`)
+    expect(up.out).toContain(`wt: up notes/planning runs out of sight, its output in ${join(jobs, 'notes--planning.log')}`)
     // The job releases its lock before it notifies, so the wait is on both.
     await settled(() => !existsSync(lock) && sandbox.calls().some(call => call.startsWith('notify-send')))
-    expect(JSON.parse(readFileSync(job, 'utf8'))).toMatchObject({ ref: 'times/planning', verb: 'up', code: 0 })
+    expect(JSON.parse(readFileSync(job, 'utf8'))).toMatchObject({ ref: 'notes/planning', verb: 'up', code: 0 })
     expect(sandbox.dockerCalls().filter(call => call.args.startsWith('compose up')).map(call => call.cwd)).toEqual([dirOf('planning')])
     const notified = sandbox.calls().filter(call => call.startsWith('notify-send'))
 
     expect(notified).toHaveLength(1)
-    expect(notified[0]).toContain('times/planning is up')
+    expect(notified[0]).toContain('notes/planning is up')
 
     // Without notify-send, macOS's osascript tells it; with neither, the detach line points at `wt ls`
     const bin = join(sandbox.home, '..', 'bin')
@@ -1410,7 +1410,7 @@ describe('up and down with no runner', () => {
 
     expect(again.out).not.toContain('wt ls')
     await settled(() => !existsSync(lock) && sandbox.calls().some(call => call.startsWith('osascript')))
-    expect(sandbox.calls().find(call => call.startsWith('osascript'))).toContain('wt: times/planning is up')
+    expect(sandbox.calls().find(call => call.startsWith('osascript'))).toContain('wt: notes/planning is up')
 
     rmSync(join(bin, 'osascript'))
     expect((await wt('up', 'planning', '--bg')).out).toContain('nothing here notifies its end, `wt ls` shows how it went')
@@ -1448,11 +1448,11 @@ describe('up and down with no runner', () => {
 })
 
 describe('wt init', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
+    env = await notesSandbox()
   })
 
   afterAll(() => env?.stop())
@@ -1460,14 +1460,14 @@ describe('wt init', () => {
   test('drafts a manifest for a checkout no tool knows, named after its folder unless --name says otherwise', async () => {
     const { sandbox, wt, root } = env
 
-    sandbox.seed('devproxy-hosts', JSON.stringify([{ host: 'mail.times.localhost', group: 'docker-times', to: 'http://times-mailhog:8025', passthrough: false }]))
+    sandbox.seed('devproxy-hosts', JSON.stringify([{ host: 'mail.notes.localhost', group: 'docker-notes', to: 'http://notes-mailhog:8025', passthrough: false }]))
 
     const printed = await wt('init', root, '--print', '--name', 'other')
 
     expect(printed.err).toBe('')
     expect(printed.code).toBe(0)
     expect(printed.out).toContain('import type { ProjectConfig } from \'@kaynooo/cli-wt\'')
-    expect(printed.out).toContain('root: \'~/Workspace/times\'')
+    expect(printed.out).toContain('root: \'~/Workspace/notes\'')
     expect(printed.out).toContain('} satisfies ProjectConfig')
     expect(existsSync(join(sandbox.home, '.config', 'wt', 'projects', 'other.ts'))).toBe(false)
 
@@ -1475,12 +1475,12 @@ describe('wt init', () => {
 
     expect((await wt('init', root)).code).toBe(0)
     // The manifest's name is its file's, so the draft is the one printed, less the newline console.log adds
-    expect(`${readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'times.ts'), 'utf8')}\n`).toBe(printed.out)
+    expect(`${readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), 'utf8')}\n`).toBe(printed.out)
 
     const { compilerOptions } = JSON.parse(readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'tsconfig.json'), 'utf8')) as { compilerOptions: { paths: Record<string, string[]> } }
 
     expect(compilerOptions.paths['@kaynooo/cli-wt']).toEqual([join(import.meta.dir, '..', 'src', 'index.ts')])
-    expect(printed.out).toContain('{ host: \'mail.times.localhost\', to: \'mailhog:8025\' },')
+    expect(printed.out).toContain('{ host: \'mail.notes.localhost\', to: \'mailhog:8025\' },')
   }, 30_000)
 
   test('says why the draft has no routes, and names a host of main it cannot place', async () => {
@@ -1489,16 +1489,16 @@ describe('wt init', () => {
     expect((await wt('init', root, '--print')).err).toContain('devproxy serves no hosts, so the draft has no routes')
 
     sandbox.seed('devproxy-hosts', JSON.stringify([
-      { host: 'ghost.times.localhost', group: 'docker-times', to: 'http://gone:80', passthrough: false },
+      { host: 'ghost.notes.localhost', group: 'docker-notes', to: 'http://gone:80', passthrough: false },
       { host: 'app.other.localhost', group: 'docker-other', to: 'http://other-web:80', passthrough: false },
     ]))
 
     const unplaced = await wt('init', root, '--print')
 
     expect(unplaced.code).toBe(0)
-    expect(unplaced.err).toContain('devproxy serves ghost.times.localhost from times\'s labels, to http://gone:80, which is no service of it: add its route by hand')
+    expect(unplaced.err).toContain('devproxy serves ghost.notes.localhost from notes\'s labels, to http://gone:80, which is no service of it: add its route by hand')
     expect(unplaced.err).not.toContain('app.other.localhost')
-    expect(unplaced.err).toContain('none of the hosts devproxy serves leads to times')
+    expect(unplaced.err).toContain('none of the hosts devproxy serves leads to notes')
 
     rmSync(join(sandbox.home, '.config', 'devproxy', 'config.ts'))
 
@@ -1508,12 +1508,12 @@ describe('wt init', () => {
 })
 
 describe('wt ls --json', () => {
-  let env: Awaited<ReturnType<typeof timesSandbox>>
+  let env: Awaited<ReturnType<typeof notesSandbox>>
 
   beforeEach(async () => {
     env?.stop()
-    env = await timesSandbox()
-    env.sandbox.seed('volumes', 'times_mailpit\n')
+    env = await notesSandbox()
+    env.sandbox.seed('volumes', 'notes_mailpit\n')
   })
 
   afterAll(() => env?.stop())
@@ -1523,17 +1523,17 @@ describe('wt ls --json', () => {
     const { sandbox, wt, root, dirOf } = env
 
     expect((await wt('add', 'planning')).code).toBe(0)
-    sandbox.seed('compose-ls.json', JSON.stringify([{ Name: 'times--planning', Status: 'running(2)' }]))
+    sandbox.seed('compose-ls.json', JSON.stringify([{ Name: 'notes--planning', Status: 'running(2)' }]))
 
     const run = await wt('ls', '--json')
 
     expect(run.err).toBe('')
     expect(run.code).toBe(0)
     expect(JSON.parse(run.out)).toEqual({
-      project: 'times',
+      project: 'notes',
       checkouts: [
-        { project: 'times', task: 'main', dir: root, branch: 'main', url: 'https://times.localhost', running: false, dirty: 0, unbranched: 0, session: 'times', job: '' },
-        { project: 'times', task: 'planning', dir: dirOf('planning'), branch: 'wt/planning', url: 'https://planning.times.localhost', running: true, dirty: 0, unbranched: 0, session: 'times--planning', job: 'add ok just now' },
+        { project: 'notes', task: 'main', dir: root, branch: 'main', url: 'https://notes.localhost', running: false, dirty: 0, unbranched: 0, session: 'notes', job: '' },
+        { project: 'notes', task: 'planning', dir: dirOf('planning'), branch: 'wt/planning', url: 'https://planning.notes.localhost', running: true, dirty: 0, unbranched: 0, session: 'notes--planning', job: 'add ok just now' },
       ],
     })
   }, 30_000)

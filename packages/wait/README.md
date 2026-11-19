@@ -40,7 +40,7 @@ Heavy commands from parallel Claude Code sessions (phpunit, playwright, vue-tsc,
 
 ```sh
 slot -- bunx vue-tsc
-slot --lock booki-test-db -- vendor/bin/phpunit
+slot --lock shop-test-db -- vendor/bin/phpunit
 slot -n 6 -t 10m -- bun test
 slot ls
 check --slot
@@ -53,7 +53,7 @@ check --slot
 - Slots and locks are `flock`s on files, called through `bun:ffi`: the kernel drops one with its holder, so a `slot` killed with SIGKILL frees what it held, and nothing is cleaned up by pid or timestamp. The command it started is not killed with it: it keeps running with its slot and lock already freed, so the lock no longer protects it.
 - A `slot` inside a slotted command does not wait for another slot or for a lock the outer one holds (the `SLOT_HOLDING` variable lists them), so a script and the commands it runs may both be wrapped, and `check --slot` over a script calling `slot --lock` cannot deadlock against a session waiting for a slot while it holds that lock, since a waiter holds nothing.
 - When it has to wait, stderr gets one line naming who holds what it needs: the session, the command and for how long. `--timeout` (`-t`, `30s`, `5m`, a bare number of seconds) gives up with exit 2; it waits forever by default.
-- `slot ls` lists the holders (`slot 2`, `lock booki-test-db`) and the waiters with their session (found as `ft take` finds it, through `~/.claude/sessions`), command and age, `--json` as `{slots, busy, entries}`. A waiter that died is dropped from the list.
+- `slot ls` lists the holders (`slot 2`, `lock shop-test-db`) and the waiters with their session (found as `ft take` finds it, through `~/.claude/sessions`), command and age, `--json` as `{slots, busy, entries}`. A waiter that died is dropped from the list.
 - `slot ls` is the listing even as a first word, `slot -- ls` being read as `slot ls` because Bun drops a leading `--`: write `slot -n 4 -- ls` for the command.
 - State lives in `$XDG_RUNTIME_DIR/kaynooo-cli/slot` (`~/.cache/kaynooo-cli/slot` without it), only the user can enter it; `$SLOT_DIR` points elsewhere.
 - Exit codes: the command's, 2 on a timeout or a usage error.

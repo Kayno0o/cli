@@ -28,8 +28,8 @@ describe('live', () => {
 
 describe('phpService', () => {
   test('prefers php itself, then any service naming php', () => {
-    expect(phpService(['db', 'booki-php', 'php'])).toBe('php')
-    expect(phpService(['db', 'dorad_php'])).toBe('dorad_php')
+    expect(phpService(['db', 'shop-php', 'php'])).toBe('php')
+    expect(phpService(['db', 'blog_php'])).toBe('blog_php')
     expect(phpService(['db', 'node'])).toBeUndefined()
     expect(phpService(['db', 'phpmyadmin'])).toBeUndefined()
     expect(phpService(['phpmyadmin', 'app-php'])).toBe('app-php')
