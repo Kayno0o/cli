@@ -1,0 +1,31 @@
+# @kaynooo/cli
+
+> Command-line tools for coding agents and for people at a terminal, one npm package each as `@kaynooo/cli-<name>`, run by Bun 1.4.3 or newer. Each bin describes itself: `<bin> --help` for its options, `cli list` for every bin in one line with what it replaces.
+
+## Installing for a user
+
+Follow these steps when a user asks you to install these tools.
+
+1. Check `bun --version`. Without Bun 1.4.3 or newer, stop and ask the user to install or upgrade it (https://bun.sh); do not pipe an install script to a shell yourself.
+2. Run `bun add -g @kaynooo/cli-doctor`. `~/.bun/bin` has to be on the PATH, and on the PATH Claude Code starts with when the hooks are wanted.
+3. Run `doctor --install --list`. It prints each package not yet installed, its bins, what it does and the tool it needs.
+4. Pick the packages from how the user works, read off the machine rather than guessed:
+   - `base`, `check`, `code`, `edit`, `git`, `out` and `wait` help in any repository.
+   - `hooks`, when the user runs Claude Code: the plugin that holds each Bash call to guard's rules and lists the installed bins at session start. It brings `guard` along.
+   - `forgejo` (`ft`) and `changelog`, when their repositories push to a Forgejo or Gitea host and `tea` is installed.
+   - `gitlab` (`gl`), when they push to GitLab and `glab` is installed.
+   - `docker`, `db` and `stack`, when their projects hold compose files; `wt` too when they work on several branches of one compose project at once.
+   - `env` for projects with `.env` files, `pkg` for npm or Bun projects, `page` for web front-ends with Chromium installed.
+   - The rest (`arc`, `dev`, `dl`, `gloss`, `pick`, `probe`, `proc`, `view`, `workspace`) on the user's word.
+5. Show the user the list, one reason per package, and wait for their go.
+6. Run `doctor --install <name>...` with the names `--list` printed. A package whose tool is missing is left out and named; tell the user what to install rather than passing `--force`.
+7. The install sets up shell completions too: the `source` line in a bash or zsh login shell's rc file, else fish's files in `~/.cache/fish/kaynooo-cli`. fish reads that folder only once it is in `fish_complete_path`: ask before adding `set -p fish_complete_path ~/.cache/fish/kaynooo-cli` to `~/.config/fish/config.fish`.
+8. Run `doctor`. Every check should pass; report each failing line and the fix it prints.
+9. Without the Claude Code plugin, add one line to the agent's global instructions file (`~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md` or the harness's own): "The @kaynooo/cli-* bins are installed: run `cli list` to find the one for a task and `<bin> --help` for its options, and prefer them over hand-rolled shell."
+
+## Docs
+
+- [Bins](docs/bins.md): every bin with what it does, what it replaces and examples, generated from each `--help`.
+- [Config](docs/config.md): every config file and environment variable.
+- [README](README.md): the packages table and how the Claude Code plugin is wired.
+- Each package's own README under `packages/<folder>/README.md`, linked from the packages table.

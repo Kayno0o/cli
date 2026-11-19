@@ -4,6 +4,14 @@ CLIs for Claude Code sessions and for people at a terminal, each published on it
 
 ## Install
 
+With a coding agent, paste this into it:
+
+```text
+Install the @kaynooo/cli command-line tools for me by following https://raw.githubusercontent.com/Kayno0o/cli/main/llms.txt. Choose the packages from how I work on this machine, and show me the list before installing anything.
+```
+
+By hand:
+
 ```sh
 bun add -g @kaynooo/cli-doctor
 doctor --install
@@ -74,7 +82,7 @@ source <(cli completions zsh)
 | [`@kaynooo/cli-workspace`](packages/workspace) | `ws` | the repositories of the workspace that need attention (dirty, unpushed, behind, unreleased); node_modules, build output and clean worktrees reclaimed across repos, dry by default; the known vulnerabilities of the Bun repositories in one table per repository |
 | [`@kaynooo/cli-wt`](packages/wt) | `wt` | git worktrees of a compose project, each with its own stack, its own copy of the data and its own `<task>.<host>` subdomains through devproxy; manifests and a runner in a config file, job locks other tools can share |
 
-Every bin and command is described in [docs/bins.md](docs/bins.md), every config file and environment variable in [docs/config.md](docs/config.md).
+Every bin and command is described in [docs/bins.md](docs/bins.md), every config file and environment variable in [docs/config.md](docs/config.md). [llms.txt](llms.txt) is the entry point for agents.
 
 ## Claude Code
 
