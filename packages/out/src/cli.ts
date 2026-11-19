@@ -8,7 +8,7 @@ import { readPiped, run } from './run'
 import { grepLog, printLast, printList } from './saved'
 import { readEntries, renderSummary, statsPath, summarize } from './stats'
 
-const USAGE = 'out [-n <lines>] -- <command> [args...]: runs the command and shortens its output when it is long, exiting with its code\n<command> | out [-n <lines>]: shortens the output piped in\nout --stats [--since 7d] [--json]: the runs recorded and about how many tokens they saved\nout --last: the path of the most recent full log\nout --list: the saved logs, the newest first\nout --grep <regex> [--log <name>]: the lines of a saved log (the last by default) matching the regex, with their line numbers\n\nEach run is recorded in ~/.local/state/kaynooo-cli/out/stats.jsonl with the words naming the command, never its arguments; tokens are counted as bytes / 4.'
+const USAGE = 'out [-n <lines>] -- <command> [args...]: runs the command and shortens its output when it is long, exiting with its code\n<command> | out [-n <lines>]: shortens the output piped in\nout --stats [--since 7d] [--json]: the runs recorded and about how many tokens they saved\nout --last: the path of the most recent full log\nout --list: the saved logs, the newest first\nout --grep <regex> [--log <name>]: the lines of a saved log (the last by default) matching the regex, with their line numbers\n\nEach run is recorded in ~/.local/state/kaynooo-cli/out/stats.jsonl with the words naming the command, never its arguments; tokens are counted as bytes / 4, a run only up to the 30,000 characters Claude Code shows (BASH_MAX_OUTPUT_LENGTH).'
 
 const EXITS: ExitRow[] = [[0, 'the command did, or the output piped in was shortened, or the log was found'], ['its own', 'the code of a command that failed'], [1, '--grep matched nothing, or --list found no log'], [126, 'the command cannot be run (not executable)'], [127, 'the command cannot be started'], [2, 'a usage error, or no such saved log']]
 
@@ -22,7 +22,7 @@ const OPTIONS = {
   log: { type: 'string', description: 'with --grep, the saved log to read (its name or path) instead of the last' },
   stats: { type: 'boolean', description: 'print the runs recorded and the tokens saved' },
   since: { type: 'string', description: 'with --stats, only the runs this recent (7d, 12h)' },
-  json: jsonOption('with --stats, {runs, folded, bytes, shown, tokensSaved, commands}'),
+  json: jsonOption('with --stats, {runs, folded, bytes, shown, tokensSaved, cap, commands}'),
 } as const
 
 async function stats(since: string | undefined, json: boolean): Promise<number> {
