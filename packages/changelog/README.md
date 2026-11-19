@@ -79,12 +79,6 @@ jobs:
 
 It will be triggered whenever you push a tag that starts with `v`.
 
-The package is published to the Forgejo npm registry. To install it from there, add to your `.npmrc`:
-
-```ini
-@kaynooo:registry=https://git.kaynooo.fr/api/packages/kaynooo/npm/
-```
-
 ## Configuration
 
 Put a `changelog.config.{ts,mts,js,mjs,json}` file in the project root, or a `changelog` field in `package.json`. CLI flags override the file, which overrides `package.json`.
@@ -168,7 +162,7 @@ bunx @kaynooo/cli-changelog --dry-run
 `changelog --json` (also with `--dry-run` or `--output`):
 
 ```json
-{ "command": "release", "status": "released", "from": "v1.4.2", "to": "main", "commits": 3, "notes": "...", "url": "https://git.kaynooo.fr/o/r/releases/tag/v1.4.3", "output": null, "assetsFailed": 0, "discord": null }
+{ "command": "release", "status": "released", "from": "v1.4.2", "to": "main", "commits": 3, "notes": "...", "url": "https://git.example.org/o/r/releases/tag/v1.4.3", "output": null, "assetsFailed": 0, "discord": null }
 ```
 
 `status` is `released`, `dry-run` or `saved`; `url` is the release page once released, `output` the file written by `--output`, `discord` is `posted`, `failed` or `null` without a webhook. The exit code is 1 when an asset upload or the Discord post failed, with the report still printed.
@@ -204,7 +198,7 @@ The Gitea release note is **not** removed by default - you're asked about it int
 | `--yes`           | Skip confirmation prompts (for CI/scripts)                                          |
 | `-r`, `--repo`    | Repository to undo in, e.g. `kaynooo/cli` (`--gitea` is kept as an alias)           |
 
-The short `-t` for `--token` was removed, pass `--token` or set `GITHUB_TOKEN`. The Forgejo host defaults to `git.kaynooo.fr`.
+The short `-t` for `--token` was removed, pass `--token` or set `GITHUB_TOKEN`.
 
 ## Why?
 

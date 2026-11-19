@@ -18,7 +18,7 @@ doctor --install forgejo check hooks   # or name them: a package, one of its bin
 | --- | --- | --- |
 | each `@kaynooo/cli-*` package | it is installed globally, its bins are on the PATH and it is no older than the version `bun info` serves | `bun install -g <package>@<latest>`, and one line installing every outdated package at once |
 | `needs` | the system tools the installed packages need are on the PATH: glab for `gl`, docker for `dc`, `dlog`, `dx` and `sf` | install them by hand, doctor never installs a system package |
-| `tea` | `ft` is installed, tea is installed, logged in to git.kaynooo.fr and `tea api version` answers, since `ft` goes through it | `tea login add --url https://git.kaynooo.fr --oauth` |
+| `tea` | `ft` is installed, tea is installed, logged in to the `forge` host of `~/.config/kaynooo-cli/config.json` and `tea api version` answers, since `ft` goes through it | `tea login add --url https://<forge> --oauth` |
 | `hooks` | `~/.claude/settings.json` wires the hooks one way: the `cli-hooks@kaynooo-cli` plugin enabled, or the `cli` mod listed in `CLAUDE_CODE_PLUGIN_DIRS`; both at once fails, every call being checked twice | `claude plugin install cli-hooks --marketplace ...`, or `claude plugin disable` for the doubled one |
 | `bun` | Bun satisfies the `engines.bun` range of every installed package | `bun upgrade` |
 | `completions` | a bash or zsh login shell's rc file sources `cli completions <shell>`; otherwise fish is missing, or its folder holds a completion for every installed bin and none of ours for a bin no longer installed | `cli completions fish --install`, or the line appended to the rc file |

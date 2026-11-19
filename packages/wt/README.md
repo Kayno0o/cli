@@ -6,7 +6,7 @@ Git worktrees of a compose project, each with its own stack, its own copy of the
 bun install -g @kaynooo/cli-wt
 ```
 
-`wt add planning` checks the project out on `wt/planning` next to main, copies the gitignored files main needs (env files, certificates), clones its volumes while main's containers are paused, rewrites the hosts in the copied env files to `planning.<host>`, and writes a compose override giving the worktree's routed services their [devproxy](https://git.kaynooo.fr/kaynooo/devproxy) labels. `wt up planning` starts it, `wt rm planning` stops it and deletes everything but its branches.
+`wt add planning` checks the project out on `wt/planning` next to main, copies the gitignored files main needs (env files, certificates), clones its volumes while main's containers are paused, rewrites the hosts in the copied env files to `planning.<host>`, and writes a compose override giving the worktree's routed services their devproxy labels. `wt up planning` starts it, `wt rm planning` stops it and deletes everything but its branches.
 
 ## Commands
 
