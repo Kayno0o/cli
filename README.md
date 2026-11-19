@@ -32,7 +32,7 @@ bash, in `~/.bashrc`:
 source <(cli completions bash)
 ```
 
-zsh, in `~/.zshrc` (untested):
+zsh, anywhere in `~/.zshrc`:
 
 ```sh
 source <(cli completions zsh)

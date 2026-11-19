@@ -44,7 +44,7 @@ source <(cli completions bash)            # in ~/.bashrc
 source <(cli completions zsh)             # in ~/.zshrc
 ```
 
-Each bin completes itself through `<bin> __complete`, and these are the scripts `<bin> --completions <shell>` prints (from `@kaynooo/cli-kit`), written for every installed bin at once. fish gets a file per bin, the stale ones this command wrote taken out, in `~/.cache/fish/kaynooo-cli` (or `$XDG_CACHE_HOME`); the folder has to be in `fish_complete_path`, first so a completion fish ships for the same name does not win: `set -p fish_complete_path ~/.cache/fish/kaynooo-cli`. bash and zsh get one script each on stdout, `--install` and `--dir` being fish's, the zsh one loading compinit when the rc file has not. `doctor --fix` appends the line to the login shell's rc file. The zsh one is untested, zsh not being installed here.
+Each bin completes itself through `<bin> __complete`, and these are the scripts `<bin> --completions <shell>` prints (from `@kaynooo/cli-kit`), written for every installed bin at once. fish gets a file per bin, the stale ones this command wrote taken out, in `~/.cache/fish/kaynooo-cli` (or `$XDG_CACHE_HOME`); the folder has to be in `fish_complete_path`, first so a completion fish ships for the same name does not win: `set -p fish_complete_path ~/.cache/fish/kaynooo-cli`. bash and zsh get one script each on stdout, `--install` and `--dir` being fish's, the zsh one registering the bins at the first prompt, so a `compinit` run later (oh-my-zsh) keeps them, and loading compinit when nothing did. `doctor --fix` appends the line to the login shell's rc file.
 
 ## cli config
 

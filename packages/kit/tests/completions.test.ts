@@ -12,7 +12,7 @@ function fakeBin(): string {
   const dir = temp('completions-bin-')
   const script = join(dir, 'demo')
 
-  writeFileSync(script, '#!/bin/sh\ncase "$*" in\n  "__complete "|"__complete be") printf "build\\tbuild it\\nbench\\tbench it\\nrun\\n" ;;\n  "__complete build --") printf -- "--fast\\tquick\\n--full\\n" ;;\n  "__complete run "*) printf "__files__\\n" ;;\nesac\n')
+  writeFileSync(script, '#!/bin/sh\ncase "$*" in\n  "__complete "|"__complete be") printf "build\\tbuild it\\nbench\\tbench it\\nrun\\n" ;;\n  "__complete build --") printf -- "--fast\\tquick\\n--full\\n" ;;\n  "__complete run "*) printf "__files__\\n" ;;\n  bench) echo ran-bench ;;\nesac\n')
   chmodSync(script, 0o755)
   writeFileSync(join(dir, 'notes.txt'), '')
 
@@ -32,7 +32,7 @@ describe('completionScript', () => {
   test('registers every bin on the one function', () => {
     expect(completionScript('fish', ['src', 'gst'])).toEndWith('end\ncomplete -c src -f -a \'(__kaynooo_cli_complete src)\'\ncomplete -c gst -f -a \'(__kaynooo_cli_complete gst)\'\n')
     expect(completionScript('bash', ['src', 'gst'])).toEndWith('complete -F __kaynooo_cli_complete src gst\n')
-    expect(completionScript('zsh', ['src', 'gst'])).toEndWith('compdef __kaynooo_cli_complete src gst\n')
+    expect(completionScript('zsh', ['src', 'gst'])).toEndWith('__kaynooo_cli_bins+=(src gst)\n')
   })
 
   test('zsh describes the values with one, escaping their colons, and completes files on the marker', () => {
@@ -42,9 +42,37 @@ describe('completionScript', () => {
     expect(script).toContain('//:/\\\\:')
     expect(script).toContain('__files__')
   })
+})
 
-  test('zsh loads compinit itself when the rc file has not, so compdef exists wherever the line is sourced', () => {
-    expect(completionScript('zsh', ['demo'])).toContain('(( $+functions[compdef] )) || { autoload -Uz compinit && compinit }\n')
+describe.if(Bun.which('zsh') !== null)('the zsh script', () => {
+  // An interactive zsh reading the rc file given, driven through zpty: `demo be` and Tab, then Enter, so the bin prints ran-bench only when Tab completed it to `demo bench`.
+  function ranAfterTab(dir: string, rc: string): string {
+    writeFileSync(join(dir, 'demo.zsh'), completionScript('zsh', ['demo']))
+    writeFileSync(join(dir, 'other.zsh'), completionScript('zsh', ['other']))
+    writeFileSync(join(dir, '.zshrc'), `PS1='READY> '\nunset zle_bracketed_paste\n${rc}\n`)
+
+    const driver = `zmodload zsh/zpty
+zpty z zsh -i
+zpty -r z out '*READY> *'
+zpty -w z $'demo be\\t'
+zpty -r z out '*READY> *'
+print -r -- "$out"`
+    const ran = Bun.spawnSync(['zsh', '-f', '-c', driver], { cwd: dir, env: { ...onPath(dir), HOME: dir, ZDOTDIR: dir, TERM: 'xterm' }, timeout: 10_000 })
+
+    return ran.stdout.toString()
+  }
+
+  test('completes a bin in a bare rc file, compinit being loaded for it', () => {
+    expect(ranAfterTab(fakeBin(), 'source ./demo.zsh')).toContain('ran-bench')
+  })
+
+  test('completes a bin when compinit runs before the line or after it, as a framework loaded later does', () => {
+    expect(ranAfterTab(fakeBin(), 'autoload -Uz compinit && compinit\nsource ./demo.zsh')).toContain('ran-bench')
+    expect(ranAfterTab(fakeBin(), 'source ./demo.zsh\nautoload -Uz compinit && compinit')).toContain('ran-bench')
+  })
+
+  test('keeps a bin completed when the script of another is sourced after it', () => {
+    expect(ranAfterTab(fakeBin(), 'source ./demo.zsh\nsource ./other.zsh')).toContain('ran-bench')
   })
 })
 
