@@ -26,6 +26,6 @@ Follow these steps when a user asks you to install these tools.
 ## Docs
 
 - [Bins](docs/bins.md): every bin with what it does, what it replaces and examples, generated from each `--help`.
-- [Config](docs/config.md): every config file and environment variable.
+- [Config](docs/config.md): every config file, the theme and every environment variable.
 - [README](README.md): the packages table and how the Claude Code plugin is wired.
 - Each package's own README under `packages/<folder>/README.md`, linked from the packages table.
