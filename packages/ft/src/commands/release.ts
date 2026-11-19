@@ -150,7 +150,7 @@ export async function release(args: string[]): Promise<number> {
 
     // One push for every package, so the branch's runs test the bumps once.
     try {
-      push = await pushToOrigin(['--atomic', 'origin', `HEAD:refs/heads/${branch}`, ...tags.map(tag => `refs/tags/${tag}`)], child => held.forward(child))
+      push = await pushToOrigin([`HEAD:refs/heads/${branch}`, ...tags.map(tag => `refs/tags/${tag}`)], child => held.forward(child), true)
     }
     catch (error) {
       isPushUnknown = true

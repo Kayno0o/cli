@@ -6,6 +6,7 @@ import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
 import { describe, expect, test } from 'bun:test'
 import { commitPackageBump, nextVersion, release, taggedVersion, testsPass } from '../src/commands/release'
+import { pushToOrigin } from '../src/commands/release-checks'
 import { timing } from '../src/commands/watch'
 import { withFakeTea } from './fake-tea'
 
@@ -69,6 +70,79 @@ describe('testsPass on a commit origin has', () => {
       expect(result).toBe(false)
       expect(out).toStartWith(`main at ${sha.slice(0, 7)} is on origin, waiting for its runs before the bump\nfailure test.yml run 7 on main in 1m\n`)
     })
+  })
+
+  test('names the later push that cancelled its runs, rather than a failure', async () => {
+    const work = await pushedRepo()
+    const sha = (await $`git -C ${work} rev-parse HEAD`.text()).trim()
+    const other = join(work, '..', 'other')
+
+    await $`git clone -q ${join(work, '..', 'origin.git')} ${other} && git -C ${other} -c user.name=t -c user.email=t@t commit -q --allow-empty -m 'fix(wt): later' && git -C ${other} push -q origin main`.quiet()
+
+    const tip = (await $`git -C ${other} rev-parse --short=7 HEAD`.text()).trim()
+
+    await withFakeTea({ issues: [], runs: [run(sha, 'cancelled')] }, async () => {
+      // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+      await expect(inRepo(work, 1, async () => capture(async () => testsPass(sha, 'main', 1000)))).rejects.toThrow(`a later push to origin (${tip} fix(wt): later) cancelled the runs on ${sha.slice(0, 7)}, so nothing was bumped or tagged`)
+    })
+  })
+})
+
+describe('pushToOrigin with a mirror as a second push URL', () => {
+  // origin fetches from forge.git and pushes to it and to mirror.git, as a GitHub mirror is set up; work has a feat commit tagged v1 to push.
+  async function mirroredRepo(): Promise<{ root: string, work: string }> {
+    const root = temp('ft-push-mirror-')
+    const work = join(root, 'work')
+
+    await $`git init -q --bare -b main forge.git && git init -q --bare -b main mirror.git && git clone -q forge.git work`.cwd(root).quiet()
+    await $`git config user.name t && git config user.email t@t && git commit -q --allow-empty -m init && git push -q origin main && git push -q ../mirror.git main`.cwd(work).quiet()
+    await $`git remote set-url --add --push origin ${root}/forge.git && git remote set-url --add --push origin ${root}/mirror.git`.cwd(work).quiet()
+    await $`git commit -q --allow-empty -m feat && git tag v1`.cwd(work).quiet()
+
+    return { root, work }
+  }
+
+  // Pushes a commit work lacks to the bare repository, so it refuses work's push.
+  async function moveAhead(root: string, bare: string): Promise<void> {
+    await $`git clone -q ${bare} other-${bare} && git -C other-${bare} -c user.name=t -c user.email=t@t commit -q --allow-empty -m later && git -C other-${bare} push -q origin main`.cwd(root).quiet()
+  }
+
+  async function pushIn(work: string): Promise<{ code: number, err: string }> {
+    const home = process.cwd()
+
+    process.chdir(work)
+
+    try {
+      const { result, err } = await capture(async () => pushToOrigin(['HEAD:refs/heads/main', 'refs/tags/v1'], undefined, true))
+
+      return { code: result.code, err }
+    }
+    finally {
+      process.chdir(home)
+    }
+  }
+
+  test('leaves the mirror untouched when the forge refuses', async () => {
+    const { root, work } = await mirroredRepo()
+
+    await moveAhead(root, 'forge.git')
+
+    expect((await pushIn(work)).code).not.toBe(0)
+    expect((await $`git -C mirror.git tag`.cwd(root).text()).trim()).toBe('')
+  })
+
+  test('stands once the forge took it, a refusing mirror only warned about', async () => {
+    const { root, work } = await mirroredRepo()
+
+    await moveAhead(root, 'mirror.git')
+
+    const { code, err } = await pushIn(work)
+    const head = (await $`git rev-parse HEAD`.cwd(work).text()).trim()
+
+    expect(code).toBe(0)
+    expect(err).toContain(`warning: ${root}/mirror.git refused the push`)
+    expect((await $`git -C forge.git tag`.cwd(root).text()).trim()).toBe('v1')
+    expect((await $`git rev-parse origin/main`.cwd(work).text()).trim()).toBe(head)
   })
 })
 
