@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { $ } from 'bun'
 import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { HELD_ENV, Jobs, logTail } from '../src/jobs'
+import { dropStaleGuard, HELD_ENV, Jobs, logTail } from '../src/jobs'
 
 const scratch = mkdtempSync(join(tmpdir(), 'wt-jobs-'))
 const stack = { ref: 'booki/planning', slug: 'booki--planning' }
@@ -94,6 +94,31 @@ describe('Jobs', () => {
     writeFileSync(`${lock}.takeover`, '')
 
     expect(() => jobs.claim(stack, 'up', false)).toThrow('booki/planning is already coming up')
+  })
+
+  test('takes an abandoned lock over past a takeover whose claimer died in it', () => {
+    const jobs = jobsIn()
+    const { lock } = jobs.paths(stack.slug)
+
+    jobs.claim(stack, 'up', false)
+    writeFileSync(lock, DEAD_PID)
+    writeFileSync(`${lock}.takeover`, 'dead claimer')
+    utimesSync(`${lock}.takeover`, 1, 1)
+
+    expect(() => jobs.claim(stack, 'up', false)).not.toThrow()
+  })
+
+  test('of two claimers finding the same stale takeover, the later one puts back the guard the first made since', () => {
+    const guard = join(scratch, 'race.lock.takeover')
+
+    writeFileSync(guard, 'dead claimer')
+
+    expect(dropStaleGuard(guard, 'dead claimer')).toBe(true)
+
+    writeFileSync(guard, 'first claimer', { flag: 'wx' })
+
+    expect(dropStaleGuard(guard, 'dead claimer')).toBe(false)
+    expect(readFileSync(guard, 'utf8')).toBe('first claimer')
   })
 
   test('prints a failed command as what it said, with no stack trace', async () => {

@@ -4,7 +4,8 @@
  * Tools pointing at the same folder share the locks: a project tool's up and wt's rm of one worktree never run together.
  */
 
-import { closeSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { closeSync, fstatSync, linkSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { formatAge, printError } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
@@ -105,26 +106,71 @@ function held(lock: string, now = Date.now()): boolean {
   }
 }
 
+function readText(file: string): string | undefined {
+  try {
+    return readFileSync(file, 'utf8')
+  }
+  catch {
+    return undefined
+  }
+}
+
+/**
+ * Removes the stale takeover guard a claimer found holding `seen`, moving it aside under a name of this process first: of two claimers finding the same stale guard only one moves it, and one that moved the guard another made since puts it back.
+ * False when it put one back, true when the guard is gone.
+ */
+export function dropStaleGuard(guard: string, seen: string): boolean {
+  const aside = `${guard}.${process.pid}.stale`
+
+  try {
+    renameSync(guard, aside)
+  }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+      return true
+
+    throw error
+  }
+
+  const moved = readText(aside)
+
+  try {
+    if (moved === seen)
+      return true
+
+    try {
+      linkSync(aside, guard)
+    }
+    catch {}
+
+    return false
+  }
+  finally {
+    rmSync(aside, { force: true })
+  }
+}
+
 /**
  * Removes an abandoned lock under a takeover file of its own, checking it is still abandoned once that is held: two claimers seeing the same dead lock would otherwise both remove it, the second one the lock the first had just made.
  * False when another claimer is taking it over right now.
  */
 function takeOver(lock: string): boolean {
   const guard = `${lock}.takeover`
+  const token = `${process.pid} ${randomUUID()}`
 
   try {
-    writeFileSync(guard, '', { flag: 'wx' })
+    writeFileSync(guard, token, { flag: 'wx' })
   }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST')
       throw error
 
-    if (Date.now() - (statSync(guard, { throwIfNoEntry: false })?.mtimeMs ?? 0) < TAKEOVER_MS)
+    const seen = readText(guard)
+
+    if (seen !== undefined && Date.now() - (statSync(guard, { throwIfNoEntry: false })?.mtimeMs ?? 0) < TAKEOVER_MS)
       return false
 
-    rmSync(guard, { force: true })
-
-    return takeOver(lock)
+    return (seen === undefined || dropStaleGuard(guard, seen)) && takeOver(lock)
   }
 
   try {
@@ -134,7 +180,9 @@ function takeOver(lock: string): boolean {
     return true
   }
   finally {
-    rmSync(guard, { force: true })
+    // a guard taken over as stale meanwhile belongs to another claimer now
+    if (readText(guard) === token)
+      rmSync(guard, { force: true })
   }
 }
 
