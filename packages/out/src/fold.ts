@@ -1,6 +1,6 @@
 import { configuredNumber } from '@kaynooo/cli-kit'
 import { truncate } from '@kaynooo/utils/text'
-import { isImportant, shape } from './shape'
+import { isImportant, isPassingTest, shape } from './shape'
 
 export interface FoldOptions {
   // Output with at most this many lines is left alone.
@@ -43,6 +43,10 @@ interface Entry {
   covers: number
   // An error line naming every file it was printed for, kept whole however wide.
   whole?: boolean
+  // How many passing tests the entry counts, which it stands for alone.
+  passes?: number
+  // The earlier lines a bare back-reference points at.
+  refersTo?: number[]
 }
 
 export function lineCount(text: string): number {
@@ -160,15 +164,28 @@ function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repe
   let references = false
 
   for (const unit of units) {
+    const covers = unit.size * unit.reps
+
+    if (unit.lines.every(line => isPassingTest(line))) {
+      entries.push({ text: '', important: false, covers, passes: covers })
+
+      continue
+    }
+
     const seen = counts.get(unit.key)
 
     counts.set(unit.key, { count: (seen?.count ?? 0) + unit.reps, sample: seen?.sample ?? clip(unit.lines[0] ?? '') })
 
     const earlier = firstSeen.get(unit.key)
-    const covers = unit.size * unit.reps
 
     if (earlier !== undefined && (unit.size > 1 || unit.key.length >= MIN_REFERENCED)) {
       references = true
+
+      if (unit.size === 1 && unit.reps === 1 && !unit.important) {
+        entries.push({ text: '', important: false, covers, refersTo: [earlier] })
+
+        continue
+      }
 
       const where = unit.size > 1 ? `block same as line ${earlier}` : `same as line ${earlier}`
       const times = unit.reps > 1 ? `, repeated ${unit.reps} times` : ''
@@ -216,10 +233,59 @@ function toEntries(units: Unit[]): { entries: Entry[], references: boolean, repe
   return { entries, references, repeated }
 }
 
+// `1-2, 4` for 1, 2 and 4.
+function ranges(numbers: number[]): string {
+  const parts: string[] = []
+
+  for (let at = 0; at < numbers.length;) {
+    let end = at
+
+    while (numbers[end + 1] === (numbers[end] ?? 0) + 1)
+      end++
+
+    parts.push(end === at ? String(numbers[at]) : `${numbers[at]}-${numbers[end]}`)
+    at = end + 1
+  }
+
+  return parts.join(', ')
+}
+
+// Passing tests in a row as one count, and bare back-references in a row as one line.
+function merge(entries: Entry[]): Entry[] {
+  const merged: Entry[] = []
+
+  for (const entry of entries) {
+    const last = merged.at(-1)
+
+    if (entry.passes !== undefined && last?.passes !== undefined) {
+      last.passes += entry.passes
+      last.covers += entry.covers
+    }
+    else if (entry.refersTo !== undefined && last?.refersTo !== undefined) {
+      last.refersTo.push(...entry.refersTo)
+      last.covers += entry.covers
+    }
+    else {
+      merged.push({ ...entry })
+    }
+  }
+
+  for (const entry of merged) {
+    if (entry.passes !== undefined)
+      entry.text = `[out: ${entry.passes} passing ${entry.passes === 1 ? 'test' : 'tests'}]`
+
+    if (entry.refersTo !== undefined)
+      entry.text = entry.refersTo.length === 1 ? `(same as line ${entry.refersTo[0]})` : `(same as lines ${ranges(entry.refersTo)})`
+  }
+
+  return merged
+}
+
 // Folds long output: drops carriage-return progress, collapses repeated lines and blocks (compared by shape) and far-apart duplicates, then keeps the head, the tail and the important lines of the middle.
 export function fold(text: string, { threshold, logPath }: FoldOptions): string {
   const lines = splitLines(text)
-  const { entries, references, repeated } = toEntries(toUnits(lines, lines.map(line => shape(line))))
+  const { entries: listed, references, repeated } = toEntries(toUnits(lines, lines.map(line => shape(line))))
+  const entries = merge(listed)
 
   for (const entry of entries.filter(each => each.whole !== true))
     entry.text = cutWide(entry.text)
@@ -229,11 +295,18 @@ export function fold(text: string, { threshold, logPath }: FoldOptions): string 
   const head = Math.floor(Math.min(HEAD, Math.floor(threshold / 3)) / shrink)
   const tail = Math.floor(Math.min(TAIL, Math.floor(threshold / 2)) / shrink)
   const out: string[] = []
+  // the passing tests a count stands for are left out too
   let dropped = 0
   let kept = 0
 
+  const show = (entry: Entry) => {
+    out.push(entry.text)
+    dropped += entry.passes ?? 0
+  }
+
   if (entries.length <= threshold && !heavy) {
-    out.push(...entries.map(({ text }) => text))
+    for (const entry of entries)
+      show(entry)
   }
   else {
     const middleEnd = entries.length - tail
@@ -250,7 +323,7 @@ export function fold(text: string, { threshold, logPath }: FoldOptions): string 
     for (const [index, entry] of entries.entries()) {
       if (index < head || index >= middleEnd) {
         closeGap()
-        out.push(entry.text)
+        show(entry)
 
         continue
       }
@@ -258,7 +331,7 @@ export function fold(text: string, { threshold, logPath }: FoldOptions): string 
       if (entry.important && kept < MAX_KEPT_IMPORTANT) {
         kept++
         closeGap()
-        out.push(entry.text)
+        show(entry)
 
         continue
       }

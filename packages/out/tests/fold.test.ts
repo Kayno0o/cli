@@ -85,6 +85,33 @@ describe('fold', () => {
     expect(out).toContain('most repeated: 2x Downloading')
   })
 
+  test('counts passing tests instead of listing them, a failure among them kept', () => {
+    const passes = Array.from({ length: 200 }, (_, i) => `(pass) suite > case ${i} [1.00ms]`)
+
+    passes[50] = '(pass) suite > refuses a call that fails twice [2.00ms]'
+    passes[100] = '(fail) suite > broken [3.00ms]'
+
+    const out = folded(`tests/a.test.ts:\n${passes.join('\n')}\n\n 199 pass\n 1 fail\n`)
+
+    expect(out).toStartWith('[out: 204 lines, 199 left out, ')
+    expect(out).toContain('tests/a.test.ts:\n[out: 100 passing tests]\n(fail) suite > broken [3.00ms]\n[out: 99 passing tests]\n\n 199 pass\n 1 fail\n')
+    expect(out).not.toContain('refuses a call that fails twice')
+  })
+
+  test('counts the passing tests vitest and jest mark with a tick', () => {
+    const out = folded(`${Array.from({ length: 160 }, (_, i) => ` ✓ src/a.test.ts > case ${i} 2ms`).join('\n')}\n Tests  160 passed\n ✓ src/late.test.ts 2ms\n`)
+
+    expect(out).toContain('\n[out: 160 passing tests]\n Tests  160 passed\n[out: 1 passing test]\n')
+  })
+
+  test('puts back-references in a row on one line, consecutive lines as a range', () => {
+    const firsts = ['the first line long enough to point back to', 'the second line long enough to point back to', 'the third line long enough to point back to', 'the fourth line long enough to point back to']
+    const filler = Array.from({ length: 200 }, (_, i) => `filler ${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + (Math.floor(i / 26) % 26))}`)
+    const out = folded(`${[...firsts, ...filler, firsts[0], firsts[1], firsts[3], 'end'].join('\n')}\n`)
+
+    expect(out).toContain('\n(same as lines 1-2, 4)\nend\n')
+  })
+
   test('keeps error, warning and stack frame lines of the middle', () => {
     const lines = Array.from({ length: 300 }, (_, i) => `plain output number ${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + (Math.floor(i / 26) % 26))} continues`)
 

@@ -49,6 +49,9 @@ describe('commandKey', () => {
     expect(commandKey(['sh', '-c', 'cd a && bun test'])).toBe('bun test')
     expect(commandKey(['sh', '-c', 'TOKEN=abc bun test'])).toBe('bun test')
     expect(commandKey(['API_KEY=x9', 'mycli', 'login', 'sk3cRet'])).toBe('mycli login')
+    expect(commandKey(['slot', '--', 'bun', 'test', 'a.test.ts'])).toBe('bun test')
+    expect(commandKey(['slot', '-l', 'db', '--', 'vendor/bin/phpunit'])).toBe('phpunit')
+    expect(commandKey(['slot', 'ls'])).toBe('slot ls')
   })
 })
 

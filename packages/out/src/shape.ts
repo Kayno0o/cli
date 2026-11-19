@@ -9,11 +9,17 @@ const PERCENT = /\b\d+(?:\.\d+)?%/g
 const NUMBER = /\d+(?:\.\d+)?/g
 // Longer lines are cut before the regexes below run, which backtrack quadratically on a long run of dots or slashes.
 const MAX_SHAPED = 2000
+// A passing test as bun (`(pass) name`), vitest and jest (`✓ name`) and phpunit's testdox (`✔ name`) print it.
+const PASSING = /^\s*(?:\(pass\)|[✓✔√])\s/
 const IMPORTANT = /error|fail|warn|panic|exception|fatal|✗|✘|^\s+at\s+\S|^\s*File ".*", line \d+|^\s*\d+: .+ at /i
 
 // Whether the line carries an error, failure, warning or stack frame, which folding never drops.
 export function isImportant(line: string): boolean {
   return IMPORTANT.test(stripAnsi(line.slice(0, MAX_SHAPED)))
+}
+
+export function isPassingTest(line: string): boolean {
+  return PASSING.test(stripAnsi(line.slice(0, MAX_SHAPED)))
 }
 
 // The line with what changes between lookalikes (numbers, ids, durations, paths, file names) replaced by placeholders.

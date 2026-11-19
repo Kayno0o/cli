@@ -31,7 +31,7 @@ export function statsPath(env: Record<string, string | undefined> = process.env)
   return join(stateHome(env), CLI_FOLDER, 'out', 'stats.jsonl')
 }
 
-// The words naming what ran (`bun run build`, `docker compose exec`), stopping at an option or any word that could carry a value, so no argument a secret may sit in is kept; `sh -c '...'` is named by the last command of its chain that is not a `cd`.
+// The words naming what ran (`bun run build`, `docker compose exec`), stopping at an option or any word that could carry a value, so no argument a secret may sit in is kept; `sh -c '...'` is named by the last command of its chain that is not a `cd`, `slot -- ...` by the command it ran.
 export function commandKey(command: readonly string[]): string {
   const [program = '', ...rest] = command.slice(Math.max(0, command.findIndex(word => !ASSIGNMENT.test(word))))
 
@@ -40,6 +40,10 @@ export function commandKey(command: readonly string[]): string {
 
     return commandKey((chain.at(-1) ?? '').split(BLANKS))
   }
+
+  // `slot -- bun test` waited for a slot to run `bun test`, which is what the run is about.
+  if (basename(program) === 'slot' && rest.includes('--'))
+    return commandKey(rest.slice(rest.indexOf('--') + 1))
 
   const words = [basename(program)]
 
