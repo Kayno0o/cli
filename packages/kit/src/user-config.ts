@@ -55,6 +55,27 @@ export function readUserConfig(bin: string, where: UserConfigLocation = {}, lega
   }
 }
 
+const URL_SCHEME = /^[a-z][a-z\d+.-]*:\/\//i
+const TRAILING_SLASHES = /\/+$/
+
+export interface Forge {
+  host: string
+  // The forge's web root, https unless the key names its scheme, no trailing slash.
+  url: string
+}
+
+// The forge `owner/name` shorthands and links point at: the `forge` key of config.json, a host or a URL; undefined when unset.
+export function configuredForge(where: UserConfigLocation = {}): Forge | undefined {
+  const value = readUserConfig('config', where).forge
+
+  if (typeof value !== 'string' || value.trim() === '')
+    return undefined
+
+  const url = (URL_SCHEME.test(value.trim()) ? value.trim() : `https://${value.trim()}`).replace(TRAILING_SLASHES, '')
+
+  return URL.canParse(url) ? { host: new URL(url).host, url } : undefined
+}
+
 // A positive whole number the bin's config file sets under `key`, `fallback` when the key is missing or is anything else.
 export function configuredNumber(bin: string, key: string, fallback: number, where: UserConfigLocation = {}, legacy: string[][] = []): number {
   const value = readUserConfig(bin, where, legacy)[key]

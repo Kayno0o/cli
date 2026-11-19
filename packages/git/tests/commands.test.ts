@@ -240,6 +240,18 @@ describe('gcl', () => {
     expect(existsSync(join(root, 'open', 'a.txt'))).toBe(true)
   })
 
+  test('refuses owner/name when the config names no forge', () => {
+    const home = join(root, 'empty-config')
+
+    mkdirSync(home)
+
+    const done = run([process.execPath, BINS.gcl!, 'kaynooo/open', join(root, 'open')], root, { XDG_CONFIG_HOME: home })
+
+    expect(done.code).toBe(2)
+    expect(done.err).toContain(`set forge (a host such as git.example.org) in ${home}/kaynooo-cli/config.json`)
+    expect(existsSync(join(root, 'open'))).toBe(false)
+  })
+
   test('reads owner/name as a URL on the forge, and its ssh address', async () => {
     const { urlOf, nameOf, sshUrlOf } = await import('../src/gcl')
 

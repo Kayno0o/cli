@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'bun:test'
 import { tempDirs } from '../src/test'
-import { configBase, userConfigPath, userConfigReadPath } from '../src/user-config'
+import { configBase, configuredForge, userConfigPath, userConfigReadPath } from '../src/user-config'
 
 const temp = tempDirs()
 
@@ -45,5 +45,27 @@ describe('userConfigReadPath', () => {
     const xdg = temp('kit-uc-')
 
     expect(userConfigReadPath('pkg', [['pkg', 'config.json']], { xdg })).toBe(join(xdg, 'kaynooo-cli', 'pkg.json'))
+  })
+})
+
+describe('configuredForge', () => {
+  function withForge(forge: unknown): string {
+    const home = temp('kit-forge-')
+
+    mkdirSync(join(home, '.config', 'kaynooo-cli'), { recursive: true })
+    writeFileSync(join(home, '.config', 'kaynooo-cli', 'config.json'), JSON.stringify({ forge }))
+
+    return home
+  }
+
+  it('reads a host as served over https, and a URL as given', () => {
+    expect(configuredForge({ home: withForge('git.example.org') })).toEqual({ host: 'git.example.org', url: 'https://git.example.org' })
+    expect(configuredForge({ home: withForge('http://forge.lan:3000/') })).toEqual({ host: 'forge.lan:3000', url: 'http://forge.lan:3000' })
+  })
+
+  it('is undefined when the key is unset, empty or no string', () => {
+    expect(configuredForge({ home: temp('kit-forge-') })).toBeUndefined()
+    expect(configuredForge({ home: withForge('') })).toBeUndefined()
+    expect(configuredForge({ home: withForge(3) })).toBeUndefined()
   })
 })

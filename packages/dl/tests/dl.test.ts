@@ -651,6 +651,23 @@ describe('releases', () => {
     expect(installed(dir, 'other')).toBe('#!/bin/sh\necho v1.2.0\n')
   })
 
+  test('fj:owner/repo is on the forge config.json names, and refused without one', async () => {
+    const dir = home()
+
+    releases = [{ tag: 'v1.1.0', published: ago(30), assets: builds('v1.1.0') }]
+
+    const config = { XDG_CONFIG_HOME: join(dir, '.config') }
+    const refused = await dl(['fj:o/tool', '--bin', 'tool'], dir, config)
+
+    expect(refused.code).toBe(2)
+    expect(refused.err).toContain(`set forge (a host such as git.example.org) in ${dir}/.config/kaynooo-cli/config.json`)
+
+    mkdirSync(join(dir, '.config', 'kaynooo-cli'), { recursive: true })
+    writeFileSync(join(dir, '.config', 'kaynooo-cli', 'config.json'), JSON.stringify({ forge: url('/fj') }))
+    expect((await dl(['fj:o/tool', '--bin', 'tool'], dir, config)).code).toBe(0)
+    expect(installed(dir, 'tool')).toBe('#!/bin/sh\necho v1.1.0\n')
+  })
+
   test.skipIf(!hasGpg)('--key alone checks the signature the release ships beside its checksums file', async () => {
     const dir = home()
     const assets = builds('v1.0.0')

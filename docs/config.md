@@ -6,7 +6,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 
 | File | Read by | Keys |
 |---|---|---|
-| `~/.config/kaynooo-cli/config.json` | `doctor`, `gcl`, `pkg`, `ws repos`, `ws sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: the host `gcl owner/name` clones from over https, git.kaynooo.fr by default; `forgeSsh`: the forge's ssh address (`git@host`, `ssh://git@host:port`) `gcl owner/name` clones from first |
+| `~/.config/kaynooo-cli/config.json` | `doctor`, `gcl`, `dl`, `pkg`, `ws repos`, `ws sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: your forge, a host (`git.example.org`) or a URL: `gcl owner/name` clones from it over https, `dl fj:owner/repo` reads its releases, `doctor` wants a tea login to it (any login when unset); `forgeSsh`: the forge's ssh address (`git@host`, `ssh://git@host:port`) `gcl owner/name` clones from first |
 | `~/.config/kaynooo-cli/theme.json` | every bin | `preset`, `colors`, `glyphs`, `accents`, `gradient`, `bins`: see [Theme](#theme) |
 | `.kaynooo/theme.json` | every bin | the same, found upward from the current folder to the repository root, laid over the user file |
 | `~/.config/kaynooo-cli/ft.json` | `ft` | `remoteHost`: the ssh host `ft remote` switches alias origins to (the older `~/.config/ft/config.json` is read when this one is missing) |

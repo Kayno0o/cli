@@ -1,7 +1,8 @@
+import type { Forge } from '@kaynooo/cli-kit'
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
 import { appendFile, rm } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
-import { configuredNumber, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
+import { configuredForge, configuredNumber, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
 import { HOOKS_REQUIRES, NEEDS } from './catalog'
 import { completionDir, missingCompletions, staleCompletions } from './completions'
 
@@ -60,7 +61,11 @@ export const TOOLS: Record<string, string[]> = {
   '@kaynooo/cli-wt': ['wt'],
 }
 
-export const FORGE = 'git.kaynooo.fr'
+// The forge config.json names, which ft's tea login must reach; undefined lets any login do.
+function forgeOf(home: string): Forge | undefined {
+  return configuredForge({ home, xdg: process.env.XDG_CONFIG_HOME })
+}
+
 const PLUGIN = 'cli-hooks@kaynooo-cli'
 
 // The public GitHub copy: the Forgejo repo is private, and the marketplace is cloned without credentials.
@@ -169,7 +174,7 @@ async function checkGt(host: Host): Promise<Result> {
   const token = TEA_TOKEN.exec(config)?.[1]
 
   if (url === undefined || token === undefined)
-    return { check: 'tea', ok: false, detail: `tea is not installed and gt has no login: ${firstLine(own.stderr || own.stdout)}`, fix: `gt auth login --host https://${FORGE}` }
+    return { check: 'tea', ok: false, detail: `tea is not installed and gt has no login: ${firstLine(own.stderr || own.stdout)}`, fix: `gt auth login --host ${forgeOf(host.home)?.url ?? 'https://<forge>'}` }
 
   const injected = await host.run(['gt', 'api', 'version'], { GITEA_TOKEN: token, GITEA_CLI_HOST: url })
   const served = injected.code === 0 ? readJsonText<{ version?: string }>(injected.stdout)?.version : undefined
@@ -190,21 +195,22 @@ export async function checkTea(host: Host): Promise<Result> {
 
   const logins = await host.run(['tea', 'login', 'list', '-o', 'json'])
   const parsed = logins.code === 0 ? readJsonText<{ name: string, url: string }[]>(logins.stdout) : undefined
-  const hosts = new Set([FORGE, ...extraForgeHosts(host.home)])
-  const login = parsed?.find(each => URL.canParse(each.url) && hosts.has(new URL(each.url).host))
+  const forge = forgeOf(host.home)
+  const hosts = new Set([...(forge === undefined ? [] : [forge.host]), ...extraForgeHosts(host.home)])
+  const login = parsed?.find(each => URL.canParse(each.url) && (hosts.size === 0 || hosts.has(new URL(each.url).host)))
 
   if (login === undefined)
-    return { check: 'tea', ok: false, detail: `no login to ${FORGE}`, fix: `tea login add --url https://${FORGE} --oauth` }
+    return { check: 'tea', ok: false, detail: forge === undefined ? 'no tea login' : `no login to ${forge.host}`, fix: `tea login add --url ${forge?.url ?? 'https://<forge>'} --oauth` }
 
   const version = await host.run(['tea', 'api', '--login', login.name, 'version'])
   const served = version.code === 0 ? readJsonText<{ version?: string }>(version.stdout)?.version : undefined
 
-  const forge = new URL(login.url).host
+  const reached = new URL(login.url).host
 
   if (served === undefined)
-    return { check: 'tea', ok: false, detail: `${forge} did not answer: ${firstLine(version.stderr || version.stdout)}`, fix: `tea login edit ${login.name} --token <token>, or check the network` }
+    return { check: 'tea', ok: false, detail: `${reached} did not answer: ${firstLine(version.stderr || version.stdout)}`, fix: `tea login edit ${login.name} --token <token>, or check the network` }
 
-  return { check: 'tea', ok: true, detail: `logged in to ${forge} as ${login.name}, Forgejo ${served}` }
+  return { check: 'tea', ok: true, detail: `logged in to ${reached} as ${login.name}, Forgejo ${served}` }
 }
 
 // How the hooks are wired: the cli-hooks plugin, the dotfiles' cli mod (the folder holding it), both or neither.

@@ -1,7 +1,7 @@
 import type { Key } from './signature'
 import { readdirSync } from 'node:fs'
 import process from 'node:process'
-import { badUsage, fail, formatAge, warn } from '@kaynooo/cli-kit'
+import { badUsage, configuredForge, fail, formatAge, userConfigPath, warn } from '@kaynooo/cli-kit'
 
 /** `gh:owner/repo` or `fj:owner/repo`, with `@tag` for one release rather than the latest. */
 export interface ReleaseSpec {
@@ -88,8 +88,11 @@ function releasesUrl(spec: ReleaseSpec): { url: string, headers: Record<string, 
   const path = `repos/${spec.owner}/${spec.repo}/releases`
   const tagged = spec.tag === undefined ? '' : `/tags/${encodeURIComponent(spec.tag)}`
 
-  if (spec.forge === 'fj')
-    return { url: `${process.env.DL_FORGEJO_URL ?? 'https://git.kaynooo.fr'}/api/v1/${path}${tagged || '?limit=30'}`, headers: { accept: 'application/json' } }
+  if (spec.forge === 'fj') {
+    const forge = process.env.DL_FORGEJO_URL ?? configuredForge()?.url ?? fail(`fj:${spec.owner}/${spec.repo} needs the forge it lives on: set forge (a host such as git.example.org) in ${userConfigPath('config')}`, 2)
+
+    return { url: `${forge}/api/v1/${path}${tagged || '?limit=30'}`, headers: { accept: 'application/json' } }
+  }
 
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN
   const headers: Record<string, string> = { 'accept': 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' }

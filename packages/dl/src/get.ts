@@ -20,7 +20,7 @@ import { fetchSums, pathUnder, sumFor, sumIn } from './sums'
 
 const USAGE = `dl [options] <url> [-- <script args>]: downloads a file into a new folder of its own, checks its sha256, then extracts it, installs it as a command or runs it as a script
 
-<url> is an http or https URL, or a release: gh:owner/repo on GitHub, fj:owner/repo on git.kaynooo.fr, with @tag for one release. A release is the newest at least two weeks old unless --fresh; its asset the one built for this OS and arch, or the one --asset names; it is checked against the checksums file the release ships, else the sha256 the forge gives, and --key alone finds the signature beside it.
+<url> is an http or https URL, or a release: gh:owner/repo on GitHub, fj:owner/repo on the Forgejo the forge key of ~/.config/kaynooo-cli/config.json names (DL_FORGEJO_URL over it), with @tag for one release. A release is the newest at least two weeks old unless --fresh; its asset the one built for this OS and arch, or the one --asset names; it is checked against the checksums file the release ships, else the sha256 the forge gives, and --key alone finds the signature beside it.
 Without -o the file lands in a new folder under the temp folder. It prints where the file went, its size, final URL, type and sha256, and how it compares with the last download of the same URL (a changed text file shows its diff).
 An HTML page arriving where a file was expected fails, as does a download over --max-size.
 --sig checks a detached signature with --key: of the file, or of the checksums file when --sums names one. A gpg key is a fingerprint of your keyring or a key file, a minisign key its string or file, a cosign key its PEM file; the tool has to be on PATH.

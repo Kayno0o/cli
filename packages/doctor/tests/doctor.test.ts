@@ -170,14 +170,23 @@ describe('checkTea', () => {
   })
 
   const logins = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'forge', url: 'https://git.kaynooo.fr' }]) } }
+  const configureForge = () => write(join(home, '.config', 'kaynooo-cli', 'config.json'), { forge: 'git.kaynooo.fr' })
 
   test('passes a login reaching the forge', async () => {
     expect(await checkTea(fakeHost({ ...logins, 'tea api --login forge version': { stdout: '{"version":"16.0.6"}' } }))).toEqual({ check: 'tea', ok: true, detail: 'logged in to git.kaynooo.fr as forge, Forgejo 16.0.6' })
   })
 
+  test('takes any login when config.json names no forge', async () => {
+    const other = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'mine', url: 'https://git.example.org' }]) }, 'tea api --login mine version': { stdout: '{"version":"16.0.6"}' } }
+
+    expect(await checkTea(fakeHost(other))).toMatchObject({ ok: true, detail: 'logged in to git.example.org as mine, Forgejo 16.0.6' })
+    expect(await checkTea(fakeHost({ 'tea login list -o json': { stdout: '[]' } }))).toMatchObject({ ok: false, detail: 'no tea login', fix: 'tea login add --url https://<forge> --oauth' })
+  })
+
   test('takes another host of the forge from forgeHosts in doctor.json', async () => {
     const other = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'mine', url: 'https://git.example.org' }]) }, 'tea api --login mine version': { stdout: '{"version":"16.0.6"}' } }
 
+    configureForge()
     expect(await checkTea(fakeHost(other))).toMatchObject({ ok: false })
 
     mkdirSync(join(home, '.config', 'kaynooo-cli'), { recursive: true })
@@ -189,7 +198,7 @@ describe('checkTea', () => {
   test('ignores a doctor.json that does not parse or holds the wrong types', async () => {
     const other = { 'tea login list -o json': { stdout: JSON.stringify([{ name: 'mine', url: 'https://git.example.org' }]) }, 'tea api --login mine version': { stdout: '{"version":"16.0.6"}' } }
 
-    mkdirSync(join(home, '.config', 'kaynooo-cli'), { recursive: true })
+    configureForge()
 
     for (const text of ['{ nope', '{"forgeHosts":"git.example.org"}', '{"forgeHosts":[1,null]}']) {
       writeFileSync(join(home, '.config', 'kaynooo-cli', 'doctor.json'), text)
@@ -204,6 +213,7 @@ describe('checkTea', () => {
 
   test('fails without tea, without a login to the forge, or when the forge does not answer', async () => {
     expect(await checkTea(fakeHost({}, []))).toMatchObject({ ok: false, detail: 'not installed, and ft goes through it' })
+    configureForge()
     expect(await checkTea(fakeHost({ 'tea login list -o json': { stdout: '[{"name":"gh","url":"https://gitea.com"}]' } }))).toMatchObject({ ok: false, fix: 'tea login add --url https://git.kaynooo.fr --oauth' })
     expect(await checkTea(fakeHost({ ...logins, 'tea api --login forge version': { code: 1, stderr: 'dial tcp: timeout\n' } }))).toMatchObject({ ok: false, detail: 'git.kaynooo.fr did not answer: dial tcp: timeout' })
   })
