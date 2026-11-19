@@ -9,11 +9,36 @@ bun add -g @kaynooo/cli-doctor
 doctor --install
 ```
 
-`doctor --install` lists the packages in a checklist, with what each needs on the machine, and the Claude Code hooks plugin among them; name them instead (`doctor --install forgejo check hooks`, or `all`) off a terminal. A package whose required tool is missing (tea for `ft`, glab for `gl`, docker for `dc`) is left out unless `--force`, and `hooks` brings `guard` along. `doctor` alone checks what is installed and `doctor --fix` repairs it, the hooks plugin and the completions included.
+`doctor --install` lists the packages in a checklist, with what each needs on the machine, and the Claude Code hooks plugin among them; name them instead (`doctor --install git check hooks`, or `all`) off a terminal. A package whose required tool is missing (tea for `ft`, glab for `gl`, docker for `dc`) is left out unless `--force`, and `hooks` brings `guard` along. `doctor` alone checks what is installed and `doctor --fix` repairs it, the hooks plugin and the completions included.
 
-One package alone is `bun add -g @kaynooo/cli-<name>`, from npmjs with no registry setup. Each is also published to the Forgejo registry, which answers without a token, and `@kaynooo/cli-changelog` only there; to install from it, map the scope first: `printf '[install.scopes]\n"@kaynooo" = "https://git.kaynooo.fr/api/packages/kaynooo/npm/"\n' >> ~/.bunfig.toml`.
+One package alone is `bun add -g @kaynooo/cli-<name>`.
 
 `~/.bun/bin` must be on the PATH Claude Code starts with, or the hooks find no `guard`: Claude Code then reports a hook error on each call and lets it through.
+
+## Shell completions
+
+Every bin completes its commands, options and values in fish, bash and zsh. `cli` writes the scripts for all the installed bins at once.
+
+fish, one file per bin in `~/.cache/fish/kaynooo-cli`:
+
+```fish
+cli completions fish --install
+set -p fish_complete_path ~/.cache/fish/kaynooo-cli   # in ~/.config/fish/config.fish
+```
+
+bash, in `~/.bashrc`:
+
+```sh
+source <(cli completions bash)
+```
+
+zsh, in `~/.zshrc` (untested):
+
+```sh
+source <(cli completions zsh)
+```
+
+`doctor` reports a bin installed since without its fish completion, and `doctor --fix` writes it, or adds the `source` line to a bash or zsh rc file that lacks it.
 
 ## Packages
 
@@ -73,4 +98,4 @@ bun run check && bun run lint && bun run test
 
 Each CLI releases on its own: `just release <folder> <patch|minor|major>` bumps `packages/<folder>`, tags it `<folder>-v<version>`, and the tag's workflow builds that folder (`bun run build`, a Bun bundle per bin with `packages/kit` inlined) and publishes it. Kit is published like the CLIs (`just release kit minor`) for the libs outside this repo; the CLIs here take it as `workspace:*` and inline it, so a kit change reaches one of them with its next release.
 
-The same workflow then publishes the package to npmjs (`@kaynooo` org) with the `NPM_STAGE_TOKEN` secret, a granular staged-publish token on `@kaynooo`, through `npm stage publish` since `bun publish` finds no auth for npmjs. The version is staged, not live: approve it with `npm stage approve <stage-id>` (`npm stage list` shows the pending ones). npm ends direct publishing for bypass-2FA tokens around January 2027, and trusted publishing does not support Forgejo, so staged publishing is the fallback; Forgejo has no OIDC, so there is no `--provenance`.
+The same workflow then publishes the package to npmjs (`@kaynooo` org) with the `NPM_STAGE_TOKEN` secret, a granular staged-publish token on `@kaynooo`, through `npm stage publish` since `bun publish` finds no auth for npmjs. The version is staged, not live: approve it with `npm stage approve <stage-id>` (`npm stage list` shows the pending ones). npm ends direct publishing for bypass-2FA tokens around January 2027, and the CI has no OIDC for trusted publishing or `--provenance`, so staged publishing is the fallback.
