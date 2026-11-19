@@ -5,6 +5,8 @@ import { CLI_FOLDER, stateHome, table } from '@kaynooo/cli-kit'
 
 // A rough count, close enough for a running total: no tokenizer is shipped or called.
 const BYTES_PER_TOKEN = 4
+// Claude Code's Bash tool shows at most this many characters of a command's output, BASH_MAX_OUTPUT_LENGTH overriding it.
+const HARNESS_CAP = 30_000
 // A subcommand or script name (`run`, `build`, `test:unit`); a secret almost always holds a digit or a capital, so such a word ends the key.
 const KEY_WORD = /^[a-z][a-z:_-]*$/
 const KEY_WORDS = 3
@@ -29,7 +31,7 @@ export function statsPath(env: Record<string, string | undefined> = process.env)
   return join(stateHome(env), CLI_FOLDER, 'out', 'stats.jsonl')
 }
 
-// The words naming what ran (`bun run build`, `docker compose exec`), stopping at an option or any word that could carry a value, so no argument a secret may sit in is kept; `sh -c '...'` is named by the last command of its chain that is not a `cd`.
+// The words naming what ran (`bun run build`, `docker compose exec`), stopping at an option or any word that could carry a value, so no argument a secret may sit in is kept; `sh -c '...'` is named by the last command of its chain that is not a `cd`, `slot -- ...` by the command it ran.
 export function commandKey(command: readonly string[]): string {
   const [program = '', ...rest] = command.slice(Math.max(0, command.findIndex(word => !ASSIGNMENT.test(word))))
 
@@ -38,6 +40,10 @@ export function commandKey(command: readonly string[]): string {
 
     return commandKey((chain.at(-1) ?? '').split(BLANKS))
   }
+
+  // `slot -- bun test` waited for a slot to run `bun test`, which is what the run is about.
+  if (basename(program) === 'slot' && rest.includes('--'))
+    return commandKey(rest.slice(rest.indexOf('--') + 1))
 
   const words = [basename(program)]
 
@@ -84,6 +90,8 @@ export interface Summary {
   bytes: number
   shown: number
   tokensSaved: number
+  // The most of one run's output counted as read without out, in bytes.
+  cap: number
   // The share of runs folded, in percent.
   foldedShare: number
   // The median share of its baseline a folded run cut, in percent per command; undefined when none folded.
@@ -100,6 +108,13 @@ function median(values: number[]): number | undefined {
   return sorted.length % 2 === 1 ? sorted[middle] : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
 }
 
+// The most of one run's output the session would have read, which a run past it saves no more than.
+export function harnessCap(env: Record<string, string | undefined> = process.env): number {
+  const value = Number.parseInt(env.BASH_MAX_OUTPUT_LENGTH ?? '', 10)
+
+  return value > 0 ? value : HARNESS_CAP
+}
+
 function tokens(bytes: number): number {
   return Math.round(bytes / BYTES_PER_TOKEN)
 }
@@ -114,17 +129,21 @@ function cut(runs: readonly Entry[]): number | undefined {
   return value === undefined ? undefined : Math.round(value)
 }
 
-export function summarize(entries: readonly Entry[]): Summary {
+function saved(runs: readonly Entry[], cap: number): number {
+  return tokens(runs.reduce((sum, run) => sum + Math.min(run.baseline, cap) - Math.min(run.shown, cap), 0))
+}
+
+export function summarize(entries: readonly Entry[], cap = harnessCap()): Summary {
   const commands = Map.groupBy(entries, entry => entry.command).entries().map(([command, runs]) => ({
     command,
     runs: runs.length,
     folded: runs.filter(run => run.folded).length,
-    tokensSaved: tokens(runs.reduce((sum, run) => sum + run.baseline - run.shown, 0)),
+    tokensSaved: saved(runs, cap),
     medianCut: cut(runs),
   }))
-  const sum = (field: 'bytes' | 'baseline' | 'shown') => entries.reduce((total, entry) => total + entry[field], 0)
+  const sum = (field: 'bytes' | 'shown') => entries.reduce((total, entry) => total + entry[field], 0)
 
-  return { runs: entries.length, folded: entries.filter(entry => entry.folded).length, bytes: sum('bytes'), shown: sum('shown'), tokensSaved: tokens(sum('baseline') - sum('shown')), foldedShare: entries.length === 0 ? 0 : Math.round(entries.filter(entry => entry.folded).length / entries.length * 100), commands: [...commands].sort((a, b) => b.tokensSaved - a.tokensSaved) }
+  return { runs: entries.length, folded: entries.filter(entry => entry.folded).length, bytes: sum('bytes'), shown: sum('shown'), tokensSaved: saved(entries, cap), cap, foldedShare: entries.length === 0 ? 0 : Math.round(entries.filter(entry => entry.folded).length / entries.length * 100), commands: [...commands].sort((a, b) => b.tokensSaved - a.tokensSaved) }
 }
 
 export function renderSummary(summary: Summary, period: string): string {
@@ -134,7 +153,7 @@ export function renderSummary(summary: Summary, period: string): string {
   const top = summary.commands.slice(0, TOP).filter(each => each.tokensSaved !== 0)
 
   return [
-    `${formatNumber(summary.runs)} runs ${period}, ${formatNumber(summary.folded)} folded (${summary.foldedShare}%): ${formatNumber(summary.bytes)} bytes printed, ${formatNumber(summary.shown)} shown, about ${formatNumber(summary.tokensSaved)} tokens saved (bytes / ${BYTES_PER_TOKEN})`,
+    `${formatNumber(summary.runs)} runs ${period}, ${formatNumber(summary.folded)} folded (${summary.foldedShare}%): ${formatNumber(summary.bytes)} bytes printed, ${formatNumber(summary.shown)} shown, about ${formatNumber(summary.tokensSaved)} tokens saved (bytes / ${BYTES_PER_TOKEN}, a run counted up to the ${formatNumber(summary.cap)} characters Claude Code shows)`,
     ...top.length === 0 ? [] : ['', table([['command', 'runs', 'folded', 'median cut', 'tokens saved'], ...top.map(each => [each.command, formatNumber(each.runs), formatNumber(each.folded), each.medianCut === undefined ? '-' : `${each.medianCut}%`, formatNumber(each.tokensSaved)])])],
   ].join('\n')
 }

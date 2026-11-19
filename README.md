@@ -48,6 +48,10 @@ source <(cli completions zsh)
 
 `doctor` reports a bin installed since without its fish completion, and `doctor --fix` writes it, or adds the `source` line to a bash or zsh rc file that lacks it.
 
+## Configuration
+
+Every config file, the [theme](docs/config.md#theme) every bin draws with and every environment variable are in [docs/config.md](docs/config.md). `cli config` shows which files this host has and the theme in force.
+
 ## Packages
 
 | Package | Bin | What it does |
@@ -82,7 +86,7 @@ source <(cli completions zsh)
 | [`@kaynooo/cli-workspace`](packages/workspace) | `ws` | the repositories of the workspace that need attention (dirty, unpushed, behind, unreleased); node_modules, build output and clean worktrees reclaimed across repos, dry by default; the known vulnerabilities of the Bun repositories in one table per repository |
 | [`@kaynooo/cli-wt`](packages/wt) | `wt` | git worktrees of a compose project, each with its own stack, its own copy of the data and its own `<task>.<host>` subdomains through devproxy; manifests and a runner in a config file, job locks other tools can share |
 
-Every bin and command is described in [docs/bins.md](docs/bins.md), every config file and environment variable in [docs/config.md](docs/config.md). [llms.txt](llms.txt) is the entry point for agents.
+Every bin and command is described in [docs/bins.md](docs/bins.md). [llms.txt](llms.txt) is the entry point for agents.
 
 ## Claude Code
 

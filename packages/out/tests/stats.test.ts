@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { filtered } from '../src/stages'
-import { commandKey, readEntries, record, renderSummary, summarize } from '../src/stats'
+import { commandKey, harnessCap, readEntries, record, renderSummary, summarize } from '../src/stats'
 
 const dir = mkdtempSync(join(tmpdir(), 'out-stats-'))
 
@@ -49,6 +49,9 @@ describe('commandKey', () => {
     expect(commandKey(['sh', '-c', 'cd a && bun test'])).toBe('bun test')
     expect(commandKey(['sh', '-c', 'TOKEN=abc bun test'])).toBe('bun test')
     expect(commandKey(['API_KEY=x9', 'mycli', 'login', 'sk3cRet'])).toBe('mycli login')
+    expect(commandKey(['slot', '--', 'bun', 'test', 'a.test.ts'])).toBe('bun test')
+    expect(commandKey(['slot', '-l', 'db', '--', 'vendor/bin/phpunit'])).toBe('phpunit')
+    expect(commandKey(['slot', 'ls'])).toBe('slot ls')
   })
 })
 
@@ -68,12 +71,24 @@ describe('stats', () => {
   })
 
   test('count the tokens saved against the baseline, a tail that printed less than out showed counting against', () => {
-    const summary = summarize([entry('bun test', 40_000, 40_000, 4000), entry('bun test', 40_000, 40_000, 4000), entry('bun run lint', 8000, 400, 2000)])
+    const summary = summarize([entry('bun test', 40_000, 40_000, 4000), entry('bun test', 40_000, 40_000, 4000), entry('bun run lint', 8000, 400, 2000)], 100_000)
 
     expect(summary).toMatchObject({ runs: 3, folded: 3, bytes: 88_000, shown: 10_000, tokensSaved: 17_600 })
     expect(summary.commands.map(each => [each.command, each.tokensSaved])).toEqual([['bun test', 18_000], ['bun run lint', -400]])
-    expect(renderSummary(summary, 'recorded')).toContain('about 17,600 tokens saved (bytes / 4)')
+    expect(renderSummary(summary, 'recorded')).toContain('about 17,600 tokens saved (bytes / 4, a run counted up to the 100,000 characters Claude Code shows)')
     expect(renderSummary(summarize([]), 'in the last 7d')).toBe('no run of out recorded in the last 7d')
+  })
+
+  test('count a run only up to what Claude Code would have shown of it', () => {
+    expect(summarize([entry('bun test', 40_000, 40_000, 4000)], 30_000).tokensSaved).toBe(6500)
+    expect(summarize([entry('bun test', 30_000, 30_000, 4000)], 30_000).tokensSaved).toBe(6500)
+    expect(summarize([entry('bun test', 50_000, 50_000, 40_000)], 30_000).tokensSaved).toBe(0)
+  })
+
+  test('take the cap from BASH_MAX_OUTPUT_LENGTH, 30,000 without a usable one', () => {
+    expect(harnessCap({ BASH_MAX_OUTPUT_LENGTH: '150000' })).toBe(150_000)
+    expect(harnessCap({})).toBe(30_000)
+    expect(harnessCap({ BASH_MAX_OUTPUT_LENGTH: 'lots' })).toBe(30_000)
   })
 
   test('report the share of runs folded and the median cut of the folded runs per command', () => {

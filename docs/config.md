@@ -7,7 +7,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 | File | Read by | Keys |
 |---|---|---|
 | `~/.config/kaynooo-cli/config.json` | `doctor`, `gcl`, `pkg`, `ws repos`, `ws sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: the host `gcl owner/name` clones from over https, git.kaynooo.fr by default; `forgeSsh`: the forge's ssh address (`git@host`, `ssh://git@host:port`) `gcl owner/name` clones from first |
-| `~/.config/kaynooo-cli/theme.json` | every bin | `preset` (`default`, `high-contrast`, `mono`, `ascii`), `colors`, `glyphs`, `accents`, `bins`: see the kit README |
+| `~/.config/kaynooo-cli/theme.json` | every bin | `preset`, `colors`, `glyphs`, `accents`, `gradient`, `bins`: see [Theme](#theme) |
 | `.kaynooo/theme.json` | every bin | the same, found upward from the current folder to the repository root, laid over the user file |
 | `~/.config/kaynooo-cli/ft.json` | `ft` | `remoteHost`: the ssh host `ft remote` switches alias origins to (the older `~/.config/ft/config.json` is read when this one is missing) |
 | `~/.config/kaynooo-cli/db.json` | `db` | `allowedHosts`: hosts other than loopback and compose services that `db` may connect to (the older `~/.config/db/config.json` is read when this one is missing) |
@@ -18,6 +18,31 @@ Every file below is optional, nothing is assumed without it. The user files live
 | `~/.config/kaynooo-cli/repos.json` | `ws repos` | `skip`: repository names left out |
 | `.npmrc`, `bunfig.toml` | `pkg` | the registry and token of a scope, read as `bun` reads them |
 | `changelog.config.{ts,mts,js,mjs,json}`, the `changelog` field of `package.json` | `changelog` | the release notes: repo, groups, Discord webhook |
+
+## Theme
+
+Every bin draws with one theme: the default, then the `preset` a file names, then `~/.config/kaynooo-cli/theme.json`, then `.kaynooo/theme.json` found upward to the repository root, each over the last. `KIT_THEME=mono` or `KIT_THEME=<file>` replaces all of that for one run.
+
+```json
+{
+  "preset": "high-contrast",
+  "colors": { "accent": "magenta", "ok": "#22c55e", "id": 208, "path": "bold blue" },
+  "glyphs": { "ok": "✔", "bar": "▬" },
+  "gradient": ["#c084fc", "#67e8f9"],
+  "bins": { "ft": "magenta" }
+}
+```
+
+| Key | Takes |
+|---|---|
+| `preset` | `default`, `high-contrast` (bright colours), `mono` (bold, dim and underline only) or `ascii` (glyphs in plain ASCII) |
+| `colors` | a colour per role: `accent`, `id`, `path`, `label`, `value`; per mark: `ok`, `warn`, `problem`, `note`, `plan`; per status: `passed`, `failed`, `running`, `queued`, `skipped` |
+| `glyphs` | one column wide each: the marks and statuses above, `bar`, `rule`, `corner`, and `open`, `leaf`, `guide` for trees |
+| `accents` | the colours a bin's header picks from by its name |
+| `bins` | a header colour per bin, over `accents` |
+| `gradient` | the two `#rrggbb` ends bars and sparklines blend between, or `null` to draw them in the accent |
+
+A colour is an ANSI name or style (`cyan`, `redBright`, `bold blue`), a 256-colour index or `#rrggbb`. A bad value is reported once on stderr and skipped, the rest still applies. A theme file is JSON only, so a project's file cannot run anything, and nothing drawn off a terminal or under `NO_COLOR` changes.
 
 ## Environment variables
 
