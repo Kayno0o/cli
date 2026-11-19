@@ -338,7 +338,7 @@
     },
     "packages/wt": {
       "name": "@kaynooo/cli-wt",
-      "version": "0.1.9",
+      "version": "0.1.10",
       "bin": {
         "wt": "./dist/cli.js",
       },
