@@ -61,7 +61,7 @@ it('generates from a tag before the merge with only first-parent commits', async
   const dir = await mergedRepo(true)
 
   await inside(dir, async () => {
-    const { commits } = await generate({ firstParent: true, from: 'v1.0.0', to: 'HEAD', contributors: false, repo: 'o/r' })
+    const { commits } = await generate({ firstParent: true, from: 'v1.0.0', to: 'HEAD', contributors: false, repo: 'o/r', baseUrl: 'forge.example' })
     const descriptions = commits.map(c => c.description)
 
     expect(['merge other', 'after merge', 'after tag'].filter(wanted => !descriptions.includes(wanted))).toEqual([])
@@ -74,7 +74,7 @@ it('finds the starting tag along the first parent, ignoring a later imported tag
   const dir = await mergedRepo(true)
 
   await inside(dir, async () => {
-    const options = { to: 'HEAD', contributors: false, repo: 'o/r' }
+    const options = { to: 'HEAD', contributors: false, repo: 'o/r', baseUrl: 'forge.example' }
 
     expect((await generate({ ...options, firstParent: true })).config.from).toBe('v1.0.0')
     expect((await generate({ ...options, firstParent: false })).config.from).toBe('9.5.0')
@@ -85,7 +85,7 @@ it('starts from a single root when no tag exists and the history was merged', as
   const dir = await mergedRepo(false)
 
   await inside(dir, async () => {
-    const options = { to: 'HEAD', contributors: false, repo: 'o/r' }
+    const options = { to: 'HEAD', contributors: false, repo: 'o/r', baseUrl: 'forge.example' }
     const { config } = await generate({ ...options, firstParent: true })
 
     expect(config.from).toMatch(/^[0-9a-f]{40}$/)

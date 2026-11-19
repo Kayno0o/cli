@@ -10,7 +10,7 @@ import { sendDiscordWebhook } from '@kaynooo/utils/discord'
 import { version } from '../package.json'
 import { aliasFlags, shared, shouldAskNote, toOptions, undoFlags, withToken } from './flags'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
-import { deleteLocalTag, deleteRemoteGitTag, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
+import { deleteLocalTag, deleteRemoteGitTag, forgeName, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
 import { err, out, stdoutToStderr } from './ui'
 
 type Report = Record<string, unknown>
@@ -43,7 +43,7 @@ async function ask(question: string) {
   return await confirm(question, { default: false, hint: 'pass --yes to skip the questions' }) === true
 }
 
-// Forgejo's new-release page only reads `tag`, so the notes go to a file to paste instead of into the link.
+// The new-release page of Forgejo and GitHub only reads `tag` reliably, so the notes go to a file to paste instead of into the link.
 async function printManualRelease(config: ResolvedChangelogOptions, md: string, heading: string) {
   const file = join(tmpdir(), `changelog-${config.to.replaceAll('/', '-')}.md`)
 
@@ -55,7 +55,7 @@ async function printManualRelease(config: ResolvedChangelogOptions, md: string, 
   console.log()
 }
 
-const RELEASE_EXITS: ExitRow[] = [[0, 'it released, wrote --output or showed --dry-run'], [1, 'the release could not be made (no token, the tag not on Forgejo, a shallow clone, an API error), an asset upload or the Discord post failed'], [2, 'a usage error']]
+const RELEASE_EXITS: ExitRow[] = [[0, 'it released, wrote --output or showed --dry-run'], [1, 'the release could not be made (no token, the tag not on the forge, a shallow clone, an API error), an asset upload or the Discord post failed'], [2, 'a usage error']]
 
 async function release(argv: string[], report: (value: Report) => unknown) {
   const parsed = parse(argv, `usage: changelog release [options]
@@ -100,12 +100,12 @@ async function release(argv: string[], report: (value: Report) => unknown) {
 
     if (!config.token) {
       await printManualRelease(config, md, 'Create it manually at')
-      fail('no Forgejo token found, pass --token or set GITHUB_TOKEN, release skipped', 1)
+      fail(`no ${forgeName(config)} token found, pass --token or set GITHUB_TOKEN${config.provider === 'github' ? ', or log in with gh auth login' : ''}, release skipped`, 1)
     }
 
     if (!await hasTagOnGitea(config.to, config)) {
       await printManualRelease(config, md, 'Create it manually at')
-      fail(`the ref "${config.to}" is not available as a tag on Forgejo, release skipped`, 1)
+      fail(`the ref "${config.to}" is not available as a tag on ${forgeName(config)}, release skipped`, 1)
     }
 
     if (!commits.length && await isRepoShallow()) {
@@ -177,7 +177,7 @@ async function undo(argv: string[], report: (value: Report) => unknown) {
     const config = await resolveConfig({ ...options, to: tag })
 
     // Prefer plain git for the origin repo so remote tags are handled without
-    // relying on a Gitea API token; only fall back to the API for a distinct
+    // relying on an API token; only fall back to the API for a distinct
     // release repository.
     let originRepo: string | undefined
 
@@ -202,7 +202,7 @@ async function undo(argv: string[], report: (value: Report) => unknown) {
     }
 
     // Deleting the release note is opt-in: --note forces it, --yes and --dry-run skip the question, otherwise it defaults to "no".
-    const deleteNote = release !== null && (args.note === true || (!json && shouldAskNote({ release, note: args.note, yes: args.yes, dry: args['dry-run'] }) && await ask(`Also delete the Forgejo release note "${release.name || tag}"?`)))
+    const deleteNote = release !== null && (args.note === true || (!json && shouldAskNote({ release, note: args.note, yes: args.yes, dry: args['dry-run'] }) && await ask(`Also delete the ${forgeName(config)} release note "${release.name || tag}"?`)))
 
     const actions: string[] = []
 
@@ -288,7 +288,7 @@ async function undo(argv: string[], report: (value: Report) => unknown) {
 process.exitCode = await runCli({
   name: 'changelog',
   about: 'generate the release notes and publish them',
-  replaces: 'writing the release notes by hand and posting them through the Forgejo UI',
+  replaces: 'writing the release notes by hand and posting them through the Forgejo or GitHub UI',
   examples: [['changelog --dry-run', 'the notes since the last tag, nothing published'], ['changelog undo v1.2.0 --dry-run', 'what undoing that release would remove']],
   commands: {
     release: { summary: 'generate the release notes and publish them (the default)', run: async argv => reporting(aliasFlags(argv), release) },

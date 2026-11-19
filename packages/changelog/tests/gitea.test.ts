@@ -1,7 +1,7 @@
 import type { AuthorInfo, ChangelogOptions } from '../src/types'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
-import { afterEach, expect, it, mock, spyOn } from 'bun:test'
+import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, hasTagOnGitea, resolveAuthorInfo, uploadAssets } from '../src/gitea'
 
 const tempDir = tempDirs()
@@ -90,4 +90,61 @@ it('counts the assets it could not upload', async () => {
 
   expect(await uploadAssets(withRelease, [file])).toBe(0)
   expect(await uploadAssets(withRelease, [file, join(dir, 'missing.txt')])).toBe(1)
+})
+
+describe('on GitHub', () => {
+  const github = { baseUrlApi: 'api.github.com', provider: 'github', repo: 'owner/repo', releaseRepo: 'owner/repo', token: 'secret', to: 'v1/a' } as ChangelogOptions
+
+  it('reads tags through git refs, and sends GitHub\'s bearer token and media type', async () => {
+    const seen: { url: string, method: string, headers: Record<string, string> }[] = []
+
+    spyOn(globalThis, 'fetch').mockImplementation((async (input: string | URL | Request, init?: RequestInit) => {
+      seen.push({ url: String(input), method: init?.method ?? 'GET', headers: init?.headers as Record<string, string> })
+
+      return Response.json({ id: 1, name: 'x', url: '', html_url: '' })
+    }) as typeof fetch)
+
+    await getRelease(github, 'v1/a')
+    await hasRemoteTag(github, 'v1/a')
+    await hasTagOnGitea('v1/a', github)
+    await deleteRemoteTag(github, 'v1/a')
+
+    expect(seen.map(s => `${s.method} ${s.url}`)).toEqual([
+      'GET https://api.github.com/repos/owner/repo/releases/tags/v1%2Fa',
+      'GET https://api.github.com/repos/owner/repo/git/ref/tags/v1%2Fa',
+      'GET https://api.github.com/repos/owner/repo/git/ref/tags/v1%2Fa',
+      'DELETE https://api.github.com/repos/owner/repo/git/refs/tags/v1%2Fa',
+    ])
+    expect(seen[0]!.headers).toMatchObject({ accept: 'application/vnd.github+json', authorization: 'Bearer secret' })
+  })
+
+  it('takes the login from the commit, and never searches users by email', async () => {
+    const asked = answer({ '/repos/owner/repo/commits/abc': { author: { login: 'ada', avatar_url: 'https://avatars.example/ada' } } })
+
+    expect(await resolveAuthorInfo(github, author(['abc']))).toMatchObject({ login: 'ada', avatar: 'https://avatars.example/ada' })
+    expect((await resolveAuthorInfo(github, author([]))).login).toBeUndefined()
+    expect(asked).toEqual(['https://api.github.com/repos/owner/repo/commits/abc'])
+  })
+
+  it('uploads an asset as its raw bytes to uploads.github.com', async () => {
+    const dir = tempDir('changelog-gh-assets-')
+    const file = join(dir, 'a.txt')
+    const uploads: { url: string, type: string | undefined, body: string }[] = []
+
+    await Bun.write(file, 'a')
+    spyOn(console, 'log').mockImplementation(() => undefined)
+    spyOn(globalThis, 'fetch').mockImplementation((async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+
+      if (url.includes('/releases/tags/'))
+        return Response.json({ id: 7 })
+
+      uploads.push({ url, type: (init?.headers as Record<string, string>)['content-type'], body: await new Response(init?.body).text() })
+
+      return Response.json({})
+    }) as typeof fetch)
+
+    expect(await uploadAssets(github, [file])).toBe(0)
+    expect(uploads).toEqual([{ url: 'https://uploads.github.com/repos/owner/repo/releases/7/assets?name=a.txt', type: 'application/octet-stream', body: 'a' }])
+  })
 })

@@ -6,7 +6,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 
 | File | Read by | Keys |
 |---|---|---|
-| `~/.config/kaynooo-cli/config.json` | `doctor`, `gcl`, `dl`, `pkg`, `ws repos`, `ws sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: your forge, a host (`git.example.org`) or a URL: `gcl owner/name` clones from it over https, `dl fj:owner/repo` reads its releases, `doctor` wants a tea login to it (any login when unset); `forgeSsh`: the forge's ssh address (`git@host`, `ssh://git@host:port`) `gcl owner/name` clones from first |
+| `~/.config/kaynooo-cli/config.json` | `changelog`, `doctor`, `gcl`, `dl`, `pkg`, `ws repos`, `ws sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: your forge, a host (`git.example.org`) or a URL: `gcl owner/name` clones from it over https, `dl fj:owner/repo` reads its releases, `doctor` wants a tea login to it (any login when unset), `changelog` links and releases to it from a repo not on github.com (origin's host when unset); `forgeSsh`: the forge's ssh address (`git@host`, `ssh://git@host:port`) `gcl owner/name` clones from first |
 | `~/.config/kaynooo-cli/theme.json` | every bin | `preset`, `colors`, `glyphs`, `accents`, `gradient`, `bins`: see [Theme](#theme) |
 | `.kaynooo/theme.json` | every bin | the same, found upward from the current folder to the repository root, laid over the user file |
 | `~/.config/kaynooo-cli/ft.json` | `ft` | `remoteHost`: the ssh host `ft remote` switches alias origins to (the older `~/.config/ft/config.json` is read when this one is missing) |
@@ -17,7 +17,7 @@ Every file below is optional, nothing is assumed without it. The user files live
 | `~/.config/kaynooo-cli/pkg-excluded.json` | `pkg bump` | the folders left out of a package's bumps, `{ "<package>": ["<folder>"] }`: written by the checklist, editable |
 | `~/.config/kaynooo-cli/repos.json` | `ws repos` | `skip`: repository names left out |
 | `.npmrc`, `bunfig.toml` | `pkg` | the registry and token of a scope, read as `bun` reads them |
-| `changelog.config.{ts,mts,js,mjs,json}`, the `changelog` field of `package.json` | `changelog` | the release notes: repo, groups, Discord webhook |
+| `changelog.config.{ts,mts,js,mjs,json}`, the `changelog` field of `package.json` | `changelog` | the release notes: repo, groups, Discord webhook; `baseUrl` and `provider` (`gitea` or `github`) when the forge is not the one origin or `forge` gives |
 
 ## Theme
 
@@ -64,7 +64,7 @@ A colour is an ANSI name or style (`cyan`, `redBright`, `bold blue`), a 256-colo
 | `PAGE_CHROMIUM`, `PLAYWRIGHT_BROWSERS_PATH` | `page` | the Chrome or Chromium binary to drive, else the folder of Playwright's downloaded builds (`~/.cache/ms-playwright`) |
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | `check`, `docker`, `env`, `stack` | the compose files, as `docker compose` reads them |
 | `POSTGRES_*`, `MYSQL_*`, `MARIADB_*` | `db` | the credentials of a database service, read from its compose environment, `*_FILE` variants included |
-| `GITHUB_TOKEN` | `changelog` | the Forgejo token when `--token` is not given |
+| `GITHUB_TOKEN` | `changelog` | the forge's token when `--token` is not given; on GitHub, `gh auth token` comes after it |
 | `DISCORD_WEBHOOK` | `changelog` | the webhook the release is posted to when `--discord-webhook` is not given |
 | `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_TMPDIR` | `ft`, `waitfor` | where Claude Code keeps its sessions, and the temporary folder a background task writes to |
 

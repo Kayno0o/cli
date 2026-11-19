@@ -1,6 +1,6 @@
 # @kaynooo/cli-changelog
 
-Generate changelog for Gitea / Forgejo releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), and post it to Discord.
+Generate changelog for Forgejo, Gitea or GitHub releases from [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/), and post it to Discord.
 
 > **Bun only.** This tool runs on [Bun](https://bun.sh) and uses Bun-native APIs (`Bun.$`, `Bun.file`, `Bun.Glob`, global `fetch`). It is not meant to run under Node.
 
@@ -29,7 +29,7 @@ With [`highlights`](#open-the-notes-with-highlights), a **🌟 Highlights** sect
 
 ## Discord
 
-Once the release is out on Forgejo, it is posted to the webhook in `DISCORD_WEBHOOK` (or `discordWebhook` / `--discord-webhook`) as one embed: the same sections with each issue's title beside it, maintenance as a count line, and links to the full note and the diff. A note too long for Discord's 4096 characters ends with `…and N more`. Nothing is posted when no webhook is set.
+Once the release is out, it is posted to the webhook in `DISCORD_WEBHOOK` (or `discordWebhook` / `--discord-webhook`) as one embed: the same sections with each issue's title beside it, maintenance as a count line, and links to the full note and the diff. A note too long for Discord's 4096 characters ends with `…and N more`. Nothing is posted when no webhook is set.
 
 ```yml
       - run: bunx @kaynooo/cli-changelog
@@ -38,9 +38,13 @@ Once the release is out on Forgejo, it is posted to the webhook in `DISCORD_WEBH
           DISCORD_WEBHOOK: ${{secrets.DISCORD_WEBHOOK}}
 ```
 
+## Forge
+
+A repo whose origin is on github.com releases to GitHub, with `GITHUB_TOKEN` or else `gh auth token`. Any other repo releases to Forgejo or Gitea at the `forge` host of `~/.config/kaynooo-cli/config.json`, or at origin's host when that is unset. `baseUrl` and `provider` (`gitea` or `github`) in the config override both.
+
 ## Usage
 
-In Gitea / Forgejo Actions:
+In Forgejo, Gitea or GitHub Actions (under `.github/workflows/` on GitHub):
 
 ```yml
 # .gitea/workflows/release.yml

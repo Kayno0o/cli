@@ -16,7 +16,7 @@ export type Commit = GitCommit
 
 export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   /**
-   * Dry run. Skip releasing to Gitea.
+   * Dry run. Skip releasing to the forge.
    */
   dry?: boolean
   /**
@@ -38,7 +38,7 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
    */
   prerelease?: boolean
   /**
-   * Gitea Token
+   * The forge's API token
    */
   token?: string
   /**
@@ -71,15 +71,19 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
    */
   emoji?: boolean
   /**
-   * Gitea base url
-   * @default git.kaynooo.fr
+   * The forge's host, for links and the API: github.com for a repo whose origin is there, else the `forge` key of ~/.config/kaynooo-cli/config.json, else origin's host
    */
   baseUrl?: string
   /**
-   * Gitea base API url
-   * @default git.kaynooo.fr/api/v1
+   * The forge's API, without its scheme
+   * @default api.github.com on GitHub, `<baseUrl>/api/v1` elsewhere
    */
   baseUrlApi?: string
+  /**
+   * Which API the release goes through: `github`, or `gitea` for Gitea and Forgejo
+   * @default github when baseUrl is github.com, gitea otherwise
+   */
+  provider?: 'gitea' | 'github'
 
   /**
    * Walk only the first parent of each merge, so a merged history shows as the merge commit instead of its commits.
@@ -137,7 +141,7 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
   tag?: string
 
   /**
-   * Discord webhook the release is posted to once it is out on Gitea, as an embed
+   * Discord webhook the release is posted to once it is out on the forge, as an embed
    *
    * @default process.env.DISCORD_WEBHOOK
    */

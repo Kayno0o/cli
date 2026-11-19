@@ -8,6 +8,14 @@ const regexSpecialRE = /[.*+?^${}()|[\]\\]/g
 const httpsRegex = /https?:\/\/[^/]+\/(\w[\w.-]*)\/(\w[\w.-]*)$/i
 const releaseVersionRE = /^[^.]*(?:\.[\d.]*|\d)$/
 const TAG_DECORATION = /tag: ([^,\n]+)/g
+const ORIGIN_HOST = /^(?:[a-z][a-z\d+.-]*:\/\/)?(?:[^@/]+@)?([^:/]+)/i
+
+// The host of origin's URL, whether it is an scp address, ssh:// or https://; undefined with no origin.
+export async function getOriginHost(): Promise<string | undefined> {
+  const url = (await $`git config --get remote.origin.url`.quiet().nothrow().text()).trim()
+
+  return ORIGIN_HOST.exec(url)?.[1]
+}
 
 export async function getGiteaRepo() {
   const url = await execCommand('git', ['config', '--get', 'remote.origin.url'])

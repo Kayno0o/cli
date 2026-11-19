@@ -1,8 +1,10 @@
 import type { ChangelogOptions } from '../src'
 import type { ReleasedRepo } from './fixture'
+import { join } from 'node:path'
+import process from 'node:process'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { $ } from 'bun'
-import { beforeAll, expect, it } from 'bun:test'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import { generate, getCurrentGitBranch, getFirstGitCommit, getGiteaRepo, getLastMatchingTag, getVersionString, resolveConfig } from '../src'
 import { inside, releasedRepo } from './fixture'
 
@@ -33,6 +35,7 @@ it('parse', async () => {
       "fromRoot": false,
       "group": true,
       "prerelease": true,
+      "provider": "gitea",
       "releaseRepo": "kaynooo/cli",
       "repo": "kaynooo/cli",
       "rollup": {},
@@ -189,12 +192,35 @@ it('treats the tag template literally when reading a version', () => {
   expect(getVersionString('r.%s', 'rx1.0.0')).toBe('rx1.0.0')
 })
 
-it('defaults to the public Forgejo host', async () => {
+it('takes origin\'s host when config.json names no forge', async () => {
   const { dir, git } = await bareRepo()
 
-  await git('remote', 'add', 'origin', 'git@git.kaynooo.fr:owner/repo.git')
+  await git('remote', 'add', 'origin', 'ssh://git@git.example.com:2222/owner/repo.git')
 
-  expect(await inside(dir, async () => resolveConfig({}))).toMatchObject({ baseUrl: 'git.kaynooo.fr', baseUrlApi: 'git.kaynooo.fr/api/v1' })
+  expect(await inside(dir, async () => resolveConfig({}))).toMatchObject({ baseUrl: 'git.example.com', baseUrlApi: 'git.example.com/api/v1', provider: 'gitea' })
+})
+
+describe('with a forge in config.json', () => {
+  const file = join(process.env.XDG_CONFIG_HOME!, 'kaynooo-cli', 'config.json')
+
+  beforeEach(async () => Bun.write(file, JSON.stringify({ forge: 'git.public.example' })))
+  afterEach(async () => Bun.file(file).delete())
+
+  it('links a repo off GitHub to that forge, origin being its private address', async () => {
+    const { dir, git } = await bareRepo()
+
+    await git('remote', 'add', 'origin', 'git@git.private.example:owner/repo.git')
+
+    expect(await inside(dir, async () => resolveConfig({}))).toMatchObject({ baseUrl: 'git.public.example', baseUrlApi: 'git.public.example/api/v1', provider: 'gitea' })
+  })
+
+  it('sends a repo on github.com to GitHub', async () => {
+    const { dir, git } = await bareRepo()
+
+    await git('remote', 'add', 'origin', 'git@github.com:owner/repo.git')
+
+    expect(await inside(dir, async () => resolveConfig({}))).toMatchObject({ baseUrl: 'github.com', baseUrlApi: 'api.github.com', provider: 'github' })
+  })
 })
 
 it('reads an owner and a repo of one character', async () => {

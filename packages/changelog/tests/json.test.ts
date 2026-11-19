@@ -16,8 +16,17 @@ async function repo(): Promise<string> {
   return dir
 }
 
+// With no origin, the forge the notes link to comes from config.json.
+async function forgeConfig(): Promise<string> {
+  const home = tempDir('changelog-json-config-')
+
+  await Bun.write(join(home, 'kaynooo-cli', 'config.json'), JSON.stringify({ forge: 'forge.example' }))
+
+  return home
+}
+
 async function run(cwd: string, args: string[]) {
-  const proc = Bun.spawn(['bun', CLI, ...args], { cwd, env: { ...process.env, GITHUB_TOKEN: '' }, stdout: 'pipe', stderr: 'pipe' })
+  const proc = Bun.spawn(['bun', CLI, ...args], { cwd, env: { ...process.env, GITHUB_TOKEN: '', XDG_CONFIG_HOME: await forgeConfig() }, stdout: 'pipe', stderr: 'pipe' })
   const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
 
   return { out, err, code }

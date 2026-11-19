@@ -3,16 +3,16 @@ import type { ChangelogOptions } from './types'
 import { jsonOption } from '@kaynooo/cli-kit'
 
 export const shared = {
-  'token': { type: 'string', description: 'Forgejo token, defaults to GITHUB_TOKEN' },
+  'token': { type: 'string', description: 'The forge\'s token, defaults to GITHUB_TOKEN, then on GitHub to gh\'s login' },
   'from': { type: 'string', description: 'From tag' },
   'to': { type: 'string', description: 'To tag' },
-  'repo': { type: 'string', short: 'r', description: 'Forgejo repository, e.g. kaynooo/cli (--gitea is kept as an alias)' },
+  'repo': { type: 'string', short: 'r', description: 'Repository, e.g. kaynooo/cli, origin\'s by default (--gitea is kept as an alias)' },
   'release-repo': { type: 'string', description: 'Release repository, defaults to --repo (--release-gitea is kept as an alias)' },
   'name': { type: 'string', description: 'Name of the release' },
   'contributors': { type: 'boolean', description: 'Show contributors' },
   'prerelease': { type: 'boolean', description: 'Mark release as prerelease' },
   'draft': { type: 'boolean', short: 'd', description: 'Mark release as draft' },
-  'output': { type: 'string', description: 'Output to file instead of sending to Forgejo' },
+  'output': { type: 'string', description: 'Output to file instead of sending to the forge' },
   'capitalize': { type: 'boolean', description: 'Capitalize each commit message' },
   'emoji': { type: 'boolean', description: 'Use emojis in section titles, --no-emoji to drop them' },
   'group': { type: 'boolean', description: 'Nest commit messages under their scopes' },
@@ -26,7 +26,7 @@ export const shared = {
 
 export const undoFlags = {
   ...shared,
-  note: { type: 'boolean', description: 'Also delete the Forgejo release note (skips the question)' },
+  note: { type: 'boolean', description: 'Also delete the release note on the forge (skips the question)' },
   yes: { type: 'boolean', description: 'Skip confirmation prompts' },
 } as const satisfies Options
 
@@ -79,7 +79,7 @@ export function toOptions(args: Flags): ChangelogOptions {
   })
 }
 
-// The token goes to the Forgejo host, so only --token and GITHUB_TOKEN (which Forgejo Actions sets) are read, never another service's credentials.
+// The token goes to the release's forge, so only --token and GITHUB_TOKEN (which Forgejo Actions and GitHub Actions set) are read here, and gh's login only for GitHub (resolveConfig).
 export function withToken(options: ChangelogOptions): ChangelogOptions {
   const token = [options.token, process.env.GITHUB_TOKEN].find(value => value !== undefined && value !== '')
 

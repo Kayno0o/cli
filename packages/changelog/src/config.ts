@@ -1,9 +1,18 @@
 import type { ChangelogOptions, ResolvedChangelogOptions } from './types'
 import { join } from 'node:path'
-import { getCurrentGitBranch, getFirstGitCommit, getGiteaRepo, getLastMatchingTag, getSafeTagTemplate, isPrerelease } from './git'
+import { configuredForge } from '@kaynooo/cli-kit'
+import { $ } from 'bun'
+import { getCurrentGitBranch, getFirstGitCommit, getGiteaRepo, getLastMatchingTag, getOriginHost, getSafeTagTemplate, isPrerelease } from './git'
+
+const GITHUB = 'github.com'
 
 export function defineConfig(config: ChangelogOptions) {
   return config
+}
+
+// The forge's name in messages.
+export function forgeName(config: ChangelogOptions): string {
+  return config.provider === 'github' ? 'GitHub' : 'Forgejo'
 }
 
 const configFiles = ['ts', 'mts', 'js', 'mjs', 'json'].map(ext => `changelog.config.${ext}`)
@@ -66,6 +75,16 @@ async function loadConfigFile(cwd: string): Promise<ChangelogOptions> {
   return {}
 }
 
+// gh's own login, for a GitHub release given no token; undefined without gh or a login.
+async function ghToken(): Promise<string | undefined> {
+  if (Bun.which('gh') === null)
+    return undefined
+
+  const answer = await $`gh auth token`.quiet().nothrow()
+
+  return answer.exitCode === 0 && answer.text().trim() !== '' ? answer.text().trim() : undefined
+}
+
 async function loadPackageConfig(cwd: string): Promise<ChangelogOptions> {
   const file = Bun.file(join(cwd, 'package.json'))
 
@@ -82,8 +101,23 @@ export async function loadConfig(options: ChangelogOptions, cwd = process.cwd())
 export async function resolveConfig(options: ChangelogOptions) {
   const config = await loadConfig(options)
 
-  config.baseUrl ??= 'git.kaynooo.fr'
-  config.baseUrlApi ??= config.baseUrl ? `${config.baseUrl}/api/v1` : 'git.kaynooo.fr/api/v1'
+  // origin may be the forge's private address, while the links want the public one config.json names.
+  const origin = config.baseUrl === undefined ? await getOriginHost() : undefined
+
+  const baseUrl = config.baseUrl ?? (origin === GITHUB ? origin : configuredForge()?.host ?? origin)
+
+  if (baseUrl === undefined || baseUrl === '')
+    throw new Error('no forge to link the notes to: set baseUrl in the changelog config, forge in ~/.config/kaynooo-cli/config.json, or an origin remote')
+
+  config.baseUrl = baseUrl
+  config.provider ??= baseUrl === GITHUB ? 'github' : 'gitea'
+  config.baseUrlApi ??= config.provider === 'github' ? 'api.github.com' : `${baseUrl}/api/v1`
+
+  const token = config.provider === 'github' && (config.token ?? '') === '' ? await ghToken() : undefined
+
+  if (token !== undefined)
+    config.token = token
+
   config.to ||= await getCurrentGitBranch()
   config.tagFilter ??= () => true
   config.tag = getSafeTagTemplate(config.tag ?? defaultConfig.tag)
@@ -107,7 +141,7 @@ export async function resolveConfig(options: ChangelogOptions) {
   config.discordWebhook ??= process.env.DISCORD_WEBHOOK ?? ''
 
   if (typeof config.repo !== 'string')
-    throw new TypeError(`Invalid Gitea repository, expected a string but got ${JSON.stringify(config.repo)}`)
+    throw new TypeError(`Invalid repository, expected a string but got ${JSON.stringify(config.repo)}`)
 
   return config as ResolvedChangelogOptions
 }

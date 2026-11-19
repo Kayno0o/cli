@@ -12,7 +12,17 @@ interface GiteaRelease {
 }
 
 interface GiteaCommit {
-  author: { login: string, avatar_url: string }
+  // GitHub leaves it null for an email no account claims.
+  author: { login: string, avatar_url: string } | null
+}
+
+function onGithub(options: ChangelogOptions): boolean {
+  return options.provider === 'github'
+}
+
+// GitHub reads a tag as a git ref, under `ref` to read and `refs` to delete; Forgejo has a tags endpoint.
+function tagPath(options: ChangelogOptions, repo: string | undefined, tag: string, write = false): string {
+  return onGithub(options) ? `repos/${repo}/git/${write ? 'refs' : 'ref'}/tags/${encodeURIComponent(tag)}` : `repos/${repo}/tags/${encodeURIComponent(tag)}`
 }
 
 async function request(url: string, init?: RequestInit) {
@@ -92,7 +102,7 @@ export async function deleteRelease(options: ChangelogOptions, releaseId: number
 
 export async function hasRemoteTag(options: ChangelogOptions, tag: string) {
   try {
-    await api(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/tags/${encodeURIComponent(tag)}`, {
+    await api(`https://${options.baseUrlApi}/${tagPath(options, options.releaseRepo, tag)}`, {
       headers: getHeaders(options),
     })
 
@@ -104,13 +114,16 @@ export async function hasRemoteTag(options: ChangelogOptions, tag: string) {
 }
 
 export async function deleteRemoteTag(options: ChangelogOptions, tag: string) {
-  await request(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/tags/${encodeURIComponent(tag)}`, {
+  await request(`https://${options.baseUrlApi}/${tagPath(options, options.releaseRepo, tag, true)}`, {
     method: 'DELETE',
     headers: getHeaders(options),
   })
 }
 
-function getHeaders(options: ChangelogOptions) {
+function getHeaders(options: ChangelogOptions): Record<string, string> {
+  if (onGithub(options))
+    return { 'accept': 'application/vnd.github+json', 'authorization': `Bearer ${options.token}`, 'x-github-api-version': '2022-11-28' }
+
   return {
     accept: 'application/vnd.gitea.v3+json',
     authorization: `token ${options.token}`,
@@ -134,17 +147,20 @@ export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorI
   // A commit names its author's account exactly, so only an author with no commit of their own, a co-author, is searched by email.
   if (info.commits.length) {
     try {
-      const data = await api<GiteaCommit>(`https://${options.baseUrlApi}/repos/${options.repo}/git/commits/${info.commits[0]}`, {
+      const data = await api<GiteaCommit>(`https://${options.baseUrlApi}/repos/${options.repo}/${onGithub(options) ? 'commits' : 'git/commits'}/${info.commits[0]}`, {
         headers: getHeaders(options),
       })
 
-      info.login = data.author.login
-      info.avatar = data.author.avatar_url
+      if (data.author !== null) {
+        info.login = data.author.login
+        info.avatar = data.author.avatar_url
+      }
     }
     catch {}
   }
 
-  if ((info.login ?? '') !== '')
+  // GitHub's user search shows no email to match exactly, so a co-author stays a name there.
+  if ((info.login ?? '') !== '' || onGithub(options))
     return info
 
   try {
@@ -212,8 +228,10 @@ export async function resolveAuthors(commits: Commit[], options: ChangelogOption
 
 export async function hasTagOnGitea(tag: string, options: ChangelogOptions) {
   try {
-    console.log(`checking if tag exists on https://${options.baseUrlApi}/repos/${options.repo}/tags/${encodeURIComponent(tag)}`)
-    await api(`https://${options.baseUrlApi}/repos/${options.repo}/tags/${encodeURIComponent(tag)}`, {
+    const url = `https://${options.baseUrlApi}/${tagPath(options, options.repo, tag)}`
+
+    console.log(`checking if tag exists on ${url}`)
+    await api(url, {
       headers: getHeaders(options),
     })
 
@@ -280,18 +298,22 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
     }
 
     const fileName = path.basename(filePath)
-
-    // Gitea expects multipart/form-data with an `attachment` field
-    const form = new FormData()
-
-    form.append('attachment', file, fileName)
-
-    const uploadUrl = `https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`
+    const assetsPath = `repos/${options.releaseRepo}/releases/${release.id}/assets?name=${encodeURIComponent(fileName)}`
 
     console.log(out().cyan(`Uploading ${fileName}...`))
 
     try {
-      await request(uploadUrl, { method: 'POST', headers, body: form })
+      if (onGithub(options)) {
+        await request(`https://uploads.github.com/${assetsPath}`, { method: 'POST', headers: { ...headers, 'content-type': 'application/octet-stream' }, body: file })
+      }
+      else {
+        // Forgejo expects multipart/form-data with an `attachment` field
+        const form = new FormData()
+
+        form.append('attachment', file, fileName)
+        await request(`https://${options.baseUrlApi}/${assetsPath}`, { method: 'POST', headers, body: form })
+      }
+
       console.log(out().green(`Uploaded ${fileName} successfully.`))
     }
     catch (error) {

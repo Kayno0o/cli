@@ -74,7 +74,7 @@ it('starts at the newest tag that is an ancestor of to, so an older release rege
     await git('tag', `v${version}`)
   }
 
-  const { config, commits } = await inside(dir, async () => generate({ to: 'v1.1.0', contributors: false, repo: 'o/r' }))
+  const { config, commits } = await inside(dir, async () => generate({ to: 'v1.1.0', contributors: false, repo: 'o/r', baseUrl: 'forge.example' }))
 
   expect(config.from).toBe('v1.0.0')
   expect(commits.map(c => c.description)).toEqual(['before 1.1.0'])
@@ -88,13 +88,13 @@ it('takes in the root commit when no earlier tag exists', async () => {
   await git('tag', 'v0.1.0')
   await commit('fix: after')
 
-  const { config, commits } = await inside(dir, async () => generate({ to: 'v0.1.0', contributors: false, repo: 'o/r' }))
+  const { config, commits } = await inside(dir, async () => generate({ to: 'v0.1.0', contributors: false, repo: 'o/r', baseUrl: 'forge.example' }))
 
   expect(config.from).toMatch(/^[0-9a-f]{40}$/)
   expect(commits.map(c => c.description)).toEqual(['second', 'initial import'])
 
   // A given from keeps its range, whatever a config says of fromRoot.
-  const given = await inside(dir, async () => generate({ from: config.from, fromRoot: true, to: 'v0.1.0', contributors: false, repo: 'o/r' }))
+  const given = await inside(dir, async () => generate({ from: config.from, fromRoot: true, to: 'v0.1.0', contributors: false, repo: 'o/r', baseUrl: 'forge.example' }))
 
   expect(given.commits.map(c => c.description)).toEqual(['second'])
 })

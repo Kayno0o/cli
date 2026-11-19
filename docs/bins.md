@@ -34,7 +34,7 @@ base proof -- bun test tests/new.test.ts  # it fails before the change and passe
 
 generate the release notes and publish them. Package `changelog`.
 
-Instead of: writing the release notes by hand and posting them through the Forgejo UI
+Instead of: writing the release notes by hand and posting them through the Forgejo or GitHub UI
 
 ```sh
 changelog <command> [options]
