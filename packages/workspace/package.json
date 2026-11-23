@@ -12,16 +12,25 @@
     "directory": "packages/workspace"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["cli", "git", "workspace", "monorepo", "audit", "disk"],
+  "keywords": [
+    "cli",
+    "git",
+    "workspace",
+    "monorepo",
+    "audit",
+    "disk"
+  ],
   "bin": {
     "ws": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
     "ws": "$npm_execpath src/cli.ts"
   },
   "devDependencies": {

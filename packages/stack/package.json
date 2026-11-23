@@ -12,16 +12,24 @@
     "directory": "packages/stack"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["docker", "compose", "port", "cli", "bun"],
+  "keywords": [
+    "docker",
+    "compose",
+    "port",
+    "cli",
+    "bun"
+  ],
   "bin": {
     "stack": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
     "stack": "$npm_execpath src/cli.ts"
   },
   "devDependencies": {

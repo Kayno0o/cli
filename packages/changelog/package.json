@@ -12,7 +12,13 @@
     "directory": "packages/changelog"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["forgejo", "gitea", "release", "changelog", "conventional-commits"],
+  "keywords": [
+    "forgejo",
+    "gitea",
+    "release",
+    "changelog",
+    "conventional-commits"
+  ],
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
@@ -20,12 +26,15 @@
   "bin": {
     "changelog": "./dist/cli.js"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
     "changelog": "$npm_execpath src/cli.ts"
   },
   "dependencies": {

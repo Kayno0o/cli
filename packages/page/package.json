@@ -31,14 +31,14 @@
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist --external playwright-core && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts --external playwright-core --splitting",
     "page": "$npm_execpath src/cli.ts"
   },
   "dependencies": {
-    "@kaynooo/audit-engine": "0.1.1",
     "playwright-core": "1.64.1"
   },
   "devDependencies": {
+    "@kaynooo/audit-engine": "0.1.1",
     "@kaynooo/cli-kit": "workspace:*"
   }
 }

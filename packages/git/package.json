@@ -41,7 +41,7 @@
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/gst.ts src/gc.ts src/gb.ts src/gp.ts src/gf.ts src/gm.ts src/gcl.ts src/gd.ts src/gu.ts --root src --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/gst.ts src/gc.ts src/gb.ts src/gp.ts src/gf.ts src/gm.ts src/gcl.ts src/gd.ts src/gu.ts --root src",
     "gst": "$npm_execpath src/gst.ts",
     "gc": "$npm_execpath src/gc.ts",
     "gb": "$npm_execpath src/gb.ts",

@@ -12,17 +12,29 @@
     "directory": "packages/proc"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["process", "port", "proc", "kill", "cli", "bun"],
-  "os": ["linux"],
+  "keywords": [
+    "process",
+    "port",
+    "proc",
+    "kill",
+    "cli",
+    "bun"
+  ],
+  "os": [
+    "linux"
+  ],
   "bin": {
     "proc": "./dist/proc-cli.js"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/proc-cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/proc-cli.ts",
     "proc": "$npm_execpath src/proc-cli.ts"
   },
   "devDependencies": {

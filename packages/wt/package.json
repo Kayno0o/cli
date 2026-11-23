@@ -12,19 +12,30 @@
     "directory": "packages/wt"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["git", "worktree", "docker", "compose", "devproxy", "cli", "bun"],
+  "keywords": [
+    "git",
+    "worktree",
+    "docker",
+    "compose",
+    "devproxy",
+    "cli",
+    "bun"
+  ],
   "exports": {
     ".": "./src/index.ts"
   },
   "bin": {
     "wt": "./dist/cli.js"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "rm -rf dist && $npm_execpath build src/cli.ts --target bun --splitting --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts --splitting",
     "wt": "$npm_execpath src/cli.ts"
   },
   "dependencies": {

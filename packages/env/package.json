@@ -12,7 +12,13 @@
     "directory": "packages/env"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["env", "dotenv", "secrets", "redact", "mask"],
+  "keywords": [
+    "env",
+    "dotenv",
+    "secrets",
+    "redact",
+    "mask"
+  ],
   "exports": {
     "./dotenv": "./src/dotenv.ts",
     "./files": "./src/files.ts",
@@ -23,12 +29,15 @@
   "bin": {
     "ev": "./dist/ev.js"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/ev.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/ev.ts --splitting",
     "ev": "$npm_execpath src/ev.ts"
   },
   "dependencies": {

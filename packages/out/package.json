@@ -12,22 +12,28 @@
     "directory": "packages/out"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["claude-code", "cli", "output", "logs", "tokens"],
+  "keywords": [
+    "claude-code",
+    "cli",
+    "output",
+    "logs",
+    "tokens"
+  ],
   "bin": {
     "out": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
     "out": "$npm_execpath src/cli.ts"
   },
-  "dependencies": {
-    "@kaynooo/utils": "3.1.0"
-  },
   "devDependencies": {
-    "@kaynooo/cli-kit": "workspace:*"
+    "@kaynooo/cli-kit": "workspace:*",
+    "@kaynooo/utils": "3.1.0"
   }
 }

@@ -12,18 +12,28 @@
     "directory": "packages/check"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["check", "fix", "lint", "format", "typecheck", "test", "claude-code"],
+  "keywords": [
+    "check",
+    "fix",
+    "lint",
+    "format",
+    "typecheck",
+    "test",
+    "claude-code"
+  ],
   "bin": {
     "check": "./dist/cli.js",
     "errs": "./dist/errs-cli.js",
     "j": "./dist/j-cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts src/errs-cli.ts src/j-cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts src/errs-cli.ts src/j-cli.ts",
     "check": "$npm_execpath src/cli.ts",
     "errs": "$npm_execpath src/errs-cli.ts",
     "j": "$npm_execpath src/j-cli.ts"

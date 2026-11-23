@@ -12,7 +12,12 @@
     "directory": "packages/docker"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["docker", "compose", "cli", "bun"],
+  "keywords": [
+    "docker",
+    "compose",
+    "cli",
+    "bun"
+  ],
   "exports": {
     ".": "./src/index.ts"
   },
@@ -22,12 +27,15 @@
     "dx": "./dist/dx-cli.js",
     "sf": "./dist/sf-cli.js"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/dc-cli.ts src/dlog-cli.ts src/dx-cli.ts src/sf-cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/dc-cli.ts src/dlog-cli.ts src/dx-cli.ts src/sf-cli.ts",
     "dc": "$npm_execpath src/dc-cli.ts",
     "dlog": "$npm_execpath src/dlog-cli.ts",
     "dx": "$npm_execpath src/dx-cli.ts",

@@ -58,11 +58,9 @@
       "bin": {
         "src": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/utils": "3.1.0",
-      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/utils": "3.1.0",
       },
     },
     "packages/db": {
@@ -128,11 +126,9 @@
       "bin": {
         "sub": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/utils": "3.1.0",
-      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/utils": "3.1.0",
       },
     },
     "packages/env": {
@@ -156,11 +152,9 @@
       "bin": {
         "ft": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/utils": "3.1.0",
-      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/utils": "3.1.0",
       },
     },
     "packages/git": {
@@ -222,8 +216,16 @@
       "version": "0.48.0",
       "dependencies": {
         "@kaynooo/utils": "3.1.0",
+      },
+      "devDependencies": {
         "@xterm/headless": "6.0.0",
       },
+      "peerDependencies": {
+        "@xterm/headless": ">=6.0.0",
+      },
+      "optionalPeers": [
+        "@xterm/headless",
+      ],
     },
     "packages/out": {
       "name": "@kaynooo/cli-out",
@@ -231,11 +233,9 @@
       "bin": {
         "out": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/utils": "3.1.0",
-      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/utils": "3.1.0",
       },
     },
     "packages/page": {
@@ -245,10 +245,10 @@
         "page": "./dist/cli.js",
       },
       "dependencies": {
-        "@kaynooo/audit-engine": "0.1.1",
         "playwright-core": "1.64.1",
       },
       "devDependencies": {
+        "@kaynooo/audit-engine": "0.1.1",
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
@@ -268,11 +268,9 @@
       "bin": {
         "pkg": "./dist/cli.js",
       },
-      "dependencies": {
-        "@kaynooo/utils": "3.1.0",
-      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
+        "@kaynooo/utils": "3.1.0",
       },
     },
     "packages/probe": {

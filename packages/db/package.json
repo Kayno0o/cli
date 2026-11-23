@@ -12,16 +12,26 @@
     "directory": "packages/db"
   },
   "bugs": "https://github.com/Kayno0o/cli/issues",
-  "keywords": ["postgres", "mysql", "mariadb", "sql", "read-only", "cli", "bun"],
+  "keywords": [
+    "postgres",
+    "mysql",
+    "mariadb",
+    "sql",
+    "read-only",
+    "cli",
+    "bun"
+  ],
   "bin": {
     "db": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "engines": {
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath build src/cli.ts --target bun --outdir dist && $npm_execpath ../../scripts/shell-shebang.ts",
+    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
     "db": "$npm_execpath src/cli.ts"
   },
   "devDependencies": {
