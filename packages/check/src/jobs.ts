@@ -253,16 +253,14 @@ function withIncludes(source: string, dir: string, seen: Set<string>): string {
     if (!match)
       return line
 
-    return match[1]!.trim().split(BLANKS)
-      .flatMap(path => GLOB_CHARS.test(path) ? [...new Bun.Glob(path).scanSync({ cwd: dir })].sort() : [path])
-      .map(path => resolvePath(dir, path))
-      .filter(file => !seen.has(file) && existsSync(file))
-      .map((file) => {
-        seen.add(file)
+    const paths = match[1]!.trim().split(BLANKS).flatMap(path => GLOB_CHARS.test(path) ? [...new Bun.Glob(path).scanSync({ cwd: dir })].sort() : [path])
+    const files = paths.map(path => resolvePath(dir, path)).filter(file => !seen.has(file) && existsSync(file))
 
-        return withIncludes(readFileSync(file, 'utf-8'), dir, seen)
-      })
-      .join('\n')
+    return files.map((file) => {
+      seen.add(file)
+
+      return withIncludes(readFileSync(file, 'utf-8'), dir, seen)
+    }).join('\n')
   }).join('\n')
 }
 
