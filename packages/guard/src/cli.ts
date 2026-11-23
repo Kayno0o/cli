@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, 
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, readInput, role, runCli, runCommand, stateHome } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printJson, readInput, role, runCli, runCommand, stateHome } from '@kaynooo/cli-kit'
 import { checkCommand, checkPath } from './check'
 import { EVENTS, hook } from './hook'
 import { RULES } from './rules'
@@ -86,7 +86,7 @@ async function check(args: string[]): Promise<number> {
   const verdict: Verdict = await checkCommand(command, context)
 
   if (values.json === true)
-    console.log(JSON.stringify(verdict))
+    printJson(verdict)
   else
     report(verdict.violations)
 
@@ -105,7 +105,7 @@ function path(args: string[]): number {
   const violations = parsed.positionals.flatMap(each => checkPath(each) ?? [])
 
   if (parsed.values.json === true)
-    console.log(JSON.stringify({ violations }))
+    printJson({ violations })
   else
     report(violations)
 
@@ -126,7 +126,7 @@ function rules(args: string[]): number {
   const parsed = parse(args, rulesUsage, rulesOptions, { exits: RULES_EXITS })
 
   if (parsed.values.json === true) {
-    console.log(JSON.stringify(RULES))
+    printJson(RULES)
 
     return 0
   }
@@ -167,7 +167,7 @@ function machine(): Machine {
 }
 
 async function hookCommand(args: string[]): Promise<number> {
-  const parsed = parse(args, hookUsage, {}, { exits: HOOK_EXITS })
+  const parsed = parse(args, hookUsage, {}, { exits: HOOK_EXITS, positionals: ['[event]'], candidates: { '[event]': () => [...EVENTS] } })
 
   const event = parsed.positionals[0] ?? ''
 
