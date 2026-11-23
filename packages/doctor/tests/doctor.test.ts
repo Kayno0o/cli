@@ -156,6 +156,34 @@ describe('runChecks', () => {
     await runChecks({ ...host, which: () => '/bin/x' })
     expect(peak).toBeLessThanOrEqual(4)
   })
+
+  test('short-circuits remaining registry batches on a DNS/network failure, and skips them with --offline', async () => {
+    const calls: string[] = []
+    const host: Host = {
+      ...fakeHost({}, []),
+      which: () => '/bin/x',
+      run: async (argv) => {
+        calls.push(argv.join(' '))
+
+        return { code: 1, stdout: '', stderr: 'DNSResolveFailed: view request failed to send\n' }
+      },
+    }
+
+    for (const name of Object.keys(TOOLS).slice(0, 10))
+      install(name, '0.1.0')
+
+    const results = await runChecks(host)
+
+    expect(calls.filter(line => line.startsWith('bun info')).length).toBeLessThanOrEqual(4)
+    expect(results.filter(result => result.detail.includes('DNSResolveFailed'))).toHaveLength(10)
+
+    calls.length = 0
+
+    const offline = await runChecks(host, [], { offline: true })
+
+    expect(calls.filter(line => line.startsWith('bun info'))).toEqual([])
+    expect(offline.filter(result => result.detail.includes('skipped (--offline)'))).toHaveLength(10)
+  })
 })
 
 describe('checkTea', () => {

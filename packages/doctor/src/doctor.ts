@@ -22,6 +22,7 @@ const OPTIONS = {
   'json': jsonOption('[{check, ok, detail, fix?}], as the checks stand after --fix; the fixes it ran go to stderr'),
   'only': { type: 'string', multiple: true, choices: CHECK_NAMES, description: 'run only this check (a package such as cli-forgejo, tea, hooks, bun or completions), repeatable' },
   'quiet': { type: 'boolean', short: 'q', description: 'print only the failing checks' },
+  'offline': { type: 'boolean', description: 'skip registry and remote release lookups' },
   'fix': { type: 'boolean', description: 'run the fix: lines doctor may run, then check again' },
   'dry-run': { type: 'boolean', description: 'with --fix or --install, show what would run without running it (alone, it implies --fix)' },
   'install': { type: 'boolean', description: 'install the packages named, or managed from a checklist, installed ones checked and unchecking removing them: forgejo, ft, hooks, all' },
@@ -69,7 +70,8 @@ export async function main(args: string[], host: Host = hostHere()): Promise<num
 
   const dry = values['dry-run'] === true
   const json = values.json === true
-  let results = await runChecks(host, only)
+  const offline = values.offline === true
+  let results = await runChecks(host, only, { offline })
   let fixed = false
 
   if ((values.fix === true || dry) && results.some(result => !result.ok)) {
@@ -83,7 +85,7 @@ export async function main(args: string[], host: Host = hostHere()): Promise<num
     if (dry)
       return 1
 
-    results = await runChecks(host, only)
+    results = await runChecks(host, only, { offline })
 
     fixed = true
   }

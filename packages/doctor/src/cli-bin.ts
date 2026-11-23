@@ -4,7 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Host } from './checks'
 import type { Listed } from './list'
 import process from 'node:process'
-import { badUsage, completionScript, duration, formatDuration, jsonOption, paint, parse, printJson, readUsage, runCli, summarizeUsage, table, usagePath } from '@kaynooo/cli-kit'
+import { activeTheme, badge, badUsage, bar, completionScript, duration, formatDuration, header, jsonOption, keyValue, marked, paint, parse, PRESETS, printJson, readUsage, role, runCli, section, sparkline, summarizeUsage, table, tree, usagePath } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
 import { completionDir, installCompletions, installedBins } from './completions'
 import { configReport } from './config-report'
@@ -191,6 +191,53 @@ export async function stats(args: string[], path = usagePath()): Promise<number>
   return 0
 }
 
+const THEME_USAGE = `cli theme [preset]: preview the active theme, or a named preset
+
+Draws the marks, roles, status badges, bar, sparkline and tree with the theme in force (or the preset named: ${Object.keys(PRESETS).join(', ')}).`
+
+const THEME_EXITS: ExitRow[] = [[0, 'it printed the preview'], [2, 'a usage error']]
+
+export function theme(args: string[]): number {
+  const { positionals } = parse(args, THEME_USAGE, {}, { positionals: ['[preset]'], exits: THEME_EXITS, candidates: { '[preset]': () => Object.keys(PRESETS) }, examples: ['cli theme', ['cli theme light', 'preview the light preset'], ['cli theme ascii', 'preview the ASCII preset']] })
+  const preset = positionals[0]
+
+  if (preset !== undefined && !Object.hasOwn(PRESETS, preset))
+    badUsage(`no preset ${preset}, one of ${Object.keys(PRESETS).join(', ')}`)
+
+  const before = process.env.KIT_THEME
+
+  if (preset !== undefined)
+    process.env.KIT_THEME = preset
+
+  try {
+    const out = process.stdout
+    const loaded = activeTheme()
+    const head = header('cli', `theme · ${loaded.preset}`, out)
+
+    if (head !== '')
+      console.log(head)
+
+    console.log(keyValue([['preset', loaded.preset], ['presets', Object.keys(PRESETS).join(', ')], ['files', loaded.sources.length === 0 ? 'none' : loaded.sources.join(', ')]], { stream: out }))
+    console.log(`\n${section('marks & badges', undefined, out)}`)
+    console.log((['ok', 'warn', 'problem', 'note', 'plan'] as const).map(mark => marked(mark, mark, out)).join('  '))
+    console.log(['success', 'failure', 'running', 'waiting', 'skipped'].map(word => badge(word, out)).join('  '))
+    console.log((['accent', 'id', 'path', 'label', 'value'] as const).map(name => role(name, out)(name)).join('  '))
+    console.log(`\n${section('charts & tree', undefined, out)}`)
+    console.log(`${bar(0.65, { stream: out })}  ${sparkline([1, 3, 2, 5, 8, 4, 9, 6], { stream: out })}`)
+    console.log(tree([{ label: 'packages', children: [{ label: 'kit', children: [{ label: 'src' }] }, { label: 'git' }] }], { stream: out }))
+  }
+  finally {
+    if (preset !== undefined) {
+      if (before === undefined)
+        delete process.env.KIT_THEME
+      else
+        process.env.KIT_THEME = before
+    }
+  }
+
+  return 0
+}
+
 if (import.meta.main) {
   process.exitCode = await runCli({
     name: 'cli',
@@ -205,6 +252,7 @@ if (import.meta.main) {
       list: { summary: 'every bin in one line: what it does and what it is reached for instead of', run: async args => list(args) },
       config: { summary: 'where every bin looks for its config and which environment variables are set', run: async args => Promise.resolve(config(args)) },
       stats: { summary: 'how often each bin ran and the options usage errors did not know', run: async args => stats(args) },
+      theme: { summary: 'preview the active theme or a named preset', run: async args => Promise.resolve(theme(args)) },
       completions: { summary: 'shell completions for every installed bin: fish files printed or written to the folder fish reads, a bash or zsh script', run: async args => completions(args) },
     },
   })

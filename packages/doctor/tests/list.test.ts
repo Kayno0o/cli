@@ -3,8 +3,8 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { list } from '../src/cli-bin'
-import { describeBin, filterBins } from '../src/list'
+import { list, theme } from '../src/cli-bin'
+import { describeBin, filterBins, listBins } from '../src/list'
 
 const temp = tempDirs()
 
@@ -108,5 +108,53 @@ describe('the cli bin', () => {
 
     expect(none.exitCode).toBe(2)
     expect(none.stderr.toString()).toContain('no bin matches')
+  })
+
+  test('listBins caches parsed bin descriptions by file stat', async () => {
+    const dir = temp('doctor-cache-')
+    const modules = join(dir, 'modules')
+    const binFile = join(modules, '@kaynooo', 'cli-git', 'dist', 'gst.js')
+
+    mkdirSync(join(modules, '@kaynooo', 'cli-git', 'dist'), { recursive: true })
+    writeFileSync(join(modules, '@kaynooo', 'cli-git', 'package.json'), JSON.stringify({ bin: { gst: './dist/gst.js' } }))
+    writeFileSync(binFile, '// gst')
+
+    let runs = 0
+    const host: Host = {
+      ...fakeHost({ gst: '' }),
+      home: dir,
+      globalModules: modules,
+      run: async () => {
+        runs++
+
+        return { code: 0, stdout: JSON.stringify(GST), stderr: '' }
+      },
+    }
+    const prevXdg = process.env.XDG_CACHE_HOME
+
+    process.env.XDG_CACHE_HOME = join(dir, 'cache')
+
+    try {
+      const first = await listBins(host)
+      const second = await listBins(host)
+
+      expect(runs).toBe(1)
+      expect(second.find(each => each.bin === 'gst')).toEqual(first.find(each => each.bin === 'gst'))
+    }
+    finally {
+      if (prevXdg === undefined)
+        delete process.env.XDG_CACHE_HOME
+      else
+        process.env.XDG_CACHE_HOME = prevXdg
+    }
+  })
+
+  test('cli theme previews the active theme or a named preset', async () => {
+    const preview = await capture(() => theme(['light']))
+
+    expect(preview.result).toBe(0)
+    expect(preview.out).toContain('light')
+    expect(preview.out).toContain('marks & badges')
+    expect(() => theme(['nope'])).toThrow('no preset nope')
   })
 })

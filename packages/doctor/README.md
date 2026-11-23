@@ -5,6 +5,7 @@
 ```sh
 bun install -g @kaynooo/cli-doctor
 doctor           # one line per check
+doctor --offline # skip registry and remote release lookups
 doctor --json    # [{check, ok, detail, fix?}]
 doctor -q        # only the failing checks, nothing when all pass
 doctor --only tea --only bun    # just these checks (a package such as cli-forgejo, tea, hooks, bun, completions)
@@ -61,6 +62,15 @@ cli stats [--since 7d] [--json]   # runs per bin and per command, failures (exit
 ```
 
 Every bin records each run in `~/.local/state/kaynooo-cli/usage.jsonl`: the bin, its command, the flag names it saw (never values or arguments), the exit code and, on a usage error, the unknown option (never its message). It also records how long each run took, and the commands whose 90th percentile took a second or more are listed slowest first, the ones worth a progress line or a speed-up. `failed` counts exits other than 0 and 2, usage errors being exit 2 (misuse, or a check that could not be made). `$XDG_STATE_HOME` moves the file. `KAYNOOO_CLI_NO_USAGE=1` turns it off; `guard` never records.
+
+## cli theme
+
+```sh
+cli theme            # preview the theme in force
+cli theme light      # preview a named preset (default, high-contrast, light, mono, ascii)
+```
+
+Draws the marks, roles, status badges, bar, sparkline and tree with the theme in force or the named preset.
 
 ## cli list
 

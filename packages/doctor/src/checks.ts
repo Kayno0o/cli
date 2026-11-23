@@ -114,8 +114,10 @@ export function ownBin(host: Host, name: string, bin: string): string | undefine
   return file === undefined ? undefined : join(host.globalModules, name, file)
 }
 
+const NETWORK_ERROR = /DNSResolveFailed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|Unable to connect|timed out/i
+
 // One package: installed, its bins on the PATH, and no older than the version the registry serves.
-export async function checkTool(host: Host, name: string, bins: readonly string[]): Promise<Result> {
+export async function checkTool(host: Host, name: string, bins: readonly string[], { offline = false, registryDown }: { offline?: boolean, registryDown?: string } = {}): Promise<Result> {
   const check = name.slice(name.indexOf('/') + 1)
   const version = installed(host, name)?.version
 
@@ -123,6 +125,14 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
     return { check, ok: false, detail: 'not installed', fix: `bun install -g ${name}` }
 
   const off = bins.filter(bin => host.which(bin) === null)
+
+  if (offline || registryDown !== undefined) {
+    if (off.length > 0)
+      return { check, ok: false, detail: `${version}, ${off.join(', ')} not on the PATH`, fix: `add ${binDir(host)} to the PATH` }
+
+    return { check, ok: true, detail: offline ? `${version}, skipped (--offline)` : `${version}, the registry did not answer: ${registryDown}` }
+  }
+
   const info = await host.run(['bun', 'info', name, 'version', '--no-cache'])
   const answered = info.code === 0 ? firstLine(info.stdout.trim().split('\n').at(-1) ?? '') : ''
   const latest = VERSION.test(answered) ? answered : ''
@@ -455,15 +465,27 @@ export function checkWorkspace(host: Host, env: Record<string, string | undefine
 export const CHECK_NAMES = [...Object.keys(TOOLS).map(toolCheck), ...OTHER_CHECKS]
 
 // The checks named in `only`; with it empty, those of what is installed: a package left out is no failure.
-export async function runChecks(host: Host, only: readonly string[] = []): Promise<Result[]> {
+export async function runChecks(host: Host, only: readonly string[] = [], { offline = false }: { offline?: boolean } = {}): Promise<Result[]> {
   const wanted = (check: string) => only.length === 0 || only.includes(check)
   const entries = Object.entries(TOOLS).filter(([name]) => only.length === 0 ? isInstalled(host, name) : wanted(toolCheck(name)))
   const { plugin, mod } = hooksWiring(host)
   const hooks = only.length > 0 || plugin || mod !== undefined || isInstalled(host, HOOKS_REQUIRES)
   const tools: Result[] = []
+  let registryDown: string | undefined
 
-  for (let at = 0; at < entries.length; at += INFO_AT_ONCE)
-    tools.push(...await Promise.all(entries.slice(at, at + INFO_AT_ONCE).map(async ([name, bins]) => checkTool(host, name, bins))))
+  for (let at = 0; at < entries.length; at += INFO_AT_ONCE) {
+    const batch = await Promise.all(entries.slice(at, at + INFO_AT_ONCE).map(async ([name, bins]) => checkTool(host, name, bins, { offline, ...(registryDown === undefined ? {} : { registryDown }) })))
+
+    tools.push(...batch)
+
+    if (!offline && registryDown === undefined) {
+      const marker = 'the registry did not answer: '
+      const failed = batch.find(result => result.detail.includes(marker) && NETWORK_ERROR.test(result.detail))
+
+      if (failed !== undefined)
+        registryDown = failed.detail.slice(failed.detail.indexOf(marker) + marker.length)
+    }
+  }
 
   return [
     ...tools,
@@ -474,7 +496,7 @@ export async function runChecks(host: Host, only: readonly string[] = []): Promi
     ...wanted('completions') ? [checkCompletions(host)] : [],
     ...wanted('dead-bins') ? [checkDeadBins(host)] : [],
     ...wanted('workspace') && (only.length > 0 || isInstalled(host, WORKSPACE) || isInstalled(host, '@kaynooo/cli-pkg')) ? [checkWorkspace(host)] : [],
-    ...wanted('wakatime') && existsSync(join(host.home, '.wakatime.cfg')) ? [await checkWakatime(host)] : [],
-    ...wanted('dl-bins') && (only.length > 0 || isInstalled(host, DL)) ? [await checkDlBins(host)] : [],
+    ...wanted('wakatime') && !offline && existsSync(join(host.home, '.wakatime.cfg')) ? [await checkWakatime(host)] : [],
+    ...wanted('dl-bins') && !offline && (only.length > 0 || isInstalled(host, DL)) ? [await checkDlBins(host)] : [],
   ]
 }
