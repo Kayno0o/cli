@@ -5,7 +5,6 @@ import { entries, formatAssignment, lastLine, removeKey, setLine, unquotable } f
 import { assertDotenvName, loadKnown, readEnv, withLocks, writeAtomic, writeEnv } from '../files'
 import { maskValue } from '../mask'
 import { parseStructured, structuredFormat } from '../structured'
-import { setStructured, unsetStructured } from '../structured-write'
 
 const DEFAULT_FILE = '.env'
 const TRAILING_NEWLINE = /\r?\n$/
@@ -99,6 +98,7 @@ export async function set(args: string[]): Promise<number> {
   const value = parsed.values.empty === true ? '' : await readValue(key, parsed.values.file)
 
   if (structuredFormat(target) !== undefined) {
+    const { setStructured } = await import('../structured-write')
     const text = await withLocks([target], async () => {
       const edited = setStructured(target, await readStructured(target), key, value)
 
@@ -144,6 +144,8 @@ export async function unset(args: string[]): Promise<number> {
 
   await withLocks([target], async () => {
     if (structuredFormat(target) !== undefined) {
+      const { unsetStructured } = await import('../structured-write')
+
       await writeAtomic(target, unsetStructured(target, await readStructured(target), key) ?? fail(`${key} is not set in ${target}`, 1))
 
       return
