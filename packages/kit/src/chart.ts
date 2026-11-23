@@ -121,10 +121,29 @@ export function tree(roots: TreeNode[], { stream = process.stdout, env = process
   if (outputMode(stream, env) === 'agent')
     return indented(roots, '')
 
-  const colors = paint(stream, env)
   const terminal = takesControlCodes(stream, env)
+
+  if (!terminal) {
+    const lines: string[] = []
+    const walkPlain = (nodes: TreeNode[], depth: number) => {
+      const prefix = '│ '.repeat(depth)
+
+      for (const { label, children = [] } of nodes) {
+        const folder = children.length > 0
+
+        lines.push(`${prefix}${folder ? '•' : '·'} ${folder ? `${label}/` : label}`)
+        walkPlain(children, depth + 1)
+      }
+    }
+
+    walkPlain(roots, 0)
+
+    return lines.join('\n')
+  }
+
+  const colors = paint(stream, env)
   const { theme } = activeTheme()
-  const marks = terminal ? theme.glyphs : { open: '•', leaf: '·', guide: '│' }
+  const marks = theme.glyphs
   const deepest = depthOf(roots) - 1
   const lines: string[] = []
 

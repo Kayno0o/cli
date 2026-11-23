@@ -41,11 +41,11 @@ function prose(line: string, colors: ReturnType<typeof paint>): string {
 }
 
 // With a `bin`, the help opens on `<name> <version>  <summary>` as a CLI's does, the summary leaving the usage.
-export function helpText(usage: string, options: Options, colors = paint(process.stdout), { examples = [], exits = [], bin }: Described & { bin?: { name: string, version: () => string } | undefined } = {}): string {
+export function helpText(usage: string, options: Options, colors = paint(process.stdout), { examples = [], exits = [], bin, columns }: Described & { bin?: { name: string, version: () => string } | undefined, columns?: number | undefined } = {}): string {
   const { summary } = description(usage)
   const head = bin === undefined ? [usageLine(usage, colors)] : [`${colors.bold(bin.name)} ${colors.dim(bin.version())}${summary === '' ? '' : `  ${summary}`}`, '', usageLine(usage, colors, { summary: false })]
 
-  return [...head, '', colors.bold('Options:'), ...optionRows(options, colors), ...exitRows(exits, colors), ...exampleRows(examples, colors)].join('\n')
+  return [...head, '', colors.bold('Options:'), ...optionRows(options, colors, columns), ...exitRows(exits, colors), ...exampleRows(examples, colors)].join('\n')
 }
 
 // An exit code and what it means.
@@ -103,8 +103,35 @@ export function exampleRows(examples: Example[], colors = paint(process.stdout))
 // Choices longer than this are listed after the description, so one option does not push every description off the screen.
 const MAX_INLINE_CHOICES = 24
 
-// A line per option, `-n, --times <value>  how many`, aligned on the visible text.
-export function optionRows(options: Options, colors = paint(process.stdout)): string[] {
+// Wraps prose at word boundaries to `limit` columns, keeping a word longer than `limit` whole.
+function wrapText(text: string, limit: number): string[] {
+  if (text.length <= limit)
+    return [text]
+
+  const lines: string[] = []
+  let current = ''
+
+  for (const word of text.split(' ')) {
+    if (current === '') {
+      current = word
+    }
+    else if (current.length + 1 + word.length <= limit) {
+      current = `${current} ${word}`
+    }
+    else {
+      lines.push(current)
+      current = word
+    }
+  }
+
+  if (current !== '')
+    lines.push(current)
+
+  return lines
+}
+
+// A line per option, `-n, --times <value>  how many`, aligned on the visible text; wraps long descriptions under their column when `columns` is given.
+export function optionRows(options: Options, colors = paint(process.stdout), columns?: number): string[] {
   const rows = Object.entries(options).map(([name, option]) => {
     const short = option.short === undefined ? '    ' : `${colors.cyan(`-${option.short}`)}, `
     const choices = option.choices?.join('|')
@@ -117,6 +144,16 @@ export function optionRows(options: Options, colors = paint(process.stdout)): st
     return { flag: `${short}${colors.cyan(`--${name}`)}${value}`, width: `-x, --${name}`.length + (option.type === 'string' ? placeholder.length + 1 : 0), description: described }
   })
   const width = Math.max(0, ...rows.map(row => row.width))
+  const indent = 2 + width + 2
+  const room = columns !== undefined && columns - indent >= 20 ? columns - indent : undefined
 
-  return rows.map(row => row.description === '' ? `  ${row.flag}` : `  ${row.flag}${' '.repeat(width - row.width)}  ${colors.dim(row.description)}`)
+  return rows.flatMap((row) => {
+    if (row.description === '')
+      return [`  ${row.flag}`]
+
+    const wrapped = room === undefined ? [row.description] : wrapText(row.description, room)
+    const [first = '', ...rest] = wrapped
+
+    return [`  ${row.flag}${' '.repeat(width - row.width)}  ${colors.dim(first)}`, ...rest.map(line => `${' '.repeat(indent)}${colors.dim(line)}`)]
+  })
 }

@@ -87,6 +87,7 @@ const DEFAULT: Theme = {
 }
 
 const BRIGHT: Partial<Theme['colors']> = { accent: 'cyanBright', id: 'yellowBright', path: 'blueBright', label: 'white', value: 'bold whiteBright', ok: 'greenBright', warn: 'yellowBright', problem: 'redBright', note: 'white', plan: 'magentaBright', passed: 'greenBright', failed: 'redBright', running: 'cyanBright', queued: 'yellowBright', skipped: 'white' }
+const LIGHT: Partial<Theme['colors']> = { accent: '#0369a1', id: '#b45309', path: '#1d4ed8', label: '#52525b', value: 'bold', ok: '#15803d', warn: '#b45309', problem: '#b91c1c', note: '#52525b', plan: '#7e22ce', passed: '#15803d', failed: '#b91c1c', running: '#0369a1', queued: '#b45309', skipped: '#52525b' }
 const MONO: Partial<Theme['colors']> = { accent: 'bold', id: 'bold', path: 'underline', label: 'dim', value: 'bold', ok: 'bold', warn: 'bold', problem: 'bold', note: 'dim', plan: 'dim', passed: 'bold', failed: 'bold', running: 'bold', queued: 'dim', skipped: 'dim' }
 const ASCII: Partial<Theme['glyphs']> = { ok: '+', warn: '!', problem: 'x', note: '>', plan: '?', passed: '+', failed: 'x', running: '*', queued: 'o', skipped: '-', bar: '#', rule: '-', corner: '+', open: '*', leaf: '-', guide: '|' }
 
@@ -94,6 +95,7 @@ const ASCII: Partial<Theme['glyphs']> = { ok: '+', warn: '!', problem: 'x', note
 export const PRESETS: Record<string, { colors?: Partial<Theme['colors']>, glyphs?: Partial<Theme['glyphs']>, accents?: ColorSpec[], gradient?: Theme['gradient'] }> = {
   'default': {},
   'high-contrast': { colors: BRIGHT, accents: ['cyanBright', 'magentaBright', 'greenBright', 'blueBright', 'yellowBright', 'redBright'], gradient: ['#d8b4fe', '#a5f3fc'] },
+  'light': { colors: LIGHT, accents: ['#0369a1', '#7e22ce', '#15803d', '#1d4ed8', '#b45309', '#b91c1c'], gradient: ['#7c3aed', '#0284c7'] },
   'mono': { colors: MONO, accents: ['bold'], gradient: undefined },
   'ascii': { glyphs: ASCII },
 }

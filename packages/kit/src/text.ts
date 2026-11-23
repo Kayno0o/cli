@@ -63,3 +63,53 @@ export function closest(name: string, names: string[]): string | undefined {
 
   return best !== undefined && best.far <= (name.length < 4 ? 1 : 2) ? best.known : undefined
 }
+
+const ESC = String.fromCharCode(27)
+// A colour or cursor code, or an OSC 8 link's opening or closing, read where `lastIndex` points.
+const ESCAPE_CODE = new RegExp(`${ESC}(?:\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]|\\][^\\u0007${ESC}]*(?:\\u0007|${ESC}\\\\))`, 'y')
+const RESET_STYLE = `${ESC}[0m`
+const CLOSE_LINK = `${ESC}]8;;${ESC}\\`
+
+// The line cut to `width` columns of visible text, its escapes kept whole, and styles and links ended after a cut so none runs into the next cell or line.
+export function cutToWidth(line: string, width: number, suffix = ''): string {
+  if (Bun.stringWidth(line) <= width)
+    return line
+
+  const suffixWidth = suffix === '' ? 0 : Bun.stringWidth(suffix)
+  let room = Math.max(0, width - suffixWidth)
+  let kept = ''
+  let index = 0
+  let styled = false
+  let linked = false
+
+  while (index < line.length) {
+    ESCAPE_CODE.lastIndex = index
+
+    const escape = ESCAPE_CODE.exec(line)
+
+    if (escape !== null) {
+      kept += escape[0]
+
+      if (escape[0].startsWith(`${ESC}]`))
+        linked = true
+      else
+        styled = true
+
+      index = ESCAPE_CODE.lastIndex
+
+      continue
+    }
+
+    const char = String.fromCodePoint(line.codePointAt(index)!)
+    const columns = Bun.stringWidth(char)
+
+    if (columns > room)
+      break
+
+    kept += char
+    room -= columns
+    index += char.length
+  }
+
+  return `${kept}${styled ? RESET_STYLE : ''}${linked ? CLOSE_LINK : ''}${suffix}`
+}

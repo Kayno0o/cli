@@ -64,6 +64,18 @@ describe('recordUsage', () => {
 
     expect(await readUsage(usagePath(env))).toEqual([])
   })
+
+  test('trims the log to the newest half once it exceeds maxBytes', async () => {
+    const env = { XDG_STATE_HOME: temp('usage-trim-') }
+
+    for (let i = 0; i < 6; i++)
+      recordUsage(usageEntry(`bin${i}`, undefined, [], 0, { now: new Date(i * 1000) }), env, 250)
+
+    const entries = await readUsage(usagePath(env))
+
+    expect(entries.length).toBeLessThan(6)
+    expect(entries.at(-1)?.bin).toBe('bin5')
+  })
 })
 
 describe('summarizeUsage', () => {
@@ -116,6 +128,10 @@ describe('runCli', () => {
 
       expect(code).toBe(0)
       expect((await readUsage(usagePath({ XDG_STATE_HOME: state })))[0]).toMatchObject({ bin: 'demo', command: 'go', flags: ['--fast'], code: 0 })
+
+      await runCli({ name: 'demo', version: '1.0.0', about: 'x', commands: { go: { summary: 'go', run: async () => Promise.resolve(0) } } }, ['--help'])
+      await runCli({ name: 'demo', version: '1.0.0', about: 'x', commands: { go: { summary: 'go', run: async () => Promise.resolve(0) } } }, ['--version'])
+      expect(await readUsage(usagePath({ XDG_STATE_HOME: state }))).toHaveLength(1)
     }
     finally {
       for (const name of ['XDG_STATE_HOME', 'NODE_ENV']) {

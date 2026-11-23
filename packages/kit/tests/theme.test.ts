@@ -58,6 +58,12 @@ describe('loadTheme', () => {
     expect(chosen.theme.glyphs.bar).toBe('━')
     expect(chosen.theme.colors.id).toBe('bold')
     expect(chosen.sources).toEqual([])
+
+    const light = loadTheme({ ...world(), env: { KIT_THEME: 'light' } })
+
+    expect(light.preset).toBe('light')
+    expect(light.theme.colors.accent).toBe('#0369a1')
+    expect(light.theme.gradient).toEqual(['#7c3aed', '#0284c7'])
   })
 
   it('names the bins that choose their own colour', () => {

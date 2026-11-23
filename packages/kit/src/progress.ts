@@ -3,6 +3,7 @@ import process from 'node:process'
 import { formatDuration, formatElapsed } from './format'
 import { holdSignals } from './process'
 import { marked, paint, takesControlCodes } from './style'
+import { cutToWidth } from './text'
 import { activeTheme, shaded, tinted } from './theme'
 
 export interface Progress {
@@ -65,14 +66,8 @@ const FRAME_MS = 200
 const BAR_WIDTH = 20
 // Back to the start of the line, then erases it and everything under it.
 const CLEAR_BELOW = '\r\x1B[J'
-
-const ESC = String.fromCharCode(27)
-// A colour or cursor code, or an OSC 8 link's opening or closing, read where `lastIndex` points.
-const ESCAPE_CODE = new RegExp(`${ESC}(?:\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]|\\][^\\u0007${ESC}]*(?:\\u0007|${ESC}\\\\))`, 'y')
-const RESET_STYLE = `${ESC}[0m`
 // What Ctrl+C sends once raw mode stops the terminal turning it into SIGINT.
 const CTRL_C = 3
-const CLOSE_LINK = `${ESC}]8;;${ESC}\\`
 // What the console prints with, to the terminal the line is drawn on or the other.
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug', 'dir', 'dirxml', 'table', 'trace', 'group', 'groupCollapsed', 'count', 'timeEnd', 'timeLog', 'assert'] as const
 
@@ -309,43 +304,6 @@ function plain(text: string): string {
 
 function tintedParts(parts: Part[], colors: Colors): string {
   return parts.map(({ text, tint }) => tint(colors)(text)).join('')
-}
-
-// The line cut to `width` columns of visible text, its escapes kept whole, and the styles and a link ended after a cut so none runs into the next line.
-function cutToWidth(line: string, width: number): string {
-  if (Bun.stringWidth(line) <= width)
-    return line
-
-  let room = width
-  let kept = ''
-  let index = 0
-  let linked = false
-
-  while (index < line.length) {
-    ESCAPE_CODE.lastIndex = index
-
-    const escape = ESCAPE_CODE.exec(line)
-
-    if (escape !== null) {
-      kept += escape[0]
-      linked ||= escape[0].startsWith(`${ESC}]`)
-      index = ESCAPE_CODE.lastIndex
-
-      continue
-    }
-
-    const char = String.fromCodePoint(line.codePointAt(index)!)
-    const columns = Bun.stringWidth(char)
-
-    if (columns > room)
-      break
-
-    kept += char
-    room -= columns
-    index += char.length
-  }
-
-  return `${kept}${RESET_STYLE}${linked ? CLOSE_LINK : ''}`
 }
 
 // Keeps keys typed on the terminal from being echoed while the region is drawn: an Enter would push it down a line and leave its first line behind on every redraw. Ctrl+C still interrupts.

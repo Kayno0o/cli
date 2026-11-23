@@ -19,8 +19,9 @@ describe('marked', () => {
     expect(marked('note', 'skipped', {}, undefined, {})).toBe('note: skipped')
   })
 
-  it('prints plain words on a terminal under NO_COLOR', () => {
+  it('prints plain words on a terminal under non-empty NO_COLOR, keeping colour for an empty NO_COLOR', () => {
     expect(marked('ok', 'built', TERMINAL, undefined, { NO_COLOR: '1' })).toBe('ok: built')
+    expect(marked('ok', 'built', TERMINAL, undefined, { NO_COLOR: '' })).toBe('\x1B[1m\x1B[32m✓\x1B[39m\x1B[22m built')
   })
 })
 
@@ -29,6 +30,12 @@ describe('helpText', () => {
 
   it('lays out the usage and options under their headers, aligned on the visible text', () => {
     expect(helpText('usage: demo greet [options] <name>', options, paint({}))).toBe('Usage: demo greet [options] <name>\n\nOptions:\n  -n, --times <value>  how many\n      --loud           shout')
+  })
+
+  it('wraps long option descriptions under their column when columns is given', () => {
+    const longOptions = { verbose: { type: 'boolean', description: 'print every single step and its full timing summary' } } as const
+
+    expect(helpText('demo', longOptions, paint({}), { columns: 42 })).toBe('Usage: demo\n\nOptions:\n      --verbose  print every single step\n                 and its full timing\n                 summary')
   })
 
   it('aligns the same once coloured', () => {

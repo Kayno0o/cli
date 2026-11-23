@@ -25,6 +25,13 @@ describe('notification', () => {
     expect(codes).toContain(`${TITLE}\x1B\x1B\\\x1B\\\x1BPtmux;\x1B\x1B]99;`)
     expect(codes.endsWith(`${BODY}\x1B\x1B\\\x1B\\`)).toBe(true)
   })
+
+  it('uses OSC 777 on WezTerm/foot and OSC 9 on iTerm2/Windows Terminal', () => {
+    expect(notification('ft release', 'done in 12.0s', { TERM_PROGRAM: 'WezTerm' })).toBe('\x1B]777;notify;ft release;done in 12.0s\x1B\\')
+    expect(notification('ft release', 'done in 12.0s', { TERM: 'foot-extra' })).toBe('\x1B]777;notify;ft release;done in 12.0s\x1B\\')
+    expect(notification('ft release', 'done in 12.0s', { TERM_PROGRAM: 'iTerm.app' })).toBe('\x1B]9;ft release: done in 12.0s\x1B\\')
+    expect(notification('ft release', 'done in 12.0s', { WT_SESSION: 'abc' })).toBe('\x1B]9;ft release: done in 12.0s\x1B\\')
+  })
 })
 
 describe('notifyEnd', () => {

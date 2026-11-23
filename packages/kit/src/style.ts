@@ -15,12 +15,14 @@ const MARK_WORDS: Record<Mark, string> = { ok: 'ok:', warn: 'warning:', problem:
 
 // A terminal that draws in place: not a log or a pipe, not an agent that reads text and no drawing, nor a run that KIT_MODE says is CI or a pipe, and not asked for plain output by `NO_COLOR` or a dumb `TERM`.
 export function takesControlCodes(stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): boolean {
-  return stream.isTTY === true && env.NO_COLOR === undefined && env.NODE_DISABLE_COLORS === undefined && env.TERM !== 'dumb' && outputMode(stream, env) === 'terminal'
+  return stream.isTTY === true && (env.NO_COLOR === undefined || env.NO_COLOR === '') && env.NODE_DISABLE_COLORS === undefined && env.TERM !== 'dumb' && outputMode(stream, env) === 'terminal'
 }
 
 // Colours that write escapes only to a stream taking control codes.
 export function paint(stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): Colors {
-  return createColors({ stream: { isTTY: takesControlCodes(stream, env) }, env })
+  const effective = env.NO_COLOR === '' ? { ...env, NO_COLOR: undefined } : env
+
+  return createColors({ stream: { isTTY: takesControlCodes(stream, env) }, env: effective })
 }
 
 // `✓ text` on a terminal, `ok: text` elsewhere; `detail` follows dimmed.

@@ -6,8 +6,9 @@ type Env = Record<string, string | undefined>
 export type Mode = 'terminal' | 'ci' | 'agent' | 'pipe'
 
 const MODES = new Set<string>(['terminal', 'ci', 'agent', 'pipe'])
-// Variables an agent's own tool sets for what it runs: `CLAUDECODE` by Claude Code, `AI_AGENT` by the tools that follow that convention; another agent's variable goes here once confirmed.
-const AGENT_VARIABLES = ['CLAUDECODE', 'AI_AGENT']
+
+// Variables coding agents set for what they run: `CLAUDECODE` by Claude Code, `AI_AGENT` by tools following that convention, plus Codex, Cursor, OpenCode, Gemini CLI and Antigravity.
+export const AGENT_VARIABLES = ['CLAUDECODE', 'AI_AGENT', 'CODEX_SANDBOX', 'CODEX_CI', 'CURSOR_AGENT', 'OPENCODE', 'GEMINI_CLI', 'ANTIGRAVITY_AGENT'] as const
 
 function isSet(value: string | undefined): boolean {
   return value !== undefined && value !== '' && value !== '0' && value.toLowerCase() !== 'false'

@@ -19,9 +19,12 @@ describe('outputMode', () => {
     expect(outputMode(TERMINAL, { CI: 'true' })).toBe('terminal')
   })
 
-  test('is agent for Claude Code or AI_AGENT, on a pty too, and ahead of CI', () => {
+  test('is agent for coding agent env vars, on a pty too, and ahead of CI', () => {
     expect(outputMode({}, { CLAUDECODE: '1' })).toBe('agent')
     expect(outputMode(TERMINAL, { AI_AGENT: 'opencode' })).toBe('agent')
+    expect(outputMode(TERMINAL, { CODEX_SANDBOX: 'seatbelt' })).toBe('agent')
+    expect(outputMode(TERMINAL, { CURSOR_AGENT: '1' })).toBe('agent')
+    expect(outputMode(TERMINAL, { GEMINI_CLI: '1' })).toBe('agent')
     expect(outputMode({}, { CLAUDECODE: '1', CI: 'true' })).toBe('agent')
   })
 

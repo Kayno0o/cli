@@ -161,7 +161,7 @@ async function expand<T extends Scope>(scope: T, words: string[]): Promise<T> {
 }
 
 // The level's help; a default command's options follow the commands, as they apply with no command named.
-async function help({ path, header, summary: lazySummary, commands, defaultCommand, examples, replaces }: Level, stream: { isTTY?: boolean }): Promise<string> {
+async function help({ path, header, summary: lazySummary, commands, defaultCommand, examples, replaces }: Level, stream: { isTTY?: boolean, columns?: number }): Promise<string> {
   const colors = paint(stream)
   const prefix = path.join(' ')
   const summary = await resolveSummary(lazySummary)
@@ -169,6 +169,7 @@ async function help({ path, header, summary: lazySummary, commands, defaultComma
   if (wantsHelpJson())
     return JSON.stringify(description(`${prefix} <command> [options]: ${summary}`, { examples, replaces }))
 
+  const columns = takesControlCodes(stream) ? stream.columns : undefined
   const fallback = defaultCommand === undefined ? undefined : commands[defaultCommand]
   const options = fallback !== undefined && 'run' in fallback ? await optionsOf(fallback.run) : undefined
   // The default command's own run lists the output flags again, so they show once, under the level's.
@@ -180,10 +181,10 @@ async function help({ path, header, summary: lazySummary, commands, defaultComma
     usageLine(`${prefix} ${defaultCommand === undefined ? colors.cyan('<command>') : `[${colors.cyan('<command>')}]`} [options]`, colors),
     '',
     ...await commandRows(commands, colors),
-    ...own.length === 0 ? [] : ['', `${colors.bold(`Options of ${defaultCommand}:`)} ${colors.dim('the command run when none is named')}`, ...optionRows(Object.fromEntries(own), colors)],
+    ...own.length === 0 ? [] : ['', `${colors.bold(`Options of ${defaultCommand}:`)} ${colors.dim('the command run when none is named')}`, ...optionRows(Object.fromEntries(own), colors, columns)],
     '',
     colors.bold('Options:'),
-    ...optionRows(path.length === 1 ? TOP_OPTIONS : LEVEL_OPTIONS, colors),
+    ...optionRows(path.length === 1 ? TOP_OPTIONS : LEVEL_OPTIONS, colors, columns),
     ...exampleRows(examples ?? [], colors),
     '',
     `${colors.dim('Run')} ${prefix} ${colors.cyan('<command>')} --help ${colors.dim('for its options.')}`,
@@ -244,7 +245,7 @@ function reportThrown(prefix: string, error: unknown, redact: (text: string) => 
   return error instanceof Exit ? error.code : 1
 }
 
-async function dispatch(level: Level, typed: string[], { version, redact }: { version: string, redact: Cli['redact'] | undefined }): Promise<number> {
+async function dispatch(level: Level, typed: string[], { version, redact }: { version: () => string, redact: Cli['redact'] | undefined }): Promise<{ code: number, meta: boolean }> {
   const prefix = level.path.join(' ')
   let argv: string[]
 
@@ -252,7 +253,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
     argv = takeOutputFlags(typed)
   }
   catch (error) {
-    return reportThrown(prefix, error)
+    return { code: reportThrown(prefix, error), meta: false }
   }
 
   const [name, ...args] = argv
@@ -260,29 +261,32 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
 
   if (name === undefined && level.runBare && fallback !== undefined && 'run' in fallback) {
     try {
-      return await fallback.run([])
+      return { code: await fallback.run([]), meta: false }
     }
     catch (error) {
-      return reportThrown(`${prefix} ${level.defaultCommand}`, error, redact, false)
+      return { code: reportThrown(`${prefix} ${level.defaultCommand}`, error, redact, false), meta: error instanceof HelpShown }
     }
   }
 
   if (name === undefined && level.path.length > 1) {
     console.error(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stderr))
 
-    return 2
+    return { code: 2, meta: true }
   }
+
+  if (name === 'help' && args.length > 0)
+    return dispatch(level, [...args, '--help'], { version, redact })
 
   if (name === undefined || name === 'help' || name === '--help' || name === '-h') {
     console.log(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stdout))
 
-    return 0
+    return { code: 0, meta: true }
   }
 
   if (level.path.length === 1 && (name === '--version' || name === '-v')) {
-    console.log(version)
+    console.log(version())
 
-    return 0
+    return { code: 0, meta: true }
   }
 
   let command = lookup(level, name)
@@ -305,7 +309,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
 
     printError(prefix, `no command ${name}`, meant === undefined ? `run ${prefix} --help for its commands` : `did you mean ${meant}?`)
 
-    return 2
+    return { code: 2, meta: false }
   }
 
   if ('commands' in command) {
@@ -315,10 +319,10 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   }
 
   try {
-    return await command.run(rest)
+    return { code: await command.run(rest), meta: false }
   }
   catch (error) {
-    return reportThrown(`${prefix} ${ran}`, error, redact, wantsJson(rest))
+    return { code: reportThrown(`${prefix} ${ran}`, error, redact, wantsJson(rest)), meta: error instanceof HelpShown }
   }
 }
 
@@ -495,8 +499,6 @@ export function packageVersion(entry = Bun.main): string {
 
 // Runs the command argv names and returns the exit code: 0 for help and version, 2 for an unknown command.
 export async function runCli(cli: Cli, argv = scriptArgs()): Promise<number> {
-  const version = cli.version ?? packageVersion()
-
   const answered = await askpassClient(argv)
 
   if (answered !== undefined)
@@ -508,13 +510,15 @@ export async function runCli(cli: Cli, argv = scriptArgs()): Promise<number> {
   if (argv[0] === COMPLETIONS || argv[0]?.startsWith(`${COMPLETIONS}=`) === true)
     return printCompletionScript(cli.name, flagValue(argv))
 
+  // Version is read lazily so a normal command never walks the filesystem for package.json.
+  const version = () => cli.version ?? packageVersion()
   const started = performance.now()
-  const code = await dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(version)}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version, redact: cli.redact })
+  const { code, meta } = await dispatch({ path: [cli.name], header: (colors, about) => `${colors.bold(cli.name)} ${colors.dim(version())}  ${about}`, summary: cli.about, ...scopeOf(cli.commands, cli.extraCommands, cli.aliases), defaultCommand: cli.defaultCommand, runBare: cli.runBare === true, examples: cli.examples, replaces: cli.replaces }, argv, { version, redact: cli.redact })
   const command = commandPath(scopeOf(cli.commands, cli.extraCommands, cli.aliases), argv)
 
   notifyEnd(command === undefined ? cli.name : `${cli.name} ${command}`, code, performance.now() - started)
 
-  if (cli.usage !== false) {
+  if (cli.usage !== false && !meta) {
     try {
       recordUsage(usageEntry(cli.name, command, argv, code, { ms: performance.now() - started }))
     }
@@ -591,6 +595,7 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
   }
 
   let code: number
+  let meta = false
   const started = performance.now()
 
   heading.bin = { name, version: () => version ?? packageVersion() }
@@ -599,6 +604,7 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
     code = await run(argv)
   }
   catch (error) {
+    meta = error instanceof HelpShown
     code = reportThrown(name, error, redact, wantsJson(argv))
   }
   finally {
@@ -607,7 +613,7 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
 
   notifyEnd(name, code, performance.now() - started)
 
-  if (usage !== false) {
+  if (usage !== false && !meta) {
     try {
       recordUsage(usageEntry(name, undefined, argv, code, { ms: performance.now() - started }))
     }

@@ -99,6 +99,8 @@ describe('runCli', () => {
     } } } }
 
     expect(await capture(async () => runCli(helped, ['port', '--help']))).toEqual({ result: 0, out: 'Usage: demo port\n\nOptions:\n      --color <auto|always|never>  auto (the default) colours on a terminal alone\n      --plain                      plain text, no colour or spinner: --color never\n  -h, --help                       show this help\n', err: '' })
+    expect(await capture(async () => runCli(helped, ['help', 'port']))).toEqual(await capture(async () => runCli(helped, ['port', '--help'])))
+    expect((await capture(async () => runCli(cli, ['help', 'plan']))).out).toStartWith('demo plan  a group')
   })
 
   test('names an error other than an Exit by its class, prints its cause\'s message under it, and redacts both', async () => {

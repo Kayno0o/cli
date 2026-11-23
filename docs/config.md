@@ -35,7 +35,7 @@ Every bin draws with one theme: the default, then the `preset` a file names, the
 
 | Key | Takes |
 |---|---|
-| `preset` | `default`, `high-contrast` (bright colours), `mono` (bold, dim and underline only) or `ascii` (glyphs in plain ASCII) |
+| `preset` | `default`, `high-contrast` (bright colours), `light` (for light terminal backgrounds), `mono` (bold, dim and underline only) or `ascii` (glyphs in plain ASCII) |
 | `colors` | a colour per role: `accent`, `id`, `path`, `label`, `value`; per mark: `ok`, `warn`, `problem`, `note`, `plan`; per status: `passed`, `failed`, `running`, `queued`, `skipped` |
 | `glyphs` | one column wide each: the marks and statuses above, `bar`, `rule`, `corner`, and `open`, `leaf`, `guide` for trees |
 | `accents` | the colours a bin's header picks from by its name |
@@ -49,7 +49,7 @@ A colour is an ANSI name or style (`cyan`, `redBright`, `bold blue`), a 256-colo
 | Variable | Read by | Effect |
 |---|---|---|
 | `NO_COLOR`, `FORCE_COLOR`, `NODE_DISABLE_COLORS`, `COLORTERM`, `TERM` | every bin | the usual colour switches; `--color` and `--plain` win |
-| `KIT_MODE` | every bin | `terminal`, `ci`, `agent` or `pipe`, forcing how the output is shaped; `CLAUDECODE` and `AI_AGENT` select `agent` |
+| `KIT_MODE` | every bin | `terminal`, `ci`, `agent` or `pipe`, forcing how the output is shaped; `CLAUDECODE`, `AI_AGENT`, `CODEX_SANDBOX`, `CODEX_CI`, `CURSOR_AGENT`, `OPENCODE`, `GEMINI_CLI` and `ANTIGRAVITY_AGENT` select `agent` |
 | `KIT_THEME` | every bin | a preset name, or the theme file to use instead of the others |
 | `KIT_HELP` | every bin | `json` makes `--help` print a machine-readable description |
 | `KAYNOOO_WORKSPACE` | `doctor`, `pkg`, `ws repos`, `ws sweep` | the folder holding the repositories, over `config.json` |

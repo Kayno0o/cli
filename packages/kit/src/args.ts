@@ -4,6 +4,7 @@ import process from 'node:process'
 import { parseArgs } from 'node:util'
 import { upTo } from './format'
 import { description, helpText, wantsHelpJson } from './help'
+import { takesControlCodes } from './style'
 import { closest } from './text'
 
 const DASHES = /^-+/
@@ -187,7 +188,9 @@ export function parse<const T extends Options, const Names extends readonly stri
   applyOutput('color' in output ? values.color as string | undefined : undefined, 'plain' in output ? values.plain as boolean | undefined : undefined)
 
   if (values.help === true) {
-    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings, listing)) : helpText(usage, listing, undefined, { ...settings, bin: heading.bin }))
+    const columns = takesControlCodes(process.stdout) ? process.stdout.columns : undefined
+
+    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings, listing)) : helpText(usage, listing, undefined, { ...settings, bin: heading.bin, columns }))
 
     throw new HelpShown()
   }

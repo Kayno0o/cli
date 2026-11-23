@@ -2,6 +2,8 @@ import process from 'node:process'
 import { truncate as cut } from '@kaynooo/utils/text'
 import { outputMode } from './mode'
 import { paint, takesControlCodes } from './style'
+import { cutToWidth } from './text'
+import { activeTheme } from './theme'
 
 export { formatFileSize, formatUnit } from '@kaynooo/utils/format'
 
@@ -60,7 +62,6 @@ export function truncate(text: string, width: number): string {
 }
 
 const LINE_BREAKS = /\s*\n\s*/g
-const ESCAPE = String.fromCharCode(27)
 
 export type Align = 'left' | 'right'
 
@@ -71,7 +72,7 @@ export interface TableSettings {
   header?: boolean
   // Per column, `right` for numbers; a column not named is left-aligned.
   align?: Align[]
-  // Narrows the widest column until a row fits this many characters, `process.stdout.columns` for the terminal's own width. Cells holding colours are never cut.
+  // Narrows the widest column until a row fits this many characters, `process.stdout.columns` for the terminal's own width.
   fit?: number
   // The stream the header's bold and rule are drawn for, `process.stdout` by default.
   stream?: { isTTY?: boolean }
@@ -98,7 +99,7 @@ export function table(rows: string[][], { cellWidth, header = false, align = [],
   }
 
   const shown = fit === undefined ? cells : narrow(cells, widths, fit)
-  const colors = paint(stream)
+  const colors = paint(stream, env)
   const lines = shown.map(row => row.map((cell, index) => {
     const width = widths[index] ?? 0
     const gap = ' '.repeat(Math.max(0, width - textWidth(cell)))
@@ -109,22 +110,21 @@ export function table(rows: string[][], { cellWidth, header = false, align = [],
     return index === row.length - 1 ? cell : `${cell}${gap}`
   }).join('  ').trimEnd())
 
-  const rule = header && takesControlCodes(stream) && lines.length > 1 ? [colors.dim('─'.repeat(Math.max(...lines.map(textWidth))))] : []
+  const rule = header && takesControlCodes(stream, env) && lines.length > 1 ? [colors.dim(activeTheme().theme.glyphs.rule.repeat(Math.max(...lines.map(textWidth))))] : []
 
   return lines.flatMap((line, index) => header && index === 0 ? [colors.bold(line), ...rule] : [line]).join('\n')
 }
 
-// The rows with the widest cuttable column cut so every line fits `limit`, `widths` shrinking with it.
+// The rows with the widest column cut so every line fits `limit`, `widths` shrinking with it; ANSI styles and links are preserved and closed cleanly.
 function narrow(rows: string[][], widths: number[], limit: number): string[][] {
   const used = () => widths.reduce((sum, width) => sum + width, 0) + 2 * Math.max(0, widths.length - 1)
-  const cuttable = (index: number) => rows.every(row => !(row[index] ?? '').includes(ESCAPE))
   const floor = 8
 
   while (used() > limit) {
     let widest = -1
 
     for (const [index, width] of widths.entries()) {
-      if (cuttable(index) && width > floor && width > (widths[widest] ?? 0))
+      if (width > floor && width > (widths[widest] ?? 0))
         widest = index
     }
 
@@ -134,7 +134,7 @@ function narrow(rows: string[][], widths: number[], limit: number): string[][] {
     widths[widest] = Math.max(floor, (widths[widest] ?? 0) - (used() - limit))
   }
 
-  return rows.map(row => row.map((cell, index) => textWidth(cell) > (widths[index] ?? 0) ? truncate(cell, widths[index] ?? 0) : cell))
+  return rows.map(row => row.map((cell, index) => textWidth(cell) > (widths[index] ?? 0) ? cutToWidth(cell, widths[index] ?? 0, '…') : cell))
 }
 
 // The JSON of `value`: indented by two spaces for a person or a log, on one line for an agent, which pays for every indent.

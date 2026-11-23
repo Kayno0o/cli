@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll } from 'bun:test'
+import { AGENT_VARIABLES } from '../packages/kit/src/mode'
 
 // Points tea, glab and gh at an empty config, so a test whose stand-in is missed fails on no login instead of writing to the real forge.
 const config = mkdtempSync(join(tmpdir(), 'kaynooo-cli-config-'))
@@ -21,9 +22,14 @@ process.env.XDG_STATE_HOME = join(config, 'state')
 // Tests of colour pass their own streams and expect colour on them, so a NO_COLOR or FORCE_COLOR of the shell running them, `check` sets the first, is not theirs to see.
 delete process.env.NO_COLOR
 delete process.env.FORCE_COLOR
+
+if (process.env.TERM === 'dumb')
+  delete process.env.TERM
+
 // The mode of the shell running the tests, an agent's or CI's, is not theirs either: each test that wants one passes its own env.
-delete process.env.CLAUDECODE
-delete process.env.AI_AGENT
+for (const name of AGENT_VARIABLES)
+  delete process.env[name]
+
 delete process.env.CI
 delete process.env.KIT_MODE
 

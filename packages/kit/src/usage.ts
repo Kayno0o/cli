@@ -1,9 +1,12 @@
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { CLI_FOLDER } from './logs'
 import { xdgFolder } from './user-config'
+
+// Usage log cap before trimming to the newest half of lines, so the file never grows unbounded.
+export const MAX_USAGE_BYTES = 2 * 1024 * 1024
 
 // One run of a bin: which command it ran, the names of the flags it saw (never a value or an argument), how it exited and, on a usage error, the option it did not know.
 export interface UsageEntry {
@@ -61,8 +64,23 @@ export function usageEntry(bin: string, command: string | undefined, argv: reado
   return { at: now.toISOString(), bin, ...(command === undefined ? {} : { command }), flags: flagNames(argv), code, ...(unknown === undefined ? {} : { unknown }), ...(ms === undefined ? {} : { ms: Math.round(ms) }) }
 }
 
+// Keeps the newest half of lines once the log passes `maxBytes`, best effort and atomic via rename.
+function trimUsage(path: string, maxBytes: number): void {
+  const info = statSync(path, { throwIfNoEntry: false })
+
+  if (info === undefined || info.size <= maxBytes)
+    return
+
+  const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean)
+  const kept = `${lines.slice(Math.floor(lines.length / 2)).join('\n')}\n`
+  const temp = `${path}.${process.pid}.tmp`
+
+  writeFileSync(temp, kept, { mode: 0o600 })
+  renameSync(temp, path)
+}
+
 // Appends the run to the usage log, best effort: a log that cannot be written never changes what a bin prints or exits with.
-export function recordUsage(entry: UsageEntry, env: Record<string, string | undefined> = process.env): void {
+export function recordUsage(entry: UsageEntry, env: Record<string, string | undefined> = process.env, maxBytes = MAX_USAGE_BYTES): void {
   if (!usageRecorded(env))
     return
 
@@ -71,6 +89,7 @@ export function recordUsage(entry: UsageEntry, env: Record<string, string | unde
 
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     appendFileSync(path, `${JSON.stringify(entry)}\n`, { mode: 0o600 })
+    trimUsage(path, maxBytes)
   }
   catch {}
 }

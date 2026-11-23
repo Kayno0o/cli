@@ -41,8 +41,29 @@ describe('table layout', () => {
     expect(table([['a', '1'], ['bb', '100']], { align: ['left', 'right'] })).toBe('a     1\nbb  100')
   })
 
-  test('narrows the widest column to fit a width', () => {
+  test('narrows the widest column to fit a width, including coloured cells', () => {
     expect(table([['id', 'a very long title indeed'], ['x', 'short']], { fit: 20 })).toBe('id  a very long tit…\nx   short')
+    expect(table([['id', '\x1B[36ma very long title indeed\x1B[39m'], ['x', 'short']], { fit: 20 })).toBe('id  \x1B[36ma very long tit\x1B[0m…\nx   short')
+  })
+
+  test('passes env to header styling and uses the active theme rule glyph', () => {
+    const rows = [['bin', 'runs'], ['check', '12']]
+
+    expect(table(rows, { header: true, stream: { isTTY: true }, env: { NO_COLOR: '1' } })).toBe('bin    runs\ncheck  12')
+
+    const before = process.env.KIT_THEME
+
+    process.env.KIT_THEME = 'ascii'
+
+    try {
+      expect(table(rows, { header: true, stream: { isTTY: true }, env: {} })).toBe('\x1B[1mbin    runs\x1B[22m\n\x1B[2m-----------\x1B[22m\ncheck  12')
+    }
+    finally {
+      if (before === undefined)
+        delete process.env.KIT_THEME
+      else
+        process.env.KIT_THEME = before
+    }
   })
 })
 
