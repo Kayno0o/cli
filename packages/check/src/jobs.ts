@@ -75,6 +75,9 @@ const BLANKS = /\s+/
 const TRAILING_SLASHES = /\/+$/
 const VERSION_SUFFIX = /@.*/
 const LEADING_HASHES = /^#*/
+// An `include`, `-include` or `sinclude` directive and the files it names.
+const INCLUDE = /^(?:-|s)?include[ \t]+([^#]+)/
+const GLOB_CHARS = /[*?[]/
 
 const installed = new Map<string, boolean>()
 
@@ -242,6 +245,27 @@ export function show(source: string, target: string): string {
   return lines.slice(start, end).join('\n').trimEnd()
 }
 
+// The makefile with each included file put in place of its directive, as make reads it: paths go from the folder make runs in, and a missing file (one named by a variable among them) or one already read is skipped.
+function withIncludes(source: string, dir: string, seen: Set<string>): string {
+  return source.split('\n').map((line) => {
+    const match = INCLUDE.exec(line)
+
+    if (!match)
+      return line
+
+    return match[1]!.trim().split(BLANKS)
+      .flatMap(path => GLOB_CHARS.test(path) ? [...new Bun.Glob(path).scanSync({ cwd: dir })].sort() : [path])
+      .map(path => resolvePath(dir, path))
+      .filter(file => !seen.has(file) && existsSync(file))
+      .map((file) => {
+        seen.add(file)
+
+        return withIncludes(readFileSync(file, 'utf-8'), dir, seen)
+      })
+      .join('\n')
+  }).join('\n')
+}
+
 // Make reads the makefile of its own folder only, so no parent is looked up.
 function make(dir: string): Entry[] {
   const file = MAKEFILES.find(name => existsSync(join(dir, name)))
@@ -249,7 +273,8 @@ function make(dir: string): Entry[] {
   if (file === undefined)
     return []
 
-  const source = readFileSync(join(dir, file), 'utf-8')
+  const path = resolvePath(dir, file)
+  const source = withIncludes(readFileSync(path, 'utf-8'), dir, new Set([path]))
 
   return build({ kind: 'make', tag: 'make', runner: ['make'], separated: false, dir }, targets(source).map(target => ({ ...target, body: show(source, target.name) })))
 }

@@ -18,7 +18,9 @@ const FILES: Record<string, string> = {
   'deno.jsonc': '{\n  // tasks\n  "tasks": { "dev": "deno run main.ts", "serve": { "command": "deno serve", "description": "Serve it" } }\n}\n',
   'api/package.json': JSON.stringify({ scripts: { test: 'vitest' } }),
   'api/package-lock.json': '{}',
-  'api/Makefile': 'migrate: ## Run the migrations\n\tphp bin/console doctrine:migrations:migrate\n',
+  'api/Makefile': 'migrate: ## Run the migrations\n\tphp bin/console doctrine:migrations:migrate\n\n-include node_modules/kit/release.mk missing.mk $(LOCAL).mk\nsinclude mk/*.mk\n',
+  'api/node_modules/kit/release.mk': '# Releasing\npatch minor:\n\tbun pm version $@\n\ninclude node_modules/kit/release.mk\n',
+  'api/mk/seed.mk': 'seed:\n\tbun seed.ts\n',
   'packages/a/package.json': JSON.stringify({ scripts: { build: 'tsup' } }),
   'node_modules/x/package.json': JSON.stringify({ scripts: { nope: 'x' } }),
   '.hidden/package.json': JSON.stringify({ scripts: { nope: 'x' } }),
@@ -69,6 +71,11 @@ describe('everything', () => {
     expect(byId('npm:api/test')).toMatchObject({ dir: 'api', runner: ['npm', 'run'], separated: true })
     expect(byId('make:api/migrate')).toMatchObject({ dir: 'api', doc: 'Run the migrations' })
     expect(byId('bun:packages/a/build').dir).toBe('packages/a')
+  })
+
+  test('reads the targets of the files a makefile includes, skipping the missing ones and those named by a variable', () => {
+    expect(byId('make:api/minor')).toMatchObject({ dir: 'api', doc: null, body: 'patch minor:\n\tbun pm version $@' })
+    expect(byId('make:api/seed').body).toBe('seed:\n\tbun seed.ts')
   })
 
   test('skips the hidden and installed folders', () => {
