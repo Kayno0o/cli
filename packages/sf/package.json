@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-sf",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "sf: picks and runs Symfony console commands in a compose PHP service or local php.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
