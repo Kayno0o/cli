@@ -54,7 +54,7 @@
     },
     "packages/code": {
       "name": "@kaynooo/cli-code",
-      "version": "0.17.4",
+      "version": "0.18.0",
       "bin": {
         "src": "./dist/cli.js",
       },
