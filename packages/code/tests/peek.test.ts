@@ -93,8 +93,8 @@ describe('locations piped in', () => {
     expect(spansAround('a.ts', 30, [12, 4, 30, 14, 99], 2)).toEqual([{ path: 'a.ts', from: 2, to: 6 }, { path: 'a.ts', from: 10, to: 16 }, { path: 'a.ts', from: 28, to: 30 }])
   })
 
-  test('peek prints the lines around each location piped in, skipping paths it cannot or may not read', () => {
-    const result = piped('src/b.ts:3:1: error\nsrc/a.ts:7:3: warning\n/etc/passwd:1:x\nmissing.ts:4:2: gone\n', '-C', '1')
+  test('peek prints the lines around each location piped in, skipping paths it cannot read', () => {
+    const result = piped('src/b.ts:3:1: error\nsrc/a.ts:7:3: warning\nmissing.ts:4:2: gone\n', '-C', '1')
 
     expect(result.code).toBe(0)
     expect(result.out).toBe('src/b.ts:2-3\n2  \n3  console.log(addOne(2))\n\nsrc/a.ts:6-8\n6  \n7    return value + 1\n8  }\n')
@@ -165,11 +165,14 @@ describe('peek', () => {
     expect(peek('missing.ts').code).toBe(1)
   })
 
-  test('reads an absolute path inside the repository and refuses one outside', () => {
+  test('reads paths inside and outside the repository without a repo-root jail', () => {
+    const outside = temp('peek-outside-')
+    const outsideFile = join(outside, 'note.txt')
+
+    writeFileSync(outsideFile, 'hello outside\n')
     expect(peek(`${realpathSync(dir)}/src/b.ts:3`).out).toContain('3  console.log(addOne(2))')
-    expect(peek(relative(dir, '/etc/hostname'))).toMatchObject({ code: 2 })
-    expect(peek('/etc/hostname').err).toContain('outside the repository')
-    expect(peek('--refs', 'x', '/etc').code).toBe(2)
+    expect(peek(`${outsideFile}:1`).out).toContain('1  hello outside')
+    expect(peek(relative(dir, outsideFile)).code).toBe(0)
   })
 
   test('a span starting past the end of the file exits 1, and --around on the last line shows no phantom line', () => {
@@ -281,5 +284,75 @@ describe('declarations in other languages', () => {
     expect(outline(java, 'Main.java').map(entry => entry.text)).toEqual(['public class Main', 'public static void main(String[] a)', 'private final List<String> names()'])
     expect(find(csharp, 'A.cs', 'RunAsync')).toEqual([2])
     expect(outline('class A {\n    void f() {\n        return g(1);\n        else h(2);\n    }\n}\n', 'A.java').map(entry => entry.text)).toEqual(['class A'])
+  })
+
+  test('outlines top-level arrow functions, joins multiline signatures, and ignores strings/comments', () => {
+    const ts = [
+      '/* function fakeInComment() {} */',
+      'const msg = `',
+      'export function fakeInTemplate() {}',
+      '`',
+      'const helper = (x: number) => x + 1',
+      'const multi = (',
+      '  a: string,',
+      '  b: number,',
+      '): boolean => a.length === b',
+      'const NOT_A_FN = 42',
+      'export function longSig(',
+      '  first: string,',
+      '  second: number,',
+      '): void {',
+      '  return',
+      '}',
+    ].join('\n')
+
+    expect(outline(ts, 'a.ts')).toEqual([
+      { line: 5, depth: 0, text: 'const helper = (x: number) => x + 1' },
+      { line: 6, depth: 0, text: 'const multi = ( a: string, b: number, ): boolean => a.length === b' },
+      { line: 11, depth: 0, text: 'export function longSig( first: string, second: number, ): void' },
+    ])
+  })
+
+  test('top-level src def/refs/outline/around, src deps, and src coupling commands work', () => {
+    const srcCli = new URL('../src/cli.ts', import.meta.url).pathname
+    const runSrc = (...args: string[]) => {
+      const res = Bun.spawnSync([process.execPath, srcCli, ...args], { cwd: dir, stdout: 'pipe', stderr: 'pipe' })
+
+      return { code: res.exitCode, out: res.stdout.toString(), err: res.stderr.toString() }
+    }
+
+    expect(runSrc('def', 'addOne').out).toContain('export function addOne')
+    expect(runSrc('refs', 'addOne').out).toContain('console.log(addOne(2))')
+    expect(runSrc('outline', 'src/a.ts').out).toContain('export class Counter')
+    expect(runSrc('around', 'LIMIT', '-C', '0').out).toContain('export const LIMIT = 5')
+
+    writeFileSync(join(dir, 'src/c.ts'), 'import { addOne } from \'./a\'\nexport const used = addOne(1)\nexport const unusedHelper = 2\n')
+    writeFileSync(join(dir, 'src/x.ts'), 'import { used } from \'./c\'\nexport const x = used\n')
+
+    const depRun = runSrc('deps', 'src/c.ts', '--json')
+
+    expect(depRun.code).toBe(0)
+
+    const depJson = JSON.parse(depRun.out) as { imports: string[], importers: string[], cycles: string[][], unusedExports: string[] }
+
+    expect(depJson.imports).toEqual(['src/a.ts'])
+    expect(depJson.importers).toEqual(['src/x.ts'])
+    expect(depJson.cycles).toEqual([['src/c.ts', 'src/a.ts', 'src/x.ts', 'src/c.ts']])
+    expect(depJson.unusedExports).toEqual(['unusedHelper'])
+
+    // Two commits changing src/a.ts and src/b.ts together -> coupling pair!
+    const gitEnv = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' }
+
+    Bun.spawnSync(['git', 'add', '-A'], { cwd: dir, env: gitEnv })
+    Bun.spawnSync(['git', 'commit', '-q', '-m', 'c1'], { cwd: dir, env: gitEnv })
+    writeFileSync(join(dir, 'src/a.ts'), `${SOURCE}// edit\n`)
+    writeFileSync(join(dir, 'src/b.ts'), 'import { addOne } from \'./a\'\nconsole.log(addOne(3))\n')
+    Bun.spawnSync(['git', 'add', '-A'], { cwd: dir, env: gitEnv })
+    Bun.spawnSync(['git', 'commit', '-q', '-m', 'c2'], { cwd: dir, env: gitEnv })
+
+    const coup = runSrc('coupling', '--json')
+
+    expect(coup.code).toBe(0)
+    expect((JSON.parse(coup.out) as { a: string, b: string, coChanges: number }[]).some(p => p.a === 'src/a.ts' && p.b === 'src/b.ts' && p.coChanges === 2)).toBe(true)
   })
 })

@@ -73,6 +73,11 @@ describe('marksIn', () => {
   test('reads a file anchor as no issue, a dotted repository name still as one', () => {
     expect(marksIn('// TODO: see docs/guide.md#12 and kaynooo/kaynooo.fr#3 or mrdoob/three.js#123\n', 'a.ts')[0]?.refs).toEqual([{ repo: 'kaynooo/kaynooo.fr', number: 3 }, { repo: 'mrdoob/three.js', number: 123 }])
   })
+
+  test('resolves bare #123 references against defaultRepo when provided', () => {
+    expect(marksIn('// TODO: fix #42 and see #99\n', 'a.ts', 'kaynooo/cli')[0]?.refs).toEqual([{ repo: 'kaynooo/cli', number: 42 }, { repo: 'kaynooo/cli', number: 99 }])
+    expect(marksIn('// see #42\n', 'a.ts')).toEqual([])
+  })
 })
 
 describe('todo-scan', () => {

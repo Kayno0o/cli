@@ -10,7 +10,7 @@ const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 let dir = ''
 
 function sub(args: string[], stdin?: string) {
-  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: dir, stdin: stdin === undefined ? 'ignore' : Buffer.from(stdin), stdout: 'pipe', stderr: 'pipe' })
+  const result = Bun.spawnSync([process.execPath, CLI, ...args], { cwd: dir, env: { ...process.env }, stdin: stdin === undefined ? 'ignore' : Buffer.from(stdin), stdout: 'pipe', stderr: 'pipe' })
 
   return { code: result.exitCode, out: result.stdout.toString(), err: result.stderr.toString() }
 }
@@ -446,7 +446,45 @@ describe('sub --pairs inline', () => {
     const result = sub(['--pairs', '[{"from":"a","to":"b","n":2}]', 'a.ts'])
 
     expect(result.code).toBe(2)
-    expect(result.err).toContain('unknown key n, known: from, to, count, all, regex')
+    expect(result.err).toContain('unknown key n, known: from, to, count, all, word, regex')
+  })
+})
+
+describe('sub --word, --ext/--glob/--exclude, file:from-to, and --undo', () => {
+  test('--word matches whole words only', () => {
+    file('a.ts', 'const foo = foobar + foo\n')
+    expect(sub(['-w', '-f', 'foo', '-t', 'bar', '--all', 'a.ts']).code).toBe(0)
+    expect(read('a.ts')).toBe('const bar = foobar + bar\n')
+  })
+
+  test('--ext, --glob, and --exclude filter walked folders', () => {
+    mkdirSync(join(dir, 'src/ignored'), { recursive: true })
+    file('src/a.ts', 'old\n')
+    file('src/b.js', 'old\n')
+    file('src/ignored/c.ts', 'old\n')
+
+    expect(sub(['-f', 'old', '-t', 'new', '--ext', 'ts', '--exclude', '**/ignored/**', 'src']).code).toBe(0)
+    expect(read('src/a.ts')).toBe('new\n')
+    expect(read('src/b.js')).toBe('old\n')
+    expect(read('src/ignored/c.ts')).toBe('old\n')
+  })
+
+  test('file:from-to restricts replacements to the specified line range', () => {
+    file('a.ts', 'old\nold\nold\nold\n')
+    expect(sub(['-f', 'old', '-t', 'new', '--all', 'a.ts:2-3']).code).toBe(0)
+    expect(read('a.ts')).toBe('old\nnew\nnew\nold\n')
+  })
+
+  test('--undo restores the last sub run in the directory and refuses if edited afterward', () => {
+    file('a.ts', 'before\n')
+    expect(sub(['-f', 'before', '-t', 'after', 'a.ts']).code).toBe(0)
+    expect(read('a.ts')).toBe('after\n')
+
+    const undone = sub(['--undo'])
+
+    expect(undone.code).toBe(0)
+    expect(read('a.ts')).toBe('before\n')
+    expect(sub(['--undo']).code).toBe(1)
   })
 })
 

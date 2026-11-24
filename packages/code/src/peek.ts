@@ -1,7 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Span } from './source'
-import { realpathSync } from 'node:fs'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { badUsage, capped, fail, isStdinPiped, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, wholeNumber } from '@kaynooo/cli-kit'
 import { counted } from '@kaynooo/utils/text'
@@ -11,17 +10,16 @@ import { around, definitions, locations, outline, spansAround, usages } from './
 const USAGE = `src peek [options] <file[:from-to]>...: prints files or line spans with their line numbers, several in one call
 
 src peek src/a.ts:120-140 src/b.ts:1-40   the spans, src/a.ts:120 the one line, src/a.ts the whole file
-src peek --def <symbol> [path...]          the whole declaration of the symbol, its comments included, --def again for more symbols
-src peek --refs <symbol> [path...]         the lines naming the symbol, grouped by file, --defs-first printing its declarations before
-src peek --outline <file>...               the declarations and class members, a Markdown file's headings
-src peek --around <regex> [-C 3] [path...] the lines around each match, overlapping ones merged
+src def <symbol> [path...]                 the whole declaration of the symbol (or src peek --def)
+src refs <symbol> [path...]                the lines naming the symbol (or src peek --refs)
+src outline <file>...                      the declarations and class members (or src peek --outline)
+src around <regex> [-C 3] [path...]        the lines around each match (or src peek --around)
 <output> | src peek [-C 3]                 the lines around each path:line the output opens a line with (errs, rg -n, grep -n, tsc, linters)
 The paths default to the files git keeps here (\`.gitignore\` holds).`
-const EXITS: ExitRow[] = [[0, 'it printed something'], [1, 'nothing is found, a file cannot be read or a span starts past the end'], [2, 'a usage error or a path outside the repository']]
+const EXITS: ExitRow[] = [[0, 'it printed something'], [1, 'nothing is found, a file cannot be read or a span starts past the end'], [2, 'a usage error']]
 
 const REFS_LIMIT = 100
 const AROUND_LIMIT = 20
-const PARENT = `..${sep}`
 
 const OPTIONS = {
   'def': { type: 'string', short: 'd', multiple: true, description: 'print the declaration of this symbol, repeat for more' },
@@ -42,41 +40,12 @@ function cut(text: string): string {
   return text.length > LONGEST_LINE ? `${text.slice(0, LONGEST_LINE - 1)}…` : text
 }
 
-// The repository's top folder, or the current one outside git: nothing past it is read.
-async function readableRoot(): Promise<string> {
-  const ran = await runCommand(['git', 'rev-parse', '--show-toplevel'], { cwd: process.cwd() })
-
-  return realpathSync(ran.code === 0 ? ran.text.trim() : process.cwd())
-}
-
-// Whether a path's real location, a symlink followed, lies outside the repository; a path that does not exist is not.
-async function isOutside(path: string): Promise<boolean> {
-  let real
-
-  try {
-    real = realpathSync(resolve(process.cwd(), path))
-  }
-  catch {
-    return false
-  }
-
-  const inRoot = relative(await readableRoot(), real)
-
-  return inRoot === '..' || inRoot.startsWith(PARENT) || isAbsolute(inRoot)
-}
-
-// Refuses a path outside the repository, so peek reads no more than a grep of the repository would.
-async function checkInside(path: string): Promise<void> {
-  if (await isOutside(path))
-    badUsage(`${path} is outside the repository`)
-}
-
-// The spans around the locations piped in, a path outside the repository or not readable left out.
+// The spans around the locations piped in, skipping unreadable files.
 async function pipedSpans(text: string, context: number): Promise<Span[]> {
   const spans: Span[] = []
 
   for (const [path, numbers] of locations(text)) {
-    const source = await isOutside(path) ? undefined : await readText(resolve(process.cwd(), path))
+    const source = await readText(resolve(process.cwd(), path))
 
     if (source !== undefined)
       spans.push(...spansAround(path, source.replace(TRAILING_NEWLINE, '').split('\n').length, numbers, context))
@@ -86,8 +55,6 @@ async function pipedSpans(text: string, context: number): Promise<Span[]> {
 }
 
 async function textOf(path: string): Promise<string> {
-  await checkInside(path)
-
   const text = await readText(resolve(process.cwd(), path))
 
   if (text === undefined)
@@ -157,13 +124,43 @@ async function spanOf(target: string): Promise<Span> {
   return { path, from, to: Math.min(to, count) }
 }
 
-// Each readable file under the paths, with its text.
-async function* sources(paths: readonly string[]): AsyncGenerator<{ path: string, text: string }> {
-  for (const path of paths)
-    await checkInside(path)
+// Pre-filters candidate files with `rg --files-with-matches` when available so symbol/regex searches skip non-matching files.
+async function prefilterFiles(paths: readonly string[], filter?: { patterns: readonly string[], fixed?: boolean }): Promise<string[]> {
+  const cwd = process.cwd()
 
-  for (const path of await listFiles(paths, process.cwd())) {
-    const text = await readText(join(process.cwd(), path))
+  if (filter !== undefined && filter.patterns.length > 0 && Bun.which('rg') !== null) {
+    const argv = ['rg', '--files-with-matches', '--color=never', '--no-messages', ...(filter.fixed === true ? ['-F'] : [])]
+
+    for (const pattern of filter.patterns)
+      argv.push('-e', pattern)
+
+    argv.push('--', ...(paths.length === 0 ? ['.'] : paths))
+
+    const ran = await runCommand(argv, { cwd })
+
+    if (ran.code === 0 || ran.code === 1) {
+      return ran.stdout
+        .split('\n')
+        .filter(Boolean)
+        .map((file) => {
+          if (file.startsWith('./'))
+            return file.slice(2)
+
+          return file.startsWith('/') ? relative(cwd, file) : file
+        })
+        .sort()
+    }
+  }
+
+  return listFiles(paths, cwd)
+}
+
+// Each readable file under the paths, with its text, optionally pre-filtered with rg.
+async function* sources(paths: readonly string[], filter?: { patterns: readonly string[], fixed?: boolean }): AsyncGenerator<{ path: string, text: string }> {
+  const cwd = process.cwd()
+
+  for (const path of await prefilterFiles(paths, filter)) {
+    const text = await readText(join(cwd, path))
 
     if (text !== undefined)
       yield { path, text }
@@ -183,7 +180,7 @@ function regex(source: string): RegExp {
 async function definitionsOf(symbols: readonly string[], paths: readonly string[]): Promise<Span[]> {
   const found = new Map<string, Span[]>(symbols.map(symbol => [symbol, []]))
 
-  for await (const { path, text } of sources(paths)) {
+  for await (const { path, text } of sources(paths, { patterns: symbols, fixed: true })) {
     for (const symbol of symbols)
       found.get(symbol)?.push(...definitions(text, path, symbol))
   }
@@ -197,7 +194,7 @@ async function definitionsOf(symbols: readonly string[], paths: readonly string[
 }
 
 export async function peek(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[target...]'], replaces: 'sed -n N,Mp, grep -n chains and whole-file reads', examples: [['src peek src/a.ts:120-140 src/b.ts:1-40', 'two spans in one call'], ['src peek --def parseArgs src', 'a whole declaration']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[target...]'], replaces: 'sed -n N,Mp, grep -n chains and whole-file reads', examples: [['src peek src/a.ts:120-140 src/b.ts:1-40', 'two spans in one call'], ['src def parseArgs src', 'a whole declaration']] })
   const modes = [values.def?.length === 0 ? undefined : values.def, values.refs, values.outline, values.around].filter(mode => mode !== undefined && mode !== false)
   const json = values.json === true
 
@@ -234,10 +231,10 @@ export async function peek(args: string[]): Promise<number> {
   if (values.refs !== undefined) {
     const rows: { path: string, line: number, text: string }[] = []
 
-    for await (const { path, text } of sources(positionals)) {
+    for await (const { path, text } of sources(positionals, { patterns: [values.refs], fixed: true })) {
       const lines = text.split('\n')
 
-      rows.push(...usages(text, values.refs).map(line => ({ path, line, text: (lines[line - 1] ?? '').trim() })))
+      rows.push(...usages(text, values.refs, path).map(line => ({ path, line, text: (lines[line - 1] ?? '').trim() })))
     }
 
     if (rows.length === 0)
@@ -284,7 +281,7 @@ export async function peek(args: string[]): Promise<number> {
     const context = wholeNumber(values.context, 'context', 3, 0)
     const spans: Span[] = []
 
-    for await (const { path, text } of sources(positionals))
+    for await (const { path, text } of sources(positionals, { patterns: [values.around], fixed: false }))
       spans.push(...around(text, path, pattern, context))
 
     if (spans.length === 0)
@@ -301,6 +298,104 @@ export async function peek(args: string[]): Promise<number> {
     badUsage('give the files or spans to print')
 
   await printSpans(await Promise.all(positionals.map(spanOf)), json)
+
+  return 0
+}
+
+const DEF_USAGE = 'src def <symbol> [path...]: prints the whole declaration of a symbol (comments included)'
+const REFS_USAGE = 'src refs <symbol> [path...]: lists every line naming a symbol outside strings and comments'
+const OUTLINE_USAGE = 'src outline <file>...: lists top-level declarations (including arrow functions), class members, and Markdown headings'
+const AROUND_USAGE = 'src around <regex> [-C 3] [path...]: prints lines around each regex match, merging overlaps'
+
+export async function defCmd(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, DEF_USAGE, {
+    def: { type: 'string', short: 'd', multiple: true, description: 'additional symbol to look up, repeatable' },
+    json: jsonOption('[{path, from, to, lines}]'),
+  }, { exits: EXITS, positionals: ['<symbol>', '[path...]'], examples: [['src def parseArgs packages/kit/src', 'find parseArgs declaration']] })
+  const [symbol, ...paths] = positionals
+  const symbols = [symbol, ...(values.def ?? [])]
+
+  await printSpans(await definitionsOf(symbols, paths), values.json === true)
+
+  return 0
+}
+
+export async function refsCmd(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, REFS_USAGE, {
+    'defs-first': { type: 'boolean', description: 'print the symbol\'s declarations before its references' },
+    ...limitOptions(REFS_LIMIT),
+    'json': jsonOption('[{path, line, text}] ({definitions, references} with --defs-first)'),
+  }, { exits: EXITS, positionals: ['<symbol>', '[path...]'], examples: [['src refs parseArgs --defs-first', 'declarations followed by every reference']] })
+  const [symbol, ...paths] = positionals
+  const json = values.json === true
+  const rows: { path: string, line: number, text: string }[] = []
+
+  for await (const { path, text } of sources(paths, { patterns: [symbol], fixed: true })) {
+    const lines = text.split('\n')
+
+    rows.push(...usages(text, symbol, path).map(line => ({ path, line, text: (lines[line - 1] ?? '').trim() })))
+  }
+
+  if (rows.length === 0)
+    fail(`nothing names ${symbol}`, 1)
+
+  const { shown, footer } = capped(rows, limitOf({ ...values, json }, REFS_LIMIT))
+  const defs = values['defs-first'] === true ? await readSpans(await definitionsOf([symbol], paths)) : []
+
+  if (json) {
+    printJson(values['defs-first'] === true ? { definitions: defs, references: shown } : shown)
+  }
+  else {
+    if (defs.length > 0)
+      console.log(`${formatSpans(defs)}\n`)
+
+    printByFile(shown.map(row => ({ ...row, text: cut(row.text) })))
+
+    if (footer !== undefined)
+      console.log(footer)
+  }
+
+  return 0
+}
+
+export async function outlineCmd(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, OUTLINE_USAGE, {
+    json: jsonOption('[{path, line, depth, text}]'),
+  }, { exits: EXITS, positionals: ['<file>...'], examples: [['src outline packages/code/src/source.ts', 'declarations and class members']] })
+  const rows: { path: string, line: number, depth: number, text: string }[] = []
+
+  for (const path of positionals)
+    rows.push(...outline(await textOf(path), path).map(entry => ({ path, ...entry })))
+
+  if (values.json === true)
+    printJson(rows)
+  else
+    printByFile(rows.map(row => ({ ...row, text: `${'  '.repeat(row.depth)}${row.text}` })))
+
+  return 0
+}
+
+export async function aroundCmd(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, AROUND_USAGE, {
+    context: { type: 'string', short: 'C', description: 'lines on each side of each match (3)' },
+    ...limitOptions(AROUND_LIMIT),
+    json: jsonOption('[{path, from, to, lines}]'),
+  }, { exits: EXITS, positionals: ['<regex>', '[path...]'], examples: [['src around "TODO|FIXME" -C 2 src', 'lines around each match']] })
+  const [rawPattern, ...paths] = positionals
+  const pattern = regex(rawPattern)
+  const context = wholeNumber(values.context, 'context', 3, 0)
+  const json = values.json === true
+  const spans: Span[] = []
+
+  for await (const { path, text } of sources(paths, { patterns: [rawPattern], fixed: false }))
+    spans.push(...around(text, path, pattern, context))
+
+  if (spans.length === 0)
+    fail(`no line matches ${rawPattern}`, 1)
+
+  const { shown, footer } = capped(spans, limitOf({ ...values, json }, AROUND_LIMIT))
+
+  await printSpans(shown, json, footer)
 
   return 0
 }

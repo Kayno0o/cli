@@ -29,6 +29,10 @@ const ESCAPE = /\\./g
 const AFTER_FIRST_LINE = /\n[\s\S]*/
 // An owner and a repository as a forge names them, never `.` or `..` and no leading dash, so a match is neither a path nor an option.
 const REF = /(?<![\w./-])(\w[\w.-]*\/(?!\.+#)[\w.][\w.-]*)#(\d+)\b/g
+// Bare `#123` issue references (resolved to the current repo's origin when present; skips hex colors and paths).
+const BARE_REF = /(?<![\w./&#-])#([1-9]\d{0,5})(?![\w-])/g
+const ORIGIN_REPO = /[:/]([^/:]+\/[^/]+?)(?:\.git)?$/
+const BLAME_CONCURRENCY = 8
 // A document's anchor such as docs/guide.md#12, which names no repository; code extensions stay out, as repositories such as mrdoob/three.js carry them and a code file's anchor reads #L12.
 const FILE_ANCHOR = /\.(?:md|mdx|markdown|txt|rst|adoc|html?)$/i
 
@@ -79,22 +83,37 @@ async function commitTimes(path: string, cwd: string): Promise<Map<number, numbe
   return times
 }
 
-// Sets each mark's age in days from one git blame per file; a mark git cannot date is left without one.
-export async function addAges(marks: readonly Mark[], cwd: string, now = Date.now() / 1000): Promise<void> {
-  await Promise.all([...Map.groupBy(marks, mark => mark.path)].map(async ([path, ofFile]) => {
-    const times = await commitTimes(path, cwd)
+// Detects `owner/repo` from `git remote get-url origin`, undefined outside a repo or without an origin remote.
+export async function originRepo(cwd: string): Promise<string | undefined> {
+  const ran = await runCommand(['git', 'remote', 'get-url', 'origin'], { cwd })
 
-    for (const mark of ofFile) {
-      const time = times.get(mark.line)
-
-      if (time !== undefined)
-        mark.age = Math.max(0, Math.floor((now - time) / DAY_S))
-    }
-  }))
+  return ran.code === 0 ? ORIGIN_REPO.exec(ran.stdout.trim())?.[1] : undefined
 }
 
-// The TODO, FIXME, HACK, XXX and owner/repo#N comments of a file's text, one mark per comment line.
-export function marksIn(text: string, path: string): Mark[] {
+// Sets each mark's age in days from one git blame per file, bounded to BLAME_CONCURRENCY parallel workers.
+export async function addAges(marks: readonly Mark[], cwd: string, now = Date.now() / 1000): Promise<void> {
+  const groups = [...Map.groupBy(marks, mark => mark.path)]
+  let cursor = 0
+
+  async function worker(): Promise<void> {
+    while (cursor < groups.length) {
+      const [path, ofFile] = groups[cursor++]!
+      const times = await commitTimes(path, cwd)
+
+      for (const mark of ofFile) {
+        const time = times.get(mark.line)
+
+        if (time !== undefined)
+          mark.age = Math.max(0, Math.floor((now - time) / DAY_S))
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(BLAME_CONCURRENCY, groups.length) }, worker))
+}
+
+// The TODO, FIXME, HACK, XXX, owner/repo#N, and (when `defaultRepo` is set) bare #N comments of a file's text.
+export function marksIn(text: string, path: string, defaultRepo?: string): Mark[] {
   const marks: Mark[] = []
   const comment = MARKUP.test(path) ? MARKUP_COMMENT : COMMENT
 
@@ -106,7 +125,21 @@ export function marksIn(text: string, path: string): Mark[] {
 
     const body = line.slice(opener.index + opener[0].length).replace(CLOSERS, '').trim()
     const marker = MARKER.exec(body)?.[1] as Mark['kind'] | undefined
-    const refs = [...body.matchAll(REF)].filter(found => !FILE_ANCHOR.test(found[1] ?? '')).map(found => ({ repo: found[1] ?? '', number: Number(found[2]) }))
+    const explicitRefs = [...body.matchAll(REF)].filter(found => !FILE_ANCHOR.test(found[1] ?? '')).map(found => ({ repo: found[1] ?? '', number: Number(found[2]) }))
+    const bareRefs = defaultRepo === undefined
+      ? []
+      : [...body.matchAll(BARE_REF)].map(found => ({ repo: defaultRepo, number: Number(found[1]) }))
+    const seen = new Set<string>()
+    const refs = [...explicitRefs, ...bareRefs].filter((ref) => {
+      const key = refKey(ref)
+
+      if (seen.has(key))
+        return false
+
+      seen.add(key)
+
+      return true
+    })
 
     if (marker !== undefined || refs.length > 0)
       marks.push({ path, line: i + 1, kind: marker ?? 'ref', text: body, refs })

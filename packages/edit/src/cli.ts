@@ -2,11 +2,13 @@
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Diff } from './diff'
-import type { Pair } from './replace'
-import { accessSync, chmodSync, constants, existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, normalize, resolve } from 'node:path'
+import type { LineRange, Pair } from './replace'
+import type { WalkFilter } from './walk'
+import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, normalize, resolve } from 'node:path'
 import process from 'node:process'
-import { Exit, fail, jsonOption, parse, printJson, readInput, role, runMain, wholeNumber } from '@kaynooo/cli-kit'
+import { Exit, fail, jsonOption, parse, printJson, readInput, role, runMain, wholeNumber, xdgFolder } from '@kaynooo/cli-kit'
 import { counted, plural } from '@kaynooo/utils/text'
 import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
@@ -35,11 +37,16 @@ const OPTIONS = {
   'to': { type: 'string', short: 't', description: 'text to put in its place, empty to delete it' },
   'count': { type: 'string', short: 'n', description: 'matches expected in each file (default 1)' },
   'all': { type: 'boolean', short: 'a', description: 'replace every match, expecting at least one in each file, or exactly --count' },
+  'word': { type: 'boolean', short: 'w', description: 'match whole words only' },
   'skip-missing': { type: 'boolean', description: 'with --all, leave a file where no pair matches alone and list it, instead of failing; the counts still hold for the files that match' },
   'regex': { type: 'boolean', short: 'r', description: '--from is a regular expression (^ and $ match each line), --to may use $1, ${1}, $<name> and ${name}, and a \\n or \\t in it is a newline or a tab, \\\\ a backslash' }, // eslint-disable-line no-template-curly-in-string
   'ignore-case': { type: 'boolean', short: 'i', description: 'with --regex, match without regard to case' },
   'dotall': { type: 'boolean', short: 's', description: 'with --regex, let . match a newline too' },
-  'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, regex?, ignoreCase?, dotAll?} applied in order: inline when it starts with [, else a file or - for stdin' },
+  'pairs': { type: 'string', short: 'p', description: 'JSON array of {from, to, count?, all?, word?, regex?, ignoreCase?, dotAll?} applied in order: inline when it starts with [, else a file or - for stdin' },
+  'glob': { type: 'string', multiple: true, description: 'when walking folders, keep only files matching this glob, repeatable' },
+  'ext': { type: 'string', multiple: true, description: 'when walking folders, keep only these extensions (comma-separated, e.g. ts,tsx), repeatable' },
+  'exclude': { type: 'string', multiple: true, description: 'when walking folders, skip files matching this glob, repeatable' },
+  'undo': { type: 'boolean', description: 'restore the files modified by the last sub run in this directory' },
   'diff': { type: 'boolean', short: 'd', description: 'print each file\'s unified diff' },
   'dry-run': { type: 'boolean', description: 'show what would change without writing' },
   'quiet': { type: 'boolean', short: 'q', description: 'print nothing on success, the diff aside' },
@@ -49,12 +56,135 @@ const OPTIONS = {
 interface Defaults {
   count: number | undefined
   all: boolean
+  word: boolean
   regex: boolean
   ignoreCase: boolean
   dotAll: boolean
 }
 
-const PAIR_KEYS = ['from', 'to', 'count', 'all', 'regex', 'ignoreCase', 'dotAll']
+const PAIR_KEYS = ['from', 'to', 'count', 'all', 'word', 'regex', 'ignoreCase', 'dotAll']
+const FILE_RANGE = /^(.+?):(\d+)(?:-(\d+))?$/
+const LEADING_DOT = /^\./
+
+interface UndoEntry {
+  cwd: string
+  at: string
+  files: { path: string, target: string, before: string, after: string }[]
+}
+
+function undoFile(): string {
+  return join(xdgFolder(process.env.XDG_STATE_HOME, join(homedir(), '.local', 'state')), 'sub', 'undo.json')
+}
+
+function loadUndoMap(): Record<string, UndoEntry> {
+  const file = undoFile()
+
+  if (!existsSync(file))
+    return {}
+
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as Record<string, UndoEntry>
+  }
+  catch {
+    return {}
+  }
+}
+
+function saveUndo(cwd: string, files: { path: string, before: string, after: string }[]): void {
+  if (files.length === 0)
+    return
+
+  try {
+    const key = canonical(cwd)
+    const map = loadUndoMap()
+
+    map[key] = {
+      cwd: key,
+      at: new Date().toISOString(),
+      files: files.map(({ path, before, after }) => ({ path, target: canonical(path), before, after })),
+    }
+
+    // Keep at most 20 recent directories.
+    const entries = Object.entries(map).sort(([, a], [, b]) => b.at.localeCompare(a.at)).slice(0, 20)
+    const file = undoFile()
+
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, JSON.stringify(Object.fromEntries(entries)))
+  }
+  catch {
+    // Best-effort undo persistence; read-only state dirs never fail an edit.
+  }
+}
+
+function runUndo(dryRun: boolean, showDiff: boolean, quiet: boolean, json: boolean): number {
+  const key = canonical(process.cwd())
+  const map = loadUndoMap()
+  const entry = map[key]
+
+  if (entry === undefined || entry.files.length === 0)
+    return nothingWritten([{ path: '', problem: 'nothing to undo in this directory' }], json)
+
+  const problems: Problem[] = []
+  const restores: { path: string, target: string, before: string, after: string, diff: Diff }[] = []
+
+  for (const file of entry.files) {
+    if (!existsSync(file.target)) {
+      problems.push({ path: file.path, problem: 'no longer exists' })
+
+      continue
+    }
+
+    const current = readUtf8(file.target)
+
+    if (current !== file.after) {
+      problems.push({ path: file.path, problem: 'file changed since last sub edit; refusing to overwrite' })
+
+      continue
+    }
+
+    if (!dryRun && !writable(file.target)) {
+      problems.push({ path: file.path, problem: 'not writable' })
+
+      continue
+    }
+
+    restores.push({ path: file.path, target: file.target, before: current, after: file.before, diff: diffTexts(file.path, current, file.before) })
+  }
+
+  if (problems.length > 0)
+    return nothingWritten(problems, json)
+
+  if (!dryRun) {
+    const failed = writeAll(restores.map(({ target, after }) => ({ path: target, text: after })))
+
+    if (failed !== undefined)
+      return nothingWritten([failed], json)
+
+    delete map[key]
+    writeFileSync(undoFile(), JSON.stringify(map))
+  }
+
+  const done = restores.map(({ path, diff }) => ({ path, replacements: 1, lines: [], added: diff.added, removed: diff.removed, ...(showDiff ? { diff: diff.unified } : {}) }))
+
+  if (json) {
+    printJson({ dryRun, undone: true, files: done })
+
+    return 0
+  }
+
+  for (const { path, diff } of restores) {
+    if (!quiet)
+      console.log(`${role('path', process.stdout)(path)}: restored, ${role(diff.added === 0 ? 'label' : 'ok', process.stdout)(`+${diff.added}`)} ${role(diff.removed === 0 ? 'label' : 'problem', process.stdout)(`-${diff.removed}`)}`)
+
+    if (showDiff && diff.unified !== '')
+      process.stdout.write(diff.unified)
+  }
+
+  if (dryRun && !quiet)
+    console.log('dry run: nothing written')
+
+  return 0
+}
 
 function checkPattern(pair: Pair, label: string) {
   if (pair.from === '')
@@ -81,7 +211,7 @@ function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   if (typeof item !== 'object' || item === null || Array.isArray(item))
     fail(`${label}give an object {from, to}`)
 
-  const { from, to, count, all, regex, ignoreCase, dotAll, ...rest } = item as Record<string, unknown>
+  const { from, to, count, all, word, regex, ignoreCase, dotAll, ...rest } = item as Record<string, unknown>
   const unknown = Object.keys(rest)
 
   if (unknown.length > 0)
@@ -93,10 +223,10 @@ function pairFrom(item: unknown, i: number, defaults: Defaults): Pair {
   if (count !== undefined && (typeof count !== 'number' || !Number.isInteger(count) || count < 1))
     fail(`${label}count takes a whole number from 1`)
 
-  if (!isFlag(all) || !isFlag(regex) || !isFlag(ignoreCase) || !isFlag(dotAll))
-    fail(`${label}all, regex, ignoreCase and dotAll take true or false`)
+  if (!isFlag(all) || !isFlag(word) || !isFlag(regex) || !isFlag(ignoreCase) || !isFlag(dotAll))
+    fail(`${label}all, word, regex, ignoreCase and dotAll take true or false`)
 
-  const pair: Pair = { from, to, count: count ?? defaults.count ?? 1, all: count === undefined ? all ?? defaults.all : false, regex: regex ?? defaults.regex, ignoreCase: ignoreCase ?? defaults.ignoreCase, dotAll: dotAll ?? defaults.dotAll }
+  const pair: Pair = { from, to, count: count ?? defaults.count ?? 1, all: count === undefined ? all ?? defaults.all : false, word: word ?? defaults.word, regex: regex ?? defaults.regex, ignoreCase: ignoreCase ?? defaults.ignoreCase, dotAll: dotAll ?? defaults.dotAll }
 
   if ((pair.ignoreCase === true || pair.dotAll === true) && pair.regex !== true)
     fail(`${label}ignoreCase and dotAll need regex`)
@@ -278,7 +408,7 @@ async function plan(values: { from?: string, to?: string, pairs?: string }, file
       if (values.from === undefined || values.to === undefined)
         fail(`give --from and --to (--to '' deletes), or --pairs\n\n${USAGE}`)
 
-      pairs = [{ from: values.from, to: values.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex, ignoreCase: defaults.ignoreCase, dotAll: defaults.dotAll }]
+      pairs = [{ from: values.from, to: values.to, count: defaults.count ?? 1, all: defaults.all, word: defaults.word, regex: defaults.regex, ignoreCase: defaults.ignoreCase, dotAll: defaults.dotAll }]
       checkPattern(pairs[0] as Pair, '')
     }
 
@@ -294,7 +424,7 @@ async function plan(values: { from?: string, to?: string, pairs?: string }, file
     fail(`blocks: ${blocks}`)
 
   for (const [i, block] of blocks.entries()) {
-    const pair: Pair = { from: block.from, to: block.to, count: defaults.count ?? 1, all: defaults.all, regex: defaults.regex, ignoreCase: defaults.ignoreCase, dotAll: defaults.dotAll }
+    const pair: Pair = { from: block.from, to: block.to, count: defaults.count ?? 1, all: defaults.all, word: defaults.word, regex: defaults.regex, ignoreCase: defaults.ignoreCase, dotAll: defaults.dotAll }
     const named = block.file === undefined ? undefined : normalize(block.file)
     const targets = named === undefined ? files : [spellings.get(canonical(named)) ?? named]
 
@@ -322,12 +452,35 @@ async function main(argv: string[]): Promise<number> {
   const parsed = parse(argv, USAGE, OPTIONS, { exits: EXITS, replaces: 'sed -i and one-off bun -e or python editors', examples: [['sub src/a.php <<\'EOF\' (SEARCH/REPLACE blocks, see above)', 'multi-line text, no escaping'], ['sub --from oldName --to newName --all src/a.ts src/b.ts', 'every match in two files'], ['sub --regex --from "v(\\d+)" --to "v$1.0" --dry-run --diff README.md', 'the diff, nothing written']] })
 
   const { values, positionals } = parsed
-  const walked = new Set<string>()
-  const given = await Promise.all(positionals.map(async (path) => {
-    if (statSync(path, { throwIfNoEntry: false })?.isDirectory() !== true)
-      return [normalize(path)]
 
-    const inside = (await filesIn(path)).map(normalize)
+  if (values.undo === true)
+    return runUndo(values['dry-run'] === true, values.diff === true, values.quiet === true, values.json === true)
+
+  const exts = (values.ext ?? []).flatMap(item => item.split(',').map(ext => ext.trim().replace(LEADING_DOT, '').toLowerCase()).filter(Boolean))
+  const walkFilter: WalkFilter | undefined = (values.glob?.length ?? 0) > 0 || exts.length > 0 || (values.exclude?.length ?? 0) > 0
+    ? { ...(values.glob === undefined ? {} : { globs: values.glob }), ...(exts.length === 0 ? {} : { exts }), ...(values.exclude === undefined ? {} : { excludes: values.exclude }) }
+    : undefined
+  const walked = new Set<string>()
+  const ranges = new Map<string, LineRange>()
+  const given = await Promise.all(positionals.map(async (rawPath) => {
+    if (!existsSync(rawPath)) {
+      const rangeMatch = FILE_RANGE.exec(rawPath)
+
+      if (rangeMatch !== null && existsSync(rangeMatch[1]!)) {
+        const clean = normalize(rangeMatch[1]!)
+        const from = Number(rangeMatch[2])
+        const to = Number(rangeMatch[3] ?? rangeMatch[2])
+
+        ranges.set(canonical(clean), { from, to })
+
+        return [clean]
+      }
+    }
+
+    if (statSync(rawPath, { throwIfNoEntry: false })?.isDirectory() !== true)
+      return [normalize(rawPath)]
+
+    const inside = (await filesIn(rawPath, walkFilter)).map(normalize)
 
     for (const file of inside)
       walked.add(file)
@@ -343,7 +496,7 @@ async function main(argv: string[]): Promise<number> {
     fail('--ignore-case and --dotall need --regex')
 
   // --count with --all checks the exact count, the stricter reading of what both ask for.
-  const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true && values.count === undefined, regex: values.regex === true, ignoreCase: values['ignore-case'] === true, dotAll: values.dotall === true }
+  const defaults: Defaults = { count: values.count === undefined ? undefined : wholeNumber(values.count, 'count', 1), all: values.all === true && values.count === undefined, word: values.word === true, regex: values.regex === true, ignoreCase: values['ignore-case'] === true, dotAll: values.dotall === true }
   const edits = await plan(values, files, defaults)
   const changes: { path: string, before: string, after: string, lines: number[], diff?: Diff }[] = []
   const problems: Problem[] = []
@@ -367,7 +520,7 @@ async function main(argv: string[]): Promise<number> {
       continue
     }
 
-    const applied = applyPairs(before, pairs)
+    const applied = applyPairs(before, pairs, ranges.get(canonical(path)))
 
     if ((values['skip-missing'] === true || walked.has(path)) && applied.matched === 0) {
       skipped.push(path)
@@ -391,20 +544,19 @@ async function main(argv: string[]): Promise<number> {
   if (problems.length > 0)
     return nothingWritten(problems, json)
 
-  try {
-    for (const change of changes)
-      change.diff = await diffTexts(change.path, change.before, change.after)
-  }
-  catch (error) {
-    return nothingWritten([{ path: '', problem: error instanceof Error ? error.message : String(error) }], json)
-  }
+  for (const change of changes)
+    change.diff = diffTexts(change.path, change.before, change.after)
 
   const done: { path: string, replacements: number, lines: number[], added: number, removed: number, diff?: string }[] = []
+  const modified = changes.filter(({ before, after, diff }) => diff !== undefined && after !== before)
 
-  const failed = values['dry-run'] === true ? undefined : writeAll(changes.filter(({ before, after, diff }) => diff !== undefined && after !== before).map(({ path, after }) => ({ path, text: after })))
+  const failed = values['dry-run'] === true ? undefined : writeAll(modified.map(({ path, after }) => ({ path, text: after })))
 
   if (failed !== undefined)
     return nothingWritten([failed], json)
+
+  if (values['dry-run'] !== true && modified.length > 0)
+    saveUndo(process.cwd(), modified)
 
   for (const { path, lines, diff } of changes) {
     if (diff === undefined)

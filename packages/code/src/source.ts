@@ -22,8 +22,9 @@ const STAR = /^\*?\s*/
 const HOLDS_MEMBERS = /\b(?:(?:class|interface|trait|struct|enum)\s|impl[\s<]|(?:record|extension|protocol|object)\s+[A-Z]|companion\s+object\b)/
 const CALL_KEYWORDS = /^(?:if|for|while|switch|catch|return|await|throw|new|else|do|try|super|typeof)\b/
 const LEADING = /^(?:\/\/|\/\*|\*|#(?!!)|@)/
-// A binding the module keeps to itself, left out of an outline.
+// A binding the module keeps to itself, left out of an outline unless it holds a function/arrow function.
 const LOCAL_BINDING = /^(?:const|let|var)\s/
+const TOP_LEVEL_FUNCTION_VALUE = /^(?:const|let|var)\s+[#\w$]+\s*(?::[^=]+)?=\s*(?:async\s+)?(?:function\b|(?:<[^>]*>\s*)?(?:\([^)]*\)|[\w$]+)\s*(?::[^=]+)?=>|(?:<[^>]*>\s*)?\()/
 const HEADING = /^#{1,6}\s/
 const TRAILING_NEWLINE = /\n$/
 const MARKDOWN = /\.(?:md|mdx|markdown)$/i
@@ -262,13 +263,43 @@ function leadingStart(lines: readonly string[], start: number): number {
   return first
 }
 
+// The code-only portion of a line (strings, template literals, regexes, comments blanked to spaces) while preserving column indices and updating multiline quote/comment state.
+function stripNonCode(line: string, quote: Quote, rust: boolean): string {
+  const out = Array.from<string>({ length: line.length }).fill(' ')
+
+  codeChars(line, quote, rust, (char, index) => {
+    out[index] = char
+  })
+
+  return out.join('')
+}
+
+// Whether a line opens inside a multiline comment or template literal (skipping declarations/usages there).
+function lineCodeStates(lines: readonly string[], path: string): { codeLines: string[], inOpenBlock: boolean[] } {
+  const quote: Quote = { open: '', depth: 0 }
+  const rust = RUST.test(path)
+  const codeLines: string[] = []
+  const inOpenBlock: boolean[] = []
+
+  for (const line of lines) {
+    inOpenBlock.push(quote.open !== '')
+    codeLines.push(stripNonCode(line, quote, rust))
+  }
+
+  return { codeLines, inOpenBlock }
+}
+
 // Each declaration of the name in the text, with its comments, as spans.
 export function definitions(text: string, path: string, name: string): Span[] {
   const lines = text.split('\n')
   const members = memberLines(lines, path)
+  const { inOpenBlock } = lineCodeStates(lines, path)
   const spans: Span[] = []
 
   for (let i = 0; i < lines.length; i++) {
+    if (inOpenBlock[i] === true)
+      continue
+
     if (!declares(lines[i] ?? '', name, members[i]))
       continue
 
@@ -281,11 +312,13 @@ export function definitions(text: string, path: string, name: string): Span[] {
   return spans
 }
 
-// The lines naming the symbol as a whole word, 1-based.
-export function usages(text: string, name: string): number[] {
+// The lines naming the symbol as a whole word outside comments and string literals, 1-based.
+export function usages(text: string, name: string, path = ''): number[] {
   const word = new RegExp(String.raw`(?<![\w$])${escaped(name)}(?![\w$])`)
+  const lines = text.split('\n')
+  const { codeLines } = lineCodeStates(lines, path)
 
-  return text.split('\n').flatMap((line, i) => word.test(line) ? [i + 1] : [])
+  return codeLines.flatMap((line, i) => word.test(line) ? [i + 1] : [])
 }
 
 export interface OutlineEntry {
@@ -294,28 +327,62 @@ export interface OutlineEntry {
   text: string
 }
 
-function signature(line: string): string {
-  const text = line.trim().replace(BODY_OPENER, '')
+const COLLAPSE_SPACE = /\s+/g
+
+// Joins continuation lines when a declaration signature spans multiple lines (e.g. multiline parameter list), capped at LONGEST_SIGNATURE.
+function multilineSignature(lines: readonly string[], start: number): string {
+  const first = (lines[start] ?? '').trim()
+  let combined = first
+  let parens = 0
+
+  for (const ch of first) {
+    if (ch === '(')
+      parens++
+    else if (ch === ')')
+      parens--
+  }
+
+  for (let i = start + 1; parens > 0 && i < Math.min(lines.length, start + 12); i++) {
+    const next = (lines[i] ?? '').trim()
+
+    if (next === '')
+      break
+
+    combined = `${combined} ${next}`.replace(COLLAPSE_SPACE, ' ')
+
+    for (const ch of next) {
+      if (ch === '(')
+        parens++
+      else if (ch === ')')
+        parens--
+    }
+  }
+
+  const text = combined.replace(BODY_OPENER, '')
 
   return text.length > LONGEST_SIGNATURE ? `${text.slice(0, LONGEST_SIGNATURE - 1)}…` : text
 }
 
-// The declarations at the top of the file and the members one level inside its classes and interfaces; a Markdown file's headings.
+// The declarations at the top of the file (including top-level arrow functions and multiline signatures) and members inside classes/interfaces; a Markdown file's headings.
 export function outline(text: string, path: string): OutlineEntry[] {
   const lines = text.split('\n')
 
   if (MARKDOWN.test(path))
     return lines.flatMap((line, i) => HEADING.test(line) ? [{ line: i + 1, depth: (line.indexOf(' ') - 1), text: line.trim() }] : [])
 
+  const { inOpenBlock } = lineCodeStates(lines, path)
   const entries: OutlineEntry[] = []
   let memberIndent: number | undefined
 
   for (const [i, line] of lines.entries()) {
+    if (inOpenBlock[i] === true)
+      continue
+
     const text = line.trim()
     const indent = indentOf(line)
 
-    if (indent === 0 && DECLARATION.test(text) && !LOCAL_BINDING.test(text)) {
-      entries.push({ line: i + 1, depth: 0, text: signature(line) })
+    if (indent === 0 && DECLARATION.test(text) && (!LOCAL_BINDING.test(text) || TOP_LEVEL_FUNCTION_VALUE.test(text))) {
+      entries.push({ line: i + 1, depth: 0, text: multilineSignature(lines, i) })
       memberIndent = HOLDS_MEMBERS.test(text) ? -1 : undefined
     }
     else if (indent === 0 && text !== '' && !text.startsWith('{') && !text.startsWith('}') && !LEADING.test(text)) {
@@ -323,7 +390,7 @@ export function outline(text: string, path: string): OutlineEntry[] {
     }
     else if (memberIndent !== undefined && indent > 0 && (memberIndent === -1 || indent === memberIndent) && MEMBER.test(text) && !CALL_KEYWORDS.test(text)) {
       memberIndent = indent
-      entries.push({ line: i + 1, depth: 1, text: signature(line) })
+      entries.push({ line: i + 1, depth: 1, text: multilineSignature(lines, i) })
     }
   }
 

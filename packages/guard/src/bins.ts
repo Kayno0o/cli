@@ -37,7 +37,7 @@ export const BINS: Record<string, BinBrief> = {
   proc: { summary: 'what a process is, who listens on a port and which dev…', replaces: 'cat /proc/<pid>/..., ss -ltnp, lsof…' },
   sf: { summary: 'picks a Symfony console command on a terminal and runs it,…', replaces: 'bin/console typed in the php…' },
   slot: { summary: 'waits for a free machine-wide slot, then runs the command and…', replaces: 'flock wrappers, hand-written…' },
-  src: { summary: 'reads and ranks the source of a folder: line spans, TODO…', replaces: 'sed -n N,Mp, grep -n chains and…' },
+  src: { summary: 'reads, outlines, graphs and ranks source code: spans,…', replaces: 'sed -n N,Mp, grep -n chains and…' },
   sub: { summary: 'replaces text in files, writing nothing unless every…', replaces: 'sed -i and one-off bun -e or python…' },
   view: { summary: 'shows a markdown file, a source file or a git diff in the…', replaces: 'cat, bat or less on a markdown…' },
   waitfor: { summary: 'waits until a file shows a line, a port listens, a URL answers…', replaces: 'sleep loops, tail -f and until !…' },

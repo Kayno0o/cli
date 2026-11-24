@@ -7,9 +7,16 @@ export interface Pair {
   count?: number
   all?: boolean
   regex?: boolean
+  // Match whole words only.
+  word?: boolean
   // Regex flags: case-insensitive, and the dot matching a newline.
   ignoreCase?: boolean
   dotAll?: boolean
+}
+
+export interface LineRange {
+  from: number
+  to: number
 }
 
 export interface Applied {
@@ -55,8 +62,10 @@ export function listLines(lines: number[]): string {
 }
 
 // A literal --from as a pattern whose line breaks match either ending, so a file mixing LF and CRLF still matches it.
-function literal(from: string): RegExp {
-  return new RegExp(from.split(CRLF).map(part => part.replaceAll(SPECIAL, String.raw`\$&`)).join(String.raw`\r?\n`), 'g')
+function literal(from: string, word = false): RegExp {
+  const body = from.split(CRLF).map(part => part.replaceAll(SPECIAL, String.raw`\$&`)).join(String.raw`\r?\n`)
+
+  return new RegExp(word ? String.raw`(?<![\w$])${body}(?![\w$])` : body, 'g')
 }
 
 // Where the first line of a text that matched nowhere does appear, the usual sign of an indentation or neighbouring-line mismatch.
@@ -72,17 +81,18 @@ function firstLineHint(text: string, from: string): string {
 }
 
 // Unicode-aware, so `.` takes a whole emoji and `\p{L}` is a letter class. A pattern only the legacy syntax accepts, such as `\-` outside a class, compiles without it, `.` then taking half an emoji; one naming a property is refused instead, as the legacy syntax would read `\p{Foo}` as the text `p{Foo}`.
-export function compile(source: string, { ignoreCase, dotAll }: Pick<Pair, 'ignoreCase' | 'dotAll'> = {}): RegExp {
+export function compile(source: string, { ignoreCase, dotAll, word }: Pick<Pair, 'ignoreCase' | 'dotAll' | 'word'> = {}): RegExp {
+  const wrapped = word === true ? String.raw`(?<![\w$])(?:${source})(?![\w$])` : source
   const flags = `gm${ignoreCase === true ? 'i' : ''}${dotAll === true ? 's' : ''}`
 
   try {
-    return new RegExp(source, `${flags}u`)
+    return new RegExp(wrapped, `${flags}u`)
   }
   catch (error) {
     if (PROPERTY_ESCAPE.test(source))
       throw error
 
-    return new RegExp(source, flags)
+    return new RegExp(wrapped, flags)
   }
 }
 
@@ -108,8 +118,34 @@ function bracedGroups(to: string): string {
   })
 }
 
-// Applies the pairs in order, each to the previous one's result, and lists every pair that matched another number of times than expected.
-export function applyPairs(original: string, pairs: Pair[]): Applied {
+const LINE_PARTS = /[^\n]*\n|[^\n]+/g
+
+// Applies the pairs in order, optionally restricted to a 1-based inclusive line range.
+export function applyPairs(original: string, pairs: Pair[], range?: LineRange): Applied {
+  if (range !== undefined) {
+    const parts = original.match(LINE_PARTS) ?? []
+
+    if (range.from < 1 || range.to < range.from)
+      return { text: original, lines: [], problems: [`invalid line range ${range.from}-${range.to}`], matched: 0 }
+
+    if (range.from > parts.length)
+      return { text: original, lines: [], problems: [`line range ${range.from}-${range.to} starts past end of file (${parts.length} lines)`], matched: 0 }
+
+    const startIdx = range.from - 1
+    const endIdx = Math.min(range.to, parts.length)
+    const beforeSlice = parts.slice(0, startIdx).join('')
+    const targetSlice = parts.slice(startIdx, endIdx).join('')
+    const afterSlice = parts.slice(endIdx).join('')
+    const inner = applyPairs(targetSlice, pairs)
+
+    return {
+      text: `${beforeSlice}${inner.text}${afterSlice}`,
+      lines: inner.lines.map(line => line + startIdx),
+      problems: inner.problems,
+      matched: inner.matched,
+    }
+  }
+
   const crlf = original.includes('\r\n')
   const lines: number[] = []
   const problems: string[] = []
@@ -120,7 +156,7 @@ export function applyPairs(original: string, pairs: Pair[]): Applied {
     const label = pairs.length > 1 ? `pair ${i + 1}: ` : ''
     const typed = pair.regex === true ? escapes(pair.to) : pair.to
     const to = crlf ? typed.replace(CRLF, '\r\n') : typed
-    const pattern = pair.regex === true ? compile(pair.from, pair) : literal(pair.from)
+    const pattern = pair.regex === true ? compile(pair.from, pair) : literal(pair.from, pair.word === true)
     const indexes = [...text.matchAll(pattern)].map(match => match.index)
     const found = linesOf(text, indexes)
 

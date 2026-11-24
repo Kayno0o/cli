@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { capped, duration, jsonOption, limitOf, limitOptions, parse, printJson, warn } from '@kaynooo/cli-kit'
 import { listFiles, readText } from './files'
-import { addAges, lookUp, marksIn, refKey } from './todo'
+import { addAges, lookUp, marksIn, originRepo, refKey } from './todo'
 
 const USAGE = `src todo-scan [options] [path...]: lists the TODO, FIXME, HACK, XXX and owner/repo#N comments under the paths (here by default), each as <file>:<line>: <comment>, honouring .gitignore
 
@@ -33,13 +33,14 @@ export async function todoScan(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[path...]'], replaces: 'grep -rn TODO, then opening each issue it names', examples: ['src todo-scan src', ['src todo-scan --stale', 'only the comments naming a closed issue']] })
   const cwd = process.cwd()
   const limit = limitOf(values, LIST_LIMIT)
+  const [defaultRepo, files] = await Promise.all([originRepo(cwd), listFiles(positionals, cwd)])
   const found: Mark[] = []
 
-  for (const path of await listFiles(positionals, cwd)) {
+  for (const path of files) {
     const text = await readText(join(cwd, path))
 
     if (text !== undefined)
-      found.push(...marksIn(text, path))
+      found.push(...marksIn(text, path, defaultRepo))
   }
 
   const older = values.older === undefined ? undefined : duration(values.older, 'older', 0, 'm') / DAY_MS

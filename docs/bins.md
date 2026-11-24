@@ -492,14 +492,16 @@ slot ls
 
 ## src
 
-reads and ranks the source of a folder: line spans, TODO comments and the files worth splitting. Package `code`.
+reads, outlines, graphs and ranks source code: spans, definitions, references, deps, coupling, TODOs and hotspots. Package `code`.
 
 Instead of: sed -n N,Mp, grep -n chains and grep -rn TODO
 
 ```sh
 src <command> [options]
 src peek src/cli.ts:10-40
-src todo-scan
+src def parseArgs src
+src outline src/cli.ts
+src deps src/cli.ts
 src hotspots -n 10  # the ten files both complex and often edited
 ```
 
