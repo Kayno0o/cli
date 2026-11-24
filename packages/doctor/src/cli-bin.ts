@@ -4,7 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Host } from './checks'
 import type { Listed } from './list'
 import process from 'node:process'
-import { activeTheme, badge, badUsage, bar, completionScript, duration, formatDuration, header, jsonOption, keyValue, marked, paint, parse, PRESETS, printJson, readUsage, role, runCli, section, sparkline, summarizeUsage, table, tree, usagePath } from '@kaynooo/cli-kit'
+import { activeTheme, badge, badUsage, bar, completionScript, duration, formatDuration, header, jsonOption, keyValue, marked, paint, parse, PRESETS, printHeader, printJson, readUsage, role, runCli, section, sparkline, summarizeUsage, table, tree, usagePath } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
 import { completionDir, installCompletions, installedBins } from './completions'
 import { configReport } from './config-report'
@@ -25,6 +25,8 @@ const LIST_OPTIONS = {
 } as const
 
 function print(listed: readonly Listed[]): void {
+  printHeader('cli', `${listed.filter(each => each.installed).length}/${listed.length} installed`)
+
   const { cyan, dim } = paint(process.stdout)
   const width = Math.max(...listed.map(each => each.bin.length))
 
@@ -145,12 +147,15 @@ export function config(args: string[], host: Host = hostHere()): number {
     return 0
   }
 
+  printHeader('cli', 'config')
+
   const { dim } = paint(process.stdout)
 
+  console.log(section('config files', undefined, process.stdout))
   console.log(table(report.sources.filter(each => each.kind === 'file').map(each => [each.name, each.status === 'absent' ? dim(each.status) : each.status, dim(each.where)])))
   const variables = report.sources.filter(each => each.kind === 'env' && each.status === 'set')
 
-  console.log(variables.length === 0 ? `\n${dim('no variable set')}` : `\n${table(variables.map(each => [each.name, each.value ?? '']))}`)
+  console.log(variables.length === 0 ? `\n${dim('no variable set')}` : `\n${section('environment', variables.length, process.stdout)}\n${table(variables.map(each => [each.name, each.value ?? '']))}`)
   console.log(`\nworkspace  ${report.workspace}\ntheme      ${report.theme.preset}${report.theme.sources.length === 0 ? '' : `, from ${report.theme.sources.join(', ')}`}`)
 
   return 0
@@ -173,20 +178,21 @@ export async function stats(args: string[], path = usagePath()): Promise<number>
     return 0
   }
 
+  printHeader('cli', `stats · ${summary.runs} runs`)
   console.log(`${summary.runs} runs\n\n${table(summary.bins.map(each => [each.bin, String(each.runs), `${each.failed} failed`, `${each.usageErrors} usage errors`]))}`)
 
   const busy = summary.commands.filter(each => each.failed + each.usageErrors > 0).toSorted((a, b) => b.failed + b.usageErrors - (a.failed + a.usageErrors)).slice(0, 15)
 
   if (busy.length > 0)
-    console.log(`\ncommands with failures or usage errors\n${table(busy.map(each => [`${each.bin} ${each.command}`, String(each.runs), `${each.failed} failed`, `${each.usageErrors} usage errors`]))}`)
+    console.log(`\n${section('commands with failures or usage errors', busy.length, process.stdout)}\n${table(busy.map(each => [`${each.bin} ${each.command}`, String(each.runs), `${each.failed} failed`, `${each.usageErrors} usage errors`]))}`)
 
   if (summary.usageErrors.length > 0)
-    console.log(`\nunknown options\n${table(summary.usageErrors.map(each => [`${each.bin}${each.command === undefined ? '' : ` ${each.command}`}`, each.unknown, `${each.count}x`]))}`)
+    console.log(`\n${section('unknown options', summary.usageErrors.length, process.stdout)}\n${table(summary.usageErrors.map(each => [`${each.bin}${each.command === undefined ? '' : ` ${each.command}`}`, each.unknown, `${each.count}x`]))}`)
 
   const slow = summary.durations.filter(each => each.p90 >= SLOW_MS).slice(0, 15)
 
   if (slow.length > 0)
-    console.log(`\nslowest commands\n${table(slow.map(each => [`${each.bin}${each.command === undefined ? '' : ` ${each.command}`}`, `${each.runs} timed`, `median ${formatDuration(each.median)}`, `p90 ${formatDuration(each.p90)}`]))}`)
+    console.log(`\n${section('slowest commands', slow.length, process.stdout)}\n${table(slow.map(each => [`${each.bin}${each.command === undefined ? '' : ` ${each.command}`}`, `${each.runs} timed`, `median ${formatDuration(each.median)}`, `p90 ${formatDuration(each.p90)}`]))}`)
 
   return 0
 }

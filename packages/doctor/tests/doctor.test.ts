@@ -183,6 +183,12 @@ describe('runChecks', () => {
 
     expect(calls.filter(line => line.startsWith('bun info'))).toEqual([])
     expect(offline.filter(result => result.detail.includes('skipped (--offline)'))).toHaveLength(10)
+    expect(offline.filter(result => result.warn === true)).toHaveLength(10)
+
+    const rendered = await capture(async () => main(['--offline', '--only', 'cli-arc'], host))
+
+    expect(rendered.result).toBe(0)
+    expect(rendered.out).toContain('warning: cli-arc')
   })
 })
 
