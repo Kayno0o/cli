@@ -1,6 +1,7 @@
 import type { Context, Violation } from './check'
 import { isEnvFile } from '@kaynooo/cli-env/guard'
 import { BINS, binsSection } from './bins'
+import { cachedBriefs } from './bins-cache'
 import { checkCommand, checkPath } from './check'
 import { gcLine } from './commit'
 
@@ -162,7 +163,7 @@ function userPromptSubmit(input: HookInput, machine: Machine): null {
 }
 
 function sessionStart(machine: Machine): HookOutput | null {
-  const text = binsSection(new Set(Object.keys(BINS).filter(machine.has)), machine.home)
+  const text = binsSection(new Set(Object.keys(BINS).filter(machine.has)), cachedBriefs(machine.home))
 
   return text === undefined ? null : { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: text } }
 }

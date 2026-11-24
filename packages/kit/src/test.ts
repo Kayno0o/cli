@@ -43,6 +43,7 @@ export async function onTerminal<T>(argv: string[], use: (run: TerminalRun) => P
   let closed = false
   const proc = Bun.spawn(argv, {
     ...spawn,
+    env: spawn.env ?? process.env,
     terminal: {
       cols,
       rows,
