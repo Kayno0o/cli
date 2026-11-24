@@ -121,34 +121,23 @@ export function fromHome(path: string, home: string): string {
   return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path
 }
 
-const QUOTED = /['\\\n\r]/g
-const ESCAPES: Record<string, string> = { '\'': '\\\'', '\\': '\\\\', '\n': '\\n', '\r': '\\r' }
-
-// A single-quoted TypeScript string, its quotes, backslashes and line breaks escaped.
-const str = (value: string) => `'${value.replace(QUOTED, char => ESCAPES[char]!)}'`
-const list = (values: string[]) => `[${values.map(str).join(', ')}]`
-
 export function render(draft: Draft): string {
-  const routes = draft.routes.map(route => `    { host: ${str(route.host)}, to: ${str(route.to)}${route.passthrough ? ', passthrough: true' : ''} },`)
+  const payload = {
+    root: draft.root,
+    repos: draft.repos,
+    copy: draft.copy,
+    clone: draft.clone,
+    ...(draft.skip.length ? { skip: draft.skip } : {}),
+    ...(draft.certs !== undefined ? { certs: draft.certs } : {}),
+    setup: [],
+    routes: draft.routes.map(route => ({
+      host: route.host,
+      to: route.to,
+      ...(route.passthrough ? { passthrough: true } : {}),
+    })),
+  }
 
-  return [
-    `import type { ProjectConfig } from '@kaynooo/cli-wt'`,
-    '',
-    '// Drafted by `wt init`: check every list against the stack before the first `wt add`.',
-    'export default {',
-    `  root: ${str(draft.root)},`,
-    `  repos: ${list(draft.repos)},`,
-    `  copy: ${list(draft.copy)},`,
-    `  clone: ${list(draft.clone)},`,
-    ...draft.skip.length ? [`  skip: ${list(draft.skip)},`] : [],
-    ...draft.certs !== undefined ? [`  certs: ${str(draft.certs)},`] : [],
-    '  setup: [],',
-    '  routes: [',
-    ...routes,
-    '  ],',
-    '} satisfies ProjectConfig',
-    '',
-  ].join('\n')
+  return `${JSON.stringify(payload, null, 2)}\n`
 }
 
 export async function initProject(dir: string, options: { print?: boolean, name?: string }): Promise<void> {
@@ -158,38 +147,15 @@ export async function initProject(dir: string, options: { print?: boolean, name?
   if (options.print)
     return console.log(content)
 
-  const { manifests } = await wtConfig()
-  const file = join(manifests, `${draft.name}.ts`)
+  const file = options.name !== undefined
+    ? join((await wtConfig()).manifests, `${draft.name}.json`)
+    : join((await git(dir, 'rev-parse', '--show-toplevel')).out, '.wt.json')
 
-  mkdirSync(manifests, { recursive: true })
+  mkdirSync(join(file, '..'), { recursive: true })
 
   if (existsSync(file))
     throw new WtError(`${file} already exists`, 'compare it with `wt init --print`')
 
   writeFileSync(file, content)
-  writeTsconfig(manifests)
   console.log(`wt: drafted ${file}, review it before \`wt add\``)
-}
-
-// wt's own folder, from src/ or the built dist/ alike; the package ships its sources.
-const PACKAGE_ROOT = join(import.meta.dir, '..')
-
-// Nothing resolves the manifests' `@kaynooo/cli-wt` import where they live, so a tsconfig beside them points it at the wt that wrote it, for an editor to type-check them. One already there is the user's and stays.
-function writeTsconfig(manifests: string): void {
-  const file = join(manifests, 'tsconfig.json')
-
-  if (existsSync(file))
-    return
-
-  const compilerOptions = {
-    target: 'ESNext',
-    module: 'Preserve',
-    moduleResolution: 'bundler',
-    strict: true,
-    noEmit: true,
-    skipLibCheck: true,
-    paths: { '@kaynooo/cli-wt': [join(PACKAGE_ROOT, 'src', 'index.ts')] },
-  }
-
-  writeFileSync(file, `${JSON.stringify({ compilerOptions }, null, 2)}\n`)
 }

@@ -16,5 +16,5 @@ export const HOOKS_REQUIRES = '@kaynooo/cli-guard'
 // What a package needs on the machine besides Bun.
 export const NEEDS: Record<string, Need[]> = {
   '@kaynooo/cli-docker': [{ bin: 'docker', why: 'dc runs docker compose', how: 'https://docs.docker.com/engine/install/' }],
-  '@kaynooo/cli-wt': [{ bin: 'docker', why: 'wt runs each worktree stack with docker compose', how: 'https://docs.docker.com/engine/install/' }, { bin: 'mkcert', why: 'wt makes the certificates of a manifest\'s passthrough routes with it, and nothing else needs it', how: 'https://github.com/FiloSottile/mkcert' }],
+  '@kaynooo/cli-wt': [{ bin: 'git', why: 'wt manages git worktrees', how: 'https://git-scm.com/' }, { bin: 'docker', why: 'wt runs compose stacks when a project has compose.yml', how: 'https://docs.docker.com/engine/install/' }, { bin: 'mkcert', why: 'wt makes the certificates of a manifest\'s passthrough routes with it', how: 'https://github.com/FiloSottile/mkcert' }],
 }

@@ -198,7 +198,7 @@ describe('addTask', () => {
     expect(existsSync(dirOf('planning'))).toBe(false)
   })
 
-  test('refuses before making anything when a program the project needs is missing, and doctor says so', async () => {
+  test('refuses before making anything when a program the project needs is missing', async () => {
     const { sandbox, wt, dirOf } = env
 
     rmSync(join(sandbox.home, '..', 'bin', 'mkcert'))
@@ -207,14 +207,9 @@ describe('addTask', () => {
 
     expect(run.code).toBe(1)
     expect(run.err).toContain('mkcert is not on PATH, https://github.com/FiloSottile/mkcert, then `mkcert -install`')
+    expect(run.err).toContain('cli doctor')
     expect(existsSync(dirOf('planning'))).toBe(false)
     expect(sandbox.dockerCalls().filter(call => !call.args.startsWith('compose version'))).toEqual([])
-
-    const doctor = await wt('doctor')
-
-    expect(doctor.code).toBe(1)
-    expect(doctor.out).toMatch(/missing\s+mkcert\s+https:\/\/github\.com\/FiloSottile\/mkcert.*\(notes\)/)
-    expect(doctor.out).toMatch(/ok\s+git\s+\S+\/git\s/)
   })
 
   test('reads main and the worktree through compose with the worktree\'s own project name, and the tidy env after', async () => {
@@ -519,7 +514,7 @@ describe('cd, url and tasks', () => {
 
     writeFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), 'export default {\n')
 
-    const broken = await wt('tasks')
+    const broken = await wt('tasks', '-p', 'notes')
 
     expect(broken.code).toBe(1)
     expect(broken.err).toContain('Expected identifier but found end of file')
@@ -564,7 +559,7 @@ describe('commands checking their target before any job', () => {
     const run = await env.wt('path')
 
     expect(run.out).toBe(`${env.root}\n`)
-    expect(run.err).toContain('notes.ts and twin.ts both have a checkout compose names notes, so their worktrees would share stacks and volumes: twin skipped')
+    expect(run.err).toContain('notes and twin both have a checkout named notes, so their worktrees would share stacks and volumes: twin skipped')
   })
 
   test('skip a checkout folder that leaves compose no stack name', async () => {
@@ -590,7 +585,7 @@ describe('commands checking their target before any job', () => {
     expect((await env.wt('path', '-p', 'notes')).err).toBe('')
 
     manifest('other', 'export default { repos: [] }\n')
-    await skipsOther('other', `${file} has no default export with a \`root\``)
+    await skipsOther('other', `${file} has no \`root\``)
 
     mkdirSync(join(env.sandbox.home, 'Elsewhere', 'bare', '.git'), { recursive: true })
     manifest('other', 'export default { root: \'~/Elsewhere/bare\' }\n')
@@ -1318,7 +1313,7 @@ describe('up and down with no runner', () => {
 
     const [header, ...rows] = (await wt('ls')).out.trim().split('\n')
 
-    expect(header).toMatch(/^up\s+project\s+task\s+branch\s+url\s+job\s+changes$/)
+    expect(header).toMatch(/^up\s+project\s+task\s+branch\s+sync\s+url\s+job\s+changes$/)
     expect(rows.find(row => row.includes('wt/planning'))).toContain('up ok just now')
     expect(rows.find(row => row.includes('wt/other'))).toContain('add ok just now')
   }, 30_000)
@@ -1457,7 +1452,7 @@ describe('wt init', () => {
 
   afterAll(() => env?.stop())
 
-  test('drafts a manifest for a checkout no tool knows, named after its folder unless --name says otherwise', async () => {
+  test('drafts a JSON .wt.json manifest for a checkout no tool knows, or <manifests>/<name>.json when --name says otherwise', async () => {
     const { sandbox, wt, root } = env
 
     sandbox.seed('devproxy-hosts', JSON.stringify([{ host: 'mail.notes.localhost', group: 'docker-notes', to: 'http://notes-mailhog:8025', passthrough: false }]))
@@ -1466,21 +1461,20 @@ describe('wt init', () => {
 
     expect(printed.err).toBe('')
     expect(printed.code).toBe(0)
-    expect(printed.out).toContain('import type { ProjectConfig } from \'@kaynooo/cli-wt\'')
-    expect(printed.out).toContain('root: \'~/Workspace/notes\'')
-    expect(printed.out).toContain('} satisfies ProjectConfig')
-    expect(existsSync(join(sandbox.home, '.config', 'wt', 'projects', 'other.ts'))).toBe(false)
+    expect(JSON.parse(printed.out)).toMatchObject({
+      root: '~/Workspace/notes',
+      repos: [],
+      copy: ['.env'],
+      setup: [],
+      routes: [{ host: 'mail.notes.localhost', to: 'mailhog:8025' }],
+    })
+    expect(existsSync(join(sandbox.home, '.config', 'wt', 'projects', 'other.json'))).toBe(false)
 
     rmSync(join(sandbox.home, '.config', 'wt', 'projects'), { recursive: true })
 
     expect((await wt('init', root)).code).toBe(0)
-    // The manifest's name is its file's, so the draft is the one printed, less the newline console.log adds
-    expect(`${readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'notes.ts'), 'utf8')}\n`).toBe(printed.out)
-
-    const { compilerOptions } = JSON.parse(readFileSync(join(sandbox.home, '.config', 'wt', 'projects', 'tsconfig.json'), 'utf8')) as { compilerOptions: { paths: Record<string, string[]> } }
-
-    expect(compilerOptions.paths['@kaynooo/cli-wt']).toEqual([join(import.meta.dir, '..', 'src', 'index.ts')])
-    expect(printed.out).toContain('{ host: \'mail.notes.localhost\', to: \'mailhog:8025\' },')
+    expect(`${readFileSync(join(root, '.wt.json'), 'utf8')}\n`).toBe(printed.out)
+    expect(existsSync(join(sandbox.home, '.config', 'wt', 'projects', 'tsconfig.json'))).toBe(false)
   }, 30_000)
 
   test('says why the draft has no routes, and names a host of main it cannot place', async () => {
@@ -1532,8 +1526,8 @@ describe('wt ls --json', () => {
     expect(JSON.parse(run.out)).toEqual({
       project: 'notes',
       checkouts: [
-        { project: 'notes', task: 'main', dir: root, branch: 'main', url: 'https://notes.localhost', running: false, dirty: 0, unbranched: 0, session: 'notes', job: '' },
-        { project: 'notes', task: 'planning', dir: dirOf('planning'), branch: 'wt/planning', url: 'https://planning.notes.localhost', running: true, dirty: 0, unbranched: 0, session: 'notes--planning', job: 'add ok just now' },
+        { project: 'notes', task: 'main', dir: root, branch: 'main', ahead: 0, behind: 0, url: 'https://notes.localhost', running: false, dirty: 0, unbranched: 0, session: 'notes', job: '' },
+        { project: 'notes', task: 'planning', dir: dirOf('planning'), branch: 'wt/planning', ahead: 0, behind: 0, url: 'https://planning.notes.localhost', running: true, dirty: 0, unbranched: 0, session: 'notes--planning', job: 'add ok just now' },
       ],
     })
   }, 30_000)

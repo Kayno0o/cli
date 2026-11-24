@@ -1,9 +1,10 @@
 import type { Resolved } from './config'
-import { existsSync, readdirSync, realpathSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
 import { warn } from '@kaynooo/cli-kit'
 import { expandHome, fillTemplate, wtConfig } from './config'
 import { failureText, KnownError } from './errors'
+import { git } from './git'
 import { stringToPort } from './port'
 
 export interface Route {
@@ -111,7 +112,7 @@ function warnUnknownKeys(name: string, config: ProjectConfig): void {
   ]
 
   for (const key of unknown)
-    warn(`${name}.ts: unknown key ${key}, ignored`)
+    warn(`${name}: unknown key ${key}, ignored`)
 }
 
 // Caught when the manifest loads, not halfway through a `wt add` that has already cloned data.
@@ -138,30 +139,59 @@ function assertValid(project: Project): void {
   }
 }
 
-/** One manifest, checked; any failure names its file. */
-async function loadManifest(settings: Resolved, file: string): Promise<Project> {
-  const path = join(settings.manifests, file)
+const COMPOSE_FILES = ['compose.yml', 'compose.yaml', 'docker-compose.yml', 'docker-compose.yaml']
+
+/** Whether a project uses Docker Compose / devproxy provisioning instead of lightweight git-only worktrees. */
+export function hasCompose(project: Pick<Project, 'root' | 'routes' | 'clone'>): boolean {
+  if (project.routes.length > 0 || (project.clone?.length ?? 0) > 0)
+    return true
+
+  return COMPOSE_FILES.some(file => existsSync(join(project.root, file)))
+}
+
+const MANIFEST_EXT = /\.(?:jsonc|json|ts)$/
+
+function manifestBaseName(file: string): string {
+  return file.replace(MANIFEST_EXT, '')
+}
+
+/** One manifest (.json, .jsonc, or legacy .ts), checked; any failure names its file. */
+async function loadManifest(settings: Resolved, file: string, fullPath?: string): Promise<Project> {
+  const path = fullPath ?? join(settings.manifests, file)
   let config: unknown
 
   try {
-    config = ((await import(path)) as { default?: unknown }).default
+    config = path.endsWith('.ts')
+      ? ((await import(path)) as { default?: unknown }).default
+      : Bun.JSONC.parse(readFileSync(path, 'utf8'))
   }
   catch (error) {
     throw new WtError(`${path} does not load: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  if (typeof config !== 'object' || config === null || typeof (config as { root?: unknown }).root !== 'string')
-    throw new WtError(`${path} has no default export with a \`root\``, 'export default { root: \'~/Workspace/<checkout>\', ... } satisfies ProjectConfig')
+  if (typeof config !== 'object' || config === null)
+    throw new WtError(`${path} is not a JSON object`, 'write { "root": "~/Workspace/<checkout>" } in .wt.json')
 
-  const manifest = config as ProjectConfig
-  const project: Project = { ...manifest, repos: manifest.repos ?? [], routes: manifest.routes ?? [], root: expandHome(manifest.root), name: basename(file, '.ts'), settings }
+  const manifest = config as Partial<ProjectConfig>
+  let rootPath: string | undefined
 
-  warnUnknownKeys(project.name, manifest)
+  if (typeof manifest.root === 'string')
+    rootPath = expandHome(manifest.root)
+  else if (fullPath !== undefined)
+    rootPath = dirname(fullPath)
+
+  if (rootPath === undefined)
+    throw new WtError(`${path} has no \`root\``, 'set "root": "~/Workspace/<checkout>" or place .wt.json in the repo root')
+
+  const name = fullPath !== undefined ? basename(rootPath) : manifestBaseName(file)
+  const project: Project = { ...manifest, root: rootPath, repos: manifest.repos ?? [], routes: manifest.routes ?? [], name, settings }
+
+  warnUnknownKeys(file, manifest as ProjectConfig)
   assertValid(project)
 
   // A worktree's stack is named after its checkout's folder, kept so that running stacks keep their containers and volumes.
   if (stackName(project) === '')
-    throw new WtError(`${project.name}.ts: the checkout folder ${basename(project.root)} holds no letter or digit to name its compose stacks after`, 'rename the folder')
+    throw new WtError(`${path}: the checkout folder ${basename(project.root)} holds no letter or digit to name its stacks after`, 'rename the folder')
 
   return project
 }
@@ -169,7 +199,9 @@ async function loadManifest(settings: Resolved, file: string): Promise<Project> 
 /** Every project whose manifest loads; one that does not is skipped, `skipped` told why (a warning by default), so it cannot break the others. */
 export async function loadProjects(skipped: (message: string) => void = warn): Promise<Project[]> {
   const settings = await wtConfig()
-  const files = existsSync(settings.manifests) ? readdirSync(settings.manifests).filter(file => file.endsWith('.ts')).sort() : []
+  const files = existsSync(settings.manifests)
+    ? readdirSync(settings.manifests).filter(file => file.endsWith('.json') || file.endsWith('.jsonc') || file.endsWith('.ts')).sort()
+    : []
   const loaded = await Promise.allSettled(files.map(async file => loadManifest(settings, file)))
   const projects: Project[] = []
 
@@ -184,7 +216,7 @@ export async function loadProjects(skipped: (message: string) => void = warn): P
     const twin = projects.find(other => stackName(other) === stackName(project))
 
     if (twin)
-      skipped(`${twin.name}.ts and ${project.name}.ts both have a checkout compose names ${stackName(project)}, so their worktrees would share stacks and volumes: ${project.name} skipped, rename the folder of a checkout that has no worktrees yet, or remove one of the files`)
+      skipped(`${twin.name} and ${project.name} both have a checkout named ${stackName(project)}, so their worktrees would share stacks and volumes: ${project.name} skipped`)
     else
       projects.push(project)
   }
@@ -195,11 +227,12 @@ export async function loadProjects(skipped: (message: string) => void = warn): P
 /** The project of one manifest, the others left unread: its failure to load ends the command. */
 export async function findProject(name: string): Promise<Project> {
   const settings = await wtConfig()
+  const candidate = ['.json', '.jsonc', '.ts'].map(ext => `${name}${ext}`).find(file => existsSync(join(settings.manifests, file)))
 
-  if (!existsSync(join(settings.manifests, `${name}.ts`)))
+  if (candidate === undefined)
     throw new WtError(`no project named ${name} in ${settings.manifests}`)
 
-  return loadManifest(settings, `${name}.ts`)
+  return loadManifest(settings, candidate)
 }
 
 export const tasksDir = (project: Project) => fillTemplate([project.settings.worktrees], { root: dirname(project.root), repo: basename(project.root) })[0]!
@@ -267,7 +300,39 @@ function resolved(path: string): string {
   }
 }
 
+// Zero-config project discovery for any git repository: loads `.wt.json`/`.wt.jsonc` when present, else synthesizes a lightweight project.
+async function discoverGitProject(cwd: string): Promise<{ project: Project, task: string } | undefined> {
+  if (!existsSync(cwd))
+    return undefined
+
+  const top = await git(cwd, 'rev-parse', '--show-toplevel')
+
+  if (!top.ok || top.out === '')
+    return undefined
+
+  const common = await git(cwd, 'rev-parse', '--git-common-dir')
+  const checkoutRoot = resolved(top.out)
+  const mainRoot = common.ok && common.out !== '' ? resolved(dirname(resolve(cwd, common.out))) : checkoutRoot
+  const settings = await wtConfig()
+  const localManifest = ['.wt.json', '.wt.jsonc'].map(file => join(mainRoot, file)).find(file => existsSync(file))
+  const project: Project = localManifest !== undefined
+    ? await loadManifest(settings, basename(localManifest), localManifest)
+    : { root: mainRoot, repos: [], routes: [], name: basename(mainRoot), settings }
+  const dir = resolved(tasksDir(project))
+  const here = resolved(cwd)
+
+  if (here.startsWith(`${dir}/`)) {
+    const rest = here.slice(dir.length + 1)
+    const slash = rest.indexOf('/')
+
+    return { project, task: slash === -1 ? rest : rest.slice(0, slash) }
+  }
+
+  return { project, task: 'main' }
+}
+
 // The project and task the working directory sits in, `main` when it is the project's own checkout.
+// Works zero-config in any git repository via `.wt.json` or synthesized lightweight project.
 export async function locate(cwd: string, projectName?: string): Promise<{ project: Project, task: string }> {
   const here = resolved(cwd)
   const projects = projectName !== undefined ? [await findProject(projectName)] : await loadProjects()
@@ -287,13 +352,20 @@ export async function locate(cwd: string, projectName?: string): Promise<{ proje
       return { project, task: 'main' }
   }
 
+  if (projectName === undefined) {
+    const discovered = await discoverGitProject(cwd)
+
+    if (discovered !== undefined)
+      return discovered
+  }
+
   if (projects.length === 1)
     return { project: projects[0]!, task: 'main' }
 
   if (!existsSync(cwd))
     throw new WtError(`the current directory ${cwd} is gone`, 'cd into a project or worktree, or pass --project')
 
-  throw new WtError('not inside a known project or worktree (cd into one, or pass --project)')
+  throw new WtError('not inside a git repository or known project (cd into one, or pass --project)')
 }
 
 export async function locateWorktree(cwd: string, task: string | undefined, projectName?: string): Promise<Worktree> {

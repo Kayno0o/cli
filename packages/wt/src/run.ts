@@ -6,7 +6,6 @@ import { join, resolve } from 'node:path'
 import { holdSignals } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { baseComposeFiles, composeConfig } from './compose'
-import { wtConfig } from './config'
 import { readEnvFile } from './env_file'
 import { assertWorktreeExists, currentDir, locateWorktree, WtError } from './project'
 import { holding, inLine, queueDir } from './queue'
@@ -218,9 +217,13 @@ async function ensureDatabase(plan: RunPlan, database: TestDatabase): Promise<st
 }
 
 // Forwards an interrupt to the child, a `docker run` passing it on to the container, and resolves with its exit code.
-export async function runInherit(command: string[]): Promise<number> {
+export async function runInherit(command: string[], options: { cwd?: string, env?: Record<string, string | undefined> } = {}): Promise<number> {
   const held = holdSignals()
-  const child = Bun.spawn(command, { stdio: ['inherit', 'inherit', 'inherit'] })
+  const child = Bun.spawn(command, {
+    stdio: ['inherit', 'inherit', 'inherit'],
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    ...(options.env === undefined ? {} : { env: options.env }),
+  })
 
   held.forward(child)
 
@@ -279,16 +282,31 @@ async function provision(worktree: Worktree, run: RunConfig, plan: RunPlan, data
 
 export async function runTask(task: string, command: string[], project?: string): Promise<number> {
   const worktree = await locateWorktree(currentDir(), task, project)
-  const { run, name } = worktree.project
+  const { run } = worktree.project
 
   assertWorktreeExists(worktree)
 
-  if (!run)
-    throw new WtError(`${name} has no \`run\` in its manifest, so wt cannot tell which service runs its tests`)
-
-  // Held while it runs, so `wt rm` does not pull the worktree from under its container
+  // Held while it runs, so `wt rm` does not pull the worktree from under the command.
   return holding(runsDir(worktree), command.join(' '), async () => {
-    const database = testDatabase(join(worktree.dir, run.dir))
+    // Lightweight / non-container repos run directly in the worktree directory.
+    if (!run) {
+      return runInherit(command, {
+        cwd: worktree.dir,
+        env: { ...process.env, WT_TASK: worktree.task, WT_PORT: String(worktree.clientPort), TEST_TOKEN: testToken(worktree.task) },
+      })
+    }
+
+    const runDir = join(worktree.dir, run.dir)
+    const hasDatabase = existsSync(join(runDir, '.env')) || existsSync(join(runDir, '.env.dist')) || existsSync(join(runDir, '.env.test'))
+
+    if (!hasDatabase) {
+      return runInherit(command, {
+        cwd: runDir,
+        env: { ...process.env, ...run.env, WT_TASK: worktree.task, WT_PORT: String(worktree.clientPort), TEST_TOKEN: testToken(worktree.task) },
+      })
+    }
+
+    const database = testDatabase(runDir)
     const plan = runPlan(worktree, run, await cachedRunInputs(worktree, run, database.host), database, userInfo(), Boolean(process.stdin.isTTY && process.stdout.isTTY))
 
     await provision(worktree, run, plan, await answeringDatabase(plan, database) ?? await ensureDatabase(plan, database))
@@ -300,11 +318,4 @@ export async function runTask(task: string, command: string[], project?: string)
 /** The folder each `wt run` of the worktree holds a ticket in while it runs. */
 export function runsDir(worktree: Worktree): string {
   return queueDir(worktree.project.settings, `${worktree.id}.runs`)
-}
-
-// One heavy command at a time across every session on the machine, the rest waiting their turn in arrival order.
-export async function runHeavy(command: string[]): Promise<number> {
-  const label = `${command.join(' ')} (in ${currentDir()})`
-
-  return inLine(queueDir(await wtConfig(), 'heavy'), label, (ahead, running) => console.error(`wt heavy: ${ahead} ahead, running ${running}`), async () => runInherit(command))
 }

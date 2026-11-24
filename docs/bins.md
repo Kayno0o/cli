@@ -22,12 +22,13 @@ arc extract release.tar.gz  # any common archive
 
 runs a command at HEAD or another ref in a temporary worktree, sharing node_modules and env files with the working tree unless --no-link. Package `base`.
 
-Instead of: git stash, a test run, then git stash pop
+Instead of: git stash, a test run, git bisect, then git stash pop
 
 ```sh
 base <command> [options]
 base -- bun test tests/api.test.ts  # the test at HEAD, the working tree changes left out
-base proof -- bun test tests/new.test.ts  # it fails before the change and passes in the working tree
+base proof -- bun test tests/new.test.ts  # auto-keeps the new test, proves it fails before and passes now
+base bisect --good v1.0.0 -- bun test tests/api.test.ts  # find the first commit that broke a test
 ```
 
 ## changelog

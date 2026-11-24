@@ -1,14 +1,27 @@
 import type { Worktree } from './project'
-import { warn } from '@kaynooo/cli-kit'
+import { linkedWorktreeEntries, linkWorktreeEntries, warn } from '@kaynooo/cli-kit'
 import { baseComposeFiles, composeConfig, overrideWarnings, renderOverride, unknownServices } from './compose'
 import { cloneData, copyFromMain, linkFromMain, writeEnvFiles, writeIfChanged } from './files'
 import { stringToPort } from './port'
-import { assertWorktreeExists, listTasks, loadProjects, worktreeOf } from './project'
+import { assertWorktreeExists, hasCompose, listTasks, loadProjects, worktreeOf } from './project'
 import { writeStackCerts } from './routes'
 
 // Everything a worktree needs besides its git checkouts. Safe to run again: copies and clones never overwrite, generated files are rewritten.
+// Lightweight (non-compose) repositories link ignored node_modules/.env*/vendor/.venv from main via the shared kit linker and skip Docker steps.
 export async function syncWorktree(worktree: Worktree): Promise<void> {
   assertWorktreeExists(worktree)
+
+  if (!hasCompose(worktree.project)) {
+    const warnings = await copyFromMain(worktree)
+
+    linkFromMain(worktree)
+    linkWorktreeEntries(worktree.project.root, worktree.dir, await linkedWorktreeEntries(worktree.project.root))
+
+    for (const warning of warnings)
+      warn(warning)
+
+    return
+  }
 
   const [warnings, main] = await Promise.all([copyFromMain(worktree), composeConfig(worktree.project.root)])
 
@@ -32,7 +45,7 @@ export async function syncWorktree(worktree: Worktree): Promise<void> {
     warn(warning)
 }
 
-// Ports are hashed from names, so two may land on one; main's is hashed from its project's name. Whether the port is in use is asked on add only, as the worktree's own dev server holds it once running.
+// Ports are hashed from names, so two may land on one; main's is hashed from its project's name.
 async function portClashes(worktree: Worktree): Promise<string[]> {
   const port = worktree.clientPort
   const sharing: string[] = []

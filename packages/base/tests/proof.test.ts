@@ -93,6 +93,7 @@ describe('proof', () => {
       proved: true,
       ref: 'HEAD',
       sha: git('rev-parse', 'HEAD'),
+      autoKept: [],
       before: { code: 1, output: 'missing fixed\n' },
       now: { code: 0, output: '' },
       runs: [{ code: 0 }],
@@ -204,5 +205,58 @@ describe('proof default ref', () => {
     git('commit', '-q', '-am', 'fix')
 
     expect(proof(check('fixed')).out).toStartWith(`fails at ${git('rev-parse', '--short=7', 'origin/master')}, passes now`)
+  })
+
+  test('defaults to HEAD when a feature branch has uncommitted changes, and auto-keeps untracked files referenced in the command', () => {
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    git('checkout', '-q', '-b', 'feat')
+    file('a.txt', 'committed\n')
+    git('commit', '-q', '-am', 'feat commit')
+    file('a.txt', 'dirty-fix\n')
+    file('new.spec.txt', 'check-me\n')
+
+    const result = proof(['--', 'sh', '-c', 'grep -q dirty-fix a.txt && grep -q check-me new.spec.txt'])
+
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('working tree has uncommitted changes')
+    expect(result.err).toContain('auto-kept new.spec.txt')
+    expect(result.out).toStartWith(`fails at ${git('rev-parse', '--short=7', 'HEAD')}, passes now`)
+  })
+
+  test('--keep-new copies untracked files even when not named in the command', () => {
+    file('a.txt', 'fixed\n')
+    file('helper.txt', 'present\n')
+
+    const result = proof(['--keep-new', '--', 'sh', '-c', 'test -f helper.txt && grep -q fixed a.txt'])
+
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('auto-kept helper.txt')
+  })
+})
+
+describe('base bisect', () => {
+  test('finds the first commit where the command starts failing', () => {
+    file('a.txt', 'v1\n')
+    git('commit', '-q', '-am', 'c1')
+    const good = git('rev-parse', 'HEAD')
+
+    file('a.txt', 'v2\n')
+    git('commit', '-q', '-am', 'c2')
+    file('a.txt', 'broken\n')
+    git('commit', '-q', '-am', 'c3-bad')
+    const badSha = git('rev-parse', 'HEAD')
+
+    file('a.txt', 'broken-still\n')
+    git('commit', '-q', '-am', 'c4')
+
+    const result = Bun.spawnSync([process.execPath, CLI, 'bisect', '--good', good, '--json', '--', 'sh', '-c', '! grep -q broken a.txt'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+
+    expect(result.exitCode).toBe(0)
+
+    const parsed = JSON.parse(result.stdout.toString()) as { firstBad: { sha: string, subject: string }, tested: { sha: string, code: number }[] }
+
+    expect(parsed.firstBad.sha).toBe(badSha)
+    expect(parsed.firstBad.subject).toBe('c3-bad')
+    expect(parsed.tested.length).toBeGreaterThanOrEqual(1)
   })
 })

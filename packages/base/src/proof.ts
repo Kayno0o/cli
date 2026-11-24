@@ -2,22 +2,22 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Run } from './worktree'
 import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, wholeNumber } from '@kaynooo/cli-kit'
-import { checkout, defaultProofRef, folded, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
+import { autoKeptPaths, checkout, chooseProofRef, folded, formattedFailure, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
-const USAGE = 'base proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]: runs the command at the ref below in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nThe ignored env files, node_modules, vendor and .venv of the working tree are linked into the temporary worktree, writes included; --no-link runs fully apart. The ref defaults to the merge base with the default branch of origin (origin/main unless origin/HEAD names another) when HEAD is on a branch ahead of it, else HEAD. --runs <n> runs the command n times now, for a flaky test, and every run must pass. --timeout kills a run that lasts longer (a hung test), which says nothing about the change and ends with exit 2.'
+const USAGE = 'base proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--keep-new] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]: runs the command at the ref below in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nDefaults to HEAD when the working tree has uncommitted changes, else the merge base with origin\'s default branch when on a branch ahead of it. Untracked/new test files referenced in the command are kept automatically (--keep-new copies all untracked files).'
 
 const EXITS: ExitRow[] = [[0, 'the command fails before and passes in every run now'], [1, 'it passes before too, fails in any run now, or passes before and fails now'], [2, 'a usage error, an unknown ref, a command that cannot start, ends with exit 126, 127, 125 or a signal, or runs past --timeout'], [130, 'interrupted (128 plus the signal)']]
 
 const OPTIONS = {
-  'ref': { type: 'string', short: 'r', description: 'the commit to run before at (default: the merge base with the default branch of origin on a branch ahead of it, else HEAD)' },
+  'ref': { type: 'string', short: 'r', description: 'the commit to run before at (default: HEAD when dirty, else merge-base with origin\'s default branch)' },
   'runs': { type: 'string', short: 'n', description: 'run the command this many times now, every run must pass (1)' },
   'keep': { type: 'string', short: 'k', multiple: true, description: 'a working-tree file or folder copied over to the ref, such as the new test, repeatable' },
+  'keep-new': { type: 'boolean', description: 'copy all untracked files from the working tree into the temporary worktree' },
   'timeout': { type: 'string', short: 't', description: 'kill each run lasting longer than this (30s, 5m, 1h), a result of neither side' },
   'no-link': { type: 'boolean', description: 'do not link the ignored env files, node_modules, vendor and .venv of the checkout' },
-  'json': jsonOption('{outcome, proved, ref, sha, before: {code, output}, now: {code, output}}'),
+  'json': jsonOption('{outcome, proved, ref, sha, autoKept, before: {code, output}, now: {code, output}}'),
 } as const
 
-// A shell's "not executable", "not found" and killed-by-signal codes say the command did not run, which no test result does; 125 is what git bisect run calls "cannot test".
 function abnormal(code: number): boolean {
   return code === 125 || code === 126 || code === 127 || (code > 128 && code < 160)
 }
@@ -39,7 +39,6 @@ function outcomeOf(before: number, now: readonly number[]): Outcome {
   return 'regressed'
 }
 
-// The message of each outcome and the side whose output explains it.
 function describe(outcome: Outcome, at: string, now: readonly number[]): { message: string, side: 'before' | 'now' } {
   switch (outcome) {
     case 'proved': return { message: now.length > 1 ? `fails at ${at}, passes now in ${now.length} of ${now.length} runs` : `fails at ${at}, passes now`, side: 'before' }
@@ -51,9 +50,8 @@ function describe(outcome: Outcome, at: string, now: readonly number[]): { messa
 }
 
 export async function proof(argv: string[]): Promise<number> {
-  // Bun drops a leading `--` before the script sees it, so a first word that is no option starts the command.
   const bare = argv[0] !== undefined && !argv[0].startsWith('-')
-  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, exits: EXITS, replaces: 'running a test, stashing the change and running it again', examples: [['base proof --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the new test fails at HEAD and passes now'], ['base proof --ref v1.2.0 --keep tests/fix.test.ts -- bun test tests/fix.test.ts', 'the same against a release']] })
+  const parsed = parse(bare ? [] : argv, USAGE, OPTIONS, { rest: true, exits: EXITS, replaces: 'running a test, stashing the change and running it again', examples: [['base proof -- bun test tests/fix.test.ts', 'auto-keeps the new test, proves it fails at HEAD and passes now'], ['base proof --ref v1.2.0 -- bun test tests/fix.test.ts', 'the same against a release']] })
 
   const given = bare ? argv : parsed.rest ?? []
 
@@ -67,10 +65,19 @@ export async function proof(argv: string[]): Promise<number> {
   const cwd = process.cwd()
   const { root, prefix } = await checkout(cwd)
   const runs = wholeNumber(parsed.values.runs, 'runs', 1, 1)
-  const ref = parsed.values.ref ?? await defaultProofRef(root)
+  const chosen = parsed.values.ref === undefined ? await chooseProofRef(root) : { ref: parsed.values.ref, reason: 'explicit --ref' }
+  const { ref } = chosen
   const sha = await resolveRef(root, ref)
-  const kept = keptPaths(root, cwd, parsed.values.keep ?? [])
+  const explicitKept = keptPaths(root, cwd, parsed.values.keep ?? [])
+  const autoKept = (await autoKeptPaths(root, cwd, given, sha, parsed.values['keep-new'] === true)).filter(path => !explicitKept.includes(path))
+  const kept = [...explicitKept, ...autoKept]
   const timeoutMs = parsed.values.timeout === undefined ? undefined : duration(parsed.values.timeout, 'timeout', 0)
+
+  if (parsed.values.json !== true) {
+    const dim = role('label', process.stderr)
+
+    console.error(dim(`base proof: ref ${sha.slice(0, 7)} (${chosen.reason})${autoKept.length === 0 ? '' : `, auto-kept ${autoKept.join(', ')}`}`))
+  }
 
   const signals = holdSignals()
   let before: Run
@@ -107,7 +114,7 @@ export async function proof(argv: string[]): Promise<number> {
   const proved = outcome === 'proved'
 
   if (parsed.values.json === true) {
-    printJson({ outcome, proved, ref, sha, before: { code: before.code, output: before.output }, now: { code: now.code, output: now.output }, runs: nowRuns.map(run => ({ code: run.code })) })
+    printJson({ outcome, proved, ref, sha, autoKept, before: { code: before.code, output: before.output }, now: { code: now.code, output: now.output }, runs: nowRuns.map(run => ({ code: run.code })) })
 
     return proved ? 0 : 1
   }
@@ -120,7 +127,7 @@ export async function proof(argv: string[]): Promise<number> {
   const shown = side === 'before' ? before : now
 
   if (shown.code !== 0 && shown.output.trim() !== '')
-    console.log(`\n${folded(shown.output)}`)
+    console.log(`\n${formattedFailure(shown.output, cwd)}`)
 
   return proved ? 0 : 1
 }

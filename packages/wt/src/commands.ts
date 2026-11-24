@@ -4,8 +4,8 @@ import { isListening, warn } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { runningProjects } from './compose'
 import { knownMessage } from './errors'
-import { addWorktrees, dirtyRepos, isRegistered, removeWorktrees, unreachableCommits } from './git'
-import { assertWorktreeExists, currentDir, locate, locateWorktree, worktreeOf, WtError } from './project'
+import { addWorktrees, currentBranch, dirtyRepos, git, isRegistered, removeWorktrees, unreachableCommits } from './git'
+import { assertWorktreeExists, currentDir, hasCompose, locate, locateWorktree, worktreeOf, WtError } from './project'
 import { removeQueues } from './prune'
 import { holders } from './queue'
 import { urlsOf } from './routes'
@@ -88,9 +88,11 @@ export async function addTask(task: string, branch: string | undefined, options:
   for (const url of urlsOf(worktree))
     console.log(`    ${url}`)
 
-  if (options.up)
+  const compose = hasCompose(project)
+
+  if (options.up && compose)
     await stackUp(worktree)
-  else
+  else if (compose)
     console.log(`    wt up ${task}`)
 }
 
@@ -138,34 +140,55 @@ export async function assertRemovable(task: string, options: GlobalOptions & { f
   return worktree
 }
 
-export async function removeTask(task: string, options: GlobalOptions & { force?: boolean }): Promise<void> {
+export async function removeTask(task: string, options: GlobalOptions & { force?: boolean, deleteBranch?: boolean }): Promise<void> {
   const worktree = await locateWorktree(currentDir(), task, options.project)
+  const compose = hasCompose(worktree.project)
+  const branchToDelete = options.deleteBranch === true && existsSync(worktree.dir) && worktree.project.repos.length === 0
+    ? await currentBranch(worktree.dir)
+    : undefined
 
   // Every command after this one spawns from the cwd, which may be the directory about to go.
   process.chdir(worktree.project.root)
 
-  const anonymous = await anonymousVolumes(worktree)
+  const anonymous = compose ? await anonymousVolumes(worktree) : []
 
   // Again inside the job: the tree may have changed since the check before it
   refuseWhileRun(worktree)
   await refuseLosingWork(worktree, options.force === true)
 
-  // With the folder gone, its containers may still hold its volumes
-  if (existsSync(worktree.dir) || await hasContainers(worktree.id))
-    await stackDown(worktree)
+  if (compose) {
+    // With the folder gone, its containers may still hold its volumes
+    if (existsSync(worktree.dir) || await hasContainers(worktree.id))
+      await stackDown(worktree)
 
-  await removeVolumes(worktree, anonymous)
+    await removeVolumes(worktree, anonymous)
+  }
 
   for (const file of Object.values(worktree.files))
     rmSync(file, { force: true })
 
-  await forgetTestDatabases(worktree)
+  if (compose)
+    await forgetTestDatabases(worktree)
+
   removeQueues(worktree)
 
   await removeWorktrees(worktree)
-  await afterRemove(worktree)
 
-  console.log(`wt: removed ${worktree.id}, its branches are kept`)
+  if (compose)
+    await afterRemove(worktree)
+
+  let deletedBranch = false
+
+  if (branchToDelete !== undefined && branchToDelete !== '?' && branchToDelete !== 'HEAD') {
+    const deleted = await git(worktree.project.root, 'branch', options.force === true ? '-D' : '-d', branchToDelete)
+
+    if (deleted.ok)
+      deletedBranch = true
+    else
+      warn(`removed worktree, but could not delete branch ${branchToDelete}: ${deleted.out}`)
+  }
+
+  console.log(`wt: removed ${worktree.id}${deletedBranch ? ` and deleted branch ${branchToDelete}` : ', its branches are kept'}`)
 }
 
 export async function upTask(worktree: Worktree): Promise<void> {

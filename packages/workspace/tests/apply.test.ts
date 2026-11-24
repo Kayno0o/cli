@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { applyAll } from '../src/apply'
+import { applyAll, wtTaskFor } from '../src/apply'
 
 const temp = tempDirs()
 
@@ -102,5 +102,36 @@ describe('applyAll', () => {
     expect(outcome?.removed).toBe(false)
     expect(outcome?.error).not.toBe('')
     expect(existsSync(target)).toBe(true)
+  })
+
+  test('detects wt-managed worktrees under .worktrees/<repo>/<task> and delegates cleanup to wt rm', async () => {
+    const root = temp('apply-wt-')
+    const repo = join(root, 'myrepo')
+    const target = join(root, '.worktrees', 'myrepo', 'feat')
+    const bin = join(root, 'bin')
+    const log = join(root, 'wt.log')
+
+    mkdirSync(repo, { recursive: true })
+    mkdirSync(target, { recursive: true })
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(join(bin, 'wt'), `#!/bin/sh\necho "$PWD:$*" > "${log}"\nrm -rf "${target}"\n`, { mode: 0o755 })
+
+    expect(wtTaskFor(entry(target, { kind: 'worktree', repo }))).toEqual({ task: 'feat', repo })
+    expect(wtTaskFor(entry(join(root, 'other', 'feat'), { kind: 'worktree', repo }))).toBeUndefined()
+
+    const oldPath = process.env.PATH
+
+    process.env.PATH = `${bin}:${oldPath ?? ''}`
+
+    try {
+      const [outcome] = await applyAll([entry(target, { kind: 'worktree', repo })], () => undefined)
+
+      expect(outcome).toEqual({ path: target, removed: true })
+      expect(existsSync(target)).toBe(false)
+      expect(await Bun.file(log).text()).toBe(`${repo}:rm feat\n`)
+    }
+    finally {
+      process.env.PATH = oldPath
+    }
   })
 })

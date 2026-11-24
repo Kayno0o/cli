@@ -1,7 +1,7 @@
 import type { Entry } from './sweep-scan'
 import { existsSync } from 'node:fs'
 import { lstat, rm } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { runTool } from '@kaynooo/cli-kit'
 import { FOLDER_NAMES, isCachePath } from './sweep-scan'
 
@@ -31,10 +31,39 @@ async function removeFolder(entry: Entry): Promise<Outcome> {
   }
 }
 
-// Never forced: git refuses a worktree that turned dirty or locked since the scan.
+// Detects wt-managed worktrees under `<parent>/.worktrees/<repo>/<task>` so cleanup delegates to `wt rm`.
+export function wtTaskFor(entry: Entry): { task: string, repo: string } | undefined {
+  if (entry.repo === undefined)
+    return undefined
+
+  const task = basename(entry.path)
+  const repoDir = dirname(entry.path)
+  const wtRoot = dirname(repoDir)
+
+  if (basename(wtRoot) !== '.worktrees' || basename(repoDir) !== basename(entry.repo))
+    return undefined
+
+  return { task, repo: entry.repo }
+}
+
+// Never forced: delegates wt-managed worktrees to `wt rm` so compose overrides/routes/volumes go too, else uses `git worktree remove`.
 async function removeWorktree(entry: Entry): Promise<Outcome> {
   if (entry.repo === undefined)
     return { path: entry.path, removed: false, error: 'no repository known' }
+
+  const wtManaged = wtTaskFor(entry)
+
+  if (wtManaged !== undefined && Bun.which('wt') !== null) {
+    try {
+      const ran = await runTool('wt rm', ['wt', 'rm', wtManaged.task], { cwd: wtManaged.repo })
+
+      if (ran.code === 0)
+        return { path: entry.path, removed: true }
+    }
+    catch {
+      // Fall back to plain git worktree remove if wt is unavailable or refuses.
+    }
+  }
 
   try {
     const ran = await runTool('git worktree remove', ['git', '-C', entry.repo, 'worktree', 'remove', entry.path])

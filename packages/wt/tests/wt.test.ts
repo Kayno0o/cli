@@ -32,7 +32,7 @@ describe('wt init draft', () => {
     expect(fromHome('/home/meadow/notes', '/home/me')).toBe('/home/meadow/notes')
   })
 
-  test('renders values holding quotes, backslashes and line breaks as a manifest that loads back to them', async () => {
+  test('renders values holding quotes, backslashes and line breaks as a JSON manifest that loads back to them', () => {
     const manifest: Omit<Draft, 'name'> = {
       root: '~/Workspace/it\'s',
       repos: ['a\\b'],
@@ -42,17 +42,8 @@ describe('wt init draft', () => {
       certs: 'certs\r',
       routes: [{ host: 'it\'s.localhost', to: 'web:80', passthrough: true }],
     }
-    const dir = mkdtempSync(join(tmpdir(), 'wt-init-'))
-    const file = join(dir, 'odd.ts')
 
-    writeFileSync(file, render({ name: 'odd', ...manifest }))
-
-    try {
-      expect((await import(file) as { default: unknown }).default).toEqual({ ...manifest, setup: [] })
-    }
-    finally {
-      rmSync(dir, { recursive: true })
-    }
+    expect(JSON.parse(render({ name: 'odd', ...manifest }))).toEqual({ ...manifest, setup: [] })
   })
 })
 
@@ -528,4 +519,80 @@ describe('writeEnvFiles', () => {
 
     expect(statSync(join(dir, '.env')).mtimeMs).toBe(1000)
   })
+})
+
+describe('zero-config lightweight wt', () => {
+  test('wt add, ls (ahead/behind), run, and rm -b work in a plain git repo with no manifest and no docker', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'wt-plain-'))
+    const home = join(base, 'home')
+    const root = join(base, 'myrepo')
+    const cli = join(import.meta.dir, '..', 'src', 'cli.ts')
+    const cleanEnv: Record<string, string> = {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HOME: home,
+      XDG_CONFIG_HOME: join(home, '.config'),
+      XDG_CACHE_HOME: join(home, '.cache'),
+      GIT_AUTHOR_NAME: 'wt',
+      GIT_AUTHOR_EMAIL: 'wt@test',
+      GIT_COMMITTER_NAME: 'wt',
+      GIT_COMMITTER_EMAIL: 'wt@test',
+    }
+
+    mkdirSync(root, { recursive: true })
+    mkdirSync(home, { recursive: true })
+
+    try {
+      await $`git init -q -b main`.cwd(root).env(cleanEnv)
+      writeFileSync(join(root, '.gitignore'), 'node_modules/\n.env.local\n')
+      writeFileSync(join(root, 'index.txt'), 'hello\n')
+      writeFileSync(join(root, '.env.local'), 'SECRET=1\n')
+      mkdirSync(join(root, 'node_modules', 'dep'), { recursive: true })
+      writeFileSync(join(root, 'node_modules', 'dep', 'ok.txt'), 'linked\n')
+      await $`git add .gitignore index.txt && git commit -q -m init`.cwd(root).env(cleanEnv)
+
+      const runWt = async (...args: string[]) => {
+        const res = await $`bun --no-env-file ${cli} ${args}`.cwd(root).env(cleanEnv).nothrow().quiet()
+
+        return { code: res.exitCode, out: res.stdout.toString(), err: res.stderr.toString() }
+      }
+
+      const added = await runWt('add', 'feat')
+
+      expect(added.code).toBe(0)
+
+      const wtDir = join(base, '.worktrees', 'myrepo', 'feat')
+
+      expect(existsSync(join(wtDir, '.env.local'))).toBe(true)
+      expect(readFileSync(join(wtDir, 'node_modules', 'dep', 'ok.txt'), 'utf8')).toBe('linked\n')
+
+      const ran = await runWt('run', 'feat', '--', 'cat', 'index.txt')
+
+      expect(ran.code).toBe(0)
+      expect(ran.out).toBe('hello\n')
+
+      writeFileSync(join(wtDir, 'extra.txt'), 'new\n')
+      await $`git add extra.txt && git commit -q -m extra`.cwd(wtDir).env(cleanEnv)
+
+      const listed = await runWt('ls', '--json')
+
+      expect(listed.code).toBe(0)
+
+      const parsed = JSON.parse(listed.out) as { project: string, checkouts: { task: string, ahead: number, behind: number }[] }
+
+      expect(parsed.project).toBe('myrepo')
+      expect(parsed.checkouts.find(c => c.task === 'feat')).toMatchObject({ ahead: 1, behind: 0 })
+
+      const removed = await runWt('rm', 'feat', '-b', '-f')
+
+      expect(removed.code).toBe(0)
+      expect(existsSync(wtDir)).toBe(false)
+
+      const branches = (await $`git branch --list wt/feat`.cwd(root).env(cleanEnv).text()).trim()
+
+      expect(branches).toBe('')
+    }
+    finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  }, 30_000)
 })

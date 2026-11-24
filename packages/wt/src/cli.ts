@@ -170,9 +170,9 @@ Provisions a worktree again after a manifest change: missing copies and clones, 
 
 Exits 0 once it is provisioned, 1 when a step fails, 2 on a usage error.`
 
-const RM_USAGE = `wt rm <task> [-f] [-p <name>] [--bg]
+const RM_USAGE = `wt rm <task> [-f] [-b] [-p <name>] [--bg]
 
-Stops a worktree stack and deletes its checkouts, volumes, certificates and routes, keeping its branches. Gitignored files go with the folder unchecked: edits to a copied .env.local, uploads and the like are lost, so save them first.
+Stops a worktree stack (when compose is used) and deletes its checkouts, volumes, certificates and routes. Pass -b/--delete-branch to delete the worktree's branch too.
 
 Exits 0 once it is gone, 1 when uncommitted changes or lost commits refuse it (unless --force) or a step fails, 2 on a usage error.`
 
@@ -247,27 +247,15 @@ Exits 0 when it printed it, 1 when there is no such worktree or project, 2 on a 
 
 const INIT_USAGE = `wt init [dir] [--name <name>] [--print]
 
-Drafts a manifest for the project checked out in a directory, the current one by default, into the config's manifests folder.
+Drafts a JSON .wt.json manifest for a compose project in the directory (the current one by default). Plain git repos need no manifest at all.
 
 Exits 0 once it is written or printed, 1 when the folder holds no compose project, 2 on a usage error.`
 
-const DOCTOR_USAGE = `wt doctor
-
-Lists each program wt runs: where it is on PATH, or how to get it, and what wt needs it for.
-
-Exits 0 when every program the projects need is there, 1 when one is missing, 2 on a usage error.`
-
 const RUN_USAGE = `wt run <task> [-p <name>] -- <command>...
 
-Runs a command of a worktree in a throwaway container of its run service, against a test database of its own, provisioned on first use.
+Runs a command inside a worktree directory (or in its configured compose run service when .wt.json defines one). Use \`slot\` to queue heavy commands across sessions.
 
-Exits with the command's code, 1 when the test database cannot be provisioned, 2 on a usage error.`
-
-const HEAVY_USAGE = `wt heavy -- <command>...
-
-Runs a heavy command (a full suite, e2e) once those queued before it, from any session, are done.
-
-Exits with the command's code, 2 on a usage error.`
+Exits with the command's code, 1 when setup fails, 2 on a usage error.`
 
 const OPEN_USAGE = `wt open [task] [-p <name>]
 
@@ -331,19 +319,21 @@ process.exitCode = await runCli({
       },
     },
     rm: {
-      summary: 'stop a worktree stack and delete its checkouts, volumes, certificates and routes, keeping its branches',
+      summary: 'delete a worktree (and its compose stack if any); -b deletes its branch too',
       run: async (args) => {
         const { values, positionals: [task] } = parse(args, RM_USAGE, {
-          project: PROJECT_OPTION,
-          force: { type: 'boolean', short: 'f', description: 'remove even with uncommitted changes or commits on no branch' },
-          bg: BG_OPTION,
+          'project': PROJECT_OPTION,
+          'force': { type: 'boolean', short: 'f', description: 'remove even with uncommitted changes or commits on no branch' },
+          'delete-branch': { type: 'boolean', short: 'b', description: 'delete the worktree branch after removing the worktree' },
+          'bg': BG_OPTION,
         }, { positionals: ['<task>'], candidates: TASK })
 
         return guarded(async () => {
           const { assertRemovable, removeTask } = await commands()
           const worktree = await assertRemovable(task, values)
+          const opts = { ...values, deleteBranch: values['delete-branch'] === true }
 
-          return asWorktreeJob('rm', worktree, values, ['rm', task, ...(values.force ? ['--force'] : [])], async () => removeTask(task, values))
+          return asWorktreeJob('rm', worktree, values, ['rm', task, ...(values.force ? ['--force'] : []), ...(values['delete-branch'] ? ['-b'] : [])], async () => removeTask(task, opts))
         }, bgName(values, 'rm', task))
       },
     },
@@ -436,43 +426,20 @@ process.exitCode = await runCli({
         return guarded(async () => (await import('./init')).initProject(dir ?? currentDir(), values))
       },
     },
-    doctor: {
-      summary: 'list the programs wt runs, where each is or how to get it',
-      run: async (args) => {
-        parse(args, DOCTOR_USAGE, {})
-
-        return guarded(async () => (await import('./tools')).doctor(await loadProjects()))
-      },
-    },
     run: {
-      summary: 'run a command of a worktree in a throwaway container of its run service, against a test database of its own',
+      summary: 'run a command inside a worktree directory (or its configured run service)',
       run: async (args) => {
         const { values, positionals: [task], rest } = parse(args, RUN_USAGE, { project: PROJECT_OPTION }, {
           positionals: ['<task>'],
           candidates: TASK,
           rest: true,
-          examples: [['wt run planning -- vendor/bin/phpunit --filter Foo', 'a test run in the planning worktree']],
+          examples: [['wt run planning -- bun test', 'run tests inside the planning worktree']],
         })
 
         if (rest === undefined || rest.length === 0)
           badUsage('give the command after --')
 
         return guarded(async () => (await import('./run')).runTask(task, rest, values.project))
-      },
-    },
-    heavy: {
-      summary: 'run a heavy command once those queued before it, from any session, are done',
-      run: async (args) => {
-        const { rest } = parse(args, HEAVY_USAGE, {}, {
-          positionals: [],
-          rest: true,
-          examples: [['wt heavy -- wt run planning -- vendor/bin/phpunit', 'a full suite, queued']],
-        })
-
-        if (rest === undefined || rest.length === 0)
-          badUsage('give the command after --')
-
-        return guarded(async () => (await import('./run')).runHeavy(rest))
       },
     },
     shell: {

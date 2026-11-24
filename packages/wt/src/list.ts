@@ -15,6 +15,8 @@ export interface Checkout {
   task: string
   dir: string
   branch: string
+  ahead: number
+  behind: number
   url: string
   running: boolean
   /** Changed files over the root and its repos. */
@@ -66,9 +68,24 @@ async function dirtyCount(dir: string, repos: string[]): Promise<number> {
   return changedFiles(statuses.filter(status => status.ok).map(status => status.out))
 }
 
+const COUNT_PAIR = /^(\d+)\s+(\d+)$/
+
+async function aheadBehind(dir: string, mainBranch: string): Promise<{ ahead: number, behind: number }> {
+  const upstream = await git(dir, '--no-optional-locks', 'rev-list', '--left-right', '--count', '@{upstream}...HEAD')
+  let raw = upstream
+
+  if (!upstream.ok && mainBranch !== '?' && mainBranch !== 'HEAD')
+    raw = await git(dir, '--no-optional-locks', 'rev-list', '--left-right', '--count', `${mainBranch}...HEAD`)
+
+  const match = raw.ok ? COUNT_PAIR.exec(raw.out.trim()) : null
+
+  return match === null ? { ahead: 0, behind: 0 } : { behind: Number(match[1]), ahead: Number(match[2]) }
+}
+
 async function checkoutsOf(project: Project, running: Set<string>, jobs: Jobs, states: Map<string, JobState>): Promise<Checkout[]> {
   const branchDir = project.repos[0] ?? '.'
   const mainHost = project.routes.find(route => !route.host.startsWith('*.'))?.host
+  const mainBranch = await currentBranch(join(project.root, branchDir))
   const main = { id: stackName(project), task: 'main', dir: project.root, url: mainHost !== undefined ? `https://${mainHost}` : '' }
   const worktrees = listTasks(project).map((task) => {
     const worktree = worktreeOf(project, task)
@@ -76,18 +93,35 @@ async function checkoutsOf(project: Project, running: Set<string>, jobs: Jobs, s
     return { id: worktree.id, task, dir: worktree.dir, url: urlsOf(worktree)[0] ?? '' }
   })
 
-  return Promise.all([main, ...worktrees].map(async ({ id, task, dir, url }) => ({
-    project: project.name,
-    task,
-    dir,
-    branch: await currentBranch(join(dir, branchDir)),
-    url,
-    running: running.has(id),
-    dirty: await dirtyCount(dir, project.repos),
-    unbranched: task === 'main' ? 0 : await unreachableCount(dir, project.repos),
-    session: sessionOf(task === 'main' ? basename(dir) : id),
-    job: jobs.summary(states.get(slugOf(`${project.name}/${task}`)) ?? {}),
-  })))
+  return Promise.all([main, ...worktrees].map(async ({ id, task, dir, url }) => {
+    const [branch, sync, dirty, unbranched] = await Promise.all([
+      currentBranch(join(dir, branchDir)),
+      aheadBehind(join(dir, branchDir), mainBranch),
+      dirtyCount(dir, project.repos),
+      task === 'main' ? Promise.resolve(0) : unreachableCount(dir, project.repos),
+    ])
+
+    return {
+      project: project.name,
+      task,
+      dir,
+      branch,
+      ahead: sync.ahead,
+      behind: sync.behind,
+      url,
+      running: running.has(id),
+      dirty,
+      unbranched,
+      session: sessionOf(task === 'main' ? basename(dir) : id),
+      job: jobs.summary(states.get(slugOf(`${project.name}/${task}`)) ?? {}),
+    }
+  }))
+}
+
+function syncLabel(checkout: Checkout): string {
+  const parts = [checkout.ahead > 0 ? `+${checkout.ahead}` : '', checkout.behind > 0 ? `-${checkout.behind}` : ''].filter(Boolean)
+
+  return parts.join('/')
 }
 
 // One row per checkout under a header, `*` marking a stack that is up; as JSON, `{ project, checkouts }`, project being the one the directory is in, null outside every one.
@@ -105,7 +139,7 @@ export async function listWorktrees(options: ListOptions): Promise<void> {
   if (!checkouts.length)
     return
 
-  const rows = checkouts.map(checkout => [checkout.running ? '*' : '', checkout.project, checkout.task, checkout.branch, checkout.url, checkout.job, [checkout.dirty ? `${checkout.dirty} changed` : '', checkout.unbranched ? `${checkout.unbranched} on no branch` : ''].filter(Boolean).join(', ')])
+  const rows = checkouts.map(checkout => [checkout.running ? '*' : '', checkout.project, checkout.task, checkout.branch, syncLabel(checkout), checkout.url, checkout.job, [checkout.dirty ? `${checkout.dirty} changed` : '', checkout.unbranched ? `${checkout.unbranched} on no branch` : ''].filter(Boolean).join(', ')])
 
-  console.log(table([['up', 'project', 'task', 'branch', 'url', 'job', 'changes'], ...rows], { header: true }))
+  console.log(table([['up', 'project', 'task', 'branch', 'sync', 'url', 'job', 'changes'], ...rows], { header: true }))
 }

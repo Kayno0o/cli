@@ -1,16 +1,14 @@
 import type { HeldSignals, Ran } from '@kaynooo/cli-kit'
 import type { Subprocess } from 'bun'
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, role, runCommand } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, linkedWorktreeEntries, linkWorktreeEntries, role, runCommand } from '@kaynooo/cli-kit'
+import { formatError, parseErrors } from '@kaynooo/cli-kit/errors'
 
 const WHITESPACE = /\s/
 const ORIGIN_PREFIX = /^origin\//
-const ENV_FILE = /^\.env(?:\..+)?$/
-const DEPENDENCIES = new Set(['node_modules', 'vendor', '.venv'])
-const TRAILING_SLASH = /\/$/
 const PARENT = `..${sep}`
 const BASE_DIR = /^base-\w{6}$/
 const CONTAINER = /(?:^|[\s;&|(])(?:docker\s+compose|docker-compose)\s+(?:-\S+(?:\s+[^-\s]\S*)?\s+)*(?:exec|run)\b|(?:^|[\s;&|(])docker\s+exec\b/
@@ -57,18 +55,76 @@ async function defaultRemoteRef(root: string): Promise<string> {
   return head.code === 0 && head.stdout.trim() !== '' ? head.stdout.trim() : 'origin/main'
 }
 
-// The ref `base proof` runs before at when none is given: the merge base with origin's default branch (main unless origin's HEAD names another) when HEAD is on another branch that is ahead of it, else HEAD.
-export async function defaultProofRef(root: string): Promise<string> {
+export interface ChosenProofRef {
+  ref: string
+  reason: string
+}
+
+// Defaults to HEAD when the working tree has uncommitted changes (proving the dirty diff), else to merge-base with origin's default branch when on a branch ahead of it, else HEAD.
+export async function chooseProofRef(root: string): Promise<ChosenProofRef> {
+  const status = await git(['status', '--porcelain'], root)
+
+  if (status.code === 0 && status.stdout.trim() !== '')
+    return { ref: 'HEAD', reason: 'working tree has uncommitted changes' }
+
   const branch = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], root)
   const remote = await defaultRemoteRef(root)
 
   if (branch.code !== 0 || branch.stdout.trim() === remote.replace(ORIGIN_PREFIX, ''))
-    return 'HEAD'
+    return { ref: 'HEAD', reason: 'on default branch' }
 
   const base = await git(['merge-base', 'HEAD', remote], root)
   const head = await git(['rev-parse', 'HEAD'], root)
 
-  return base.code === 0 && base.stdout.trim() !== head.stdout.trim() ? base.stdout.trim() : 'HEAD'
+  return base.code === 0 && base.stdout.trim() !== head.stdout.trim()
+    ? { ref: base.stdout.trim(), reason: `merge-base with ${remote}` }
+    : { ref: 'HEAD', reason: 'no commits ahead of default branch' }
+}
+
+export async function defaultProofRef(root: string): Promise<string> {
+  return (await chooseProofRef(root)).ref
+}
+
+const SHELL_TOKEN_SEP = /[\s;|&()'"]+/
+
+// Auto-discovers untracked/new files referenced in `command` (or all untracked files when `keepNew` is true) that do not exist at `sha`.
+export async function autoKeptPaths(root: string, cwd: string, command: readonly string[], sha: string, keepNew: boolean): Promise<string[]> {
+  const realRoot = realpathSync(root)
+  const found = new Set<string>()
+
+  if (keepNew) {
+    const untracked = await git(['ls-files', '--others', '--exclude-standard', '-z'], root)
+
+    if (untracked.code === 0) {
+      for (const rel of untracked.stdout.split('\0').filter(Boolean))
+        found.add(rel)
+    }
+  }
+
+  const tokens = command.flatMap(arg => WHITESPACE.test(arg) ? arg.split(SHELL_TOKEN_SEP) : [arg])
+
+  for (const token of tokens) {
+    if (token === '' || token.startsWith('-'))
+      continue
+
+    const absolute = resolve(cwd, token)
+
+    if (!existsSync(absolute) || lstatSync(absolute, { throwIfNoEntry: false })?.isFile() !== true)
+      continue
+
+    const inRepo = relative(realRoot, join(realpathSync(dirname(absolute)), basename(absolute)))
+
+    if (inRepo === '' || inRepo === '..' || inRepo.startsWith(PARENT) || isAbsolute(inRepo))
+      continue
+
+    // Only auto-keep files that do NOT exist at the target ref (e.g. a brand-new regression test).
+    const atRef = await git(['cat-file', '-e', `${sha}:${inRepo}`], root)
+
+    if (atRef.code !== 0)
+      found.add(inRepo)
+  }
+
+  return [...found]
 }
 
 // Repository paths of the --keep files, refused before anything is created when one is missing or outside the repository.
@@ -105,19 +161,8 @@ function checkNoSymlink(dir: string, path: string): void {
   }
 }
 
-// Env files and dependency folders the checkout has but git ignores, which a run needs and a fresh worktree lacks.
 export async function linkedEntries(root: string): Promise<string[]> {
-  const ran = await git(['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z'], root)
-
-  if (ran.code !== 0)
-    return []
-
-  return ran.stdout.trim().split('\0').filter((entry) => {
-    const folder = entry.endsWith('/')
-    const name = basename(entry)
-
-    return folder ? DEPENDENCIES.has(name) : ENV_FILE.test(name)
-  }).map(entry => entry.replace(TRAILING_SLASH, ''))
+  return linkedWorktreeEntries(root)
 }
 
 export async function addWorktree(root: string, sha: string): Promise<string> {
@@ -144,84 +189,8 @@ export function copyKept(root: string, dir: string, paths: string[]): void {
   }
 }
 
-// Returns the links made, which are unlinked before the worktree is removed so nothing ever deletes through them.
 export function linkEntries(root: string, dir: string, entries: string[]): string[] {
-  const links: string[] = []
-
-  for (const entry of entries) {
-    const link = join(dir, entry)
-
-    if (existsSync(link))
-      continue
-
-    mkdirSync(dirname(link), { recursive: true })
-
-    if (basename(entry) === 'node_modules' && hasWorkspaceLinks(root, entry)) {
-      links.push(...linkModules(root, dir, entry))
-
-      continue
-    }
-
-    symlinkSync(join(root, entry), link)
-    links.push(link)
-  }
-
-  return links
-}
-
-// The symlinks of a node_modules folder: its direct entries and those of its @scope folders.
-function moduleLinks(root: string, folder: string): { path: string, name: string }[] {
-  const found: { path: string, name: string }[] = []
-
-  for (const entry of readdirSync(join(root, folder), { withFileTypes: true })) {
-    if (entry.isSymbolicLink())
-      found.push({ path: join(folder, entry.name), name: entry.name })
-    else if (entry.isDirectory() && entry.name.startsWith('@'))
-      found.push(...moduleLinks(root, join(folder, entry.name)))
-  }
-
-  return found
-}
-
-// Where a node_modules symlink points when that is inside the repository but outside any node_modules: a workspace package.
-function workspaceTarget(root: string, path: string): string | undefined {
-  try {
-    const inRepo = relative(realpathSync(root), realpathSync(join(root, path)))
-
-    return inRepo === '' || inRepo.startsWith(PARENT) || inRepo.split(sep).includes('node_modules') ? undefined : inRepo
-  }
-  catch {
-    return undefined
-  }
-}
-
-function hasWorkspaceLinks(root: string, folder: string): boolean {
-  return moduleLinks(root, folder).some(({ path }) => workspaceTarget(root, path) !== undefined)
-}
-
-// Rebuilds a node_modules folder entry by entry so a workspace link lands on the worktree's own copy of the package, not the main checkout's.
-function linkModules(root: string, dir: string, folder: string): string[] {
-  const links: string[] = []
-
-  mkdirSync(join(dir, folder), { recursive: true })
-
-  for (const entry of readdirSync(join(root, folder), { withFileTypes: true })) {
-    const path = join(folder, entry.name)
-    const link = join(dir, path)
-
-    if (entry.isDirectory() && entry.name.startsWith('@')) {
-      links.push(...linkModules(root, dir, path))
-
-      continue
-    }
-
-    const workspace = entry.isSymbolicLink() ? workspaceTarget(root, path) : undefined
-
-    symlinkSync(workspace === undefined ? join(root, path) : join(dir, workspace), link)
-    links.push(link)
-  }
-
-  return links
+  return linkWorktreeEntries(root, dir, entries)
 }
 
 const STALE_AFTER = 24 * 60 * 60 * 1000
@@ -354,6 +323,24 @@ export function folded(output: string): string {
     return lines.join('\n')
 
   return [...lines.slice(0, FOLD_HEAD), `... ${lines.length - FOLD_HEAD - FOLD_TAIL} lines omitted, --json has them all ...`, ...lines.slice(-FOLD_TAIL)].join('\n')
+}
+
+// Formats command failure output using shared `errs` diagnostics when recognized, falling back to `folded`.
+export function formattedFailure(output: string, cwd = process.cwd()): string {
+  const { errors } = parseErrors(output)
+  const relevant = errors.filter(error => error.severity === 'error')
+  const list = relevant.length > 0 ? relevant : errors
+
+  if (list.length > 0) {
+    const shown = list.slice(0, 25).map(error => formatError(error, cwd))
+
+    if (list.length > 25)
+      shown.push(`... ${list.length - 25} more errors, --json has them all ...`)
+
+    return shown.join('\n')
+  }
+
+  return folded(output)
 }
 
 export interface WorktreeOptions {
