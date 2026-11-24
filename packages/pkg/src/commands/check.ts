@@ -2,6 +2,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { AnalyzeInput, Report } from '../analyze'
 import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher } from '../registry'
+import { dirname, resolve } from 'node:path'
 import { fail, formatAge, isStdinPiped, jsonOption, parse, printJson, readInput, role, table, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
@@ -109,12 +110,13 @@ export async function check(args: string[]): Promise<number> {
   if (positionals.length === 0)
     fail(values.from === undefined ? `a package name is needed\n\n${usage}` : `${values.from} has no registry dependency to check`)
 
-  const settings = await loadSettings()
-  const context: Context = { configs: await loadConfigs(), settings, minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0) }
+  const fromDir = values.from !== undefined && values.from !== '-' ? dirname(resolve(values.from)) : undefined
+  const settings = await loadSettings(fromDir)
+  const context: Context = { configs: await loadConfigs(fromDir), settings, minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0) }
   const reports = await Promise.all(positionals.map(async text => checkPackage(text, context)))
 
   if (values.json === true)
-    printJson(reports.length === 1 ? reports[0] : reports)
+    printJson(reports)
   else
     console.log(reports.map(report => render(report)).join('\n\n'))
 

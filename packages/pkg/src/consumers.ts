@@ -134,19 +134,30 @@ export function wantedVersion(consumer: Consumer): string {
   return consumer.alias === undefined ? consumer.spec : ALIAS.exec(consumer.spec)?.[2] ?? consumer.spec
 }
 
-const KIND_FLAGS: Record<Kind, string[]> = { dependencies: [], devDependencies: ['--dev'], optionalDependencies: ['--optional'], peerDependencies: ['--peer'] }
+const BUN_KIND_FLAGS: Record<Kind, string[]> = { dependencies: [], devDependencies: ['--dev'], optionalDependencies: ['--optional'], peerDependencies: ['--peer'] }
+const PNPM_KIND_FLAGS: Record<Kind, string[]> = { dependencies: [], devDependencies: ['-D'], optionalDependencies: ['-O'], peerDependencies: ['--save-peer'] }
+const YARN_KIND_FLAGS: Record<Kind, string[]> = { dependencies: [], devDependencies: ['-D'], optionalDependencies: ['-O'], peerDependencies: ['-P'] }
+const NPM_KIND_FLAGS: Record<Kind, string[]> = { dependencies: [], devDependencies: ['--save-dev'], optionalDependencies: ['--save-optional'], peerDependencies: ['--save-peer'] }
 
 export const RANGE_PREFIX = /^[~^]/
 
-// The `bun add` putting the version in the consumer, under the same kind of dependency; an alias keeps its key and the `~` or `^` of its range, a plain dependency is pinned exactly.
+// The manager-appropriate add command putting the version in the consumer, under the same kind of dependency; an alias keeps its key and the `~` or `^` of its range, a plain dependency is pinned exactly.
 export function addCommand(consumer: Consumer, name: string, version: string): string[] {
-  if (consumer.alias !== undefined) {
-    const prefix = RANGE_PREFIX.exec(wantedVersion(consumer))?.[0] ?? ''
+  const isAlias = consumer.alias !== undefined
+  const prefix = isAlias ? (RANGE_PREFIX.exec(wantedVersion(consumer))?.[0] ?? '') : ''
+  const target = isAlias ? `${consumer.alias}@npm:${name}@${prefix}${version}` : `${name}@${version}`
+  const exact = !isAlias || prefix === ''
 
-    return ['bun', 'add', ...KIND_FLAGS[consumer.kind], ...prefix === '' ? ['--exact'] : [], '--no-cache', `${consumer.alias}@npm:${name}@${prefix}${version}`]
-  }
+  if (consumer.manager === 'pnpm')
+    return ['pnpm', 'add', ...PNPM_KIND_FLAGS[consumer.kind], ...exact ? ['--save-exact'] : [], target]
 
-  return ['bun', 'add', ...KIND_FLAGS[consumer.kind], '--exact', '--no-cache', `${name}@${version}`]
+  if (consumer.manager === 'yarn')
+    return ['yarn', 'add', ...YARN_KIND_FLAGS[consumer.kind], ...exact ? ['--exact'] : [], target]
+
+  if (consumer.manager === 'npm')
+    return ['npm', 'install', ...NPM_KIND_FLAGS[consumer.kind], ...exact ? ['--save-exact'] : [], target]
+
+  return ['bun', 'add', ...BUN_KIND_FLAGS[consumer.kind], ...exact ? ['--exact'] : [], '--no-cache', target]
 }
 
 export interface Declared {

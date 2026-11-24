@@ -103,14 +103,17 @@ describe('bumpConsumers', () => {
 
       return Promise.resolve({ code: 0, text: '', output: '', chunks: [] } as unknown as Ran)
     }
-    const { result, out, err } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run })))
+    const { result, out } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run })))
 
     expect(result).toBe(true)
-    expect(ran).toEqual([[['bun', 'add', '--dev', '--exact', '--no-cache', `${NAME}@0.8.0`], join(root, 'kay')]])
+    expect(ran).toEqual([
+      [['pnpm', 'add', '--save-exact', `${NAME}@0.8.0`], join(root, 'app')],
+      [['bun', 'add', '--dev', '--exact', '--no-cache', `${NAME}@0.8.0`], join(root, 'kay')],
+    ])
     expect(out).toContain('done already on 0.8.0')
+    expect(out).toContain('app ^0.8.0 -> 0.8.0')
     expect(out).toContain('kay 0.7.3 -> 0.8.0')
     expect(out).toContain('1 non-registry dependency (workspace:, file:, git, URL, alias, catalog:) left as they are')
-    expect(err).toContain('app ^0.8.0, its lockfile pins pnpm')
   })
 
   test('reports a failed install and returns false', async () => {
@@ -140,10 +143,11 @@ describe('bumpConsumers --all-consumers', () => {
     const { result, out } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run, isAll: true })))
 
     expect(result).toBe(true)
-    expect(ran.map(([argv]) => argv[0])).toEqual(['git', 'bun', 'check', 'gc'])
-    expect(ran[3]).toEqual([['gc', `chore(deps): bump ${NAME} to 0.8.0`, '--', 'package.json', 'bun.lock'], join(root, 'kay')])
+    expect(ran.map(([argv]) => argv[0])).toEqual(['git', 'pnpm', 'check', 'gc', 'git', 'bun', 'check', 'gc'])
+    expect(ran[3]).toEqual([['gc', `chore(deps): bump ${NAME} to 0.8.0`, '--', 'package.json', 'pnpm-lock.yaml'], join(root, 'app')])
+    expect(ran[7]).toEqual([['gc', `chore(deps): bump ${NAME} to 0.8.0`, '--', 'package.json', 'bun.lock'], join(root, 'kay')])
     expect(out).toContain('kay 0.7.3 -> 0.8.0, checked and committed')
-    expect(out).toContain('summary 1 bumped and committed, 0 bumped and failing, 3 skipped')
+    expect(out).toContain('summary 2 bumped and committed, 0 bumped and failing, 2 skipped')
   })
 
   test('leaves a folder whose check fails uncommitted and returns false', async () => {
@@ -151,9 +155,9 @@ describe('bumpConsumers --all-consumers', () => {
     const { result, err, out } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run, isAll: true })))
 
     expect(result).toBe(false)
-    expect(ran.map(([argv]) => argv[0])).toEqual(['git', 'bun', 'check'])
+    expect(ran.map(([argv]) => argv[0])).toEqual(['git', 'pnpm', 'check', 'git', 'bun', 'check'])
     expect(err).toContain('kay 0.7.3 -> 0.8.0, left uncommitted: check exited 1: check broke')
-    expect(out).toContain('summary 0 bumped and committed, 1 bumped and failing (kay), 3 skipped')
+    expect(out).toContain('summary 0 bumped and committed, 2 bumped and failing (app, kay), 2 skipped')
   })
 
   test('a monorepo package commits the lockfile at its root', async () => {
@@ -310,8 +314,9 @@ describe('bumpConsumers guards', () => {
     const { result, err } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run, isAll: true })))
 
     expect(result).toBe(false)
-    expect(ran.map(argv => argv[0])).toEqual(['git'])
-    expect(ran[0]).toEqual(['git', 'status', '--porcelain', '--', 'package.json', 'bun.lock'])
+    expect(ran.map(argv => argv[0])).toEqual(['git', 'git'])
+    expect(ran[0]).toEqual(['git', 'status', '--porcelain', '--', 'package.json', 'pnpm-lock.yaml'])
+    expect(ran[1]).toEqual(['git', 'status', '--porcelain', '--', 'package.json', 'bun.lock'])
     expect(err).toContain('kay package.json or its lockfile has uncommitted changes')
   })
 
@@ -329,7 +334,7 @@ describe('bumpConsumers guards', () => {
     }
     const { out } = await capture(async () => bumpConsumers(NAME, '0.8.0', settings({ run })))
 
-    expect(ran.map(argv => argv.at(-1))).toEqual([`${NAME}@0.8.0`])
+    expect(ran.map(argv => argv.at(-1))).toEqual([`${NAME}@0.8.0`, `${NAME}@0.8.0`])
     expect(out).toContain('4 non-registry dependencies')
     expect(out).toContain('peer range ^0.7.0, left as it is')
   })

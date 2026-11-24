@@ -3,9 +3,9 @@ import type { RepoState } from './repos-scan'
 import { existsSync, statSync } from 'node:fs'
 import { basename, relative } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, readMainConfig, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
+import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
-import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
+import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf, skipped } from './repos-scan'
 
 const USAGE = `ws repos [options] [root]: the git repositories under root (the configured workspace by default) that need attention: dirty files, commits not pushed, an upstream ahead, commits since the latest tag
 
@@ -23,43 +23,6 @@ const OPTIONS = {
   path: { type: 'boolean', conflicts: ['json'], description: 'print only the paths of the repositories listed, one per line' },
   json: jsonOption('[{name, path, branch, upstream, dirty, ahead, behind, worktrees, tag, unreleased, packages, reasons, fetchFailed, unreadable}]'),
 } as const
-
-async function skipped(): Promise<Set<string>> {
-  const names = new Set<string>()
-  const mainSection = readMainConfig().repos
-
-  if (typeof mainSection === 'object' && mainSection !== null && !Array.isArray(mainSection)) {
-    const skip = (mainSection as { skip?: unknown }).skip
-
-    if (Array.isArray(skip)) {
-      for (const name of skip) {
-        if (typeof name === 'string')
-          names.add(name)
-      }
-    }
-  }
-
-  const file = userConfigReadPath('repos')
-
-  if (!existsSync(file))
-    return names
-
-  try {
-    const config = Bun.JSONC.parse(await Bun.file(file).text()) as { skip?: unknown } | null
-
-    if (Array.isArray(config?.skip)) {
-      for (const name of config.skip) {
-        if (typeof name === 'string')
-          names.add(name)
-      }
-    }
-
-    return names
-  }
-  catch (error) {
-    fail(`${file} does not parse: ${error instanceof Error ? error.message : String(error)}`)
-  }
-}
 
 function releasedCell(repo: RepoState): string {
   if (repo.packages.length > 0)
@@ -209,7 +172,7 @@ export async function repos(args: string[], watched = false): Promise<number> {
   if (failed.length > 0)
     console.log(label(`fetch failed for ${failed.join(', ')}`))
 
-  if (values.fetch !== true)
+  if (!fetching)
     console.log(label('ahead/behind as of the last fetch, --fetch refreshes them'))
 
   return failedPulls > 0 ? 1 : 0

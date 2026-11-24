@@ -147,7 +147,7 @@ export async function vet(name: string, version: string, settings: BumpSettings)
 // The lockfile of the folder, which a monorepo keeps at its root, as a path relative to the folder; undefined when there is none.
 export function lockfileOf(dir: string, root: string): string | undefined {
   for (let at = dir; ; at = dirname(at)) {
-    const found = ['bun.lock', 'bun.lockb'].find(file => existsSync(join(at, file)))
+    const found = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'].find(file => existsSync(join(at, file)))
 
     if (found !== undefined)
       return relative(dir, join(at, found))
@@ -229,10 +229,6 @@ export async function bumpConsumers(name: string, version: string, settings: Bum
       skipped.push(consumer.dir)
       note(consumer.dir, `already on ${version}`)
     }
-    else if (consumer.manager !== 'bun') {
-      skipped.push(consumer.dir)
-      warn(consumer.dir, `${consumer.spec}, its lockfile pins ${consumer.manager}: put ${version} in by hand`)
-    }
     else if (settings.isDryRun === true) {
       note(consumer.dir, `would run ${[argv.join(' '), ...settings.isAll === true ? ['check', `gc 'chore(deps): bump ${name} to ${version}'`] : []].join(', then ')}`)
     }
@@ -279,10 +275,10 @@ export interface Plan {
   line: string
 }
 
-// The folders a bump would touch, each as the line the plan prints: the ones a bump leaves as they are (peer ranges, already on the version, local specs, another manager's lockfile) are not offered.
+// The folders a bump would touch, each as the line the plan prints: the ones a bump leaves as they are (peer ranges, already on the version, local specs) are not offered.
 export function plannedBumps(name: string, version: string, settings: BumpSettings): Plan[] {
   return findConsumers(name, settings.root)
-    .filter(each => !isLocal(each) && each.kind !== 'peerDependencies' && each.manager === 'bun' && (each.alias === undefined ? each.spec : wantedVersion(each).replace(RANGE_PREFIX, '')) !== version)
+    .filter(each => !isLocal(each) && each.kind !== 'peerDependencies' && (each.alias === undefined ? each.spec : wantedVersion(each).replace(RANGE_PREFIX, '')) !== version)
     .map(each => ({ dir: each.dir, line: `${each.dir}  ${each.spec} -> ${version}` }))
 }
 

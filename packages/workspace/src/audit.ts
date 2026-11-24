@@ -2,17 +2,17 @@ import type { ExitRow, Ran } from '@kaynooo/cli-kit'
 import type { Finding, Severity } from './report'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
+import { join, relative } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printHeader, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
+import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printHeader, printJson, role, runCommand, table, workspaceRoot } from '@kaynooo/cli-kit'
+import { holdsAnyLock, JS_LOCKFILES, OSV_LOCKFILES, osvAuditLockfiles } from '@kaynooo/cli-kit/audit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
-import { holdsOsvLock, osvAudit } from './osv'
 import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEVERITIES, workspaceFolders } from './report'
 
-const USAGE = `ws audit [options] [root]: the known vulnerabilities of the Bun, Composer, Cargo and uv repositories under root (the current folder by default), one table per repository
+const USAGE = `ws audit [options] [root]: the known vulnerabilities of the Bun, pnpm, Yarn, npm, Composer, Cargo and uv repositories under root (configured workspace by default), one table per repository
 
 Each package with an advisory is one row: its worst severity, advisory count, prod or dev, direct or via the direct dependencies leading to it, and the version that fixes every advisory at once.
-It reaches the network: \`bun audit --json\` for a bun.lock, osv.dev for a composer.lock, Cargo.lock or uv.lock; the walk goes three levels deep and stops at a lockfile.
+It reaches the network: \`bun audit --json\` for bun.lock, osv.dev for pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock and uv.lock; the walk goes three levels deep and stops at a lockfile.
 To sweep many repositories at once; \`pkg audit\` vets the one repository in depth.`
 
 const EXITS: ExitRow[] = [[0, 'no repository has an advisory at the level asked'], [1, 'one has'], [2, 'a repository\'s audit failed, no lockfile sits under root, a usage error or a root that is no folder']]
@@ -51,7 +51,7 @@ function holdsBunLock(dir: string): boolean {
 }
 
 function holdsLock(dir: string): boolean {
-  return holdsBunLock(dir) || holdsOsvLock(dir)
+  return holdsAnyLock(dir)
 }
 
 async function findRepos(root: string): Promise<string[]> {
@@ -99,14 +99,22 @@ function children(root: string): (folder: string) => string[] {
   }
 }
 
-async function audited(path: string, shown: string, level: Severity, ignore: readonly string[]): Promise<RepoAudit> {
-  const bun = holdsBunLock(path) ? await bunAudited(path, shown, level, ignore) : { repo: shown, path, findings: [], below: 0, warnings: [], error: undefined }
+const NON_BUN_LOCKS = [...JS_LOCKFILES.filter(spec => spec.file !== 'bun.lock'), ...OSV_LOCKFILES]
 
-  if (bun.error !== undefined || !holdsOsvLock(path))
+async function audited(path: string, shown: string, level: Severity, ignore: readonly string[]): Promise<RepoAudit> {
+  const hasBun = holdsBunLock(path)
+  const bun = hasBun ? await bunAudited(path, shown, level, ignore) : { repo: shown, path, findings: [], below: 0, warnings: [], error: undefined }
+
+  if (bun.error !== undefined)
+    return bun
+
+  const osvSpecs = hasBun ? OSV_LOCKFILES : NON_BUN_LOCKS
+
+  if (!osvSpecs.some(spec => existsSync(join(path, spec.file))))
     return bun
 
   try {
-    const osv = await osvAudit(path, level, ignore)
+    const osv = await osvAuditLockfiles(path, osvSpecs, level, ignore)
 
     return { ...bun, findings: [...bun.findings, ...osv.findings], below: bun.below + osv.below }
   }
@@ -180,7 +188,7 @@ function rows(findings: Finding[]): string[][] {
 
 export async function audit(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['ws audit', 'ws audit ~/Workspace --level high --prod'] })
-  const root = resolve(positionals[0] ?? '.')
+  const root = workspaceRoot({ given: positionals[0] })
 
   if (!existsSync(root) || !statSync(root).isDirectory())
     fail(`no folder ${root}`)
@@ -194,7 +202,7 @@ export async function audit(args: string[]): Promise<number> {
     const paths = await findRepos(root)
 
     if (paths.length === 0)
-      fail(`no bun.lock, composer.lock, Cargo.lock or uv.lock under ${root}`)
+      fail(`no lockfile (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock or uv.lock) under ${root}`)
 
     progress.update({ step: 'auditing', done: 0, total: paths.length, unit: 'repositories' })
     audits = await pool(paths, configuredNumber('audit', 'concurrency', CONCURRENCY), async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []), (done, total) => progress.update({ step: 'auditing', done, total, unit: 'repositories' }))

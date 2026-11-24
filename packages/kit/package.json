@@ -21,6 +21,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./askpass": "./src/askpass.ts",
+    "./audit": "./src/audit.ts",
     "./errors": "./src/errors/index.ts",
     "./compose": "./src/compose.ts",
     "./progress": "./src/progress.ts",

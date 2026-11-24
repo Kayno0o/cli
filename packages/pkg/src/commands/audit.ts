@@ -4,28 +4,30 @@ import type { Advisory, VersionAdvisory } from '../advisories'
 import type { PkgSettings, RegistryConfig, Severity } from '../config'
 import type { Locked } from '../lockfile'
 import type { Fetcher, Packument, Registry } from '../registry'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, parse, pool, printJson, role, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { detectLockfiles, directDependenciesOf, JS_LOCKFILES, lockGraphFromBun, OSV_LOCKFILES, osvAuditLockfiles, reachedFrom } from '@kaynooo/cli-kit/audit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
 import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
-import { parseBunLock, productionPackages } from '../lockfile'
+import { productionPackages } from '../lockfile'
 import { fetchPackument } from '../registry'
 
 const usage = `pkg audit [dir]
 
-Reads the bun.lock of the folder and runs on every registry package it pins the checks \`pkg check\` runs before an add, and lists the known advisories of each version, with the GHSA, the severity and the fixed version.
-Reach for it to vet one repository in depth; \`audit\` sweeps many repositories for advisories only.`
+Reads the lockfile(s) of the folder (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock, uv.lock), runs safety vetting + advisory checks with direct/via attribution, and lists every finding.
+Reach for it to vet one repository in depth; \`ws audit\` sweeps many repositories at once.`
 
-const EXITS: ExitRow[] = [[0, 'nothing blocks'], [1, 'a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --level'], [2, 'the registry could not be reached or answered badly (a warning says which, and nothing is reported as clean), a usage error or no bun.lock']]
+const EXITS: ExitRow[] = [[0, 'nothing blocks'], [1, 'a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --level'], [2, 'the registry could not be reached or answered badly (a warning says which, and nothing is reported as clean), a usage error or no lockfile']]
 
 const options = {
-  'json': jsonOption('[{name, version, license, blocked, warnings, advisories}] for the packages with a finding'),
+  'json': jsonOption('[{name, version, license, blocked, direct, via, warnings, advisories}] for the packages with a finding'),
   'min-age': { type: 'string', description: `days a version must be old (${DEFAULT_MIN_AGE_DAYS}, or the minAge setting)` },
   'level': { type: 'string', choices: SEVERITIES, default: 'moderate', description: 'lowest advisory severity listed and failing (moderate)' },
-  'prod': { type: 'boolean', description: 'only the packages a production dependency or an optional one of a workspace reaches' },
+  'prod': { type: 'boolean', description: 'only the packages a production dependency or an optional one reaches' },
   'ignore': { type: 'string', multiple: true, description: 'an advisory skipped by GHSA or numeric id, repeatable' },
 } as const
 
@@ -39,6 +41,8 @@ export interface AuditContext {
   ignore: string[]
   fetcher?: Fetcher | undefined
   now?: number | undefined
+  direct?: ReadonlySet<string> | undefined
+  via?: ReadonlyMap<string, string[]> | undefined
   // Hears each step and how many packages were looked up, for a progress line.
   onProgress?: ((progress: Progress) => void) | undefined
 }
@@ -48,6 +52,8 @@ export interface Audited {
   version: string
   license?: string | undefined
   blocked: boolean
+  direct?: boolean | undefined
+  via?: string[] | undefined
   warnings: string[]
   advisories: VersionAdvisory[]
 }
@@ -109,8 +115,19 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
     const found = filterAdvisories(advisoriesFor(advisories[name], version), context.level, context.ignore)
     const safeAdvisories = safe === undefined ? [] : filterAdvisories(advisoriesFor(advisories[name], safe), blockSeverity, context.ignore)
     const report = analyze({ ...input, advisories: advisoriesFor(advisories[name], version), safeAdvisories })
+    const isDirect = context.direct?.has(name)
+    const via = isDirect === true ? [] : context.via?.get(name)
 
-    return { name, version, license: report.license, blocked: report.blocked || found.length > 0, warnings: report.warnings, advisories: found }
+    return {
+      name,
+      version,
+      license: report.license,
+      blocked: report.blocked || found.length > 0,
+      ...isDirect === undefined ? {} : { direct: isDirect },
+      ...via === undefined ? {} : { via },
+      warnings: report.warnings,
+      advisories: found,
+    }
   })
 
   return { audited, unavailable }
@@ -118,16 +135,23 @@ export async function auditPackages(packages: Locked[], context: AuditContext): 
 
 const HIGH_SEVERITIES = new Set<string>(['high', 'critical'])
 
+function originTag(entry: Audited): string {
+  if (entry.direct === true)
+    return ' (direct)'
+
+  return entry.via !== undefined && entry.via.length > 0 ? ` (via ${entry.via.slice(0, 2).join(', ')})` : ''
+}
+
 export function renderAudit(findings: Audited[], total: number, stream: { isTTY?: boolean } = process.stdout, env: Record<string, string | undefined> = process.env): string {
   const id = role('id', stream, env)
   const label = role('label', stream, env)
   const warning = role('warn', stream, env)
   const problem = role('problem', stream, env)
   const blocking = findings.filter(each => each.blocked).length
-  const blocks = findings.map(({ name, version, warnings, advisories }) => [
-    id(`${name}@${version}`),
-    ...warnings.map(each => `  ${warning('warning:')} ${each}`),
-    ...advisories.map(each => `  ${label(String(each.ghsa ?? each.id))} ${(HIGH_SEVERITIES.has(each.severity) ? problem : warning)(each.severity)}: ${each.title}${each.fixed === undefined ? '' : ` ${label(`(fixed in ${each.fixed})`)}`}`),
+  const blocks = findings.map(entry => [
+    `${id(`${entry.name}@${entry.version}`)}${label(originTag(entry))}`,
+    ...entry.warnings.map(each => `  ${warning('warning:')} ${each}`),
+    ...entry.advisories.map(each => `  ${label(String(each.ghsa ?? each.id))} ${(HIGH_SEVERITIES.has(each.severity) ? problem : warning)(each.severity)}: ${each.title}${each.fixed === undefined ? '' : ` ${label(`(fixed in ${each.fixed})`)}`}`),
   ].join('\n'))
 
   return [...blocks, `${findings.length} of ${total} packages with a finding, ${(blocking === 0 ? label : problem)(`${blocking} blocking`)}`].join('\n\n')
@@ -138,39 +162,84 @@ export async function audit(args: string[]): Promise<number> {
   const { level } = values
 
   const dir = resolve(asked ?? process.cwd())
-  const lock = Bun.file(join(dir, 'bun.lock'))
+  const foundLocks = detectLockfiles(dir)
 
-  if (!await lock.exists())
-    fail(`no bun.lock in ${dir}`)
+  if (foundLocks.length === 0)
+    fail(`no lockfile (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock or uv.lock) in ${dir}`)
 
-  const text = await lock.text()
-  const production = values.prod === true ? productionPackages(text) : undefined
-  const packages = parseBunLock(text).filter(({ name, version }) => production?.has(`${name}@${version}`) ?? true)
+  const jsLock = JS_LOCKFILES.find(spec => existsSync(join(dir, spec.file)))
+  const osvLocks = OSV_LOCKFILES.filter(spec => existsSync(join(dir, spec.file)))
   const settings = await loadSettings(dir)
-  const context: AuditContext = {
-    configs: await loadConfigs(dir),
-    settings,
-    minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0),
-    level,
-    ignore: values.ignore ?? [],
-  }
   const progress = progressLine()
-  let result: Audit
+  const audited: Audited[] = []
+  const unavailable: string[] = []
+  let totalCount = 0
 
   try {
-    result = await auditPackages(packages, { ...context, onProgress: progress.update })
+    if (jsLock !== undefined) {
+      const text = readFileSync(join(dir, jsLock.file), 'utf8')
+      const production = values.prod === true && jsLock.file === 'bun.lock' ? productionPackages(text) : undefined
+      const parsed = jsLock.parse(text).filter(pkg => (values.prod !== true || pkg.prod) && (production?.has(`${pkg.name}@${pkg.version}`) ?? true))
+      const direct = directDependenciesOf(dir, 'npm')
+      const via = jsLock.file === 'bun.lock' ? reachedFrom(lockGraphFromBun(text), direct, new Set(parsed.map(pkg => pkg.name))) : new Map<string, string[]>()
+
+      totalCount += parsed.length
+
+      const context: AuditContext = {
+        configs: await loadConfigs(dir),
+        settings,
+        minAgeDays: wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0),
+        level,
+        ignore: values.ignore ?? [],
+        direct,
+        via,
+        onProgress: progress.update,
+      }
+      const jsResult = await auditPackages(parsed, context)
+
+      audited.push(...jsResult.audited)
+      unavailable.push(...jsResult.unavailable)
+    }
+
+    if (osvLocks.length > 0) {
+      progress.update({ step: 'querying osv.dev' })
+
+      for (const spec of osvLocks)
+        totalCount += spec.parse(readFileSync(join(dir, spec.file), 'utf8')).length
+
+      try {
+        const osv = await osvAuditLockfiles(dir, osvLocks, level, values.ignore ?? [])
+
+        for (const finding of osv.findings) {
+          if (values.prod === true && finding.scope !== 'prod')
+            continue
+
+          audited.push({
+            name: finding.package,
+            version: finding.fix ?? '*',
+            blocked: true,
+            direct: finding.direct,
+            via: finding.via,
+            warnings: [],
+            advisories: finding.advisories.map(row => ({ ...row, vulnerable: row.fixed === undefined ? '*' : `<${row.fixed}` })),
+          })
+        }
+      }
+      catch (error) {
+        unavailable.push(`osv.dev: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
   }
   finally {
     progress.stop()
   }
 
-  const { audited, unavailable } = result
   const findings = audited.filter(hasFinding)
 
   if (values.json === true)
     printJson(findings)
   else
-    console.log(renderAudit(findings, packages.length))
+    console.log(renderAudit(findings, totalCount))
 
   for (const reason of unavailable)
     warn(`${reason}, so its advisories are not checked`)

@@ -3,17 +3,21 @@
 import process from 'node:process'
 import { runCli } from '@kaynooo/cli-kit'
 import { audit } from './audit'
+import { exec, pull, push } from './ops'
 import { repos } from './repos'
 import { sweep } from './sweep'
 
 process.exitCode = await runCli({
   name: 'ws',
-  about: 'the repositories under a root: the ones needing attention, the folders worth reclaiming and their known vulnerabilities',
-  replaces: 'a cd, git status and du loop over each repository of the workspace, and a bun audit run in each',
-  examples: ['ws repos', ['ws sweep --older 30d', 'what a month of idle repos weighs'], 'ws audit'],
+  about: 'multi-repo workspace manager: repos status, pull, push, exec, disk sweep, and multi-ecosystem audit',
+  replaces: 'shell loops over workspace repositories for git status/pull/push, du/rm cleanup, and multi-ecosystem audit',
+  examples: ['ws repos', 'ws pull --prune', 'ws exec -- git status -s', 'ws audit'],
   commands: {
-    repos: { summary: 'the git repositories that need attention: dirty, ahead or behind, worktrees, unreleased commits', run: repos },
-    sweep: { summary: 'the regenerable folders, caches and clean worktrees, largest first, deleted only on --apply', run: sweep },
-    audit: { summary: 'the known vulnerabilities of the Bun, Composer, Cargo and uv repositories, one table per repository', run: audit },
+    repos: { summary: 'git repositories needing attention: dirty, ahead/behind, worktrees, unreleased commits', run: repos },
+    pull: { summary: 'fetch (--prune) and fast-forward behind repositories (--dirty safely stashes/pops)', run: pull },
+    push: { summary: 'push ahead repositories that are not diverged', run: push },
+    exec: { summary: 'run a command across workspace repositories (`ws exec [root] -- <cmd...>`)', run: exec },
+    sweep: { summary: 'regenerable folders, caches and clean worktrees, largest first, deleted only on --apply', run: sweep },
+    audit: { summary: 'known vulnerabilities across Bun, pnpm, Yarn, npm, Composer, Cargo and uv lockfiles', run: audit },
   },
 })

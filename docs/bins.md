@@ -422,14 +422,15 @@ ps aux | pick --with-nth 2,11.. --nth 11..  # show some fields, search others
 
 ## pkg
 
-checks npm packages before they are added, and moves a lib's consumers onto a new release. Package `pkg`.
+checks, adds, audits and updates packages safely across bun, pnpm, yarn, npm, composer, cargo and uv. Package `pkg`.
 
 Instead of: bun add on trust, and a bun info and sleep loop then a bun add per consumer
 
 ```sh
 pkg <command> [options]
 pkg zod  # the name, the newest version two weeks old, its licence and scripts
-pkg bump @kaynooo/cli-kit --dry-run  # the consumers a release would move
+pkg add zod  # vet and install exact safe version with the detected manager
+pkg update --apply  # update dependencies safely across workspaces
 ```
 
 ## probe
@@ -540,14 +541,15 @@ waitfor --port 5432 -t 2m  # Postgres accepting connections
 
 ## ws
 
-the repositories under a root: the ones needing attention, the folders worth reclaiming and their known vulnerabilities. Package `workspace`.
+multi-repo workspace manager: repos status, pull, push, exec, disk sweep, and multi-ecosystem audit. Package `workspace`.
 
-Instead of: a cd, git status and du loop over each repository of the workspace, and a bun audit run in each
+Instead of: shell loops over workspace repositories for git status/pull/push, du/rm cleanup, and multi-ecosystem audit
 
 ```sh
 ws <command> [options]
 ws repos
-ws sweep --older 30d  # what a month of idle repos weighs
+ws pull --prune
+ws exec -- git status -s
 ws audit
 ```
 

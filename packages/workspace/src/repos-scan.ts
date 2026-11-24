@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import process from 'node:process'
-import { pool, runCommand } from '@kaynooo/cli-kit'
+import { fail, pool, readMainConfig, runCommand, userConfigReadPath } from '@kaynooo/cli-kit'
 
 export const MAX_DEPTH = 3
 export const CONCURRENCY = 8
@@ -133,8 +133,46 @@ async function packageReleases(path: string): Promise<PackageRelease[]> {
   return releases.filter(release => release !== undefined)
 }
 
-export async function inspect(path: string, fetch: boolean): Promise<RepoState> {
-  const fetched = fetch ? await read(path, ['fetch', '--quiet'], FETCH_MS) : ''
+export async function skipped(): Promise<Set<string>> {
+  const names = new Set<string>()
+  const mainSection = readMainConfig().repos
+
+  if (typeof mainSection === 'object' && mainSection !== null && !Array.isArray(mainSection)) {
+    const skip = (mainSection as { skip?: unknown }).skip
+
+    if (Array.isArray(skip)) {
+      for (const name of skip) {
+        if (typeof name === 'string')
+          names.add(name)
+      }
+    }
+  }
+
+  const file = userConfigReadPath('repos')
+
+  if (!existsSync(file))
+    return names
+
+  try {
+    const config = Bun.JSONC.parse(await Bun.file(file).text()) as { skip?: unknown } | null
+
+    if (Array.isArray(config?.skip)) {
+      for (const name of config.skip) {
+        if (typeof name === 'string')
+          names.add(name)
+      }
+    }
+
+    return names
+  }
+  catch (error) {
+    fail(`${file} does not parse: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+export async function inspect(path: string, fetch: boolean, prune = false): Promise<RepoState> {
+  const fetchArgs = prune ? ['fetch', '--quiet', '--prune'] : ['fetch', '--quiet']
+  const fetched = fetch ? await read(path, fetchArgs, FETCH_MS) : ''
   const [status, worktrees, packages] = await Promise.all([
     read(path, ['status', '--porcelain=v2', '--branch']),
     read(path, ['worktree', 'list', '--porcelain']),
@@ -200,6 +238,37 @@ function firstLine(text: string): string {
 export async function fastForward(path: string): Promise<string | undefined> {
   try {
     const ran = await runCommand(['git', '--no-optional-locks', 'merge', '--ff-only', '--quiet', '@{upstream}'], { cwd: path, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, timeoutMs: GIT_MS })
+
+    if (ran.timedOut)
+      return 'timed out'
+
+    return ran.code === 0 ? undefined : firstLine(ran.text.trim()) || `exit ${ran.code}`
+  }
+  catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
+
+// Safely fast-forwards a dirty repo by stashing uncommitted changes, fast-forwarding, and popping the stash.
+export async function fastForwardDirty(path: string): Promise<string | undefined> {
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+  const stashed = await runCommand(['git', '--no-optional-locks', 'stash', 'push', '-u', '-q', '-m', 'ws-pull-autostash'], { cwd: path, env, timeoutMs: GIT_MS })
+
+  if (stashed.code !== 0)
+    return firstLine(stashed.text.trim()) || `stash failed (${stashed.code})`
+
+  const merged = await fastForward(path)
+  const popped = await runCommand(['git', '--no-optional-locks', 'stash', 'pop', '-q'], { cwd: path, env, timeoutMs: GIT_MS })
+
+  if (merged !== undefined)
+    return merged
+
+  return popped.code === 0 ? undefined : `pulled, but stash pop failed: ${firstLine(popped.text.trim()) || `exit ${popped.code}`}`
+}
+
+export async function pushRepo(path: string): Promise<string | undefined> {
+  try {
+    const ran = await runCommand(['git', '--no-optional-locks', 'push', '--quiet'], { cwd: path, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, timeoutMs: FETCH_MS })
 
     if (ran.timedOut)
       return 'timed out'

@@ -12,7 +12,7 @@ const LOCKFILES: [file: string, manager: Manager][] = [['bun.lock', 'bun'], ['bu
 
 // The command each manager runs for an action; a missing manager falls back to npm's spelling.
 const COMMANDS: Record<Action, Partial<Record<Manager, string>> & { fallback: (manager: Manager) => string }> = {
-  install: { yarn: 'yarn add', uv: 'uv sync', fallback: manager => `${manager} install` },
+  install: { bun: 'bun add', pnpm: 'pnpm add', yarn: 'yarn add', composer: 'composer require', uv: 'uv add', fallback: manager => `${manager} install` },
   dev: { bun: 'bun add -d', yarn: 'yarn add -D', pnpm: 'pnpm add -D', composer: 'composer require --dev', uv: 'uv add --dev', fallback: () => 'npm install -D' },
   remove: { npm: 'npm uninstall', fallback: manager => `${manager} remove` },
   update: { yarn: 'yarn upgrade', uv: 'uv lock --upgrade', fallback: manager => `${manager} update` },

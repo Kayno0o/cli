@@ -1,9 +1,15 @@
+import { createHash } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
 import { fail } from '@kaynooo/cli-kit'
 
 export const PUBLIC_REGISTRY = 'https://registry.npmjs.org'
 const DOWNLOADS_API = 'https://api.npmjs.org/downloads/point/last-week'
 const TRAILING_SLASHES = /\/+$/
 const REQUEST_TIMEOUT = 10_000
+const PACKUMENT_CACHE_TTL_MS = 15 * 60_000
 // The npm name grammar: an optional scope, then url-safe characters, no leading dot or underscore.
 const PACKAGE_NAME = /^(?:@[\w~-][\w.~-]*\/)?[\w~-][\w.~-]*$/
 
@@ -62,10 +68,62 @@ export function isValidName(name: string): boolean {
   return PACKAGE_NAME.test(name) && name.length <= 214
 }
 
+function packumentCacheDir(): string {
+  const base = process.env.XDG_CACHE_HOME
+
+  return join(base !== undefined && base !== '' ? base : join(homedir(), '.cache'), 'kaynooo-cli', 'pkg', 'packuments')
+}
+
+function cacheFileFor(registryUrl: string, name: string): string {
+  const hash = createHash('sha256').update(`${registryUrl}|${name}`).digest('hex').slice(0, 24)
+
+  return join(packumentCacheDir(), `${hash}.json`)
+}
+
+async function readCachedPackument(registryUrl: string, name: string): Promise<Packument | undefined> {
+  try {
+    const file = Bun.file(cacheFileFor(registryUrl, name))
+
+    if (!await file.exists())
+      return undefined
+
+    const entry = await file.json() as { savedAt?: number, packument?: Packument }
+
+    if (typeof entry.savedAt !== 'number' || Date.now() - entry.savedAt > PACKUMENT_CACHE_TTL_MS)
+      return undefined
+
+    return entry.packument?.name === name ? entry.packument : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+async function writeCachedPackument(registryUrl: string, name: string, packument: Packument): Promise<void> {
+  try {
+    const path = cacheFileFor(registryUrl, name)
+
+    mkdirSync(packumentCacheDir(), { recursive: true })
+    await Bun.write(path, JSON.stringify({ savedAt: Date.now(), packument }))
+  }
+  catch {
+    // Cache writes are best-effort.
+  }
+}
+
 // The full metadata document, which carries the publish times and licence that the abbreviated one leaves out; undefined when the registry has no such package.
 export async function fetchPackument(name: string, registry: Registry, fetcher: Fetcher = fetch): Promise<Packument | undefined> {
   if (!isValidName(name))
     fail(`${name} is not a valid npm package name`)
+
+  const useCache = fetcher === fetch && process.env.PKG_NO_CACHE !== '1' && registry.token === undefined
+
+  if (useCache) {
+    const cached = await readCachedPackument(registry.url, name)
+
+    if (cached !== undefined)
+      return cached
+  }
 
   const response = await get(fetcher, `${registry.url.replace(TRAILING_SLASHES, '')}/${encodeURIComponent(name).replace('%40', '@').replace('%2F', '%2f')}`, registry.token)
 
@@ -86,6 +144,9 @@ export async function fetchPackument(name: string, registry: Registry, fetcher: 
 
   if (packument?.name !== name)
     unreachable(`${new URL(registry.url).host} answered ${name} with the metadata of ${String(packument?.name)}`)
+
+  if (useCache)
+    await writeCachedPackument(registry.url, name, packument)
 
   return packument
 }

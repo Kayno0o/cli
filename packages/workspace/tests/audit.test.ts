@@ -28,7 +28,7 @@ describe('audit', () => {
     const empty = audit(dir)
 
     expect(empty.code).toBe(2)
-    expect(empty.err).toContain('no bun.lock')
+    expect(empty.err).toContain('no lockfile')
   })
 
   test('a repository holding only a composer.lock without packages is audited, asking osv.dev nothing', () => {

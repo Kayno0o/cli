@@ -27,8 +27,11 @@ describe('detectManager', () => {
 describe('commandFor', () => {
   test('spells each action per manager', () => {
     expect(commandFor('install', 'yarn')).toBe('yarn add')
-    expect(commandFor('install', 'uv')).toBe('uv sync')
-    expect(commandFor('install', 'bun')).toBe('bun install')
+    expect(commandFor('install', 'uv')).toBe('uv add')
+    expect(commandFor('install', 'composer')).toBe('composer require')
+    expect(commandFor('install', 'bun')).toBe('bun add')
+    expect(commandFor('install', 'pnpm')).toBe('pnpm add')
+    expect(commandFor('install', 'npm')).toBe('npm install')
     expect(commandFor('dev', 'npm')).toBe('npm install -D')
     expect(commandFor('dev', 'composer')).toBe('composer require --dev')
     expect(commandFor('remove', 'npm')).toBe('npm uninstall')

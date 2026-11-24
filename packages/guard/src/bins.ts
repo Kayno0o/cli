@@ -32,7 +32,7 @@ export const BINS: Record<string, BinBrief> = {
   out: { summary: 'runs the command and shortens its output when it is long,…', replaces: 'piping a noisy command through tail…' },
   page: { summary: 'shoots HTML files or URLs at several widths in a local Chromium…', replaces: 'reading screenshots by eye for…' },
   pick: { summary: 'a fuzzy selector, the lines on stdin in, the chosen one on…', replaces: 'fzf for a quick choice in a pipe,…' },
-  pkg: { summary: 'checks npm packages before they are added, and moves a lib\'s…', replaces: 'bun add on trust, and a bun info…' },
+  pkg: { summary: 'checks, adds, audits and updates packages safely across bun,…', replaces: 'bun add on trust, and a bun info…' },
   probe: { summary: 'reports each site\'s negotiated HTTP version, redirect chain,…', replaces: 'the httpversion fish function, curl…' },
   proc: { summary: 'what a process is, who listens on a port and which dev…', replaces: 'cat /proc/<pid>/..., ss -ltnp, lsof…' },
   sf: { summary: 'picks a Symfony console command on a terminal and runs it,…', replaces: 'bin/console typed in the php…' },
@@ -41,7 +41,7 @@ export const BINS: Record<string, BinBrief> = {
   sub: { summary: 'replaces text in files, writing nothing unless every…', replaces: 'sed -i and one-off bun -e or python…' },
   view: { summary: 'shows a markdown file, a source file or a git diff in the…', replaces: 'cat, bat or less on a markdown…' },
   waitfor: { summary: 'waits until a file shows a line, a port listens, a URL answers…', replaces: 'sleep loops, tail -f and until !…' },
-  ws: { summary: 'the repositories under a root: the ones needing attention, the…', replaces: 'a cd, git status and du loop over…' },
+  ws: { summary: 'multi-repo workspace manager: repos status, pull, push, exec,…', replaces: 'shell loops over workspace…' },
   wt: { summary: 'git worktrees of a compose project, each with its own stack,…', replaces: 'a second clone, port juggling and a…' },
 }
 
