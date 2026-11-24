@@ -1,4 +1,3 @@
-import type { BinBrief } from './bins'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -26,7 +25,7 @@ function shorten(text: string, max: number): string {
 }
 
 // Reads the cached KIT_HELP=json descriptions written by `cli list` when available, keyed by bin name.
-export function cachedBriefs(home = homedir()): Record<string, BinBrief> {
+export function cachedBriefs(home = homedir()): Record<string, string> {
   const cacheBase = xdgFolder(process.env.XDG_CACHE_HOME, join(home, '.cache'))
   const file = join(cacheBase, 'kaynooo-cli', 'bins.json')
 
@@ -35,7 +34,7 @@ export function cachedBriefs(home = homedir()): Record<string, BinBrief> {
 
   try {
     const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, CachedEntry>
-    const result: Record<string, BinBrief> = {}
+    const result: Record<string, string> = {}
 
     for (const [entryPath, entry] of Object.entries(raw)) {
       const summary = entry.description?.summary
@@ -43,11 +42,11 @@ export function cachedBriefs(home = homedir()): Record<string, BinBrief> {
       if (typeof summary !== 'string' || summary === '')
         continue
 
-      const replaces = typeof entry.description?.replaces === 'string' ? shorten(entry.description.replaces, 36) : undefined
+      const replaces = typeof entry.description?.replaces === 'string' ? shorten(entry.description.replaces, 48) : undefined
       const base = entryPath.split('/').at(-1)?.replace(JS_EXT, '') ?? ''
 
       if (base !== '' && base in BINS)
-        result[base] = { summary: shorten(summary, 64), ...(replaces === undefined ? {} : { replaces }) }
+        result[base] = `\`${base}\`: ${shorten(summary, 110)}${replaces === undefined ? '' : ` (instead of ${replaces})`}`
     }
 
     return result

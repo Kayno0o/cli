@@ -18,7 +18,7 @@ import { discoverProjects, loadCheckConfig, STEP_NAMES } from './steps'
 const usage = `check [path|workspace...] [--only <steps>] [--changed [--base <ref>]] [--failed] [--fail-fast] [--retry <n>] [--watch] [--quiet] [--timeout <duration>] [--slot | --no-slot] [--lock <name>] [--parallel] [--in <service> | --host] [--list]
 check --fix [--only <fixers>] [--changed [--base <ref>]] [--timeout <duration>] [--in <service> | --host] [--list]
 
-Runs the repo's check, typecheck, lint, fmt (fmt:check / format:check) and test steps from package.json (bun/pnpm/yarn/npm), composer.json, deno.json, Justfile, Makefile, Taskfile, mise, pyproject.toml, Go, Rust, Python, or PHP configs, or .checkrc.json; a folder with no steps runs its subfolders and workspaces.
+Runs the repo's typecheck, lint, fmt and test steps (\`check --fix\` to auto-fix and format) across package.json, composer.json, deno.json, Justfile, Makefile, Taskfile, mise, pyproject.toml, Go, Rust, Python, PHP or .checkrc.json; a folder with no steps runs its subfolders and workspaces.
 A step runs inside the running compose service that mounts its folder and never starts one, and queues for a machine-wide slot when \`slot\` is installed.
 A passing step prints one line, a failing one structured errors, and each step's full log is saved to the file its line ends with.
 With --fix, the project's fix, lint:fix and fmt or format scripts run instead, then the formatters its files call for (php-cs-fixer, \`just --fmt\`, go fmt, cargo fmt, ruff), and the files they changed are listed.`
