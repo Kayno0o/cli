@@ -3,7 +3,7 @@ import type { Action, Service } from './stack'
 import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { Redactor } from '@kaynooo/cli-env/redactor'
-import { closest, fail, isInteractive, jsonOption, paint, parse, printJson, table, wholeNumber } from '@kaynooo/cli-kit'
+import { closest, fail, isInteractive, jsonOption, paint, parse, printHeader, printJson, table, wholeNumber } from '@kaynooo/cli-kit'
 import { byRecency, record, runs } from '@kaynooo/cli-kit/picker'
 import { KEY_LABELS, KEYS, pickService } from './picker'
 import { ACTIONS, allServices, commandFor, defaultAction, key, LOGS_TAIL, logsOf, serviceNamed, stateColor } from './stack'
@@ -111,6 +111,15 @@ export async function followMasked(command: string[]): Promise<number> {
   return proc.exited
 }
 
+async function serviceCandidates(): Promise<[string, string][]> {
+  try {
+    return (await allServices()).map(service => [key(service), service.state])
+  }
+  catch {
+    return []
+  }
+}
+
 export async function dx(args: string[]): Promise<number> {
   const [flag = ''] = args
 
@@ -125,7 +134,7 @@ export async function dx(args: string[]): Promise<number> {
 
   // The protocol the tmux picker reads instead of running the command: its mode, the words typed back, and the command's words.
   const emit = flag === '--emit'
-  const parsed = parse(emit ? args.slice(1) : args, usage, options, { allowNegative: true, exits: EXITS, replaces: 'docker compose exec <service> bash, logs -f and restart typed per service', examples: ['dx', ['dx php', 'a shell in php, or php brought up when stopped'], ['dx php logs', 'follow its logs on a terminal, print them once without one'], ['dx php logs --tail 50 --no-follow', 'the last 50 lines, then exit'], ['dx -', 'the last action again']] })
+  const parsed = parse(emit ? args.slice(1) : args, usage, options, { positionals: ['[service]', '[action]'], candidates: { '[service]': serviceCandidates, '[action]': () => [...ACTIONS] }, allowNegative: true, exits: EXITS, replaces: 'docker compose exec <service> bash, logs -f and restart typed per service', examples: ['dx', ['dx php', 'a shell in php, or php brought up when stopped'], ['dx php logs', 'follow its logs on a terminal, print them once without one'], ['dx php logs --tail 50 --no-follow', 'the last 50 lines, then exit'], ['dx -', 'the last action again']] })
   const [named, asked] = parsed.positionals
   const services = await allServices()
 
@@ -142,10 +151,13 @@ export async function dx(args: string[]): Promise<number> {
       if (emit)
         fail('the picker needs a terminal', 1)
 
-      if (parsed.values.json === true)
+      if (parsed.values.json === true) {
         printJson(services.map(each => ({ key: key(each), project: each.project, name: each.name, state: each.state, status: each.status, ports: each.ports, image: each.image })))
-      else
+      }
+      else {
+        printHeader('dx', `${services.length} ${services.length === 1 ? 'service' : 'services'}`)
         console.log(serviceTable(services))
+      }
 
       return 0
     }

@@ -5,6 +5,7 @@ import { entries, formatAssignment, lastLine, removeKey, setLine, unquotable } f
 import { assertDotenvName, loadKnown, readEnv, withLocks, writeAtomic, writeEnv } from '../files'
 import { maskValue } from '../mask'
 import { parseStructured, structuredFormat } from '../structured'
+import { keyCandidates } from './read'
 
 const DEFAULT_FILE = '.env'
 const TRAILING_NEWLINE = /\r?\n$/
@@ -83,7 +84,7 @@ export async function set(args: string[]): Promise<number> {
     file: { type: 'string', short: 'F', description: 'read the value from this file instead of stdin' },
     empty: { type: 'boolean', description: 'set an empty value, reading nothing' },
     ...QUIET,
-  }, { exits: SET_EXITS })
+  }, { positionals: ['[key]', '[file]'], candidates: { '[key]': keyCandidates }, exits: SET_EXITS })
 
   const [key, target = DEFAULT_FILE] = parsed.positionals
 
@@ -132,7 +133,7 @@ export async function set(args: string[]): Promise<number> {
 }
 
 export async function unset(args: string[]): Promise<number> {
-  const parsed = parse(args, unsetUsage, QUIET, { exits: UNSET_EXITS })
+  const parsed = parse(args, unsetUsage, QUIET, { positionals: ['[key]', '[file]'], candidates: { '[key]': keyCandidates }, exits: UNSET_EXITS })
 
   const [key, target = DEFAULT_FILE] = parsed.positionals
 
@@ -205,7 +206,7 @@ export async function mv(args: string[]): Promise<number> {
     to: { type: 'string', description: 'the file to put KEY in, created when missing' },
     force: { type: 'boolean', description: 'replace KEY when the target already sets it' },
     ...QUIET,
-  }, { exits: MV_EXITS })
+  }, { positionals: ['[key]'], candidates: { '[key]': keyCandidates }, exits: MV_EXITS })
 
   const [key] = parsed.positionals
   const { from, to, force } = parsed.values
@@ -232,7 +233,7 @@ export async function cp(args: string[]): Promise<number> {
     to: { type: 'string', description: 'the file to put the copy in, created when missing' },
     as: { type: 'string', description: 'store the copy under this key instead' },
     ...QUIET,
-  }, { exits: CP_EXITS })
+  }, { positionals: ['[key]'], candidates: { '[key]': keyCandidates }, exits: CP_EXITS })
 
   const [key] = parsed.positionals
   const { from, to, as } = parsed.values

@@ -7,7 +7,7 @@ import { join, relative } from 'node:path'
 import process from 'node:process'
 import { badUsage, fail, formatAge, isInteractive, jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
-import { load } from './branch'
+import { branchCandidates, load } from './branch'
 import { conflictHunks } from './conflicts'
 import { git } from './git'
 
@@ -310,7 +310,7 @@ async function refuseUnsafeChanges(branch: string): Promise<void> {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const { values, positionals } = parse(argv, USAGE, OPTIONS, { positionals: ['[branch]'], exits: EXITS, replaces: 'git merge and then git diff --name-only --diff-filter=U and reading each file for markers', examples: ['gm feature', ['gm --dry-run feature', 'whether it would conflict, and where'], ['gm --continue', 'commit once the conflicts are resolved'], ['gm --abort', 'give the merge up']] })
+  const { values, positionals } = parse(argv, USAGE, OPTIONS, { positionals: ['[branch]'], candidates: { '[branch]': () => branchCandidates(true) }, exits: EXITS, replaces: 'git merge and then git diff --name-only --diff-filter=U and reading each file for markers', examples: ['gm feature', ['gm --dry-run feature', 'whether it would conflict, and where'], ['gm --continue', 'commit once the conflicts are resolved'], ['gm --abort', 'give the merge up']] })
   const json = values.json === true
   const into = await currentBranch()
 

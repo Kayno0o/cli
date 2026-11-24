@@ -4,7 +4,7 @@ import type { Container, Service } from './stack'
 import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { maskLine, PEM_BEGIN, PEM_END } from '@kaynooo/cli-env/mask'
-import { badUsage, configuredNumber, fail, jsonOption, paint, parse, printJson, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, configuredNumber, fail, jsonOption, paint, parse, printHeader, printJson, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
 import { truncate } from '@kaynooo/utils/text'
 import { allServices, attempt, containers, key, stateColor } from './stack'
 
@@ -169,6 +169,8 @@ function line(report: Report): string {
 }
 
 function show(reports: Report[]): void {
+  printHeader('dlog', `${reports.length} ${reports.length === 1 ? 'service' : 'services'}`)
+
   const colors = paint(process.stdout)
 
   for (const report of reports) {
@@ -188,8 +190,17 @@ function show(reports: Report[]): void {
   }
 }
 
+async function serviceCandidates(): Promise<[string, string][]> {
+  try {
+    return (await allServices()).map(service => [key(service), service.state])
+  }
+  catch {
+    return []
+  }
+}
+
 export async function dlog(args: string[]): Promise<number> {
-  const parsed = parse(args, usage, options, { exits: EXITS, replaces: 'docker compose ps, logs --tail | grep -i error and docker inspect for health', examples: ['dlog', ['dlog php db', 'only those services'], ['dlog -n 10 --since 15m', 'ten error lines of the last quarter of an hour'], ['dlog --level warn', 'warnings too'], ['dlog --grep "timeout|5\\d\\d"', 'the lines matching a regex'], ['dlog --fail-on down --fail-on unhealthy', 'a gate that ignores old errors'], ['dlog --json', 'the report as JSON']] })
+  const parsed = parse(args, usage, options, { positionals: ['[service...]'], candidates: { '[service...]': serviceCandidates }, exits: EXITS, replaces: 'docker compose ps, logs --tail | grep -i error and docker inspect for health', examples: ['dlog', ['dlog php db', 'only those services'], ['dlog -n 10 --since 15m', 'ten error lines of the last quarter of an hour'], ['dlog --level warn', 'warnings too'], ['dlog --grep "timeout|5\\d\\d"', 'the lines matching a regex'], ['dlog --fail-on down --fail-on unhealthy', 'a gate that ignores old errors'], ['dlog --json', 'the report as JSON']] })
   const limit = wholeNumber(parsed.values.lines, 'lines', 5)
   const matches = matcherOf(parsed.values.level === 'warn' ? 'warn' : 'error', parsed.values.grep)
   const failOn = new Set<FailOn>((parsed.values['fail-on'] ?? []).length > 0 ? parsed.values['fail-on'] ?? FAIL_ON : FAIL_ON)

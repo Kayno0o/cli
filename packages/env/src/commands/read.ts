@@ -1,6 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { KnownSecrets } from '../mask'
-import { fail, jsonOption, parse, printJson, role, table } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, printHeader, printJson, role, table } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { entries, parseDotenv } from '../dotenv'
 import { assertDotenvText, assertReadableName, envFiles, loadKnown, readEntries } from '../files'
@@ -69,6 +69,24 @@ async function readAll(names: string[], scanned: boolean): Promise<{ files: [nam
   return { files, known: await loadKnown(process.cwd(), files.map(([, file]) => file)) }
 }
 
+// Key names of the folder's .env* files for shell completion; values are never returned.
+export async function keyCandidates(): Promise<string[]> {
+  try {
+    const names = await envFiles()
+    const keys = new Set<string>()
+
+    for (const name of names) {
+      for (const key of (await readEntries(name, { scanned: true })).keys())
+        keys.add(key)
+    }
+
+    return [...keys].sort()
+  }
+  catch {
+    return []
+  }
+}
+
 export async function list(args: string[]): Promise<number> {
   const parsed = parse(args, listUsage, jsonFlag, { exits: LIST_EXITS })
 
@@ -88,15 +106,17 @@ export async function list(args: string[]): Promise<number> {
   }
 
   printRows(rows, parsed.values.json === true, () => {
-    if (rows.length > 0)
+    if (rows.length > 0) {
+      printHeader('ev', `${names.length} ${names.length === 1 ? 'file' : 'files'} · ${rows.length} ${rows.length === 1 ? 'key' : 'keys'}`)
       console.log(keyTable(rows))
+    }
   })
 
   return 0
 }
 
 export async function get(args: string[]): Promise<number> {
-  const parsed = parse(args, getUsage, jsonFlag, { exits: GET_EXITS })
+  const parsed = parse(args, getUsage, jsonFlag, { positionals: ['[key]', '[file]'], candidates: { '[key]': keyCandidates }, exits: GET_EXITS })
 
   const [key, file] = parsed.positionals
 

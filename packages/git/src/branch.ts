@@ -115,6 +115,14 @@ export function branches(against: string | undefined): Branch[] {
   })
 }
 
+// Branch names with their latest commit subject, for shell completion; empty outside a git repository.
+export function branchCandidates(includeRemotes = true): [string, string][] {
+  const refs = includeRemotes ? ['refs/heads', 'refs/remotes'] : ['refs/heads']
+  const lines = read(['for-each-ref', '--format=%(refname)%00%(refname:short)%00%(subject)', ...refs]).split('\n').filter(Boolean)
+
+  return lines.map(line => line.split('\0')).filter(([ref = '']) => !ref.endsWith('/HEAD')).map(([, name = '', subject = '']) => [name, subject])
+}
+
 // What the log is compared against: the remote's default branch, else a local main or master.
 function base(): string | undefined {
   const remote = read(['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD'])
@@ -299,7 +307,7 @@ export async function gb(args: string[]): Promise<number> {
 
   // The protocol the tmux picker and the fish wrapper read instead of the command being run: its mode, the words typed back, and the command's words.
   const emitting = flag === '--emit'
-  const parsed = parse(emitting ? args.slice(1) : args, usage, options, { exits: EXITS, replaces: 'git switch, git branch -d and git checkout typed per branch', examples: ['gb', ['gb feature', 'switch to feature, or create it from origin/feature'], ['gb -', 'back to the previous branch'], ['gb -c fix/login', 'create a branch and switch to it'], ['gb -d old', 'delete a merged local branch']] })
+  const parsed = parse(emitting ? args.slice(1) : args, usage, options, { positionals: ['[branch...]'], candidates: { '[branch...]': () => branchCandidates(true) }, exits: EXITS, replaces: 'git switch, git branch -d and git checkout typed per branch', examples: ['gb', ['gb feature', 'switch to feature, or create it from origin/feature'], ['gb -', 'back to the previous branch'], ['gb -c fix/login', 'create a branch and switch to it'], ['gb -d old', 'delete a merged local branch']] })
   const [named] = parsed.positionals
 
   if (read(['rev-parse', '--git-dir']) === '')

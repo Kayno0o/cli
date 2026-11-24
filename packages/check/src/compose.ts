@@ -409,8 +409,19 @@ export function programOf(command: string): string {
   return end === -1 ? command : command.slice(0, end)
 }
 
+async function composeServiceCandidates(): Promise<string[]> {
+  try {
+    const services = await readServices(process.cwd())
+
+    return services?.map(service => service.name) ?? []
+  }
+  catch {
+    return []
+  }
+}
+
 export const placeOptions = {
-  in: { type: 'string', description: 'run in this compose service instead of the one found mounting the folder' },
+  in: { type: 'string', description: 'run in this compose service instead of the one found mounting the folder', candidates: composeServiceCandidates },
   host: { type: 'boolean', description: 'run on the host even when a compose service mounts the folder' },
 } as const
 

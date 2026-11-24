@@ -12,8 +12,8 @@ const SPAWNS = 8
 
 // Bins whose commands hand the arguments to another program, which answers the unknown option.
 const PASS_THROUGH = new Set(['dc', 'dx', 'sf'])
-// Bins whose completion lists what they run here, not subcommands: walking it would run the jobs.
-const NO_SUBCOMMANDS = new Set(['j'])
+// Every `runCli` group help ends on `Run <prefix> <command> --help for its options.`; a leaf command never does.
+const GROUP_HELP = /<command> --help for its options\./
 
 interface Answer {
   out: string
@@ -47,23 +47,22 @@ async function answer(source: string, args: string[]): Promise<Answer> {
   }
 }
 
-// Every command a bin runs, as the arguments before --help: [] for a single-command bin, a path of names for each leaf of a runCli one.
-async function commandsOf(source: string, path: string[] = []): Promise<string[][]> {
+// Every leaf command a bin runs, walking only groups (whose --help lists subcommands) so positional candidates of a leaf are never mistaken for subcommands.
+async function leavesOf(bin: string, source: string, path: string[] = []): Promise<Leaf[]> {
+  const help = await answer(source, [...path, '--help'])
+
+  if (!GROUP_HELP.test(help.out)) {
+    const unknown = PASS_THROUGH.has(bin) ? 2 : (await answer(source, [...path, UNKNOWN_OPTION])).code
+
+    return [{ path, help, unknown }]
+  }
+
+  // Only the subcommands listed under headings in the group's --help (leaving out a default command's dynamic positional candidates).
   const listed = (await answer(source, ['__complete', ...path, ''])).out.trim().split('\n').map(line => line.slice(0, !line.includes('\t') ? undefined : line.indexOf('\t')))
+  const subcommands = new Set([...help.out.matchAll(/^ {2}([a-z0-9][a-z0-9-]*) {2}/gm)].map(match => match[1]!))
+  const names = listed.filter(name => subcommands.has(name))
 
-  if (listed.length === 1 && listed[0] === '__files__')
-    return [path]
-
-  return (await Promise.all(listed.filter(name => name !== '').map(async name => commandsOf(source, [...path, name])))).flat()
-}
-
-async function leavesOf(bin: string, source: string): Promise<Leaf[]> {
-  return Promise.all((NO_SUBCOMMANDS.has(bin) ? [[]] : await commandsOf(source)).map(async (path) => {
-    const unknownOf = async () => PASS_THROUGH.has(bin) ? 2 : (await answer(source, [...path, UNKNOWN_OPTION])).code
-    const [help, unknown] = await Promise.all([answer(source, [...path, '--help']), unknownOf()])
-
-    return { path, help, unknown }
-  }))
+  return (await Promise.all(names.map(async name => leavesOf(bin, source, [...path, name])))).flat()
 }
 
 // Asked up front and all at once, as one spawn after the other made this file the longest of the suite.

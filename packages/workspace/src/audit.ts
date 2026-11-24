@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
+import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printHeader, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { holdsOsvLock, osvAudit } from './osv'
 import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEVERITIES, workspaceFolders } from './report'
@@ -217,6 +217,8 @@ export async function audit(args: string[]): Promise<number> {
 }
 
 function show(audits: RepoAudit[], total: number): void {
+  printHeader('ws', `audit · ${total} ${total === 1 ? 'repository' : 'repositories'}`)
+
   const label = role('label', process.stdout)
   const path = role('path', process.stdout)
   const flagged = audits.filter(each => each.error !== undefined || each.findings.length > 0)

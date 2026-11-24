@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { bins } from './bins'
 
@@ -10,4 +13,45 @@ describe('every bin answers __complete', () => {
       expect({ code: result.exitCode, err: result.stderr.toString() }).toEqual({ code: 0, err: '' })
     })
   }
+})
+
+describe('dynamic candidates', () => {
+  const sourceOf = (name: string) => bins.find(each => each.bin === name)!.source
+
+  test('gb, gm and gp -b offer branches of the repository', () => {
+    for (const [bin, args] of [['gb', ['']], ['gm', ['']], ['gp', ['-b', '']]] as const) {
+      const result = Bun.spawnSync([process.execPath, sourceOf(bin), '__complete', ...args], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout.toString()).toContain('main\t')
+    }
+  })
+
+  test('ev get offers key names from .env without leaking values', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cli-complete-ev-'))
+
+    try {
+      writeFileSync(join(dir, '.env'), 'DATABASE_URL=postgres://secret@localhost/db\nAPI_TOKEN=super_secret_val\n')
+
+      const result = Bun.spawnSync([process.execPath, sourceOf('ev'), '__complete', 'get', ''], { cwd: dir, stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+      const out = result.stdout.toString()
+
+      expect(result.exitCode).toBe(0)
+      expect(out).toContain('API_TOKEN')
+      expect(out).toContain('DATABASE_URL')
+      expect(out).not.toContain('super_secret_val')
+    }
+    finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('dx offers actions for its second positional and guard hook offers hook events', () => {
+    const dx = Bun.spawnSync([process.execPath, sourceOf('dx'), '__complete', 'php', ''], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+    const guard = Bun.spawnSync([process.execPath, sourceOf('guard'), '__complete', 'hook', ''], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+
+    expect(dx.stdout.toString()).toContain('logs')
+    expect(dx.stdout.toString()).toContain('restart')
+    expect(guard.stdout.toString()).toContain('pre-tool-use')
+  })
 })

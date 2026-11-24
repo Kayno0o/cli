@@ -6,6 +6,7 @@ import process from 'node:process'
 import { jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { askpass } from '@kaynooo/cli-kit/askpass'
 import { progressLine } from '@kaynooo/cli-kit/progress'
+import { branchCandidates } from './branch'
 import { git } from './git'
 import { dirsOf, repoState } from './repos'
 
@@ -18,7 +19,7 @@ What follows -- goes to every git push as is (gp -- --tags, gp -- --force-with-l
 const EXITS: ExitRow[] = [[0, 'every push went through, or there was nothing to push'], [1, 'a push was refused or a repository could not be read'], [2, 'outside a git repository or a usage error']]
 
 const OPTIONS = {
-  'branch': { type: 'string', short: 'b', multiple: true, description: 'push this local branch instead of the current one' },
+  'branch': { type: 'string', short: 'b', multiple: true, description: 'push this local branch instead of the current one', candidates: () => branchCandidates(false) },
   'repos': { type: 'boolean', short: 'r', description: 'every repository nested below too' },
   'dry-run': { type: 'boolean', description: 'say what would be pushed, pushing nothing' },
   'json': jsonOption('one {path, branch, remote, commits, outcome, reason?} per repository, outcome being pushed, would-push, skipped or refused'),

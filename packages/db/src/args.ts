@@ -1,5 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import { duration, jsonOption, wholeNumber } from '@kaynooo/cli-kit'
+import { composeServices } from './compose'
 
 export const DEFAULT_ENV = 'DATABASE_URL'
 export const DEFAULT_LIMIT = 20
@@ -16,9 +17,18 @@ export const HOSTS_NOTE = 'db connects to a local host (localhost, 127.0.0.1, ::
 
 export const WRITE_NOTE = 'A write is printed for you to run (exit 1), and runs only on a database whose name ends in _test, checked on the server.'
 
+async function dbServiceCandidates(): Promise<[string, string][]> {
+  try {
+    return (await composeServices()).filter(service => service.engine !== 'other').map(service => [service.name, service.engine])
+  }
+  catch {
+    return []
+  }
+}
+
 export const connectionOptions = {
   env: { type: 'string', short: 'e', description: `environment key holding the connection URL (${DEFAULT_ENV}, postgres:// or mysql://), a compose service's host in it reached from here` },
-  service: { type: 'string', short: 's', description: 'read the running Postgres, MySQL or MariaDB service of this name in the compose project, credentials from its environment' },
+  service: { type: 'string', short: 's', description: 'read the running Postgres, MySQL or MariaDB service of this name in the compose project, credentials from its environment', candidates: dbServiceCandidates },
   container: { type: 'string', short: 'c', description: 'read the running Postgres, MySQL or MariaDB container of this name, in any compose project or none, credentials from its environment' },
   database: { type: 'string', short: 'd', description: 'database to read instead of the URL\'s or the service\'s' },
   timeout: { type: 'string', description: `stop a statement after this long, a duration such as 500ms, 30s or 2m (${DEFAULT_TIMEOUT_MS / 1000}s)` },
