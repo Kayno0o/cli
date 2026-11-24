@@ -57,12 +57,15 @@ describe('saveWorkspace', () => {
     expect(JSON.parse(readFileSync(join(dir, '.config', 'kaynooo-cli', 'config.json'), 'utf8'))).toEqual({ other: 1, workspace: '~/code' })
   })
 
-  test('creates the file, and refuses to overwrite one that does not parse', () => {
+  test('creates the file, handles comments in JSONC, and refuses to overwrite one that does not parse', () => {
     const fresh = home()
+    const withComments = home('// comment\n{ "other": 1 }\n')
     const broken = home('{ nope')
 
     expect(saveWorkspace('/srv', { home: fresh, env: {} })).toBe(true)
     expect(workspaceRoot({ home: fresh, env: {} })).toBe('/srv')
+    expect(saveWorkspace('/commented', { home: withComments, env: {} })).toBe(true)
+    expect(workspaceRoot({ home: withComments, env: {} })).toBe('/commented')
     expect(saveWorkspace('/srv', { home: broken, env: {} })).toBe(false)
   })
 })

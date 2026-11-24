@@ -1,6 +1,6 @@
-import { configuredNumber, userConfigReadPath, warn } from '@kaynooo/cli-kit'
+import { configuredNumber, readMainConfig, userConfigReadPath, warn } from '@kaynooo/cli-kit'
 
-// What ~/.config/kaynooo-cli/ft.json (or the older ~/.config/ft/config.json) may set; every key is optional and nothing is assumed without it.
+// What ~/.config/kaynooo-cli/config.json(c) (`ft` section) or ~/.config/kaynooo-cli/ft.json (or legacy ~/.config/ft/config.json) may set; every key is optional and nothing is assumed without it.
 export interface FtSettings {
   // The Forgejo ssh host `ft remote` switches alias origins to: `git.example.com`.
   remoteHost?: string
@@ -15,8 +15,17 @@ export function settingsPath(home?: string): string {
   return userConfigReadPath('ft', [['ft', 'config.json']], { home })
 }
 
-// The global settings, empty when the file is missing; a file that is not a JSON object, or a host that is no string, is ignored with a warning.
+// The global settings, empty when missing; the `ft` section of config.json(c) wins over a legacy ft.json file.
 export async function loadSettings(home?: string): Promise<FtSettings> {
+  const fromMain = readMainConfig({ home }).ft
+
+  if (typeof fromMain === 'object' && fromMain !== null && !Array.isArray(fromMain) && 'remoteHost' in fromMain) {
+    const host = (fromMain as { remoteHost?: unknown }).remoteHost
+
+    if (typeof host === 'string' && host !== '')
+      return { remoteHost: host }
+  }
+
   const path = settingsPath(home)
   const file = Bun.file(path)
 
@@ -26,7 +35,7 @@ export async function loadSettings(home?: string): Promise<FtSettings> {
   let raw: unknown
 
   try {
-    raw = await file.json()
+    raw = Bun.JSONC.parse(await file.text())
   }
   catch (error) {
     warn(`${path} is not valid JSON, so its settings are ignored`, error instanceof Error ? error.message : String(error))

@@ -3,7 +3,7 @@ import type { Registry } from './registry'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { SEVERITIES, userConfigReadPath } from '@kaynooo/cli-kit'
+import { readMainConfig, SEVERITIES, userConfigReadPath } from '@kaynooo/cli-kit'
 import { PUBLIC_REGISTRY, unreachable } from './registry'
 
 // What one .npmrc or bunfig.toml says about registries: a default, one per scope, and tokens by registry address without its protocol.
@@ -225,14 +225,12 @@ export function parseSettings(text: string): PkgSettings {
   return settings
 }
 
-// The `.pkgrc.json` files from the directory up to the root, then ~/.config/kaynooo-cli/pkg.json (or the older ~/.config/pkg/config.json), each key taken from the nearest file that sets it.
+// The `.pkgrc.json` files from the directory up to the root, then `pkg` in config.json(c), then ~/.config/kaynooo-cli/pkg.json (or legacy ~/.config/pkg/config.json), each key taken from the nearest file that sets it.
 export async function loadSettings(cwd = process.cwd(), home?: string): Promise<PkgSettings> {
   const files: string[] = []
 
   for (let dir = cwd; !files.includes(join(dir, SETTINGS_FILE)); dir = dirname(dir))
     files.push(join(dir, SETTINGS_FILE))
-
-  files.push(userConfigReadPath('pkg', [['pkg', 'config.json']], { home }))
 
   const settings: PkgSettings = {}
 
@@ -243,6 +241,31 @@ export async function loadSettings(cwd = process.cwd(), home?: string): Promise<
       continue
 
     const found = readable(file, () => parseSettings(text))
+
+    settings.licenses ??= found.licenses
+    settings.blockSeverity ??= found.blockSeverity
+    settings.minAge ??= found.minAge
+    settings.concurrency ??= found.concurrency
+    settings.trusted ??= found.trusted
+  }
+
+  const mainSection = readMainConfig({ home }).pkg
+
+  if (typeof mainSection === 'object' && mainSection !== null && !Array.isArray(mainSection)) {
+    const found = parseSettings(JSON.stringify(mainSection))
+
+    settings.licenses ??= found.licenses
+    settings.blockSeverity ??= found.blockSeverity
+    settings.minAge ??= found.minAge
+    settings.concurrency ??= found.concurrency
+    settings.trusted ??= found.trusted
+  }
+
+  const legacyFile = userConfigReadPath('pkg', [['pkg', 'config.json']], { home })
+  const legacyText = await readIfThere(legacyFile)
+
+  if (legacyText !== undefined) {
+    const found = readable(legacyFile, () => parseSettings(legacyText))
 
     settings.licenses ??= found.licenses
     settings.blockSeverity ??= found.blockSeverity

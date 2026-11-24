@@ -2,7 +2,7 @@ import type { Host } from './checks'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { findUp, loadTheme, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
+import { findUp, loadTheme, mainConfigPath, stateHome, userConfigReadPath, workspaceRoot } from '@kaynooo/cli-kit'
 
 export interface ConfigSource {
   kind: 'file' | 'env'
@@ -20,10 +20,62 @@ export interface ConfigReport {
   sources: ConfigSource[]
 }
 
-// [bin, older path under the config folder].
-const USER_FILES: [string, string[][]][] = [['config', []], ['theme', []], ['doctor', []], ['ft', [['ft', 'config.json']]], ['db', [['db', 'config.json']]], ['pkg', []], ['pkg-excluded', []], ['repos', []]]
-const PROJECT_FILES = [join('.kaynooo', 'theme.json'), '.pkgrc.json']
-const ENV = ['KAYNOOO_WORKSPACE', 'KAYNOOO_CLI_NO_USAGE', 'KIT_MODE', 'KIT_THEME', 'KIT_HELP', 'CI', 'CLAUDECODE', 'AI_AGENT', 'NO_COLOR', 'FORCE_COLOR', 'NODE_DISABLE_COLORS', 'COLORTERM', 'TERM', 'BROWSER', 'EDITOR', 'VISUAL', 'SLOT_DIR', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME', 'XDG_RUNTIME_DIR', 'BUN_INSTALL', 'COMPOSE_FILE', 'COMPOSE_PATH_SEPARATOR', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_TMPDIR', 'GITHUB_TOKEN', 'DISCORD_WEBHOOK']
+// Legacy per-bin files still supported as fallbacks when not defined as sections in config.json(c).
+const USER_FILES: [string, string[][]][] = [
+  ['theme', []],
+  ['doctor', []],
+  ['ft', [['ft', 'config.json']]],
+  ['db', [['db', 'config.json']]],
+  ['pkg', []],
+  ['repos', []],
+  ['out', []],
+  ['dlog', []],
+  ['wait', []],
+  ['hotspots', []],
+  ['audit', []],
+  ['guard', []],
+  ['slot', []],
+]
+const PROJECT_FILES = [join('.kaynooo', 'theme.json'), join('.kaynooo', 'guard.json'), '.pkgrc.json']
+const ENV = [
+  'KAYNOOO_WORKSPACE',
+  'KAYNOOO_CLI_NO_USAGE',
+  'KIT_MODE',
+  'KIT_THEME',
+  'KIT_HELP',
+  'CI',
+  'CLAUDECODE',
+  'AI_AGENT',
+  'CODEX_SANDBOX',
+  'CODEX_CI',
+  'CURSOR_AGENT',
+  'OPENCODE',
+  'GEMINI_CLI',
+  'ANTIGRAVITY_AGENT',
+  'NO_COLOR',
+  'FORCE_COLOR',
+  'NODE_DISABLE_COLORS',
+  'COLORTERM',
+  'TERM',
+  'BROWSER',
+  'EDITOR',
+  'VISUAL',
+  'SLOT_DIR',
+  'PAGE_CHROMIUM',
+  'PLAYWRIGHT_BROWSERS_PATH',
+  'DL_FORGEJO_URL',
+  'XDG_CONFIG_HOME',
+  'XDG_CACHE_HOME',
+  'XDG_STATE_HOME',
+  'XDG_RUNTIME_DIR',
+  'BUN_INSTALL',
+  'COMPOSE_FILE',
+  'COMPOSE_PATH_SEPARATOR',
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_CODE_TMPDIR',
+  'GITHUB_TOKEN',
+  'DISCORD_WEBHOOK',
+]
 const SECRETS = new Set(['GITHUB_TOKEN', 'DISCORD_WEBHOOK'])
 
 function fileStatus(path: string): ConfigSource['status'] {
@@ -42,11 +94,22 @@ function fileStatus(path: string): ConfigSource['status'] {
 
 // Every config file a bin reads and every environment variable that changes one, with where it was looked for and whether it is there.
 export function configReport(host: Pick<Host, 'home'>, env: Record<string, string | undefined> = process.env, from = process.cwd()): ConfigReport {
-  const sources: ConfigSource[] = USER_FILES.map(([bin, legacy]) => {
-    const where = userConfigReadPath(bin, legacy, { home: host.home, xdg: env.XDG_CONFIG_HOME })
+  const location = { home: host.home, xdg: env.XDG_CONFIG_HOME }
+  const main = mainConfigPath(location)
+  const sources: ConfigSource[] = [
+    { kind: 'file', name: main.endsWith('.jsonc') ? 'config.jsonc' : 'config.json', where: main, status: fileStatus(main) },
+    ...USER_FILES.map(([bin, legacy]): ConfigSource => {
+      const where = userConfigReadPath(bin, legacy, location)
 
-    return { kind: 'file', name: `${bin}.json`, where, status: fileStatus(where) }
-  })
+      return { kind: 'file', name: `${bin}.json`, where, status: fileStatus(where) }
+    }),
+  ]
+
+  const stateExcluded = join(env.XDG_STATE_HOME === undefined ? join(host.home, '.local', 'state') : stateHome(env), 'kaynooo-cli', 'pkg-excluded.json')
+  const legacyExcluded = userConfigReadPath('pkg-excluded', [], location)
+  const excludedWhere = !existsSync(stateExcluded) && existsSync(legacyExcluded) ? legacyExcluded : stateExcluded
+
+  sources.push({ kind: 'file', name: 'pkg-excluded.json', where: excludedWhere, status: fileStatus(excludedWhere) })
 
   for (const name of PROJECT_FILES) {
     // Up to the repository root or the home folder, as the bins look.

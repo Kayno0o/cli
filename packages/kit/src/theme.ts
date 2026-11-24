@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { findUp } from './config'
-import { userConfigPath } from './user-config'
+import { mainConfigPath, readMainConfig, userConfigPath } from './user-config'
 
 export type Role = 'accent' | 'id' | 'path' | 'label' | 'value'
 export type Mark = 'ok' | 'warn' | 'problem' | 'note' | 'plan'
@@ -200,7 +200,7 @@ function readThemeFile(path: string, warn: (message: string) => void): ThemeFile
       return undefined
     }
 
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    const parsed: unknown = Bun.JSONC.parse(readFileSync(path, 'utf8'))
 
     if (isRecord(parsed))
       return parsed
@@ -316,6 +316,13 @@ export function loadTheme({ env = process.env, from = process.cwd(), home = home
     wanted.push(resolve(from, chosen))
 
   const files: { path: string, file: ThemeFile }[] = []
+
+  if (chosen === '') {
+    const mainTheme = readMainConfig({ home, xdg: env.XDG_CONFIG_HOME }).theme
+
+    if (isRecord(mainTheme))
+      files.push({ path: `${mainConfigPath({ home, xdg: env.XDG_CONFIG_HOME })}#theme`, file: mainTheme })
+  }
 
   for (const path of wanted) {
     const file = path === undefined ? undefined : readThemeFile(path, warn)

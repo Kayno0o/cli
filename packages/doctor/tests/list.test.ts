@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { list, stats, theme } from '../src/cli-bin'
+import { configGet, configSet, configUnset, list, stats, theme } from '../src/cli-bin'
 import { describeBin, filterBins, listBins } from '../src/list'
 
 const temp = tempDirs()
@@ -170,5 +170,16 @@ describe('the cli bin', () => {
 
     expect(agent.result).toBe(0)
     expect(JSON.parse(agent.out)).toMatchObject({ runs: 1, bins: [{ bin: 'ft', runs: 1 }] })
+  })
+
+  test('cli config get/set/unset reads and writes dotted keys in unified config', async () => {
+    const dir = temp('cli-cfg-')
+    const host = { ...fakeHost({}), home: dir }
+
+    expect((await capture(() => configSet(['out.lines', '250'], host))).result).toBe(0)
+    expect((await capture(() => configGet(['out.lines'], host))).out.trim()).toBe('250')
+    expect(JSON.parse((await capture(() => configGet(['out.lines', '--json'], host))).out)).toBe(250)
+    expect((await capture(() => configUnset(['out.lines'], host))).result).toBe(0)
+    expect(() => configGet(['out.lines'], host)).toThrow('out.lines is not set')
   })
 })

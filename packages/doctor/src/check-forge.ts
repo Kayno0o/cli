@@ -3,7 +3,7 @@ import type { Host, Result } from './check-tools'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import { configuredForge, userConfigReadPath } from '@kaynooo/cli-kit'
+import { configuredForge, readUserConfig } from '@kaynooo/cli-kit'
 import { firstLine, ownBin, readJsonText, VERSION } from './check-tools'
 
 // The forge config.json names, which ft's tea login must reach; undefined lets any login do.
@@ -11,21 +11,11 @@ function forgeOf(home: string): Forge | undefined {
   return configuredForge({ home, xdg: process.env.XDG_CONFIG_HOME })
 }
 
-// Other hosts the same forge answers on, from `forgeHosts` in ~/.config/kaynooo-cli/doctor.json.
+// Other hosts the same forge answers on, from `doctor.forgeHosts` in config.json(c) or legacy doctor.json.
 function extraForgeHosts(home: string): string[] {
-  try {
-    const path = userConfigReadPath('doctor', [], { home, xdg: process.env.XDG_CONFIG_HOME })
+  const raw = readUserConfig('doctor', { home, xdg: process.env.XDG_CONFIG_HOME }).forgeHosts
 
-    if (!existsSync(path))
-      return []
-
-    const raw = Bun.JSONC.parse(readFileSync(path, 'utf8')) as { forgeHosts?: unknown } | null
-
-    return Array.isArray(raw?.forgeHosts) ? raw.forgeHosts.filter((each): each is string => typeof each === 'string') : []
-  }
-  catch {
-    return []
-  }
+  return Array.isArray(raw) ? raw.filter((each): each is string => typeof each === 'string') : []
 }
 
 const TEA_URL = /^\s*url:\s*["']?([^\s"']+)/m

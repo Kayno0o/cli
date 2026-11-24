@@ -1,23 +1,36 @@
 # Configuration
 
-Every file below is optional, nothing is assumed without it. The user files live in `~/.config/kaynooo-cli/` (`$XDG_CONFIG_HOME/kaynooo-cli/` when that is set). A file of a bin's own settings that does not parse is ignored with a warning (`config.json` and `pkg-excluded.json` silently, `repos.json` ends `ws repos` with exit 1).
+Every file below is optional, nothing is assumed without it. User config lives in `~/.config/kaynooo-cli/config.jsonc` (or `config.json`, under `$XDG_CONFIG_HOME/kaynooo-cli/` when set), with per-tool sections and JSONC comments supported everywhere. Legacy per-bin files (`theme.json`, `ft.json`, `db.json`, `pkg.json`, `doctor.json`, `repos.json`, `out.json`, `dlog.json`, `wait.json`, `hotspots.json`, `audit.json`) remain supported as fallbacks, with keys in `config.jsonc` taking precedence. Manage keys with `cli config`, `cli config get <key>`, `cli config set <key> <value>`, `cli config unset <key>`, `cli config edit`, or `cli config init`.
 
-## Files
+## Unified `config.jsonc` sections
 
-| File | Read by | Keys |
+| Section / key | Read by | Keys |
 |---|---|---|
-| `~/.config/kaynooo-cli/config.json` | `changelog`, `doctor`, `gcl`, `dl`, `pkg`, `ws repos`, `ws sweep` | `workspace`: the folder holding the repositories (`doctor --install` writes it); `forge`: your forge, a host (`git.example.org`) or a URL: `gcl owner/name` clones from it over https, `dl fj:owner/repo` reads its releases, `doctor` wants a tea login to it (any login when unset), `changelog` links and releases to it from a repo not on github.com (origin's host when unset); `forgeSsh`: the forge's ssh address (`git@host`, `ssh://git@host:port`) `gcl owner/name` clones from first |
-| `~/.config/kaynooo-cli/theme.json` | every bin | `preset`, `colors`, `glyphs`, `accents`, `gradient`, `bins`: see [Theme](#theme) |
-| `.kaynooo/theme.json` | every bin | the same, found upward from the current folder to the repository root, laid over the user file |
-| `~/.config/kaynooo-cli/ft.json` | `ft` | `remoteHost`: the ssh host `ft remote` switches alias origins to (the older `~/.config/ft/config.json` is read when this one is missing) |
-| `~/.config/kaynooo-cli/db.json` | `db` | `allowedHosts`: hosts other than loopback and compose services that `db` may connect to (the older `~/.config/db/config.json` is read when this one is missing) |
-| `~/.config/kaynooo-cli/doctor.json` | `doctor` | `forgeHosts`: other hosts the forge answers on, accepted for the tea login check |
-| `~/.config/kaynooo-cli/pkg.json` | `pkg` | `licenses`, `blockSeverity`, `minAge`: the same keys as `.pkgrc.json` |
-| `.pkgrc.json` | `pkg` | `licenses`, `blockSeverity`, `minAge`, found upward, the nearest file that sets a key wins |
-| `~/.config/kaynooo-cli/pkg-excluded.json` | `pkg bump` | the folders left out of a package's bumps, `{ "<package>": ["<folder>"] }`: written by the checklist, editable |
-| `~/.config/kaynooo-cli/repos.json` | `ws repos` | `skip`: repository names left out |
-| `.npmrc`, `bunfig.toml` | `pkg` | the registry and token of a scope, read as `bun` reads them |
-| `changelog.config.{ts,mts,js,mjs,json}`, the `changelog` field of `package.json` | `changelog` | the release notes: repo, groups, Discord webhook; `baseUrl` and `provider` (`gitea` or `github`) when the forge is not the one origin or `forge` gives |
+| Top-level (`config.jsonc` / `config.json`) | `changelog`, `doctor`, `gcl`, `dl`, `pkg`, `ws`, `src` | `workspace`: folder holding repositories (`cli config init` / `doctor --install` writes it); `forge`: host (`git.example.org`) or URL; `forgeSsh`: forge SSH address (`git@host`, `ssh://git@host:port`); `ignore`: extra folder names skipped during repo scans |
+| `theme` (or legacy `theme.json`) | every bin | `preset`, `colors`, `glyphs`, `accents`, `gradient`, `bins`: see [Theme](#theme) |
+| `ft` (or legacy `ft.json`, `~/.config/ft/config.json`) | `ft` | `remoteHost`: ssh host `ft remote` switches alias origins to; `concurrency`: max concurrent forge API calls |
+| `db` (or legacy `db.json`, `~/.config/db/config.json`) | `db` | `allowedHosts`: non-local hosts `db` may connect to |
+| `doctor` (or legacy `doctor.json`) | `doctor` | `forgeHosts`: extra hosts accepted for the tea login check; `concurrency`: registry check concurrency |
+| `pkg` (or legacy `pkg.json`, `.pkgrc.json`) | `pkg` | `licenses`, `blockSeverity`, `minAge`, `concurrency`, `trusted` |
+| `repos` (or legacy `repos.json`) | `ws repos` | `skip`: repository names left out; `concurrency`: repo scan concurrency |
+| `audit` (or legacy `audit.json`) | `ws audit` | `concurrency`: concurrent repo audits |
+| `out` (or legacy `out.json`) | `out` | `lines`, `head`, `tail`, `width`: output folding thresholds |
+| `dlog` (or legacy `dlog.json`) | `dlog` | `tail`, `width`: log tail window and line width |
+| `wait` (or legacy `wait.json`) | `waitfor` | `tail`, `around`, `portTimeoutMs`: waitfor output and probe tuning |
+| `hotspots` (or legacy `hotspots.json`) | `src hotspots` | `bulk`, `limit`, `months`: churn and complexity tuning |
+| `guard` (or `.kaynooo/guard.json`) | `guard` | rule toggles, extra protected paths, and allowlists |
+| `slot` (or legacy `slot.json`) | `slot` | default machine-wide slot count |
+
+## Project & state files
+
+| File | Read by | Purpose |
+|---|---|---|
+| `.kaynooo/theme.json` | every bin | project theme override, found upward to repository root (JSONC) |
+| `.kaynooo/guard.json` | `guard` | project guard overrides, found upward to repository root |
+| `.pkgrc.json` | `pkg` | project `licenses`, `blockSeverity`, `minAge`, `concurrency`, `trusted` |
+| `~/.local/state/kaynooo-cli/pkg-excluded.json` | `pkg bump` | folders unchecked in the bump checklist (mutable UI state; falls back to legacy `~/.config/kaynooo-cli/pkg-excluded.json`) |
+| `.npmrc`, `bunfig.toml` | `pkg` | registry and token per scope, read as `bun` reads them |
+| `changelog.config.{ts,mts,js,mjs,json}`, `package.json#changelog` | `changelog` | release notes groups, Discord webhook, `baseUrl`, `provider` |
 
 ## Theme
 

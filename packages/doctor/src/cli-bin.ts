@@ -3,9 +3,12 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Host } from './checks'
 import type { Listed } from './list'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import process from 'node:process'
-import { activeTheme, badge, badUsage, bar, completionScript, duration, formatDuration, header, isInteractive, jsonOption, keyValue, marked, paint, parse, PRESETS, printHeader, printJson, readUsage, role, runCli, section, sparkline, summarizeUsage, table, tree, usagePath } from '@kaynooo/cli-kit'
+import { activeTheme, badge, badUsage, bar, completionScript, duration, fail, formatDuration, getConfigKey, header, isInteractive, jsonOption, keyValue, mainConfigPath, marked, paint, parse, parseConfigValue, PRESETS, printHeader, printJson, readMainConfig, readUsage, role, runCli, section, setConfigKey, sparkline, summarizeUsage, table, tree, unsetConfigKey, updateMainConfig, usagePath } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
+import { completePath, input, select } from '@kaynooo/cli-kit/prompt'
 import { completionDir, installCompletions, installedBins } from './completions'
 import { configReport } from './config-report'
 import { main as doctor } from './doctor'
@@ -162,6 +165,132 @@ export function config(args: string[], host: Host = hostHere()): number {
   return 0
 }
 
+const CONFIG_GET_USAGE = `cli config get <key> [--json]: reads a key from the unified config file (dotted paths such as out.lines or theme.preset)`
+const CONFIG_SET_USAGE = `cli config set <key> <value>: sets a key in ~/.config/kaynooo-cli/config.json(c) (numbers, booleans, null and JSON arrays/objects are parsed)`
+const CONFIG_UNSET_USAGE = `cli config unset <key>: removes a key from ~/.config/kaynooo-cli/config.json(c)`
+const CONFIG_EDIT_USAGE = `cli config edit: opens ~/.config/kaynooo-cli/config.json(c) in $VISUAL or $EDITOR`
+const CONFIG_INIT_USAGE = `cli config init: interactively sets workspace, forge, forgeSsh and theme.preset in ~/.config/kaynooo-cli/config.json(c)`
+
+export function configGet(args: string[], host: Host = hostHere()): number {
+  const { values, positionals } = parse(args, CONFIG_GET_USAGE, { json: jsonOption('the raw JSON value') }, { positionals: ['<key>'], exits: [[0, 'printed the value'], [1, 'the key is not set'], [2, 'a usage error']], examples: ['cli config get workspace', 'cli config get out.lines'] })
+  const [key] = positionals
+  const value = getConfigKey(readMainConfig({ home: host.home, xdg: process.env.XDG_CONFIG_HOME }), key)
+
+  if (value === undefined)
+    fail(`${key} is not set`, 1)
+
+  if (values.json === true)
+    printJson(value)
+  else
+    console.log(typeof value === 'string' ? value : JSON.stringify(value))
+
+  return 0
+}
+
+export function configSet(args: string[], host: Host = hostHere()): number {
+  const { positionals } = parse(args, CONFIG_SET_USAGE, {}, { positionals: ['<key>', '<value>'], exits: [[0, 'wrote the value'], [1, 'config file could not be parsed'], [2, 'a usage error']], examples: ['cli config set workspace ~/Workspace', 'cli config set out.lines 200', 'cli config set theme.preset light'] })
+  const [key, raw] = positionals
+  const parsed = parseConfigValue(raw)
+  let valid = true
+  const location = { home: host.home, xdg: process.env.XDG_CONFIG_HOME }
+  const ok = updateMainConfig((data) => {
+    valid = setConfigKey(data, key, parsed)
+  }, location)
+
+  if (!valid)
+    badUsage(`invalid config key ${key}`)
+
+  if (!ok)
+    fail(`${mainConfigPath(location)} does not parse as a JSON object`, 1)
+
+  console.log(`${key} = ${typeof parsed === 'string' ? parsed : JSON.stringify(parsed)}`)
+
+  return 0
+}
+
+export function configUnset(args: string[], host: Host = hostHere()): number {
+  const { positionals } = parse(args, CONFIG_UNSET_USAGE, {}, { positionals: ['<key>'], exits: [[0, 'removed the key'], [1, 'key was not set or config file could not be parsed'], [2, 'a usage error']], examples: ['cli config unset out.lines'] })
+  const [key] = positionals
+  let removed = false
+  const location = { home: host.home, xdg: process.env.XDG_CONFIG_HOME }
+  const ok = updateMainConfig((data) => {
+    removed = unsetConfigKey(data, key)
+  }, location)
+
+  if (!ok)
+    fail(`${mainConfigPath(location)} does not parse as a JSON object`, 1)
+
+  if (!removed)
+    fail(`${key} was not set`, 1)
+
+  console.log(`unset ${key}`)
+
+  return 0
+}
+
+export async function configEdit(args: string[], host: Host = hostHere()): Promise<number> {
+  parse(args, CONFIG_EDIT_USAGE, {}, { positionals: [], exits: [[0, 'editor exited cleanly'], [1, 'editor exited nonzero'], [2, 'a usage error']], examples: ['cli config edit'] })
+  const path = mainConfigPath({ home: host.home, xdg: process.env.XDG_CONFIG_HOME })
+
+  if (!existsSync(path)) {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, '{}\n')
+  }
+
+  const command = [process.env.VISUAL, process.env.EDITOR].find(value => value !== undefined && value !== '') ?? 'vi'
+  const child = Bun.spawn(['sh', '-c', `${command} "$1"`, 'sh', path], { stdio: ['inherit', 'inherit', 'inherit'] })
+
+  return await child.exited === 0 ? 0 : 1
+}
+
+export async function configInit(args: string[], host: Host = hostHere()): Promise<number> {
+  parse(args, CONFIG_INIT_USAGE, {}, { positionals: [], exits: [[0, 'wrote config'], [1, 'cancelled or config unparseable'], [2, 'a usage error']], examples: ['cli config init'] })
+  const location = { home: host.home, xdg: process.env.XDG_CONFIG_HOME }
+  const current = readMainConfig(location)
+  const currentWorkspace = typeof current.workspace === 'string' ? current.workspace : '~/Workspace'
+  const currentForge = typeof current.forge === 'string' ? current.forge : ''
+  const currentForgeSsh = typeof current.forgeSsh === 'string' ? current.forgeSsh : ''
+  const workspace = await input('workspace folder', { default: currentWorkspace, complete: before => completePath(before, process.cwd(), host.home).filter(path => path.endsWith('/')), hint: 'use `cli config set workspace <path>` off a terminal' })
+
+  if (workspace === undefined)
+    return 1
+
+  const forge = await input('forge host or URL (optional)', { default: currentForge, hint: 'use `cli config set forge <host>` off a terminal' })
+
+  if (forge === undefined)
+    return 1
+
+  const forgeSsh = await input('forge SSH address (optional)', { default: currentForgeSsh, hint: 'use `cli config set forgeSsh <addr>` off a terminal' })
+
+  if (forgeSsh === undefined)
+    return 1
+
+  const preset = await select('theme preset', Object.keys(PRESETS).map(name => ({ value: name, label: name, hint: '' })), { default: 'default', hint: 'use `cli config set theme.preset <name>` off a terminal' })
+
+  if (preset === undefined)
+    return 1
+
+  const ok = updateMainConfig((data) => {
+    if (workspace !== '')
+      data.workspace = workspace
+
+    if (forge !== '')
+      data.forge = forge
+
+    if (forgeSsh !== '')
+      data.forgeSsh = forgeSsh
+
+    setConfigKey(data, 'theme.preset', preset)
+  }, location)
+
+  if (!ok)
+    fail(`${mainConfigPath(location)} does not parse as a JSON object`, 1)
+
+  console.log(`wrote ${mainConfigPath(location)}`)
+
+  return 0
+}
+
 export async function stats(args: string[], path = usagePath()): Promise<number> {
   const { values } = parse(args, STATS_USAGE, STATS_OPTIONS, { positionals: [], exits: STATS_EXITS, examples: ['cli stats', ['cli stats --since 7d', 'the last week'], ['cli stats --mode agent', 'only runs from coding agents']] })
   const window = values.since === undefined ? undefined : duration(values.since, 'since', 0, 'h')
@@ -257,7 +386,20 @@ if (import.meta.main) {
       doctor: { summary: 'checks this host\'s install of the bins, one line per check, the command that fixes a failing one beside it', run: async args => doctor(args) },
       find: { summary: 'picks a bin on a terminal and shows its help; the default of a bare cli', run: async args => find(args) },
       list: { summary: 'every bin in one line: what it does and what it is reached for instead of', run: async args => list(args) },
-      config: { summary: 'where every bin looks for its config and which environment variables are set', run: async args => Promise.resolve(config(args)) },
+      config: {
+        summary: 'show or edit unified config (~/.config/kaynooo-cli/config.jsonc) and active env vars',
+        defaultCommand: 'show',
+        runBare: true,
+        commands: {
+          show: { summary: 'where every bin looks for its config and which environment variables are set', run: async args => Promise.resolve(config(args)) },
+          get: { summary: 'read a dotted key from config.json(c)', run: async args => Promise.resolve(configGet(args)) },
+          set: { summary: 'set a dotted key in config.json(c)', run: async args => Promise.resolve(configSet(args)) },
+          unset: { summary: 'remove a dotted key from config.json(c)', run: async args => Promise.resolve(configUnset(args)) },
+          edit: { summary: 'open config.json(c) in $VISUAL or $EDITOR', run: async args => configEdit(args) },
+          init: { summary: 'interactively set workspace, forge and theme', run: async args => configInit(args) },
+        },
+        examples: ['cli config', 'cli config get workspace', 'cli config set out.lines 200', 'cli config init'],
+      },
       stats: { summary: 'how often each bin ran and the options usage errors did not know', run: async args => stats(args) },
       theme: { summary: 'preview the active theme or a named preset', run: async args => Promise.resolve(theme(args)) },
       completions: { summary: 'shell completions for every installed bin: fish files printed or written to the folder fish reads, a bash or zsh script', run: async args => completions(args) },

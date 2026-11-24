@@ -272,7 +272,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   if ('commands' in command) {
     const { summary } = command
 
-    return dispatch({ path: [...level.path, name], header: (colors, text) => `${colors.bold(`${prefix} ${name}`)}  ${text}`, summary, ...scopeOf(command.commands, command.extraCommands, command.aliases), defaultCommand: undefined, runBare: false, examples: command.examples, replaces: undefined }, rest, { version, redact })
+    return dispatch({ path: [...level.path, name], header: (colors, text) => `${colors.bold(`${prefix} ${name}`)}  ${text}`, summary, ...scopeOf(command.commands, command.extraCommands, command.aliases), defaultCommand: command.defaultCommand, runBare: command.runBare === true, examples: command.examples, replaces: undefined }, rest, { version, redact })
   }
 
   try {

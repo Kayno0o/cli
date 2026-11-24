@@ -19,7 +19,7 @@ export type Command = {
 } & (
   | { run: (args: string[]) => Promise<number> }
   // A group of subcommands dispatched the same way, with its own help; `commands` may be a function for a group made of lazy commands alone.
-  | { commands: Commands | LazyCommands, extraCommands?: LazyCommands, aliases?: Record<string, string>, examples?: import('./args').Example[] }
+  | { commands: Commands | LazyCommands, extraCommands?: LazyCommands, aliases?: Record<string, string>, defaultCommand?: string, runBare?: boolean, examples?: import('./args').Example[] }
 )
 
 // What a level lists and dispatches: the commands it has, and the functions giving more once called.

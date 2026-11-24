@@ -3,7 +3,7 @@ import type { RepoState } from './repos-scan'
 import { existsSync, statSync } from 'node:fs'
 import { basename, relative } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
+import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, readMainConfig, role, table, takesControlCodes, userConfigReadPath, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf } from './repos-scan'
 
@@ -25,15 +25,36 @@ const OPTIONS = {
 } as const
 
 async function skipped(): Promise<Set<string>> {
+  const names = new Set<string>()
+  const mainSection = readMainConfig().repos
+
+  if (typeof mainSection === 'object' && mainSection !== null && !Array.isArray(mainSection)) {
+    const skip = (mainSection as { skip?: unknown }).skip
+
+    if (Array.isArray(skip)) {
+      for (const name of skip) {
+        if (typeof name === 'string')
+          names.add(name)
+      }
+    }
+  }
+
   const file = userConfigReadPath('repos')
 
   if (!existsSync(file))
-    return new Set()
+    return names
 
   try {
-    const config = await Bun.file(file).json() as { skip?: unknown }
+    const config = Bun.JSONC.parse(await Bun.file(file).text()) as { skip?: unknown } | null
 
-    return new Set(Array.isArray(config.skip) ? config.skip.filter((name): name is string => typeof name === 'string') : [])
+    if (Array.isArray(config?.skip)) {
+      for (const name of config.skip) {
+        if (typeof name === 'string')
+          names.add(name)
+      }
+    }
+
+    return names
   }
   catch (error) {
     fail(`${file} does not parse: ${error instanceof Error ? error.message : String(error)}`)
