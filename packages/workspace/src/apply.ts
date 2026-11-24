@@ -2,6 +2,7 @@ import type { Entry } from './sweep-scan'
 import { existsSync } from 'node:fs'
 import { lstat, rm } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
+import process from 'node:process'
 import { runTool } from '@kaynooo/cli-kit'
 import { FOLDER_NAMES, isCachePath } from './sweep-scan'
 
@@ -52,10 +53,11 @@ async function removeWorktree(entry: Entry): Promise<Outcome> {
     return { path: entry.path, removed: false, error: 'no repository known' }
 
   const wtManaged = wtTaskFor(entry)
+  const wtBin = wtManaged === undefined ? null : Bun.which('wt', { PATH: process.env.PATH ?? '' })
 
-  if (wtManaged !== undefined && Bun.which('wt') !== null) {
+  if (wtManaged !== undefined && wtBin !== null) {
     try {
-      const ran = await runTool('wt rm', ['wt', 'rm', wtManaged.task], { cwd: wtManaged.repo })
+      const ran = await runTool('wt rm', [wtBin, 'rm', wtManaged.task], { cwd: wtManaged.repo })
 
       if (ran.code === 0)
         return { path: entry.path, removed: true }
