@@ -16,7 +16,7 @@ export const BINS: Record<string, BinBrief> = {
   doctor: { summary: 'checks this host\'s @kaynooo/cli-* install, one line per check…', replaces: 'checking each bin\'s version, tea\'s…' },
   dx: { summary: 'picks a compose service on a terminal to open its shell, follow…', replaces: 'docker compose exec <service> bash,…' },
   errs: { summary: 'prints one `file:line:col: message (rule)` line per error found…', replaces: 'reading raw tsc, eslint, phpunit,…' },
-  ev: { summary: '.env files listed and edited with secrets masked', replaces: 'cat .env, grep on env files and…' },
+  ev: { summary: '.env files listed, run, synced and edited with secrets masked', replaces: 'cat .env, grep on env files,…' },
   ft: { summary: 'Forgejo tools over tea, run from a repository whose origin is…', replaces: 'tea api calls piped through jq, and…' },
   gb: { summary: 'picks a git branch and switches to it', replaces: 'git switch, git branch -d/-D/-m and…' },
   gc: { summary: 'commits exactly the paths given, its message checked before…', replaces: 'git add, git status and git commit…' },

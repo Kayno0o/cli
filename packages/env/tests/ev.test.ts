@@ -147,14 +147,18 @@ describe('ev', () => {
     expect(ev(['diff', 'app.yaml', 'app.toml']).out).toContain('database.born')
   })
 
-  test('writes only into a structured file that is there, and refuses to move or copy its keys', async () => {
+  test('writes only into a structured file that is there, and copies or moves structured keys', async () => {
     await writeStructured()
 
     expect(ev(['set', 'TOKEN', 'new.yaml'], 'x')).toMatchObject({ code: 1, err: expect.stringContaining('new.yaml does not exist: ev writes into a JSON, YAML or TOML file that is there') })
     expect(await Bun.file(join(dir, 'new.yaml')).exists()).toBe(false)
-    expect(ev(['cp', 'database.password', '--from', 'app.json', '--to', 'copy.env'])).toMatchObject({ code: 2, err: expect.stringContaining('app.json is JSON, which ev set and unset edit while the other commands that write take dotenv files') })
-    expect(ev(['mv', 'database.password', '--from', 'app.toml', '--to', 'copy.env'])).toMatchObject({ code: 2, err: expect.stringContaining('app.toml is TOML, which ev set and unset edit') })
-    expect(await Bun.file(join(dir, 'copy.env')).exists()).toBe(false)
+
+    expect(ev(['cp', 'database.password', '--from', 'app.json', '--to', 'copy.env', '--as', 'DB_PASS']).code).toBe(0)
+    expect(await read('copy.env')).toContain('DB_PASS=hunter2hunter2')
+
+    expect(ev(['mv', 'database.port', '--from', 'app.toml', '--to', 'copy.env']).code).toBe(0)
+    expect(await read('copy.env')).toContain('database.port=5432')
+    expect(ev(['get', 'database.port', 'app.toml']).code).toBe(1)
   })
 
   // Each file is edited where the key is and nowhere else: the expected text is the original with that one span changed.
@@ -520,5 +524,64 @@ describe('ev', () => {
     expect(ev(['show', 'HEAD:app.ini']).err).toContain('app.ini is INI')
     expect(ev(['show', 'HEAD:app.conf']).err).toContain('HEAD:app.conf holds no KEY=value line')
     expect(ev(['show', 'HEAD:app.conf']).err).toContain('git show HEAD:app.conf | ev redact')
+
+    const revDiff = ev(['diff', 'HEAD:.env', '.env', '--json'])
+
+    expect(revDiff.code).toBe(1)
+    expect(JSON.parse(revDiff.out)).toMatchObject({ onlyA: ['API_TOKEN', 'DATABASE_URL', 'CERT'], onlyB: [], differ: ['PORT'] })
+  })
+
+  test('ev run loads env files and redacts secrets when --redact is passed', async () => {
+    await write('.env.test', 'APP_MODE=testing\nAPI_TOKEN=tok_supersecretvalue123\n')
+
+    const plain = ev(['run', '-f', '.env.test', '--', 'sh', '-c', 'echo "$APP_MODE"'])
+
+    expect(plain.code).toBe(0)
+    expect(plain.out.trim()).toBe('testing')
+
+    const redacted = ev(['run', '-f', '.env.test', '--redact', '--', 'sh', '-c', 'echo "mode=$APP_MODE tok=$API_TOKEN"'])
+
+    expect(redacted.code).toBe(0)
+    expect(redacted.out).toContain('mode=testing')
+    expect(redacted.out).not.toContain('tok_supersecretvalue123')
+  })
+
+  test('ev template, sync, check, and gen manage .env lifecycle safely', async () => {
+    await write('.env', '# app\nPORT=3000\nAPI_TOKEN=tok_abcdefghijklmnop\nDATABASE_URL=postgres://app:hunter22@db:5432/app\n')
+
+    expect(ev(['template']).code).toBe(0)
+    const example = await read('.env.example')
+
+    expect(example).toContain('# app')
+    expect(example).toContain('PORT=3000')
+    expect(example).toContain('API_TOKEN=')
+    expect(example).not.toContain('tok_abcdefghijklmnop')
+    expect(example).toContain('postgres://app:changeme@db:5432/app')
+    expect(example).not.toContain('hunter22')
+
+    await write('.env.local', 'PORT=4000\n')
+    expect(ev(['sync', '.env.local', '--from', '.env.example']).code).toBe(0)
+    const synced = await read('.env.local')
+
+    expect(synced).toContain('PORT=4000')
+    expect(synced).toContain('API_TOKEN=')
+    expect(synced).toContain('DATABASE_URL=')
+
+    await write('.env.bad', 'A=1\nA=2\nB="unterminated\n')
+    const checked = ev(['check', '.env.bad', '--json'])
+
+    expect(checked.code).toBe(1)
+    const messages = (JSON.parse(checked.out) as { message: string }[]).map(each => each.message)
+
+    expect(messages.some(msg => msg.includes('duplicate key A'))).toBe(true)
+    expect(messages.some(msg => msg.includes('unterminated quote on B'))).toBe(true)
+
+    const generated = ev(['gen', 'JWT_SECRET', '.env.gen', '--bytes', '16', '--format', 'hex'])
+
+    expect(generated.code).toBe(0)
+    expect(generated.out).toContain('***(32)')
+    expect(await read('.env.gen')).toMatch(/^JWT_SECRET=[0-9a-f]{32}\n$/)
+    expect(ev(['gen', 'JWT_SECRET', '.env.gen']).code).toBe(1)
+    expect(ev(['gen', 'JWT_SECRET', '.env.gen', '--force']).code).toBe(0)
   })
 })

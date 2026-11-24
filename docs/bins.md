@@ -192,13 +192,14 @@ errs -- vendor/bin/phpunit  # each failed PHP test with its file and line
 
 ## ev
 
-.env files listed and edited with secrets masked. Package `env`.
+.env files listed, run, synced and edited with secrets masked. Package `env`.
 
-Instead of: cat .env, grep on env files and editing them by hand
+Instead of: cat .env, grep on env files, sourcing .env into the shell and editing them by hand
 
 ```sh
 ev <command> [options]
 ev list
+ev run -f .env.test --redact -- bun test  # run a command with .env.test loaded and output redacted
 ev get DATABASE_URL  # one key, its value masked
 ```
 

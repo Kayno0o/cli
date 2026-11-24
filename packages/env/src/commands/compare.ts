@@ -2,11 +2,11 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
 import { loadKnown, readEntries } from '../files'
-import { display } from './read'
+import { display, isRevisionTarget, readRevisionEntries } from './read'
 
 const diffUsage = `ev diff <a> <b>
 
-Names the keys set in one file and not the other, and those both set to different values, each value masked as ev list does.
+Names the keys set in one file (or git revision like \`HEAD:.env\`) and not the other, and those both set to different values, each value masked as ev list does.
 
 --keys compares the keys only.
 --json prints {a, b, onlyA, onlyB, differ}, differ naming the keys only.`
@@ -27,6 +27,13 @@ async function keys(path: string): Promise<Set<string>> {
   return new Set((await readEntries(path)).keys())
 }
 
+async function readSide(target: string): Promise<Map<string, string>> {
+  if (!await Bun.file(target).exists() && isRevisionTarget(target))
+    return readRevisionEntries(target)
+
+  return readEntries(target)
+}
+
 // Running ev reads both files already, and `ev redact` tells whether a string is one of their secrets, so naming a value as changed gives nothing away.
 export async function diff(args: string[]): Promise<number> {
   const parsed = parse(args, diffUsage, { keys: { type: 'boolean', description: 'compare the keys only' }, ...jsonFlag }, { exits: DIFF_EXITS })
@@ -36,8 +43,8 @@ export async function diff(args: string[]): Promise<number> {
   if (a === undefined || b === undefined)
     fail(`needs two files\n\n${diffUsage}`)
 
-  const left = await readEntries(a)
-  const right = await readEntries(b)
+  const left = await readSide(a)
+  const right = await readSide(b)
   const onlyA = [...left.keys()].filter(key => !right.has(key))
   const onlyB = [...right.keys()].filter(key => !left.has(key))
   const differ = parsed.values.keys === true ? [] : [...left].filter(([key, value]) => right.has(key) && right.get(key) !== value).map(([key]) => key)

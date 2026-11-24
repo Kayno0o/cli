@@ -161,6 +161,32 @@ const SHOW_EXITS: ExitRow[] = [[0, 'it printed them'], [1, 'git cannot show the 
 
 const REVISION = /^([^:]+):(.+)$/
 
+// Reads a git revision target (`<rev>:<file>`) as a key/value map, enforcing readable file checks.
+export async function readRevisionEntries(target: string): Promise<Map<string, string>> {
+  const [, revision, path] = REVISION.exec(target) ?? []
+
+  if (revision === undefined || path === undefined)
+    fail(`give <rev>:<file>\n\n${showUsage}`)
+
+  if (revision.startsWith('-'))
+    fail(`${revision} is not a revision: it reads as a git option`)
+
+  const redact = `git show ${revision}:${path} | ev redact`
+
+  assertReadableName(path, redact)
+
+  const shown = await $`git show --end-of-options ${`${revision}:${path}`}`.quiet().nothrow()
+
+  if (shown.exitCode !== 0)
+    fail(`git show ${revision}:${path} failed: ${shown.stderr.toString().trim()}`, 1)
+
+  return structuredFormat(path) === undefined ? dotenvKeys(target, shown.stdout.toString(), redact) : parseStructured(target, shown.stdout.toString())
+}
+
+export function isRevisionTarget(target: string): boolean {
+  return REVISION.test(target)
+}
+
 export async function grep(args: string[]): Promise<number> {
   const parsed = parse(args, grepUsage, { 'ignore-case': { type: 'boolean', short: 'i', description: 'match the key whatever its case' }, ...jsonFlag }, { exits: GREP_EXITS })
 
@@ -210,26 +236,13 @@ export async function show(args: string[]): Promise<number> {
   const parsed = parse(args, showUsage, jsonFlag, { exits: SHOW_EXITS })
 
   const [target] = parsed.positionals
-  const [, revision, path] = REVISION.exec(target ?? '') ?? []
 
-  if (revision === undefined || path === undefined)
+  if (target === undefined || !isRevisionTarget(target))
     fail(`give <rev>:<file>\n\n${showUsage}`)
 
-  if (revision.startsWith('-'))
-    fail(`${revision} is not a revision: it reads as a git option`)
-
-  const redact = `git show ${revision}:${path} | ev redact`
-
-  assertReadableName(path, redact)
-
-  const shown = await $`git show --end-of-options ${`${revision}:${path}`}`.quiet().nothrow()
-
-  if (shown.exitCode !== 0)
-    fail(`git show ${revision}:${path} failed: ${shown.stderr.toString().trim()}`, 1)
-
-  const keys = structuredFormat(path) === undefined ? dotenvKeys(target ?? '', shown.stdout.toString(), redact) : parseStructured(target ?? '', shown.stdout.toString())
+  const keys = await readRevisionEntries(target)
   const known = await loadKnown(process.cwd(), [keys])
-  const rows = [...keys].map(([key, value]) => row(target ?? '', key, value, known))
+  const rows = [...keys].map(([key, value]) => row(target, key, value, known))
 
   printRows(rows, parsed.values.json === true, () => {
     if (rows.length > 0)

@@ -166,38 +166,107 @@ export async function unset(args: string[]): Promise<number> {
   return 0
 }
 
-// The write path of mv and cp: puts KEY's line from `from` into `to`, as `newKey` when given, and returns both files for the caller to finish.
-async function transfer(key: string, from: string, to: string, newKey: string | undefined, replace: boolean) {
-  checkKey(key, to)
+// The write path of mv and cp: puts KEY from `from` into `to` (supporting dotenv, JSON, YAML, and TOML on either side), as `newKey` when given.
+async function transfer(key: string, from: string, to: string, newKey: string | undefined, replace: boolean, removeFromSource: boolean): Promise<{ sourceKeys: Map<string, string>, targetKeys: Map<string, string>, value: string, name: string }> {
+  checkKey(key, from)
 
-  if (newKey !== undefined)
-    checkKey(newKey, to)
+  const name = newKey ?? key
+
+  checkKey(name, to)
 
   if (from === to && newKey === undefined)
     fail('--from and --to are the same file')
 
-  const source = await readEnv(from)
-  const line = lastLine(source, key)
+  const fromStructured = structuredFormat(from) !== undefined
+  const toStructured = structuredFormat(to) !== undefined
 
-  if (line === undefined)
-    fail(`${key} is not set in ${from}`, 1)
+  let value: string
+  let rawLine: string | undefined
+  let sourceDotenv: Awaited<ReturnType<typeof readEnv>> | undefined
+  let sourceText: string | undefined
+  let sourceKeys: Map<string, string>
 
-  const target = from === to ? source : await readOrEmpty(to)
-  const name = newKey ?? key
+  if (fromStructured) {
+    sourceText = await readStructured(from)
+    sourceKeys = parseStructured(from, sourceText)
 
-  if (!replace && entries(target).has(name))
-    fail(`${to} already sets ${name}, --force replaces it`, 1)
+    const found = sourceKeys.get(key)
 
-  const value = line.value ?? ''
-  const raw = newKey === undefined && !entries(target).has(name) ? line.raw : undefined
+    if (found === undefined)
+      fail(`${key} is not set in ${from}`, 1)
 
-  if (raw === undefined && formatAssignment(name, value) === undefined)
-    fail(`${key} in ${from}: ${unquotable(value)}, nothing was written`, 1)
+    value = found
+  }
+  else {
+    sourceDotenv = await readEnv(from)
 
-  setLine(target, name, value, raw)
-  await writeEnv(to, target)
+    const line = lastLine(sourceDotenv, key)
 
-  return { source, target, value, name }
+    if (line === undefined)
+      fail(`${key} is not set in ${from}`, 1)
+
+    value = line.value ?? ''
+    rawLine = line.raw
+    sourceKeys = entries(sourceDotenv)
+  }
+
+  let targetKeys: Map<string, string>
+
+  if (toStructured) {
+    const { setStructured } = await import('../structured-write')
+    const currentText = from === to && sourceText !== undefined ? sourceText : await readStructured(to)
+    const currentMap = parseStructured(to, currentText)
+
+    if (!replace && currentMap.has(name))
+      fail(`${to} already sets ${name}, --force replaces it`, 1)
+
+    const edited = setStructured(to, currentText, name, value)
+
+    if (from === to) {
+      sourceText = edited
+    }
+    else {
+      await writeAtomic(to, edited)
+    }
+
+    targetKeys = parseStructured(to, edited)
+  }
+  else {
+    const target = from === to && sourceDotenv !== undefined ? sourceDotenv : await readOrEmpty(to)
+
+    if (!replace && entries(target).has(name))
+      fail(`${to} already sets ${name}, --force replaces it`, 1)
+
+    const raw = !fromStructured && newKey === undefined && !entries(target).has(name) ? rawLine : undefined
+
+    if (raw === undefined && formatAssignment(name, value) === undefined)
+      fail(`${key} in ${from}: ${unquotable(value)}, nothing was written`, 1)
+
+    setLine(target, name, value, raw)
+    await writeEnv(to, target)
+    targetKeys = entries(target)
+  }
+
+  if (removeFromSource) {
+    if (fromStructured && sourceText !== undefined) {
+      const { unsetStructured } = await import('../structured-write')
+      const removed = unsetStructured(from, sourceText, key)
+
+      if (removed === undefined)
+        fail(`${key} is not set in ${from}`, 1)
+
+      await writeAtomic(from, removed)
+    }
+    else if (sourceDotenv !== undefined) {
+      removeKey(sourceDotenv, key)
+      await writeEnv(from, sourceDotenv)
+    }
+  }
+  else if (from === to && toStructured && sourceText !== undefined) {
+    await writeAtomic(to, sourceText)
+  }
+
+  return { sourceKeys, targetKeys, value, name }
 }
 
 export async function mv(args: string[]): Promise<number> {
@@ -214,12 +283,7 @@ export async function mv(args: string[]): Promise<number> {
   if (key === undefined || from === undefined || to === undefined)
     fail(`needs KEY, --from and --to\n\n${mvUsage}`)
 
-  await withLocks([from, to], async () => {
-    const { source } = await transfer(key, from, to, undefined, force === true)
-
-    removeKey(source, key)
-    await writeEnv(from, source)
-  })
+  await withLocks([from, to], async () => transfer(key, from, to, undefined, force === true, true))
 
   if (parsed.values.quiet !== true)
     console.log(`${key}: ${from} -> ${to}`)
@@ -241,10 +305,10 @@ export async function cp(args: string[]): Promise<number> {
   if (key === undefined || from === undefined || to === undefined)
     fail(`needs KEY, --from and --to\n\n${cpUsage}`)
 
-  const { source, target, value, name } = await withLocks([from, to], async () => transfer(key, from, to, as, true))
+  const { sourceKeys, targetKeys, value, name } = await withLocks([from, to], async () => transfer(key, from, to, as, true, false))
 
   if (parsed.values.quiet !== true)
-    console.log(`${to}: ${name}=${maskValue(name, value, await loadKnown(process.cwd(), [entries(source), entries(target)])).replaceAll('\n', '\\n')}`)
+    console.log(`${to}: ${name}=${maskValue(name, value, await loadKnown(process.cwd(), [sourceKeys, targetKeys])).replaceAll('\n', '\\n')}`)
 
   return 0
 }
