@@ -119,7 +119,7 @@ async function ask(all: readonly Candidate[]): Promise<{ add: Candidate[], remov
   const remove = all.filter(each => !picked.has(each) && each.installed)
 
   // Unchecking is easy to do by accident, so the removal is confirmed; declining keeps what is installed and still adds what was checked.
-  if (remove.length > 0 && await confirm(`remove ${remove.map(each => each.label).join(', ')}?`, { default: false }) !== true)
+  if (remove.length > 0 && await confirm(`remove ${remove.map(each => each.label).join(', ')}?`, { default: false, hint: 'pass package names explicitly to avoid interactive removal' }) !== true)
     return { add: all.filter(each => picked.has(each) && !each.installed), remove: [] }
 
   return { add: all.filter(each => picked.has(each) && !each.installed), remove }
@@ -137,7 +137,7 @@ async function askWorkspace(host: Host): Promise<void> {
   if (!isInteractive() || workspaceChosen({ home: host.home }))
     return
 
-  const folder = await input('folder holding your repositories (repos, sweep and pkg bump look there)', { default: '~/Workspace', complete: before => completePath(before, process.cwd(), host.home).filter(path => path.endsWith('/')) })
+  const folder = await input('folder holding your repositories (repos, sweep and pkg bump look there)', { default: '~/Workspace', complete: before => completePath(before, process.cwd(), host.home).filter(path => path.endsWith('/')), hint: 'set workspace in ~/.config/kaynooo-cli/config.json or KAYNOOO_WORKSPACE' })
 
   if (folder !== undefined && folder !== '' && !saveWorkspace(folder, { home: host.home }))
     console.error(`could not write the workspace into ${userConfigPath('config', { home: host.home })}: it does not parse, fix it by hand`)

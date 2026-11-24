@@ -65,6 +65,16 @@ describe('recordUsage', () => {
     expect(await readUsage(usagePath(env))).toEqual([])
   })
 
+  test('filters entries by output mode when requested', async () => {
+    const env = { XDG_STATE_HOME: temp('usage-mode-') }
+
+    recordUsage(usageEntry('ft', 'board', [], 0, { now: new Date(1000), mode: 'agent' }), env)
+    recordUsage(usageEntry('gst', undefined, [], 0, { now: new Date(2000), mode: 'terminal' }), env)
+
+    expect((await readUsage(usagePath(env), 0, 'agent')).map(each => each.bin)).toEqual(['ft'])
+    expect((await readUsage(usagePath(env), 0, 'terminal')).map(each => each.bin)).toEqual(['gst'])
+  })
+
   test('trims the log to the newest half once it exceeds maxBytes', async () => {
     const env = { XDG_STATE_HOME: temp('usage-trim-') }
 
@@ -127,7 +137,7 @@ describe('runCli', () => {
       const code = await runCli({ name: 'demo', version: '1.0.0', about: 'x', commands: { go: { summary: 'go', run: async () => Promise.resolve(0) } } }, ['go', '--fast'])
 
       expect(code).toBe(0)
-      expect((await readUsage(usagePath({ XDG_STATE_HOME: state })))[0]).toMatchObject({ bin: 'demo', command: 'go', flags: ['--fast'], code: 0 })
+      expect((await readUsage(usagePath({ XDG_STATE_HOME: state })))[0]).toMatchObject({ bin: 'demo', command: 'go', flags: ['--fast'], code: 0, mode: 'pipe' })
 
       await runCli({ name: 'demo', version: '1.0.0', about: 'x', commands: { go: { summary: 'go', run: async () => Promise.resolve(0) } } }, ['--help'])
       await runCli({ name: 'demo', version: '1.0.0', about: 'x', commands: { go: { summary: 'go', run: async () => Promise.resolve(0) } } }, ['--version'])

@@ -45,7 +45,7 @@ export function askpass(pause: () => () => void = () => () => undefined): Askpas
 
       const { input } = await import('./prompt')
 
-      return { answer: await input(prompt.trim(), { mask: !ECHOED.test(prompt) }) }
+      return { answer: await input(prompt.trim(), { mask: !ECHOED.test(prompt), hint: 'add the SSH key to ssh-agent or run on a terminal' }) }
     }
     finally {
       resume()

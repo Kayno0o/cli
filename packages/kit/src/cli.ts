@@ -9,6 +9,7 @@ import { scriptArgs } from './argv'
 import { askpassClient } from './askpass'
 import { candidates, COMPLETE, COMPLETIONS, expand, FILES, flagValue, leafCandidates, lookup, optionsOf, printCandidates, printCompletionScript, resolveSummary, scopeOf, shown } from './complete'
 import { COMPLETION_SHELLS } from './completions'
+import { outputMode } from './mode'
 import { notifyEnd } from './notify'
 import { paint, takesControlCodes } from './style'
 import { closest } from './text'
@@ -104,12 +105,12 @@ interface Level extends Scope {
 }
 
 // The level's help; a default command's options follow the commands, as they apply with no command named.
-async function help({ path, header, summary: lazySummary, commands, defaultCommand, examples, replaces }: Level, stream: { isTTY?: boolean, columns?: number }): Promise<string> {
+async function help({ path, header, summary: lazySummary, commands, defaultCommand, examples, replaces }: Level, stream: { isTTY?: boolean, columns?: number }, json = false): Promise<string> {
   const colors = paint(stream)
   const prefix = path.join(' ')
   const summary = await resolveSummary(lazySummary)
 
-  if (wantsHelpJson())
+  if (json || wantsHelpJson())
     return JSON.stringify(description(`${prefix} <command> [options]: ${summary}`, { examples, replaces }))
 
   const columns = takesControlCodes(stream) ? stream.columns : undefined
@@ -156,9 +157,15 @@ export function printHint(hint: string): void {
   console.error(`  ${takesControlCodes(process.stderr) ? colors.yellow('hint') : 'hint:'} ${hint}`)
 }
 
-// An error as `{"error", "hint"?, "cause"?}` on stderr, for a command run with `--json`, so a caller parses its failures as it parses its output.
-export function printJsonError(message: string, hint?: string, cause?: string): void {
-  console.error(JSON.stringify({ error: message, ...(hint === undefined ? {} : { hint }), ...(cause === undefined ? {} : { cause }) }))
+// An error as `{"error", "code"?, "command"?, "hint"?, "cause"?}` on stderr, for a command run with `--json`, so a caller parses its failures as it parses its output.
+export function printJsonError(message: string, hint?: string, cause?: string, extra?: { code?: number, command?: string }): void {
+  console.error(JSON.stringify({
+    error: message,
+    ...(extra?.code === undefined ? {} : { code: extra.code }),
+    ...(extra?.command === undefined ? {} : { command: extra.command }),
+    ...(hint === undefined ? {} : { hint }),
+    ...(cause === undefined ? {} : { cause }),
+  }))
 }
 
 // Whether the arguments ask for JSON, read before parsing so even a parse error prints as JSON.
@@ -174,6 +181,7 @@ function reportThrown(prefix: string, error: unknown, redact: (text: string) => 
   if (error instanceof HelpShown)
     return 0
 
+  const code = error instanceof Exit ? error.code : 1
   const helpHint = error instanceof UsageError ? `run ${prefix} --help for its options` : undefined
   const named = error instanceof Error && !(error instanceof Exit) && error.name !== 'Error' ? `${error.name}: ${error.message}` : undefined
   const cause = error instanceof Error && error.cause instanceof Error ? redact(error.cause.message) : undefined
@@ -181,11 +189,13 @@ function reportThrown(prefix: string, error: unknown, redact: (text: string) => 
   if (error instanceof Exit && error.code === 2)
     noteUsageError(error.message)
 
-  const report = json ? printJsonError : (message: string, hint?: string, causeText?: string) => printError(prefix, message, hint, causeText)
+  const report = json
+    ? (message: string, hint?: string, causeText?: string) => printJsonError(message, hint, causeText, { code, command: prefix })
+    : (message: string, hint?: string, causeText?: string) => printError(prefix, message, hint, causeText)
 
   report(redact(named ?? (error instanceof Error ? error.message : String(error))), error instanceof Exit ? error.hint ?? helpHint : undefined, cause)
 
-  return error instanceof Exit ? error.code : 1
+  return code
 }
 
 async function dispatch(level: Level, typed: string[], { version, redact }: { version: () => string, redact: Cli['redact'] | undefined }): Promise<{ code: number, meta: boolean }> {
@@ -196,7 +206,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
     argv = takeOutputFlags(typed)
   }
   catch (error) {
-    return { code: reportThrown(prefix, error), meta: false }
+    return { code: reportThrown(prefix, error, redact, wantsJson(typed)), meta: false }
   }
 
   const [name, ...args] = argv
@@ -217,11 +227,11 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
     return { code: 2, meta: true }
   }
 
-  if (name === 'help' && args.length > 0)
+  if (name === 'help' && args.length > 0 && args[0] !== '--json')
     return dispatch(level, [...args, '--help'], { version, redact })
 
-  if (name === undefined || name === 'help' || name === '--help' || name === '-h') {
-    console.log(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stdout))
+  if (name === undefined || name === 'help' || name === '--help' || name === '-h' || name === '--help=json') {
+    console.log(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stdout, wantsHelpJson(process.env, argv)))
 
     return { code: 0, meta: true }
   }
@@ -249,8 +259,12 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
 
   if (command === undefined) {
     const meant = closest(name, Object.keys(shown(level.commands)))
+    const hint = meant === undefined ? `run ${prefix} --help for its commands` : `did you mean ${meant}?`
 
-    printError(prefix, `no command ${name}`, meant === undefined ? `run ${prefix} --help for its commands` : `did you mean ${meant}?`)
+    if (wantsJson(argv))
+      printJsonError(`no command ${name}`, hint, undefined, { code: 2, command: prefix })
+    else
+      printError(prefix, `no command ${name}`, hint)
 
     return { code: 2, meta: false }
   }
@@ -315,7 +329,7 @@ export async function runCli(cli: Cli, argv = scriptArgs()): Promise<number> {
 
   if (cli.usage !== false && !meta) {
     try {
-      recordUsage(usageEntry(cli.name, command, argv, code, { ms: performance.now() - started }))
+      recordUsage(usageEntry(cli.name, command, argv, code, { ms: performance.now() - started, mode: outputMode() }))
     }
     catch {}
   }
@@ -410,7 +424,7 @@ export async function runMain({ name, version, run, redact, usage }: Main, argv 
 
   if (usage !== false && !meta) {
     try {
-      recordUsage(usageEntry(name, undefined, argv, code, { ms: performance.now() - started }))
+      recordUsage(usageEntry(name, undefined, argv, code, { ms: performance.now() - started, mode: outputMode() }))
     }
     catch {}
   }

@@ -1,3 +1,4 @@
+import type { Mode } from './mode'
 import { appendFileSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -18,6 +19,8 @@ export interface UsageEntry {
   unknown?: string
   // How long the run took, in whole milliseconds.
   ms?: number
+  // The output mode active during the run (`terminal`, `agent`, `ci`, or `pipe`).
+  mode?: Mode
 }
 
 const UNKNOWN_OPTION = /unknown option '(--[a-z][a-z0-9-]*)[=']/
@@ -56,12 +59,12 @@ export function flagNames(argv: readonly string[]): string[] {
 }
 
 // The entry for a run that exited with `code`, with the unknown option a usage error named. Only that option's name is kept, never the message, which most usage errors fill with the value they refused.
-export function usageEntry(bin: string, command: string | undefined, argv: readonly string[], code: number, { ms, now = new Date() }: { ms?: number, now?: Date } = {}): UsageEntry {
+export function usageEntry(bin: string, command: string | undefined, argv: readonly string[], code: number, { ms, mode, now = new Date() }: { ms?: number, mode?: Mode, now?: Date } = {}): UsageEntry {
   const unknown = code === 2 && usageError !== undefined ? UNKNOWN_OPTION.exec(usageError)?.[1] : undefined
 
   usageError = undefined
 
-  return { at: now.toISOString(), bin, ...(command === undefined ? {} : { command }), flags: flagNames(argv), code, ...(unknown === undefined ? {} : { unknown }), ...(ms === undefined ? {} : { ms: Math.round(ms) }) }
+  return { at: now.toISOString(), bin, ...(command === undefined ? {} : { command }), flags: flagNames(argv), code, ...(unknown === undefined ? {} : { unknown }), ...(ms === undefined ? {} : { ms: Math.round(ms) }), ...(mode === undefined ? {} : { mode }) }
 }
 
 // Keeps the newest half of lines once the log passes `maxBytes`, best effort and atomic via rename.
@@ -94,7 +97,7 @@ export function recordUsage(entry: UsageEntry, env: Record<string, string | unde
   catch {}
 }
 
-export async function readUsage(path = usagePath(), since = 0): Promise<UsageEntry[]> {
+export async function readUsage(path = usagePath(), since = 0, mode?: Mode): Promise<UsageEntry[]> {
   const file = Bun.file(path)
 
   if (!await file.exists())
@@ -104,7 +107,10 @@ export async function readUsage(path = usagePath(), since = 0): Promise<UsageEnt
     try {
       const entry = JSON.parse(line) as UsageEntry
 
-      return Date.parse(entry.at) >= since ? [entry] : []
+      if (Date.parse(entry.at) < since)
+        return []
+
+      return mode !== undefined && entry.mode !== mode ? [] : [entry]
     }
     catch {
       return []

@@ -168,10 +168,12 @@ describe('runMain', () => {
   })
 
   test('prints the error as JSON when the command was given --json', async () => {
-    expect(await capture(async () => runMain(main(async () => badUsage('bad input')), ['--json']))).toEqual({ result: 2, out: '', err: '{"error":"bad input","hint":"run solo --help for its options"}\n' })
-    expect((await capture(async () => runMain(main(async () => fail('timed out', 2)), ['--json', 'x']))).err).toBe('{"error":"timed out"}\n')
+    expect(await capture(async () => runMain(main(async () => badUsage('bad input')), ['--json']))).toEqual({ result: 2, out: '', err: '{"error":"bad input","code":2,"command":"solo","hint":"run solo --help for its options"}\n' })
+    expect((await capture(async () => runMain(main(async () => fail('timed out', 2)), ['--json', 'x']))).err).toBe('{"error":"timed out","code":2,"command":"solo"}\n')
     expect((await capture(async () => runMain(main(async () => fail('timed out', 2)), ['--', '--json']))).err).toBe('error: solo: timed out\n')
-    expect((await capture(async () => runCli({ name: 'demo', version: '1.0.0', about: 'a demo', commands: { boom: { summary: 'fails', run: async () => fail('it broke', 4) } } }, ['boom', '--json']))).err).toBe('{"error":"it broke"}\n')
+    expect((await capture(async () => runCli({ name: 'demo', version: '1.0.0', about: 'a demo', commands: { boom: { summary: 'fails', run: async () => fail('it broke', 4) } } }, ['boom', '--json']))).err).toBe('{"error":"it broke","code":4,"command":"demo boom"}\n')
+    expect(await capture(async () => runCli(cli, ['nope', '--json']))).toEqual({ result: 2, out: '', err: '{"error":"no command nope","code":2,"command":"demo","hint":"run demo --help for its commands"}\n' })
+    expect(await capture(async () => runCli(cli, ['--color', 'sometimes', 'echo', '--json']))).toEqual({ result: 2, out: '', err: '{"error":"--color takes auto, always or never, not sometimes","code":2,"command":"demo","hint":"run demo --help for its options"}\n' })
   })
 })
 
@@ -456,18 +458,27 @@ describe('the help screen', () => {
     expect((await capture(async () => runCli({ ...cli, replaces: 'echo' }, ['--help']))).out).toContain('Usage: demo <command> [options]\n\nCommands:')
   })
 
-  test('prints the description as JSON under KIT_HELP=json', async () => {
+  test('prints the description as JSON under KIT_HELP=json, --help=json or --help --json', async () => {
     const described = async (args: string[]) => {
       parse(args, 'demo [file]: prints a file\n\nExits 0 always.', {}, { replaces: 'cat', examples: ['demo a', ['demo', 'stdin']] })
 
       return 0
     }
 
+    const expectedMain = { synopsis: 'demo [file]', summary: 'prints a file', replaces: 'cat', examples: [{ line: 'demo a' }, { line: 'demo', note: 'stdin' }], options: expect.arrayContaining([{ name: 'help', short: 'h', description: 'show this help' }]) }
+    const expectedCli = { synopsis: 'demo <command> [options]', summary: 'a demo', examples: [{ line: 'demo echo hi' }] }
+
+    expect(JSON.parse((await capture(async () => runMain({ name: 'demo', version: '1', run: described }, ['--help=json']))).out)).toEqual(expectedMain)
+    expect(JSON.parse((await capture(async () => runMain({ name: 'demo', version: '1', run: described }, ['--help', '--json']))).out)).toEqual(expectedMain)
+    expect(JSON.parse((await capture(async () => runCli({ ...cli, examples: ['demo echo hi'] }, ['--help=json']))).out)).toEqual(expectedCli)
+    expect(JSON.parse((await capture(async () => runCli({ ...cli, examples: ['demo echo hi'] }, ['--help', '--json']))).out)).toEqual(expectedCli)
+    expect(JSON.parse((await capture(async () => runCli({ ...cli, examples: ['demo echo hi'] }, ['help', '--json']))).out)).toEqual(expectedCli)
+
     process.env.KIT_HELP = 'json'
 
     try {
-      expect(JSON.parse((await capture(async () => runMain({ name: 'demo', version: '1', run: described }, ['--help']))).out)).toEqual({ synopsis: 'demo [file]', summary: 'prints a file', replaces: 'cat', examples: [{ line: 'demo a' }, { line: 'demo', note: 'stdin' }], options: expect.arrayContaining([{ name: 'help', short: 'h', description: 'show this help' }]) })
-      expect(JSON.parse((await capture(async () => runCli({ ...cli, examples: ['demo echo hi'] }, ['--help']))).out)).toEqual({ synopsis: 'demo <command> [options]', summary: 'a demo', examples: [{ line: 'demo echo hi' }] })
+      expect(JSON.parse((await capture(async () => runMain({ name: 'demo', version: '1', run: described }, ['--help']))).out)).toEqual(expectedMain)
+      expect(JSON.parse((await capture(async () => runCli({ ...cli, examples: ['demo echo hi'] }, ['--help']))).out)).toEqual(expectedCli)
     }
     finally {
       delete process.env.KIT_HELP

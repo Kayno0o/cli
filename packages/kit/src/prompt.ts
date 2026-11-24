@@ -42,8 +42,8 @@ export interface Terminal {
 }
 
 export interface PromptSettings {
-  // Shown under the error a prompt fails with off a terminal, such as `pass --yes`.
-  hint?: string
+  // Shown under the error a prompt fails with off a terminal, such as `pass --yes`, so non-interactive callers always get a concrete flag or argument to pass.
+  hint: string
   terminal?: Terminal
 }
 
@@ -73,7 +73,7 @@ export interface SelectSettings<T> extends PromptSettings {
 }
 
 // One choice among several, typing filtering them, the arrows moving and Enter picking; undefined once Escape or Ctrl+C cancels.
-export async function select<T>(question: string, choices: Choice<T>[], { initial = 0, default: fallback, ...settings }: SelectSettings<T> = {}): Promise<T | undefined> {
+export async function select<T>(question: string, choices: Choice<T>[], { initial = 0, default: fallback, ...settings }: SelectSettings<T>): Promise<T | undefined> {
   const named = choices.findIndex(choice => choice.value === fallback)
   const list = new List(choices, fallback === undefined || named === -1 ? initial : named)
   const picked = await ask(question, settings, (colors, state, rows) => state === 'asking'
@@ -111,7 +111,7 @@ function flip<T>(checked: ReadonlySet<T>, value: T): ReadonlySet<T> {
 }
 
 // Several choices, typing filtering them, Space checking or unchecking the one under the cursor and Enter accepting what is checked; undefined once cancelled.
-export async function checklist<T>(question: string, choices: Choice<T>[], { initial = new Set(), min = 0, toggle = flip, ...settings }: ChecklistSettings<T> = {}): Promise<ReadonlySet<T> | undefined> {
+export async function checklist<T>(question: string, choices: Choice<T>[], { initial = new Set(), min = 0, toggle = flip, ...settings }: ChecklistSettings<T>): Promise<ReadonlySet<T> | undefined> {
   const list = new List(choices, 0)
   let checked = initial
   let invalid: string | undefined
@@ -152,7 +152,7 @@ export interface ConfirmSettings extends PromptSettings {
 }
 
 // A yes or no, y or n answering it and Enter taking the default; undefined once cancelled.
-export async function confirm(question: string, { default: fallback, ...settings }: ConfirmSettings = {}): Promise<boolean | undefined> {
+export async function confirm(question: string, { default: fallback, ...settings }: ConfirmSettings): Promise<boolean | undefined> {
   let answered = fallback
   const choices = { true: 'Y/n', false: 'y/N', undefined: 'y/n' }[String(fallback) as 'true' | 'false' | 'undefined']
   const accepted = await ask(question, settings, (colors, state) => [state === 'asking' ? asking(colors, question, '', choices) : answer(colors, question, state, answered ? 'yes' : 'no')], (key) => {
@@ -244,7 +244,7 @@ function listed(colors: Colors, found: readonly string[], columns: number): stri
 }
 
 // A line of text, Enter taking it once `validate` does; undefined once cancelled.
-export async function input(question: string, { default: fallback, mask = false, validate, history, complete, ...settings }: InputPromptSettings = {}): Promise<string | undefined> {
+export async function input(question: string, { default: fallback, mask = false, validate, history, complete, ...settings }: InputPromptSettings): Promise<string | undefined> {
   let line: Line = { text: '', caret: 0 }
   let invalid: string | undefined
   // What the last Tab found when it could fill nothing in, listed under the line until the next key.
@@ -528,7 +528,7 @@ export interface EditorSettings extends PromptSettings {
 }
 
 // A text edited in VISUAL or EDITOR (vi without either) on a temp file, the editor taking the terminal until it exits; undefined when it exits nonzero, as `:cq` does.
-export async function editor(question: string, { default: text = '', extension = '.txt', env = process.env, hint, terminal = process }: EditorSettings = {}): Promise<string | undefined> {
+export async function editor(question: string, { default: text = '', extension = '.txt', env = process.env, hint, terminal = process }: EditorSettings): Promise<string | undefined> {
   const { stderr } = terminal
 
   if (!isInteractive(terminal))

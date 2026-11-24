@@ -3,7 +3,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Theme } from './theme'
 import process from 'node:process'
-import { badUsage, fail, jsonOption, parse, printJson, readInput, runMain, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, canPage, fail, isHumanTerminal, jsonOption, parse, printJson, readInput, runMain, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
 import { languageOf, renderCode } from './code'
 import { looksLikeDiff, renderDiff } from './diff'
 import { renderMarkdown } from './markdown'
@@ -76,7 +76,8 @@ async function main(args: string[]): Promise<number> {
   if (text.trim() === '')
     fail('nothing to show', 1)
 
-  const width = wholeNumber(values.width, 'width', process.stdout.isTTY === true ? process.stdout.columns || DEFAULT_WIDTH : columnsOf(process.env.COLUMNS), 20)
+  const human = isHumanTerminal(process.stdout)
+  const width = wholeNumber(values.width, 'width', human ? process.stdout.columns || DEFAULT_WIDTH : columnsOf(process.env.COLUMNS), 20)
   const theme = themeFor(process.stdout)
   const language = values.lang === undefined ? languageOf(path) : languageOf(values.lang)
 
@@ -101,9 +102,9 @@ async function main(args: string[]): Promise<number> {
     return 0
   }
 
-  const shown = render(theme, values.lines ?? process.stdout.isTTY === true)
+  const shown = render(theme, values.lines ?? human)
 
-  if (process.stdout.isTTY === true && values.pager !== false && shown.split('\n').length > (process.stdout.rows || 24))
+  if (canPage(process.stdout) && values.pager !== false && shown.split('\n').length > (process.stdout.rows || 24))
     await page(shown)
   else
     process.stdout.write(shown)

@@ -171,11 +171,19 @@ export function parse<const T extends Options, const Names extends readonly stri
     throw new Completing(listing, settings.positionals, settings.candidates)
 
   const { own, rest } = settings.trailing === true ? splitTrailing(args, all, settings.positionals?.length ?? 0) : splitRest(args, settings.rest === true)
+  const helpJson = wantsHelpJson(process.env, own)
+  const stripHelpJson = (arg: string): string[] => {
+    if (arg === '--help=json')
+      return ['--help']
+
+    return arg === '--json' && !('json' in options) ? [] : [arg]
+  }
+  const normalized = helpJson ? own.flatMap(stripHelpJson) : own
 
   let parsed
 
   try {
-    parsed = parseArgs({ args: joinDashValues(withBare(withAliases(own, all), all), all), options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
+    parsed = parseArgs({ args: joinDashValues(withBare(withAliases(normalized, all), all), all), options: all, allowPositionals: true, allowNegative: settings.allowNegative === true, strict: true })
   }
   catch (error) {
     const message = parseError(error)
@@ -190,7 +198,7 @@ export function parse<const T extends Options, const Names extends readonly stri
   if (values.help === true) {
     const columns = takesControlCodes(process.stdout) ? process.stdout.columns : undefined
 
-    console.log(wantsHelpJson() ? JSON.stringify(description(usage, settings, listing)) : helpText(usage, listing, undefined, { ...settings, bin: heading.bin, columns }))
+    console.log(helpJson ? JSON.stringify(description(usage, settings, listing)) : helpText(usage, listing, undefined, { ...settings, bin: heading.bin, columns }))
 
     throw new HelpShown()
   }

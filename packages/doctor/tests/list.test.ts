@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { list, theme } from '../src/cli-bin'
+import { list, stats, theme } from '../src/cli-bin'
 import { describeBin, filterBins, listBins } from '../src/list'
 
 const temp = tempDirs()
@@ -156,5 +156,19 @@ describe('the cli bin', () => {
     expect(preview.out).toContain('light')
     expect(preview.out).toContain('marks & badges')
     expect(() => theme(['nope'])).toThrow('no preset nope')
+  })
+
+  test('cli stats --mode filters runs by output mode', async () => {
+    const file = join(temp('stats-mode-'), 'usage.jsonl')
+
+    writeFileSync(file, [
+      JSON.stringify({ at: new Date().toISOString(), bin: 'ft', command: 'board', flags: [], code: 0, mode: 'agent' }),
+      JSON.stringify({ at: new Date().toISOString(), bin: 'gst', flags: [], code: 0, mode: 'terminal' }),
+    ].join('\n'))
+
+    const agent = await capture(async () => stats(['--mode', 'agent', '--json'], file))
+
+    expect(agent.result).toBe(0)
+    expect(JSON.parse(agent.out)).toMatchObject({ runs: 1, bins: [{ bin: 'ft', runs: 1 }] })
   })
 })

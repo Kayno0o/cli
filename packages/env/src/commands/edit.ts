@@ -43,7 +43,7 @@ const CP_EXITS: ExitRow[] = [[0, 'it copied the key'], [1, 'the source lacks it 
 
 async function readValue(key: string, from: string | undefined): Promise<string> {
   const value = from === undefined && isInteractive()
-    ? await input(`value of ${key}`, { mask: true }) ?? fail('cancelled, nothing was written', 130)
+    ? await input(`value of ${key}`, { mask: true, hint: 'pipe the value on stdin or pass -F <file>' }) ?? fail('cancelled, nothing was written', 130)
     : await readInput(from ?? '-', { noStdin: 'pipe the value on stdin or give -F <file>, it is never taken from the command line' })
 
   const stripped = value.replace(TRAILING_NEWLINE, '')

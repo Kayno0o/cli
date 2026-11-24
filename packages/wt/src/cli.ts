@@ -143,7 +143,7 @@ async function prune(options: GlobalOptions & { all?: boolean, yes?: boolean }):
 
     const { confirm } = await import('@kaynooo/cli-kit/prompt')
 
-    if (await confirm('Remove it all?', { default: false }) !== true)
+    if (await confirm('Remove it all?', { default: false, hint: 'pass --yes to remove without asking' }) !== true)
       return 1
   }
 

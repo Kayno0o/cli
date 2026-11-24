@@ -4,7 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Host } from './checks'
 import type { Listed } from './list'
 import process from 'node:process'
-import { activeTheme, badge, badUsage, bar, completionScript, duration, formatDuration, header, jsonOption, keyValue, marked, paint, parse, PRESETS, printHeader, printJson, readUsage, role, runCli, section, sparkline, summarizeUsage, table, tree, usagePath } from '@kaynooo/cli-kit'
+import { activeTheme, badge, badUsage, bar, completionScript, duration, formatDuration, header, isInteractive, jsonOption, keyValue, marked, paint, parse, PRESETS, printHeader, printJson, readUsage, role, runCli, section, sparkline, summarizeUsage, table, tree, usagePath } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
 import { completionDir, installCompletions, installedBins } from './completions'
 import { configReport } from './config-report'
@@ -61,7 +61,7 @@ const FIND_EXITS: ExitRow[] = [[0, 'it showed a help or the list'], [1, 'nothing
 async function find(args: string[], host: Host = hostHere()): Promise<number> {
   const { positionals } = parse(args, FIND_USAGE, {}, { positionals: ['[word]'], exits: FIND_EXITS, examples: ['cli', ['cli find git', 'pick among the git family']] })
 
-  if (process.stdin.isTTY !== true || process.stderr.isTTY !== true)
+  if (!isInteractive())
     return list(positionals.filter(word => word !== undefined), host)
 
   const { cyan, dim } = paint(process.stderr)
@@ -114,9 +114,9 @@ export async function completions(args: string[], host: Host = hostHere()): Prom
   return 0
 }
 
-const STATS_USAGE = `cli stats [--since 7d] [--json]: how often each bin ran, and the usage errors by the option it did not know
+const STATS_USAGE = `cli stats [--since 7d] [--mode <terminal|agent|ci|pipe>] [--json]: how often each bin ran, and the usage errors by the option it did not know
 
-Every bin records each run in ~/.local/state/kaynooo-cli/usage.jsonl: the bin, its command, the flag names it saw (never a value or an argument), the exit code, how long it took and the unknown option of a usage error.
+Every bin records each run in ~/.local/state/kaynooo-cli/usage.jsonl: the bin, its command, the flag names it saw (never a value or an argument), the exit code, how long it took, its output mode and the unknown option of a usage error.
 The commands whose 90th percentile took a second or more are listed slowest first; failed counts exits other than 0 and 2. Set \`KAYNOOO_CLI_NO_USAGE=1\` to stop recording; \`guard\` never records.`
 
 const SLOW_MS = 1000
@@ -124,6 +124,7 @@ const STATS_EXITS: ExitRow[] = [[0, 'it printed the summary'], [2, 'a usage erro
 
 const STATS_OPTIONS = {
   since: { type: 'string', description: 'only the runs this recent (7d, 12h)' },
+  mode: { type: 'string', choices: ['terminal', 'agent', 'ci', 'pipe'] as const, description: 'only the runs in this output mode' },
   json: jsonOption('{runs, bins: [{bin, runs, failed, usageErrors}], commands: [{bin, command, runs, failed, usageErrors}], usageErrors: [{bin, command?, unknown, count}], durations: [{bin, command?, runs, median, p90}] in ms, slowest p90 first}'),
 } as const
 
@@ -162,9 +163,9 @@ export function config(args: string[], host: Host = hostHere()): number {
 }
 
 export async function stats(args: string[], path = usagePath()): Promise<number> {
-  const { values } = parse(args, STATS_USAGE, STATS_OPTIONS, { positionals: [], exits: STATS_EXITS, examples: ['cli stats', ['cli stats --since 7d', 'the last week']] })
+  const { values } = parse(args, STATS_USAGE, STATS_OPTIONS, { positionals: [], exits: STATS_EXITS, examples: ['cli stats', ['cli stats --since 7d', 'the last week'], ['cli stats --mode agent', 'only runs from coding agents']] })
   const window = values.since === undefined ? undefined : duration(values.since, 'since', 0, 'h')
-  const summary = summarizeUsage(await readUsage(path, window === undefined ? 0 : Date.now() - window))
+  const summary = summarizeUsage(await readUsage(path, window === undefined ? 0 : Date.now() - window, values.mode))
 
   if (values.json === true) {
     printJson(summary)

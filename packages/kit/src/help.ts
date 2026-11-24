@@ -70,8 +70,20 @@ export interface Description {
   options?: { name: string, short?: string, description?: string }[]
 }
 
-export function wantsHelpJson(env: Record<string, string | undefined> = process.env): boolean {
-  return env.KIT_HELP === 'json'
+export function wantsHelpJson(env: Record<string, string | undefined> = process.env, argv?: readonly string[]): boolean {
+  if (env.KIT_HELP === 'json')
+    return true
+
+  if (argv === undefined)
+    return false
+
+  const end = argv.indexOf('--')
+  const own = end === -1 ? argv : argv.slice(0, end)
+
+  if (own.includes('--help=json'))
+    return true
+
+  return (own.includes('--help') || own.includes('-h') || own[0] === 'help') && own.includes('--json')
 }
 
 // The synopsis and the summary a usage's first line splits into at its first `: `, else the first line after the synopses as the summary, with the examples spelled out.
@@ -92,12 +104,16 @@ export function description(usage: string, { examples = [], replaces, exits }: D
   }
 }
 
-// An `Examples:` section, after a blank line, with a line per example; nothing without one, and nothing for an agent, which reads the usage and the options.
+const MAX_AGENT_EXAMPLES = 2
+
+// An `Examples:` section, after a blank line, with a line per example; nothing without one, and at most two compact examples for an agent.
 export function exampleRows(examples: Example[], colors = paint(process.stdout)): string[] {
-  if (examples.length === 0 || outputMode() === 'agent')
+  if (examples.length === 0)
     return []
 
-  return ['', colors.bold('Examples:'), ...examples.map(example => typeof example === 'string' ? `  ${example}` : `  ${example[0]}  ${colors.dim(`# ${example[1]}`)}`)]
+  const shown = outputMode() === 'agent' ? examples.slice(0, MAX_AGENT_EXAMPLES) : examples
+
+  return ['', colors.bold('Examples:'), ...shown.map(example => typeof example === 'string' ? `  ${example}` : `  ${example[0]}  ${colors.dim(`# ${example[1]}`)}`)]
 }
 
 // Choices longer than this are listed after the description, so one option does not push every description off the screen.

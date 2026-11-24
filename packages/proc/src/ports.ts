@@ -125,7 +125,7 @@ async function stop(port: number, rows: PortRow[], procs: Map<number, ProcInfo>,
     if (!process.stdin.isTTY)
       fail(`stopping ${names} needs a terminal to ask on: pass --yes`, 2)
 
-    if (await confirm(`Stop ${names}?`, { default: false }) !== true)
+    if (await confirm(`Stop ${names}?`, { default: false, hint: 'pass --yes to stop without asking' }) !== true)
       return 1
   }
 

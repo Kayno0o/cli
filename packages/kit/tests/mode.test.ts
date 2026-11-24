@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { jsonText } from '../src/format'
 import { exampleRows } from '../src/help'
-import { isInteractive, outputMode } from '../src/mode'
+import { canPage, isHumanTerminal, isInteractive, outputMode } from '../src/mode'
 import { takesControlCodes } from '../src/style'
 
 const TERMINAL = { isTTY: true }
@@ -43,13 +43,13 @@ describe('jsonText', () => {
 })
 
 describe('help for an agent', () => {
-  test('drops the examples and the instead-of line', () => {
+  test('keeps up to two compact examples in agent mode', () => {
     const before = process.env.CLAUDECODE
 
     process.env.CLAUDECODE = '1'
 
     try {
-      expect(exampleRows(['a --b'])).toEqual([])
+      expect(exampleRows(['a --b', ['a --c', 'with note'], 'a --d'])).toEqual(['', 'Examples:', '  a --b', '  a --c  # with note'])
     }
     finally {
       if (before === undefined)
@@ -58,7 +58,7 @@ describe('help for an agent', () => {
         process.env.CLAUDECODE = before
     }
 
-    expect(exampleRows(['a --b'])).not.toEqual([])
+    expect(exampleRows(['a --b', 'a --c', 'a --d'])).toHaveLength(5)
   })
 })
 
@@ -71,11 +71,17 @@ describe('KIT_MODE on a terminal', () => {
   })
 })
 
-describe('isInteractive', () => {
-  test('needs input and the prompt on a terminal', () => {
-    expect(isInteractive({ stdin: { isTTY: true }, stderr: { isTTY: true } })).toBe(true)
-    expect(isInteractive({ stdin: { isTTY: true }, stderr: { isTTY: false } })).toBe(false)
-    expect(isInteractive({ stdin: {}, stderr: { isTTY: true } })).toBe(false)
-    expect(isInteractive({})).toBe(false)
+describe('isHumanTerminal, canPage and isInteractive', () => {
+  test('only treat a real human terminal as interactive or page-capable, never an agent on a pty', () => {
+    expect(isHumanTerminal(TERMINAL, {})).toBe(true)
+    expect(isHumanTerminal(TERMINAL, { CLAUDECODE: '1' })).toBe(false)
+    expect(isHumanTerminal({}, {})).toBe(false)
+    expect(canPage(TERMINAL, {})).toBe(true)
+    expect(canPage(TERMINAL, { KIT_MODE: 'agent' })).toBe(false)
+    expect(isInteractive({ stdin: { isTTY: true }, stderr: { isTTY: true } }, {})).toBe(true)
+    expect(isInteractive({ stdin: { isTTY: true }, stderr: { isTTY: true } }, { CLAUDECODE: '1' })).toBe(false)
+    expect(isInteractive({ stdin: { isTTY: true }, stderr: { isTTY: false } }, {})).toBe(false)
+    expect(isInteractive({ stdin: {}, stderr: { isTTY: true } }, {})).toBe(false)
+    expect(isInteractive({}, {})).toBe(false)
   })
 })

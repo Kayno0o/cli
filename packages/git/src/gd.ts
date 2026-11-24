@@ -2,7 +2,7 @@
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
-import { badUsage, fail, jsonOption, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
+import { badUsage, fail, isHumanTerminal, jsonOption, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
 import { git } from './git'
 import { toplevelOf } from './repos'
 
@@ -67,9 +67,9 @@ async function diff(args: string[], paths: string[]): Promise<string> {
   return ran.stdout
 }
 
-// The patch on stdout, through view on a terminal when it is installed.
+// The patch on stdout, through view on a human terminal when it is installed.
 async function show(patch: string): Promise<void> {
-  const viewer = process.stdout.isTTY ? Bun.which('view') : null
+  const viewer = isHumanTerminal(process.stdout) ? Bun.which('view') : null
 
   if (viewer === null) {
     process.stdout.write(patch)

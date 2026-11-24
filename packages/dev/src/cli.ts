@@ -56,7 +56,7 @@ async function textInput(argument: string | undefined, what: string): Promise<st
 // A secret kept out of the command line: asked for masked on a terminal, read from stdin otherwise.
 async function secretInput(what: string): Promise<string> {
   if (isInteractive())
-    return await input(what, { mask: true }) ?? fail('cancelled', 130)
+    return await input(what, { mask: true, hint: `pipe ${what} on stdin` }) ?? fail('cancelled', 130)
 
   return (await textInput(undefined, what)).replace(TRAILING_NEWLINE, '')
 }

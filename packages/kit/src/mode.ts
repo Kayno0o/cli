@@ -30,7 +30,17 @@ export function outputMode(stream: { isTTY?: boolean } = process.stdout, env: En
   return isSet(env.CI) ? 'ci' : 'pipe'
 }
 
-// Whether a person can answer a prompt: input arrives from a terminal and the prompt, drawn on stderr, lands on one.
-export function isInteractive(streams: { stdin?: { isTTY?: boolean }, stderr?: { isTTY?: boolean } } = process): boolean {
-  return streams.stdin?.isTTY === true && streams.stderr?.isTTY === true
+// Whether a person is reading stdout/stderr directly on a terminal (never true for an agent even on a PTY, CI, or a pipe).
+export function isHumanTerminal(stream: { isTTY?: boolean } = process.stdout, env: Env = process.env): boolean {
+  return outputMode(stream, env) === 'terminal'
+}
+
+// Whether long output may be sent to an interactive pager.
+export function canPage(stream: { isTTY?: boolean } = process.stdout, env: Env = process.env): boolean {
+  return isHumanTerminal(stream, env)
+}
+
+// Whether a person can answer a prompt: input arrives from a terminal and the prompt, drawn on stderr, lands on a human terminal.
+export function isInteractive(streams: { stdin?: { isTTY?: boolean }, stderr?: { isTTY?: boolean } } = process, env: Env = process.env): boolean {
+  return streams.stdin?.isTTY === true && isHumanTerminal(streams.stderr ?? {}, env)
 }

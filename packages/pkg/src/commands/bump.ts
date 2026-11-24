@@ -293,7 +293,7 @@ export interface Chooser {
 
 const terminalChooser: Chooser = {
   pick: async (name, plans, excluded) => checklist(`bump ${name} in`, plans.map(plan => ({ value: plan.dir, label: plan.line, hint: excluded.has(plan.dir) ? 'left out last time' : '' })), { initial: new Set(plans.filter(plan => !excluded.has(plan.dir)).map(plan => plan.dir)), hint: 'pass --yes to bump every consumer' }),
-  confirm: async question => confirm(question, { default: true }),
+  confirm: async question => confirm(question, { default: true, hint: 'pass --yes to skip confirmation' }),
 }
 
 // Asks which of the consumers to bump, the ones left out last time unchecked, remembers what is unchecked now and prints the plan for a yes; the folders to bump and those left out, none to bump when declined, undefined when there is nothing to choose from.

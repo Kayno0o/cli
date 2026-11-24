@@ -282,7 +282,7 @@ async function execute(emitting: boolean, typed: string, recorded: string, comma
   if (!interactive() && command.some(word => typeof word === 'object' && 'ask' in word))
     fail('a required argument is missing and there is no terminal to ask for it', 1)
 
-  const done = await answered(command, async name => input(`${name}:`, { history: `sf ${recorded || typed} ${name}` }))
+  const done = await answered(command, async name => input(`${name}:`, { history: `sf ${recorded || typed} ${name}`, hint: `pass ${name} as an argument after \`sf ${recorded || typed}\`` }))
 
   if (done === undefined)
     return 1
