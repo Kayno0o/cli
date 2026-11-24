@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
-const COMMANDS = ['pid', 'ports', 'procs'] as const
+const COMMANDS = ['pid', 'ports', 'cleanup', 'ls', 'tree', 'top', 'kill'] as const
 
 function listen() {
   return Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: () => undefined } })
@@ -124,9 +124,9 @@ describe('ports', () => {
   })
 })
 
-describe('procs', () => {
-  test('--json has the groups shape', () => {
-    const result = run('procs', ['--json'])
+describe('cleanup', () => {
+  test('--json has the groups shape and supports --origin and --tool filters', () => {
+    const result = run('cleanup', ['--json'])
     const data = JSON.parse(result.out) as { groups: { origin: string, count: number, rss: number, oldestSeconds: number, pids: number[] }[], skipped: number }
 
     expect(result.code).toBe(0)
@@ -137,13 +137,53 @@ describe('procs', () => {
       expect(group.count).toBe(group.pids.length)
       expect(group.pids).not.toContain(process.pid)
     }
+
+    const filtered = JSON.parse(run('cleanup', ['--origin', 'nonexistent-origin-xyz', '--json']).out) as { groups: unknown[] }
+
+    expect(filtered.groups).toEqual([])
   })
 
   test('--kill without --yes stops nothing', () => {
-    expect(run('procs', ['--kill', '--min-mem', '1']).code).toBe(0)
+    expect(run('cleanup', ['--kill', '--min-mem', '1']).code).toBe(0)
   })
 
   test('refuses a bad size', () => {
-    expect(run('procs', ['--min-mem', 'lots']).code).toBe(2)
+    expect(run('cleanup', ['--min-mem', 'lots']).code).toBe(2)
+  })
+})
+
+describe('ls, tree, top, and kill', () => {
+  test('ls/find, tree, top, and kill operate on live processes safely', async () => {
+    const child = Bun.spawn(['sleep', '30'], { stdout: 'ignore', stderr: 'ignore' })
+
+    try {
+      await Bun.sleep(100)
+
+      const found = JSON.parse(run('ls', ['sleep', '--json']).out) as { pid: number }[]
+
+      expect(found.some(p => p.pid === child.pid)).toBe(true)
+
+      const pidInfo = JSON.parse(run('pid', [String(process.pid), '--json']).out) as { children: { pid: number }[] }
+
+      expect(pidInfo.children.some(c => c.pid === child.pid)).toBe(true)
+
+      const tree = JSON.parse(run('tree', [String(process.pid), '--json']).out) as { pid: number, children: { pid: number }[] }[]
+
+      expect(tree[0]?.pid).toBe(process.pid)
+      expect(tree[0]?.children.some(c => c.pid === child.pid)).toBe(true)
+
+      const top = JSON.parse(run('top', ['-n', '5', '--json']).out) as { pid: number }[]
+
+      expect(top.length).toBeGreaterThan(0)
+      expect(top.length).toBeLessThanOrEqual(5)
+
+      const killed = run('kill', [String(child.pid), '--yes', '--json'])
+
+      expect(killed.code).toBe(0)
+      expect((JSON.parse(killed.out) as { terminated: number[] }).terminated).toContain(child.pid)
+    }
+    finally {
+      child.kill()
+    }
   })
 })

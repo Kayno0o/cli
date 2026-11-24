@@ -47,7 +47,7 @@ describe('repeated --port and --url', () => {
     const result = await waitfor(['-p', String(up.port), '-p', String(closed), '-t', '1s'])
 
     up.stop(true)
-    expect(result.code).toBe(2)
+    expect(result.code).toBe(124)
     expect(result.err).toContain(`127.0.0.1:${closed} is not listening`)
     expect(result.err).not.toContain(`127.0.0.1:${up.port} is not listening`)
   })
@@ -72,7 +72,7 @@ describe('--status and --body', () => {
     await web.stop(true)
     expect(wanted.code).toBe(0)
     expect(wanted.out).toContain('answered 404')
-    expect(other.code).toBe(2)
+    expect(other.code).toBe(124)
   })
 
   test('sees a redirect itself when a 3xx is asked', async () => {
@@ -98,12 +98,12 @@ describe('--status and --body', () => {
     const result = await waitfor(['--url', `http://127.0.0.1:${web.port}/`, '--body', 'ready', '-t', '1s'])
 
     await web.stop(true)
-    expect(result.code).toBe(2)
+    expect(result.code).toBe(124)
     expect(result.err).toContain('body does not match')
   })
 
   test('refuses --status without --url and a bad status', async () => {
-    expect((await waitfor(['-p', '1', '--status', '200'])).err).toContain('--status and --body go with --url')
+    expect((await waitfor(['-p', '1', '--status', '200'])).err).toContain('--status, --body, --header and --insecure go with --url')
     expect((await waitfor(['--url', 'http://x/', '--status', 'bad'])).err).toContain('--status takes')
   })
 })

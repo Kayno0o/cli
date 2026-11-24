@@ -27,7 +27,20 @@ describe('waitfor --pid', () => {
     const result = await waitfor(['--pid', String(child.pid), '-t', '300ms'])
 
     child.kill()
-    expect(result.code).toBe(2)
+    expect(result.code).toBe(124)
     expect(result.err).toContain(`pid ${child.pid} is still running`)
+  })
+
+  test('--while-pid exits 1 immediately when the watched process is dead', async () => {
+    const gone = Bun.spawn(['true'])
+
+    await gone.exited
+
+    const started = Date.now()
+    const result = await waitfor(['--port', '9', '--while-pid', String(gone.pid), '-t', '30s'])
+
+    expect(result.code).toBe(1)
+    expect(result.err).toContain(`--while-pid ${gone.pid} exited`)
+    expect(Date.now() - started).toBeLessThan(5000)
   })
 })

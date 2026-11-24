@@ -9,14 +9,16 @@ import { maskArgs } from './mask'
 import { ancestry, snapshot } from './read'
 import { selectGroups } from './select'
 
-const usage = `proc procs: lists the calling user's leftover or heavy dev processes, grouped by project folder, browser profile or command
+const usage = `proc cleanup: lists the calling user's leftover or heavy dev processes, grouped by project folder, browser profile or command
 
 A process is listed when it is a dev tool (bun, node, vite, chromium, playwright, language servers, test runners) and either an orphan, reparented to init or to the user's systemd, or heavy (500M resident by default); the processes below it and those sharing its browser profile come with it.
-\`--kill\` is a dry run that names what it would stop unless --yes is given. It never signals pid 1, shells, terminals, this command and its ancestors, or processes of other users.`
+Filter by --origin or --tool before running --kill --yes. \`--kill\` is a dry run that names what it would stop unless --yes is given.`
 const EXITS: ExitRow[] = [[0, 'it listed or stopped everything'], [1, 'a process survived SIGKILL'], [2, 'a usage error']]
 
 const options = {
   'json': jsonOption('{ groups: [{ origin, kind, count, rss, oldestSeconds, tools, orphans, pids, processes }], skipped }'),
+  'origin': { type: 'string', description: 'keep only groups whose origin contains this substring (case-insensitive)' },
+  'tool': { type: 'string', description: 'keep only processes matching this tool name (comma-separated, e.g. chromium,vite)' },
   'kill': { type: 'boolean', conflicts: ['watch'], description: 'stop the listed processes: a dry run without --yes' },
   'watch': watchOption('the processes'),
   'yes': { type: 'boolean', short: 'y', description: 'with --kill, really stop them, without asking' },
@@ -59,15 +61,14 @@ function render(groups: Group[]): string {
   return table([['ORIGIN', 'PROCS', 'RSS', 'OLDEST', 'WHAT', ''], ...rows], { header: true, align: ['left', 'right', 'right', 'right'] })
 }
 
-export async function procs(args: string[]): Promise<number> {
+export async function cleanup(args: string[]): Promise<number> {
   const { values } = parse(args, usage, options, {
     exits: EXITS,
     replaces: 'pkill -f and pgrep -f one-liners (which match their own shell), ps aux | grep for leftover chromium, bun or vite processes',
     examples: [
-      ['proc procs', 'leftover and heavy dev processes, by origin'],
-      ['proc procs --min-mem 1G --older 1h', 'only the big ones that have run a while'],
-      ['proc procs --kill', 'dry run: what would be stopped'],
-      'proc procs --kill --yes',
+      ['proc cleanup', 'leftover and heavy dev processes, by origin'],
+      ['proc cleanup --tool chromium --kill --yes', 'stop leftover Chromium processes'],
+      ['proc cleanup --origin workspace/app --min-mem 1G', 'filter by project origin and memory'],
     ],
   })
   const minMem = values['min-mem'] === undefined ? undefined : parseSize(values['min-mem'], 1024 ** 2)
@@ -76,13 +77,36 @@ export async function procs(args: string[]): Promise<number> {
     fail(`--min-mem takes a size such as 500M or 1.5G, not ${values['min-mem']}`, 2)
 
   if (values.watch !== undefined)
-    return watching(values.watch, async () => procs(withoutWatch(args)))
+    return watching(values.watch, async () => cleanup(withoutWatch(args)))
 
   const olderMs = values.older === undefined ? undefined : duration(values.older, 'older', 0, 'm')
   const uid = process.getuid?.() ?? -1
   const all = await snapshot('/proc', owner => owner === uid)
   const mine = new Set(ancestry(process.pid, new Map(all.map(proc => [proc.pid, proc]))))
-  const { groups, protectedCount } = selectGroups(all, { guard: { uid, mine }, now: Date.now(), home: homedir(), exists: existsSync, minMem, olderMs })
+  const selected = selectGroups(all, { guard: { uid, mine }, now: Date.now(), home: homedir(), exists: existsSync, minMem, olderMs })
+  const originFilter = values.origin?.toLowerCase()
+  const toolFilter = values.tool === undefined ? undefined : new Set(values.tool.split(',').map(item => item.trim().toLowerCase()).filter(Boolean))
+  const groups = selected.groups
+    .filter(group => originFilter === undefined || group.origin.toLowerCase().includes(originFilter))
+    .map((group): Group | undefined => {
+      if (toolFilter === undefined)
+        return group
+
+      const members = group.members.filter(member => toolFilter.has(member.tool.toLowerCase()))
+
+      if (members.length === 0)
+        return undefined
+
+      return {
+        ...group,
+        members,
+        rss: members.reduce((sum, member) => sum + member.proc.rss, 0),
+        oldestMs: Math.max(...members.map(member => member.ageMs)),
+        orphans: members.filter(member => member.orphan).length,
+      }
+    })
+    .filter((group): group is Group => group !== undefined)
+  const { protectedCount } = selected
   const pids = groups.flatMap(group => group.members.map(({ proc }) => proc.pid))
 
   const show = (extra: object = {}): void => {

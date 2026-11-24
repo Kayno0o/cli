@@ -19,12 +19,12 @@ describe('waitfor --cmd', () => {
   test('times out naming the last exit code and output line', async () => {
     const result = await waitfor(['--cmd', 'echo not yet; exit 3', '--interval', '100ms', '-t', '500ms'])
 
-    expect(result.code).toBe(2)
+    expect(result.code).toBe(124)
     expect(result.err).toContain('`echo not yet; exit 3` exited 3 (not yet)')
   })
 
   test('a command that cannot run is a timeout reason, not a crash', async () => {
-    expect((await waitfor(['--cmd', 'no-such-command-here', '--interval', '100ms', '-t', '500ms'])).code).toBe(2)
+    expect((await waitfor(['--cmd', 'no-such-command-here', '--interval', '100ms', '-t', '500ms'])).code).toBe(124)
   })
 })
 
@@ -41,7 +41,7 @@ describe('waitfor --any', () => {
   test('times out listing every condition when none is met', async () => {
     const result = await waitfor(['--any', '--cmd', 'false', '--pid', String(process.pid), '-t', '500ms'])
 
-    expect(result.code).toBe(2)
+    expect(result.code).toBe(124)
     expect(result.err).toContain('none met')
     expect(result.err).toContain('`false` exited 1')
     expect(result.err).toContain(`pid ${process.pid} is still running`)

@@ -5,7 +5,7 @@ import process from 'node:process'
 import { fail, formatFileSize, formatSeconds, jsonOption, paint, parse, printJson } from '@kaynooo/cli-kit'
 import { maskArgs, maskEnviron } from './mask'
 import { parseCgroup, parseEnviron, parseLimits, parseStat, parseStatus, statusBytes } from './parse'
-import { bootMs, fdCount, readProc, readSockets, readText, socketsOf, userName } from './read'
+import { bootMs, fdCount, readProc, readSockets, readText, snapshot, socketsOf, userName } from './read'
 
 const usage = `proc pid <pid>: shows what a process is, from its executable and command line to its parent chain, memory, open files, listening ports and cgroup
 
@@ -34,6 +34,7 @@ export interface Report {
   cwd: string | undefined
   command: string[]
   parents: Parent[]
+  children: Parent[]
   user: { uid: number, name: string | undefined }
   startedAt: string
   ageSeconds: number
@@ -101,6 +102,12 @@ async function report(pid: number, showEnv: boolean): Promise<Report | undefined
   if (showEnv && environText === undefined)
     unreadable.push('environment')
 
+  const [allProcs, parents] = await Promise.all([snapshot('/proc', () => false), parentsOf(proc, boot)])
+  const children: Parent[] = allProcs
+    .filter(child => child.ppid === pid)
+    .sort((a, b) => a.pid - b.pid)
+    .map(child => ({ pid: child.pid, comm: child.comm, command: maskArgs(child.args).join(' ') }))
+
   return {
     pid,
     comm: proc.comm,
@@ -108,7 +115,8 @@ async function report(pid: number, showEnv: boolean): Promise<Report | undefined
     exe: proc.exe,
     cwd: proc.cwd,
     command: maskArgs(proc.args),
-    parents: await parentsOf(proc, boot),
+    parents,
+    children,
     user: { uid, name: await userName(uid) },
     startedAt: new Date(proc.startMs).toISOString(),
     ageSeconds: Math.max(0, (Date.now() - proc.startMs) / 1000),
@@ -139,6 +147,7 @@ function render(info: Report, showEnv: boolean): string {
     ['Directory', info.cwd ?? '-'],
     ['Command', info.command.join(' ') || `[${info.comm}]`],
     ['Parents', info.parents.length === 0 ? 'none (init)' : info.parents.map(parent => `${parent.pid} ${parent.comm}`).join(' < ')],
+    ...(info.children.length === 0 ? [] : [['Children', info.children.map(child => `${child.pid} ${child.comm}`).join(', ')] as [string, string]]),
     ['User', `${info.user.name ?? '?'} (${info.user.uid})`],
     ['State', info.state],
     ['Started', `${info.startedAt} (${formatSeconds(info.ageSeconds)} ago)`],
@@ -147,6 +156,9 @@ function render(info: Report, showEnv: boolean): string {
     ['Processes', `${info.threads ?? '-'} threads (limit ${limitLine(info.limits, 'Max processes')})`],
     ['Listening', info.listening.length === 0 ? 'nothing' : info.listening.map(({ protocol, address, port }) => `${protocol} ${address.includes(':') ? `[${address}]` : address}:${port}`).join(', ')],
   ]
+
+  if (info.container !== undefined)
+    rows.push(['Container', info.container])
 
   if (info.cgroup !== undefined)
     rows.push(['Cgroup', info.cgroup])

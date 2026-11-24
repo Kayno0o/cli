@@ -215,4 +215,27 @@ describe('slot', () => {
   test('slot ls says nothing is busy on an empty queue', async () => {
     expect((await finished(slot(['ls', '-n', '3']))).out).toBe('slots: 0 of 3 busy\n')
   })
+
+  test('slot -- ls runs the ls command instead of listing slots', async () => {
+    const run = await finished(slot(['--', 'ls', dir]))
+
+    expect(run.code).toBe(0)
+    expect(run.out).not.toContain('slots:')
+  })
+
+  test('--weight and --exclusive reserve multiple slots at once', async () => {
+    const holder = slot(['-n', '2', '--weight', '2', ...sleeper('a.pid')])
+
+    await until(async () => (await listed()).busy === 2)
+
+    const { code } = await finished(slot(['-n', '2', '-t', '400ms', '--', 'echo', 'blocked']))
+
+    expect(code).toBe(2)
+    holder.kill('SIGKILL')
+    await holder.exited
+
+    const excl = await finished(slot(['-n', '2', '--exclusive', '--', 'echo', 'alone']))
+
+    expect(excl).toEqual({ code: 0, out: 'alone\n', err: '' })
+  })
 })

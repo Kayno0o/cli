@@ -223,3 +223,68 @@ export function verdictOf(answers: DnsAnswer[], zoneProblem?: string): Pick<DnsR
 export function known(report: Pick<DnsReport, 'answers'>): boolean {
   return report.answers.some(answer => answer.error === undefined && answer.a.length + answer.aaaa.length + answer.cname.length > 0)
 }
+
+export const RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'CAA', 'NS', 'SOA'] as const
+export type RecordType = typeof RECORD_TYPES[number]
+
+export interface TypedRecords {
+  type: RecordType
+  values: string[]
+  error?: string
+}
+
+/** Queries specific DNS record types (MX, TXT, CAA, NS, SOA, A, AAAA, CNAME) against the system resolver. */
+export async function queryRecordTypes(host: string, types: readonly RecordType[], timeoutMs = TIMEOUT_MS): Promise<TypedRecords[]> {
+  const name = host.replace(TRAILING_DOT, '').toLowerCase()
+  const resolver = new Resolver({ timeout: timeoutMs, tries: 1 })
+
+  return Promise.all(types.map(async (type): Promise<TypedRecords> => {
+    try {
+      switch (type) {
+        case 'A':
+          return { type, values: (await settled(resolver.resolve4(name))).sort() }
+        case 'AAAA':
+          return { type, values: (await settled(resolver.resolve6(name))).sort() }
+        case 'CNAME':
+          return { type, values: (await settled(resolver.resolveCname(name))).map(v => v.toLowerCase()) }
+        case 'MX':
+          return { type, values: (await settled(resolver.resolveMx(name))).sort((a, b) => a.priority - b.priority || a.exchange.localeCompare(b.exchange)).map(r => `${r.priority} ${r.exchange}`) }
+        case 'TXT':
+          return { type, values: (await settled(resolver.resolveTxt(name))).map(parts => parts.join('')) }
+        case 'CAA':
+          return {
+            type,
+            values: (await settled(resolver.resolveCaa(name))).map((r) => {
+              if (r.issue !== undefined)
+                return `${r.critical} issue "${r.issue}"`
+
+              if (r.issuewild !== undefined)
+                return `${r.critical} issuewild "${r.issuewild}"`
+
+              return `${r.critical} iodef "${r.iodef ?? ''}"`
+            }),
+          }
+        case 'NS':
+          return { type, values: (await settled(resolver.resolveNs(name))).sort() }
+        case 'SOA': {
+          try {
+            const soa = await resolver.resolveSoa(name)
+
+            return { type, values: [`${soa.nsname} ${soa.hostmaster} serial=${soa.serial} refresh=${soa.refresh} retry=${soa.retry} expire=${soa.expire} minttl=${soa.minttl}`] }
+          }
+          catch (error) {
+            const code = (error as { code?: string }).code
+
+            if (code === 'ENOTFOUND' || code === 'ENODATA')
+              return { type, values: [] }
+
+            throw error
+          }
+        }
+      }
+    }
+    catch (error) {
+      return { type, values: [], error: failureOf(error) }
+    }
+  }))
+}

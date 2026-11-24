@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs'
-import { badUsage, configuredNumber } from '@kaynooo/cli-kit'
+import { badUsage, configuredNumber, runCommand } from '@kaynooo/cli-kit'
 
 // Lines kept from the end of the file for a timeout's excerpt, and on each side of a failure line.
 const TAIL = configuredNumber('wait', 'tail', 20)
@@ -37,7 +37,17 @@ export class FileWatch {
   private failure: Failure | undefined
   private matched = false
 
-  constructor(readonly path: string, private readonly until: RegExp | undefined, private readonly failOn: RegExp | undefined) {}
+  constructor(readonly path: string, private readonly until: RegExp | undefined, private readonly failOn: RegExp | undefined, fromEnd = false) {
+    if (fromEnd && existsSync(path)) {
+      const stats = statSync(path)
+
+      if (stats.isDirectory())
+        badUsage(`--file ${path} is a folder, not a log file`)
+
+      this.offset = stats.size
+      this.identity = { dev: stats.dev, ino: stats.ino }
+    }
+  }
 
   get done(): boolean {
     return this.until === undefined || this.matched
@@ -228,6 +238,46 @@ export interface UrlExpect {
   status?: { test: StatusTest, spec: string }
   // A pattern the first megabyte of the body must match.
   body?: RegExp
+  // Extra HTTP headers sent with each poll request.
+  headers?: Record<string, string>
+  // Accept untrusted / self-signed TLS certificates.
+  insecure?: boolean
+}
+
+// Checks whether a Docker Compose service or container reports healthy. Returns undefined when healthy.
+export async function healthyProblem(service: string): Promise<string | undefined> {
+  if (Bun.which('docker') === null)
+    return 'docker is not installed'
+
+  const compose = await runCommand(['docker', 'compose', 'ps', '--format', 'json', service])
+
+  if (compose.code === 0 && compose.stdout.trim() !== '') {
+    const rows: Record<string, unknown>[] = compose.stdout.trim().split('\n').flatMap((line): Record<string, unknown>[] => {
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown> | Record<string, unknown>[]
+
+        return Array.isArray(parsed) ? parsed : [parsed]
+      }
+      catch {
+        return []
+      }
+    })
+
+    if (rows.length > 0) {
+      const states = rows.map(row => String(row.Health ?? row.State ?? row.Status ?? 'unknown').toLowerCase())
+
+      return states.every(state => state === 'healthy' || state.includes('(healthy)')) ? undefined : states.join(', ')
+    }
+  }
+
+  const inspected = await runCommand(['docker', 'inspect', '--format', '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}', service])
+
+  if (inspected.code !== 0)
+    return 'container not found'
+
+  const status = inspected.stdout.trim().toLowerCase()
+
+  return status === 'healthy' ? undefined : (status || 'unknown')
 }
 
 async function readBody(response: Response): Promise<string> {
@@ -260,7 +310,13 @@ export async function urlCheck(url: string, timeout: number, expect: UrlExpect =
   try {
     // A 3xx expected is the answer itself, so redirects are left unfollowed then.
     const wantsRedirect = expect.status !== undefined && Array.from({ length: 100 }, (_, index) => 300 + index).some(expect.status.test)
-    const response = await fetch(url, { signal: AbortSignal.timeout(timeout), redirect: wantsRedirect ? 'manual' : 'follow' })
+    const init: RequestInit & { tls?: { rejectUnauthorized: boolean } } = {
+      signal: AbortSignal.timeout(timeout),
+      redirect: wantsRedirect ? 'manual' : 'follow',
+      ...(expect.headers === undefined ? {} : { headers: expect.headers }),
+      ...(expect.insecure === true ? { tls: { rejectUnauthorized: false } } : {}),
+    }
+    const response = await fetch(url, init)
     const ok = expect.status === undefined ? response.ok : expect.status.test(response.status)
 
     if (!ok) {

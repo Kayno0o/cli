@@ -3,7 +3,7 @@ import type { Container, Protocol, Socket } from './parse'
 import type { ProcInfo } from './read'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { badUsage, duration, fail, jsonOption, paint, parse, printJson, problem, table, truncate, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, paint, parse, printJson, problem, runCommand, table, truncate, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { dockerContainers } from './docker'
 import { protectionOf, terminate } from './kill'
@@ -19,6 +19,7 @@ const EXITS: ExitRow[] = [[0, 'it listed or stopped'], [1, 'nothing listens on t
 const options = {
   json: jsonOption('[{ port, protocol, addresses, pid, command, cwd, container }]'),
   kill: { type: 'boolean', conflicts: ['watch'], description: 'stop the owner of the given port' },
+  docker: { type: 'boolean', description: 'with --kill, also stop Docker containers publishing the port' },
   watch: watchOption('the ports'),
   force: { type: 'boolean', description: 'with --kill, SIGKILL what SIGTERM did not stop within --grace' },
   yes: { type: 'boolean', short: 'y', description: 'with --kill, do not ask first' },
@@ -103,12 +104,21 @@ function render(rows: PortRow[]): string {
   return table([['PORT', 'PROTO', 'ADDRESS', 'PID', 'COMMAND', 'CWD'], ...cells], { header: true })
 }
 
-async function stop(port: number, rows: PortRow[], procs: Map<number, ProcInfo>, values: { force?: boolean | undefined, yes?: boolean | undefined, quiet?: boolean | undefined, grace?: string | undefined }): Promise<number> {
+async function stop(port: number, rows: PortRow[], procs: Map<number, ProcInfo>, values: { docker?: boolean | undefined, force?: boolean | undefined, yes?: boolean | undefined, quiet?: boolean | undefined, grace?: string | undefined }): Promise<number> {
   const guard = { uid: process.getuid?.() ?? -1, mine: new Set(ancestry(process.pid, procs)) }
   const targets = new Map<number, PortRow>()
+  const containers = new Map<string, NonNullable<PortRow['container']>>()
 
   for (const row of rows) {
-    const reason = refusal(row, row.pid === undefined ? undefined : procs.get(row.pid), guard)
+    const proc = row.pid === undefined ? undefined : procs.get(row.pid)
+
+    if (values.docker === true && row.container !== undefined && (proc === undefined || proc.comm === 'docker-proxy')) {
+      containers.set(row.container.name, row.container)
+
+      continue
+    }
+
+    const reason = refusal(row, proc, guard)
 
     if (reason !== undefined)
       problem(`port ${port}: ${reason}`)
@@ -116,10 +126,13 @@ async function stop(port: number, rows: PortRow[], procs: Map<number, ProcInfo>,
       targets.set(row.pid, row)
   }
 
-  if (targets.size === 0)
+  if (targets.size === 0 && containers.size === 0)
     return 1
 
-  const names = [...targets].map(([pid, row]) => `${pid} (${truncate(row.command ?? '', 40)})`).join(', ')
+  const names = [
+    ...[...targets].map(([pid, row]) => `${pid} (${truncate(row.command ?? '', 40)})`),
+    ...[...containers.values()].map(c => `docker ${containerLabel(c)}`),
+  ].join(', ')
 
   if (values.yes !== true) {
     if (!process.stdin.isTTY)
@@ -129,15 +142,37 @@ async function stop(port: number, rows: PortRow[], procs: Map<number, ProcInfo>,
       return 1
   }
 
-  const outcome = await terminate([...targets.keys()], { escalate: values.force === true, graceMs: duration(values.grace, 'grace', 5000) })
+  let code = 0
 
-  for (const pid of values.quiet === true ? [] : [...outcome.terminated, ...outcome.killed])
-    console.log(`stopped ${pid}${outcome.killed.includes(pid) ? ' (SIGKILL)' : ''}`)
+  if (containers.size > 0) {
+    for (const name of containers.keys()) {
+      const ran = await runCommand(['docker', 'stop', name])
 
-  for (const pid of outcome.survived)
-    problem(`${pid} is still running${values.force === true ? '' : ', pass --force to SIGKILL it'}`)
+      if (ran.code === 0) {
+        if (values.quiet !== true)
+          console.log(`stopped container ${name}`)
+      }
+      else {
+        problem(`could not stop container ${name}: ${ran.text.trim() || `exit ${ran.code}`}`)
+        code = 1
+      }
+    }
+  }
 
-  return outcome.survived.length === 0 ? 0 : 1
+  if (targets.size > 0) {
+    const outcome = await terminate([...targets.keys()], { escalate: values.force === true, graceMs: duration(values.grace, 'grace', 5000) })
+
+    for (const pid of values.quiet === true ? [] : [...outcome.terminated, ...outcome.killed])
+      console.log(`stopped ${pid}${outcome.killed.includes(pid) ? ' (SIGKILL)' : ''}`)
+
+    for (const pid of outcome.survived)
+      problem(`${pid} is still running${values.force === true ? '' : ', pass --force to SIGKILL it'}`)
+
+    if (outcome.survived.length > 0)
+      code = 1
+  }
+
+  return code
 }
 
 export async function ports(args: string[]): Promise<number> {

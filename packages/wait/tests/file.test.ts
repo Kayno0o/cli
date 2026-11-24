@@ -76,12 +76,23 @@ describe('waitfor --file', () => {
     expect((await waitfor(['-f', log('ready\nFATAL\n'), '-u', 'ready', '-e', 'FATAL'])).code).toBe(0)
   })
 
-  test('ends with 2 on a timeout, printing the last lines', async () => {
+  test('ends with 124 on a timeout, printing the last lines', async () => {
     const path = log('one\ntwo\n')
     const result = await waitfor(['-f', path, '-u', 'ready', '-t', '600ms'])
 
-    expect(result.code).toBe(2)
+    expect(result.code).toBe(124)
     expect(result.err).toBe(`error: waitfor: gave up after 0.6s: no line of ${path} matched --until\nlast lines of ${path}:\n  1  one\n  2  two\n`)
+  })
+
+  test('--from-end ignores lines already in the file and matches newly appended ones', async () => {
+    const path = log('ready\nold\n')
+    const result = await waitfor(['-f', path, '--from-end', '-u', '^ready$', '-t', '3s'], async () => {
+      await Bun.sleep(300)
+      appendFileSync(path, 'ready\n')
+    })
+
+    expect(result.code).toBe(0)
+    expect(result.out).toBe(`${path}:1: ready\n`)
   })
 
   test('says when the file never appeared', async () => {

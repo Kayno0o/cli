@@ -46,10 +46,10 @@ describe('waitfor task', () => {
     expect([json.code, json.failures.length, json.tail]).toEqual([1, 2, [{ number: 30, text: 'line 30' }]])
   })
 
-  test('times out with 2 and the last lines', async () => {
+  test('times out with 124 and the last lines', async () => {
     const result = await waitfor(['task', log('still going\n'), '-t', '500ms'])
 
-    expect(result.code).toBe(2)
+    expect(result.code).toBe(124)
     expect(result.err).toContain('is still running')
     expect(result.err).toContain('1  still going')
   })

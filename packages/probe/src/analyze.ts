@@ -245,6 +245,43 @@ export function cdnHint(headers: Headers): string | undefined {
 
 export const WORTH_KNOWING = ['server', 'content-type', 'content-encoding', 'cache-control', 'strict-transport-security'] as const
 
+export const SECURITY_HEADERS = [
+  'strict-transport-security',
+  'content-security-policy',
+  'x-content-type-options',
+  'x-frame-options',
+  'referrer-policy',
+  'permissions-policy',
+] as const
+
+export interface SecurityAudit {
+  present: Headers
+  missing: string[]
+}
+
+export function securityAudit(headers: Headers, secure: boolean): SecurityAudit {
+  const present: Headers = {}
+  const missing: string[] = []
+  const csp = headers['content-security-policy'] ?? ''
+  const hasFrameAncestors = csp.toLowerCase().includes('frame-ancestors')
+
+  for (const name of SECURITY_HEADERS) {
+    if (name === 'strict-transport-security' && !secure)
+      continue
+
+    const value = headers[name]
+
+    if (value !== undefined && value !== '')
+      present[name] = value
+    else if (name === 'x-frame-options' && hasFrameAncestors)
+      continue
+    else
+      missing.push(name)
+  }
+
+  return { present, missing }
+}
+
 export function worthKnowing(headers: Headers): Headers {
   const kept: Headers = {}
 

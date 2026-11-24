@@ -4,15 +4,15 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:f
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badge, currentSession, duration, exitCodeOf, fail, formatAge, formatDuration, holdSignals, jsonOption, liveSessions, paint, parse, printJson, privateLogDirectory, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, configuredNumber, currentSession, duration, exitCodeOf, fail, formatAge, formatDuration, formatElapsed, holdSignals, jsonOption, liveSessions, paint, parse, printJson, privateLogDirectory, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { tryLock, writeHeld } from './flock'
 
-const RUN_USAGE = `slot [options] -- <cmd>...: waits for a free machine-wide slot, then runs the command and exits with its code
+const RUN_USAGE = `slot [options] -- <cmd>...: waits in FIFO order for free machine-wide slots, then runs the command and exits with its code
 slot ls [--json]: lists who holds a slot or a lock and who waits for one (slot ls --help)
 
-The slots and locks are shared by every session, worktree and shell of this user, so heavy jobs (phpunit, playwright, vue-tsc, eslint) queue instead of overloading the machine; one is freed the moment its holder ends, SIGKILL included.
-A slotted command that runs slot again does not wait for a second slot, so wrapping a script and the commands inside it cannot deadlock.
-A first word \`ls\` always means the listing: run the ls command as \`slot -n 4 -- ls\`.`
+Slots and locks are shared across sessions, worktrees and shells of this user; one is freed the moment its holder ends, SIGKILL included.
+A slotted command running slot again does not wait for a second slot, preventing deadlock. Use --weight <k> to reserve k slots at once or --exclusive to hold all slots. Pass \`slot -- ls\` to run the ls command.`
 
 const RUN_EXITS: ExitRow[] = [[0, 'the command did'], ['its own', 'the code of a command that failed'], [2, 'it timed out waiting for the slot or a usage error'], [127, 'the command cannot be started']]
 
@@ -20,11 +20,13 @@ const LS_USAGE = `slot ls [options]: lists the slots and locks held, with the se
 
 --json prints {slots, busy, entries}, each entry as {state, resource, pid, session, command, cwd, since}.`
 
-const SLOTS = { type: 'string', short: 'n', description: 'how many commands may hold a slot at once (half the CPU count)' } as const
+const SLOTS = { type: 'string', short: 'n', description: 'how many commands may hold a slot at once (config.jsonc#slot.slots, else half CPU count)' } as const
 
 const RUN_OPTIONS = {
   'lock': { type: 'string', short: 'l', multiple: true, description: 'a named lock to hold as well, for what must not run twice at once (shop-test-db)' },
   'no-slot': { type: 'boolean', description: 'take the --lock alone, without a slot' },
+  'weight': { type: 'string', short: 'w', description: 'how many slots this command reserves at once (1)' },
+  'exclusive': { type: 'boolean', short: 'x', description: 'reserve all slots at once (same as --weight <slots>)' },
   'slots': SLOTS,
   'timeout': { type: 'string', short: 't', description: 'how long to wait before giving up (30s, 5m, 1h, a bare number in seconds), forever by default' },
 } as const
@@ -42,15 +44,14 @@ interface Holder { pid: number, session?: string, command: string, cwd: string, 
 
 interface Entry extends Holder { state: 'holding' | 'waiting', resource: string }
 
-interface Resource { kind: Kind, name: string, count: number }
+interface Resource { kind: Kind, name: string, count: number, weight: number }
 
 interface Taken { held: Held, resource: string }
 
 function defaultSlots(): number {
-  return Math.max(1, Math.floor(availableParallelism() / 2))
+  return configuredNumber('slot', 'slots', Math.max(1, Math.floor(availableParallelism() / 2)))
 }
 
-// The state is kept in a folder of the user's own, $SLOT_DIR when set (tests, a second queue).
 async function stateDir(): Promise<string> {
   const dir = process.env.SLOT_DIR ?? await privateLogDirectory('slot')
 
@@ -64,7 +65,9 @@ function readHolder(path: string): Holder | undefined {
   try {
     const holder = JSON.parse(readFileSync(path, 'utf8')) as Partial<Holder>
 
-    return typeof holder.pid === 'number' && typeof holder.command === 'string' ? { pid: holder.pid, command: holder.command, cwd: holder.cwd ?? '', since: holder.since ?? 0, ...holder.session === undefined ? {} : { session: holder.session }, ...holder.resource === undefined ? {} : { resource: holder.resource } } : undefined
+    return typeof holder.pid === 'number' && typeof holder.command === 'string'
+      ? { pid: holder.pid, command: holder.command, cwd: holder.cwd ?? '', since: holder.since ?? 0, ...(holder.session === undefined ? {} : { session: holder.session }), ...(holder.resource === undefined ? {} : { resource: holder.resource }) }
+      : undefined
   }
   catch {
     return undefined
@@ -75,7 +78,6 @@ function pathOf(dir: string, kind: Kind, name: string): string {
   return join(dir, kind === 'slot' ? 'slots' : 'locks', name)
 }
 
-// The paths whose holders block this resource: every slot file, or the one lock file.
 function candidates(dir: string, { kind, name, count }: Resource): { path: string, resource: string }[] {
   if (kind === 'lock')
     return [{ path: pathOf(dir, 'lock', name), resource: `lock ${name}` }]
@@ -83,13 +85,23 @@ function candidates(dir: string, { kind, name, count }: Resource): { path: strin
   return Array.from({ length: count }, (_, index) => ({ path: pathOf(dir, 'slot', String(index)), resource: `slot ${index + 1}` }))
 }
 
-function attempt(dir: string, wanted: Resource): Taken | undefined {
+// Acquires `wanted.weight` locks for this resource (all or none).
+function attempt(dir: string, wanted: Resource): Taken[] | undefined {
+  const taken: Taken[] = []
+
   for (const { path, resource } of candidates(dir, wanted)) {
     const held = tryLock(path)
 
-    if (held !== undefined)
-      return { held, resource }
+    if (held !== undefined) {
+      taken.push({ held, resource })
+
+      if (taken.length === wanted.weight)
+        return taken
+    }
   }
+
+  for (const { held } of taken)
+    held.release()
 
   return undefined
 }
@@ -98,7 +110,6 @@ function who(holder: Holder): string {
   return `${holder.session ?? `pid ${holder.pid}`} running ${truncate(holder.command, COMMAND_WIDTH)} for ${formatDuration(Date.now() - holder.since)}`
 }
 
-// The one line printed when a wait starts: who has held what it needs the longest.
 function waitingLine(dir: string, wanted: Resource): string {
   const holders = candidates(dir, wanted).map(({ path }) => readHolder(path)).filter(holder => holder !== undefined).sort((a, b) => a.since - b.since)
   const oldest = holders[0]
@@ -107,36 +118,79 @@ function waitingLine(dir: string, wanted: Resource): string {
   if (wanted.kind === 'lock')
     return `slot: waiting for lock ${wanted.name}, held by ${by}`
 
-  return `slot: waiting for a slot (${holders.length} of ${wanted.count} busy), the oldest held by ${by}`
+  return `slot: waiting for ${wanted.weight > 1 ? `${wanted.weight} slots` : 'a slot'} (${holders.length} of ${wanted.count} busy), the oldest held by ${by}`
 }
 
 async function holderOf(command: string[]): Promise<Holder> {
   const session = await currentSession(await liveSessions())
 
-  return { pid: process.pid, command: command.join(' '), cwd: process.cwd(), since: Date.now(), ...session === undefined ? {} : { session: session.name } }
+  return { pid: process.pid, command: command.join(' '), cwd: process.cwd(), since: Date.now(), ...(session === undefined ? {} : { session: session.name }) }
 }
 
 let waiterCount = 0
 
-// Takes every wanted resource or none, giving back what it took when one is busy: holding a lock while waiting for a slot, or the reverse, lets two sessions wait on each other. Meanwhile it is listed in `slot ls` as a waiter, its own lock telling whether it still lives.
+function resourceLabel(wanted: Resource): string {
+  return wanted.kind === 'lock' ? `lock ${wanted.name}` : 'slot'
+}
+
+// Whether a live waiter with an earlier FIFO ticket is waiting for any resource we want.
+function hasOlderWaiter(dir: string, myName: string | undefined, resources: readonly Resource[]): boolean {
+  const folder = join(dir, 'waiters')
+
+  if (!existsSync(folder))
+    return false
+
+  const wantedLabels = new Set(resources.map(resourceLabel))
+
+  for (const name of readdirSync(folder).sort()) {
+    if (myName !== undefined && name >= myName)
+      break
+
+    const path = join(folder, name)
+    const probe = tryLock(path)
+
+    if (probe !== undefined) {
+      rmSync(path, { force: true })
+      probe.release()
+
+      continue
+    }
+
+    const holder = readHolder(path)
+
+    if (holder === undefined || holder.resource === undefined || wantedLabels.has(holder.resource))
+      return true
+  }
+
+  return false
+}
+
+// Takes every wanted resource in FIFO order, or none, showing a live TTY spinner while waiting.
 async function acquire(dir: string, resources: Resource[], holder: Holder, deadline: number, timeoutMs: number): Promise<Taken[]> {
-  let waiter: { held: Held, path: string, resource: string } | undefined
+  let waiter: { held: Held, path: string, name: string, resource: string } | undefined
+  let region: ReturnType<typeof liveRegion> | undefined
+  let currentBusy: Resource = resources[0]!
+  const started = Date.now()
+  const { dim } = paint(process.stderr)
 
   try {
     for (;;) {
+      const blockedByQueue = hasOlderWaiter(dir, waiter?.name, resources)
       const taken: Taken[] = []
-      let busy: Resource | undefined
+      let busy: Resource | undefined = blockedByQueue ? resources[0] : undefined
 
-      for (const wanted of resources) {
-        const got = attempt(dir, wanted)
+      if (!blockedByQueue) {
+        for (const wanted of resources) {
+          const got = attempt(dir, wanted)
 
-        if (got === undefined) {
-          busy = wanted
+          if (got === undefined) {
+            busy = wanted
 
-          break
+            break
+          }
+
+          taken.push(...got)
         }
-
-        taken.push(got)
       }
 
       if (busy === undefined) {
@@ -149,18 +203,24 @@ async function acquire(dir: string, resources: Resource[], holder: Holder, deadl
       for (const { held } of taken)
         held.release()
 
-      const resource = busy.kind === 'lock' ? `lock ${busy.name}` : 'slot'
+      currentBusy = busy
+
+      const resource = resourceLabel(busy)
 
       if (waiter === undefined) {
-        const path = join(dir, 'waiters', `${process.pid}-${waiterCount++}`)
+        const name = `${String(Date.now()).padStart(15, '0')}-${String(process.pid).padStart(8, '0')}-${waiterCount++}`
+        const path = join(dir, 'waiters', name)
         const held = tryLock(path)
 
         if (held !== undefined) {
           writeHeld(held, JSON.stringify({ ...holder, resource }))
-          waiter = { held, path, resource }
+          waiter = { held, path, name, resource }
         }
 
-        console.error(waitingLine(dir, busy))
+        if (process.stderr.isTTY)
+          region = liveRegion(spinner => [`${spinner} ${waitingLine(dir, currentBusy)} ${dim(formatElapsed(Date.now() - started))}`])
+        else
+          console.error(waitingLine(dir, busy))
       }
       else if (waiter.resource !== resource) {
         writeHeld(waiter.held, JSON.stringify({ ...holder, resource }))
@@ -174,6 +234,8 @@ async function acquire(dir: string, resources: Resource[], holder: Holder, deadl
     }
   }
   finally {
+    region?.stop()
+
     if (waiter !== undefined) {
       rmSync(waiter.path, { force: true })
       waiter.held.release()
@@ -181,7 +243,6 @@ async function acquire(dir: string, resources: Resource[], holder: Holder, deadl
   }
 }
 
-// Where the command starts when no `--` comes before it: the first word that is neither an option nor an option's value, so `slot -l db phpunit` needs no `--`. Bun drops a leading `--` before the script sees it, which makes this the case of `slot -- cmd` too.
 function withSeparator(args: string[]): string[] {
   const takesValue = (word: string) => Object.entries(RUN_OPTIONS).some(([name, option]) => option.type === 'string' && (word === `--${name}` || ('short' in option && word === `-${option.short}`)))
 
@@ -203,7 +264,7 @@ function withSeparator(args: string[]): string[] {
 
 export async function runSlotted(given: string[]): Promise<number> {
   const args = withSeparator(given)
-  const parsed = parse(args, RUN_USAGE, RUN_OPTIONS, { rest: true, exits: RUN_EXITS, replaces: 'flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database', examples: [['slot -- bunx vue-tsc', 'wait for a free slot, then type-check'], ['slot --lock shop-test-db -- vendor/bin/phpunit', 'one phpunit at a time on the shared test database'], 'slot ls'] })
+  const parsed = parse(args, RUN_USAGE, RUN_OPTIONS, { rest: true, exits: RUN_EXITS, replaces: 'flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database', examples: [['slot -- bunx vue-tsc', 'wait for a free slot, then type-check'], ['slot --lock shop-test-db -- vendor/bin/phpunit', 'one phpunit at a time on the shared test database'], ['slot -w 2 -- bun test', 'reserve 2 slots for a heavy test run'], 'slot ls'] })
   const { values, rest } = parsed
 
   if (rest === undefined || rest.length === 0)
@@ -219,11 +280,25 @@ export async function runSlotted(given: string[]): Promise<number> {
   if (values['no-slot'] === true && locks.length === 0)
     fail('--no-slot takes the --lock alone, and none is given')
 
+  if (values['no-slot'] === true && (values.weight !== undefined || values.exclusive === true))
+    fail('--weight and --exclusive cannot be used with --no-slot')
+
+  if (values.weight !== undefined && values.exclusive === true)
+    fail('give either --weight or --exclusive, not both')
+
   const count = wholeNumber(values.slots, 'slots', defaultSlots())
+  const weight = values.exclusive === true ? count : wholeNumber(values.weight, 'weight', 1, 1)
+
+  if (weight > count)
+    fail(`--weight ${weight} exceeds total slots (${count})`)
+
   const timeoutMs = duration(values.timeout, 'timeout', Number.POSITIVE_INFINITY)
   const deadline = Date.now() + timeoutMs
   const holding = new Set((process.env[HOLDING] ?? '').split(',').filter(token => token !== ''))
-  const wanted: Resource[] = [...locks.filter(name => !holding.has(`lock:${name}`)).map((name): Resource => ({ kind: 'lock', name, count })), ...values['no-slot'] === true || holding.has('slot') ? [] : [{ kind: 'slot', name: '', count } satisfies Resource]]
+  const wanted: Resource[] = [
+    ...locks.filter(name => !holding.has(`lock:${name}`)).map((name): Resource => ({ kind: 'lock', name, count, weight: 1 })),
+    ...(values['no-slot'] === true || holding.has('slot') ? [] : [{ kind: 'slot', name: '', count, weight } satisfies Resource]),
+  ]
   const signals = holdSignals(() => undefined)
   const taken: Taken[] = []
 
@@ -235,7 +310,7 @@ export async function runSlotted(given: string[]): Promise<number> {
       taken.push(...await acquire(dir, wanted, holder, deadline, timeoutMs))
     }
 
-    const tokens = new Set([...holding, ...locks.map(name => `lock:${name}`), ...wanted.some(resource => resource.kind === 'slot') ? ['slot'] : []])
+    const tokens = new Set([...holding, ...locks.map(name => `lock:${name}`), ...(wanted.some(resource => resource.kind === 'slot') ? ['slot'] : [])])
     let child: Bun.Subprocess
 
     try {
@@ -258,7 +333,6 @@ export async function runSlotted(given: string[]): Promise<number> {
   }
 }
 
-// Every held lock file under a folder, a free one told apart by being lockable here, which also drops a dead waiter's file.
 function scan(dir: string, state: Entry['state'], kind: 'slots' | 'locks' | 'waiters'): Entry[] {
   const folder = join(dir, kind)
   const entries: Entry[] = []
@@ -279,7 +353,7 @@ function scan(dir: string, state: Entry['state'], kind: 'slots' | 'locks' | 'wai
     const holder = readHolder(path)
     const resource = kind === 'waiters' ? holder?.resource ?? 'slot' : `${kind === 'slots' ? 'slot' : 'lock'} ${kind === 'slots' ? Number(name) + 1 : name}`
 
-    entries.push({ state, resource, pid: holder?.pid ?? 0, command: holder?.command ?? '?', cwd: holder?.cwd ?? '', since: holder?.since ?? 0, ...holder?.session === undefined ? {} : { session: holder.session } })
+    entries.push({ state, resource, pid: holder?.pid ?? 0, command: holder?.command ?? '?', cwd: holder?.cwd ?? '', since: holder?.since ?? 0, ...(holder?.session === undefined ? {} : { session: holder.session }) })
   }
 
   return entries

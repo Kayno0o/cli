@@ -105,12 +105,27 @@ describe('probe against a local http server', () => {
     expect(err).toBe('')
   })
 
-  test('prints one line by default', async () => {
-    const { code, out } = await probe([`${base}/old`])
+  test('prints detailed summary by default for 1 target, and one line with --compact', async () => {
+    const detailed = await probe([`${base}/old`])
 
-    expect(code).toBe(0)
-    expect(out.trimEnd().split('\n')).toHaveLength(1)
-    expect(out).toMatch(new RegExp(`^HTTP/1\\.1 200 ${base}/final\\s+\\d+ms\\s+2 redirects\\s+127\\.0\\.0\\.1\\s+warning: the site is not served over https\\n$`))
+    expect(detailed.code).toBe(0)
+    expect(detailed.out).toStartWith(`HTTP/1.1 200 ${base}/final`)
+    expect(detailed.out).toContain('timings')
+    expect(detailed.out).toContain('security')
+
+    const oneLine = await probe([`${base}/old`, '--compact'])
+
+    expect(oneLine.code).toBe(0)
+    expect(oneLine.out.trimEnd().split('\n')).toHaveLength(1)
+    expect(oneLine.out).toMatch(new RegExp(`^HTTP/1\\.1 200 ${base}/final\\s+\\d+ms\\s+2 redirects\\s+127\\.0\\.0\\.1\\s+warning: the site is not served over https\\n$`))
+  })
+
+  test('--all-headers includes every response header and securityHeaders audits missing headers', async () => {
+    const report = parsed((await probe([`${base}/final`, '--all-headers', '--json'])).out) as Json & { securityHeaders: { missing: string[] } }
+
+    expect(report.headers['alt-svc']).toBe('h3=":443"; ma=60')
+    expect(report.headers.via).toBe('1.1 testproxy')
+    expect(report.securityHeaders.missing).toContain('content-security-policy')
   })
 
   test('probes several targets, one line each, exiting 1 when one cannot be reached', async () => {
@@ -152,35 +167,33 @@ describe('probe against a local http server', () => {
     expect((await probe([target, '--resolve', 'my.test:nope'])).code).toBe(2)
   })
 
-  test('--cors says whether the preflight lets the request through, exiting 1 when it does not', async () => {
-    const allowed = await probe([`${base}/cors`, '--cors', 'https://app.test/', '--method', 'put'])
+  test('probe cors says whether the preflight lets the request through, exiting 1 when it does not', async () => {
+    const allowed = await probe(['cors', 'https://app.test/', `${base}/cors`, '--method', 'put'])
 
     expect(allowed.code).toBe(0)
     expect(allowed.out).toStartWith(`ok: allowed 204 ${base}/cors  from https://app.test, PUT with content-type`)
     expect(allowed.out).toContain('  access-control-allow-methods GET, PUT')
 
-    const refused = await probe([`${base}/cors`, '--cors', 'https://evil.test', '--json'])
+    const refused = await probe(['cors', 'https://evil.test', `${base}/cors`, '--json'])
 
     expect(refused.code).toBe(1)
     expect(JSON.parse(refused.out)).toEqual({ target: `${base}/cors`, url: `${base}/cors`, status: 204, request: { origin: 'https://evil.test', method: 'POST', headers: ['content-type'] }, allowed: false, reasons: ['no access-control-allow-origin', 'access-control-allow-headers does not cover content-type'], warnings: [], headers: {} })
 
-    const header = await probe([`${base}/cors`, '--cors', 'https://app.test', '--cors-headers', 'content-type, x-trace', '--json'])
+    const header = await probe(['cors', 'https://app.test', `${base}/cors`, '--cors-headers', 'content-type, x-trace', '--json'])
 
     expect((JSON.parse(header.out) as { reasons: string[] }).reasons).toEqual(['access-control-allow-headers does not cover x-trace'])
-    expect((await probe(['http://127.0.0.1:1/', '--cors', 'https://app.test'])).code).toBe(1)
+    expect((await probe(['cors', 'https://app.test', 'http://127.0.0.1:1/'])).code).toBe(1)
 
-    const bare = JSON.parse((await probe([`${base}/cors`, '--cors', 'https://app.test', '--method', 'get', '--cors-headers', '', '--json'])).out) as { request: unknown, allowed: boolean }
+    const bare = JSON.parse((await probe(['cors', 'https://app.test', `${base}/cors`, '--method', 'get', '--cors-headers', '', '--json'])).out) as { request: unknown, allowed: boolean }
 
     expect(bare).toMatchObject({ request: { origin: 'https://app.test', method: 'GET', headers: [] }, allowed: true })
   })
 
-  test('--cors, --method and --dns refuse what they cannot go with', async () => {
-    expect((await probe([base, '--cors', 'not an origin'])).code).toBe(2)
-    expect((await probe([base, '--cors', 'localhost:3000'])).err).toContain('--cors takes an origin such as https://app.example.com, not localhost:3000')
-    expect((await probe([base, '--method', 'PUT'])).err).toContain('--method goes with --cors')
-    expect((await probe([base, '--cors-headers', 'x'])).code).toBe(2)
-    expect((await probe([base, '--dns', '-H', 'X: 1'])).err).toContain('--dns cannot be used with --header')
-    expect((await probe(['127.0.0.1', '--dns'])).err).toContain('--dns takes a name, not the address 127.0.0.1')
+  test('probe cors and probe dns validate their arguments', async () => {
+    expect((await probe(['cors', 'not an origin', base])).code).toBe(2)
+    expect((await probe(['cors', 'localhost:3000', base])).err).toContain('origin takes an origin such as https://app.example.com, not localhost:3000')
+    expect((await probe(['dns', '127.0.0.1'])).err).toContain('probe dns takes a name, not the address 127.0.0.1')
+    expect((await probe(['dns', '-t', 'NOPE', 'example.com'])).code).toBe(2)
   })
 
   test('--timeout gives up on a slow answer', async () => {
@@ -233,7 +246,7 @@ describe('probe against a local http server', () => {
   test('exits 1 when nothing answers and 2 on bad input', async () => {
     expect((await probe(['http://127.0.0.1:1/'])).code).toBe(1)
     expect((await probe(['ftp://a.test'])).code).toBe(2)
-    expect((await probe([])).code).toBe(2)
+    expect((await probe(['http'])).code).toBe(2)
   })
 })
 
@@ -271,5 +284,17 @@ describe.skipIf(openssl === null)('probe against a local tls server', () => {
 
   test('without --insecure curl refuses the certificate and probe exits 1', async () => {
     expect((await probe([`https://localhost:${secure.port}/`])).code).toBe(1)
+  })
+
+  test('probe tls inspects TLS protocol and certificate directly without HTTP', async () => {
+    const res = await probe(['tls', `localhost:${secure.port}`, '--json'])
+
+    expect(res.code).toBe(0)
+
+    const info = JSON.parse(res.out) as { protocol: string, certificate: { names: string[] }, warnings: string[] }
+
+    expect(info.protocol).toBe('TLSv1.3')
+    expect(info.certificate.names).toEqual(['localhost', '127.0.0.1'])
+    expect(info.warnings.some(w => w.includes('expires in'))).toBe(true)
   })
 })

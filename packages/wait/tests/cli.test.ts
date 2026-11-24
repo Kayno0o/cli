@@ -11,7 +11,7 @@ describe('waitfor usage', () => {
   })
 
   test('refuses what cannot be waited for', async () => {
-    expect((await waitfor([])).err).toContain('give --until with --file, --port, --url, --pid or --cmd')
+    expect((await waitfor([])).err).toContain('give --until with --file, --port, --url, --healthy, --pid or --cmd')
     expect((await waitfor(['-u', 'x'])).err).toContain('--file needs one of them')
     expect((await waitfor(['-f', 'a.log', '-p', '80'])).err).toContain('--file needs one of them')
     expect((await waitfor(['-f', 'a.log', '-u', '('])).err).toContain('--until is no valid regular expression')
@@ -21,7 +21,7 @@ describe('waitfor usage', () => {
   })
 
   test('exits 2 on a usage error', async () => {
-    const results = await Promise.all([[], ['-H', 'db', '--url', 'http://x'], ['-p', '80', 'extra'], ['-p', 'eighty'], ['--pid', '-1']].map(async args => waitfor(args)))
+    const results = await Promise.all([[], ['--host', 'db', '--url', 'http://x'], ['-p', '80', 'extra'], ['-p', 'eighty'], ['--pid', '-1']].map(async args => waitfor(args)))
 
     expect(results.map(({ code }) => code)).toEqual([2, 2, 2, 2, 2])
     expect(results[1]?.err).toContain('--host goes with --port')

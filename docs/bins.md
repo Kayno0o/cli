@@ -436,31 +436,34 @@ pkg update --apply  # update dependencies safely across workspaces
 
 ## probe
 
-reports each site's negotiated HTTP version, redirect chain, timings, addresses, TLS and certificate, the headers worth knowing and what warrants a warning. Package `probe`.
+HTTP, DNS, CORS, TLS and public IP diagnostics. Package `probe`.
 
-Instead of: the httpversion fish function, curl -sI chains, openssl s_client and dig @server one-liners
+Instead of: curl -sI chains, openssl s_client, dig @server one-liners and ip lookups
 
 ```sh
-probe [options] <url|domain>...
+probe <command> [options]
 probe example.com
-probe https://example.com/path --json
 probe a.test b.test  # one line each
-probe https://example.com --resolve example.com:203.0.113.7 -H "Host: example.com" --verbose  # a server before its DNS points at it
-probe --dns example.com  # whether a DNS change has reached every resolver
-probe --cors https://app.example.com --method PUT --cors-headers content-type,authorization https://api.example.com/items  # whether the browser would let the call through
+probe dns -t MX,TXT example.com
+probe cors https://app.test https://api.test/items
+probe tls example.com
+probe ip
 ```
 
 ## proc
 
-what a process is, who listens on a port and which dev processes are worth cleaning, read from /proc. Package `proc`.
+inspect, search, tree, rank and safely clean processes and listening ports from /proc. Package `proc`.
 
-Instead of: cat /proc/<pid>/..., ss -ltnp, lsof -i and pgrep -f one-liners
+Instead of: cat /proc/<pid>/..., ps aux | grep, pstree, ss -ltnp, lsof -i and pkill -f one-liners
 
 ```sh
 proc <command> [options]
 proc pid 1234
 proc ports
-proc procs  # the leftover or heavy processes, dry-run first
+proc ls vite
+proc tree
+proc top
+proc cleanup  # leftover or heavy dev processes, dry-run first
 ```
 
 ## sf
@@ -479,7 +482,7 @@ sf -  # the last command again, with its arguments
 
 ## slot
 
-waits for a free machine-wide slot, then runs the command and exits with its code. Package `wait`.
+waits in FIFO order for free machine-wide slots, then runs the command and exits with its code. Package `wait`.
 
 Instead of: flock wrappers, hand-written heavy.sh queues and parallel runs fighting over one test database
 
@@ -487,6 +490,7 @@ Instead of: flock wrappers, hand-written heavy.sh queues and parallel runs fight
 slot [options] -- <cmd>...
 slot -- bunx vue-tsc  # wait for a free slot, then type-check
 slot --lock shop-test-db -- vendor/bin/phpunit  # one phpunit at a time on the shared test database
+slot -w 2 -- bun test  # reserve 2 slots for a heavy test run
 slot ls
 ```
 
@@ -532,14 +536,14 @@ git diff | view
 
 ## waitfor
 
-waits until a file shows a line, a port listens, a URL answers 2xx, a process exits or a command exits 0. Package `wait`.
+waits until a file shows a line, a port listens, a URL answers 2xx, a Docker service is healthy, a process exits or a command exits 0. Package `wait`.
 
 Instead of: sleep loops, tail -f and until ! pgrep -f
 
 ```sh
 waitfor [options]
-waitfor --file dev.log --until "ready in" --fail error  # a dev server up, or its first error
-waitfor --port 5432 -t 2m  # Postgres accepting connections
+waitfor --file dev.log --from-end --until "ready in" --fail error  # a dev server up from new log lines, or its first error
+waitfor --port 5432 --while-pid 1234 -t 2m  # Postgres accepting connections while its launcher is alive
 ```
 
 ## ws

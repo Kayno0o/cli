@@ -55,6 +55,34 @@ export async function bootMs(root = '/proc'): Promise<number> {
   return match === null ? Date.now() : Number(match[1]) * 1000
 }
 
+// Runs an async mapper with bounded concurrency so /proc walks stay fast without exhausting file descriptors.
+async function mapBounded<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = Array.from<R>({ length: items.length })
+  let cursor = 0
+
+  async function worker(): Promise<void> {
+    while (cursor < items.length) {
+      const idx = cursor++
+
+      results[idx] = await fn(items[idx]!)
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+
+  return results
+}
+
+const PROC_CONCURRENCY = 32
+
+async function readDetail(pid: number, root: string): Promise<Pick<ProcInfo, 'cwd' | 'exe' | 'unit' | 'container'>> {
+  const dir = `${root}/${pid}`
+  const [cwd, exe, cgroup] = await Promise.all([link(`${dir}/cwd`), link(`${dir}/exe`), text(`${dir}/cgroup`)])
+  const groups = parseCgroup(cgroup ?? '')
+
+  return { cwd, exe, unit: cgroupUnit(groups), container: cgroupContainer(groups) }
+}
+
 // One process, undefined once it is gone or its stat cannot be read. `detail` adds what only the owner can read: the working directory, the executable and the cgroup.
 export async function readProc(pid: number, boot: number, { root = '/proc', detail = true } = {}): Promise<ProcInfo | undefined> {
   const dir = `${root}/${pid}`
@@ -77,30 +105,22 @@ export async function readProc(pid: number, boot: number, { root = '/proc', deta
     startMs: boot + (stat.startTicks / CLOCK_TICKS) * 1000,
   }
 
-  if (!detail)
-    return info
-
-  const [cwd, exe, cgroup] = await Promise.all([link(`${dir}/cwd`), link(`${dir}/exe`), text(`${dir}/cgroup`)])
-  const groups = parseCgroup(cgroup ?? '')
-
-  return { ...info, cwd, exe, unit: cgroupUnit(groups), container: cgroupContainer(groups) }
+  return detail ? { ...info, ...await readDetail(pid, root) } : info
 }
 
-// Every process, with the detail only for those `detailed` accepts: the ones of the calling user, whose directories are readable.
+// Every process, read in parallel without re-reading stat/status/cmdline; `detailed` controls which UIDs read cwd/exe/cgroup.
 export async function snapshot(root = '/proc', detailed: (uid: number) => boolean = () => true): Promise<ProcInfo[]> {
-  const boot = await bootMs(root)
-  const found: ProcInfo[] = []
-
-  for (const pid of await listPids(root)) {
+  const [boot, pids] = await Promise.all([bootMs(root), listPids(root)])
+  const entries = await mapBounded(pids, PROC_CONCURRENCY, async (pid) => {
     const light = await readProc(pid, boot, { root, detail: false })
 
     if (light === undefined)
-      continue
+      return undefined
 
-    found.push(detailed(light.uid) ? await readProc(pid, boot, { root }) ?? light : light)
-  }
+    return detailed(light.uid) ? { ...light, ...await readDetail(pid, root) } : light
+  })
 
-  return found
+  return entries.filter((entry): entry is ProcInfo => entry !== undefined)
 }
 
 // The pids from `pid` up to init, nearest first, `pid` included.
@@ -143,12 +163,14 @@ export async function socketsOf(pid: number, root = '/proc'): Promise<Set<number
   return inodes
 }
 
-// Which pid holds each socket inode, for the processes whose fd directory can be read. Forked workers share the listen socket of their master: the holder whose parent holds it too is passed over.
+// Which pid holds each socket inode, read in parallel across readable processes. Forked workers share the listen socket of their master: the holder whose parent holds it too is passed over.
 export async function socketOwners(root = '/proc'): Promise<Map<number, number>> {
+  const pids = await listPids(root)
+  const perPid = await mapBounded(pids, PROC_CONCURRENCY, async pid => ({ pid, inodes: await socketsOf(pid, root) }))
   const holders = new Map<number, number[]>()
 
-  for (const pid of await listPids(root)) {
-    for (const inode of await socketsOf(pid, root))
+  for (const { pid, inodes } of perPid) {
+    for (const inode of inodes)
       holders.set(inode, [...holders.get(inode) ?? [], pid])
   }
 
