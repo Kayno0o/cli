@@ -1,3 +1,4 @@
+import type { Dialect } from '../src/guard'
 import type { Result } from '../src/run'
 import { Exit } from '@kaynooo/cli-kit'
 import { describe, expect, test } from 'bun:test'
@@ -11,7 +12,7 @@ const POSTGRES_URL = `postgres://app:${PASSWORD}@127.0.0.1:5432/app_test`
 
 interface Stub {
   calls: string[]
-  connect: (url: string, dialect: 'postgres' | 'mysql', readOnly: boolean) => { transaction: (work: (tx: { unsafe: (statement: string, params?: unknown[]) => Promise<Result> }) => Promise<void>, readOnly: boolean) => Promise<void>, close: () => Promise<void> }
+  connect: (url: string, dialect: Dialect, readOnly: boolean) => { transaction: (work: (tx: { unsafe: (statement: string, params?: unknown[]) => Promise<Result> }) => Promise<void>, readOnly: boolean) => Promise<void>, close: () => Promise<void> }
 }
 
 // A SQL runner that answers for the server: which database the session is on, what a failing statement says, and what rows come back. Nothing connects anywhere.
@@ -72,7 +73,8 @@ describe('dialectOf', () => {
     expect(dialectOf(new URL('postgresql://u@h/d'))).toBe('postgres')
     expect(dialectOf(new URL('mysql://u@h/d'))).toBe('mysql')
     expect(dialectOf(new URL('mariadb://u@h/d'))).toBe('mysql')
-    expect(() => dialectOf(new URL('sqlite:///tmp/x.db'))).toThrow('Postgres')
+    expect(dialectOf(new URL('sqlite:///tmp/x.db'))).toBe('sqlite')
+    expect(() => dialectOf(new URL('mongodb://u@h/d'))).toThrow('Postgres')
   })
 })
 

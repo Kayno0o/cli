@@ -48,10 +48,14 @@ export async function explain(args: string[]): Promise<number> {
   const url = await connectionUrl(values)
   const dialect = dialectOf(new URL(url))
   const timeout = statementTimeout(values)
-  let prefix = 'EXPLAIN'
+  let prefix = dialect === 'sqlite' ? 'EXPLAIN QUERY PLAN' : 'EXPLAIN'
 
-  if (values.analyze === true)
+  if (values.analyze === true) {
+    if (dialect === 'sqlite')
+      fail('--analyze is not supported on SQLite (EXPLAIN QUERY PLAN runs without --analyze)')
+
     prefix = dialect === 'postgres' ? 'EXPLAIN ANALYZE' : analyzePrefix(String((await readRows(url, 'select version() as version', [], undefined, undefined, timeout))[0]?.version))
+  }
 
   const rows = await readRows(url, explainSql(sql, dialect, prefix), [], undefined, undefined, timeout)
   const [only, ...others] = Object.keys(rows[0] ?? {})

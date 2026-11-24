@@ -1,14 +1,15 @@
 import { Exit, fail, jsonText, parse, problem, readInput } from '@kaynooo/cli-kit'
-import { connectionOptions, EXITS, HOSTS_NOTE, outputOptions, rowLimit, statementTimeout, WRITE_EXIT, WRITE_NOTE } from '../args'
+import { connectionOptions, EXITS, HOSTS_NOTE, outputOptions, rowLimit, statementTimeout, unmaskSet, WRITE_EXIT, WRITE_NOTE } from '../args'
 import { inspect } from '../guard'
 import { jsonValue, render, shape } from '../output'
-import { connectionUrl, databaseOfUrl, dialectOf, readRows, TEST_SUFFIX, writeRows } from '../run'
+import { connectionUrl, databaseOfUrl, dialectOf, isSqliteTarget, readRows, TEST_SUFFIX, writeRows } from '../run'
 
-const usage = `db query "<sql>"
+const usage = `db query [sqlite-file] "<sql>"
 
-Runs one read-only statement (the SQL as an argument, or on stdin) in a READ ONLY transaction that is rolled back, on Postgres, MySQL or MariaDB.
-Only a single statement starting with SELECT, WITH, VALUES, TABLE, SHOW, EXPLAIN, DESCRIBE or DESC, with no write or side-effect function in it, runs; several statements are refused (exit 2).
-Sensitive columns (emails, tokens, passwords...) show *** unless --raw.
+Runs one read-only statement (the SQL as an argument, or on stdin) in a READ ONLY transaction that is rolled back, on Postgres, MySQL, MariaDB or SQLite.
+Passing a SQLite file path first (\`db ./app.db "select 1"\`) opens that file directly without needing -f.
+Only a single statement starting with SELECT, WITH, VALUES, TABLE, SHOW, EXPLAIN, DESCRIBE, DESC or read-only PRAGMA, with no write or side-effect function in it, runs; several statements are refused (exit 2).
+Sensitive columns (emails, tokens, passwords...) show *** unless --raw or --unmask <cols>.
 
 ${WRITE_NOTE}
 
@@ -42,13 +43,23 @@ function isWrite(sql: string): boolean {
 export async function query(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options, { exits: EXITS })
 
-  const { values, positionals } = parsed
+  const { values } = parsed
+  let { positionals } = parsed
+  let file = values.file
+
+  // Support `db ./app.db "select 1"` or `db sqlite://app.db "select 1"` shorthand.
+  if (file === undefined && positionals.length >= 2 && isSqliteTarget(positionals[0] ?? '')) {
+    file = positionals[0]
+    positionals = positionals.slice(1)
+  }
+
   const limit = rowLimit(values)
+  const unmask = unmaskSet(values.unmask)
   const sql = await readSql(positionals)
   let url: string
 
   try {
-    url = await connectionUrl(values)
+    url = await connectionUrl({ ...values, file })
   }
   catch (error) {
     if (error instanceof Exit && isWrite(sql))
@@ -66,7 +77,7 @@ export async function query(args: string[]): Promise<number> {
     if (!written.isRun)
       return handBack(sql, verdict.reasons, databaseOfUrl(url).endsWith(TEST_SUFFIX) ? `; not run on this ${TEST_SUFFIX} database either: ${written.reasons.join('; ')}` : '')
 
-    const shown = shape(written.rows, limit, values.raw === true, false)
+    const shown = shape(written.rows, limit, values.raw === true, false, unmask)
 
     if (values.json === true)
       console.log(jsonText({ database: written.database, affected: written.affected, columns: shown.columns, rows: shown.rows, truncated: shown.truncated, masked: shown.masked }, jsonValue))
@@ -81,7 +92,7 @@ export async function query(args: string[]): Promise<number> {
 
   const rows = await readRows(url, sql, [], limit, undefined, statementTimeout(values))
 
-  console.log(render(shape(rows, limit, values.raw === true, false), values.json === true, values.format))
+  console.log(render(shape(rows, limit, values.raw === true, false, unmask), values.json === true, values.format))
 
   return 0
 }

@@ -25,9 +25,9 @@ describe('explainSql', () => {
 })
 
 describe('the row cap', () => {
-  test('is 20, --all brings back the old 100 and -n wins otherwise', () => {
+  test('is 20, --all is uncapped and -n wins otherwise', () => {
     expect(rowLimit({})).toBe(20)
-    expect(rowLimit({ all: true })).toBe(100)
+    expect(rowLimit({ all: true })).toBe(Number.POSITIVE_INFINITY)
     expect(rowLimit({ rows: '7' })).toBe(7)
     expect(rowLimit({}, 5)).toBe(5)
   })

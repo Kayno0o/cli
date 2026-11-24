@@ -5,9 +5,9 @@ const LOCK_KIND = /^(?:update|share|no|key)$/
 // A SET starting a statement changes a session setting, harmless unless it switches the role or the transaction's access mode, or in MySQL changes the server (`SET GLOBAL`, `SET PERSIST`, `SET PASSWORD`).
 const PRIVILEGED_SET = new Set(['role', 'session', 'transaction', 'global', 'persist', 'persist_only', 'password', 'default'])
 // Statements that may start a read.
-const READ_STARTS = new Set(['select', 'with', 'values', 'table', 'show', 'explain', 'describe', 'desc'])
+const READ_STARTS = new Set(['select', 'with', 'values', 'table', 'show', 'explain', 'describe', 'desc', 'pragma'])
 // Statements that write, change the server or hide what they run (a prepared statement's text is a string), whatever follows; elsewhere these words are common column names.
-const WRITING_STARTS = new Set(['replace', 'load', 'rename', 'flush', 'kill', 'shutdown', 'install', 'uninstall', 'purge', 'optimize', 'repair', 'import', 'prepare', 'execute'])
+const WRITING_STARTS = new Set(['replace', 'load', 'rename', 'flush', 'kill', 'shutdown', 'install', 'uninstall', 'purge', 'optimize', 'repair', 'import', 'prepare', 'execute', 'attach', 'detach'])
 // Words that write or lock wherever they appear in a statement that started like a read, such as a DELETE inside a CTE.
 const WRITE_WORDS = new Set(['insert', 'update', 'delete', 'merge', 'truncate', 'drop', 'alter', 'create', 'grant', 'revoke', 'into', 'call', 'vacuum', 'lock', 'refresh', 'reindex', 'cluster', 'do'])
 
@@ -87,6 +87,10 @@ function statementWrites(statement: Token[]): string[] {
     }
     else if (token.text === 'for' && LOCK_KIND.test(statement[index + 1]?.text ?? '')) {
       reasons.push('takes row locks with FOR UPDATE or SHARE')
+    }
+    else if (token.text === 'pragma') {
+      if (statement.some(each => isPunct(each, '=')))
+        reasons.push('writes a PRAGMA setting')
     }
     else if (token.text === 'comment' && statement[index + 1]?.text === 'on') {
       reasons.push('uses COMMENT ON')

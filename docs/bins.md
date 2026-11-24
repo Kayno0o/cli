@@ -73,18 +73,18 @@ cli update
 
 ## db
 
-read-only SQL against Postgres, MySQL and MariaDB, credentials never shown, writes only on a _test database. Package `db`.
+read-only SQL against Postgres, MySQL, MariaDB and SQLite, credentials never shown, writes only on a _test database. Package `db`.
 
-Instead of: psql or mysql with the connection string on the command line, docker exec <container> psql -U ...
+Instead of: psql, mysql or sqlite3 with the connection string on the command line, docker exec <container> psql -U ...
 
 ```sh
 db <command> [options]
 db "select count(*) from users"
-db -c shop-db-1 "select count(*) from users"  # a container outside the compose project
-db describe users  # the columns, indexes and foreign keys of a table
-db search email  # where a field lives
+db ./app.db "select count(*) from users"  # query a local SQLite file directly
+db schema  # compact map of all tables, columns, PKs, and FKs
+db describe users  # columns, indexes and foreign keys of a table
+db sample users --latest  # newest rows of a table, sensitive columns masked
 db explain "select * from users where email = 'a'"  # the plan, nothing executed
-db --format csv "select id, email from users"  # RFC 4180 CSV, or tsv or vertical
 ```
 
 ## dc

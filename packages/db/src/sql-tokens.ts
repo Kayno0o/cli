@@ -15,8 +15,8 @@ export const UNICODE_IDENTIFIER = 'U&"'
 const UNICODE_PREFIX = /u&$/i
 const LINE_END = /[\r\n]/
 
-// The SQL a server reads: the two differ in comments, string escapes and quoting, which decides what hides behind a quote.
-export type Dialect = 'postgres' | 'mysql'
+// The SQL a server reads: Postgres, MySQL/MariaDB, and SQLite differ in comments, string escapes and quoting, which decides what hides behind a quote.
+export type Dialect = 'postgres' | 'mysql' | 'sqlite'
 
 export interface Token {
   // A quoted identifier is its unescaped content, kept apart from keywords: `"set"` is a name while `set` is a command.

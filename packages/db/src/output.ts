@@ -37,10 +37,11 @@ export function jsonValue(_key: string, value: unknown): unknown {
 }
 
 // Caps the rows and masks sensitive columns, keeping how many were left out.
-export function shape(rows: Row[], limit: number, raw: boolean, exact = true): Shown {
-  const { rows: masked, masked: columns } = maskRows(rows.slice(0, limit), raw)
+export function shape(rows: Row[], limit: number, raw: boolean, exact = true, unmask?: ReadonlySet<string>): Shown {
+  const capped = Number.isFinite(limit) ? rows.slice(0, limit) : rows
+  const { rows: masked, masked: columns } = maskRows(capped, raw, unmask)
 
-  return { columns: Object.keys(rows[0] ?? {}), rows: masked, total: rows.length, omitted: Math.max(0, rows.length - limit), exact, truncated: rows.length > limit, masked: columns }
+  return { columns: Object.keys(rows[0] ?? {}), rows: masked, total: rows.length, omitted: Number.isFinite(limit) ? Math.max(0, rows.length - limit) : 0, exact, truncated: Number.isFinite(limit) && rows.length > limit, masked: columns }
 }
 
 export type Format = 'tsv' | 'csv' | 'vertical'

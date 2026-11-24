@@ -1,8 +1,8 @@
-import type { Dialect } from '../guard'
+import type { Row, Tx } from '../run'
 import { fail, jsonText, parse } from '@kaynooo/cli-kit'
 import { catalogOptions, connectionOptions, EXITS, HOSTS_NOTE, rowLimit, statementTimeout } from '../args'
 import { jsonValue, render, shape } from '../output'
-import { connectionUrl, dialectOf, readRows } from '../run'
+import { connectionUrl, dialectOf, fetchRows, readRows, withReadSession } from '../run'
 
 const options = { ...connectionOptions, ...catalogOptions } as const
 
@@ -104,6 +104,14 @@ select constraint_name as name, group_concat(column_name order by ordinal_positi
 from information_schema.key_column_usage
 where referenced_table_name is not null and table_name = ?`
 
+const SQLITE_TABLES = `
+select 'main' as schema, name, type as kind, null as rows_estimate
+from sqlite_master
+where type in ('table', 'view') and name not like 'sqlite_%'
+order by name`
+
+const SQLITE_DATABASES = 'pragma database_list'
+
 const LIKE_SPECIALS = /[\\%_]/g
 
 // The pattern matching a text anywhere in a name, its own % and _ taken literally.
@@ -112,7 +120,7 @@ export const containing = (text: string) => `%${text.replace(LIKE_SPECIALS, '\\$
 interface Query { sql: string, params: unknown[] }
 
 // The same question per engine, as their catalogs differ.
-type Plans = Record<Dialect, Query>
+type Plans = Record<'postgres' | 'mysql', Query> & { sqlite?: Query }
 
 async function show(args: string[], usage: string, work: (positionals: string[]) => Plans): Promise<number> {
   const parsed = parse(args, usage, options, { exits: EXITS })
@@ -121,8 +129,13 @@ async function show(args: string[], usage: string, work: (positionals: string[])
   const plans = work(positionals)
   const limit = rowLimit(values)
   const url = await connectionUrl(values)
-  const { sql, params } = plans[dialectOf(new URL(url))]
-  const rows = await readRows(url, sql, params, limit, undefined, statementTimeout(values))
+  const dialect = dialectOf(new URL(url))
+  const plan = plans[dialect]
+
+  if (plan === undefined)
+    fail(`not supported on ${dialect}`)
+
+  const rows = await readRows(url, plan.sql, plan.params, limit, undefined, statementTimeout(values))
 
   console.log(render(shape(rows, limit, true, false), values.json === true, values.format))
 
@@ -130,22 +143,74 @@ async function show(args: string[], usage: string, work: (positionals: string[])
 }
 
 export async function tables(args: string[]): Promise<number> {
-  return show(args, `db tables\n\nLists the tables, views and materialized views outside the system schemas, with an estimated row count.\n\n${HOSTS_NOTE}`, () => ({ postgres: { sql: TABLES, params: [] }, mysql: { sql: MYSQL_TABLES, params: [] } }))
+  return show(args, `db tables\n\nLists the tables, views and materialized views outside the system schemas, with an estimated row count.\n\n${HOSTS_NOTE}`, () => ({
+    postgres: { sql: TABLES, params: [] },
+    mysql: { sql: MYSQL_TABLES, params: [] },
+    sqlite: { sql: SQLITE_TABLES, params: [] },
+  }))
 }
 
 export async function databases(args: string[]): Promise<number> {
-  return show(args, `db dbs\n\nLists the databases the connection may open, with their size, marking the one it reads, so --database can pick another.\n\n${HOSTS_NOTE}`, () => ({ postgres: { sql: DATABASES, params: [] }, mysql: { sql: MYSQL_DATABASES, params: [] } }))
+  return show(args, `db dbs\n\nLists the databases the connection may open, with their size, marking the one it reads, so --database can pick another.\n\n${HOSTS_NOTE}`, () => ({
+    postgres: { sql: DATABASES, params: [] },
+    mysql: { sql: MYSQL_DATABASES, params: [] },
+    sqlite: { sql: SQLITE_DATABASES, params: [] },
+  }))
+}
+
+const quoteSqliteIdent = (name: string) => `"${name.replaceAll('"', '""')}"`
+
+async function sqliteSearch(tx: Tx, needle: string): Promise<Row[]> {
+  const lower = needle.toLowerCase()
+  const allTables = await tx.unsafe(`select name from sqlite_master where type in ('table', 'view') and name not like 'sqlite_%' order by name`)
+  const rows: Row[] = []
+
+  for (const row of allTables) {
+    const tableName = String(row.name ?? '')
+
+    if (tableName.toLowerCase().includes(lower))
+      rows.push({ schema: 'main', table: tableName, column: null, type: null })
+
+    const cols = await tx.unsafe(`pragma table_info(${quoteSqliteIdent(tableName)})`)
+
+    for (const col of cols) {
+      const colName = String(col.name ?? '')
+
+      if (colName.toLowerCase().includes(lower))
+        rows.push({ schema: 'main', table: tableName, column: colName, type: col.type ?? '' })
+    }
+  }
+
+  return rows
 }
 
 export async function search(args: string[]): Promise<number> {
-  return show(args, `db search <text>\n\nFinds the tables and columns whose name contains the text, case insensitive, outside the system schemas (a table match has no column). Use it to locate where a field lives before describing a table.\n\n${HOSTS_NOTE}`, ([text, ...extra]) => {
-    if (text === undefined || extra.length > 0)
-      fail('db search takes one text')
+  const usage = `db search <text>\n\nFinds the tables and columns whose name contains the text, case insensitive, outside the system schemas (a table match has no column). Use it to locate where a field lives before describing a table.\n\n${HOSTS_NOTE}`
+  const { values, positionals } = parse(args, usage, options, { exits: EXITS })
+  const [text, ...extra] = positionals
 
-    const pattern = containing(text)
+  if (text === undefined || extra.length > 0)
+    fail('db search takes one text')
 
-    return { postgres: { sql: SEARCH, params: [pattern] }, mysql: { sql: MYSQL_SEARCH, params: [pattern, pattern] } }
-  })
+  const limit = rowLimit(values)
+  const url = await connectionUrl(values)
+  const dialect = dialectOf(new URL(url))
+
+  if (dialect === 'sqlite') {
+    const rows = await withReadSession(url, async tx => sqliteSearch(tx, text), undefined, statementTimeout(values))
+
+    console.log(render(shape(rows, limit, true, true), values.json === true, values.format))
+
+    return 0
+  }
+
+  const pattern = containing(text)
+  const plan = dialect === 'postgres' ? { sql: SEARCH, params: [pattern] } : { sql: MYSQL_SEARCH, params: [pattern, pattern] }
+  const rows = await readRows(url, plan.sql, plan.params, limit, undefined, statementTimeout(values))
+
+  console.log(render(shape(rows, limit, true, false), values.json === true, values.format))
+
+  return 0
 }
 
 // Where a table is looked up: `name` in any schema, `schema.name` (the database on MySQL) in one.
@@ -173,18 +238,69 @@ export function describePlans(table: string, schema: string | undefined): { colu
   }
 }
 
+async function sqliteDescribe(tx: Tx, table: string): Promise<{ columns: Row[], indexes: Row[], foreignKeys: Row[] }> {
+  const quoted = quoteSqliteIdent(table)
+  const rawCols = await tx.unsafe(`pragma table_info(${quoted})`)
+  const columns: Row[] = rawCols.map(col => ({
+    schema: 'main',
+    name: col.name,
+    type: String(col.type ?? '') || 'ANY',
+    nullable: Number(col.notnull) === 0 ? 'YES' : 'NO',
+    default_value: col.dflt_value,
+    primary_key: Number(col.pk) > 0,
+  }))
+  const rawIndexes = await tx.unsafe(`pragma index_list(${quoted})`)
+  const indexes: Row[] = []
+
+  for (const idx of rawIndexes) {
+    const idxName = String(idx.name ?? '')
+    const cols = await tx.unsafe(`pragma index_info(${quoteSqliteIdent(idxName)})`)
+
+    indexes.push({
+      name: idxName,
+      is_unique: Number(idx.unique) === 1,
+      primary_key: idx.origin === 'pk',
+      columns: cols.map(c => String(c.name ?? '')).join(','),
+    })
+  }
+
+  const rawFks = await tx.unsafe(`pragma foreign_key_list(${quoted})`)
+  const foreignKeys: Row[] = rawFks.map(fk => ({
+    name: `fk_${table}_${String(fk.id ?? 0)}`,
+    column: fk.from,
+    references_table: fk.table,
+    referenced_column: fk.to,
+    on_delete: fk.on_delete,
+  }))
+
+  return { columns, indexes, foreignKeys }
+}
+
 export async function describe(args: string[]): Promise<number> {
   const usage = `db describe <table>\n\nLists a table's columns with type, nullability, default and primary key, then its indexes and foreign keys. Takes \`schema.table\` to tell apart tables of the same name (the database, on MySQL).\n\n${HOSTS_NOTE}`
   const { values, positionals: [target, ...extra] } = parse(args, usage, options, { exits: EXITS })
   const { table, schema } = tableScope(target, extra)
-  const plans = describePlans(table, schema)
   const limit = rowLimit(values)
   const url = await connectionUrl(values)
-  const dialect = dialectOf(new URL(url))
-  const ask = async (plan: Plans, cap?: number) => readRows(url, plan[dialect].sql, plan[dialect].params, cap, undefined, statementTimeout(values))
-  const columns = shape(await ask(plans.columns, limit), limit, true, false)
-  const indexes = await ask(plans.indexes)
-  const foreignKeys = await ask(plans.foreignKeys)
+  const timeout = statementTimeout(values)
+
+  // Reuse a single connection and read-only transaction for all 3 catalog queries.
+  const { columnsRaw, indexes, foreignKeys } = await withReadSession(url, async (tx, dialect) => {
+    if (dialect === 'sqlite') {
+      const info = await sqliteDescribe(tx, table)
+
+      return { columnsRaw: info.columns, indexes: info.indexes, foreignKeys: info.foreignKeys }
+    }
+
+    const plans = describePlans(table, schema)
+    const columnsRaw = [...await fetchRows(tx, dialect, plans.columns[dialect].sql, plans.columns[dialect].params, limit)]
+    const indexes = [...await tx.unsafe(plans.indexes[dialect].sql, plans.indexes[dialect].params)]
+    const foreignKeys = [...await tx.unsafe(plans.foreignKeys[dialect].sql, plans.foreignKeys[dialect].params)]
+
+    return { columnsRaw, indexes, foreignKeys }
+  }, undefined, timeout)
+
+  const columns = shape(columnsRaw, limit, true, false)
 
   console.log(values.json === true
     ? jsonText({ columns: columns.columns, rows: columns.rows, truncated: columns.truncated, masked: columns.masked, indexes, foreignKeys }, jsonValue)
