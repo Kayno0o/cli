@@ -203,10 +203,10 @@ unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/M
 Instead of: tea, glab, gh api calls piped through jq, and sleep loops waiting on CI
 
 ```sh
-fg <command> [options]
-fg ci  # wait for the runs of origin's tip, failures printed
-fg pr list  # open pull/merge requests
-fg issue 12 -c  # an issue with its boxes numbered and its comments
+ft <command> [options]
+ft ci  # wait for the runs of origin's tip, failures printed
+ft pr list  # open pull/merge requests
+ft issue 12 -c  # an issue with its boxes numbered and its comments
 ```
 
 ## gb

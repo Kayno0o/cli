@@ -521,6 +521,6 @@ describe('workflow additions (#358)', () => {
     expect(json<{ branch: string, outcome: string }>(cloned.out)).toMatchObject({ branch: 'main', outcome: 'cloned' })
     expect(urlOf('gh:oven-sh/bun', undefined)).toBe('https://github.com/oven-sh/bun.git')
     expect(urlOf('gl:group/proj', undefined)).toBe('https://gitlab.com/group/proj.git')
-    expect(urlOf('fj:kaynooo/cli', 'git.kevyn.fr')).toBe('https://git.kevyn.fr/kaynooo/cli.git')
+    expect(urlOf('fj:kaynooo/cli', 'git.example.org')).toBe('https://git.example.org/kaynooo/cli.git')
   })
 })

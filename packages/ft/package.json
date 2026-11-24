@@ -22,8 +22,8 @@
     "release"
   ],
   "bin": {
-    "fg": "./dist/cli.js",
-    "ft": "./dist/cli.js"
+    "fg": "./dist/fg.js",
+    "ft": "./dist/ft.js"
   },
   "files": [
     "dist"
@@ -32,9 +32,9 @@
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
-    "fg": "$npm_execpath src/cli.ts",
-    "ft": "$npm_execpath src/cli.ts"
+    "build": "$npm_execpath ../../scripts/build.ts src/fg.ts src/ft.ts --splitting",
+    "fg": "$npm_execpath src/fg.ts",
+    "ft": "$npm_execpath src/ft.ts"
   },
   "devDependencies": {
     "@kaynooo/cli-changelog": "workspace:*",
