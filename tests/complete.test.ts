@@ -46,12 +46,16 @@ describe('dynamic candidates', () => {
     }
   })
 
-  test('dx offers actions for its second positional and guard hook offers hook events', () => {
-    const dx = Bun.spawnSync([process.execPath, sourceOf('dx'), '__complete', 'php', ''], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+  test('dc offers subcommands and actions and guard hook offers hook events', () => {
+    const dc = Bun.spawnSync([process.execPath, sourceOf('dc'), '__complete', ''], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
+    const dcAction = Bun.spawnSync([process.execPath, sourceOf('dc'), '__complete', 'php', ''], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
     const guard = Bun.spawnSync([process.execPath, sourceOf('guard'), '__complete', 'hook', ''], { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
 
-    expect(dx.stdout.toString()).toContain('logs')
-    expect(dx.stdout.toString()).toContain('restart')
+    expect(dc.stdout.toString()).toContain('health')
+    expect(dc.stdout.toString()).toContain('logs')
+    expect(dc.stdout.toString()).toContain('port')
+    expect(dcAction.stdout.toString()).toContain('logs')
+    expect(dcAction.stdout.toString()).toContain('restart')
     expect(guard.stdout.toString()).toContain('pre-tool-use')
   })
 })

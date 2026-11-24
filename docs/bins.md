@@ -89,14 +89,18 @@ db explain "select * from users where email = 'a'"  # the plan, nothing executed
 
 ## dc
 
-runs docker compose on the stack found here: the nearest compose file or .env setting COMPOSE_FILE up to the repository root, else the only stack with containers here. Package `docker`.
+unified Docker Compose CLI — service picker/listing, health & error summary, redacted logs, shell/exec, deterministic ports, and compose passthrough. Package `docker`.
 
-Instead of: docker compose -f docker-compose.prod.yaml --env-file .env.prod, typed again for each stack
+Instead of: docker compose -f ..., docker compose ps/logs/exec, dlog, dx, and stack port
 
 ```sh
-dc [project] <compose args>
-dc up -d
-dc dash logs -f  # a stack that came up from other files
+dc
+dc
+dc health  # every service state, health and recent errors
+dc logs api --tail 50 --no-follow  # redacted logs for api
+dc shell app  # open a shell inside app
+dc port api  # deterministic FNV-1a port for api
+dc up -d  # pass through to docker compose on the nearest stack
 ```
 
 ## dev
@@ -128,23 +132,6 @@ dl outdated  # what changed at its source
 dl update  # install it again
 ```
 
-## dlog
-
-one line per compose service with its state and health, then the last distinct error lines of those that log some or are not healthy, repeats collapsed with a count and secrets masked. Package `docker`.
-
-Instead of: docker compose ps, logs --tail | grep -i error and docker inspect for health
-
-```sh
-dlog [service...]
-dlog
-dlog php db  # only those services
-dlog -n 10 --since 15m  # ten error lines of the last quarter of an hour
-dlog --level warn  # warnings too
-dlog --grep "timeout|5\d\d"  # the lines matching a regex
-dlog --fail-on down --fail-on unhealthy  # a gate that ignores old errors
-dlog --json  # the report as JSON
-```
-
 ## doctor
 
 checks this host's @kaynooo/cli-* install, one line per check with the fix beside a failing one, and installs the packages it picks. Package `doctor`.
@@ -160,21 +147,6 @@ doctor --fix --dry-run  # what --fix would run
 doctor --install  # check to install, uncheck to remove
 doctor --install forgejo check hooks  # three named ones
 doctor --install all --dry-run  # what installing everything would run
-```
-
-## dx
-
-picks a compose service on a terminal to open its shell, follow its logs, restart, stop or rebuild it; without a terminal (a script, a pipe, an agent) it lists the services with their state, ports and image, the form to use there. Package `docker`.
-
-Instead of: docker compose exec <service> bash, logs -f and restart typed per service
-
-```sh
-dx [service] [action]
-dx
-dx php  # a shell in php, or php brought up when stopped
-dx php logs  # follow its logs on a terminal, print them once without one
-dx php logs --tail 50 --no-follow  # the last 50 lines, then exit
-dx -  # the last action again
 ```
 
 ## errs
@@ -489,15 +461,15 @@ proc procs  # the leftover or heavy processes, dry-run first
 
 ## sf
 
-picks a Symfony console command on a terminal and runs it, asking for each required argument; without a terminal (a script, a pipe, an agent) it lists the commands, the form to use there. Package `docker`.
+picks a Symfony console command on a terminal and runs it, asking for each required argument; without a terminal (a script, a pipe, an agent) it lists the commands, the form to use there. Package `sf`.
 
 Instead of: bin/console typed in the php container, with the command names and arguments looked up by hand
 
 ```sh
-sf [command] [args...]
+sf [--service <name>] [command] [args...]
 sf
 sf cache:clear  # run it without the picker
-sf c:c --env=prod  # the console resolves abbreviations itself
+sf -s app cache:clear  # target a custom PHP service
 sf -  # the last command again, with its arguments
 ```
 
@@ -525,18 +497,6 @@ src <command> [options]
 src peek src/cli.ts:10-40
 src todo-scan
 src hotspots -n 10  # the ten files both complex and often edited
-```
-
-## stack
-
-a stable port per service name. Package `stack`.
-
-Instead of: picking a free host port by hand
-
-```sh
-stack <command> [options]
-stack port api
-stack port api --json  # the port and whether something listens on it
 ```
 
 ## sub

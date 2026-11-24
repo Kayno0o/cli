@@ -1,13 +1,13 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
+import type { Service as ComposeService } from '@kaynooo/cli-kit/compose'
 import type { Arg, Row } from '@kaynooo/cli-kit/picker'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { cacheFolder, fail, isInteractive, paint, parse, printJson } from '@kaynooo/cli-kit'
+import { cacheFolder, captureOutput, fail, ignoredFolders, isInteractive, paint, parse, printJson, readUserConfig } from '@kaynooo/cli-kit'
+import { findComposeDir, readServices } from '@kaynooo/cli-kit/compose'
 import { byRecency, emit, list, pick, record, runs, table } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
-import { spawnText } from '@kaynooo/utils/cli'
-import { children, from, nearestStack, services, up } from './stack'
 
 interface Argument {
   name: string
@@ -45,20 +45,22 @@ export interface Entry {
   command: Command
 }
 
-const usage = `sf [command] [args...]
+const usage = `sf [--service <name>] [command] [args...]
 sf -
 
 Picks a Symfony console command on a terminal and runs it, asking for each required argument; without a terminal (a script, a pipe, an agent) it lists the commands, the form to use there.
-The console is the nearest \`bin/console\` up to the repository root, then those of the child folders (keyed \`api/cache:clear\`), run in the php service of the nearest compose stack when there is one, else with the local php.
+The console is the nearest \`bin/console\` up to the repository root, then those of the child folders (keyed \`api/cache:clear\`), run in the auto-detected or configured PHP compose service when there is one, else with local php.
 \`sf -\` runs the last command again with its arguments, \`sf <command> [args...]\` runs without the picker, a name the list does not hold going to the console as is.`
 
 const EXITS: ExitRow[] = [['the code of the console', 'a command it ran'], [0, 'it listed the commands'], [1, 'no bin/console here, or it listed no command'], [2, 'a usage error']]
 
-/** Fzf paints its rows and previews itself, so these keep their colors whatever stream they are written to; `paint` still honours `NO_COLOR`. */
 const colors = paint({ isTTY: true })
 const MARKUP = /<(info|comment|question|error)>(.*?)<\/\1>/gs
 const TAGS = { info: 'green', comment: 'yellow', question: 'cyan', error: 'red' } as const
 const LINKS = /<\/?href[^>]*>/g
+const NAME_PARTS = /[-_]/
+const PHP_PROFILE = /\b(?:php|frankenphp)\b/i
+const PHPMYADMIN = /phpmyadmin/i
 
 /** Symfony's console markup, in the colors the console itself gives it. */
 export function marked(text: string): string {
@@ -73,29 +75,79 @@ function optionsOf(command: Command): Option[] {
   return Array.isArray(command.definition.options) ? [] : Object.values(command.definition.options)
 }
 
-const NAME_PARTS = /[-_]/
-
-/** The php service by name, `php` itself before `shop-php` or `blog_php`, never `phpmyadmin`. */
-export function phpService(names: string[]): string | undefined {
-  return names.find(name => name === 'php') ?? names.find(name => name.split(NAME_PARTS).includes('php'))
+function fromDir(dir: string, command: string[]): string[] {
+  return dir === '.' ? command : ['env', '-C', dir, ...command]
 }
 
-async function consoleAt(dir: string): Promise<Console> {
-  const stack = nearestStack(dir)
-  const php = stack === undefined ? undefined : phpService((await services(stack)).map(service => service.name))
+function up(dir: string): string[] {
+  const dirs: string[] = []
 
-  if (stack !== undefined && php !== undefined)
-    return { dir, run: [...stack.run, 'exec', php, 'bin/console'], list: { ...stack.list, argv: [...stack.list.argv, 'exec', '-T', php, 'bin/console'] } }
+  for (let current = dir; ; current = join(current, '..')) {
+    dirs.push(current)
 
-  return { dir, run: from(dir, ['php', 'bin/console']), list: { argv: ['php', 'bin/console'], cwd: resolve(dir), env: process.env } }
+    const absolute = resolve(current)
+
+    if (existsSync(join(current, '.git')) || dirname(absolute) === absolute)
+      return dirs
+  }
+}
+
+function children(dir = '.'): string[] {
+  const ignored = ignoredFolders()
+
+  return readdirSync(dir, { withFileTypes: true })
+    .filter(child => child.isDirectory() && !child.name.startsWith('.') && !ignored.has(child.name))
+    .map(child => child.name)
+    .toSorted()
+}
+
+/** Picks the PHP service: configured override first, then `php`, then `*-php`/`*_php`, then any service whose image/build profile mentions php/frankenphp (never phpmyadmin). */
+export function phpService(candidates: (string | Pick<ComposeService, 'name' | 'profile'>)[], configured?: string): string | undefined {
+  const list = candidates.map(item => typeof item === 'string' ? { name: item, profile: item.toLowerCase() } : item)
+
+  if (configured !== undefined && configured !== '') {
+    const exact = list.find(item => item.name === configured)
+
+    if (exact !== undefined)
+      return exact.name
+  }
+
+  return list.find(item => item.name === 'php')?.name
+    ?? list.find(item => item.name.split(NAME_PARTS).includes('php'))?.name
+    ?? list.find(item => !PHPMYADMIN.test(item.profile) && PHP_PROFILE.test(item.profile))?.name
+}
+
+function configuredService(): string | undefined {
+  const value = readUserConfig('sf').service
+
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+async function consoleAt(dir: string, serviceOverride?: string): Promise<Console> {
+  const absDir = resolve(dir)
+  const composeDir = findComposeDir(absDir)
+  const composeServices = composeDir === undefined ? undefined : await readServices(composeDir)
+  const php = composeServices === undefined ? undefined : phpService(composeServices, serviceOverride ?? configuredService())
+
+  if (composeDir !== undefined && php !== undefined) {
+    const relCompose = relative(process.cwd(), composeDir) || '.'
+
+    return {
+      dir,
+      run: [...fromDir(relCompose, ['docker', 'compose']), 'exec', php, 'bin/console'],
+      list: { argv: ['docker', 'compose', 'exec', '-T', php, 'bin/console'], cwd: composeDir, env: process.env },
+    }
+  }
+
+  return { dir, run: fromDir(dir, ['php', 'bin/console']), list: { argv: ['php', 'bin/console'], cwd: absDir, env: process.env } }
 }
 
 /** The console of this folder or its nearest parent, then those of the child folders. */
-async function consoles(): Promise<Console[]> {
+async function consoles(serviceOverride?: string): Promise<Console[]> {
   const here = up('.').find(dir => existsSync(join(dir, 'bin/console')))
   const dirs = [...(here === undefined ? [] : [here]), ...children().filter(dir => existsSync(join(dir, 'bin/console')))]
 
-  return Promise.all([...new Set(dirs)].map(consoleAt))
+  return Promise.all([...new Set(dirs)].map(async dir => consoleAt(dir, serviceOverride)))
 }
 
 function cached(dir: string): string {
@@ -115,9 +167,12 @@ export async function live(app: Console): Promise<Command[]> {
   let commands: Command[]
 
   try {
-    const text = await spawnText([...app.list.argv, 'list', '--format=json'], { cwd: app.list.cwd, env: app.list.env })
+    const ran = await captureOutput([...app.list.argv, 'list', '--format=json'], { cwd: app.list.cwd, env: app.list.env })
 
-    commands = (JSON.parse(text) as { commands: Command[] }).commands.filter(command => !command.hidden)
+    if (ran.code !== 0)
+      return fromCache(app.dir) ?? []
+
+    commands = (JSON.parse(ran.stdout) as { commands: Command[] }).commands.filter(command => !command.hidden)
   }
   catch {
     return fromCache(app.dir) ?? []
@@ -129,8 +184,8 @@ export async function live(app: Console): Promise<Command[]> {
   return commands
 }
 
-async function entries(fresh: boolean): Promise<Entry[]> {
-  const found = await consoles()
+async function entries(fresh: boolean, serviceOverride?: string): Promise<Entry[]> {
+  const found = await consoles(serviceOverride)
   const lists = await Promise.all(found.map(async app => (fresh ? live(app) : fromCache(app.dir) ?? live(app))))
 
   return found.flatMap((app, index) => lists[index]!.map(command => ({ app, command })))
@@ -184,7 +239,6 @@ function preview(dir: string, name: string): void {
   if (!command)
     return
 
-  // Laid out as `bin/console help` has it.
   const lines = [
     colors.bold(command.description),
     '',
@@ -198,7 +252,6 @@ function preview(dir: string, name: string): void {
   console.log(marked(lines.join('\n')))
 }
 
-/** Whether an option word leaves its value to the next word, as Symfony reads `--env prod` or `-e prod`. */
 function takesNext(command: Command, word: string): boolean {
   const option = word.startsWith('--')
     ? optionsOf(command).find(each => each.name === word.slice(2))
@@ -207,14 +260,12 @@ function takesNext(command: Command, word: string): boolean {
   return option?.accept_value === true
 }
 
-/** How many given words are arguments, the options and their values left out. */
 function argumentCount(command: Command, given: string[]): number {
   let count = 0
   let options = true
   let value = false
 
   for (const word of given) {
-    // Symfony gives an option the next word as its value unless that word starts with a dash.
     const isValue = value && !word.startsWith('-')
 
     value = false
@@ -222,15 +273,12 @@ function argumentCount(command: Command, given: string[]): number {
     if (isValue)
       continue
 
-    if (!options || !word.startsWith('-') || word === '-') {
+    if (!options || !word.startsWith('-') || word === '-')
       count++
-    }
-    else if (word === '--') {
+    else if (word === '--')
       options = false
-    }
-    else {
+    else
       value = takesNext(command, word)
-    }
   }
 
   return count
@@ -267,11 +315,6 @@ export async function answered(command: Arg[], ask: (name: string) => Promise<st
   return { argv, given }
 }
 
-function interactive(): boolean {
-  return isInteractive()
-}
-
-/** What `--emit` prints for tmux, or, standalone, the command run once its prompts are answered. */
 async function execute(emitting: boolean, typed: string, recorded: string, command: Arg[]): Promise<number> {
   if (emitting) {
     emit('run', typed, recorded, command)
@@ -279,7 +322,7 @@ async function execute(emitting: boolean, typed: string, recorded: string, comma
     return 0
   }
 
-  if (!interactive() && command.some(word => typeof word === 'object' && 'ask' in word))
+  if (!isInteractive() && command.some(word => typeof word === 'object' && 'ask' in word))
     fail('a required argument is missing and there is no terminal to ask for it', 1)
 
   const done = await answered(command, async name => input(`${name}:`, { history: `sf ${recorded || typed} ${name}`, hint: `pass ${name} as an argument after \`sf ${recorded || typed}\`` }))
@@ -301,7 +344,6 @@ function listing(found: Entry[]): string {
   return sorted.map((entry, index) => `${labels[index]!.padEnd(width)}  ${entry.command.description}`.trimEnd()).join('\n')
 }
 
-/** The hidden flags term, tmux and the shell completions call, each printing and nothing more. */
 async function hidden(flag: string, rest: string[]): Promise<number | undefined> {
   if (flag === '--show') {
     preview(rest[0] ?? '.', rest[1] ?? '')
@@ -315,7 +357,6 @@ async function hidden(flag: string, rest: string[]): Promise<number | undefined>
     return 0
   }
 
-  // Brings the cache of the consoles up to date, which `--list` starts in the background for the next time.
   if (flag === '--rows') {
     console.log(table(rows(await entries(true))).join('\n'))
 
@@ -329,13 +370,11 @@ async function hidden(flag: string, rest: string[]): Promise<number | undefined>
   const found = await entries(false)
 
   if (flag === '--names') {
-    // With the description as the one fish shows beside each name.
     console.log(found.map(entry => `${key(entry)}\t${entry.command.description}`).join('\n'))
 
     return 0
   }
 
-  // From the cache, which a list run in the background brings up to date for the next time, as the picker's reload does.
   if (refreshed)
     Bun.spawn([process.execPath, process.argv[1]!, '--rows'], { stdio: ['ignore', 'ignore', 'ignore'] }).unref()
 
@@ -365,21 +404,23 @@ export async function sf(args: string[]): Promise<number> {
   if (flagged !== undefined)
     return flagged
 
-  // The protocol the tmux picker reads instead of running the command: its mode, the words typed back, and the command's words.
   const emitting = flag === '--emit'
   const words = emitting ? args.slice(1) : args
   const last = words[0] === '-'
-  const parsed = parse(last ? [] : words, usage, {}, {
+  const parsed = parse(last ? [] : words, usage, {
+    service: { type: 'string', short: 's', description: 'compose service running PHP (overrides auto-detection and config.jsonc#sf.service)' },
+  }, {
     positionals: ['[command]'],
     trailing: true,
     exits: EXITS,
     replaces: 'bin/console typed in the php container, with the command names and arguments looked up by hand',
-    examples: ['sf', ['sf cache:clear', 'run it without the picker'], ['sf c:c --env=prod', 'the console resolves abbreviations itself'], ['sf -', 'the last command again, with its arguments']],
+    examples: ['sf', ['sf cache:clear', 'run it without the picker'], ['sf -s app cache:clear', 'target a custom PHP service'], ['sf -', 'the last command again, with its arguments']],
   })
   const [command] = parsed.positionals
   const given = last ? words.slice(1) : parsed.rest ?? []
-  const refreshed = command === undefined && !last && (await consoles()).some(found => fromCache(found.dir) !== undefined)
-  const found = await entries(false)
+  const serviceOverride = parsed.values.service
+  const refreshed = command === undefined && !last && (await consoles(serviceOverride)).some(found => fromCache(found.dir) !== undefined)
+  const found = await entries(false, serviceOverride)
 
   if (last) {
     const previous = runs('sf')[0]
@@ -397,8 +438,7 @@ export async function sf(args: string[]): Promise<number> {
     if (entry !== undefined)
       return execute(emitting, key(entry), key(entry), commandFor(entry, given))
 
-    // Left to the console, which knows its abbreviations and suggests the nearest command itself.
-    const [first] = await consoles()
+    const [first] = await consoles(serviceOverride)
 
     if (first === undefined)
       fail('no bin/console here', 1)
@@ -409,7 +449,7 @@ export async function sf(args: string[]): Promise<number> {
   if (found.length === 0)
     fail('no bin/console here, or it listed no command', 1)
 
-  if (!interactive()) {
+  if (!isInteractive()) {
     if (emitting)
       fail('the picker needs a terminal', 1)
 
@@ -422,11 +462,9 @@ export async function sf(args: string[]): Promise<number> {
     prompt: 'sf> ',
     searched: 1,
     preview: `${process.execPath} ${process.argv[1]} --show {1} {2}`,
-    // Opens on the cached list, which the consoles' own answer replaces once it is in.
-    reload: refreshed ? { onOpen: true, run: async () => ({ rows: rows(await entries(true)) }) } : undefined,
+    reload: refreshed ? { onOpen: true, run: async () => ({ rows: rows(await entries(true, serviceOverride)) }) } : undefined,
   })
-  // Read again, the reload having maybe brought a command the first list did not hold.
-  const entry = picked && (await entries(false)).find(candidate => candidate.app.dir === picked.hidden[0] && candidate.command.name === picked.hidden[1])
+  const entry = picked && (await entries(false, serviceOverride)).find(candidate => candidate.app.dir === picked.hidden[0] && candidate.command.name === picked.hidden[1])
 
   return entry === undefined ? 1 : execute(emitting, key(entry), key(entry), commandFor(entry, []))
 }

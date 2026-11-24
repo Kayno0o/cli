@@ -1,0 +1,39 @@
+{
+  "name": "@kaynooo/cli-sf",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "sf: picks and runs Symfony console commands in a compose PHP service or local php.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/sf#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
+    "directory": "packages/sf"
+  },
+  "bugs": "https://github.com/Kayno0o/cli/issues",
+  "keywords": [
+    "symfony",
+    "php",
+    "console",
+    "cli",
+    "bun"
+  ],
+  "bin": {
+    "sf": "./dist/sf-cli.js"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "scripts": {
+    "build": "$npm_execpath ../../scripts/build.ts src/sf-cli.ts",
+    "sf": "$npm_execpath src/sf-cli.ts"
+  },
+  "dependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}

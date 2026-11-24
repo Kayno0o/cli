@@ -155,11 +155,11 @@ describe('user-prompt-submit', () => {
 
 describe('session-start', () => {
   test('lists all installed bins compactly, including bins previously omitted from manual prose', async () => {
-    const reply = await hook('session-start', { session_id: 'abc-123' }, machine({}, { has: bin => bin === 'ev' || bin === 'dlog' || bin === 'wt' }))
+    const reply = await hook('session-start', { session_id: 'abc-123' }, machine({}, { has: bin => bin === 'ev' || bin === 'dc' || bin === 'wt' }))
     const text = reply?.hookSpecificOutput.additionalContext ?? ''
 
     expect(text).toContain('`ev`')
-    expect(text).toContain('`dlog`')
+    expect(text).toContain('`dc`')
     expect(text).toContain('`wt`')
     expect(text).not.toContain('`db`')
   })

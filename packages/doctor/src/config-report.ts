@@ -30,6 +30,7 @@ const USER_FILES: [string, string[][]][] = [
   ['repos', []],
   ['out', []],
   ['dlog', []],
+  ['sf', []],
   ['wait', []],
   ['hotspots', []],
   ['audit', []],

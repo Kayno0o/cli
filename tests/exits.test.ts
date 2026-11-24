@@ -11,7 +11,7 @@ const UNKNOWN_OPTION = '--no-such-option-for-the-exit-test'
 const SPAWNS = 8
 
 // Bins whose commands hand the arguments to another program, which answers the unknown option.
-const PASS_THROUGH = new Set(['dc', 'dx', 'sf'])
+const PASS_THROUGH = new Set(['dc', 'sf'])
 // Every `runCli` group help ends on `Run <prefix> <command> --help for its options.`; a leaf command never does.
 const GROUP_HELP = /<command> --help for its options\./
 

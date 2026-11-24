@@ -1,7 +1,7 @@
+import { stringToPort } from '@kaynooo/cli-kit'
 import { capture } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { port } from '../src/commands/port'
-import { stringToPort } from '../src/port'
+import { dcPort } from '../src/port'
 
 // FNV-1a with BigInt, which never loses precision.
 function fnv(name: string): number {
@@ -31,9 +31,9 @@ describe('stringToPort', () => {
   })
 })
 
-describe('stack port', () => {
+describe('dc port', () => {
   test('prints the number and keeps quiet when the port is free', async () => {
-    const { result, out, err } = await capture(async () => port(['hello']))
+    const { result, out, err } = await capture(() => dcPort(['hello']))
 
     expect(result).toBe(0)
     expect(out).toBe('13483\n')
@@ -44,7 +44,7 @@ describe('stack port', () => {
     const server = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: () => undefined } })
 
     try {
-      const { result, out, err } = await capture(async () => port(['--min', String(server.port), '--max', String(server.port), 'anything']))
+      const { result, out, err } = await capture(() => dcPort(['--min', String(server.port), '--max', String(server.port), 'anything']))
 
       expect(result).toBe(0)
       expect(out).toBe(`${server.port}\n`)
@@ -56,7 +56,10 @@ describe('stack port', () => {
   })
 
   test('a --min at or above the default ceiling alone spreads the names up to the highest port', async () => {
-    const ports = await Promise.all(['api', 'web', 'db'].map(async name => Number((await capture(async () => port(['--min', '40000', name]))).out)))
+    const ports: number[] = []
+
+    for (const name of ['api', 'web', 'db'])
+      ports.push(Number((await capture(() => dcPort(['--min', '40000', name]))).out))
 
     expect(new Set(ports).size).toBe(3)
     expect(ports.every(each => each >= 40000 && each <= 65535)).toBe(true)
@@ -64,14 +67,14 @@ describe('stack port', () => {
 
   test('needs a name and a sane range', async () => {
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
-    await expect(capture(async () => port([]))).rejects.toThrow('a name is needed')
+    await expect(capture(() => dcPort([]))).rejects.toThrow('missing <name>')
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
-    await expect(capture(async () => port(['--min', '5000', '--max', '4000', 'x']))).rejects.toThrow('--max takes a whole number from 5000')
+    await expect(capture(() => dcPort(['--min', '5000', '--max', '4000', 'x']))).rejects.toThrow('--max takes a whole number from 5000')
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
-    await expect(capture(async () => port(['--max', '99999', 'x']))).rejects.toThrow('--max goes up to 65535')
+    await expect(capture(() => dcPort(['--max', '99999', 'x']))).rejects.toThrow('--max goes up to 65535')
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
-    await expect(capture(async () => port(['--min', '0', 'x']))).rejects.toThrow('--min takes a whole number from 1024')
+    await expect(capture(() => dcPort(['--min', '0', 'x']))).rejects.toThrow('--min takes a whole number from 1024')
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
-    await expect(capture(async () => port(['--min', '70000', 'x']))).rejects.toThrow('--min goes up to 65535')
+    await expect(capture(() => dcPort(['--min', '70000', 'x']))).rejects.toThrow('--min goes up to 65535')
   })
 })

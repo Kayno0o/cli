@@ -1,29 +1,24 @@
 import { describe, expect, test } from 'bun:test'
 import { version } from '../package.json'
 
-const DX = new URL('../src/dx-cli.ts', import.meta.url).pathname
+const DC = new URL('../src/dc-cli.ts', import.meta.url).pathname
 
-describe('dx', () => {
-  test('prints its version and its usage', () => {
-    expect(Bun.spawnSync([process.execPath, DX, '--version'], { stdout: 'pipe' }).stdout.toString().trim()).toBe(version)
-    expect(Bun.spawnSync([process.execPath, DX, '--help'], { stdout: 'pipe' }).stdout.toString()).toContain('dx [service] [action]')
-  })
-})
+describe('dc unified cli', () => {
+  test('prints its version, help, and subcommand help', () => {
+    expect(Bun.spawnSync([process.execPath, DC, '--version'], { stdout: 'pipe' }).stdout.toString().trim()).toBe(version)
 
-const DLOG = new URL('../src/dlog-cli.ts', import.meta.url).pathname
+    const help = Bun.spawnSync([process.execPath, DC, '--help'], { stdout: 'pipe' }).stdout.toString()
 
-describe('dlog', () => {
-  test('prints its version and its usage', () => {
-    expect(Bun.spawnSync([process.execPath, DLOG, '--version'], { stdout: 'pipe' }).stdout.toString().trim()).toBe(version)
-    expect(Bun.spawnSync([process.execPath, DLOG, '--help'], { stdout: 'pipe' }).stdout.toString()).toContain('dlog [service...]')
-  })
-})
+    expect(help).toContain('dc health')
+    expect(help).toContain('dc logs')
+    expect(help).toContain('dc shell')
+    expect(help).toContain('dc exec')
+    expect(help).toContain('dc port')
+    expect(help).toContain('dc ports')
 
-const SF = new URL('../src/sf-cli.ts', import.meta.url).pathname
-
-describe('sf', () => {
-  test('prints its version and its usage', () => {
-    expect(Bun.spawnSync([process.execPath, SF, '--version'], { stdout: 'pipe' }).stdout.toString().trim()).toBe(version)
-    expect(Bun.spawnSync([process.execPath, SF, '--help'], { stdout: 'pipe' }).stdout.toString()).toContain('sf [command] [args...]')
+    expect(Bun.spawnSync([process.execPath, DC, 'health', '--help'], { stdout: 'pipe' }).stdout.toString()).toContain('dlog [service...]')
+    expect(Bun.spawnSync([process.execPath, DC, 'logs', '--help'], { stdout: 'pipe' }).stdout.toString()).toContain('dc logs [service...]')
+    expect(Bun.spawnSync([process.execPath, DC, 'port', '--help'], { stdout: 'pipe' }).stdout.toString()).toContain('dc port <name>')
+    expect(Bun.spawnSync([process.execPath, DC, 'port', 'hello'], { stdout: 'pipe' }).stdout.toString().trim()).toBe('13483')
   })
 })

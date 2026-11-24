@@ -1,6 +1,9 @@
 import type { Command, Entry } from '../src/sf'
 import { describe, expect, test } from 'bun:test'
+import { version } from '../package.json'
 import { answered, argumentsOf, commandFor, entryJson, key, live, marked, phpService, signature } from '../src/sf'
+
+const SF = new URL('../src/sf-cli.ts', import.meta.url).pathname
 
 function command(name: string, args: Record<string, { is_required: boolean, is_array?: boolean }> | [] = []): Command {
   return {
@@ -18,6 +21,13 @@ function command(name: string, args: Record<string, { is_required: boolean, is_a
 
 const entry = (found: Command, dir = '.'): Entry => ({ app: { dir, run: dir === '.' ? ['php', 'bin/console'] : ['env', '-C', dir, 'php', 'bin/console'], list: { argv: [], cwd: dir, env: {} } }, command: found })
 
+describe('sf cli', () => {
+  test('prints its version and usage', () => {
+    expect(Bun.spawnSync([process.execPath, SF, '--version'], { stdout: 'pipe' }).stdout.toString().trim()).toBe(version)
+    expect(Bun.spawnSync([process.execPath, SF, '--help'], { stdout: 'pipe' }).stdout.toString()).toContain('sf [--service <name>] [command] [args...]')
+  })
+})
+
 describe('live', () => {
   test('falls back to an empty list when the output is not JSON, as a PHP deprecation leaves it', async () => {
     const app = { dir: '/nonexistent-sf-test', run: [], list: { argv: ['sh', '-c', 'echo "Deprecated: x"; echo "$@" >/dev/null', 'sh'], cwd: '/', env: {} } }
@@ -27,12 +37,14 @@ describe('live', () => {
 })
 
 describe('phpService', () => {
-  test('prefers php itself, then any service naming php', () => {
+  test('prefers configured service, then php, then *-php, then image/build profile mentioning php/frankenphp', () => {
     expect(phpService(['db', 'shop-php', 'php'])).toBe('php')
     expect(phpService(['db', 'blog_php'])).toBe('blog_php')
     expect(phpService(['db', 'node'])).toBeUndefined()
     expect(phpService(['db', 'phpmyadmin'])).toBeUndefined()
     expect(phpService(['phpmyadmin', 'app-php'])).toBe('app-php')
+    expect(phpService([{ name: 'db', profile: 'db postgres:16' }, { name: 'app', profile: 'app dunglas/frankenphp:1' }])).toBe('app')
+    expect(phpService([{ name: 'backend', profile: 'backend custom:latest' }, { name: 'php', profile: 'php php:8.4' }], 'backend')).toBe('backend')
   })
 })
 
