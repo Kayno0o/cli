@@ -75,7 +75,7 @@
     },
     "packages/dev": {
       "name": "@kaynooo/cli-dev",
-      "version": "0.7.4",
+      "version": "0.8.0",
       "bin": {
         "dev": "./dist/cli.js",
       },
