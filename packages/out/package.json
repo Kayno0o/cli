@@ -19,11 +19,16 @@
     "logs",
     "tokens"
   ],
+  "exports": {
+    "./wrap": "./src/wrap.ts"
+  },
   "bin": {
     "out": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/stages.ts",
+    "src/wrap.ts"
   ],
   "engines": {
     "bun": ">=1.4.3"
@@ -32,7 +37,7 @@
     "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
     "out": "$npm_execpath src/cli.ts"
   },
-  "devDependencies": {
+  "dependencies": {
     "@kaynooo/cli-kit": "workspace:*",
     "@kaynooo/utils": "3.1.0"
   }

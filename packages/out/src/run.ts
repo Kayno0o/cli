@@ -1,7 +1,8 @@
 import type { Chunk } from '@kaynooo/cli-kit'
 import { closeSync, rmSync, writeSync } from 'node:fs'
 import process from 'node:process'
-import { holdSignals, problem, runCommand, warn } from '@kaynooo/cli-kit'
+import { holdSignals, isHumanTerminal, paint, problem, runCommand, warn } from '@kaynooo/cli-kit'
+import { formatError, parseErrors } from '@kaynooo/cli-kit/errors'
 import { fold, shouldFold } from './fold'
 import { cleanLogs, logDir, newLog } from './logs'
 import { filtered } from './stages'
@@ -12,6 +13,7 @@ import { tidy } from './tidy'
 const HEAD_BYTES = 2 * 1024 * 1024
 const TAIL_BYTES = 2 * 1024 * 1024
 const FALLBACK_LINES = 100
+const MAX_PARSED_ERRORS = 25
 
 // Holds the first and last bytes of the output and streams all of it to a log file once it outgrows the memory it may take.
 export class Recorder {
@@ -153,12 +155,20 @@ function count(recorder: Recorder, { shown, folded }: Presented, recorded: Recor
   record({ at: new Date().toISOString(), dir: process.cwd(), command: recorded.command, bytes: recorder.bytes, baseline: baseline === undefined ? recorder.bytes : Buffer.byteLength(baseline), shown, folded })
 }
 
-// Runs the command with stdout and stderr captured in arrival order, then replays short output untouched or prints it folded. Returns the command's exit code, which a failure to fold never changes.
-export async function run(command: string[], threshold: number, was: readonly string[] = []): Promise<number> {
+export interface RunOptions {
+  was?: readonly string[]
+  forceFold?: boolean
+}
+
+// Runs the command; on a human terminal (unless `--fold`), streams live with ANSI preserved and saves a log if long; otherwise buffers and folds long output for agents/CI/pipes.
+export async function run(command: string[], threshold: number, options: RunOptions | readonly string[] = {}): Promise<number> {
+  const resolved: RunOptions = Array.isArray(options) ? { was: options } : (options as RunOptions)
+  const { was = [], forceFold = false } = resolved
   const dir = await logDir()
 
   await cleanLogs(dir)
 
+  const live = isHumanTerminal(process.stdout) && !forceFold
   const recorder = new Recorder(dir)
   const held = holdSignals()
   let started = false
@@ -174,6 +184,9 @@ export async function run(command: string[], threshold: number, was: readonly st
       },
       onChunk: (chunk) => {
         recorder.add(chunk)
+
+        if (live)
+          process[chunk.stream].write(chunk.data)
       },
     })
 
@@ -193,7 +206,21 @@ export async function run(command: string[], threshold: number, was: readonly st
     held.release()
   }
 
-  count(recorder, present(recorder, threshold), { command: commandKey(command), was })
+  if (live) {
+    const long = recorder.overflowing || shouldFold(recorder.text, threshold)
+
+    if (long) {
+      const path = recorder.save()
+
+      console.error(paint(process.stderr).dim(`[out: full log: ${path}]`))
+    }
+
+    count(recorder, { shown: recorder.bytes, folded: false }, { command: commandKey(command), was })
+
+    return code
+  }
+
+  count(recorder, present(recorder, threshold, code), { command: commandKey(command), was })
 
   return code
 }
@@ -209,7 +236,7 @@ export async function readPiped(threshold: number, was: readonly string[] = []):
   for await (const data of Bun.stdin.stream())
     recorder.add({ stream: 'stdout', data })
 
-  count(recorder, present(recorder, threshold), { command: '(piped)', was })
+  count(recorder, present(recorder, threshold, 0), { command: '(piped)', was })
 
   return 0
 }
@@ -220,8 +247,20 @@ interface Presented {
   folded: boolean
 }
 
-// Prints the output tidied when short, folded otherwise.
-function present(recorder: Recorder, threshold: number): Presented {
+function parsedErrorsBlock(text: string): string {
+  const { errors } = parseErrors(text)
+
+  if (errors.length === 0)
+    return ''
+
+  const lines = errors.slice(0, MAX_PARSED_ERRORS).map(error => formatError(error, process.cwd()))
+  const more = errors.length > MAX_PARSED_ERRORS ? [`... +${errors.length - MAX_PARSED_ERRORS} more errors`] : []
+
+  return `[out: ${errors.length} ${errors.length === 1 ? 'error' : 'errors'} parsed]\n${[...lines, ...more].join('\n')}\n\n`
+}
+
+// Prints the output tidied when short, folded otherwise (with structured error summary prepended on failure when recognised).
+function present(recorder: Recorder, threshold: number, code: number): Presented {
   const text = recorder.text
 
   if (!recorder.overflowing && !shouldFold(text, threshold))
@@ -230,7 +269,10 @@ function present(recorder: Recorder, threshold: number): Presented {
   let printed
 
   try {
-    printed = fold(tidy(text), { threshold, logPath: recorder.save() })
+    const body = fold(tidy(text), { threshold, logPath: recorder.save() })
+    const summary = code === 0 ? '' : parsedErrorsBlock(text)
+
+    printed = `${summary}${body}`
   }
   catch (error) {
     warn(`out: could not fold the output: ${error instanceof Error ? error.message : String(error)}`)

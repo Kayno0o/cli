@@ -110,16 +110,17 @@ describe('check', () => {
 
     expect(lines[0]).toMatch(/^ok {4}check {2}\d+\.\ds {2}\S+check\.log$/)
     expect(lines[1]).toMatch(/^FAIL {2}lint {3}\d+\.\ds {2}bun run lint {2}\S+lint\.log$/)
-    expect(lines[2]).toBe('  src/a.ts(1,7): error TS2322: bad')
+    expect(lines[2]).toBe('  src/a.ts:1:7: bad (TS2322)')
     expect(lines[3]).toStartWith('ok    test')
   })
 
-  test('--json prints each step\'s outcome, what failed under a failing one', async () => {
+  test('--json prints each step\'s outcome, structured errors and what failed under a failing one', async () => {
     const { result, out } = await capture(async () => check(['--json'], repo('js')))
-    const outcomes = JSON.parse(out) as { name: string, ok: boolean, log: string, failed?: string }[]
+    const outcomes = JSON.parse(out) as { name: string, ok: boolean, log: string, failed?: string, errors?: { file: string, rule?: string }[] }[]
 
     expect(result).toBe(1)
-    expect(outcomes.map(outcome => [outcome.name, outcome.ok, outcome.failed])).toEqual([['check', true, undefined], ['lint', false, 'src/a.ts(1,7): error TS2322: bad'], ['test', true, undefined]])
+    expect(outcomes.map(outcome => [outcome.name, outcome.ok, outcome.failed])).toEqual([['check', true, undefined], ['lint', false, 'src/a.ts:1:7: bad (TS2322)'], ['test', true, undefined]])
+    expect(outcomes[1]?.errors).toEqual([expect.objectContaining({ file: 'src/a.ts', line: 1, column: 7, rule: 'TS2322', message: 'bad' })])
     expect(outcomes[0]?.log).toEndWith('check.log')
     expect((JSON.parse((await capture(async () => check(['--list', '--json'], repo('just')))).out) as { name: string }[]).map(step => step.name)).toEqual(['lint', 'test'])
   })

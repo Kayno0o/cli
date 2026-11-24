@@ -31,7 +31,7 @@ describe('out --copy', () => {
 describe('out', () => {
   test('prints its version and its help', () => {
     expect(out('--version').out.trim()).toBe(version)
-    expect(out('--help').out).toContain('out [-n <lines>] -- <command>')
+    expect(out('--help').out).toContain('out [-n <lines>] [--fold] -- <command>')
   })
 
   test('records each run and --stats reads them back, a --was stage counting against what it would have printed', () => {
@@ -239,7 +239,7 @@ describe('out --stats --json errors', () => {
 
     expect([extra.code, since.code]).toEqual([2, 2])
     expect(extra.out).toBe('')
-    expect(JSON.parse(extra.err)).toMatchObject({ error: '--last, --list, --grep and --stats run no command' })
+    expect(JSON.parse(extra.err)).toMatchObject({ error: '--last, --list, --grep, --show and --stats run no command' })
     expect(JSON.parse(since.err)).toMatchObject({ error: expect.stringContaining('--since') })
   })
 })
@@ -269,8 +269,25 @@ describe('out logs', () => {
     expect(spawn('--grep', 'nothing').code).toBe(1)
     expect(spawn('--grep', '(').code).toBe(2)
     expect(spawn('--grep', 'x', '--log', 'missing.log').code).toBe(2)
-    expect(spawn('--list').out.split('\n').filter(Boolean).map(line => line.split(/\s+/)[0])).toEqual([join(logs, 'new.log'), join(logs, 'old.log')])
+    expect(spawn('--list').out.split('\n').filter(Boolean).map(line => line.split(/\s+/)[1])).toEqual([join(logs, 'new.log'), join(logs, 'old.log')])
+    const listed = JSON.parse(spawn('logs', '--json').out) as { path: string, source: string }[]
+
+    expect(listed.map(each => [each.source, each.path])).toEqual([['out', join(logs, 'new.log')], ['out', join(logs, 'old.log')]])
+    expect(spawn('grep', '-i', '-C', '1', 'ERROR: NEW ONE').out).toBe('2- beta\n3: error: new one\n4- error: new two\n')
+    expect(spawn('show', '2-3').out).toBe('2: beta\n3: error: new one\n')
+    expect(JSON.parse(spawn('show', '2-3', '--json').out)).toMatchObject({ from: 2, to: 3, lines: ['beta', 'error: new one'] })
     expect(spawn('--last', '--grep', 'x').code).toBe(2)
     expect(spawn('--log', 'old.log').code).toBe(2)
+
+    const checkRun = join(runtime, 'kaynooo-cli/check/run-1')
+
+    mkdirSync(checkRun, { recursive: true })
+    writeFileSync(join(checkRun, 'test.log'), 'src/x.ts(1,2): error TS2322: bad\n')
+    utimesSync(join(checkRun, 'test.log'), new Date(Date.now() + 60_000), new Date(Date.now() + 60_000))
+
+    const shared = JSON.parse(spawn('logs', '--json').out) as { path: string, source: string }[]
+
+    expect(shared[0]).toMatchObject({ source: 'check', path: join(checkRun, 'test.log') })
+    expect(spawn('last').out.trim()).toBe(join(checkRun, 'test.log'))
   })
 })

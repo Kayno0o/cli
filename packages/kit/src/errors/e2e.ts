@@ -1,4 +1,4 @@
-import type { Collector, ToolError } from './output'
+import type { Collector, ToolError } from './index'
 
 // Headers and totals Playwright and Vitest print around their errors.
 export const E2E_NOISE: RegExp[] = [

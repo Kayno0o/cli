@@ -418,7 +418,7 @@ describe('check in a compose service', () => {
 
       expect(result).toBe(1)
       expect(out).toContain('FAIL  lint')
-      expect(out).toContain('src/a.ts(1,7): error TS2322: bad')
+      expect(out).toContain('src/a.ts:1:7: bad (TS2322)')
     })
   })
 })

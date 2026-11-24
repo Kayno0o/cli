@@ -396,11 +396,12 @@ runs the command and shortens its output when it is long, exiting with its code.
 Instead of: piping a noisy command through tail or head
 
 ```sh
-out [-n <lines>] -- <command> [args...]
+out [-n <lines>] [--fold] -- <command> [args...]
 out -- bun install
 out -n 300 -- bun run build  # up to 300 lines left untouched
 bun run build 2>&1 | out  # what is piped in
-out --stats --since 7d  # the tokens saved this week
+out logs  # list saved logs from out, check and errs
+out show 1-40  # inspect lines 1-40 of the latest log
 ```
 
 ## page

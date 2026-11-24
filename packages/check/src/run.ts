@@ -1,8 +1,10 @@
 import type { HeldSignals } from '@kaynooo/cli-kit'
+import type { ToolError } from './output'
 import { mkdir, readdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import process from 'node:process'
 import { failureExcerpt, formatDuration, paint, privateLogDirectory, role, runCommand, stripAnsi, sweepLogs } from '@kaynooo/cli-kit'
+import { formatError, parseErrors } from './output'
 
 export interface Outcome { ok: boolean, ms: number, output: string, timedOut?: boolean }
 
@@ -104,13 +106,34 @@ export async function refusedStep(reason: string, logFile: string): Promise<Outc
   return { ok: false, ms: 0, output: reason }
 }
 
-// A step's outcome as --json prints it, what failed under `failed` for a failing one and the compose service it ran in under `in`.
-export function outcomeJson(name: string, command: string, logFile: string, outcome: Outcome, service?: string): { name: string, command: string, in?: string, ok: boolean, ms: number, log: string, timedOut?: true, failed?: string } {
-  return { name, command, ...(service === undefined ? {} : { in: service }), ok: outcome.ok, ms: outcome.ms, log: logFile, ...(outcome.timedOut === true ? { timedOut: true as const } : {}), ...(outcome.ok ? {} : { failed: failureExcerpt(outcome.output) }) }
+const MAX_INLINE_ERRORS = 40
+
+// Concise failure lines for a failing step: structured `errs` diagnostics when recognised, else the fallback excerpt.
+function formattedFailure(output: string, cwd = process.cwd()): { text: string, errors: ToolError[], unrecognised: number } {
+  const { errors, unrecognised } = parseErrors(output)
+
+  if (errors.length === 0)
+    return { text: failureExcerpt(output), errors, unrecognised }
+
+  const shown = errors.slice(0, MAX_INLINE_ERRORS).map(error => formatError(error, cwd))
+  const more = errors.length > MAX_INLINE_ERRORS ? [`... +${errors.length - MAX_INLINE_ERRORS} more errors`] : []
+  const extra = unrecognised > 0 ? [`(${unrecognised} unrecognised ${unrecognised === 1 ? 'line' : 'lines'} in full log)`] : []
+
+  return { text: [...shown, ...more, ...extra].join('\n'), errors, unrecognised }
 }
 
-// One line for a passing step; for a failing one its command, then what failed, indented.
-export function printOutcome(name: string, width: number, command: string, logFile: string, outcome: Outcome): void {
+// A step's outcome as --json prints it, what failed under `failed` and structured `errors` for a failing one, and the compose service it ran in under `in`.
+export function outcomeJson(name: string, command: string, logFile: string, outcome: Outcome, service?: string, cwd = process.cwd()): { name: string, command: string, in?: string, ok: boolean, ms: number, log: string, timedOut?: true, failed?: string, errors?: ToolError[], unrecognised?: number } {
+  if (outcome.ok)
+    return { name, command, ...(service === undefined ? {} : { in: service }), ok: true, ms: outcome.ms, log: logFile }
+
+  const { text, errors, unrecognised } = formattedFailure(outcome.output, cwd)
+
+  return { name, command, ...(service === undefined ? {} : { in: service }), ok: false, ms: outcome.ms, log: logFile, ...(outcome.timedOut === true ? { timedOut: true as const } : {}), failed: text, errors, unrecognised }
+}
+
+// One line for a passing step; for a failing one its command, then structured errors (or excerpt), indented.
+export function printOutcome(name: string, width: number, command: string, logFile: string, outcome: Outcome, cwd = process.cwd()): void {
   const colors = paint(process.stdout)
   const path = role('path', process.stdout)
   const took = colors.dim(formatDuration(outcome.ms))
@@ -128,5 +151,5 @@ export function printOutcome(name: string, width: number, command: string, logFi
   if (outcome.timedOut === true)
     console.log(colors.yellow(`  timed out after ${formatDuration(outcome.ms)}, the step and what it started were ended`))
 
-  console.log(failureExcerpt(outcome.output).split('\n').map(line => `  ${line}`.trimEnd()).join('\n'))
+  console.log(formattedFailure(outcome.output, cwd).text.split('\n').map(line => `  ${line}`.trimEnd()).join('\n'))
 }

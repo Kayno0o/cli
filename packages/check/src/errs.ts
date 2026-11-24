@@ -3,10 +3,12 @@ import type { PlaceSettings } from './compose'
 import type { ToolError } from './output'
 import { relative } from 'node:path'
 import process from 'node:process'
-import { fail, holdSignals, jsonOption, parse, printJson, readInput as readText, runCommand, stripAnsi, warn } from '@kaynooo/cli-kit'
+import { fail, holdSignals, jsonOption, paint, parse, printJson, readInput as readText, role, runCommand, stripAnsi, warn } from '@kaynooo/cli-kit'
 import { argvIn, place, placeOptions, placeSettings, Stack } from './compose'
-import { parseErrors } from './output'
+import { formatError, parseErrors } from './output'
 import { saveLog } from './run'
+
+export { formatError }
 
 const usage = `errs [options] [log]
 errs [options] -- <command> [args...]
@@ -20,7 +22,11 @@ const EXITS: ExitRow[] = [[0, 'no error was found and the command, if any, passe
 
 const options = {
   ...placeOptions,
-  json: jsonOption('{errors: [{tool, file, line, column, rule, severity, message, test?}], unrecognised, log?, code?}'),
+  'severity': { type: 'string', choices: ['error', 'warning'] as const, description: 'show only errors or only warnings' },
+  'group-by': { type: 'string', choices: ['file', 'rule'] as const, description: 'group diagnostics by file or rule' },
+  'summary': { type: 'boolean', description: 'print counts by severity, file and rule instead of every line' },
+  'unrecognised': { type: 'boolean', short: 'u', description: 'also print lines no parser recognised' },
+  'json': jsonOption('{errors: [{tool, file, line, column, rule, severity, message, test?}], unrecognised, unrecognisedLines?, log?, code?}'),
 } as const
 
 // The path as the repo sees it, absolute paths under the current folder made relative.
@@ -30,13 +36,44 @@ function display(file: string, cwd: string): string {
   return path.startsWith('..') ? file : path
 }
 
-export function formatError(error: ToolError, cwd: string): string {
-  const where = `${display(error.file, cwd)}:${error.line}:${error.column}`
-  const label = error.test === undefined ? '' : `${error.test}: `
-  const level = error.severity === 'warning' ? 'warning: ' : ''
-  const rule = error.rule === undefined ? '' : ` (${error.rule})`
+function printGrouped(errors: readonly ToolError[], by: 'file' | 'rule', cwd: string): void {
+  const groups = new Map<string, ToolError[]>()
 
-  return `${where}: ${level}${label}${error.message}${rule}`
+  for (const error of errors) {
+    const key = by === 'file' ? display(error.file, cwd) : (error.rule ?? '(no rule)')
+    const list = groups.get(key) ?? []
+
+    list.push(error)
+    groups.set(key, list)
+  }
+
+  const head = role(by === 'file' ? 'path' : 'id', process.stdout)
+  const { dim } = paint(process.stdout)
+
+  for (const [key, list] of [...groups.entries()].toSorted((a, b) => b[1].length - a[1].length)) {
+    console.log(`${head(key)} ${dim(`(${list.length})`)}`)
+
+    for (const error of list)
+      console.log(`  ${formatError(error, cwd)}`)
+  }
+}
+
+function printSummary(errors: readonly ToolError[], cwd: string): void {
+  const errCount = errors.filter(e => e.severity === 'error').length
+  const warnCount = errors.filter(e => e.severity === 'warning').length
+  const files = new Set(errors.map(e => display(e.file, cwd))).size
+  const byRule = new Map<string, number>()
+
+  for (const error of errors) {
+    const rule = error.rule ?? error.tool
+
+    byRule.set(rule, (byRule.get(rule) ?? 0) + 1)
+  }
+
+  console.log(`${errCount} ${errCount === 1 ? 'error' : 'errors'}, ${warnCount} ${warnCount === 1 ? 'warning' : 'warnings'} across ${files} ${files === 1 ? 'file' : 'files'}`)
+
+  for (const [rule, count] of [...byRule.entries()].toSorted((a, b) => b[1] - a[1]).slice(0, 10))
+    console.log(`  ${String(count).padStart(4)}  ${rule}`)
 }
 
 // The log named by a lone argument (- for stdin, none for stdin too), or the output of the command to run.
@@ -79,26 +116,48 @@ async function readInput(command: string[], run: boolean, settings: PlaceSetting
 
 // Parses the log or command output into error lines; returns 1 when it found errors or the command failed.
 export async function errs(args: string[], cwd = process.cwd()): Promise<number> {
-  // Bun drops a leading `--` before the script sees it, so a first word that is neither an option nor an existing file starts the command.
+  // Bun drops a leading `--` before the script sees it, so a first word that is an executable on PATH (not a missing log filename) starts a bare command.
   const first = args[0]
-  const bare = first !== undefined && !first.startsWith('-') && !await Bun.file(first).exists()
+  const bare = first !== undefined && !first.startsWith('-') && !await Bun.file(first).exists() && Bun.which(first) !== null
   const parsed = parse(bare ? [] : args, usage, options, { exits: EXITS, rest: true, replaces: 'reading raw tsc, eslint, phpunit, phpstan or playwright logs, or grepping a test summary out of them', examples: [['errs -- bun run check', 'the type errors of a run'], ['bun test 2>&1 | errs', 'the failed tests from stdin'], ['errs -- vendor/bin/phpunit', 'each failed PHP test with its file and line']] })
 
   if (parsed.positionals.length > 1)
     fail(`give one log, or a command after --\n\n${usage}`)
 
   const input = await readInput(bare ? args : parsed.rest ?? parsed.positionals, bare || parsed.rest !== undefined, placeSettings(parsed.values), cwd)
-  const { errors, unrecognised } = parseErrors(input.text)
+  const { errors: allErrors, unrecognised, unrecognisedLines } = parseErrors(input.text)
+  const errors = parsed.values.severity === undefined ? allErrors : allErrors.filter(error => error.severity === parsed.values.severity)
 
   if (parsed.values.json === true) {
-    printJson({ errors, unrecognised, ...(input.log === undefined ? {} : { log: input.log }), ...(input.code === undefined ? {} : { code: input.code }) })
+    printJson({
+      errors,
+      unrecognised,
+      ...(parsed.values.unrecognised === true ? { unrecognisedLines } : {}),
+      ...(input.log === undefined ? {} : { log: input.log }),
+      ...(input.code === undefined ? {} : { code: input.code }),
+    })
   }
   else {
-    for (const error of errors)
-      console.log(formatError(error, cwd))
+    if (parsed.values.summary === true) {
+      printSummary(errors, cwd)
+    }
+    else if (parsed.values['group-by'] !== undefined) {
+      printGrouped(errors, parsed.values['group-by'], cwd)
+    }
+    else {
+      for (const error of errors)
+        console.log(formatError(error, cwd))
+    }
 
-    if (unrecognised > 0)
+    if (parsed.values.unrecognised === true && unrecognisedLines.length > 0) {
+      console.log(`\n-- unrecognised (${unrecognisedLines.length}) --`)
+
+      for (const line of unrecognisedLines)
+        console.log(line)
+    }
+    else if (unrecognised > 0) {
       warn(`${unrecognised} ${unrecognised === 1 ? 'line' : 'lines'} not recognised`, input.log === undefined ? undefined : `see ${input.log}`)
+    }
 
     if (errors.length === 0 && input.code !== undefined && input.code !== 0)
       warn(`the command exited ${input.code} with no error recognised`, input.log === undefined ? undefined : `see ${input.log}`)

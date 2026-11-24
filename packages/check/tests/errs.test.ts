@@ -169,7 +169,7 @@ describe('parseErrors', () => {
   })
 
   test('phpstan: no error is no error', async () => {
-    expect(parseErrors(await fixture('phpstan-ok.txt'))).toEqual({ errors: [], unrecognised: 0 })
+    expect(parseErrors(await fixture('phpstan-ok.txt'))).toEqual({ errors: [], unrecognised: 0, unrecognisedLines: [] })
   })
 
   test('php-cs-fixer: one error per file with its fixers, the diffs skipped', async () => {
@@ -298,6 +298,54 @@ describe('errs', () => {
     expect(out).toBe('')
     expect(err).toContain('the command exited 3 with no error recognised')
     expect(err).toContain('1 line not recognised')
+  })
+
+  test('--severity filters errors vs warnings and --summary prints counts by rule', async () => {
+    const dir = temp('errs-filter-')
+    const path = join(dir, 'mixed.log')
+
+    writeFileSync(path, [
+      'src/main.c:5:9: warning: unused variable \'x\' [-Wunused-variable]',
+      'src/main.c:9:3: error: expected \';\' before \'return\'',
+      'src/util.c:1:1: warning: unused parameter \'y\' [-Wunused-parameter]',
+    ].join('\n'))
+
+    const warnings = await capture(async () => errs([path, '--severity', 'warning'], dir))
+    const errorsOnly = await capture(async () => errs([path, '--severity', 'error'], dir))
+    const summary = await capture(async () => errs([path, '--summary'], dir))
+    const byFile = await capture(async () => errs([path, '--group-by', 'file'], dir))
+    const byRule = await capture(async () => errs([path, '--group-by', 'rule'], dir))
+
+    expect(warnings.out.trim().split('\n')).toHaveLength(2)
+    expect(warnings.out).toContain('unused variable')
+    expect(errorsOnly.out.trim().split('\n')).toHaveLength(1)
+    expect(errorsOnly.out).toContain('expected \';\'')
+    expect(summary.out).toContain('1 error, 2 warnings across 2 files')
+    expect(byFile.out).toContain('src/main.c (2)')
+    expect(byRule.out).toContain('-Wunused-variable (1)')
+  })
+
+  test('--unrecognised prints lines no parser recognised, and a missing log path errors cleanly instead of executing', async () => {
+    const dir = temp('errs-unrec-')
+    const path = join(dir, 'noise.log')
+
+    writeFileSync(path, 'mystery line one\na.ts(1,2): error TS1: bad\nmystery line two\n')
+
+    const unrec = await capture(async () => errs([path, '--unrecognised'], dir))
+
+    expect(unrec.out).toContain('mystery line one')
+    expect(unrec.out).toContain('mystery line two')
+
+    let caught: unknown
+
+    try {
+      await errs(['definitely-missing.log'], dir)
+    }
+    catch (error) {
+      caught = error
+    }
+
+    expect(caught).toMatchObject({ message: 'no file definitely-missing.log', code: 2 })
   })
 })
 

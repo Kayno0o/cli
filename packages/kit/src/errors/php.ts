@@ -1,4 +1,4 @@
-import type { Collector, ToolError } from './output'
+import type { Collector, ToolError } from './index'
 
 // Headers and totals PHPUnit, ParaTest, PHPStan and PHP CS Fixer print around their errors.
 export const PHP_NOISE: RegExp[] = [
