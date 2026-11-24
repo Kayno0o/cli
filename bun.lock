@@ -15,7 +15,7 @@
       "bin": {
         "arc": "./dist/cli.js",
       },
-      "devDependencies": {
+      "dependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
@@ -69,7 +69,7 @@
       "bin": {
         "db": "./dist/cli.js",
       },
-      "devDependencies": {
+      "dependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
@@ -99,9 +99,6 @@
       "version": "0.10.8",
       "bin": {
         "dc": "./dist/dc-cli.js",
-        "dlog": "./dist/dlog-cli.js",
-        "dx": "./dist/dx-cli.js",
-        "sf": "./dist/sf-cli.js",
       },
       "dependencies": {
         "@kaynooo/cli-env": "workspace:*",
@@ -126,9 +123,11 @@
       "bin": {
         "sub": "./dist/cli.js",
       },
+      "dependencies": {
+        "@kaynooo/utils": "3.1.0",
+      },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
-        "@kaynooo/utils": "3.1.0",
       },
     },
     "packages/env": {
@@ -147,12 +146,14 @@
       },
     },
     "packages/ft": {
-      "name": "@kaynooo/cli-forgejo",
+      "name": "@kaynooo/cli-forge",
       "version": "0.30.12",
       "bin": {
-        "ft": "./dist/cli.js",
+        "fg": "./dist/fg.js",
+        "ft": "./dist/ft.js",
       },
       "devDependencies": {
+        "@kaynooo/cli-changelog": "workspace:*",
         "@kaynooo/cli-kit": "workspace:*",
         "@kaynooo/utils": "3.1.0",
       },
@@ -170,16 +171,6 @@
         "gcl": "./dist/gcl.js",
         "gd": "./dist/gd.js",
         "gu": "./dist/gu.js",
-      },
-      "devDependencies": {
-        "@kaynooo/cli-kit": "workspace:*",
-      },
-    },
-    "packages/gitlab": {
-      "name": "@kaynooo/cli-gitlab",
-      "version": "0.11.5",
-      "bin": {
-        "gl": "./dist/cli.js",
       },
       "devDependencies": {
         "@kaynooo/cli-kit": "workspace:*",
@@ -233,7 +224,7 @@
       "bin": {
         "out": "./dist/cli.js",
       },
-      "devDependencies": {
+      "dependencies": {
         "@kaynooo/cli-kit": "workspace:*",
         "@kaynooo/utils": "3.1.0",
       },
@@ -268,8 +259,10 @@
       "bin": {
         "pkg": "./dist/cli.js",
       },
-      "devDependencies": {
+      "dependencies": {
         "@kaynooo/cli-kit": "workspace:*",
+      },
+      "devDependencies": {
         "@kaynooo/utils": "3.1.0",
       },
     },
@@ -293,13 +286,13 @@
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
-    "packages/stack": {
-      "name": "@kaynooo/cli-stack",
-      "version": "0.8.4",
+    "packages/sf": {
+      "name": "@kaynooo/cli-sf",
+      "version": "0.1.0",
       "bin": {
-        "stack": "./dist/cli.js",
+        "sf": "./dist/sf-cli.js",
       },
-      "devDependencies": {
+      "dependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
@@ -309,7 +302,7 @@
       "bin": {
         "view": "./dist/view.js",
       },
-      "devDependencies": {
+      "dependencies": {
         "@kaynooo/cli-kit": "workspace:*",
       },
     },
@@ -426,11 +419,9 @@
 
     "@kaynooo/cli-env": ["@kaynooo/cli-env@workspace:packages/env"],
 
-    "@kaynooo/cli-forgejo": ["@kaynooo/cli-forgejo@workspace:packages/ft"],
+    "@kaynooo/cli-forge": ["@kaynooo/cli-forge@workspace:packages/ft"],
 
     "@kaynooo/cli-git": ["@kaynooo/cli-git@workspace:packages/git"],
-
-    "@kaynooo/cli-gitlab": ["@kaynooo/cli-gitlab@workspace:packages/gitlab"],
 
     "@kaynooo/cli-gloss": ["@kaynooo/cli-gloss@workspace:packages/gloss"],
 
@@ -450,7 +441,7 @@
 
     "@kaynooo/cli-proc": ["@kaynooo/cli-proc@workspace:packages/proc"],
 
-    "@kaynooo/cli-stack": ["@kaynooo/cli-stack@workspace:packages/stack"],
+    "@kaynooo/cli-sf": ["@kaynooo/cli-sf@workspace:packages/sf"],
 
     "@kaynooo/cli-view": ["@kaynooo/cli-view@workspace:packages/view"],
 
