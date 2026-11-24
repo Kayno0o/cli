@@ -1,5 +1,6 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
+import { basename } from 'node:path'
 import process from 'node:process'
 import { runCli } from '@kaynooo/cli-kit'
 import { board, drop, take } from './commands/board'
@@ -10,27 +11,34 @@ import { commentOn, edit, fixed, issue, newIssue, tick } from './commands/issue'
 import { logs } from './commands/logs'
 import { milestone, milestones } from './commands/milestone'
 import { plan } from './commands/plan'
+import { pr } from './commands/pr'
 import { release } from './commands/release'
-import { remote } from './commands/remote'
+import { play, retry } from './commands/retry'
 import { runs } from './commands/runs'
 import { closeIssues, label, reopenIssues } from './commands/triage'
 import { watch } from './commands/watch'
 
+const invoked = basename(process.argv[1] ?? 'fg')
+const binName = invoked === 'ft' ? 'ft' : 'fg'
+
 process.exitCode = await runCli({
-  name: 'ft',
-  about: 'Forgejo tools over tea, run from a repository whose origin is on Forgejo',
-  replaces: 'tea api calls piped through jq, and sleep loops waiting on CI',
-  examples: [['ft ci', 'wait for the runs of origin\'s tip, failures printed'], ['ft issue 12 -c', 'an issue with its boxes numbered and its comments']],
+  name: binName,
+  about: 'unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and releases',
+  replaces: 'tea, glab, gh api calls piped through jq, and sleep loops waiting on CI',
+  examples: [['fg ci', 'wait for the runs of origin\'s tip, failures printed'], ['fg pr list', 'open pull/merge requests'], ['fg issue 12 -c', 'an issue with its boxes numbered and its comments']],
   commands: {
-    runs: { run: runs, summary: 'recent runs with workflow, ref, duration and age', group: 'CI and release' },
-    ci: { run: ci, summary: 'wait for the runs covering a commit, printing what failed', group: 'CI and release' },
+    runs: { run: runs, summary: 'recent CI runs/pipelines with workflow, ref, duration and age', group: 'CI and release' },
+    ci: { run: ci, summary: 'wait for the runs/pipelines covering a commit, printing what failed', group: 'CI and release' },
     watch: { run: watch, summary: 'wait for runs newer than an id, or those in progress', group: 'CI and release' },
-    dispatch: { run: dispatch, summary: 'start a workflow_dispatch run, --wait to follow it to its end', group: 'CI and release' },
-    logs: { run: logs, summary: 'what the failed jobs of a run say went wrong', group: 'CI and release' },
-    release: { run: release, summary: 'bump, push branch and tag atomically, wait for runs and registry', group: 'CI and release' },
+    retry: { run: retry, summary: 'retry failed jobs of a run/pipeline, or one job with -j', group: 'CI and release' },
+    play: { run: play, summary: 'start a manual GitLab job by job id or pipeline id + -j', group: 'CI and release' },
+    dispatch: { run: dispatch, summary: 'start a workflow_dispatch run or GitLab pipeline, --wait to follow it', group: 'CI and release' },
+    logs: { run: logs, summary: 'what the failed jobs of a run/pipeline say went wrong', group: 'CI and release' },
+    release: { run: release, summary: 'bump, push branch & tags atomically, wait for CI/registry, publish notes (--notes) or undo', group: 'CI and release' },
+    pr: { run: pr, summary: 'pull/merge requests: list, view, create, checkout, merge', group: 'Pull requests' },
     board: { run: board, summary: 'open issues: available, taken by a live session, or claimed by one gone', group: 'Issues and claims' },
     digest: { run: digest, summary: 'repo state for a cold start: held and abandoned claims, red CI, unpushed commits, dirty files, stale TODOs', group: 'Issues and claims' },
-    take: { run: take, summary: 'claim an issue for this Claude Code session', group: 'Issues and claims' },
+    take: { run: take, summary: 'claim an issue for this session (--as <name> or FORGE_SESSION)', group: 'Issues and claims' },
     drop: { run: drop, summary: 'give back an issue this session took', group: 'Issues and claims' },
     issue: { run: issue, summary: 'an issue\'s claim, description and numbered boxes, -c comments', group: 'Issues and claims' },
     new: { run: newIssue, summary: 'create an issue from -t and a description file or stdin', group: 'Issues and claims' },
@@ -44,7 +52,6 @@ process.exitCode = await runCli({
     plan: { ...plan, group: 'Repo' },
     milestones: { run: milestones, summary: 'milestones with their open and closed issues, progress and due date', group: 'Repo' },
     milestone: { run: milestone, summary: 'show a milestone\'s issues like the board, `new` creates one, `close` closes it', group: 'Repo' },
-    remote: { run: remote, summary: 'check or fix an origin using an ssh alias tea cannot match', group: 'Repo' },
   },
-  aliases: { show: 'issue', view: 'issue', issues: 'board' },
+  aliases: { show: 'issue', view: 'issue', issues: 'board', mr: 'pr' },
 })

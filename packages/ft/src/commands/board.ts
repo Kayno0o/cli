@@ -189,11 +189,37 @@ export async function board(args: string[]): Promise<number> {
   return 0
 }
 
+function envSessionName(): string | undefined {
+  const forgeSession = process.env.FORGE_SESSION?.trim()
+  const agentSession = process.env.AGENT_SESSION?.trim()
+  const explicit = forgeSession !== undefined && forgeSession !== '' ? forgeSession : agentSession
+
+  if (explicit !== undefined && explicit !== '')
+    return explicit
+
+  if (process.env.CODEX_THREAD_ID !== undefined && process.env.CODEX_THREAD_ID !== '')
+    return `codex-${process.env.CODEX_THREAD_ID.slice(0, 8)}`
+
+  if (process.env.CURSOR_AGENT !== undefined && process.env.CURSOR_AGENT !== '')
+    return `cursor-${process.pid}`
+
+  if (process.env.OPENCODE !== undefined && process.env.OPENCODE !== '')
+    return `opencode-${process.pid}`
+
+  if (process.env.GEMINI_CLI !== undefined && process.env.GEMINI_CLI !== '')
+    return `gemini-${process.pid}`
+
+  if (process.env.ANTIGRAVITY_AGENT !== undefined && process.env.ANTIGRAVITY_AGENT !== '')
+    return `antigravity-${process.pid}`
+
+  return undefined
+}
+
 async function me(as: string | undefined, sessions: Session[]): Promise<string> {
-  const name = as ?? (await currentSession(sessions))?.name
+  const name = as ?? (await currentSession(sessions))?.name ?? envSessionName()
 
   if (name === undefined)
-    fail('not run from a Claude Code session: pass --as <name>')
+    fail('no active session detected: pass --as <name> or set FORGE_SESSION')
 
   if (!claimable(name))
     fail(`a claim cannot carry the name ${JSON.stringify(name)}, empty, padded or holding a line break: pass --as`)

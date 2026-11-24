@@ -11,22 +11,12 @@ lint:
 test:
     bun run test
 
-# release every package changed since its last tag, in one push: `just release-all patch` prints the plan through `ft release --dry-run`, so it needs the same clean main in step with origin as a release; `just release-all patch go=1` releases
+# release every package changed since its last tag, in one push: `just release-all patch` prints the plan via `fg release --changed --dry-run`; `just release-all patch go=1` releases
 release-all level go="":
     #!/usr/bin/env sh
     set -eu
-    changed=""
-    for dir in packages/*/; do
-      name=$(basename "$dir")
-      tag=$(git describe --tags --match "$name-v*" --abbrev=0 2>/dev/null || true)
-      if [ -z "$tag" ]; then range="HEAD"; else range="$tag..HEAD"; fi
-      [ -n "$(git log --oneline "$range" -- "$dir" | head -1)" ] || continue
-      echo "$name changed since ${tag:-the start}"
-      changed="${changed:+$changed,}$name"
-    done
-    [ -n "$changed" ] || { echo "nothing changed since the last tags"; exit 0; }
     if [ "{{ go }}" = "go=1" ] || [ "{{ go }}" = "1" ]; then
-      bun packages/ft/src/cli.ts release {{ level }} --package "$changed"
+      bun packages/ft/src/cli.ts release {{ level }} --changed
     else
-      bun packages/ft/src/cli.ts release {{ level }} --package "$changed" --dry-run
+      bun packages/ft/src/cli.ts release {{ level }} --changed --dry-run
     fi

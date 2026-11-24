@@ -1,8 +1,8 @@
 {
-  "name": "@kaynooo/cli-forgejo",
+  "name": "@kaynooo/cli-forge",
   "type": "module",
   "version": "0.30.12",
-  "description": "ft: Forgejo CI runs, logs, releases and issue checklists from the terminal, through tea.",
+  "description": "fg (ft): unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and releases.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/ft#readme",
@@ -14,13 +14,15 @@
   "bugs": "https://github.com/Kayno0o/cli/issues",
   "keywords": [
     "forgejo",
-    "gitea",
-    "tea",
+    "github",
+    "gitlab",
+    "forge",
     "ci",
-    "actions",
+    "pr",
     "release"
   ],
   "bin": {
+    "fg": "./dist/cli.js",
     "ft": "./dist/cli.js"
   },
   "files": [
@@ -31,9 +33,11 @@
   },
   "scripts": {
     "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
+    "fg": "$npm_execpath src/cli.ts",
     "ft": "$npm_execpath src/cli.ts"
   },
   "devDependencies": {
+    "@kaynooo/cli-changelog": "workspace:*",
     "@kaynooo/cli-kit": "workspace:*",
     "@kaynooo/utils": "3.1.0"
   }

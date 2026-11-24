@@ -41,7 +41,7 @@ function fakeHost(answers: Record<string, { code?: number, stdout?: string, stde
   }
 }
 
-const LATEST = { 'bun info @kaynooo/cli-forgejo version --no-cache': { stdout: '0.5.1\n' } }
+const LATEST = { 'bun info @kaynooo/cli-forge version --no-cache': { stdout: '0.5.1\n' } }
 
 beforeEach(() => {
   home = temp('doctor-')
@@ -85,24 +85,24 @@ describe('checkDeadBins', () => {
 
 describe('checkTool', () => {
   test('passes an installed package as new as the registry\'s', async () => {
-    install('@kaynooo/cli-forgejo', '0.5.1')
+    install('@kaynooo/cli-forge', '0.5.1')
 
-    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forgejo', ['ft'])).toEqual({ check: 'cli-forgejo', ok: true, detail: '0.5.1' })
+    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forge', ['ft'])).toEqual({ check: 'cli-forge', ok: true, detail: '0.5.1' })
   })
 
   test('fails one missing, older than released or with a bin off the PATH, naming the fix', async () => {
-    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: false, detail: 'not installed', fix: 'bun install -g @kaynooo/cli-forgejo' })
-    install('@kaynooo/cli-forgejo', '0.5.0')
-    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: false, detail: '0.5.0, 0.5.1 released', fix: 'bun install -g @kaynooo/cli-forgejo@0.5.1' })
-    expect(await checkTool(fakeHost(LATEST, []), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: false, detail: '0.5.0, 0.5.1 released, ft not on the PATH', fix: 'bun install -g @kaynooo/cli-forgejo@0.5.1' })
-    install('@kaynooo/cli-forgejo', '0.5.1')
-    expect(await checkTool(fakeHost(LATEST, []), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: false, detail: '0.5.1, ft not on the PATH' })
+    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forge', ['ft'])).toMatchObject({ ok: false, detail: 'not installed', fix: 'bun install -g @kaynooo/cli-forge' })
+    install('@kaynooo/cli-forge', '0.5.0')
+    expect(await checkTool(fakeHost(LATEST), '@kaynooo/cli-forge', ['ft'])).toMatchObject({ ok: false, detail: '0.5.0, 0.5.1 released', fix: 'bun install -g @kaynooo/cli-forge@0.5.1' })
+    expect(await checkTool(fakeHost(LATEST, []), '@kaynooo/cli-forge', ['ft'])).toMatchObject({ ok: false, detail: '0.5.0, 0.5.1 released, ft not on the PATH', fix: 'bun install -g @kaynooo/cli-forge@0.5.1' })
+    install('@kaynooo/cli-forge', '0.5.1')
+    expect(await checkTool(fakeHost(LATEST, []), '@kaynooo/cli-forge', ['ft'])).toMatchObject({ ok: false, detail: '0.5.1, ft not on the PATH' })
   })
 
   test('passes with a note when the registry does not answer', async () => {
-    install('@kaynooo/cli-forgejo', '0.5.0')
+    install('@kaynooo/cli-forge', '0.5.0')
 
-    expect(await checkTool(fakeHost(), '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: true, detail: '0.5.0, the registry did not answer: no stub for bun info @kaynooo/cli-forgejo version --no-cache' })
+    expect(await checkTool(fakeHost(), '@kaynooo/cli-forge', ['ft'])).toMatchObject({ ok: true, detail: '0.5.0, the registry did not answer: no stub for bun info @kaynooo/cli-forge version --no-cache' })
   })
 })
 
@@ -125,7 +125,7 @@ describe('runChecks', () => {
     for (const name of Object.keys(TOOLS))
       install(name, '0.1.0')
 
-    expect(await checkTool({ ...host, which: () => '/bin/x' }, '@kaynooo/cli-forgejo', ['ft'])).toMatchObject({ ok: true, detail: expect.stringContaining('the registry did not answer') })
+    expect(await checkTool({ ...host, which: () => '/bin/x' }, '@kaynooo/cli-forge', ['ft'])).toMatchObject({ ok: true, detail: expect.stringContaining('the registry did not answer') })
     await runChecks({ ...host, which: () => '/bin/x' })
     expect(peak).toBeLessThanOrEqual(4)
   })
@@ -254,16 +254,16 @@ describe('checkNeeds', () => {
   test('fails a tool of an installed package that is missing', () => {
     expect(checkNeeds(fakeHost())).toMatchObject({ ok: true, detail: expect.stringContaining('every tool') })
 
-    install('@kaynooo/cli-gitlab', '0.1.0')
+    install('@kaynooo/cli-docker', '0.1.0')
     install('@kaynooo/cli-git', '0.1.0')
-    expect(checkNeeds(fakeHost())).toMatchObject({ ok: false, detail: 'missing glab (gl goes through it)', fix: expect.stringContaining('glab: https://gitlab.com') })
-    expect(checkNeeds(fakeHost({}, ['glab']))).toMatchObject({ ok: true, detail: expect.stringContaining('every tool') })
+    expect(checkNeeds(fakeHost())).toMatchObject({ ok: false, detail: 'missing docker (dc runs docker compose)', fix: expect.stringContaining('docker: https://docs.docker.com') })
+    expect(checkNeeds(fakeHost({}, ['docker']))).toMatchObject({ ok: true, detail: expect.stringContaining('every tool') })
   })
 })
 
 describe('checkBun', () => {
   test('fails a Bun older than an installed package asks for', () => {
-    install('@kaynooo/cli-forgejo', '0.5.1', '>=1.5.0')
+    install('@kaynooo/cli-forge', '0.5.1', '>=1.5.0')
     install('@kaynooo/cli-git', '0.2.0')
 
     expect(checkBun(fakeHost())).toEqual({ check: 'bun', ok: false, detail: '1.4.4, the tools ask for >=1.5.0', fix: 'bun upgrade' })
@@ -272,20 +272,20 @@ describe('checkBun', () => {
 
 describe('doctor', () => {
   test('checks only what is installed, exits 1 on a failure, and counts the rest', async () => {
-    install('@kaynooo/cli-forgejo', '0.1.0')
+    install('@kaynooo/cli-forge', '0.1.0')
     install('@kaynooo/cli-git', '0.1.0')
 
     const host = fakeHost({ ...LATEST, 'bun info @kaynooo/cli-git version --no-cache': { stdout: '0.2.0\n' } })
     const { result, out } = await capture(async () => main([], host))
 
     expect(result).toBe(1)
-    expect(out.split('\n').filter(line => line.startsWith('error:')).map(line => line.split(/\s+/)[1])).toEqual(['cli-forgejo', 'cli-git', 'tea'])
-    expect(out).toContain('fix them all: bun install -g @kaynooo/cli-forgejo@0.5.1 @kaynooo/cli-git@0.2.0')
+    expect(out.split('\n').filter(line => line.startsWith('error:')).map(line => line.split(/\s+/)[1])).toEqual(['cli-forge', 'cli-git', 'tea'])
+    expect(out).toContain('fix them all: bun install -g @kaynooo/cli-forge@0.5.1 @kaynooo/cli-git@0.2.0')
     expect(out).toContain(`${Object.keys(TOOLS).length - 2} packages not installed: doctor --install`)
 
     const json = JSON.parse((await capture(async () => main(['--json'], host))).out) as { check: string }[]
 
-    expect(json.map(each => each.check)).toEqual(['cli-forgejo', 'cli-git', 'tea', 'needs', 'bun', 'completions', 'dead-bins'])
+    expect(json.map(each => each.check)).toEqual(['cli-forge', 'cli-git', 'tea', 'needs', 'bun', 'completions', 'dead-bins'])
   })
 
   test('has nothing to fail on a host with no package installed', async () => {
@@ -327,10 +327,10 @@ describe('doctor --only and --quiet', () => {
     install(GUARD, '0.1.0')
 
     const passing = await capture(async () => main(['-q', '--only', 'hooks', '--only', 'bun'], fakeHost()))
-    const failing = await capture(async () => main(['-q', '--only', 'hooks', '--only', 'cli-forgejo'], fakeHost()))
+    const failing = await capture(async () => main(['-q', '--only', 'hooks', '--only', 'cli-forge'], fakeHost()))
 
     expect(passing).toMatchObject({ result: 0, out: '' })
-    expect(failing.out).toMatch(/^error: cli-forgejo {2}not installed/)
+    expect(failing.out).toMatch(/^error: cli-forge {2}not installed/)
     expect(failing.out.split('\n').filter(Boolean)).toHaveLength(1)
   })
 })
@@ -340,14 +340,14 @@ describe('doctor --fix', () => {
   function fixingHost(): { host: Host, ran: string[] } {
     const ran: string[] = []
     const host: Host = {
-      ...fakeHost({ 'bun info @kaynooo/cli-forgejo version --no-cache': { stdout: '0.5.1\n' }, 'bun info @kaynooo/cli-git version --no-cache': { stdout: '0.2.0\n' } }),
+      ...fakeHost({ 'bun info @kaynooo/cli-forge version --no-cache': { stdout: '0.5.1\n' }, 'bun info @kaynooo/cli-git version --no-cache': { stdout: '0.2.0\n' } }),
       run: async (argv) => {
         const line = argv.join(' ')
 
         ran.push(line)
 
         if (line.startsWith('bun install -g')) {
-          install('@kaynooo/cli-forgejo', '0.5.1')
+          install('@kaynooo/cli-forge', '0.5.1')
           install('@kaynooo/cli-git', '0.2.0')
 
           return { code: 0, stdout: '', stderr: '' }
@@ -366,23 +366,23 @@ describe('doctor --fix', () => {
 
   test('runs the installs in one call, then checks again', async () => {
     const { host, ran } = fixingHost()
-    const { result, out } = await capture(async () => main(['--fix', '--only', 'cli-forgejo', '--only', 'cli-git'], host))
+    const { result, out } = await capture(async () => main(['--fix', '--only', 'cli-forge', '--only', 'cli-git'], host))
 
-    expect(ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-forgejo @kaynooo/cli-git'])
+    expect(ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-forge @kaynooo/cli-git'])
     expect(result).toBe(0)
-    expect(out).toContain('ran      bun install -g @kaynooo/cli-forgejo @kaynooo/cli-git')
+    expect(out).toContain('ran      bun install -g @kaynooo/cli-forge @kaynooo/cli-git')
     expect(out).toContain('after the fixes:')
-    expect(out.slice(out.indexOf('after the fixes:'))).toContain('ok: cli-forgejo')
+    expect(out.slice(out.indexOf('after the fixes:'))).toContain('ok: cli-forge')
   })
 
   test('--dry-run runs nothing, and a line that is no command is printed as not run', async () => {
     const { host, ran } = fixingHost()
 
-    const dry = await capture(async () => main(['--fix', '--dry-run', '--only', 'cli-forgejo'], host))
+    const dry = await capture(async () => main(['--fix', '--dry-run', '--only', 'cli-forge'], host))
 
     expect(ran.filter(line => line.startsWith('bun install'))).toEqual([])
     expect(dry.result).toBe(1)
-    expect(dry.out).toContain('would    bun install -g @kaynooo/cli-forgejo')
+    expect(dry.out).toContain('would    bun install -g @kaynooo/cli-forge')
 
     const prose = await capture(async () => main(['--fix', '--only', 'tea'], { ...host, which: () => null }))
 
@@ -391,7 +391,7 @@ describe('doctor --fix', () => {
   })
 
   test('never runs bun upgrade, which replaces Bun itself', async () => {
-    install('@kaynooo/cli-forgejo', '0.5.1', '>=9.0.0')
+    install('@kaynooo/cli-forge', '0.5.1', '>=9.0.0')
 
     const { host, ran } = fixingHost()
     const { out } = await capture(async () => main(['--fix', '--only', 'bun'], host))
@@ -402,10 +402,10 @@ describe('doctor --fix', () => {
 
   test('with --json prints the checks as they stand after the fixes, the fixes going to stderr', async () => {
     const { host } = fixingHost()
-    const { out, err } = await capture(async () => main(['--fix', '--json', '--only', 'cli-forgejo'], host))
+    const { out, err } = await capture(async () => main(['--fix', '--json', '--only', 'cli-forge'], host))
 
-    expect(JSON.parse(out)).toEqual([{ check: 'cli-forgejo', ok: true, detail: '0.5.1' }])
-    expect(err).toContain('bun install -g @kaynooo/cli-forgejo')
+    expect(JSON.parse(out)).toEqual([{ check: 'cli-forge', ok: true, detail: '0.5.1' }])
+    expect(err).toContain('bun install -g @kaynooo/cli-forge')
   })
 })
 

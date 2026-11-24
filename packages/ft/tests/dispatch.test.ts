@@ -36,12 +36,12 @@ describe('ft dispatch', () => {
 
   test('runs the --ref given without asking for the default branch, and sends no inputs when none are given', async () => {
     const { result, state } = await dispatched({}, ['apps.yml', '--ref', 'v1.2.0'])
-    const post = state.calls?.find(call => call.includes('POST'))
+    const post = state.calls?.find(call => call[0] === 'POST')
 
     expect(result).toBe(0)
-    expect(state.calls?.some(call => call.at(-1) === 'repos/{owner}/{repo}')).toBe(false)
-    expect(post).toContain('ref=v1.2.0')
-    expect(post?.some(arg => arg.startsWith('inputs='))).toBe(false)
+    expect(state.calls?.some(call => call[0] === 'GET' && call[1] === 'repos/owner/repo')).toBe(false)
+    expect(post?.[2]).toContain('"ref":"v1.2.0"')
+    expect(post?.[2]).not.toContain('"inputs"')
     expect(state.runs?.[0]).toMatchObject({ prettyref: 'v1.2.0' })
   })
 
@@ -93,7 +93,7 @@ describe('ft dispatch', () => {
 
     expect(plain.result).toBe(0)
     expect(plain.out).toBe('')
-    expect(plain.err).toContain('apps.yml started on main, but Forgejo did not say which run: ft runs -w apps.yml lists it')
+    expect(plain.err).toContain('apps.yml started on main, but the forge did not say which run: fg runs -w apps.yml lists it')
 
     for (const flag of ['--wait', '--json']) {
       await withFakeTea({ issues: [], workflows: ['apps.yml'], noRunInfo: true }, async () => {

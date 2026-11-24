@@ -9,7 +9,7 @@ export type { FixAction, Host, Result }
 
 const toolCheck = (name: string) => name.slice(name.indexOf('/') + 1)
 const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'dead-bins', 'workspace', 'dl-bins']
-const FORGEJO = '@kaynooo/cli-forgejo'
+const FORGE = '@kaynooo/cli-forge'
 const DL = '@kaynooo/cli-dl'
 const WORKSPACE = '@kaynooo/cli-workspace'
 
@@ -41,7 +41,7 @@ export async function runChecks(host: Host, only: readonly string[] = [], { offl
 
   return [
     ...tools,
-    ...wanted('tea') && (only.length > 0 || isInstalled(host, FORGEJO)) ? [await checkTea(host)] : [],
+    ...wanted('tea') && (only.length > 0 || isInstalled(host, FORGE)) ? [await checkTea(host)] : [],
     ...wanted('hooks') && hooks ? [checkHooks(host)] : [],
     ...wanted('needs') ? [checkNeeds(host)] : [],
     ...wanted('bun') ? [checkBun(host)] : [],

@@ -9,7 +9,9 @@ import { boxes } from '../checklist'
 import { latestClaim } from '../claims'
 import { defaultBranch, git, gitOk } from '../git'
 import { commentsOfAll, openIssues, sessionAuthor } from '../issues'
+import { originRemote, parseRepoSpec } from '../provider'
 import { FINISHED, newestPerWorkflow, recentRuns } from '../runs'
+import { repoDefaultBranch } from '../tea'
 import { standing } from './board'
 
 const RUNS_SCANNED = 50
@@ -152,17 +154,48 @@ export function renderDigest(digest: Digest, now = Date.now()): string {
   return sections.length === 0 ? 'nothing to pick up' : sections.map(({ heading, tone, count, lines }) => `${section(heading, count, process.stdout, process.env, tone)}\n${lines.join('\n').replace(LINE_START, '  ')}`).join('\n\n')
 }
 
-const usage = `ft digest
+// True when `-r <repo>` was not passed, or matches the cwd's own origin repository.
+async function isLocalRepo(repo: string | undefined): Promise<boolean> {
+  if (repo === undefined)
+    return true
+
+  const origin = await originRemote()
+
+  if (origin === undefined)
+    return false
+
+  return origin.repo.toLowerCase() === parseRepoSpec(repo).repo.toLowerCase()
+}
+
+const usage = `fg digest
 
 Summarises the repository for a session starting cold: the issues this session holds with their boxes left, the claims no live session here answers to, red or running CI on the default branch, unpushed commits, dirty files and TODO comments naming a closed issue.
-A section with nothing in it is left out, and the stale TODO comments need todo-scan on the PATH.`
-const EXITS: ExitRow[] = [[0, 'it summarised the repository'], [1, 'Forgejo cannot be read'], [2, 'a usage error']]
+When -r targets another repository than cwd, local git/TODO sections are skipped instead of mixing cwd's working tree into it.`
+const EXITS: ExitRow[] = [[0, 'it summarised the repository'], [1, 'the forge cannot be read'], [2, 'a usage error']]
 
 const options = {
   json: jsonOption('held and away (number, title, holder, since, boxesLeft, boxesTotal), ci (id, status, workflow, started, title), unpushed, dirty (status, path) and stale (issue, comments: path, line)'),
   watch: watchOption('the digest'),
   ...repoOption,
 } as const
+
+async function resolveDigestBranch(local: boolean, repo: string | undefined): Promise<string> {
+  if (local) {
+    try {
+      return await defaultBranch()
+    }
+    catch {
+      // Fall through to forge metadata
+    }
+  }
+
+  try {
+    return await repoDefaultBranch(repo)
+  }
+  catch {
+    return 'main'
+  }
+}
 
 export async function digest(args: string[]): Promise<number> {
   const parsed = parse(args, usage, options, { exits: EXITS })
@@ -172,12 +205,15 @@ export async function digest(args: string[]): Promise<number> {
   if (values.watch !== undefined)
     return watching(values.watch, async () => digest(withoutWatch(args)))
 
-  const [issues, sessions, branch, runs] = await Promise.all([openIssues(undefined, values.repo), liveSessions(), defaultBranch(), recentRuns(RUNS_SCANNED, values.repo)])
+  const local = await isLocalRepo(values.repo)
+  const [issues, sessions, branch, runs] = await Promise.all([openIssues(undefined, values.repo), liveSessions(), resolveDigestBranch(local, values.repo), recentRuns(RUNS_SCANNED, values.repo)])
   const comments = await commentsOfAll(issues, values.repo)
   const me = await currentSession(sessions)
-  const author = await sessionAuthor()
+  const author = await sessionAuthor(values.repo)
   const rows = issues.map(issue => ({ issue, claim: latestClaim(comments.get(issue.number) ?? [], author) }))
-  const [unpushed, dirty, stale] = await Promise.all([quietly(unpushedCommits), quietly(dirtyTree), staleTodos()])
+  const [unpushed, dirty, stale] = local
+    ? await Promise.all([quietly(unpushedCommits), quietly(dirtyTree), staleTodos()])
+    : [[], [], []]
   const summary: Digest = { ...claims(rows, sessions, me), ci: unsettled(runs, branch), unpushed, dirty, stale }
 
   if (values.json === true) {

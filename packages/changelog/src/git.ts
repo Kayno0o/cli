@@ -153,6 +153,12 @@ export async function getCommitSubject(ref: string) {
   return execCommand('git', ['log', '-1', '--format=%s', ref])
 }
 
+export async function isHeadPushed(): Promise<boolean> {
+  const out = (await $`git branch -r --contains HEAD`.quiet().nothrow().text()).trim()
+
+  return out !== ''
+}
+
 export async function softResetLastCommit() {
   await $`git reset --soft HEAD~1`.quiet()
 }

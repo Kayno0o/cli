@@ -10,7 +10,7 @@ import { sendDiscordWebhook } from '@kaynooo/utils/discord'
 import { version } from '../package.json'
 import { aliasFlags, shared, shouldAskNote, toOptions, undoFlags, withToken } from './flags'
 import { deleteRelease, deleteRemoteTag, getRelease, hasRemoteTag, uploadAssets } from './gitea'
-import { deleteLocalTag, deleteRemoteGitTag, forgeName, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
+import { deleteLocalTag, deleteRemoteGitTag, forgeName, generate, getCommitSubject, getGiteaRepo, getGitTags, getHeadCommit, getTagCommit, hasRemoteGitTag, hasTagOnGitea, isHeadPushed, isRefGitTag, isRepoShallow, resolveConfig, sendRelease, softResetLastCommit } from './index'
 import { err, out, stdoutToStderr } from './ui'
 
 type Report = Record<string, unknown>
@@ -193,12 +193,15 @@ async function undo(argv: string[], report: (value: Report) => unknown) {
       : Boolean(config.token) && await hasRemoteTag(config, tag)
     const localTag = await isRefGitTag(tag)
 
-    // Only reset the bump commit when the tag actually points at HEAD,
-    // otherwise we'd drop an unrelated commit.
+    // Only reset the bump commit when the tag actually points at HEAD and HEAD has not been pushed to a remote branch (unless --force).
     let commitToReset: { hash: string, subject: string } | undefined
+    let pushedHeadSkipped = false
 
     if (localTag && await getTagCommit(tag) === await getHeadCommit()) {
-      commitToReset = { hash: await getHeadCommit(), subject: await getCommitSubject('HEAD') }
+      if (args.force !== true && await isHeadPushed())
+        pushedHeadSkipped = true
+      else
+        commitToReset = { hash: await getHeadCommit(), subject: await getCommitSubject('HEAD') }
     }
 
     // Deleting the release note is opt-in: --note forces it, --yes and --dry-run skip the question, otherwise it defaults to "no".
@@ -217,6 +220,8 @@ async function undo(argv: string[], report: (value: Report) => unknown) {
 
     if (commitToReset)
       actions.push(`${out().red('commit')}        reset --soft (${commitToReset.hash.slice(0, 7)} "${commitToReset.subject}")`)
+    else if (pushedHeadSkipped)
+      actions.push(out().dim('commit        skipped (HEAD is pushed to a remote branch; pass --force to reset)'))
     else if (localTag)
       actions.push(out().dim(`commit        skipped (${tag} is not HEAD)`))
 
@@ -253,7 +258,7 @@ async function undo(argv: string[], report: (value: Report) => unknown) {
     }
 
     if (deleteNote) {
-      await deleteRelease(config, release.id)
+      await deleteRelease(config, release.id, tag)
       console.log(out().green(`Deleted release note ${tag}`))
     }
 

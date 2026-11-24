@@ -115,11 +115,12 @@ describe('ft milestone new', () => {
       expect((await capture(async () => milestone(['new', '1.1.0', '-d', 'next']))).out).toBe('milestone 1 1.1.0\n')
       expect((await capture(async () => milestone(['new', '1.2.0', '--due', '2026-12-24']))).out).toBe('milestone 2 1.2.0, due 2026-12-24\n')
     })
-    const posts = (state.calls ?? []).filter(call => call.includes('POST'))
+    const posts = (state.calls ?? []).filter(call => call[0] === 'POST')
 
-    expect(posts[0]?.join(' ')).toBe('api -X POST -f title=1.1.0 -f description=next repos/{owner}/{repo}/milestones')
-    expect(posts[0]?.join(' ')).not.toContain('due_on')
-    expect(posts[1]?.join(' ')).toContain('due_on=2026-12-24T00:00:00.000Z')
+    expect(posts[0]?.[1]).toBe('milestones')
+    expect(posts[0]?.[2]).toBe(JSON.stringify({ title: '1.1.0', description: 'next' }))
+    expect(posts[0]?.[2]).not.toContain('due_on')
+    expect(posts[1]?.[2]).toContain('"due_on":"2026-12-24T00:00:00.000Z"')
   })
 
   test('refuses a zero date and a missing title before calling Forgejo', async () => {
@@ -161,7 +162,10 @@ describe('milestone on issues', () => {
     })
 
     expect(state.issues.map(each => each.milestone?.title ?? null)).toEqual(['2.0.0', null])
-    expect(state.calls?.filter(call => call[0] === 'issues' && call[1] === 'edit').map(call => call.join(' '))).toEqual(['issues edit 1 -m 2.0.0', 'issues edit 2 -m '])
+    expect(state.calls?.filter(call => call[0] === 'PATCH').map(call => [call[1], call[2]])).toEqual([
+      ['issues/1', JSON.stringify({ milestone: 2 })],
+      ['issues/2', JSON.stringify({ milestone: 0 })],
+    ])
   })
 
   test('an unknown milestone is refused before anything is written', async () => {

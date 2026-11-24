@@ -27,6 +27,7 @@ export const shared = {
 export const undoFlags = {
   ...shared,
   note: { type: 'boolean', description: 'Also delete the release note on the forge (skips the question)' },
+  force: { type: 'boolean', description: 'Reset HEAD even if it is already pushed to a remote branch' },
   yes: { type: 'boolean', description: 'Skip confirmation prompts' },
 } as const satisfies Options
 

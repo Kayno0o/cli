@@ -175,16 +175,30 @@ ev run -f .env.test --redact -- bun test  # run a command with .env.test loaded 
 ev get DATABASE_URL  # one key, its value masked
 ```
 
-## ft
+## fg
 
-Forgejo tools over tea, run from a repository whose origin is on Forgejo. Package `ft`.
+unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and releases. Package `ft`.
 
-Instead of: tea api calls piped through jq, and sleep loops waiting on CI
+Instead of: tea, glab, gh api calls piped through jq, and sleep loops waiting on CI
 
 ```sh
-ft <command> [options]
-ft ci  # wait for the runs of origin's tip, failures printed
-ft issue 12 -c  # an issue with its boxes numbered and its comments
+fg <command> [options]
+fg ci  # wait for the runs of origin's tip, failures printed
+fg pr list  # open pull/merge requests
+fg issue 12 -c  # an issue with its boxes numbered and its comments
+```
+
+## ft
+
+unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and releases. Package `ft`.
+
+Instead of: tea, glab, gh api calls piped through jq, and sleep loops waiting on CI
+
+```sh
+fg <command> [options]
+fg ci  # wait for the runs of origin's tip, failures printed
+fg pr list  # open pull/merge requests
+fg issue 12 -c  # an issue with its boxes numbered and its comments
 ```
 
 ## gb
@@ -260,18 +274,6 @@ gf
 gf -b main  # fast-forward main without checking it out
 gf --repos  # every repository nested in this one
 gf --no-pull  # fetch and say how far behind the branch is
-```
-
-## gl
-
-GitLab pipelines over glab, run from a repository whose remote is on GitLab. Package `gitlab`.
-
-Instead of: glab ci and glab api .../pipelines/<id>/jobs polled in a sleep loop
-
-```sh
-gl <command> [options]
-gl ci  # wait for the pipeline of origin's tip, failed tests printed
-gl logs 1234 -j test  # one job's failed tests
 ```
 
 ## gloss

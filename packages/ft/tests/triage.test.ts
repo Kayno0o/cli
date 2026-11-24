@@ -98,7 +98,8 @@ describe('ft label', () => {
     })
 
     expect(lines).toEqual(['#4 labels: ui, kind/feature'])
-    expect(state.calls?.at(-2)).toEqual(['issues', 'edit', '4', '--add-labels', 'ui,kind/feature', '--remove-labels', 'bug'])
+    expect(state.calls?.some(call => call[0] === 'POST' && call[1] === 'issues/4/labels')).toBe(true)
+    expect(state.calls?.some(call => call[0] === 'DELETE' && call[1] === 'issues/4/labels/1')).toBe(true)
   })
 
   test('refuses an unknown label, a label both added and removed, and no change', async () => {

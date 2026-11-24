@@ -56,7 +56,7 @@ describe('take', () => {
       }
 
       expect(refused).toBeInstanceOf(Exit)
-      expect((refused as Exit).message).toContain('#5 was taken by other-1 at the same moment, and withdrawing this claim failed: tea api repos/{owner}/{repo}/issues/5/comments: boom')
+      expect((refused as Exit).message).toContain('#5 was taken by other-1 at the same moment, and withdrawing this claim failed: forgejo api repos/owner/repo/issues/5/comments: boom')
       expect((refused as Exit).hint).toContain('ft comment 5 \'Withdrawn by session a-1.\'')
     })
   })
@@ -114,13 +114,13 @@ describe('tea arguments', () => {
     expect(state.comments?.[5]).toEqual(['- [ ] --force'])
   })
 
-  test('--repo goes before the issue number', async () => {
+  test('edits an issue body directly via HTTP PATCH', async () => {
     const state = await withFakeTea({ issues: [open(5, 'x')] }, async () => {
       await editBody(5, () => 'y', 'owner/name')
     })
 
     expect(state.issues[0]?.body).toBe('y')
-    expect(state.calls?.find(call => call[0] === 'issues')).toEqual(['issues', 'edit', '5', '-d', 'y'])
+    expect(state.calls?.some(call => call[0] === 'PATCH' && call[1] === 'issues/5')).toBe(true)
   })
 })
 

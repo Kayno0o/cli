@@ -80,10 +80,10 @@ export interface ChangelogOptions extends Partial<ChangelogenOptions> {
    */
   baseUrlApi?: string
   /**
-   * Which API the release goes through: `github`, or `gitea` for Gitea and Forgejo
-   * @default github when baseUrl is github.com, gitea otherwise
+   * Which API the release goes through: `github`, `gitlab`, or `gitea` for Gitea and Forgejo
+   * @default github when baseUrl is github.com, gitlab on gitlab.*, gitea otherwise
    */
-  provider?: 'gitea' | 'github'
+  provider?: 'gitea' | 'github' | 'gitlab'
 
   /**
    * Walk only the first parent of each merge, so a merged history shows as the merge commit instead of its commits.

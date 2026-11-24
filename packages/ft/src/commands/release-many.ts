@@ -1,6 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fail } from '@kaynooo/cli-kit'
+import { $ } from 'bun'
 import { git } from '../git'
 import { LEVELS, VERSION } from './release-version'
 
@@ -36,4 +37,23 @@ export async function publishable(): Promise<string[]> {
   }
 
   return found
+}
+
+// Publishable packages that have commits under `packages/<name>` since their last `<name>-v*` tag (or since the beginning if never tagged).
+export async function changedPackages(): Promise<{ folder: string, since: string | undefined }[]> {
+  const root = await git(['rev-parse', '--show-toplevel'])
+  const all = await publishable()
+  const changed: { folder: string, since: string | undefined }[] = []
+
+  for (const folder of all) {
+    const tagRes = await $`git describe --tags --match ${`${folder}-v*`} --abbrev=0`.cwd(root).quiet().nothrow()
+    const since = tagRes.exitCode === 0 ? tagRes.text().trim() || undefined : undefined
+    const range = since === undefined ? 'HEAD' : `${since}..HEAD`
+    const logRes = await $`git log -n 1 --oneline ${range} -- ${`packages/${folder}`}`.cwd(root).quiet().nothrow()
+
+    if (logRes.exitCode === 0 && logRes.text().trim() !== '')
+      changed.push({ folder, since })
+  }
+
+  return changed
 }

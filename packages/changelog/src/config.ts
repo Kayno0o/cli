@@ -1,10 +1,16 @@
 import type { ChangelogOptions, ResolvedChangelogOptions } from './types'
 import { join } from 'node:path'
-import { configuredForge } from '@kaynooo/cli-kit'
+import process from 'node:process'
+import { configBase, configuredForge } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { getCurrentGitBranch, getFirstGitCommit, getGiteaRepo, getLastMatchingTag, getOriginHost, getSafeTagTemplate, isPrerelease } from './git'
 
 const GITHUB = 'github.com'
+const GITLAB = 'gitlab.com'
+const QUOTES = /^["']|["']$/g
+const LOGIN_LINE = /^\s*(-\s+)?([a-z_]+):(.*)$/
+const HOST_HEADER = /^(\s*)([a-z0-9.-]+):$/i
+const KV_LINE = /^\s*([a-z_]+):(.*)$/i
 
 export function defineConfig(config: ChangelogOptions) {
   return config
@@ -12,7 +18,109 @@ export function defineConfig(config: ChangelogOptions) {
 
 // The forge's name in messages.
 export function forgeName(config: ChangelogOptions): string {
-  return config.provider === 'github' ? 'GitHub' : 'Forgejo'
+  if (config.provider === 'github')
+    return 'GitHub'
+
+  return config.provider === 'gitlab' ? 'GitLab' : 'Forgejo'
+}
+
+async function readText(path: string): Promise<string> {
+  try {
+    return await Bun.file(path).text()
+  }
+  catch {
+    return ''
+  }
+}
+
+async function teaTokenFor(host: string): Promise<string | undefined> {
+  const raw = await readText(join(configBase(), 'tea', 'config.yml'))
+  let current: Record<string, string> | undefined
+  const logins: { url: string, sshHost?: string | undefined, token: string, isDefault: boolean }[] = []
+
+  const finish = () => {
+    if (current?.url !== undefined && current.token !== undefined && current.token !== '')
+      logins.push({ url: current.url, sshHost: current.ssh_host, token: current.token, isDefault: current.default === 'true' })
+  }
+
+  for (const line of raw.split('\n')) {
+    const entry = LOGIN_LINE.exec(line)
+
+    if (entry === null)
+      continue
+
+    if (entry[1] !== undefined) {
+      finish()
+      current = {}
+    }
+
+    if (current !== undefined)
+      current[entry[2]!] = (entry[3] ?? '').trim().replace(QUOTES, '')
+  }
+
+  finish()
+
+  const lower = host.toLowerCase()
+  const match = logins.find(each => (URL.canParse(each.url) && new URL(each.url).hostname.toLowerCase() === lower) || each.sshHost?.toLowerCase() === lower)
+
+  return (match ?? logins.find(each => each.isDefault))?.token
+}
+
+async function hostYamlToken(path: string, underHosts: boolean, host: string, key: 'token' | 'oauth_token'): Promise<string | undefined> {
+  const raw = await readText(path)
+  let inHosts = !underHosts
+  let hostsIndent = -1
+  let currentHost: string | undefined
+  let hostIndent = -1
+  const map = new Map<string, Record<string, string>>()
+
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+
+    if (trimmed === '' || trimmed.startsWith('#'))
+      continue
+
+    const indent = line.length - line.trimStart().length
+
+    if (underHosts && trimmed === 'hosts:') {
+      inHosts = true
+      hostsIndent = indent
+      currentHost = undefined
+
+      continue
+    }
+
+    if (!inHosts)
+      continue
+
+    if (underHosts && indent <= hostsIndent) {
+      inHosts = false
+      currentHost = undefined
+
+      continue
+    }
+
+    const header = HOST_HEADER.exec(line)
+
+    if (header !== null && (currentHost === undefined || indent <= hostIndent)) {
+      currentHost = (header[2] ?? '').toLowerCase()
+      hostIndent = indent
+      map.set(currentHost, {})
+
+      continue
+    }
+
+    if (currentHost !== undefined && indent > hostIndent) {
+      const kv = KV_LINE.exec(line)
+
+      if (kv !== null)
+        map.get(currentHost)![kv[1]!.toLowerCase()] = (kv[2] ?? '').trim().replace(QUOTES, '')
+    }
+  }
+
+  const fields = map.get(host.toLowerCase())
+
+  return firstNonEmpty(fields?.[key], fields?.token)
 }
 
 const configFiles = ['ts', 'mts', 'js', 'mjs', 'json'].map(ext => `changelog.config.${ext}`)
@@ -98,25 +206,53 @@ export async function loadConfig(options: ChangelogOptions, cwd = process.cwd())
   return mergeLayers(defaultConfig, packageConfig, fileConfig, options)
 }
 
+function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
+  return values.find(value => value !== undefined && value !== '')
+}
+
+function defaultProvider(baseUrl: string): 'github' | 'gitlab' | 'gitea' {
+  if (baseUrl === GITHUB)
+    return 'github'
+
+  return baseUrl === GITLAB || baseUrl.startsWith('gitlab.') ? 'gitlab' : 'gitea'
+}
+
+function defaultApiUrl(provider: 'github' | 'gitlab' | 'gitea', baseUrl: string): string {
+  if (provider === 'github')
+    return 'api.github.com'
+
+  return provider === 'gitlab' ? `${baseUrl}/api/v4` : `${baseUrl}/api/v1`
+}
+
 export async function resolveConfig(options: ChangelogOptions) {
   const config = await loadConfig(options)
 
   // origin may be the forge's private address, while the links want the public one config.json names.
   const origin = config.baseUrl === undefined ? await getOriginHost() : undefined
 
-  const baseUrl = config.baseUrl ?? (origin === GITHUB ? origin : configuredForge()?.host ?? origin)
+  const isGitlabHost = origin === GITLAB || (origin?.startsWith('gitlab.') ?? false)
+  const baseUrl = config.baseUrl ?? (origin === GITHUB || isGitlabHost ? origin : configuredForge()?.host ?? origin)
 
   if (baseUrl === undefined || baseUrl === '')
     throw new Error('no forge to link the notes to: set baseUrl in the changelog config, forge in ~/.config/kaynooo-cli/config.json, or an origin remote')
 
   config.baseUrl = baseUrl
-  config.provider ??= baseUrl === GITHUB ? 'github' : 'gitea'
-  config.baseUrlApi ??= config.provider === 'github' ? 'api.github.com' : `${baseUrl}/api/v1`
+  config.provider ??= defaultProvider(baseUrl)
+  config.baseUrlApi ??= defaultApiUrl(config.provider, baseUrl)
 
-  const token = config.provider === 'github' && (config.token ?? '') === '' ? await ghToken() : undefined
+  if ((config.token ?? '') === '') {
+    let token: string | undefined
 
-  if (token !== undefined)
-    config.token = token
+    if (config.provider === 'github')
+      token = firstNonEmpty(process.env.GH_TOKEN, await hostYamlToken(join(configBase(), 'gh', 'hosts.yml'), false, baseUrl, 'oauth_token'), await ghToken())
+    else if (config.provider === 'gitlab')
+      token = firstNonEmpty(process.env.GITLAB_TOKEN, process.env.GL_TOKEN, await hostYamlToken(join(configBase(), 'glab-cli', 'config.yml'), true, baseUrl, 'token'))
+    else
+      token = firstNonEmpty(process.env.FORGEJO_TOKEN, process.env.GITEA_TOKEN, await teaTokenFor(baseUrl))
+
+    if (token !== undefined)
+      config.token = token
+  }
 
   config.to ||= await getCurrentGitBranch()
   config.tagFilter ??= () => true

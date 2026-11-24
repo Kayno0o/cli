@@ -75,6 +75,6 @@ describe('release of several packages', () => {
     const work = await workspace()
 
     // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
-    await expect(inside(work, async () => capture(async () => release(['patch', '--all', '-p', 'a,b'])))).rejects.toThrow('give --all or --package')
+    await expect(inside(work, async () => capture(async () => release(['patch', '--all', '-p', 'a,b'])))).rejects.toThrow('give at most one of --all, --changed or --package')
   })
 })

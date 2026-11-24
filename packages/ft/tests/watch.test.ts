@@ -130,7 +130,7 @@ describe('watchRuns failures', () => {
     expect(Date.now() - started).toBeLessThan(5000)
   })
 
-  test('fails at once when tea is not installed', async () => {
+  test('fails at once when git is missing on PATH and no origin can be read', async () => {
     const path = process.env.PATH
     const poll = timing.poll
     const started = Date.now()
@@ -139,7 +139,7 @@ describe('watchRuns failures', () => {
     timing.poll = 1
 
     try {
-      expect(await refusal(watchRuns(runs => runs, 60_000))).toContain('tea api')
+      expect(await refusal(watchRuns(runs => runs, 60_000))).toContain('git remote get-url origin')
       expect(Date.now() - started).toBeLessThan(5000)
     }
     finally {

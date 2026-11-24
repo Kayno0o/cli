@@ -54,11 +54,15 @@ export function repoUrl(options: ResolvedChangelogOptions) {
 }
 
 export function compareUrl(options: ResolvedChangelogOptions) {
-  return `${repoUrl(options)}/compare/${options.from}...${options.to}`
+  return options.provider === 'gitlab'
+    ? `${repoUrl(options)}/-/compare/${options.from}...${options.to}`
+    : `${repoUrl(options)}/compare/${options.from}...${options.to}`
 }
 
 export function releaseUrl(options: ResolvedChangelogOptions) {
-  return `https://${options.baseUrl}/${options.releaseRepo}/releases/tag/${encodeURIComponent(options.to)}`
+  return options.provider === 'gitlab'
+    ? `https://${options.baseUrl}/${options.releaseRepo}/-/releases/${encodeURIComponent(options.to)}`
+    : `https://${options.baseUrl}/${options.releaseRepo}/releases/tag/${encodeURIComponent(options.to)}`
 }
 
 export function userUrl(login: string, options: ResolvedChangelogOptions) {
@@ -67,8 +71,9 @@ export function userUrl(login: string, options: ResolvedChangelogOptions) {
 
 function formatIssue(ref: Reference, options: ResolvedChangelogOptions, withTitle: boolean) {
   const text = withTitle && ref.title !== undefined ? `${ref.value} ${ref.title}` : ref.value
+  const segment = options.provider === 'gitlab' ? '/-/issues/' : '/issues/'
 
-  return `[${text}](${repoUrl(options)}/issues/${ref.value.slice(1)})`
+  return `[${text}](${repoUrl(options)}${segment}${ref.value.slice(1)})`
 }
 
 // Capitalizes a plain first word, and leaves an identifier such as `getUser`, `foo.ts` or `a/b` as written.

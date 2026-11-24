@@ -67,26 +67,26 @@ describe('the catalog', () => {
 describe('doctor --install', () => {
   test('installs the named packages in one call, by package or by bin, then checks them', async () => {
     const { host, ran } = recording(['fish'])
-    const { result, out } = await capture(async () => main(['--install', 'forgejo', 'sub'], host))
+    const { result, out } = await capture(async () => main(['--install', 'forge', 'sub'], host))
 
-    expect(ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-forgejo @kaynooo/cli-edit'])
+    expect(ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-forge @kaynooo/cli-edit'])
     expect(out).toContain('after the install:')
-    expect(out).toContain('cli-forgejo')
+    expect(out).toContain('cli-forge')
     expect(result).toBe(0)
   })
 
   test('leaves out a package whose tool is missing, unless --force', async () => {
-    const blocked = recording(['glab'])
-    const refused = await capture(async () => main(['--install', 'gitlab', 'git'], blocked.host))
+    const blocked = recording(['docker'])
+    const refused = await capture(async () => main(['--install', 'docker', 'git'], blocked.host))
 
     expect(refused.result).toBe(1)
-    expect(refused.out).toContain('blocked  gitlab needs glab (gl goes through it)')
+    expect(refused.out).toContain('blocked  docker needs docker (dc runs docker compose)')
     expect(blocked.ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-git'])
 
-    const forced = recording(['glab'])
+    const forced = recording(['docker'])
 
-    await capture(async () => main(['--install', 'gitlab', '--force'], forced.host))
-    expect(forced.ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-gitlab'])
+    await capture(async () => main(['--install', 'docker', '--force'], forced.host))
+    expect(forced.ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-docker'])
   })
 
   test('hooks brings guard along and runs the plugin install', async () => {
@@ -106,7 +106,7 @@ describe('doctor --install', () => {
     expect(ran).toEqual([])
     expect(result).toBe(0)
     expect(out).toContain('would')
-    expect(out).toContain('@kaynooo/cli-forgejo')
+    expect(out).toContain('@kaynooo/cli-forge')
     expect(out).not.toContain('@kaynooo/cli-edit')
   })
 
@@ -116,7 +116,7 @@ describe('doctor --install', () => {
     const { host } = recording([])
     const listed = await capture(async () => main(['--install', '--list'], host))
 
-    expect(listed.out).toContain('forgejo')
+    expect(listed.out).toContain('forge')
     expect(listed.out).toContain('not installed')
     expect(listed.out).toContain('hooks')
     expect(listed.out).toMatch(/edit\s+installed/)
@@ -178,13 +178,13 @@ describe('doctor --install, checking and unchecking', () => {
       const named = (id: string) => all.find(each => each.id === id)!
 
       expect(named('@kaynooo/cli-edit').installed).toBe(true)
-      expect(named('@kaynooo/cli-forgejo').installed).toBe(false)
+      expect(named('@kaynooo/cli-forge').installed).toBe(false)
 
-      return { add: [named('@kaynooo/cli-forgejo')], remove: [named('@kaynooo/cli-edit')] }
+      return { add: [named('@kaynooo/cli-forge')], remove: [named('@kaynooo/cli-edit')] }
     }))
 
     expect(result).toBe(0)
-    expect(ran.filter(line => line.startsWith('bun '))).toEqual(['bun install -g @kaynooo/cli-forgejo', 'bun remove -g @kaynooo/cli-edit'])
+    expect(ran.filter(line => line.startsWith('bun '))).toEqual(['bun install -g @kaynooo/cli-forge', 'bun remove -g @kaynooo/cli-edit'])
   })
 
   test('--dry-run says what it would remove and runs nothing', async () => {

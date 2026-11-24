@@ -20,8 +20,19 @@ function onGithub(options: ChangelogOptions): boolean {
   return options.provider === 'github'
 }
 
-// GitHub reads a tag as a git ref, under `ref` to read and `refs` to delete; Forgejo has a tags endpoint.
+function onGitlab(options: ChangelogOptions): boolean {
+  return options.provider === 'gitlab'
+}
+
+function gitlabProject(repo: string | undefined): string {
+  return `projects/${encodeURIComponent(repo ?? '')}`
+}
+
+// GitHub reads a tag as a git ref, under `ref` to read and `refs` to delete; GitLab uses repository/tags; Forgejo has a tags endpoint.
 function tagPath(options: ChangelogOptions, repo: string | undefined, tag: string, write = false): string {
+  if (onGitlab(options))
+    return `${gitlabProject(repo)}/repository/tags/${encodeURIComponent(tag)}`
+
   return onGithub(options) ? `repos/${repo}/git/${write ? 'refs' : 'ref'}/tags/${encodeURIComponent(tag)}` : `repos/${repo}/tags/${encodeURIComponent(tag)}`
 }
 
@@ -43,6 +54,32 @@ export async function sendRelease(
   content: string,
 ) {
   const headers = getHeaders(options)
+
+  if (onGitlab(options)) {
+    const tag = options.to ?? ''
+    const project = gitlabProject(options.releaseRepo)
+    const exists = await getRelease(options, tag)
+    const url = exists !== null
+      ? `https://${options.baseUrlApi}/${project}/releases/${encodeURIComponent(tag)}`
+      : `https://${options.baseUrlApi}/${project}/releases`
+    const method = exists !== null ? 'PUT' : 'POST'
+    const body = exists !== null
+      ? { name: options.name ?? tag, description: content }
+      : { tag_name: tag, name: options.name ?? tag, description: content }
+
+    console.log(out().cyan(method === 'POST' ? 'Creating release notes...' : 'Updating release notes...'))
+    const res = await api<{ _links?: { self?: string } }>(url, {
+      method,
+      body: JSON.stringify(body),
+      headers: { ...headers, 'content-type': 'application/json' },
+    })
+    const releaseUrl = res._links?.self ?? `https://${options.baseUrl}/${options.releaseRepo}/-/releases/${encodeURIComponent(tag)}`
+
+    console.log(out().green(`Released on ${releaseUrl}`))
+
+    return releaseUrl
+  }
+
   let url = `https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases`
   let method = 'POST'
 
@@ -84,6 +121,14 @@ export async function sendRelease(
 
 export async function getRelease(options: ChangelogOptions, tag: string) {
   try {
+    if (onGitlab(options)) {
+      const data = await api<{ tag_name: string, name?: string, _links?: { self?: string } }>(`https://${options.baseUrlApi}/${gitlabProject(options.releaseRepo)}/releases/${encodeURIComponent(tag)}`, {
+        headers: getHeaders(options),
+      })
+
+      return { id: 0, name: data.name ?? data.tag_name, url: data._links?.self ?? '', html_url: data._links?.self ?? '' }
+    }
+
     return await api<GiteaRelease>(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/tags/${encodeURIComponent(tag)}`, {
       headers: getHeaders(options),
     })
@@ -93,7 +138,16 @@ export async function getRelease(options: ChangelogOptions, tag: string) {
   }
 }
 
-export async function deleteRelease(options: ChangelogOptions, releaseId: number) {
+export async function deleteRelease(options: ChangelogOptions, releaseId: number, tag?: string) {
+  if (onGitlab(options)) {
+    await request(`https://${options.baseUrlApi}/${gitlabProject(options.releaseRepo)}/releases/${encodeURIComponent(tag ?? options.to ?? '')}`, {
+      method: 'DELETE',
+      headers: getHeaders(options),
+    })
+
+    return
+  }
+
   await request(`https://${options.baseUrlApi}/repos/${options.releaseRepo}/releases/${releaseId}`, {
     method: 'DELETE',
     headers: getHeaders(options),
@@ -124,6 +178,9 @@ function getHeaders(options: ChangelogOptions): Record<string, string> {
   if (onGithub(options))
     return { 'accept': 'application/vnd.github+json', 'authorization': `Bearer ${options.token}`, 'x-github-api-version': '2022-11-28' }
 
+  if (onGitlab(options))
+    return { 'accept': 'application/json', 'private-token': options.token ?? '' }
+
   return {
     accept: 'application/vnd.gitea.v3+json',
     authorization: `token ${options.token}`,
@@ -137,7 +194,7 @@ const excludeAuthors = [
 ]
 
 export async function resolveAuthorInfo(options: ChangelogOptions, info: AuthorInfo) {
-  if ((info.login ?? '') !== '')
+  if ((info.login ?? '') !== '' || onGitlab(options))
     return info
 
   // token not provided, skip gitea resolving

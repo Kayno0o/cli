@@ -1,169 +1,175 @@
-import process from 'node:process'
-import { runTool, upTo } from '@kaynooo/cli-kit'
-import { pickLogin, requireForgeOrigin } from './forge'
+import type { ForgeTarget, Provider } from './provider'
+import { upTo } from '@kaynooo/cli-kit'
+import { encodeGitLabProject, resolveForge } from './provider'
 
-// How long one tea call may take before it is given up; the wait loops poll again.
-const TEA_MS = 60_000
+const REQUEST_MS = 60_000
+const LEADING_SLASHES = /^\/+/
 
-// Every Forgejo call goes through tea, which owns the OAuth login and fills {owner}/{repo} from the cwd's origin, or from --repo. Without tea, `gt` (gitea-cli) takes over, with the token of tea's config when no token is set.
-function repoFlag(repo: string | undefined): string[] {
-  return repo === undefined ? [] : ['--repo', repo]
-}
-
-// True when tea is not installed and gt is: the fallback client.
-export function usesGt(): boolean {
-  const PATH = process.env.PATH ?? ''
-
-  return Bun.which('tea', { PATH }) === null && Bun.which('gt', { PATH }) !== null
-}
-
-let injected: string | undefined
-
-// gt keeps its own logins, so tea's token and host reach it through the environment unless the caller already set a token.
-async function injectLogin(repo: string | undefined): Promise<void> {
-  if (process.env.GITEA_TOKEN !== undefined && process.env.GITEA_TOKEN !== '')
-    return
-
-  const login = await pickLogin(repo === undefined)
-
-  if (login === undefined)
-    return
-
-  injected = login.token
-  process.env.GITEA_TOKEN = login.token
-  process.env.GITEA_CLI_HOST = login.url
-}
-
-// The token never shows in a message, whichever way it got there.
-function scrub(text: string): string {
-  const token = injected ?? process.env.GITEA_TOKEN
-
+function scrub(text: string, token: string | undefined): string {
   return token === undefined || token === '' ? text : text.replaceAll(token, '***')
 }
 
-// gt prints a non-2xx response's body and exits non-zero; Forgejo's message is the useful part.
-function failureText(stdout: string, stderr: string, code: number): string {
-  try {
-    const value: unknown = JSON.parse(stdout)
+function authHeaders(target: ForgeTarget, hasBody: boolean): Record<string, string> {
+  const headers: Record<string, string> = {}
 
-    if (value !== null && typeof value === 'object' && 'message' in value && typeof value.message === 'string')
-      return scrub(value.message)
+  if (target.provider === 'github') {
+    headers.accept = 'application/vnd.github+json'
+    headers['x-github-api-version'] = '2022-11-28'
+
+    if (target.token !== undefined && target.token !== '')
+      headers.authorization = `Bearer ${target.token}`
   }
-  catch {}
+  else if (target.provider === 'gitlab') {
+    headers.accept = 'application/json'
 
-  return scrub(stderr.trim() || stdout.trim() || `exit ${code}`)
+    if (target.token !== undefined && target.token !== '')
+      headers['private-token'] = target.token
+  }
+  else {
+    headers.accept = 'application/json'
+
+    if (target.token !== undefined && target.token !== '')
+      headers.authorization = `token ${target.token}`
+  }
+
+  if (hasBody)
+    headers['content-type'] = 'application/json'
+
+  return headers
 }
 
-// Runs `<client> api ...` and returns its output, or throws with the client's error.
-async function runApi(label: string, args: string[], repo: string | undefined): Promise<string> {
-  if (repo === undefined)
-    await requireForgeOrigin()
+function extractApiError(body: string, status: number, statusText: string, token: string | undefined): string {
+  try {
+    const parsed: unknown = JSON.parse(body)
 
-  const gt = usesGt()
-  const bin = gt ? 'gt' : 'tea'
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      if ('message' in parsed && typeof parsed.message === 'string' && parsed.message !== '')
+        return scrub(parsed.message, token)
 
-  if (gt)
-    await injectLogin(repo)
+      if ('error' in parsed && typeof parsed.error === 'string' && parsed.error !== '')
+        return scrub(parsed.error, token)
+    }
+  }
+  catch {
+    // Not JSON
+  }
 
-  const result = await runTool(`${bin} api ${label}`, [bin, 'api', ...repoFlag(repo), ...args], { timeoutMs: TEA_MS })
-
-  if (result.code !== 0)
-    throw new Error(`${bin} api ${label}: ${gt ? failureText(result.stdout, result.stderr, result.code) : result.stderr.trim() || `exit ${result.code}`}`)
-
-  return gt ? scrub(result.stdout) : result.stdout
+  return scrub(upTo(body.trim(), '\n') || `${status} ${statusText}`, token)
 }
 
-async function request(path: string, repo: string | undefined): Promise<string> {
-  return runApi(path, [path], repo)
+function expandPath(path: string, target: ForgeTarget): string {
+  const trimmed = path.replace(LEADING_SLASHES, '')
+
+  if (target.provider === 'gitlab')
+    return trimmed.replace('projects/:id', `projects/${encodeGitLabProject(target.repo)}`).replace('repos/{owner}/{repo}', `projects/${encodeGitLabProject(target.repo)}`)
+
+  return trimmed.replace('repos/{owner}/{repo}', `repos/${target.repo}`)
 }
 
-function clientName(): string {
-  return usesGt() ? 'gt' : 'tea'
+export async function forgeRequest(path: string, options: { method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: unknown, repo?: string | undefined, provider?: Provider | undefined, target?: ForgeTarget | undefined } = {}): Promise<{ status: number, text: string, target: ForgeTarget }> {
+  const target = options.target ?? await resolveForge(options.repo, options.provider)
+  const method = options.method ?? 'GET'
+  const expanded = expandPath(path, target)
+  const url = expanded.startsWith('http://') || expanded.startsWith('https://') ? expanded : `${target.apiBase}/${expanded}`
+  const hasBody = options.body !== undefined
+  const init: RequestInit = {
+    method,
+    headers: authHeaders(target, hasBody),
+    signal: AbortSignal.timeout(REQUEST_MS),
+    ...(hasBody ? { body: JSON.stringify(options.body) } : {}),
+  }
+
+  let response: Response
+
+  try {
+    response = await fetch(url, init)
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+
+    throw new Error(`${target.provider} api ${expanded}: ${scrub(message, target.token)}`)
+  }
+
+  const text = await response.text()
+
+  if (!response.ok)
+    throw new Error(`${target.provider} api ${expanded}: ${extractApiError(text, response.status, response.statusText, target.token)}`)
+
+  return { status: response.status, text, target }
 }
 
-function parseJson<T>(path: string, text: string): T {
+function parseJson<T>(label: string, text: string, target: ForgeTarget): T {
   let value: unknown
 
   try {
     value = JSON.parse(text)
   }
   catch {
-    throw new Error(`${clientName()} api ${path}: ${upTo(text.trim(), '\n') || 'empty answer'}`)
+    throw new Error(`${target.provider} api ${label}: ${scrub(upTo(text.trim(), '\n') || 'empty answer', target.token)}`)
   }
-
-  const failure = apiError(value)
-
-  if (failure !== undefined)
-    throw new Error(`${clientName()} api ${path}: ${failure}`)
 
   return value as T
 }
 
-// tea exits 0 on an API error and prints Forgejo's error object instead.
-function apiError(value: unknown): string | undefined {
-  if (value !== null && typeof value === 'object' && !Array.isArray(value) && 'message' in value && typeof value.message === 'string' && 'url' in value)
-    return value.message
-
-  return undefined
-}
-
 export async function api<T>(path: string, repo?: string): Promise<T> {
-  return parseJson<T>(path, await request(path, repo))
+  const { text, target } = await forgeRequest(path, { repo })
+
+  return parseJson<T>(path, text, target)
 }
 
 export async function repoApi<T>(path: string, repo?: string): Promise<T> {
-  return api<T>(`repos/{owner}/{repo}/${path}`, repo)
+  const target = await resolveForge(repo)
+  const prefix = target.provider === 'gitlab' ? `projects/${encodeGitLabProject(target.repo)}` : `repos/${target.repo}`
+  const full = `${prefix}/${path}`
+  const { text } = await forgeRequest(full, { target })
+
+  return parseJson<T>(full, text, target)
 }
 
-// A write through `api`: a string field is sent with -f, any other value (a number, an array) as typed JSON with -F; the flags come before the path, where tea reads them.
-export async function repoSend(method: 'POST' | 'PATCH' | 'DELETE', path: string, fields: Record<string, unknown>, repo?: string): Promise<string> {
-  const full = `repos/{owner}/{repo}/${path}`
-  const flags = Object.entries(fields).flatMap(([name, value]) => typeof value === 'string' ? ['-f', `${name}=${value}`] : ['-F', `${name}=${JSON.stringify(value)}`])
-
-  return runApi(full, ['-X', method, ...flags, full], repo)
-}
-
-// A write's JSON answer, or undefined when Forgejo answers 204 with no body.
-export async function repoWriteOrEmpty<T>(method: 'POST' | 'PATCH', path: string, fields: Record<string, unknown>, repo?: string): Promise<T | undefined> {
-  const text = await repoSend(method, path, fields, repo)
-
-  return text.trim() === '' ? undefined : parseJson<T>(`repos/{owner}/{repo}/${path}`, text)
-}
-
-export async function repoWrite<T>(method: 'POST' | 'PATCH', path: string, fields: Record<string, unknown>, repo?: string): Promise<T> {
-  return await repoWriteOrEmpty<T>(method, path, fields, repo) ?? parseJson<T>(`repos/{owner}/{repo}/${path}`, '')
-}
-
-// A text answer such as a job log; Forgejo's error object, which tea prints with exit 0, is thrown instead of returned as the text.
-export async function repoApiText(path: string, repo?: string): Promise<string> {
-  const full = `repos/{owner}/{repo}/${path}`
-  const text = await request(full, repo)
-  let value: unknown
-
-  try {
-    value = JSON.parse(text)
-  }
-  catch {
-    return text
-  }
-
-  const failure = apiError(value)
-
-  if (failure !== undefined)
-    throw new Error(`${clientName()} api ${full}: ${failure}`)
+export async function repoSend(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, fields?: Record<string, unknown>, repo?: string): Promise<string> {
+  const target = await resolveForge(repo)
+  const prefix = target.provider === 'gitlab' ? `projects/${encodeGitLabProject(target.repo)}` : `repos/${target.repo}`
+  const full = `${prefix}/${path}`
+  const body = fields !== undefined && Object.keys(fields).length > 0 ? fields : undefined
+  const { text } = await forgeRequest(full, { method, body, target })
 
   return text
 }
 
-// Runs a tea subcommand (`['issues', 'edit']`) with `--repo` straight after its name, before any positional or flag value that could be read as one. Callers go through the API instead when `usesGt()`.
-export async function tea(command: string[], args: string[], repo?: string): Promise<string> {
-  if (repo === undefined)
-    await requireForgeOrigin()
+export async function repoWriteOrEmpty<T>(method: 'POST' | 'PATCH' | 'PUT', path: string, fields: Record<string, unknown>, repo?: string): Promise<T | undefined> {
+  const target = await resolveForge(repo)
+  const prefix = target.provider === 'gitlab' ? `projects/${encodeGitLabProject(target.repo)}` : `repos/${target.repo}`
+  const full = `${prefix}/${path}`
+  const { text } = await forgeRequest(full, { method, body: fields, target })
 
-  const result = await runTool(`tea ${command.join(' ')}`, ['tea', ...command, ...repoFlag(repo), ...args], { timeoutMs: TEA_MS })
-
-  if (result.code !== 0)
-    throw new Error(`tea ${command.join(' ')}: ${result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`}`)
-
-  return result.stdout
+  return text.trim() === '' ? undefined : parseJson<T>(full, text, target)
 }
+
+export async function repoWrite<T>(method: 'POST' | 'PATCH' | 'PUT', path: string, fields: Record<string, unknown>, repo?: string): Promise<T> {
+  const target = await resolveForge(repo)
+  const prefix = target.provider === 'gitlab' ? `projects/${encodeGitLabProject(target.repo)}` : `repos/${target.repo}`
+  const full = `${prefix}/${path}`
+  const { text } = await forgeRequest(full, { method, body: fields, target })
+
+  return parseJson<T>(full, text, target)
+}
+
+export async function repoApiText(path: string, repo?: string): Promise<string> {
+  const target = await resolveForge(repo)
+  const prefix = target.provider === 'gitlab' ? `projects/${encodeGitLabProject(target.repo)}` : `repos/${target.repo}`
+  const { text } = await forgeRequest(`${prefix}/${path}`, { target })
+
+  return text
+}
+
+export async function repoDefaultBranch(repo?: string): Promise<string> {
+  const target = await resolveForge(repo)
+  const path = target.provider === 'gitlab' ? `projects/${encodeGitLabProject(target.repo)}` : `repos/${target.repo}`
+  const { text } = await forgeRequest(path, { target })
+  const data = parseJson<{ default_branch?: string }>(path, text, target)
+
+  return data.default_branch ?? 'main'
+}
+
+export { resolveForge } from './provider'
+export type { ForgeTarget, Provider } from './provider'
