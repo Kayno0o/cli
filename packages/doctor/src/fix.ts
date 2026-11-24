@@ -9,27 +9,23 @@ export interface Step {
   apply?: ((host: Host) => Promise<string | undefined>) | undefined
 }
 
-const INSTALL = /^bun install -g (\S+)$/
-// What a fix may run besides a global install of our own packages: nothing that installs a system package, nor prose such as "add ... to the PATH".
-const RUNNABLE = /^(?:cli completions fish --install|claude plugin (?:install \S+ --marketplace \S+|disable \S+))$/
-
-// The commands the failing checks print as their fix, the `bun install -g` ones joined into one call, each marked runnable or printed only.
+// The runnable fixes from failing checks, with all `bun install -g` specs batched into one call, and non-runnable prose fixes printed as not run.
 export function planFixes(results: readonly Result[]): Step[] {
   const steps: Step[] = []
   const installs: string[] = []
 
-  for (const { ok, fix, apply } of results) {
+  for (const { ok, fix, fixAction, apply } of results) {
     if (ok || fix === undefined)
       continue
 
-    const install = INSTALL.exec(fix)
-
     if (apply !== undefined)
       steps.push({ command: fix, apply })
-    else if (install !== null)
-      installs.push(install[1] ?? '')
+    else if (fixAction?.kind === 'install')
+      installs.push(fixAction.spec)
+    else if (fixAction?.kind === 'run')
+      steps.push({ command: fix, argv: fixAction.argv })
     else
-      steps.push({ command: fix, argv: RUNNABLE.test(fix) ? fix.split(' ') : undefined })
+      steps.push({ command: fix })
   }
 
   if (installs.length === 0)

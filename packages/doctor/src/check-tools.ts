@@ -2,7 +2,11 @@ import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from '
 import { rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { configuredNumber } from '@kaynooo/cli-kit'
-import { NEEDS } from './catalog'
+import { NEEDS, TOOLS } from './catalog'
+
+export { TOOLS }
+
+export type FixAction = { kind: 'install', spec: string } | { kind: 'run', argv: string[] }
 
 export interface Result {
   check: string
@@ -12,6 +16,8 @@ export interface Result {
   detail: string
   // The command that resolves a failure.
   fix?: string
+  // Structured runnable action for `--fix`, avoiding regex parsing of `fix`.
+  fixAction?: FixAction
   // What `--fix` runs for a fix that is no single command.
   apply?: (host: Host) => Promise<string | undefined>
 }
@@ -26,38 +32,6 @@ export interface Host {
   which: (bin: string) => string | null
   // `env` adds to the environment the command inherits.
   run: (argv: string[], env?: Record<string, string>) => Promise<{ code: number, stdout: string, stderr: string }>
-}
-
-// Every @kaynooo/cli-* package and the bins it installs; the repo's tests check it against packages/*.
-export const TOOLS: Record<string, string[]> = {
-  '@kaynooo/cli-arc': ['arc'],
-  '@kaynooo/cli-base': ['base'],
-  '@kaynooo/cli-changelog': ['changelog'],
-  '@kaynooo/cli-check': ['check', 'errs', 'j'],
-  '@kaynooo/cli-code': ['src'],
-  '@kaynooo/cli-db': ['db'],
-  '@kaynooo/cli-docker': ['dc', 'dlog', 'dx', 'sf'],
-  '@kaynooo/cli-doctor': ['doctor', 'cli'],
-  '@kaynooo/cli-edit': ['sub'],
-  '@kaynooo/cli-env': ['ev'],
-  '@kaynooo/cli-forgejo': ['ft'],
-  '@kaynooo/cli-git': ['gst', 'gc', 'gb', 'gp', 'gf', 'gm', 'gcl', 'gd', 'gu'],
-  '@kaynooo/cli-gitlab': ['gl'],
-  '@kaynooo/cli-gloss': ['gloss'],
-  '@kaynooo/cli-guard': ['guard'],
-  '@kaynooo/cli-out': ['out'],
-  '@kaynooo/cli-dev': ['dev'],
-  '@kaynooo/cli-dl': ['dl'],
-  '@kaynooo/cli-pick': ['pick'],
-  '@kaynooo/cli-page': ['page'],
-  '@kaynooo/cli-pkg': ['pkg'],
-  '@kaynooo/cli-probe': ['probe'],
-  '@kaynooo/cli-proc': ['proc'],
-  '@kaynooo/cli-stack': ['stack'],
-  '@kaynooo/cli-view': ['view'],
-  '@kaynooo/cli-wait': ['waitfor', 'slot'],
-  '@kaynooo/cli-workspace': ['ws'],
-  '@kaynooo/cli-wt': ['wt'],
 }
 
 interface Manifest { version?: string, engines?: { bun?: string }, bin?: Record<string, string> | string }
@@ -114,7 +88,7 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
   const version = installed(host, name)?.version
 
   if (version === undefined)
-    return { check, ok: false, detail: 'not installed', fix: `bun install -g ${name}` }
+    return { check, ok: false, detail: 'not installed', fix: `bun install -g ${name}`, fixAction: { kind: 'install', spec: name } }
 
   const off = bins.filter(bin => host.which(bin) === null)
 
@@ -131,7 +105,7 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
 
   // A release newer than the install comes first: an old version often lacks the very bin that is missing.
   if (latest !== '' && Bun.semver.order(version, latest) < 0)
-    return { check, ok: false, detail: `${version}, ${latest} released${off.length > 0 ? `, ${off.join(', ')} not on the PATH` : ''}`, fix: `bun install -g ${name}@${latest}` }
+    return { check, ok: false, detail: `${version}, ${latest} released${off.length > 0 ? `, ${off.join(', ')} not on the PATH` : ''}`, fix: `bun install -g ${name}@${latest}`, fixAction: { kind: 'install', spec: `${name}@${latest}` } }
 
   if (off.length > 0)
     return { check, ok: false, detail: `${version}, ${off.join(', ')} not on the PATH`, fix: `add ${binDir(host)} to the PATH` }
@@ -197,9 +171,11 @@ export function checkDeadBins(host: Host): Result {
   }
 }
 
-// The system tools the installed packages need, besides tea: a missing one fails.
+// The system tools the installed packages need, besides tea: a missing one fails unless its alternative is installed.
 export function checkNeeds(host: Host): Result {
-  const missing = Object.entries(NEEDS).flatMap(([name, needs]) => isInstalled(host, name) ? needs.filter(need => need.bin !== 'tea' && host.which(need.bin) === null) : [])
+  const missing = Object.entries(NEEDS).flatMap(([name, needs]) => isInstalled(host, name)
+    ? needs.filter(need => need.bin !== 'tea' && host.which(need.bin) === null && (need.alternative === undefined || host.which(need.alternative) === null))
+    : [])
 
   if (missing.length > 0)
     return { check: 'needs', ok: false, detail: `missing ${missing.map(need => `${need.bin} (${need.why})`).join(', ')}`, fix: `install ${missing.map(need => `${need.bin}: ${need.how}`).join('; ')}` }

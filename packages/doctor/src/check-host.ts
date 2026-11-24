@@ -28,10 +28,10 @@ export function checkHooks(host: Host): Result {
   const { plugin, mod } = hooksWiring(host)
 
   if ((plugin || mod !== undefined) && !isInstalled(host, HOOKS_REQUIRES))
-    return { check: 'hooks', ok: false, detail: `wired, but ${HOOKS_REQUIRES} is not installed, so every hook finds no guard`, fix: `bun install -g ${HOOKS_REQUIRES}` }
+    return { check: 'hooks', ok: false, detail: `wired, but ${HOOKS_REQUIRES} is not installed, so every hook finds no guard`, fix: `bun install -g ${HOOKS_REQUIRES}`, fixAction: { kind: 'install', spec: HOOKS_REQUIRES } }
 
   if (plugin && mod !== undefined)
-    return { check: 'hooks', ok: false, detail: `both the ${PLUGIN} plugin and the mod in ${mod} run guard, so every call is checked twice`, fix: `claude plugin disable ${PLUGIN}` }
+    return { check: 'hooks', ok: false, detail: `both the ${PLUGIN} plugin and the mod in ${mod} run guard, so every call is checked twice`, fix: `claude plugin disable ${PLUGIN}`, fixAction: { kind: 'run', argv: ['claude', 'plugin', 'disable', PLUGIN] } }
 
   if (plugin)
     return { check: 'hooks', ok: true, detail: `the ${PLUGIN} plugin` }
@@ -39,7 +39,7 @@ export function checkHooks(host: Host): Result {
   if (mod !== undefined)
     return { check: 'hooks', ok: true, detail: `the cli mod in ${mod}` }
 
-  return { check: 'hooks', ok: false, detail: 'neither the plugin nor the cli mod is wired into ~/.claude/settings.json', fix: `claude plugin install cli-hooks --marketplace ${MARKETPLACE}` }
+  return { check: 'hooks', ok: false, detail: 'neither the plugin nor the cli mod is wired into ~/.claude/settings.json', fix: `claude plugin install cli-hooks --marketplace ${MARKETPLACE}`, fixAction: { kind: 'run', argv: ['claude', 'plugin', 'install', 'cli-hooks', '--marketplace', MARKETPLACE] } }
 }
 
 function checkRcCompletions(home: string, shell: 'bash' | 'zsh'): Result {
@@ -76,7 +76,7 @@ export function checkCompletions(host: Host): Result {
   const stale = staleCompletions(host, dir)
 
   if (missing.length > 0 || stale.length > 0)
-    return { check: 'completions', ok: false, detail: [missing.length > 0 ? `no fish completion in ${dir} for ${missing.join(', ')}` : '', stale.length > 0 ? `completions in ${dir} for bins no longer installed: ${stale.join(', ')}` : ''].filter(Boolean).join('; '), fix: 'cli completions fish --install' }
+    return { check: 'completions', ok: false, detail: [missing.length > 0 ? `no fish completion in ${dir} for ${missing.join(', ')}` : '', stale.length > 0 ? `completions in ${dir} for bins no longer installed: ${stale.join(', ')}` : ''].filter(Boolean).join('; '), fix: 'cli completions fish --install', fixAction: { kind: 'run', argv: ['cli', 'completions', 'fish', '--install'] } }
 
   return { check: 'completions', ok: true, detail: dir }
 }

@@ -150,11 +150,11 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
   const { dim, green, red, yellow } = paint(process.stdout)
 
   if (options.list) {
-    for (const each of pool)
-      console.log(`${each.label.padEnd(12)} ${dim(each.hint)}`)
+    for (const each of all) {
+      const status = each.installed ? green('installed    ') : dim('not installed')
 
-    if (pool.length === 0)
-      console.log('everything is installed')
+      console.log(`${each.label.padEnd(12)} ${status}  ${dim(each.hint)}`)
+    }
 
     return 0
   }
@@ -270,4 +270,73 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
   const code = await recheck(checksFor(planned.packages, planned.plugin))
 
   return planned.blocked.length > 0 ? 1 : code
+}
+
+export interface RemoveOptions {
+  names: readonly string[]
+  dryRun: boolean
+}
+
+// Removes the named packages (and/or `hooks`) without an interactive checklist, keeping guard while hooks stays installed.
+export async function remove(host: Host, options: RemoveOptions): Promise<number> {
+  const all = candidates(host)
+  const { dim, green, red, yellow } = paint(process.stdout)
+  const unknown = options.names.filter(name => !all.some(each => each.names.includes(name)))
+
+  if (unknown.length > 0)
+    badUsage(`no package is named ${unknown.join(', ')}: cli add --list shows them all`)
+
+  const matched = choose(all, options.names)
+  const installed = matched.filter(each => each.installed)
+  const skipped = matched.filter(each => !each.installed)
+
+  for (const each of skipped)
+    console.log(`${dim('absent ')}  ${each.label} is not installed`)
+
+  const removing = removal(all, installed)
+
+  if (removing.packages.length === 0 && !removing.plugin) {
+    if (installed.some(each => each.id === HOOKS_REQUIRES))
+      console.log(`${yellow('kept   ')}  ${HOOKS_REQUIRES} is required by hooks (remove hooks too to uninstall it)`)
+    else if (skipped.length === 0)
+      console.log('nothing changed')
+
+    return 0
+  }
+
+  const uninstall = ['bun', 'remove', '-g', ...removing.packages]
+
+  if (removing.packages.length > 0)
+    console.log(`${options.dryRun ? dim('would  ') : green('remove ')}  ${uninstall.join(' ')}`)
+
+  if (removing.plugin)
+    console.log(`${options.dryRun ? dim('would  ') : green('remove ')}  ${PLUGIN_UNINSTALL.join(' ')}`)
+
+  if (options.dryRun)
+    return 0
+
+  if (removing.packages.length > 0) {
+    const ran = await host.run(uninstall)
+
+    if (ran.code !== 0) {
+      console.error(`${red('failed')}   bun remove -g: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+
+      return 1
+    }
+  }
+
+  if (removing.plugin && host.which('claude') === null) {
+    console.error(`${yellow('not run')}  ${PLUGIN_UNINSTALL.join(' ')}: claude is not on PATH`)
+  }
+  else if (removing.plugin) {
+    const ran = await host.run(PLUGIN_UNINSTALL)
+
+    if (ran.code !== 0) {
+      console.error(`${red('failed')}   ${PLUGIN_UNINSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+
+      return 1
+    }
+  }
+
+  return 0
 }

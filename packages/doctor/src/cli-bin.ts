@@ -13,6 +13,7 @@ import { completionDir, installCompletions, installedBins } from './completions'
 import { configReport } from './config-report'
 import { main as doctor } from './doctor'
 import { hostHere } from './host'
+import { install as installPackages, remove as removePackages } from './install'
 import { filterBins, listBins } from './list'
 
 const LIST_USAGE = `cli list [word] [--json]: every bin of the @kaynooo/cli-* packages in one line each, what it does and what it is reached for instead of
@@ -374,15 +375,60 @@ export function theme(args: string[]): number {
   return 0
 }
 
+const ADD_USAGE = `cli add [--list] [--dry-run] [--force] [name...|all]: installs @kaynooo/cli-* packages (or hooks), leaving out any whose required tool is missing unless --force`
+const REMOVE_USAGE = `cli remove [--dry-run] <name...>: uninstalls @kaynooo/cli-* packages (or hooks)`
+const UPDATE_USAGE = `cli update [--dry-run] [--offline]: checks and updates installed @kaynooo/cli-* packages, dl-installed commands and shell completions`
+const MANAGE_USAGE = `cli manage [--dry-run] [--force]: opens the interactive checklist to install or remove @kaynooo/cli-* packages`
+
+export async function add(args: string[], host: Host = hostHere()): Promise<number> {
+  const { values, positionals } = parse(args, ADD_USAGE, {
+    'list': { type: 'boolean', description: 'print every package with its installed status' },
+    'dry-run': { type: 'boolean', description: 'show what would be installed without running it' },
+    'force': { type: 'boolean', description: 'install even when a required system tool is missing' },
+  }, { positionals: ['[name...]'], exits: [[0, 'installed or listed'], [1, 'blocked or failed'], [2, 'a usage error']], examples: ['cli add git check', ['cli add --list', 'show all packages and status'], ['cli add all --dry-run', 'preview installing everything']] })
+
+  return installPackages(host, { names: positionals, list: values.list === true, dryRun: values['dry-run'] === true, force: values.force === true }, async checks => doctor(['--fix', ...checks.flatMap(check => ['--only', check])], host))
+}
+
+export async function remove(args: string[], host: Host = hostHere()): Promise<number> {
+  const { values, positionals } = parse(args, REMOVE_USAGE, {
+    'dry-run': { type: 'boolean', description: 'show what would be removed without running it' },
+  }, { positionals: ['<name...>'], exits: [[0, 'removed or already absent'], [1, 'removal failed'], [2, 'a usage error']], examples: ['cli remove gloss', ['cli remove --dry-run git', 'preview removal']] })
+
+  return removePackages(host, { names: positionals, dryRun: values['dry-run'] === true })
+}
+
+export async function update(args: string[], host: Host = hostHere()): Promise<number> {
+  const { values } = parse(args, UPDATE_USAGE, {
+    'dry-run': { type: 'boolean', description: 'show what would be updated without running it' },
+    'offline': { type: 'boolean', description: 'skip registry and remote release lookups' },
+  }, { positionals: [], exits: [[0, 'everything is up to date'], [1, 'an update failed or needs manual action'], [2, 'a usage error']], examples: ['cli update', ['cli update --dry-run', 'preview updates']] })
+
+  return doctor(['--fix', ...values['dry-run'] === true ? ['--dry-run'] : [], ...values.offline === true ? ['--offline'] : []], host)
+}
+
+export async function manage(args: string[], host: Host = hostHere()): Promise<number> {
+  const { values } = parse(args, MANAGE_USAGE, {
+    'dry-run': { type: 'boolean', description: 'show what would change without running it' },
+    'force': { type: 'boolean', description: 'install even when a required system tool is missing' },
+  }, { positionals: [], exits: [[0, 'updated install'], [1, 'blocked or failed'], [2, 'a usage error']], examples: ['cli manage'] })
+
+  return installPackages(host, { names: [], list: false, dryRun: values['dry-run'] === true, force: values.force === true }, async checks => doctor(['--fix', ...checks.flatMap(check => ['--only', check])], host))
+}
+
 if (import.meta.main) {
   process.exitCode = await runCli({
     name: 'cli',
-    about: 'the bins of the @kaynooo/cli-* packages, described by their own help',
+    about: 'the hub for @kaynooo/cli-* packages: discover, install, update, configure and check them',
     replaces: 'running each bin\'s --help to find the one that fits',
-    examples: ['cli list', ['cli list --json', 'with each bin\'s synopsis and examples']],
+    examples: ['cli list', ['cli list --json', 'with each bin\'s synopsis and examples'], 'cli add git check', 'cli update'],
     defaultCommand: 'find',
     runBare: true,
     commands: {
+      add: { summary: 'install @kaynooo/cli-* packages (or hooks) by name or all', run: async args => add(args) },
+      remove: { summary: 'uninstall @kaynooo/cli-* packages (or hooks) by name', run: async args => remove(args) },
+      update: { summary: 'update installed packages, dl commands and completions', run: async args => update(args) },
+      manage: { summary: 'interactively check to install and uncheck to remove packages', run: async args => manage(args) },
       doctor: { summary: 'checks this host\'s install of the bins, one line per check, the command that fixes a failing one beside it', run: async args => doctor(args) },
       find: { summary: 'picks a bin on a terminal and shows its help; the default of a bare cli', run: async args => find(args) },
       list: { summary: 'every bin in one line: what it does and what it is reached for instead of', run: async args => list(args) },

@@ -1,16 +1,14 @@
-import type { Host, Result } from './check-tools'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import type { FixAction, Host, Result } from './check-tools'
 import { HOOKS_REQUIRES } from './catalog'
-import { checkDlBins, checkTea, checkWakatime } from './check-forge'
+import { checkDlBins, checkTea } from './check-forge'
 import { checkCompletions, checkHooks, checkWorkspace, hooksWiring, MARKETPLACE } from './check-host'
 import { binDir, checkBun, checkDeadBins, checkNeeds, checkTool, deadBins, firstLine, INFO_AT_ONCE, isInstalled, NETWORK_ERROR, ownBin, readJsonText, TOOLS } from './check-tools'
 
-export { binDir, checkBun, checkCompletions, checkDeadBins, checkDlBins, checkHooks, checkNeeds, checkTea, checkTool, checkWakatime, checkWorkspace, deadBins, firstLine, hooksWiring, isInstalled, MARKETPLACE, ownBin, readJsonText, TOOLS }
-export type { Host, Result }
+export { binDir, checkBun, checkCompletions, checkDeadBins, checkDlBins, checkHooks, checkNeeds, checkTea, checkTool, checkWorkspace, deadBins, firstLine, hooksWiring, isInstalled, MARKETPLACE, ownBin, readJsonText, TOOLS }
+export type { FixAction, Host, Result }
 
 const toolCheck = (name: string) => name.slice(name.indexOf('/') + 1)
-const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'dead-bins', 'workspace', 'wakatime', 'dl-bins']
+const OTHER_CHECKS = ['tea', 'hooks', 'needs', 'bun', 'completions', 'dead-bins', 'workspace', 'dl-bins']
 const FORGEJO = '@kaynooo/cli-forgejo'
 const DL = '@kaynooo/cli-dl'
 const WORKSPACE = '@kaynooo/cli-workspace'
@@ -50,7 +48,6 @@ export async function runChecks(host: Host, only: readonly string[] = [], { offl
     ...wanted('completions') ? [checkCompletions(host)] : [],
     ...wanted('dead-bins') ? [checkDeadBins(host)] : [],
     ...wanted('workspace') && (only.length > 0 || isInstalled(host, WORKSPACE) || isInstalled(host, '@kaynooo/cli-pkg')) ? [checkWorkspace(host)] : [],
-    ...wanted('wakatime') && !offline && existsSync(join(host.home, '.wakatime.cfg')) ? [await checkWakatime(host)] : [],
     ...wanted('dl-bins') && !offline && (only.length > 0 || isInstalled(host, DL)) ? [await checkDlBins(host)] : [],
   ]
 }

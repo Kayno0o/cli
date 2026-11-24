@@ -5,6 +5,7 @@ import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { ABOUT, NEEDS } from '../src/catalog'
 import { TOOLS } from '../src/checks'
+import { add, remove } from '../src/cli-bin'
 import { main } from '../src/doctor'
 import { install, removal } from '../src/install'
 
@@ -109,15 +110,16 @@ describe('doctor --install', () => {
     expect(out).not.toContain('@kaynooo/cli-edit')
   })
 
-  test('--list prints the choices, and a name nothing matches is a usage error', async () => {
+  test('--list prints every package with its installed status, and a name nothing matches is a usage error', async () => {
     put('@kaynooo/cli-edit', '0.1.0')
 
     const { host } = recording([])
     const listed = await capture(async () => main(['--install', '--list'], host))
 
     expect(listed.out).toContain('forgejo')
+    expect(listed.out).toContain('not installed')
     expect(listed.out).toContain('hooks')
-    expect(listed.out).not.toContain('edit ')
+    expect(listed.out).toMatch(/edit\s+installed/)
 
     let refusal = ''
 
@@ -129,6 +131,27 @@ describe('doctor --install', () => {
     }
 
     expect(refusal).toContain('nope')
+  })
+
+  test('cli add and cli remove work non-interactively with --dry-run', async () => {
+    put('@kaynooo/cli-edit', '0.1.0')
+
+    const { host, ran } = recording([])
+    const added = await capture(async () => add(['git', '--dry-run'], host))
+
+    expect(added.result).toBe(0)
+    expect(added.out).toContain('bun install -g @kaynooo/cli-git')
+
+    const removed = await capture(async () => remove(['edit', '--dry-run'], host))
+
+    expect(removed.result).toBe(0)
+    expect(removed.out).toContain('bun remove -g @kaynooo/cli-edit')
+    expect(ran).toEqual([])
+
+    const actual = await capture(async () => remove(['edit'], host))
+
+    expect(actual.result).toBe(0)
+    expect(ran).toEqual(['bun remove -g @kaynooo/cli-edit'])
   })
 
   test('names, --list and --force are refused without --install', async () => {

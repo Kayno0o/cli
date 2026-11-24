@@ -14,6 +14,7 @@
     "test:timings": "$npm_execpath test --parallel --timings=tests/timings.json --update-timings",
     "test:coverage": "$npm_execpath test --coverage",
     "docs": "$npm_execpath scripts/bins-docs.ts",
+    "catalog": "$npm_execpath scripts/catalog.ts",
     "ft": "$npm_execpath packages/ft/src/cli.ts"
   },
   "devDependencies": {

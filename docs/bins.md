@@ -59,7 +59,7 @@ check --fix --list  # the fixers it would run
 
 ## cli
 
-the bins of the @kaynooo/cli-* packages, described by their own help. Package `doctor`.
+the hub for @kaynooo/cli-* packages: discover, install, update, configure and check them. Package `doctor`.
 
 Instead of: running each bin's --help to find the one that fits
 
@@ -67,6 +67,8 @@ Instead of: running each bin's --help to find the one that fits
 cli <command> [options]
 cli list
 cli list --json  # with each bin's synopsis and examples
+cli add git check
+cli update
 ```
 
 ## db

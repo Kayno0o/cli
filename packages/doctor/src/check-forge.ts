@@ -1,10 +1,10 @@
 import type { Forge } from '@kaynooo/cli-kit'
 import type { Host, Result } from './check-tools'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { configuredForge, readUserConfig } from '@kaynooo/cli-kit'
-import { firstLine, ownBin, readJsonText, VERSION } from './check-tools'
+import { firstLine, ownBin, readJsonText } from './check-tools'
 
 // The forge config.json names, which ft's tea login must reach; undefined lets any login do.
 function forgeOf(home: string): Forge | undefined {
@@ -73,66 +73,6 @@ export async function checkTea(host: Host): Promise<Result> {
   return { check: 'tea', ok: true, detail: `logged in to ${reached} as ${login.name}, Forgejo ${served}` }
 }
 
-const WAKATIME_RELEASE = 'https://api.github.com/repos/wakatime/wakatime-cli/releases/latest'
-const WAKATIME_ARCH: Record<string, string> = { x64: 'amd64', arm64: 'arm64' }
-const LEADING_V = /^v/
-
-// Downloads the linux release into ~/.wakatime and points the `wakatime-cli` symlink at it, the layout every official plugin uses; an error message, undefined on success.
-async function installWakatime(host: Host, tag: string, arch: string): Promise<string | undefined> {
-  const folder = join(host.home, '.wakatime')
-  const name = `wakatime-cli-linux-${arch}`
-  const zip = join(folder, `${name}.zip`)
-
-  mkdirSync(folder, { recursive: true })
-
-  const steps = [
-    ['curl', '-fsSL', '-o', zip, `https://github.com/wakatime/wakatime-cli/releases/download/${tag}/${name}.zip`],
-    ['unzip', '-o', '-d', folder, zip],
-    ['chmod', '+x', join(folder, name)],
-    ['ln', '-sfn', join(folder, name), join(folder, 'wakatime-cli')],
-  ]
-
-  for (const argv of steps) {
-    const ran = await host.run(argv)
-
-    if (ran.code !== 0)
-      return `${argv[0]} exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`
-  }
-
-  rmSync(zip, { force: true })
-
-  return undefined
-}
-
-// ~/.wakatime/wakatime-cli there and no older than the latest wakatime-cli release; left out on a host with no ~/.wakatime.cfg.
-export async function checkWakatime(host: Host): Promise<Result> {
-  const arch = WAKATIME_ARCH[process.arch]
-  const bin = join(host.home, '.wakatime', 'wakatime-cli')
-
-  if (arch === undefined)
-    return { check: 'wakatime', ok: true, detail: `no linux release for ${process.arch}` }
-
-  const release = await host.run(['curl', '-fsSL', '--max-time', '15', WAKATIME_RELEASE])
-  const latest = release.code === 0 ? readJsonText<{ tag_name?: string }>(release.stdout)?.tag_name : undefined
-  const installedVersion = existsSync(bin) ? (await host.run([bin, '--version'])).stdout.trim().replace(LEADING_V, '') : ''
-
-  if (latest === undefined)
-    return { check: 'wakatime', ok: true, warn: true, detail: `${installedVersion || 'not installed'}, GitHub did not answer: ${firstLine(release.stderr) || 'no release'}` }
-
-  const wanted = latest.replace(LEADING_V, '')
-
-  if (installedVersion !== '' && VERSION.test(installedVersion) && Bun.semver.order(installedVersion, wanted) >= 0)
-    return { check: 'wakatime', ok: true, detail: installedVersion }
-
-  return {
-    check: 'wakatime',
-    ok: false,
-    detail: installedVersion === '' ? `${bin} is missing` : `${installedVersion}, ${wanted} released`,
-    fix: `download wakatime-cli ${latest} into ${join(host.home, '.wakatime')}`,
-    apply: async on => installWakatime(on, latest, arch),
-  }
-}
-
 const DL = '@kaynooo/cli-dl'
 
 interface DlEntry { name: string, state: 'current' | 'changed' | 'unreachable', error?: string }
@@ -155,7 +95,7 @@ export async function checkDlBins(host: Host): Promise<Result> {
   const asked = unreachable.length > 0 ? `, the source of ${unreachable.join(', ')} did not answer` : ''
 
   if (changed.length > 0)
-    return { check: 'dl-bins', ok: false, detail: `${changed.join(', ')} changed at the source${asked}`, fix: `dl update ${changed.join(' ')}` }
+    return { check: 'dl-bins', ok: false, detail: `${changed.join(', ')} changed at the source${asked}`, fix: `dl update ${changed.join(' ')}`, fixAction: { kind: 'run', argv: ['dl', 'update', ...changed] } }
 
   return { check: 'dl-bins', ok: true, detail: entries.length === 0 ? 'dl installed no command' : `${entries.length - unreachable.length} commands dl installed are current${asked}` }
 }

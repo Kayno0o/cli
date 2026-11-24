@@ -3,9 +3,10 @@ import { mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { checkBun, checkDeadBins, checkDlBins, checkHooks, checkNeeds, checkTea, checkTool, checkWakatime, checkWorkspace, runChecks, TOOLS } from '../src/checks'
+import { checkBun, checkDeadBins, checkDlBins, checkHooks, checkNeeds, checkTea, checkTool, checkWorkspace, runChecks, TOOLS } from '../src/checks'
 import { configReport } from '../src/config-report'
 import { main } from '../src/doctor'
+import { planFixes } from '../src/fix'
 
 const GUARD = '@kaynooo/cli-guard'
 // Where bun puts global packages under BUN_INSTALL, so the bin folder sits at ../../../bin as on a real host.
@@ -53,7 +54,8 @@ describe('checkDlBins', () => {
     const asked = `bun ${join(home, MODULES, '@kaynooo/cli-dl', 'dist', 'cli.js')} outdated --bins --json`
     const answering = (entries: unknown[]) => fakeHost({ [asked]: { code: 1, stdout: JSON.stringify(entries) } })
 
-    expect(await checkDlBins(answering([{ name: 'a', state: 'changed' }, { name: 'b', state: 'current' }, { name: 'c', state: 'unreachable', error: 'x' }]))).toEqual({ check: 'dl-bins', ok: false, detail: 'a changed at the source, the source of c did not answer', fix: 'dl update a' })
+    expect(await checkDlBins(answering([{ name: 'a', state: 'changed' }, { name: 'b', state: 'current' }, { name: 'c', state: 'unreachable', error: 'x' }]))).toEqual({ check: 'dl-bins', ok: false, detail: 'a changed at the source, the source of c did not answer', fix: 'dl update a', fixAction: { kind: 'run', argv: ['dl', 'update', 'a'] } })
+    expect(planFixes([await checkDlBins(answering([{ name: 'a', state: 'changed' }]))])).toEqual([{ command: 'dl update a', argv: ['dl', 'update', 'a'] }])
     expect(await checkDlBins(answering([{ name: 'b', state: 'current' }, { name: 'c', state: 'unreachable' }]))).toEqual({ check: 'dl-bins', ok: true, detail: '1 commands dl installed are current, the source of c did not answer' })
     expect(await checkDlBins(fakeHost({ [asked]: { code: 2, stderr: 'error: dl: unknown command outdated\n' } }))).toEqual({ check: 'dl-bins', ok: true, detail: 'the installed dl cannot tell: error: dl: unknown command outdated' })
     expect((await runChecks(answering([]))).find(result => result.check === 'dl-bins')).toEqual({ check: 'dl-bins', ok: true, detail: 'dl installed no command' })
@@ -78,35 +80,6 @@ describe('checkDeadBins', () => {
     expect(await result.apply?.(host)).toBeUndefined()
     expect(readdirSync(bin).sort()).toEqual(['other', 'src'])
     expect(checkDeadBins(host).ok).toBe(true)
-  })
-})
-
-describe('checkWakatime', () => {
-  const RELEASE = 'curl -fsSL --max-time 15 https://api.github.com/repos/wakatime/wakatime-cli/releases/latest'
-
-  test('fails a missing binary and downloads the release through the fix', async () => {
-    const ran: string[] = []
-    const answering = fakeHost({ [RELEASE]: { stdout: '{"tag_name":"v2.28.0"}' } })
-    const host: Host = { ...answering, run: async (argv) => {
-      ran.push(argv[0] ?? '')
-
-      return argv[1] === '-fsSL' && argv[2] === '--max-time' ? answering.run(argv) : { code: 0, stdout: '', stderr: '' }
-    } }
-    const result = await checkWakatime(host)
-
-    expect(result).toMatchObject({ check: 'wakatime', ok: false })
-    expect(result.detail).toContain('is missing')
-    expect(await result.apply?.(host)).toBeUndefined()
-    expect(ran).toEqual(['curl', 'curl', 'unzip', 'chmod', 'ln'])
-  })
-
-  test('passes a binary as new as the release and skips a host with no config', async () => {
-    write(join(home, '.wakatime', 'wakatime-cli'), '')
-
-    const host = fakeHost({ [RELEASE]: { stdout: '{"tag_name":"v2.28.0"}' }, [`${join(home, '.wakatime', 'wakatime-cli')} --version`]: { stdout: 'v2.28.0\n' } })
-
-    expect(await checkWakatime(host)).toEqual({ check: 'wakatime', ok: true, detail: '2.28.0' })
-    expect((await runChecks(host, [])).map(each => each.check)).not.toContain('wakatime')
   })
 })
 
