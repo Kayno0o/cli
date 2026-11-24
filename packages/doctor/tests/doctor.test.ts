@@ -407,6 +407,43 @@ describe('doctor --fix', () => {
     expect(JSON.parse(out)).toEqual([{ check: 'cli-forge', ok: true, detail: '0.5.1' }])
     expect(err).toContain('bun install -g @kaynooo/cli-forge')
   })
+
+  test('orders dead-bins before completions and converges multi-pass fixes without looping on a stuck fix', async () => {
+    const ordered = planFixes([
+      { check: 'completions', ok: false, detail: 'stale doctor', fix: 'cli completions fish --install', fixAction: { kind: 'run', argv: ['cli', 'completions', 'fish', '--install'] } },
+      { check: 'dead-bins', ok: false, detail: 'doctor dropped', fix: 'rm /bin/doctor', apply: async () => undefined },
+      { check: 'cli-doctor', ok: false, detail: '0.22.0, 0.23.0 released', fix: 'bun install -g @kaynooo/cli-doctor@0.23.0', fixAction: { kind: 'install', spec: '@kaynooo/cli-doctor@0.23.0' } },
+    ])
+
+    expect(ordered.map(step => step.command)).toEqual(['bun install -g @kaynooo/cli-doctor@0.23.0', 'rm /bin/doctor', 'cli completions fish --install'])
+
+    // A fix that exits 0 without resolving the check must run at most once.
+    install('@kaynooo/cli-forge', '0.5.0')
+
+    let installCalls = 0
+    const stuckHost: Host = {
+      ...fakeHost(),
+      which: () => '/bin/x',
+      run: async (argv) => {
+        const line = argv.join(' ')
+
+        if (line.startsWith('bun info'))
+          return { code: 0, stdout: '0.5.1\n', stderr: '' }
+
+        if (line.startsWith('bun install -g')) {
+          installCalls++
+
+          return { code: 0, stdout: '', stderr: '' }
+        }
+
+        return { code: 1, stdout: '', stderr: '' }
+      },
+    }
+    const stuck = await capture(async () => main(['--fix', '--only', 'cli-forge'], stuckHost))
+
+    expect(installCalls).toBe(1)
+    expect(stuck.result).toBe(1)
+  })
 })
 
 describe('checkWorkspace', () => {

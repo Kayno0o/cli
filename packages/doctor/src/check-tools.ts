@@ -69,6 +69,16 @@ export function isInstalled(host: Host, name: string): boolean {
   return installed(host, name)?.version !== undefined
 }
 
+// The bins an installed package declares in its own package.json, falling back to the catalog's list when the manifest omits `bin`.
+export function declaredBins(host: Host, name: string, fallback: readonly string[]): readonly string[] {
+  const declared = installed(host, name)?.bin
+
+  if (typeof declared === 'string')
+    return [name.slice(name.indexOf('/') + 1)]
+
+  return declared === undefined ? fallback : Object.keys(declared)
+}
+
 // The file the installed package declares for the bin, undefined when it declares none, so the one under test is run and not the first of that name on the PATH.
 export function ownBin(host: Host, name: string, bin: string): string | undefined {
   const declared = installed(host, name)?.bin
@@ -83,14 +93,14 @@ export function binDir(host: Host): string {
 }
 
 // One package: installed, its bins on the PATH, and no older than the version the registry serves.
-export async function checkTool(host: Host, name: string, bins: readonly string[], { offline = false, registryDown }: { offline?: boolean, registryDown?: string } = {}): Promise<Result> {
+export async function checkTool(host: Host, name: string, bins: readonly string[], { offline = false, registryDown, registryCache }: { offline?: boolean, registryDown?: string, registryCache?: Map<string, string> } = {}): Promise<Result> {
   const check = name.slice(name.indexOf('/') + 1)
   const version = installed(host, name)?.version
 
   if (version === undefined)
     return { check, ok: false, detail: 'not installed', fix: `bun install -g ${name}`, fixAction: { kind: 'install', spec: name } }
 
-  const off = bins.filter(bin => host.which(bin) === null)
+  const off = declaredBins(host, name, bins).filter(bin => host.which(bin) === null)
 
   if (offline || registryDown !== undefined) {
     if (off.length > 0)
@@ -99,9 +109,20 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
     return { check, ok: true, warn: true, detail: offline ? `${version}, skipped (--offline)` : `${version}, the registry did not answer: ${registryDown}` }
   }
 
-  const info = await host.run(['bun', 'info', name, 'version', '--no-cache'])
-  const answered = info.code === 0 ? firstLine(info.stdout.trim().split('\n').at(-1) ?? '') : ''
-  const latest = VERSION.test(answered) ? answered : ''
+  let latest = registryCache?.get(name) ?? ''
+  let infoError = ''
+
+  if (latest === '') {
+    const info = await host.run(['bun', 'info', name, 'version', '--no-cache'])
+    const answered = info.code === 0 ? firstLine(info.stdout.trim().split('\n').at(-1) ?? '') : ''
+
+    latest = VERSION.test(answered) ? answered : ''
+
+    if (latest !== '')
+      registryCache?.set(name, latest)
+    else
+      infoError = firstLine(info.stderr) || answered || 'no version'
+  }
 
   // A release newer than the install comes first: an old version often lacks the very bin that is missing.
   if (latest !== '' && Bun.semver.order(version, latest) < 0)
@@ -111,7 +132,7 @@ export async function checkTool(host: Host, name: string, bins: readonly string[
     return { check, ok: false, detail: `${version}, ${off.join(', ')} not on the PATH`, fix: `add ${binDir(host)} to the PATH` }
 
   if (latest === '')
-    return { check, ok: true, warn: true, detail: `${version}, the registry did not answer: ${firstLine(info.stderr) || answered || 'no version'}` }
+    return { check, ok: true, warn: true, detail: `${version}, the registry did not answer: ${infoError}` }
 
   return { check, ok: true, detail: version }
 }

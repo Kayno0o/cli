@@ -1,11 +1,12 @@
 import type { Host } from '../src/checks'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { ABOUT, NEEDS } from '../src/catalog'
 import { TOOLS } from '../src/checks'
 import { add, remove, update } from '../src/cli-bin'
+import { completionDir, installCompletions } from '../src/completions'
 import { install, removal } from '../src/install'
 
 const temp = tempDirs()
@@ -149,6 +150,7 @@ describe('cli add, remove and update', () => {
 
   test('cli update updates installed packages and completions without running unrelated tea/hooks checks', async () => {
     put('@kaynooo/cli-forge', '0.1.0')
+    put('@kaynooo/cli-git', '0.2.0')
 
     const ran: string[] = []
     const host: Host = {
@@ -159,6 +161,9 @@ describe('cli add, remove and update', () => {
         ran.push(line)
 
         if (line === 'bun info @kaynooo/cli-forge version --no-cache')
+          return { code: 0, stdout: '0.2.0\n', stderr: '' }
+
+        if (line === 'bun info @kaynooo/cli-git version --no-cache')
           return { code: 0, stdout: '0.2.0\n', stderr: '' }
 
         if (line.startsWith('bun install -g')) {
@@ -175,8 +180,99 @@ describe('cli add, remove and update', () => {
 
     expect(res.result).toBe(0)
     expect(ran).toContain('bun install -g @kaynooo/cli-forge@0.2.0')
+    expect(ran.filter(line => line.startsWith('bun info'))).toHaveLength(2)
     expect(ran.some(line => line.startsWith('tea '))).toBe(false)
     expect(res.out).not.toContain('hooks')
+    // Concise output skips already up-to-date packages.
+    expect(res.out).not.toContain('cli-git')
+    expect(res.out).toContain('2 packages up to date')
+
+    const alreadyCurrent = await capture(async () => update([], host))
+
+    expect(alreadyCurrent.result).toBe(0)
+    expect(alreadyCurrent.out.trim()).toBe('ok: 2 packages up to date')
+  })
+
+  test('cli update converges in one run when an upgrade drops a bin, cleaning dead links and stale completions', async () => {
+    const modules = join(home, '.bun', 'install', 'global', 'node_modules')
+    const binDir = join(home, '.bun', 'bin')
+    const writePkg = (name: string, manifest: Record<string, unknown>) => {
+      const path = join(modules, name, 'package.json')
+
+      mkdirSync(join(path, '..'), { recursive: true })
+      writeFileSync(path, JSON.stringify(manifest))
+    }
+
+    // Before update: cli-doctor@0.22.0 ships both `doctor` and `cli`; cli-git@0.20.0 is current.
+    writePkg('@kaynooo/cli-doctor', { name: '@kaynooo/cli-doctor', version: '0.22.0', bin: { doctor: './dist/cli.js', cli: './dist/cli-bin.js' } })
+    mkdirSync(join(modules, '@kaynooo/cli-doctor/dist'), { recursive: true })
+    writeFileSync(join(modules, '@kaynooo/cli-doctor/dist/cli.js'), '')
+    writeFileSync(join(modules, '@kaynooo/cli-doctor/dist/cli-bin.js'), '')
+    writePkg('@kaynooo/cli-git', { name: '@kaynooo/cli-git', version: '0.20.0', bin: { gst: './dist/gst.js' } })
+    mkdirSync(join(modules, '@kaynooo/cli-git/dist'), { recursive: true })
+    writeFileSync(join(modules, '@kaynooo/cli-git/dist/gst.js'), '')
+
+    mkdirSync(binDir, { recursive: true })
+    symlinkSync('../install/global/node_modules/@kaynooo/cli-doctor/dist/cli.js', join(binDir, 'doctor'))
+    symlinkSync('../install/global/node_modules/@kaynooo/cli-doctor/dist/cli-bin.js', join(binDir, 'cli'))
+    symlinkSync('../install/global/node_modules/@kaynooo/cli-git/dist/gst.js', join(binDir, 'gst'))
+
+    const ran: string[] = []
+    const host: Host = {
+      home,
+      globalModules: modules,
+      bunVersion: '1.4.4',
+      shell: '',
+      which: (bin) => {
+        if (bin === 'fish')
+          return '/usr/bin/fish'
+
+        return existsSync(join(binDir, bin)) ? join(binDir, bin) : null
+      },
+      run: async (argv) => {
+        const line = argv.join(' ')
+
+        ran.push(line)
+
+        if (line === 'bun info @kaynooo/cli-doctor version --no-cache')
+          return { code: 0, stdout: '0.23.0\n', stderr: '' }
+
+        if (line === 'bun info @kaynooo/cli-git version --no-cache')
+          return { code: 0, stdout: '0.20.0\n', stderr: '' }
+
+        if (line === 'bun install -g @kaynooo/cli-doctor@0.23.0') {
+          // 0.23.0 drops dist/cli.js, leaving the `doctor` symlink broken.
+          writePkg('@kaynooo/cli-doctor', { name: '@kaynooo/cli-doctor', version: '0.23.0', bin: { cli: './dist/cli-bin.js' } })
+          rmSync(join(modules, '@kaynooo/cli-doctor/dist/cli.js'))
+
+          return { code: 0, stdout: '', stderr: '' }
+        }
+
+        if (line === 'cli completions fish --install') {
+          await installCompletions(host, completionDir(home))
+
+          return { code: 0, stdout: '', stderr: '' }
+        }
+
+        return { code: 1, stdout: '', stderr: `no stub for ${line}` }
+      },
+    }
+
+    // Seed completions before the update (including doctor.fish).
+    await installCompletions(host, completionDir(home))
+    expect(existsSync(join(completionDir(home), 'doctor.fish'))).toBe(true)
+
+    const res = await capture(async () => update([], host))
+
+    expect(res.result).toBe(0)
+    expect(existsSync(join(binDir, 'doctor'))).toBe(false)
+    expect(existsSync(join(completionDir(home), 'doctor.fish'))).toBe(false)
+    expect(ran).toContain('bun install -g @kaynooo/cli-doctor@0.23.0')
+    expect(ran).toContain('cli completions fish --install')
+    expect(res.out).toContain(`ran      rm ${join(binDir, 'doctor')}`)
+    expect(res.out).toContain('ran      cli completions fish --install')
+    expect(res.out).toContain('2 packages up to date')
+    expect(res.out).not.toContain('cli-git')
   })
 })
 

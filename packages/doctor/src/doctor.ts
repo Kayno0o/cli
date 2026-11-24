@@ -4,13 +4,13 @@ import type { Outcome } from './fix'
 import process from 'node:process'
 import { jsonOption, marked, paint, parse, printHeader, printJson } from '@kaynooo/cli-kit'
 import { CHECK_NAMES, isInstalled, runChecks, TOOLS } from './checks'
-import { applyFixes, planFixes } from './fix'
+import { convergeFixes } from './fix'
 import { hostHere } from './host'
 
 const USAGE = `cli doctor [--only <check>] [--quiet] [--fix] [--dry-run] [--offline] [--json]: checks this host's @kaynooo/cli-* install, one line per check with the fix beside a failing one
 
 Checks the installed packages are current, their system tools, tea's login, the Claude Code hooks, Bun, the shell completions (fish files, or the script a bash or zsh rc sources), dead bin links and the commands dl installed; a package not installed is no failure.
---fix runs the printed fixes, then checks again; a fix that installs a system package or only describes a step is printed, never run.
+--fix runs the printed fixes in passes until everything converges (cleaning dead bin links and refreshing completions after package upgrades); a fix that installs a system package or only describes a step is printed, never run.
 To install or remove packages, use \`cli add\`, \`cli remove\` or \`cli manage\`.`
 
 const EXITS: ExitRow[] = [[0, 'every check passes (after --fix, the ones it fixed too)'], [1, 'a check fails'], [2, 'a usage error']]
@@ -26,11 +26,12 @@ const OPTIONS = {
   'dry-run': { type: 'boolean', description: 'show what --fix would run without running it (implies --fix)' },
 } as const
 
-function print(results: readonly Result[]): void {
+export function printResults(results: readonly Result[], { header = true, showFix = true, showBatch = true }: { header?: boolean, showFix?: boolean, showBatch?: boolean } = {}): void {
   if (results.length === 0)
     return
 
-  printHeader('cli doctor', `${results.length} ${results.length === 1 ? 'check' : 'checks'}`)
+  if (header)
+    printHeader('cli doctor', `${results.length} ${results.length === 1 ? 'check' : 'checks'}`)
 
   const { dim } = paint(process.stdout)
   const width = Math.max(...results.map(result => result.check.length))
@@ -43,8 +44,13 @@ function print(results: readonly Result[]): void {
     else if (warn === true)
       mark = 'warn'
 
-    console.log(marked(mark, `${check.padEnd(width)}  ${detail}${fix === undefined ? '' : `  ${dim('fix:')} ${fix}`}`, process.stdout))
+    const suffix = showFix && fix !== undefined ? `  ${dim('fix:')} ${fix}` : ''
+
+    console.log(marked(mark, `${check.padEnd(width)}  ${detail}${suffix}`, process.stdout))
   }
+
+  if (!showBatch)
+    return
 
   const installs = results.flatMap(result => result.fix?.startsWith(INSTALL) === true ? [result.fix.slice(INSTALL.length)] : [])
 
@@ -52,12 +58,11 @@ function print(results: readonly Result[]): void {
     console.log(`\n${dim('fix them all:')} ${INSTALL}${installs.join(' ')}`)
 }
 
-function printOutcomes(outcomes: readonly Outcome[], log: (line: string) => void): void {
+export function printOutcome({ command, status, detail }: Outcome, log: (line: string) => void): void {
   const { green, red, dim } = paint(process.stdout)
   const marks = { 'ran': green('ran    '), 'failed': red('failed '), 'dry-run': dim('would  '), 'not run': dim('not run') }
 
-  for (const { command, status, detail } of outcomes)
-    log(`${marks[status]}  ${command}${detail === undefined ? '' : `  ${dim(detail)}`}`)
+  log(`${marks[status]}  ${command}${detail === undefined ? '' : `  ${dim(detail)}`}`)
 }
 
 export async function main(args: string[], host: Host = hostHere()): Promise<number> {
@@ -66,26 +71,39 @@ export async function main(args: string[], host: Host = hostHere()): Promise<num
   const dry = values['dry-run'] === true
   const json = values.json === true
   const offline = values.offline === true
-  let results = await runChecks(host, only, { offline })
+  const registryCache = new Map<string, string>()
+  let results = await runChecks(host, only, { offline, registryCache })
   let fixed = false
+  let touched = new Set<string>()
 
   if ((values.fix === true || dry) && results.some(result => !result.ok)) {
     if (!json)
-      print(values.quiet === true ? results.filter(result => !result.ok) : results)
+      printResults(results.filter(result => !result.ok), { showBatch: false })
 
-    const steps = planFixes(results)
-
-    printOutcomes(await applyFixes(host, steps, dry), json ? console.error : console.log)
+    const log = json ? console.error : console.log
+    const run = await convergeFixes(host, results, async () => runChecks(host, only, { offline, registryCache }), { dry, onOutcome: outcome => printOutcome(outcome, log) })
 
     if (dry)
       return 1
 
-    results = await runChecks(host, only, { offline })
+    results = run.results
+    touched = run.touched
+    fixed = run.changed
 
-    fixed = true
+    if (!fixed) {
+      if (json)
+        printJson(values.quiet === true ? results.filter(result => !result.ok) : results)
+
+      return results.every(result => result.ok) ? 0 : 1
+    }
   }
 
-  const shown = values.quiet === true ? results.filter(result => !result.ok) : results
+  let shown = results
+
+  if (values.quiet === true)
+    shown = results.filter(result => !result.ok)
+  else if (fixed && !json)
+    shown = results.filter(result => touched.has(result.check) || !result.ok)
 
   if (fixed && !json && shown.length > 0)
     console.log('\nafter the fixes:')
@@ -93,7 +111,7 @@ export async function main(args: string[], host: Host = hostHere()): Promise<num
   if (json)
     printJson(shown)
   else
-    print(shown)
+    printResults(shown)
 
   const absent = Object.keys(TOOLS).filter(name => !isInstalled(host, name)).length
 

@@ -6,7 +6,7 @@ import { checklist, completePath, confirm, input } from '@kaynooo/cli-kit/prompt
 import { ABOUT, HOOKS_REQUIRES, NEEDS } from './catalog'
 import { firstLine, hooksWiring, isInstalled, MARKETPLACE, TOOLS } from './checks'
 
-// What `doctor --install` can add: a package, or the Claude Code hooks plugin that calls guard.
+// What `cli add` / `cli manage` can add: a package, or the Claude Code hooks plugin that calls guard.
 export interface Candidate {
   id: string
   // The words typed after --install to name it.
@@ -102,16 +102,16 @@ export function plan(host: Host, picked: readonly Candidate[], force: boolean): 
 
 // The names of the checks that follow what was installed.
 function checksFor(packages: readonly string[], plugin: boolean): string[] {
-  return [...packages.map(name => name.slice(name.indexOf('/') + 1)), ...plugin ? ['hooks'] : [], 'needs', 'completions', ...packages.includes('@kaynooo/cli-forgejo') ? ['tea'] : []]
+  return [...packages.map(name => name.slice(name.indexOf('/') + 1)), ...plugin ? ['hooks'] : [], 'needs', 'completions', ...packages.includes('@kaynooo/cli-forge') ? ['tea'] : []]
 }
 
 // Every candidate in a checklist with the installed ones checked: what is checked and was not gets installed, what was checked and is not any more gets removed. Undefined once cancelled.
 async function ask(all: readonly Candidate[]): Promise<{ add: Candidate[], remove: Candidate[] } | undefined> {
   if (!isInteractive())
-    badUsage('name what to install, or all: doctor --install forgejo check hooks (doctor --install --list shows the choices)')
+    badUsage('name what to install, or all: cli add forge check hooks (cli add --list shows the choices)')
 
   const choices: Choice<Candidate>[] = all.map(each => ({ value: each, label: each.label, hint: `${each.installed ? 'installed, ' : ''}${each.hint}` }))
-  const picked = await checklist('installed packages', choices, { initial: new Set(all.filter(each => each.installed)), hint: 'check to install, uncheck to remove: doctor --install forgejo check names them' })
+  const picked = await checklist('installed packages', choices, { initial: new Set(all.filter(each => each.installed)), hint: 'check to install, uncheck to remove: cli add forge check names them' })
 
   if (picked === undefined)
     return undefined
@@ -168,7 +168,7 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
   const unknown = options.names.filter(name => name !== 'all' && !all.some(each => each.names.includes(name)))
 
   if (unknown.length > 0)
-    badUsage(`nothing to install is named ${unknown.join(', ')}: doctor --install --list`)
+    badUsage(`nothing to install is named ${unknown.join(', ')}: cli add --list`)
 
   const chosen = options.names.length === 0 ? await choosing(all) : { add: choose(pool, options.names), remove: [] }
   const picked = chosen?.add ?? []

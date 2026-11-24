@@ -9,10 +9,11 @@ import process from 'node:process'
 import { activeTheme, badge, badUsage, bar, completionScript, duration, fail, formatDuration, getConfigKey, header, isInteractive, jsonOption, keyValue, mainConfigPath, marked, paint, parse, parseConfigValue, PRESETS, printHeader, printJson, readMainConfig, readUsage, role, runCli, section, setConfigKey, sparkline, summarizeUsage, table, tree, unsetConfigKey, updateMainConfig, usagePath } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
 import { completePath, input, select } from '@kaynooo/cli-kit/prompt'
-import { isInstalled, TOOLS } from './checks'
+import { isInstalled, runChecks, TOOLS } from './checks'
 import { completionDir, installCompletions, installedBins } from './completions'
 import { configReport } from './config-report'
-import { main as doctor } from './doctor'
+import { main as doctor, printOutcome, printResults } from './doctor'
+import { convergeFixes } from './fix'
 import { hostHere } from './host'
 import { install as installPackages, remove as removePackages } from './install'
 import { filterBins, listBins } from './list'
@@ -378,7 +379,7 @@ export function theme(args: string[]): number {
 
 const ADD_USAGE = `cli add [--list] [--dry-run] [--force] [name...|all]: installs @kaynooo/cli-* packages (or hooks), leaving out any whose required tool is missing unless --force`
 const REMOVE_USAGE = `cli remove [--dry-run] <name...>: uninstalls @kaynooo/cli-* packages (or hooks)`
-const UPDATE_USAGE = `cli update [--dry-run] [--offline]: checks and updates installed @kaynooo/cli-* packages, dl-installed commands and shell completions`
+const UPDATE_USAGE = `cli update [--dry-run] [--offline] [--verbose] [--json]: checks and updates installed @kaynooo/cli-* packages, dl-installed commands, dead bin links and shell completions`
 const MANAGE_USAGE = `cli manage [--dry-run] [--force]: opens the interactive checklist to install or remove @kaynooo/cli-* packages`
 
 export async function add(args: string[], host: Host = hostHere()): Promise<number> {
@@ -403,7 +404,9 @@ export async function update(args: string[], host: Host = hostHere()): Promise<n
   const { values } = parse(args, UPDATE_USAGE, {
     'dry-run': { type: 'boolean', description: 'show what would be updated without running it' },
     'offline': { type: 'boolean', description: 'skip registry and remote release lookups' },
-  }, { positionals: [], exits: [[0, 'everything is up to date'], [1, 'an update failed or needs manual action'], [2, 'a usage error']], examples: ['cli update', ['cli update --dry-run', 'preview updates']] })
+    'verbose': { type: 'boolean', description: 'print every check, including up-to-date packages' },
+    'json': jsonOption('[{check, ok, detail, fix?}], as the checks stand after updating; the steps run go to stderr'),
+  }, { positionals: [], exits: [[0, 'everything is up to date'], [1, 'an update failed or needs manual action'], [2, 'a usage error']], examples: ['cli update', ['cli update --dry-run', 'preview updates'], ['cli update --verbose', 'show every check']] })
 
   const installedPkgs = Object.keys(TOOLS)
     .filter(name => isInstalled(host, name))
@@ -416,7 +419,75 @@ export async function update(args: string[], host: Host = hostHere()): Promise<n
     ...values.offline !== true && isInstalled(host, '@kaynooo/cli-dl') ? ['dl-bins'] : [],
   ]
 
-  return doctor(['--fix', ...checks.flatMap(check => ['--only', check]), ...values['dry-run'] === true ? ['--dry-run'] : [], ...values.offline === true ? ['--offline'] : []], host)
+  const dry = values['dry-run'] === true
+  const offline = values.offline === true
+  const verbose = values.verbose === true
+  const json = values.json === true
+  const registryCache = new Map<string, string>()
+  let results = await runChecks(host, checks, { offline, registryCache })
+  const failing = results.filter(result => !result.ok)
+  let changed = false
+
+  if (failing.length > 0) {
+    if (!json)
+      printResults(verbose ? results : failing, { header: verbose, showFix: verbose, showBatch: false })
+
+    const log = json ? console.error : console.log
+    const run = await convergeFixes(host, results, async () => runChecks(host, checks, { offline, registryCache }), { dry, onOutcome: outcome => printOutcome(outcome, log) })
+
+    if (dry) {
+      if (json)
+        printJson(results)
+
+      return 1
+    }
+
+    results = run.results
+    changed = run.changed
+  }
+
+  if (json) {
+    printJson(results)
+
+    return results.every(result => result.ok) ? 0 : 1
+  }
+
+  if (verbose) {
+    if (changed)
+      console.log('\nafter the updates:')
+
+    if (failing.length === 0 || changed)
+      printResults(results)
+
+    return results.every(result => result.ok) ? 0 : 1
+  }
+
+  const remaining = results.filter(result => !result.ok)
+
+  if (remaining.length > 0) {
+    if (changed)
+      printResults(remaining, { header: false, showBatch: false })
+
+    return 1
+  }
+
+  const warned = results.filter(result => result.warn === true)
+  const noun = installedPkgs.length === 1 ? 'package' : 'packages'
+
+  if (warned.length > 0) {
+    if (offline)
+      console.log(marked('warn', `${installedPkgs.length} ${noun} skipped (--offline); dead-bins and completions up to date`, process.stdout))
+    else if (warned.length <= 3)
+      printResults(warned, { header: false, showBatch: false })
+    else
+      console.log(marked('warn', `${warned.length} ${warned.length === 1 ? 'package' : 'packages'} could not reach the registry`, process.stdout))
+
+    return 0
+  }
+
+  console.log(marked('ok', installedPkgs.length === 0 ? 'no @kaynooo/cli-* package installed' : `${installedPkgs.length} ${noun} up to date`, process.stdout))
+
+  return 0
 }
 
 export async function manage(args: string[], host: Host = hostHere()): Promise<number> {
