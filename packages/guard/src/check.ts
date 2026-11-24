@@ -1,12 +1,13 @@
-import type { Manager, Mismatch, Pinned } from '@kaynooo/cli-pkg/src/pin.ts'
-import { sqlViolation } from '@kaynooo/cli-db/src/clients.ts'
+import type { Manager, Mismatch, Pinned } from '@kaynooo/cli-pkg/guard'
+import type { GuardConfig } from './config'
+import { sqlViolation } from '@kaynooo/cli-db/guard'
 import { isSearchCommand, reachesEnvFile, touchingPieces, USE_EV, USE_EV_SEARCH } from '@kaynooo/cli-env/guard'
 import { commitMessageViolation, TRAILERS, USE_GC } from '@kaynooo/cli-git/message'
 import { commandsRun, parentDir, replacePieces } from '@kaynooo/cli-kit/shell'
 import { shouldWrap, wrap } from '@kaynooo/cli-out/src/wrap.ts'
-import { addedPackages } from '@kaynooo/cli-pkg/src/added.ts'
-import { bareCommand, installRequests, LOCKFILES, mismatchFor } from '@kaynooo/cli-pkg/src/pin.ts'
+import { addedPackages, bareCommand, installRequests, LOCKFILES, mismatchFor } from '@kaynooo/cli-pkg/guard'
 import { commitSources, inlineMessage, isStdin } from './commit'
+import { loadGuardConfig } from './config'
 import { destructiveViolation } from './destructive'
 import { fedCommands, scriptedCommands } from './embedded'
 import { gitViolation } from './git'
@@ -30,6 +31,8 @@ export interface Context {
   exists: (path: string) => boolean
   // Whether the repository tracks an env file, which a diff or a log would print.
   hasTrackedEnv?: boolean
+  // Optional guard overrides (otherwise loaded from config.json(c) + upward .kaynooo/guard.json).
+  config?: Partial<GuardConfig>
   // Told of a rule that threw, whose command is then refused.
   onError?: (rule: string, error: unknown, command: string) => void
 }
@@ -111,12 +114,36 @@ function nestedMismatches(run: readonly string[], context: Context): Mismatch[] 
   return run.slice(1).flatMap(each => mismatches(each, context)).filter(mismatch => !ownTexts.has(mismatch.piece.command.trim())).map(mismatch => ({ ...mismatch, rewrite: null }))
 }
 
+function matchesAllowed(command: string, patterns: readonly string[]): boolean {
+  for (const pattern of patterns) {
+    try {
+      if (new RegExp(pattern).test(command))
+        return true
+    }
+    catch {}
+  }
+
+  return false
+}
+
 // Every rule the command breaks, each message naming the route, and the command as it should run when a rule rewrites it instead.
 export async function checkCommand(command: string, context: Context): Promise<Verdict> {
+  const loaded = loadGuardConfig(context.cwd, context.home)
+  const config: GuardConfig = {
+    disable: context.config?.disable ?? loaded.disable,
+    allowHosts: context.config?.allowHosts ?? loaded.allowHosts,
+    protectPaths: context.config?.protectPaths ?? loaded.protectPaths,
+    allowCommands: context.config?.allowCommands ?? loaded.allowCommands,
+  }
+
+  if (matchesAllowed(command, config.allowCommands))
+    return { violations: [], command, notes: [], packages: [] }
+
+  const disabled = new Set(config.disable)
   const violations: Violation[] = []
   const notes: string[] = []
   const add = (rule: string, message: string | null) => {
-    if (message !== null)
+    if (message !== null && !disabled.has(rule))
       violations.push({ rule, message })
   }
 
@@ -127,6 +154,9 @@ export async function checkCommand(command: string, context: Context): Promise<V
   const first = (messages: (string | null)[]) => messages.find(message => message !== null) ?? null
   // a rule that throws refuses the command: a crash must not let it through
   const guarded = async (rule: string, check: () => Promise<string | null> | string | null): Promise<string | null> => {
+    if (disabled.has(rule))
+      return null
+
     try {
       return await check()
     }
@@ -138,9 +168,9 @@ export async function checkCommand(command: string, context: Context): Promise<V
   }
   const readSql = async (path: string) => Promise.resolve(context.read(absolute(path, context.cwd)))
 
-  add('remote', await guarded('remote', () => first([...run, ...scripted].map(remoteViolation))))
+  add('remote', await guarded('remote', () => first([...run, ...scripted].map(each => remoteViolation(each, config.allowHosts)))))
   add('git', await guarded('git', () => first([...run, ...scripted].map(each => gitViolation(each, context.isPushAsked)))))
-  add('destructive', await guarded('destructive', () => first([...run, ...scripted].map(each => destructiveViolation(each, context.home)))))
+  add('destructive', await guarded('destructive', () => first([...run, ...scripted].map(each => destructiveViolation(each, context.home, config.protectPaths)))))
 
   const commit = await guarded('commit', () => first(run.map(each => commitViolation(each, context))))
 
@@ -156,8 +186,8 @@ export async function checkCommand(command: string, context: Context): Promise<V
   }))
   add('edit', context.canSub ? await guarded('edit', () => first(run.map(replaceViolation))) : null)
 
-  const found = mismatches(command, context)
-  const refused = [...found, ...nestedMismatches(run, context)].find(mismatch => mismatch.rewrite === null || !context.canRewrite)
+  const found = disabled.has('package-manager') ? [] : mismatches(command, context)
+  const refused = disabled.has('package-manager') ? undefined : [...found, ...nestedMismatches(run, context)].find(mismatch => mismatch.rewrite === null || !context.canRewrite)
   const rewrite = refused?.rewrite ?? null
   const route = rewrite === null ? 'Run it with the pinned manager instead.' : `Run \`${rewrite.trim()}\` instead.`
 
@@ -173,7 +203,7 @@ export async function checkCommand(command: string, context: Context): Promise<V
   if (context.canRewrite && context.canWrap && shouldWrap(rewritten))
     rewritten = wrap(rewritten)
 
-  return { violations, command: violations.length > 0 ? command : rewritten, notes: violations.length > 0 ? [] : notes, packages: [...new Set(run.flatMap(addedPackages))] }
+  return { violations, command: violations.length > 0 ? command : rewritten, notes: violations.length > 0 ? [] : notes, packages: disabled.has('pkg') ? [] : [...new Set(run.flatMap(addedPackages))] }
 }
 
 // Why a file tool may not open the path, null when it may.

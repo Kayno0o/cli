@@ -1,4 +1,4 @@
-import type { Pair } from '@kaynooo/cli-edit/src/replace.ts'
+import type { Pair } from '@kaynooo/cli-edit/replace'
 import { parseCommand, shellQuote, splitCommand } from '@kaynooo/cli-kit/shell'
 import { HEREDOC_OPENER, heredocBody } from './commit'
 

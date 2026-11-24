@@ -1,4 +1,6 @@
 import type { Piece } from '@kaynooo/cli-kit/shell'
+import { basename } from 'node:path'
+import { workspaceRoot } from '@kaynooo/cli-kit'
 import { parseCommand, SHELLS, splitCommand } from '@kaynooo/cli-kit/shell'
 import { gitCommandOf, isWholeTree, SHORT_CLUSTER } from './git'
 
@@ -103,16 +105,32 @@ function recursiveTargets(args: readonly string[]): string[] {
   return isRecursive ? args.filter((arg, i) => !arg.startsWith('-') || (args.includes('--') && i > args.indexOf('--'))) : []
 }
 
-// Whether a path is a `.git` directory, `~/Workspace` itself or a dot-directory directly under the home, which a recursive removal must never take.
-function isProtectedPath(path: string): boolean {
-  const home = HOME_PREFIX.exec(path)
-  const parts = (home === null ? path : path.slice(home[0].length)).split('/').filter(part => part !== '' && part !== '.')
+// Whether a path is a `.git` directory, the configured workspace root, a dot-directory directly under home, or an extra protected path from config.
+function isProtectedPath(path: string, home?: string, extraProtected: readonly string[] = []): boolean {
+  const clean = path.replace(TRAILING_SLASH, '')
+  const workspace = home === undefined ? undefined : workspaceRoot({ home, env: {} }).replace(TRAILING_SLASH, '')
+  const homeRoot = home?.replace(TRAILING_SLASH, '')
+  const relWorkspace = workspace !== undefined && homeRoot !== undefined && workspace.startsWith(`${homeRoot}/`) ? workspace.slice(homeRoot.length + 1) : undefined
+  const slash = relWorkspace === undefined ? -1 : relWorkspace.indexOf('/')
+  let workspaceChild = 'Workspace'
+
+  if (relWorkspace !== undefined)
+    workspaceChild = slash === -1 ? relWorkspace : relWorkspace.slice(0, slash)
+
+  const homeMatch = HOME_PREFIX.exec(path)
+  const parts = (homeMatch === null ? path : path.slice(homeMatch[0].length)).split('/').filter(part => part !== '' && part !== '.')
   const last = parts.at(-1) ?? ''
   const absolute = path.startsWith('/') ? ABSOLUTE_HOME.exec(parts.join('/')) : null
   const homeChild = parts.length === 1 ? last : undefined
-  const child = home === null ? absolute?.[1] : homeChild
+  const child = homeMatch === null ? absolute?.[1] : homeChild
 
-  return last === '.git' || (child !== undefined && (child === 'Workspace' || (child.startsWith('.') && child !== '..')))
+  if (workspace !== undefined && clean === workspace)
+    return true
+
+  if (extraProtected.some(entry => clean === entry.replace(TRAILING_SLASH, '') || (child !== undefined && child === entry) || last === basename(entry)))
+    return true
+
+  return last === '.git' || (child !== undefined && (child === workspaceChild || child === 'Workspace' || (child.startsWith('.') && child !== '..')))
 }
 
 // Whether a `find` starts at the home or the root and deletes what it matches.
@@ -236,7 +254,7 @@ function runsUnpinned(args: readonly string[]): boolean {
 }
 
 // Why the command is refused as destructive, or null when no piece throws work away. `home` is the user's home folder by its absolute path.
-export function destructiveViolation(command: string, home?: string): string | null {
+export function destructiveViolation(command: string, home?: string, extraProtected: readonly string[] = []): string | null {
   if (runsDownload(command))
     return PIPE_TO_SHELL
 
@@ -249,7 +267,7 @@ export function destructiveViolation(command: string, home?: string): string | n
     if (program === 'rm' && removesBroadly(args, home))
       return BROAD_RM
 
-    if (program === 'rm' && recursiveTargets(args).some(isProtectedPath))
+    if (program === 'rm' && recursiveTargets(args).some(target => isProtectedPath(target, home, extraProtected)))
       return PROTECTED_RM
 
     if (program === 'find' && deletesFromHome(args, home))

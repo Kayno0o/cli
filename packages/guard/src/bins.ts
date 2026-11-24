@@ -1,37 +1,79 @@
-// What each @kaynooo/cli-* bin is for, as the prompt lists the installed ones; the zshrc cli mod carries a copy.
-export const BINS: Record<string, string> = {
-  check: '`check`: runs the repo\'s check, typecheck, lint, fmt:check and test steps (package.json, composer.json and PHP tool configs, a Justfile, a Makefile) and prints only what failed, each full log saved to a file; a step runs inside the running compose service that mounts its folder (`--in <service>`, `--host`), never starting one; validate a change with it rather than chaining the scripts or `docker compose exec` by hand (`--only lint,test`, `--list`, `--slot`, `--failed` to re-run what failed last); `check --fix` runs its fixers and formatters instead (its fix, lint:fix and fmt or format scripts, php-cs-fixer, just fmt, go fmt, cargo fmt, ruff) and lists the files they changed.',
-  errs: '`errs [log]`, `errs -- <cmd>`: turns tsc, tsgo, eslint, bun check, bun test, vitest, playwright, phpunit, phpstan and php-cs-fixer output into one `file:line:col: message (rule)` line per error, counting the lines it did not recognise (`--json`); use it instead of reading raw type, lint or test logs.',
-  db: '`db "<sql>"`: one read-only statement against the Postgres, MySQL or MariaDB in DATABASE_URL (`-e KEY` for another) or, without one, the compose project\'s running database service (`-s <service>`, `-c <container>` for any container, `-d <database>`), credentials never shown; a write runs on a database whose name ends in `_test` and is printed for the user to run otherwise; `db tables`, `db describe <table>`, `db dbs`; use it instead of `docker exec <container> psql` or `mysql`.',
-  ev: '`ev`: .env files read and edited with values masked (`ev list`, `ev get KEY`, `ev grep <regex>`, `ev show <rev>:<file>`, `ev set`, `ev diff`, `ev missing`); `ev audit [dir]` finds env files others can read or git tracks, and compose files writing secrets out; `ev pins [dir]` lists the env vars reaching outside that the tests of an app leave unpinned; `ev redact` masks secrets in piped output, `<cmd> | ev redact`.',
-  pkg: '`pkg <name>[@version]`: checks an npm package before it is added: whether the name exists or is a near miss of a popular one, the newest version at least two weeks old, licence, install scripts; `bun add`, `npm install`, `pnpm add` and `yarn add` run it first and are refused on what it flags. `pkg bump <@scope/lib> [version]` waits until the registry serves a release, then `bun add --exact`s it in every consumer under ~/Workspace (`--dry-run`), `pkg consumers <name>` lists them; use it instead of a `bun info` and sleep loop and a `bun add` per repo.',
-  stack: '`stack port <name>`: the port a service name always hashes to, for every host port a compose file publishes.',
-  ft: '`ft`: Forgejo CI runs, logs and waits, releases, issue checklists and claims, milestones (`ft milestones`, `ft milestone <m>`, `ft new -m`), in a repo whose origin is on Forgejo.',
-  sub: '`sub --from <text> --to <text> <file>...`: replaces text, writing nothing unless each match count is as expected (1, `-n N`, `--all`), `--regex`, `--dry-run --diff`; multi-line text goes as SEARCH/REPLACE blocks on stdin from a quoted heredoc (`sub <file> <<\'EOF\'`, see `sub --help`), no escaping; use it instead of sed -i, a bun -e or python editor.',
-  base: '`base [--ref <rev>] [--keep <path>...] -- <cmd>`: runs a command at HEAD (or a ref) in a temporary worktree, removed afterwards, ignored env files and node_modules/vendor linked; use it instead of git stash; `base proof` runs it at HEAD (or a ref), then in the working tree, and exits 0 only when it fails before and passes now, printing the failing side\'s output; use it to prove a new test fails without your change (`--keep` the test).',
-  gst: '`gst [--log N]`: branch, upstream, changed counts and HEAD in one line, then the changed paths by staged, unstaged and untracked, `gst --repos` one line per repository nested below; use it instead of `git status --short` and `git log --oneline`.',
-  gc: '`gc <title> [-m <line>]... [--ticket <line>]... -- <path>...`: commits exactly those paths, refusing with nothing staged when the message breaks a commit rule, a path has no change or other files are already staged; use it instead of chaining git add, status and commit.',
-  gp: '`gp [--repos] [-b <branch>]... [dir]...`: pushes the current branch, or each `-b` branch, when it is ahead of its upstream, with `-u` to origin when it has none, `--repos` every repository nested below too, `--dry-run` saying what would go, flags for git push after `--`; only when the user asked for a push, like `git push`.',
-  gb: '`gb [branch]`: switches to a branch, a remote one getting its tracking branch, `gb -c <name>` creating one; without a terminal it lists the branches (`--json`), with how each stands against its upstream and whether it is merged.',
-  gf: '`gf [--repos] [dir]...`: fetches with prune and fast-forwards the branch onto its upstream, saying what came in; a diverged branch or a tree the fast-forward would overwrite is refused untouched, `--no-pull` fetches only; use it instead of `git pull` and a git fetch per nested repository.',
-  gm: '`gm [branch]`: merges the branch into the current one, saying fast-forward or merge commit, the commits and the files that came in; a conflict lists every conflicted file with its conflict regions and exits 1, `--dry-run` tries the merge without touching the tree, `--continue`/`--abort`, `--squash`; with no branch it picks one, or lists each with its verdict off a terminal; use it instead of git merge then git diff and reading conflict markers.',
-  gcl: '`gcl <repo> [dir]`: clones a URL, scp address or owner/name (over ssh first) into ./<name> and prints the path, an existing clone being fetched instead; use it instead of git clone with the folder typed out.',
-  gd: '`gd [path]...`: the tracked changes per file with added and removed lines, staged apart from unstaged, the patch of the paths given, `--staged`, `--ref <rev>`; use it instead of `git diff --stat` then `git diff <path>`.',
-  gu: '`gu <path>...`: discards the unstaged changes of the paths after saving them as a patch, `--staged` unstages, `--commit` undoes the last unpushed commit keeping its changes staged; use it instead of git restore and git reset.',
-  waitfor: '`waitfor --file <log> --until <regex> [--fail <regex>]`, `--port <n>`, `--url <url>`, `--pid <n>` (`-t 5m`): waits until the line shows, the port listens, the URL answers 2xx or the process exits, exits 1 on a --fail line with the lines around it, 2 on a timeout with the last lines; `waitfor task <id>` waits for a background Bash task and prints its exit code, last lines and failure lines; use it instead of sleep and tail, `until ! pgrep -f` or polling loops.',
-  slot: '`slot [-l <lock>] -- <cmd>`: waits for one of the machine-wide slots shared by every session (half the CPUs), then runs the command; `--lock <name>` also holds a named lock for what must not run twice (a shared test database), `slot ls` lists holders and waiters; run heavy jobs (phpunit, playwright, vue-tsc, a full test suite) through it instead of a flock wrapper.',
-  gl: '`gl ci [ref]` waits for the GitLab pipeline covering a commit and prints each failed job\'s tests (exit 0/1/2), `gl runs`, `gl logs <pipeline> [-j job] [--full]`; use it instead of `glab ci` or `glab api .../pipelines/<id>/jobs` polled in a sleep loop.',
-  src: '`src peek <file:from-to>...` prints several spans with line numbers in one call, `src peek --def <symbol>` a whole declaration, `--refs <symbol>` its usages by file, `--outline <file>` the declarations and members, `--around <regex> -C 3` the lines around matches; use it instead of `sed -n N,Mp`, `grep -n` chains and whole-file reads; `src todo-scan [path...]` lists the TODO, FIXME and owner/repo#N comments as `<file>:<line>: <comment>`, `--stale` only those whose issue is closed (exit 1), through ft; use it to find the workarounds a shipped fix lets you drop; `src hotspots [dir] [--since <date>] [-n 20]` ranks the source files by complexity times git churn (commits touching each in the window, 6 months by default), tests and generated files left out, `--json`; use it to pick which complex files are worth splitting first.',
-  doctor: '`doctor`: checks this host\'s @kaynooo/cli-* install, one line per check with its fix: each bin\'s version against the registry, tea\'s login, the Claude Code hooks, the Bun floor (`--json`); run it when a bin lacks a command or a flag its docs name.',
-  cli: '`cli list`: every @kaynooo/cli-* bin in one line, what it does and what it is reached for instead of, read from each bin\'s own --help (`--json` adds the synopsis and examples); run it to find the bin that fits a task.',
-  dl: '`dl <url>`: downloads into a new folder and prints the path, size, final URL and sha256, with the diff of a text file since its last download; `--sha256 <hex>` or `--sums <url>` checks it, `-x` extracts, `--bin [name]` installs into ~/.local/bin, `--exec --sha256 <sha>` runs a script exactly as read, `dl ls` lists what it installed or ran; use it instead of `curl | sh`, `curl -LO` and `sha256sum -c`.',
-  page: '`page check <file|url>...`: shoots each page full-page at 1440 and 400px (`-w`) in a local Chromium, prints the PNG paths, then a `<target> <width>px <kind>` line per kind found with its `<selector>: <measure>` defects under it: sideways overflow, console errors, failed requests, text in a fallback font (naming the one drawn), text under WCAG AA contrast, tap targets under 44px on phones and 24px elsewhere, text touching its box edge or running past it, clipped or overlapping text, words broken mid-word, text under 12px, doubled borders, stretched or broken images, layout shift over 0.1, a redirect to a login page; a page behind a login takes `--cookie name=value`, `-H "Authorization: …"` or `--storage-state <file>`; `page diff <mockup> <built>` writes a side-by-side and a pixel-diff PNG per width with the differing regions boxed and listed; `page shift <before> <after>` pairs the elements of both pages and prints one line per cause of a move or resize (a grown header is one line, not one per element it pushed); use it instead of judging screenshots by eye or a one-off Playwright script; it never starts the app.',
-  out: '`out -- <cmd>`: folds long output, keeping the errors and saving the full log; run noisy builds, installs, tests and linters through it.',
-  changelog: '`changelog --dry`: the release notes since the last tag, grouped from the conventional commits, without publishing them; `changelog` publishes them as the Forgejo release of the tag at HEAD, `changelog undo [tag]` takes a release back.',
+import type { BinBrief } from './generated-bins'
+import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
+import { xdgFolder } from '@kaynooo/cli-kit'
+import { GENERATED_BINS } from './generated-bins'
+
+const JS_EXT = /\.js$/
+const WHITESPACE = /\s+/g
+
+// All known @kaynooo/cli-* bins and their compact generated briefs (replaces the hand-maintained prose list).
+export const BINS: Record<string, BinBrief> = GENERATED_BINS
+
+interface CachedEntry {
+  description?: { summary?: string, replaces?: string }
 }
 
-export function binsSection(installed: Set<string>): string | undefined {
-  const lines = Object.entries(BINS).filter(([bin]) => installed.has(bin)).map(([, line]) => `- ${line}`)
+function shorten(text: string, max: number): string {
+  const clean = text.replace(WHITESPACE, ' ').trim()
 
-  return lines.length === 0 ? undefined : `# CLIs\n\nCLIs installed on this machine for you to use over hand-rolled equivalents, \`<bin> --help\` for the options:\n${lines.join('\n')}`
+  if (clean.length <= max)
+    return clean
+
+  const cut = clean.slice(0, max)
+  const sep = Math.max(cut.lastIndexOf('; '), cut.lastIndexOf(', '), cut.lastIndexOf(' '))
+
+  return `${(sep > max * 0.5 ? cut.slice(0, sep) : cut).trimEnd()}…`
+}
+
+// Reads the cached KIT_HELP=json descriptions written by `cli list` when available, keyed by bin name.
+function cachedBriefs(home = homedir()): Record<string, BinBrief> {
+  const cacheBase = xdgFolder(process.env.XDG_CACHE_HOME, join(home, '.cache'))
+  const file = join(cacheBase, 'kaynooo-cli', 'bins.json')
+
+  if (!existsSync(file))
+    return {}
+
+  try {
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, CachedEntry>
+    const result: Record<string, BinBrief> = {}
+
+    for (const [entryPath, entry] of Object.entries(raw)) {
+      const summary = entry.description?.summary
+
+      if (typeof summary !== 'string' || summary === '')
+        continue
+
+      const replaces = typeof entry.description?.replaces === 'string' ? shorten(entry.description.replaces, 36) : undefined
+      const base = entryPath.split('/').at(-1)?.replace(JS_EXT, '') ?? ''
+
+      if (base !== '' && base in GENERATED_BINS)
+        result[base] = { summary: shorten(summary, 64), ...(replaces === undefined ? {} : { replaces }) }
+    }
+
+    return result
+  }
+  catch {
+    return {}
+  }
+}
+
+// Compact 2-tier SessionStart index covering all installed bins: one short line per bin, pointing to `<bin> --help` / `cli list` for flags.
+export function binsSection(installed: Set<string>, home?: string): string | undefined {
+  const live = home === undefined ? {} : cachedBriefs(home)
+  const lines = Object.entries(GENERATED_BINS)
+    .filter(([bin]) => installed.has(bin))
+    .map(([bin, fallback]) => {
+      const brief = live[bin] ?? fallback
+      const tail = brief.replaces === undefined ? '' : ` (instead of ${brief.replaces})`
+
+      return `- \`${bin}\`: ${brief.summary}${tail}`
+    })
+
+  if (lines.length === 0)
+    return undefined
+
+  return `# CLIs\n\nInstalled \`@kaynooo/cli-*\` bins (prefer over hand-rolled shell; run \`<bin> --help\` or \`cli list <word>\` for flags):\n${lines.join('\n')}`
 }

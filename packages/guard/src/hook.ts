@@ -46,13 +46,15 @@ const PUSH_WORD = /\b(?:push|pousser?|poussez)\b/i
 const PUSH_NOUN = /\bpush[\s-]+(?:notifications?|messages?|tokens?|events?|services?|apis?|subscriptions?|workers?|servers?)\b/gi
 // Words that turn a mention of a push into a refusal, a question about the past or a statement.
 const NOT_A_REQUEST = /\b(?:don'?t|do not|never|not|no|without|avoid|stop|can'?t|cannot|won'?t|shouldn'?t|did|didn'?t|does|doesn'?t|already|ne|pas|jamais|sans|surtout)\b/i
+// Short affirmative replies to a clarifying question keep an earlier push permission alive instead of wiping it.
+const SHORT_AFFIRMATIVE = /^\s*(?:y|yes|yep|yeah|ok|okay|sure|oui|ouais|go|go ahead|proceed|continue|do it|please do|all good|sounds good|lgtm)[.!\s]*$/i
 const CLAUSE_BREAKS = /[.!?;,\n]+/
 const SESSION_ID = /^[\w-]+$/
 // The tools reading or writing the file their input names, by that input's field.
 const FILE_TOOLS = new Map([['Read', 'file_path'], ['Edit', 'file_path'], ['MultiEdit', 'file_path'], ['Write', 'file_path'], ['NotebookEdit', 'notebook_path'], ['Grep', 'path'], ['Glob', 'path']])
-// A git command that prints what a tracked file holds.
-const GIT_WORD = /\bgit\b/
-const GIT_PRINT_WORD = /\b(?:diff|log|show|whatchanged|format-patch|grep)\b/
+// A git command (or our own `gd`) that prints what a tracked file holds.
+const GIT_WORD = /\b(?:git|gd)\b/
+const GIT_PRINT_WORD = /\b(?:diff|log|show|whatchanged|format-patch|grep|gd)\b/
 const TRACKED_ENV = [':(glob)**/.env', ':(glob)**/.env.*', ':(glob)**/.envrc']
 
 // Whether a prompt asks for a push: a clause naming it that neither refuses it nor asks about the past.
@@ -119,6 +121,15 @@ async function checkedBashCall(command: string, input: HookInput, machine: Machi
 }
 
 // Whether the repository tracks an env file, so a diff or a log of it would print secrets.
+export async function commandPrintsTrackedEnv(command: string, cwd: string, run: Machine['run']): Promise<boolean> {
+  if (!GIT_WORD.test(command) || !GIT_PRINT_WORD.test(command))
+    return false
+
+  const listed = await run(['git', 'ls-files', '-z', '--', ...TRACKED_ENV], cwd)
+
+  return listed.code === 0 && listed.text.split('\0').some(isEnvFile)
+}
+
 async function hasTrackedEnv(cwd: string, machine: Machine): Promise<boolean> {
   const listed = await machine.run(['git', 'ls-files', '-z', '--', ...TRACKED_ENV], cwd)
 
@@ -137,20 +148,21 @@ function preToolUse(input: HookInput, machine: Machine): Promise<HookOutput | nu
   return deny(paths.flatMap(path => typeof path === 'string' ? [checkPath(path)] : []).filter(each => each !== null))
 }
 
-// Claude Code tells no typed prompt from one it sends itself, so any prompt naming a push counts.
+// Claude Code tells no typed prompt from one it sends itself, so any prompt naming a push counts; short affirmative replies keep an existing push permission alive.
 function userPromptSubmit(input: HookInput, machine: Machine): null {
   const file = pushFile(input.session_id, machine)
+  const text = input.prompt ?? ''
 
-  if (file !== null && asksForPush(input.prompt ?? ''))
+  if (file !== null && asksForPush(text))
     machine.write(file, '')
-  else if (file !== null)
+  else if (file !== null && !(machine.exists(file) && SHORT_AFFIRMATIVE.test(text)))
     machine.remove(file)
 
   return null
 }
 
 function sessionStart(machine: Machine): HookOutput | null {
-  const text = binsSection(new Set(Object.keys(BINS).filter(machine.has)))
+  const text = binsSection(new Set(Object.keys(BINS).filter(machine.has)), machine.home)
 
   return text === undefined ? null : { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: text } }
 }

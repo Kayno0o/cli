@@ -21,11 +21,18 @@
     "cli",
     "bun"
   ],
+  "exports": {
+    "./guard": "./src/clients.ts"
+  },
   "bin": {
     "db": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/clients.ts",
+    "src/guard-test.ts",
+    "src/guard.ts",
+    "src/sql-tokens.ts"
   ],
   "engines": {
     "bun": ">=1.4.3"
@@ -34,7 +41,7 @@
     "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
     "db": "$npm_execpath src/cli.ts"
   },
-  "devDependencies": {
+  "dependencies": {
     "@kaynooo/cli-kit": "workspace:*"
   }
 }

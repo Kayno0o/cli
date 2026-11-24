@@ -133,6 +133,18 @@ describe('user-prompt-submit', () => {
     expect(files).toEqual({})
   })
 
+  test('short affirmative replies keep an earlier push permission alive', async () => {
+    const files: Record<string, string> = {}
+    const state = machine(files)
+
+    await hook('user-prompt-submit', prompt('commit and push it'), state)
+    await hook('user-prompt-submit', prompt('yes'), state)
+    expect(await hook('pre-tool-use', bash('git push'), state)).toBeNull()
+
+    await hook('user-prompt-submit', prompt('thanks'), state)
+    expect(await hook('pre-tool-use', bash('git push'), state)).not.toBeNull()
+  })
+
   test('keeps nothing for a session id that is no safe file name', async () => {
     const files: Record<string, string> = {}
 
@@ -142,12 +154,14 @@ describe('user-prompt-submit', () => {
 })
 
 describe('session-start', () => {
-  test('lists the installed bins only', async () => {
-    const reply = await hook('session-start', { session_id: 'abc-123' }, machine({}, { has: bin => bin === 'ev' }))
+  test('lists all installed bins compactly, including bins previously omitted from manual prose', async () => {
+    const reply = await hook('session-start', { session_id: 'abc-123' }, machine({}, { has: bin => bin === 'ev' || bin === 'dlog' || bin === 'wt' }))
     const text = reply?.hookSpecificOutput.additionalContext ?? ''
 
     expect(text).toContain('`ev`')
-    expect(text).not.toContain('`db')
+    expect(text).toContain('`dlog`')
+    expect(text).toContain('`wt`')
+    expect(text).not.toContain('`db`')
   })
 
   test('adds nothing when none is installed', async () => {

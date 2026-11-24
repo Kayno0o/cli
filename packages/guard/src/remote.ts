@@ -111,21 +111,36 @@ function isScpAddress(args: readonly string[]): boolean {
   return repository !== undefined && address.test(repository)
 }
 
-function isRemote(text: string): boolean {
+function hostAllowed(args: readonly string[], allowed: ReadonlySet<string>): boolean {
+  if (allowed.size === 0)
+    return false
+
+  return args.some((arg) => {
+    if (arg.startsWith('-'))
+      return false
+
+    const host = arg.includes('@') ? arg.slice(arg.indexOf('@') + 1) : arg
+    const bare = host.includes(':') ? host.slice(0, host.indexOf(':')) : host
+
+    return allowed.has(arg) || allowed.has(host) || allowed.has(bare)
+  })
+}
+
+function isRemote(text: string, allowed: ReadonlySet<string>): boolean {
   const { program, args, assignments } = parseCommand(text)
   const declared = DECLARERS.has(program) ? args : []
 
   if (SHELL_PROGRAMS.has(program))
-    return true
+    return !hostAllowed(args, allowed)
 
   if (SOCKET_PROGRAMS.has(program))
-    return isSocketRemote(args)
+    return isSocketRemote(args) && !hostAllowed(args, allowed)
 
   if (program === 'rsync')
-    return args.some(arg => !arg.startsWith('-') && RSYNC_REMOTE.test(arg))
+    return args.some(arg => !arg.startsWith('-') && RSYNC_REMOTE.test(arg) && !hostAllowed([arg], allowed))
 
   if (program === 'git' && isScpAddress(args))
-    return true
+    return !hostAllowed(args, allowed)
 
   if (program === 'kubectl')
     return args.some(arg => KUBECTL_SERVER.test(arg))
@@ -143,6 +158,8 @@ function isRemote(text: string): boolean {
 }
 
 // Why the command is refused, or null when no piece reaches a remote machine.
-export function remoteViolation(command: string): string | null {
-  return splitCommand(command).some(piece => isRemote(piece.command)) ? REMOTE : null
+export function remoteViolation(command: string, allowHosts: readonly string[] = []): string | null {
+  const allowed = new Set(allowHosts)
+
+  return splitCommand(command).some(piece => isRemote(piece.command, allowed)) ? REMOTE : null
 }

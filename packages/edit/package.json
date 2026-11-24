@@ -19,11 +19,15 @@
     "replace",
     "sed"
   ],
+  "exports": {
+    "./replace": "./src/replace.ts"
+  },
   "bin": {
     "sub": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/replace.ts"
   ],
   "engines": {
     "bun": ">=1.4.3"
@@ -32,8 +36,10 @@
     "build": "$npm_execpath ../../scripts/build.ts src/cli.ts",
     "sub": "$npm_execpath src/cli.ts"
   },
-  "devDependencies": {
-    "@kaynooo/cli-kit": "workspace:*",
+  "dependencies": {
     "@kaynooo/utils": "3.1.0"
+  },
+  "devDependencies": {
+    "@kaynooo/cli-kit": "workspace:*"
   }
 }

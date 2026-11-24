@@ -9,7 +9,7 @@ import { dirname } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, parse, printJson, readInput, role, runCli, runCommand, stateHome } from '@kaynooo/cli-kit'
 import { checkCommand, checkPath } from './check'
-import { EVENTS, hook } from './hook'
+import { commandPrintsTrackedEnv, EVENTS, hook } from './hook'
 import { RULES } from './rules'
 
 const checkUsage = `guard check [options] [<command> | -]: checks a shell command against the rules and names the route to take instead of each one it breaks
@@ -21,9 +21,11 @@ const CHECK_EXITS: ExitRow[] = [[0, 'the command is clean'], [1, 'a rule is brok
 
 const checkOptions = {
   'json': jsonOption('{violations, command, notes, packages} for a hook'),
+  'format': { type: 'string', choices: ['text', 'json', 'claude', 'generic'] as const, description: 'output format: text (default), json, claude (PreToolUse JSON) or generic ({allow, violations, command})' },
   'cwd': { type: 'string', description: 'the directory the command runs in (default: here)' },
   'push-asked': { type: 'boolean', description: 'the user asked for a push, so git push may run' },
-  'no-wrap': { type: 'boolean', description: 'never route a noisy command through out' },
+  'pkg': { type: 'boolean', negative: 'skip running pkg check on packages the command adds' },
+  'wrap': { type: 'boolean', negative: 'never route a noisy command through out' },
 } as const
 
 const pathUsage = `guard path [--json] <path>...
@@ -64,7 +66,7 @@ function report(violations: Violation[]) {
 }
 
 async function check(args: string[]): Promise<number> {
-  const parsed = parse(args, checkUsage, checkOptions, { exits: CHECK_EXITS })
+  const parsed = parse(args, checkUsage, checkOptions, { exits: CHECK_EXITS, allowNegative: true })
 
   const { values, positionals } = parsed
 
@@ -73,25 +75,49 @@ async function check(args: string[]): Promise<number> {
 
   const given = positionals[0] ?? '-'
   const command = given === '-' ? await readInput('-', { noStdin: 'give the command, or pipe it on stdin' }) : given
+  const cwd = values.cwd ?? process.cwd()
+  const run = async (argv: string[], dir: string) => runCommand(argv, { cwd: dir })
   const context: Context = {
-    cwd: values.cwd ?? process.cwd(),
+    cwd,
     home: homedir(),
     isPushAsked: values['push-asked'] === true,
     canRewrite: true,
-    canWrap: values['no-wrap'] !== true && Bun.which('out') !== null,
+    canWrap: values.wrap !== false && Bun.which('out') !== null,
     canSub: Bun.which('sub') !== null,
     read: readText,
     exists: existsSync,
+    hasTrackedEnv: await commandPrintsTrackedEnv(command, cwd, run),
   }
   const verdict: Verdict = await checkCommand(command, context)
 
-  if (values.json === true)
+  if (verdict.violations.length === 0 && verdict.packages.length > 0 && values.pkg !== false && Bun.which('pkg') !== null) {
+    const checked = await run(['pkg', 'check', ...verdict.packages], cwd)
+
+    if (checked.code !== 0) {
+      const message = checked.code === 1 ? 'pkg refused what this adds, so it was not run' : `pkg check failed (exit ${checked.code}), so what this adds was not checked and it was not run`
+
+      verdict.violations.push({ rule: 'pkg', message: `${message}:\n${checked.text.trim()}` })
+    }
+  }
+
+  const format = values.format ?? (values.json === true ? 'json' : 'text')
+
+  if (format === 'json') {
     printJson(verdict)
-  else
+  }
+  else if (format === 'claude') {
+    if (verdict.violations.length > 0)
+      printJson({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: verdict.violations.map(each => each.message).join('\n\n') } })
+  }
+  else if (format === 'generic') {
+    printJson({ allow: verdict.violations.length === 0, violations: verdict.violations, command: verdict.command, notes: verdict.notes, packages: verdict.packages })
+  }
+  else {
     report(verdict.violations)
 
-  if (values.json !== true && verdict.command !== command)
-    console.log(`${role('label', process.stdout)('runs as:')} ${verdict.command}${verdict.notes.map(note => `\n${note}`).join('')}`)
+    if (verdict.command !== command)
+      console.log(`${role('label', process.stdout)('runs as:')} ${verdict.command}${verdict.notes.map(note => `\n${note}`).join('')}`)
+  }
 
   return verdict.violations.length > 0 ? 1 : 0
 }
@@ -175,7 +201,26 @@ async function hookCommand(args: string[]): Promise<number> {
   if (!EVENTS.includes(event as Event))
     fail(`unknown event ${event}\n\n${hookUsage}`, 1)
 
-  const reply = await hook(event as Event, JSON.parse(await Bun.stdin.text()) as HookInput, machine())
+  const raw = (await Bun.stdin.text()).trim()
+
+  if (raw === '')
+    fail('hook event stdin is empty', 1)
+
+  let input: HookInput
+
+  try {
+    const parsedInput: unknown = JSON.parse(raw)
+
+    if (typeof parsedInput !== 'object' || parsedInput === null || Array.isArray(parsedInput))
+      fail('hook event stdin must be a JSON object', 1)
+
+    input = parsedInput
+  }
+  catch (error) {
+    fail(`invalid hook event JSON: ${error instanceof Error ? error.message : String(error)}`, 1)
+  }
+
+  const reply = await hook(event as Event, input, machine())
 
   if (reply !== null)
     console.log(JSON.stringify(reply))
