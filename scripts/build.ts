@@ -1,5 +1,5 @@
-import { chmodSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import process from 'node:process'
 import { shellShebang } from './shell-shebang'
 
@@ -30,34 +30,58 @@ if (entrypoints.length === 0) {
   process.exit(2)
 }
 
-rmSync(outdir, { recursive: true, force: true })
+const stage = `${outdir}.tmp-${process.pid}-${Date.now()}`
 
-const built = await Bun.build({
-  entrypoints,
-  outdir,
-  target: 'bun',
-  splitting: splitting || entrypoints.length > 1,
-  minify: { whitespace: true, syntax: true },
-  ...(root === undefined ? {} : { root }),
-  ...(external.length === 0 ? {} : { external }),
-})
+try {
+  const built = await Bun.build({
+    entrypoints,
+    outdir: stage,
+    target: 'bun',
+    splitting: splitting || entrypoints.length > 1,
+    minify: { whitespace: true, syntax: true },
+    ...(root === undefined ? {} : { root }),
+    ...(external.length === 0 ? {} : { external }),
+  })
 
-if (!built.success) {
-  for (const log of built.logs)
-    console.error(log)
+  if (!built.success) {
+    for (const log of built.logs)
+      console.error(log)
 
-  process.exit(1)
-}
-
-for (const file of readdirSync(outdir, { recursive: true, encoding: 'utf8' })) {
-  if (!file.endsWith('.js'))
-    continue
-
-  const path = join(outdir, file)
-  const rewritten = shellShebang(readFileSync(path, 'utf8'))
-
-  if (rewritten !== undefined) {
-    writeFileSync(path, rewritten)
-    chmodSync(path, 0o755)
+    process.exit(1)
   }
+
+  const kept = new Set<string>()
+
+  for (const file of readdirSync(stage, { recursive: true, encoding: 'utf8' })) {
+    if (!file.endsWith('.js'))
+      continue
+
+    const path = join(stage, file)
+    const rewritten = shellShebang(readFileSync(path, 'utf8'))
+
+    if (rewritten !== undefined) {
+      writeFileSync(path, rewritten)
+      chmodSync(path, 0o755)
+    }
+
+    kept.add(file)
+  }
+
+  mkdirSync(outdir, { recursive: true })
+
+  for (const file of kept) {
+    const dest = join(outdir, file)
+
+    mkdirSync(join(dest, '..'), { recursive: true })
+    renameSync(join(stage, file), dest)
+  }
+
+  // Remove stale outputs left from older builds without ever leaving an active bin missing mid-build.
+  for (const file of readdirSync(outdir, { recursive: true, encoding: 'utf8' })) {
+    if (file.endsWith('.js') && !kept.has(file) && !basename(file).startsWith('.'))
+      rmSync(join(outdir, file), { force: true })
+  }
+}
+finally {
+  rmSync(stage, { recursive: true, force: true })
 }
