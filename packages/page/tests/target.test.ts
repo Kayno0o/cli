@@ -15,16 +15,25 @@ async function mockup(): Promise<string> {
 }
 
 describe('targetOf', () => {
-  test('a file:// URL loads that file, its fragment kept, its shots next to it', async () => {
+  test('a file:// URL loads that file, its fragment kept, defaulting shots to cache folder unless -o is set', async () => {
     const path = await mockup()
     const given = `${pathToFileURL(path).href}#apps`
+    const cached = targetOf(given, undefined)
 
-    expect(targetOf(given, undefined)).toEqual({ label: given, url: `${pathToFileURL(path).href}#apps`, stem: path.replace('.html', '') })
+    expect(cached.label).toBe(given)
+    expect(cached.url).toBe(`${pathToFileURL(path).href}#apps`)
+    expect(cached.stem).toContain('kaynooo-page')
+    expect(cached.stem).not.toStartWith(path.replace('.html', ''))
+
+    const explicit = targetOf(given, '/tmp/shots')
+
+    expect(explicit.stem).toBe('/tmp/shots/modern')
   })
 
   test('a path with a fragment loads the file at that fragment', async () => {
     const path = await mockup()
+    const out = temp('page-out-')
 
-    expect(targetOf(`${path}#apps`, undefined)).toEqual({ label: `${path}#apps`, url: `${pathToFileURL(path).href}#apps`, stem: path.replace('.html', '') })
+    expect(targetOf(`${path}#apps`, out)).toEqual({ label: `${path}#apps`, url: `${pathToFileURL(path).href}#apps`, stem: join(out, 'modern') })
   })
 })

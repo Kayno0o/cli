@@ -16,13 +16,13 @@ async function page(args: string[]): Promise<{ code: number, out: string }> {
 }
 
 describe('page diff', () => {
-  test('boxes the region that differs and writes both PNGs next to the built file', async () => {
+  test('boxes the region that differs and writes both PNGs into --out', async () => {
     const dir = temp('page-diff-')
 
     await Bun.write(join(dir, 'mockup.html'), PAGE('Share workspace'))
     await Bun.write(join(dir, 'built.html'), PAGE('Share project'))
 
-    const { code, out } = await page(['diff', join(dir, 'mockup.html'), join(dir, 'built.html'), '-w', '800', '--json'])
+    const { code, out } = await page(['diff', join(dir, 'mockup.html'), join(dir, 'built.html'), '-w', '800', '-o', dir, '--json'])
     const [result] = JSON.parse(out) as Compared[]
 
     expect(code).toBe(1)
@@ -37,6 +37,20 @@ describe('page diff', () => {
     expect(region!.y).toBeGreaterThanOrEqual(80)
     expect(region!.y + region!.height).toBeLessThan(200)
     expect(region!.x).toBeGreaterThanOrEqual(32)
+  }, 60_000)
+
+  test('--mask hides dynamic regions so differing timestamps produce zero diff', async () => {
+    const dir = temp('page-diff-mask-')
+    const tpl = (ts: string) => `<!doctype html><meta charset="utf-8"><title>t</title><style>body{margin:0;font-family:monospace}.ts{display:inline-block;padding:8px}</style><h1>Status</h1><span class="ts">${ts}</span>`
+
+    await Bun.write(join(dir, 'a.html'), tpl('2026-01-01 10:00:00'))
+    await Bun.write(join(dir, 'b.html'), tpl('2026-12-31 23:59:59'))
+
+    const { code, out } = await page(['diff', join(dir, 'a.html'), join(dir, 'b.html'), '-w', '640', '-o', dir, '--mask', '.ts', '--json'])
+    const [result] = JSON.parse(out) as Compared[]
+
+    expect(code).toBe(0)
+    expect(result?.regions).toEqual([])
   }, 60_000)
 
   test('exits 0 when the pages look the same', async () => {

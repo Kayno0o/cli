@@ -10,30 +10,34 @@ import { badUsage, jsonOption, marked, parse, printJson, problem, role } from '@
 import { launch, open, PHONE_WIDTH, redirectedTo, SESSION_OPTIONS, sessionOf, shoot, targetOf } from './browser'
 import { fontFindings } from './fonts'
 import { beforeLoad, inPage } from './inpage'
-import { findingLines, printLines, widthsOf } from './report'
+import { findingLines, printLines, viewportsOf } from './report'
 
-const KINDS = ['redirect', 'overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'clip', 'spill', 'overlap', 'text-size', 'stretch', 'double-border', 'image', 'layout-shift'] as const
+const KINDS = ['redirect', 'overflow', 'console', 'request', 'font', 'contrast', 'tap-target', 'padding', 'wrap', 'clip', 'spill', 'overlap', 'text-size', 'stretch', 'double-border', 'image', 'layout-shift', 'a11y', 'head'] as const
+const DOM_KINDS = new Set(['overflow', 'tap-target', 'padding', 'wrap', 'clip', 'spill', 'overlap', 'text-size', 'stretch', 'double-border', 'image', 'layout-shift', 'a11y', 'head'])
 // What a page does the same at every width, so it is reported once, at the first width it shows at.
-const ONCE = new Set(['redirect', 'console', 'request', 'font', 'contrast'])
+const ONCE = new Set(['redirect', 'console', 'request', 'font', 'contrast', 'a11y', 'head'])
 const URL_CAP = 160
 
 const EXITS: ExitRow[] = [[0, 'nothing found'], [1, 'a defect was found'], [2, 'a usage error, or a target that would not load']]
 
 const USAGE = `page check <file|url>...
 
-Opens each HTML file or URL in a local Chromium at every width, writes a full-page PNG per width (next to a file as <name>-<width>.png, into --out, or the cache folder for a URL) and prints its path, then a <target> <width>px <kind> line per kind found with its defects under it, <selector>: <measure>, a repeated one counted once.
-Kinds: redirect (the page landed elsewhere, a login page say, so what follows is about that page), overflow (the page scrolls sideways; the elements where it starts), console (errors and uncaught exceptions), request (failed, or answered 4xx/5xx), font (text drawn in another font than its stack asks for, naming the one drawn), contrast (text under WCAG AA, 4.5:1 or 3:1 for large text; text over an image, a gradient or a filter is left out), tap-target (under 44px below ${PHONE_WIDTH}px wide, under 24px otherwise; a link inside a sentence is exempt), padding (text touching the border or background edge of its box), wrap (a word broken between two letters, in a column too narrow for it), clip (text cut by an overflow: hidden box or an ellipsis, with no title holding it whole), spill (text running past the edge its box draws, nothing clipping it), overlap (text drawn over other text, nothing opaque between), text-size (text under 12px; a form field under 16px below ${PHONE_WIDTH}px wide, where iOS zooms in on focus), stretch (a raster image drawn at another aspect ratio than its file), double-border (a border against its container's or the next sibling's in the same colour, nothing between), image (did not load), layout-shift (a score above 0.1).
-It never starts or builds an app: give it a file or a URL already served. A page behind a login takes --cookie, -H or --storage-state; a header goes to the target's origin alone.
+Opens each HTML file or URL in a local Chromium at every viewport (parallel contexts per target), writes a full-page PNG per viewport (into the cache folder by default, or into --out; skip with --no-shots) and prints its path, then a <target> <width>px <kind> line per kind found with its defects under it.
+Kinds: redirect, overflow, console, request, font, contrast, tap-target, padding, wrap, clip, spill, overlap, text-size, stretch, double-border, image, layout-shift, a11y (missing img alt, unlabeled inputs, skipped headings, multiple h1), head (missing title, non-UTF-8 charset, zoom-blocking viewport, empty meta description).
+Viewports take W, WxH, or WxH@2x (default: 1440,400). Use --dark, --wait-for <selector>, --delay <ms>, and --click/--hover/--fill/--focus to inspect interactive or dark-mode states.
 Chromium comes from PAGE_CHROMIUM, ~/.cache/ms-playwright or /usr/bin, never downloaded.
 
 Exits 0 when nothing is found, 1 when something is, 2 on a usage error or when a target would not load.`
 
 const OPTIONS = {
-  widths: { type: 'string', short: 'w', description: 'viewport widths, comma separated (1440,400)' },
-  out: { type: 'string', short: 'o', description: 'folder the PNGs go to instead of next to each file' },
-  skip: { type: 'string', description: `kinds left out, comma separated: ${KINDS.join(', ')}` },
+  'widths': { type: 'string', short: 'w', description: 'viewports, comma separated: W, WxH, or WxH@2x (1440,400)' },
+  'out': { type: 'string', short: 'o', description: 'folder the PNGs go to (default: cache folder)' },
+  'no-shots': { type: 'boolean', description: 'skip writing screenshot PNGs' },
+  'only': { type: 'string', description: `run only these kinds, comma separated: ${KINDS.join(', ')}` },
+  'skip': { type: 'string', description: `kinds left out, comma separated: ${KINDS.join(', ')}` },
+  'all': { type: 'boolean', description: 'print all findings per kind instead of capping at 10' },
   ...SESSION_OPTIONS,
-  json: jsonOption('{shots: [{target, width, path}], findings: [{target, width, kind, selector, message}], failed: [{target, error}]}'),
+  'json': jsonOption('{shots: [{target, width, path}], findings: [{target, width, kind, selector, message}], failed: [{target, error}]}'),
 } as const
 
 interface Shot {
@@ -66,19 +70,48 @@ async function contrastFindings(page: Page): Promise<Omit<Finding, 'target' | 'w
   return failures.map(({ selector, fg, bg, ratio, required }) => ({ kind: 'contrast', selector, message: `${fg} on ${bg}, ${ratio.toFixed(2)}:1, needs ${required}:1` }))
 }
 
+function activeKinds(only: string | undefined, skip: string | undefined): Set<string> {
+  const all = new Set<string>(KINDS)
+
+  if (only !== undefined) {
+    const picked = only.split(',').map(kind => kind.trim()).filter(Boolean)
+    const unknown = picked.find(kind => !all.has(kind))
+
+    if (unknown !== undefined)
+      badUsage(`--only takes ${KINDS.join(', ')}, not ${unknown}`)
+
+    all.clear()
+
+    for (const kind of picked)
+      all.add(kind)
+  }
+
+  for (const kind of skip?.split(',').map(item => item.trim()).filter(Boolean) ?? []) {
+    if (!(KINDS as readonly string[]).includes(kind))
+      badUsage(`--skip takes ${KINDS.join(', ')}, not ${kind}`)
+
+    all.delete(kind)
+  }
+
+  return all
+}
+
 export async function check(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, OPTIONS, {
     positionals: ['<file|url>...'],
     exits: EXITS,
-    examples: [['page check mockup.html', 'mockup-1440.png and mockup-400.png beside it, then the defects'], ['page check http://localhost:5173/settings --cookie session=<value>', 'a page behind a login'], 'page check http://localhost:5173/settings -w 1280,768,375 -o shots', 'page check index.html --skip font,padding --json'],
+    examples: [
+      ['page check mockup.html', 'checks at 1440 and 400px, screenshots cached unless -o is passed'],
+      ['page check http://localhost:5173/ --dark --only contrast --no-shots', 'dark-mode contrast check without writing files'],
+      ['page check http://localhost:5173/ -w 1280x800@2x,390x844@2x --wait-for main', 'HiDPI viewports with SPA selector wait'],
+    ],
   })
-  const widths = widthsOf(values.widths)
-  const skipped = new Set(values.skip?.split(',').map(kind => kind.trim()) ?? [])
-  const unknown = [...skipped].find(kind => !(KINDS as readonly string[]).includes(kind))
-
-  if (unknown !== undefined)
-    badUsage(`--skip takes ${KINDS.join(', ')}, not ${unknown}`)
-
+  const viewports = viewportsOf(values.widths)
+  const active = activeKinds(values.only, values.skip)
+  const runDom = [...active].some(kind => DOM_KINDS.has(kind))
+  const runFont = active.has('font')
+  const runContrast = active.has('contrast')
+  const noShots = values['no-shots'] === true
   const targets = positionals.map(given => targetOf(given, values.out))
   const session = sessionOf(values)
   const shots: Shot[] = []
@@ -89,14 +122,12 @@ export async function check(args: string[]): Promise<number> {
 
   try {
     for (const target of targets) {
-      const once = new Set<string>()
-
-      for (const width of widths) {
+      const perViewport = await Promise.all(viewports.map(async (vp) => {
         const heard: Omit<Finding, 'target' | 'width'>[] = []
         let loaded
 
         try {
-          loaded = await open(browser, target.url, width, session, async (page) => {
+          loaded = await open(browser, target.url, vp, session, async (page) => {
             listen(page, heard)
             await beforeLoad(page, 'measure', 'watchShifts')
           })
@@ -104,38 +135,69 @@ export async function check(args: string[]): Promise<number> {
         catch (error) {
           const { message } = error as Error
 
-          failed.push({ target: target.label, error: message.includes('\n') ? message.slice(0, message.indexOf('\n')) : message })
-
-          break
+          return { ok: false as const, error: message.includes('\n') ? message.slice(0, message.indexOf('\n')) : message }
         }
 
         const { context, page, landed } = loaded
-        const redirect = redirectedTo(target.url, landed)
 
-        if (redirect !== undefined)
-          heard.unshift({ kind: 'redirect', message: `landed on ${shortUrl(redirect)}` })
+        try {
+          const redirect = redirectedTo(target.url, landed)
 
-        const file = `${target.stem}-${width}.png`
+          if (redirect !== undefined)
+            heard.unshift({ kind: 'redirect', message: `landed on ${shortUrl(redirect)}` })
 
-        mkdirSync(dirname(file), { recursive: true })
-        await shoot(page, file)
-        shots.push({ target: target.label, width, path: file })
+          let shot: Shot | undefined
 
-        if (!values.json)
-          console.log(path(file))
+          if (!noShots) {
+            const file = `${target.stem}-${vp.suffix}.png`
 
-        const found = [...heard, ...await inPage<DomFinding[]>(page, 'measure', 'measureDom', width < PHONE_WIDTH), ...skipped.has('font') ? [] : await fontFindings(page), ...skipped.has('contrast') ? [] : await contrastFindings(page)]
+            mkdirSync(dirname(file), { recursive: true })
+            await shoot(page, file)
+            shot = { target: target.label, width: vp.width, path: file }
+          }
 
-        await context.close()
+          const found = [
+            ...heard,
+            ...(runDom ? await inPage<DomFinding[]>(page, 'measure', 'measureDom', vp.width < PHONE_WIDTH) : []),
+            ...(runFont ? await fontFindings(page) : []),
+            ...(runContrast ? await contrastFindings(page) : []),
+          ]
 
-        for (const finding of found) {
+          return { ok: true as const, width: vp.width, shot, found }
+        }
+        finally {
+          await context.close()
+        }
+      }))
+
+      const once = new Set<string>()
+      let recordedFailure = false
+
+      for (const entry of perViewport) {
+        if (!entry.ok) {
+          if (!recordedFailure) {
+            failed.push({ target: target.label, error: entry.error })
+            recordedFailure = true
+          }
+
+          continue
+        }
+
+        if (entry.shot !== undefined) {
+          shots.push(entry.shot)
+
+          if (!values.json)
+            console.log(path(entry.shot.path))
+        }
+
+        for (const finding of entry.found) {
           const key = `${finding.kind}|${finding.selector ?? ''}|${finding.message}`
 
-          if (skipped.has(finding.kind) || (ONCE.has(finding.kind) && once.has(key)))
+          if (!active.has(finding.kind) || (ONCE.has(finding.kind) && once.has(key)))
             continue
 
           once.add(key)
-          findings.push({ target: target.label, width, ...finding })
+          findings.push({ target: target.label, width: entry.width, ...finding })
         }
       }
     }
@@ -148,13 +210,13 @@ export async function check(args: string[]): Promise<number> {
     printJson({ shots, findings, failed })
   }
   else {
-    printLines(findingLines(findings))
+    printLines(findingLines(findings, process.stdout, values.all === true))
 
     for (const { target, error } of failed)
       problem(`${target} would not load`, error)
 
     if (findings.length === 0 && failed.length === 0)
-      console.log(marked('ok', `no defect at ${widths.join(', ')}px`, process.stdout))
+      console.log(marked('ok', `no defect at ${viewports.map(vp => vp.width).join(', ')}px`, process.stdout))
   }
 
   if (failed.length > 0)

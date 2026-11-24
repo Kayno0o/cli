@@ -17,7 +17,7 @@ async function shift(before: string, after: string): Promise<{ code: number, lin
   await Bun.write(join(dir, 'before.html'), before)
   await Bun.write(join(dir, 'after.html'), after)
 
-  const child = Bun.spawn([process.execPath, CLI, 'shift', join(dir, 'before.html'), join(dir, 'after.html'), '-w', '800', '--json'], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
+  const child = Bun.spawn([process.execPath, CLI, 'shift', join(dir, 'before.html'), join(dir, 'after.html'), '-w', '800', '--json'], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
   const [out, code] = await Promise.all([new Response(child.stdout).text(), child.exited])
 
   return { code, lines: (JSON.parse(out) as Finding[]).map(({ width, kind, selector, message }) => `${width} ${kind} ${selector}: ${message}`) }

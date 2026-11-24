@@ -159,12 +159,12 @@ describe('page check behind a login', () => {
     const signedIn = (request.headers.get('cookie') ?? '').includes('session=ok') || request.headers.get('authorization') === 'Bearer t'
 
     if (url.pathname === '/login')
-      return new Response('<!doctype html><title>login</title><style>body{font-family:monospace}</style><p>Sign in</p>', { headers: { 'content-type': 'text/html' } })
+      return new Response('<!doctype html><meta charset="utf-8"><title>login</title><style>body{font-family:monospace}</style><p>Sign in</p>', { headers: { 'content-type': 'text/html; charset=utf-8' } })
 
     if (!signedIn)
       return Response.redirect(`${url.origin}/login`, 302)
 
-    return new Response(`<!doctype html><title>app</title><style>body{font-family:monospace}</style><p>Dashboard</p><script>fetch('${assets.url.href}beacon', { mode: 'no-cors' })</script>`, { headers: { 'content-type': 'text/html' } })
+    return new Response(`<!doctype html><meta charset="utf-8"><title>app</title><style>body{font-family:monospace}</style><p>Dashboard</p><script>fetch('${assets.url.href}beacon', { mode: 'no-cors' })</script>`, { headers: { 'content-type': 'text/html; charset=utf-8' } })
   } })
   const home = `${app.url.href}home`
 
@@ -206,4 +206,40 @@ describe('page check behind a login', () => {
     expect([cookie.code, header.code]).toEqual([2, 2])
     expect(cookie.err + header.err).not.toContain('secretvalue')
   })
+})
+
+describe('page check dark mode, --only, --no-shots, interactions, a11y, head', () => {
+  test('--dark, --only, --no-shots, --click, --fill, and semantic a11y/head checks', async () => {
+    const dir = temp('page-features-')
+    const darkFile = `${dir}/dark.html`
+    const a11yFile = `${dir}/a11y.html`
+    const interactiveFile = `${dir}/modal.html`
+
+    await Bun.write(darkFile, '<!doctype html><meta charset="utf-8"><title>Dark</title><style>body{font-family:monospace;background:#fff;color:#111}@media(prefers-color-scheme:dark){body{background:#111;color:#222}}</style><p class="msg">Dark contrast fail</p>')
+    await Bun.write(a11yFile, '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, maximum-scale=1"><style>body{font-family:monospace}</style><h1>One</h1><h3>Skipped</h3><img src="data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'20\'></svg>"><input type="text">')
+    await Bun.write(interactiveFile, '<!doctype html><meta charset="utf-8"><title>Modal</title><style>body{font-family:monospace}#panel{display:none}#panel.open{display:block;width:700px}</style><input id="name" aria-label="Name"><button id="open" onclick="document.getElementById(\'panel\').classList.add(\'open\')">Open</button><div id="panel">Opened panel overflowing phone</div>')
+
+    const dark = await page(['check', darkFile, '-w', '800x600@2x', '--dark', '--only', 'contrast', '--no-shots', '--json'])
+    const darkReport = JSON.parse(dark.out) as Report
+
+    expect(dark.code).toBe(1)
+    expect(darkReport.shots).toEqual([])
+    expect(darkReport.findings.some(f => f.kind === 'contrast')).toBe(true)
+
+    const a11y = await page(['check', a11yFile, '-w', '800', '--only', 'a11y,head', '--no-shots', '--json'])
+    const a11yReport = JSON.parse(a11y.out) as Report
+
+    expect(a11y.code).toBe(1)
+    expect(a11yReport.findings.some(f => f.kind === 'a11y' && f.message.includes('no alt'))).toBe(true)
+    expect(a11yReport.findings.some(f => f.kind === 'a11y' && f.message.includes('no <label>'))).toBe(true)
+    expect(a11yReport.findings.some(f => f.kind === 'a11y' && f.message.includes('skips heading'))).toBe(true)
+    expect(a11yReport.findings.some(f => f.kind === 'head' && f.message.includes('<title>'))).toBe(true)
+    expect(a11yReport.findings.some(f => f.kind === 'head' && f.message.includes('pinch-to-zoom'))).toBe(true)
+
+    const modal = await page(['check', interactiveFile, '-w', '400', '--fill', '#name=Alice', '--click', '#open', '--wait-for', '#open', '--delay', '10', '--only', 'overflow', '--no-shots', '--json'])
+    const modalReport = JSON.parse(modal.out) as Report
+
+    expect(modal.code).toBe(1)
+    expect(modalReport.findings.some(f => f.kind === 'overflow' && f.selector === 'div#panel')).toBe(true)
+  }, 60_000)
 })

@@ -1,10 +1,12 @@
 import type { Browser, BrowserContext, Page } from 'playwright-core'
+import type { ViewportSpec } from './report'
+import { createHash } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { badUsage, cacheFolder, fail } from '@kaynooo/cli-kit'
+import { badUsage, cacheFolder, fail, wholeNumber } from '@kaynooo/cli-kit'
 import { inPage } from './inpage'
 
 const HTTP_URL = /^https?:\/\//
@@ -66,13 +68,15 @@ export interface Target {
   stem: string
 }
 
-/** Where a target loads from and where its shots go: next to a file, into `out` when given, or the cache folder for a URL. */
+/** Where a target loads from and where its shots go: into `out` when given, else the cache folder so local repos stay clean. */
 export function targetOf(given: string, out: string | undefined): Target {
+  const folder = out === undefined ? join(cacheFolder(), 'kaynooo-page') : resolve(out)
+
   if (HTTP_URL.test(given)) {
     const url = new URL(given)
     const name = `${url.host}${url.pathname}`.replace(UNSAFE, '-').replace(EDGE_DASHES, '')
 
-    return { label: given, url: given, stem: join(out ?? join(cacheFolder(), 'kaynooo-page'), name) }
+    return { label: given, url: given, stem: join(folder, name) }
   }
 
   // A file:// URL or a path may end on a #fragment, kept for the page to scroll to.
@@ -84,25 +88,51 @@ export function targetOf(given: string, out: string | undefined): Target {
     fail(`${given} does not exist`)
 
   const name = basename(path).replace(HTML_EXT, '')
+  const stemName = out === undefined ? `${name}-${createHash('sha1').update(path).digest('hex').slice(0, 8)}` : name
 
-  return { label: given, url: `${pathToFileURL(path).href}${fragment}`, stem: join(out === undefined ? dirname(path) : resolve(out), name) }
+  return { label: given, url: `${pathToFileURL(path).href}${fragment}`, stem: join(folder, stemName) }
 }
 
-// The options letting a page behind a login be checked, shared by both commands.
+// Options controlling session, color scheme, load wait, and lightweight interactions, shared by check/diff/shift.
 export const SESSION_OPTIONS = {
   'cookie': { type: 'string', multiple: true, description: 'name=value, a cookie for a URL target\'s site, repeatable' },
   'header': { type: 'string', short: 'H', multiple: true, description: '"Name: value", a header sent with every request to a URL target\'s origin and nowhere else, repeatable' },
   'storage-state': { type: 'string', description: 'a Playwright storage state file (cookies and localStorage) every page starts from' },
+  'dark': { type: 'boolean', description: 'emulate prefers-color-scheme: dark' },
+  'wait-for': { type: 'string', description: 'CSS selector to wait for (visible) instead of waiting for networkidle' },
+  'delay': { type: 'string', description: 'extra milliseconds to wait after load and interactions before measuring/shooting' },
+  'click': { type: 'string', multiple: true, description: 'CSS selector to click after load, repeatable' },
+  'hover': { type: 'string', multiple: true, description: 'CSS selector to hover after load, repeatable' },
+  'fill': { type: 'string', multiple: true, description: 'selector=value to fill an input after load, repeatable' },
+  'focus': { type: 'string', multiple: true, description: 'CSS selector to focus after load, repeatable' },
 } as const
 
 export interface Session {
   cookies: { name: string, value: string }[]
   headers: Record<string, string>
   storageState?: string
+  dark: boolean
+  waitFor?: string
+  delay?: number
+  fills: { selector: string, value: string }[]
+  clicks: string[]
+  hovers: string[]
+  focuses: string[]
 }
 
-/** The session the options describe, refusing a malformed cookie or header without echoing its value. */
-export function sessionOf(values: { 'cookie'?: string[] | undefined, 'header'?: string[] | undefined, 'storage-state'?: string | undefined }): Session {
+/** The session the options describe, refusing a malformed cookie, header, or fill without echoing secrets. */
+export function sessionOf(values: {
+  'cookie'?: string[] | undefined
+  'header'?: string[] | undefined
+  'storage-state'?: string | undefined
+  'dark'?: boolean | undefined
+  'wait-for'?: string | undefined
+  'delay'?: string | undefined
+  'click'?: string[] | undefined
+  'hover'?: string[] | undefined
+  'fill'?: string[] | undefined
+  'focus'?: string[] | undefined
+}): Session {
   const cookies = (values.cookie ?? []).map((cookie) => {
     const at = cookie.indexOf('=')
 
@@ -122,12 +152,34 @@ export function sessionOf(values: { 'cookie'?: string[] | undefined, 'header'?: 
     headers[header.slice(0, at).trim().toLowerCase()] = header.slice(at + 1).trim()
   }
 
+  const fills = (values.fill ?? []).map((entry) => {
+    const at = entry.indexOf('=')
+
+    if (at < 1)
+      badUsage('--fill takes selector=value')
+
+    return { selector: entry.slice(0, at), value: entry.slice(at + 1) }
+  })
+
   const storageState = values['storage-state']
 
   if (storageState !== undefined && !existsSync(storageState))
     fail(`--storage-state ${storageState} does not exist`)
 
-  return { cookies, headers, ...storageState === undefined ? {} : { storageState } }
+  const delay = values.delay === undefined ? undefined : wholeNumber(values.delay, 'delay', 0, 0)
+
+  return {
+    cookies,
+    headers,
+    ...(storageState === undefined ? {} : { storageState }),
+    dark: values.dark === true,
+    ...(values['wait-for'] === undefined ? {} : { waitFor: values['wait-for'] }),
+    ...(delay === undefined ? {} : { delay }),
+    fills,
+    clicks: values.click ?? [],
+    hovers: values.hover ?? [],
+    focuses: values.focus ?? [],
+  }
 }
 
 export interface Loaded {
@@ -137,9 +189,19 @@ export interface Loaded {
   landed: string
 }
 
-/** Opens the target at one width in the session and waits until the network and the fonts settle, `prepare` running on the page before it navigates. */
-export async function open(browser: Browser, url: string, width: number, session: Session, prepare?: (page: Page) => Promise<void>): Promise<Loaded> {
-  const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 1, hasTouch: width < PHONE_WIDTH, isMobile: false, ...session.storageState === undefined ? {} : { storageState: session.storageState } })
+/** Opens the target at one viewport in the session, waits for load/wait-for/fonts, and runs any requested interactions. */
+export async function open(browser: Browser, url: string, viewport: ViewportSpec | number, session: Session, prepare?: (page: Page) => Promise<void>): Promise<Loaded> {
+  const spec: ViewportSpec = typeof viewport === 'number'
+    ? { width: viewport, height: 900, scale: 1, suffix: String(viewport), label: `${viewport}px` }
+    : viewport
+  const context = await browser.newContext({
+    viewport: { width: spec.width, height: spec.height },
+    deviceScaleFactor: spec.scale,
+    colorScheme: session.dark ? 'dark' : 'light',
+    hasTouch: spec.width < PHONE_WIDTH,
+    isMobile: false,
+    ...(session.storageState === undefined ? {} : { storageState: session.storageState }),
+  })
 
   if (HTTP_URL.test(url)) {
     if (session.cookies.length > 0)
@@ -158,13 +220,37 @@ export async function open(browser: Browser, url: string, width: number, session
   await prepare?.(page)
   await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
 
-  // A page polling or streaming never goes idle, so idle is waited for only so long.
-  try {
-    await page.waitForLoadState('networkidle', { timeout: 5_000 })
+  if (session.waitFor !== undefined) {
+    await page.waitForSelector(session.waitFor, { state: 'visible', timeout: 15_000 })
   }
-  catch {}
+  else {
+    // A page polling or streaming never goes idle, so idle is waited for only so long.
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 5_000 })
+    }
+    catch {}
+  }
 
   await inPage(page, 'measure', 'fontsReady')
+
+  const interacted = session.fills.length > 0 || session.clicks.length > 0 || session.hovers.length > 0 || session.focuses.length > 0
+
+  for (const { selector, value } of session.fills)
+    await page.locator(selector).first().fill(value, { timeout: 10_000 })
+
+  for (const selector of session.clicks)
+    await page.locator(selector).first().click({ timeout: 10_000 })
+
+  for (const selector of session.hovers)
+    await page.locator(selector).first().hover({ timeout: 10_000 })
+
+  for (const selector of session.focuses)
+    await page.locator(selector).first().focus({ timeout: 10_000 })
+
+  const waitMs = session.delay ?? (interacted ? 50 : 0)
+
+  if (waitMs > 0)
+    await page.waitForTimeout(waitMs)
 
   return { context, page, landed: page.url() }
 }
@@ -182,9 +268,16 @@ export function redirectedTo(asked: string, landed: string): string | undefined 
   return bare(asked) === bare(landed) ? undefined : landed
 }
 
-/** A full-page PNG with animations stopped and the caret hidden, retried once: a fresh Chromium has refused its first capture ("Unable to capture screenshot"). */
-export async function shoot(page: Page, path?: string): Promise<Buffer> {
-  const options = { ...path === undefined ? {} : { path }, fullPage: true, animations: 'disabled', caret: 'hide' } as const
+/** A full-page PNG with animations stopped and the caret hidden, optionally masking dynamic selectors, retried once. */
+export async function shoot(page: Page, path?: string, masks: readonly string[] = []): Promise<Buffer> {
+  const mask = masks.map(selector => page.locator(selector))
+  const options = {
+    ...(path === undefined ? {} : { path }),
+    ...(mask.length === 0 ? {} : { mask, maskColor: '#000000' }),
+    fullPage: true,
+    animations: 'disabled',
+    caret: 'hide',
+  } as const
 
   try {
     return await page.screenshot(options)

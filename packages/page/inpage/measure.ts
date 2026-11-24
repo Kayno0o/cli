@@ -365,7 +365,7 @@ export function measureDom(phone: boolean): DomFinding[] {
     }
   }
 
-  findings.push(...clippedText(range), ...overlappingText(range), ...smallText(phone), ...stretchedImages(), ...doubleBorders())
+  findings.push(...clippedText(range), ...overlappingText(range), ...smallText(phone), ...stretchedImages(), ...doubleBorders(), ...a11yChecks(), ...headChecks())
 
   // Images that finished loading with nothing to draw.
   for (const image of document.images) {
@@ -700,6 +700,85 @@ function doubleBorders(): DomFinding[] {
         findings.push({ kind: 'double-border', selector: describe(element), message: `its ${side} border sits against the ${OPPOSITE[side]} border of the next ${describe(next)}` })
     }
   }
+
+  return findings
+}
+
+const ZOOM_DISABLED = /user-scalable\s*=\s*(?:no|0)|maximum-scale\s*=\s*1(?:\.0+)?(?:\D|$)/i
+
+// Semantic accessibility checks: missing img alt, unlabeled form controls, heading hierarchy jumps and multiple h1s.
+function a11yChecks(): DomFinding[] {
+  const findings: DomFinding[] = []
+
+  for (const image of document.images) {
+    if (!visible(image) || image.getAttribute('aria-hidden') === 'true' || image.getAttribute('role') === 'presentation' || image.getAttribute('role') === 'none')
+      continue
+
+    if (!image.hasAttribute('alt'))
+      findings.push({ kind: 'a11y', selector: describe(image), message: '<img> has no alt attribute (use alt="" for decorative images)' })
+  }
+
+  const controls = document.querySelectorAll('input:not([type="hidden"], [type="submit"], [type="button"], [type="reset"], [type="image"]), select, textarea')
+
+  for (const control of controls) {
+    if (!visible(control) || (control as HTMLInputElement).disabled || control.getAttribute('aria-hidden') === 'true')
+      continue
+
+    const labels = (control as HTMLInputElement).labels
+    const hasLabel = (labels !== null && labels !== undefined && labels.length > 0)
+      || (control.getAttribute('aria-label') ?? '').trim() !== ''
+      || (control.getAttribute('aria-labelledby') ?? '').trim() !== ''
+      || (control.getAttribute('title') ?? '').trim() !== ''
+
+    if (!hasLabel)
+      findings.push({ kind: 'a11y', selector: describe(control), message: 'form field has no <label> or aria-label' })
+  }
+
+  let prevLevel = 0
+  let h1Count = 0
+
+  for (const heading of document.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+    if (!visible(heading) || heading.getAttribute('aria-hidden') === 'true')
+      continue
+
+    const level = Number(heading.tagName[1])
+
+    if (level === 1) {
+      h1Count++
+
+      if (h1Count > 1)
+        findings.push({ kind: 'a11y', selector: describe(heading), message: 'multiple <h1> headings on the page' })
+    }
+
+    if (prevLevel > 0 && level > prevLevel + 1)
+      findings.push({ kind: 'a11y', selector: describe(heading), message: `<h${level}> skips heading level after <h${prevLevel}>` })
+
+    prevLevel = level
+  }
+
+  return findings
+}
+
+// Document head hygiene: title, charset, zoom-blocking viewport, empty meta description.
+function headChecks(): DomFinding[] {
+  const findings: DomFinding[] = []
+
+  if (document.title.trim() === '')
+    findings.push({ kind: 'head', selector: 'head', message: 'missing or empty <title>' })
+
+  if (document.querySelector('meta[charset], meta[http-equiv="content-type" i]') === null && document.characterSet.toLowerCase() !== 'utf-8')
+    findings.push({ kind: 'head', selector: 'head', message: `missing <meta charset="utf-8"> (decoded as ${document.characterSet})` })
+
+  const viewport = document.querySelector('meta[name="viewport"]')
+  const content = viewport?.getAttribute('content') ?? ''
+
+  if (content !== '' && ZOOM_DISABLED.test(content))
+    findings.push({ kind: 'head', selector: 'meta[name="viewport"]', message: 'viewport meta blocks pinch-to-zoom' })
+
+  const description = document.querySelector('meta[name="description"]')
+
+  if (description !== null && (description.getAttribute('content') ?? '').trim() === '')
+    findings.push({ kind: 'head', selector: 'meta[name="description"]', message: 'empty meta description' })
 
   return findings
 }

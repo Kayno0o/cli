@@ -1,6 +1,6 @@
 import type { Finding } from '../src/report'
 import { describe, expect, test } from 'bun:test'
-import { findingLines } from '../src/report'
+import { findingLines, viewportsOf } from '../src/report'
 
 const PLAIN = { isTTY: false }
 
@@ -33,9 +33,20 @@ describe('findingLines', () => {
     ])
   })
 
-  test('past ten different findings a heading says how many more there are', () => {
+  test('past ten different findings a heading says how many more there are, unless all=true', () => {
     const findings = Array.from({ length: 13 }, (_, n) => found(400, 'tap-target', `button.b${n}`, '20×20px, under 44px'))
 
     expect(findingLines(findings, PLAIN).slice(-2)).toEqual(['  button.b9: 20×20px, under 44px', '  3 more'])
+    expect(findingLines(findings, PLAIN, true)).toHaveLength(14)
+  })
+})
+
+describe('viewportsOf', () => {
+  test('parses W, WxH, W@2x, and WxH@2x tokens', () => {
+    expect(viewportsOf('1440,390x844@2x,1280x720')).toEqual([
+      { width: 1440, height: 900, scale: 1, suffix: '1440', label: '1440px' },
+      { width: 390, height: 844, scale: 2, suffix: '390x844@2x', label: '390×844@2x' },
+      { width: 1280, height: 720, scale: 1, suffix: '1280x720', label: '1280×720px' },
+    ])
   })
 })
