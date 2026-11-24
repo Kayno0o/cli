@@ -5,8 +5,7 @@ import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { ABOUT, NEEDS } from '../src/catalog'
 import { TOOLS } from '../src/checks'
-import { add, remove } from '../src/cli-bin'
-import { main } from '../src/doctor'
+import { add, remove, update } from '../src/cli-bin'
 import { install, removal } from '../src/install'
 
 const temp = tempDirs()
@@ -35,9 +34,8 @@ function recording(absent: string[]): { host: Host, ran: string[] } {
       ran.push(line)
 
       if (line.startsWith('bun install -g')) {
-        for (const name of argv.slice(3)) {
-          put(name, '0.1.0')
-        }
+        for (const name of argv.slice(3))
+          put(name.replace(/@[\d.]+$/, ''), '0.1.0')
       }
 
       if (line === 'tea login list -o json')
@@ -64,10 +62,10 @@ describe('the catalog', () => {
   })
 })
 
-describe('doctor --install', () => {
+describe('cli add, remove and update', () => {
   test('installs the named packages in one call, by package or by bin, then checks them', async () => {
     const { host, ran } = recording(['fish'])
-    const { result, out } = await capture(async () => main(['--install', 'forge', 'sub'], host))
+    const { result, out } = await capture(async () => add(['forge', 'sub'], host))
 
     expect(ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-forge @kaynooo/cli-edit'])
     expect(out).toContain('after the install:')
@@ -77,7 +75,7 @@ describe('doctor --install', () => {
 
   test('leaves out a package whose tool is missing, unless --force', async () => {
     const blocked = recording(['docker'])
-    const refused = await capture(async () => main(['--install', 'docker', 'git'], blocked.host))
+    const refused = await capture(async () => add(['docker', 'git'], blocked.host))
 
     expect(refused.result).toBe(1)
     expect(refused.out).toContain('blocked  docker needs docker (dc runs docker compose)')
@@ -85,14 +83,14 @@ describe('doctor --install', () => {
 
     const forced = recording(['docker'])
 
-    await capture(async () => main(['--install', 'docker', '--force'], forced.host))
+    await capture(async () => add(['docker', '--force'], forced.host))
     expect(forced.ran.filter(line => line.startsWith('bun install'))).toEqual(['bun install -g @kaynooo/cli-docker'])
   })
 
   test('hooks brings guard along and runs the plugin install', async () => {
     const { host, ran } = recording([])
 
-    await capture(async () => main(['--install', 'hooks'], host))
+    await capture(async () => add(['hooks'], host))
     expect(ran).toContain('bun install -g @kaynooo/cli-guard')
     expect(ran).toContain('claude plugin install cli-hooks --marketplace https://github.com/Kayno0o/cli.git')
   })
@@ -101,7 +99,7 @@ describe('doctor --install', () => {
     put('@kaynooo/cli-edit', '0.1.0')
 
     const { host, ran } = recording([])
-    const { result, out } = await capture(async () => main(['--install', 'all', 'sub', '--dry-run'], host))
+    const { result, out } = await capture(async () => add(['all', 'sub', '--dry-run'], host))
 
     expect(ran).toEqual([])
     expect(result).toBe(0)
@@ -114,7 +112,7 @@ describe('doctor --install', () => {
     put('@kaynooo/cli-edit', '0.1.0')
 
     const { host } = recording([])
-    const listed = await capture(async () => main(['--install', '--list'], host))
+    const listed = await capture(async () => add(['--list'], host))
 
     expect(listed.out).toContain('forge')
     expect(listed.out).toContain('not installed')
@@ -124,7 +122,7 @@ describe('doctor --install', () => {
     let refusal = ''
 
     try {
-      await capture(async () => main(['--install', 'nope'], host))
+      await capture(async () => add(['nope'], host))
     }
     catch (error) {
       refusal = error instanceof Error ? error.message : String(error)
@@ -133,15 +131,10 @@ describe('doctor --install', () => {
     expect(refusal).toContain('nope')
   })
 
-  test('cli add and cli remove work non-interactively with --dry-run', async () => {
+  test('cli remove works non-interactively and supports --dry-run', async () => {
     put('@kaynooo/cli-edit', '0.1.0')
 
     const { host, ran } = recording([])
-    const added = await capture(async () => add(['git', '--dry-run'], host))
-
-    expect(added.result).toBe(0)
-    expect(added.out).toContain('bun install -g @kaynooo/cli-git')
-
     const removed = await capture(async () => remove(['edit', '--dry-run'], host))
 
     expect(removed.result).toBe(0)
@@ -154,21 +147,40 @@ describe('doctor --install', () => {
     expect(ran).toEqual(['bun remove -g @kaynooo/cli-edit'])
   })
 
-  test('names, --list and --force are refused without --install', async () => {
-    let refusal = ''
+  test('cli update updates installed packages and completions without running unrelated tea/hooks checks', async () => {
+    put('@kaynooo/cli-forge', '0.1.0')
 
-    try {
-      await capture(async () => main(['forgejo'], recording([]).host))
-    }
-    catch (error) {
-      refusal = error instanceof Error ? error.message : String(error)
+    const ran: string[] = []
+    const host: Host = {
+      ...recording(['fish']).host,
+      run: async (argv) => {
+        const line = argv.join(' ')
+
+        ran.push(line)
+
+        if (line === 'bun info @kaynooo/cli-forge version --no-cache')
+          return { code: 0, stdout: '0.2.0\n', stderr: '' }
+
+        if (line.startsWith('bun install -g')) {
+          put('@kaynooo/cli-forge', '0.2.0')
+
+          return { code: 0, stdout: '', stderr: '' }
+        }
+
+        return { code: 1, stdout: '', stderr: '' }
+      },
     }
 
-    expect(refusal).toContain('--install')
+    const res = await capture(async () => update([], host))
+
+    expect(res.result).toBe(0)
+    expect(ran).toContain('bun install -g @kaynooo/cli-forge@0.2.0')
+    expect(ran.some(line => line.startsWith('tea '))).toBe(false)
+    expect(res.out).not.toContain('hooks')
   })
 })
 
-describe('doctor --install, checking and unchecking', () => {
+describe('cli manage, checking and unchecking', () => {
   test('installs what was checked and removes what was unchecked, hooks keeping guard', async () => {
     put('@kaynooo/cli-edit', '1.0.0')
     put('@kaynooo/cli-guard', '1.0.0')

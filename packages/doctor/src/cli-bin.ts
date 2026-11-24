@@ -9,6 +9,7 @@ import process from 'node:process'
 import { activeTheme, badge, badUsage, bar, completionScript, duration, fail, formatDuration, getConfigKey, header, isInteractive, jsonOption, keyValue, mainConfigPath, marked, paint, parse, parseConfigValue, PRESETS, printHeader, printJson, readMainConfig, readUsage, role, runCli, section, setConfigKey, sparkline, summarizeUsage, table, tree, unsetConfigKey, updateMainConfig, usagePath } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
 import { completePath, input, select } from '@kaynooo/cli-kit/prompt'
+import { isInstalled, TOOLS } from './checks'
 import { completionDir, installCompletions, installedBins } from './completions'
 import { configReport } from './config-report'
 import { main as doctor } from './doctor'
@@ -404,7 +405,18 @@ export async function update(args: string[], host: Host = hostHere()): Promise<n
     'offline': { type: 'boolean', description: 'skip registry and remote release lookups' },
   }, { positionals: [], exits: [[0, 'everything is up to date'], [1, 'an update failed or needs manual action'], [2, 'a usage error']], examples: ['cli update', ['cli update --dry-run', 'preview updates']] })
 
-  return doctor(['--fix', ...values['dry-run'] === true ? ['--dry-run'] : [], ...values.offline === true ? ['--offline'] : []], host)
+  const installedPkgs = Object.keys(TOOLS)
+    .filter(name => isInstalled(host, name))
+    .map(name => name.slice(name.indexOf('/') + 1))
+
+  const checks = [
+    ...installedPkgs,
+    'completions',
+    'dead-bins',
+    ...values.offline !== true && isInstalled(host, '@kaynooo/cli-dl') ? ['dl-bins'] : [],
+  ]
+
+  return doctor(['--fix', ...checks.flatMap(check => ['--only', check]), ...values['dry-run'] === true ? ['--dry-run'] : [], ...values.offline === true ? ['--offline'] : []], host)
 }
 
 export async function manage(args: string[], host: Host = hostHere()): Promise<number> {

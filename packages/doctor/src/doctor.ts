@@ -2,17 +2,16 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Host, Result } from './checks'
 import type { Outcome } from './fix'
 import process from 'node:process'
-import { badUsage, jsonOption, marked, paint, parse, printHeader, printJson } from '@kaynooo/cli-kit'
+import { jsonOption, marked, paint, parse, printHeader, printJson } from '@kaynooo/cli-kit'
 import { CHECK_NAMES, isInstalled, runChecks, TOOLS } from './checks'
 import { applyFixes, planFixes } from './fix'
 import { hostHere } from './host'
-import { install } from './install'
 
-const USAGE = `doctor [--only <check>] [--quiet] [--fix | --install [<name>...|all]] [--list] [--dry-run] [--force] [--json]: checks this host's @kaynooo/cli-* install, one line per check with the fix beside a failing one, and installs the packages it picks
+const USAGE = `cli doctor [--only <check>] [--quiet] [--fix] [--dry-run] [--offline] [--json]: checks this host's @kaynooo/cli-* install, one line per check with the fix beside a failing one
 
 Checks the installed packages are current, their system tools, tea's login, the Claude Code hooks, Bun, the shell completions (fish files, or the script a bash or zsh rc sources), dead bin links and the commands dl installed; a package not installed is no failure.
 --fix runs the printed fixes, then checks again; a fix that installs a system package or only describes a step is printed, never run.
---install adds the packages named (\`forgejo\`, \`ft\`, \`hooks\`, \`all\`) or picked from a checklist, leaving out one whose required tool is missing unless --force.`
+To install or remove packages, use \`cli add\`, \`cli remove\` or \`cli manage\`.`
 
 const EXITS: ExitRow[] = [[0, 'every check passes (after --fix, the ones it fixed too)'], [1, 'a check fails'], [2, 'a usage error']]
 
@@ -20,21 +19,18 @@ const INSTALL = 'bun install -g '
 
 const OPTIONS = {
   'json': jsonOption('[{check, ok, detail, fix?}], as the checks stand after --fix; the fixes it ran go to stderr'),
-  'only': { type: 'string', multiple: true, choices: CHECK_NAMES, description: 'run only this check (a package such as cli-forgejo, tea, hooks, bun or completions), repeatable' },
+  'only': { type: 'string', multiple: true, choices: CHECK_NAMES, description: 'run only this check (a package such as cli-forge, tea, hooks, bun or completions), repeatable' },
   'quiet': { type: 'boolean', short: 'q', description: 'print only the failing checks' },
   'offline': { type: 'boolean', description: 'skip registry and remote release lookups' },
   'fix': { type: 'boolean', description: 'run the fix: lines doctor may run, then check again' },
-  'dry-run': { type: 'boolean', description: 'with --fix or --install, show what would run without running it (alone, it implies --fix)' },
-  'install': { type: 'boolean', description: 'install the packages named, or managed from a checklist, installed ones checked and unchecking removing them: forgejo, ft, hooks, all' },
-  'list': { type: 'boolean', description: 'with --install, print the choices' },
-  'force': { type: 'boolean', description: 'with --install, install a package even though a tool it requires is missing' },
+  'dry-run': { type: 'boolean', description: 'show what --fix would run without running it (implies --fix)' },
 } as const
 
 function print(results: readonly Result[]): void {
   if (results.length === 0)
     return
 
-  printHeader('doctor', `${results.length} ${results.length === 1 ? 'check' : 'checks'}`)
+  printHeader('cli doctor', `${results.length} ${results.length === 1 ? 'check' : 'checks'}`)
 
   const { dim } = paint(process.stdout)
   const width = Math.max(...results.map(result => result.check.length))
@@ -65,19 +61,8 @@ function printOutcomes(outcomes: readonly Outcome[], log: (line: string) => void
 }
 
 export async function main(args: string[], host: Host = hostHere()): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[name...]'], exits: EXITS, replaces: 'checking each bin\'s version, tea\'s login and the hooks by hand', examples: ['doctor', ['doctor --json', 'the checks for a script'], ['doctor -q', 'silent unless something fails'], ['doctor --fix --dry-run', 'what --fix would run'], ['doctor --install', 'check to install, uncheck to remove'], ['doctor --install forgejo check hooks', 'three named ones'], ['doctor --install all --dry-run', 'what installing everything would run']] })
+  const { values } = parse(args, USAGE, OPTIONS, { positionals: [], exits: EXITS, replaces: 'checking each bin\'s version, tea\'s login and the hooks by hand', examples: ['cli doctor', ['cli doctor --json', 'the checks for a script'], ['cli doctor -q', 'silent unless something fails'], ['cli doctor --fix --dry-run', 'what --fix would run'], ['cli doctor --fix', 'run safe fixes and re-check']] })
   const only = values.only ?? []
-
-  if (values.install !== true && (positionals.length > 0 || values.list === true || values.force === true))
-    badUsage('names, --list and --force go with --install')
-
-  if (values.install === true) {
-    if (values.fix === true || only.length > 0 || values.json === true || values.quiet === true)
-      badUsage('--install does not combine with --fix, --only, --json or --quiet')
-
-    return install(host, { names: positionals, list: values.list === true, dryRun: values['dry-run'] === true, force: values.force === true }, async checks => main(['--fix', ...checks.flatMap(check => ['--only', check])], host))
-  }
-
   const dry = values['dry-run'] === true
   const json = values.json === true
   const offline = values.offline === true
@@ -113,7 +98,7 @@ export async function main(args: string[], host: Host = hostHere()): Promise<num
   const absent = Object.keys(TOOLS).filter(name => !isInstalled(host, name)).length
 
   if (!json && only.length === 0 && absent > 0)
-    console.log(`\n${paint(process.stdout).dim(`${absent} packages not installed: doctor --install`)}`)
+    console.log(`\n${paint(process.stdout).dim(`${absent} packages not installed: cli add <name> or cli manage`)}`)
 
   return results.every(result => result.ok) ? 0 : 1
 }

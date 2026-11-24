@@ -2,7 +2,7 @@
   "name": "@kaynooo/cli-doctor",
   "type": "module",
   "version": "0.22.0",
-  "description": "doctor: checks the @kaynooo/cli-* install of a host: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks and the Bun floor; cli list: every bin in one line, read from its own help.",
+  "description": "cli: hub for @kaynooo/cli-* packages — discover, install, remove, update, configure, and diagnose (cli doctor).",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
   "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/doctor#readme",
@@ -19,7 +19,6 @@
     "install"
   ],
   "bin": {
-    "doctor": "./dist/cli.js",
     "cli": "./dist/cli-bin.js"
   },
   "files": [
@@ -29,9 +28,8 @@
     "bun": ">=1.4.3"
   },
   "scripts": {
-    "build": "$npm_execpath ../../scripts/catalog.ts && $npm_execpath ../../scripts/build.ts src/cli.ts src/cli-bin.ts",
-    "cli": "$npm_execpath src/cli-bin.ts",
-    "doctor": "$npm_execpath src/cli.ts"
+    "build": "$npm_execpath ../../scripts/catalog.ts && $npm_execpath ../../scripts/build.ts src/cli-bin.ts",
+    "cli": "$npm_execpath src/cli-bin.ts"
   },
   "devDependencies": {
     "@kaynooo/cli-kit": "workspace:*"

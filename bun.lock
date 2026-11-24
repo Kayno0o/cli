@@ -110,7 +110,6 @@
       "name": "@kaynooo/cli-doctor",
       "version": "0.22.0",
       "bin": {
-        "doctor": "./dist/cli.js",
         "cli": "./dist/cli-bin.js",
       },
       "devDependencies": {

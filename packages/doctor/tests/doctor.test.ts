@@ -281,7 +281,7 @@ describe('doctor', () => {
     expect(result).toBe(1)
     expect(out.split('\n').filter(line => line.startsWith('error:')).map(line => line.split(/\s+/)[1])).toEqual(['cli-forge', 'cli-git', 'tea'])
     expect(out).toContain('fix them all: bun install -g @kaynooo/cli-forge@0.5.1 @kaynooo/cli-git@0.2.0')
-    expect(out).toContain(`${Object.keys(TOOLS).length - 2} packages not installed: doctor --install`)
+    expect(out).toContain(`${Object.keys(TOOLS).length - 2} packages not installed: cli add <name> or cli manage`)
 
     const json = JSON.parse((await capture(async () => main(['--json'], host))).out) as { check: string }[]
 
@@ -354,7 +354,7 @@ describe('doctor --fix', () => {
         }
 
         if (line.startsWith('bun info'))
-          return { code: 0, stdout: line.includes('forgejo') ? '0.5.1\n' : '0.2.0\n', stderr: '' }
+          return { code: 0, stdout: line.includes('forge') ? '0.5.1\n' : '0.2.0\n', stderr: '' }
 
         return { code: 1, stdout: '', stderr: `no stub for ${line}` }
       },

@@ -140,23 +140,6 @@ dl outdated  # what changed at its source
 dl update --dry-run  # preview updates
 ```
 
-## doctor
-
-checks this host's @kaynooo/cli-* install, one line per check with the fix beside a failing one, and installs the packages it picks. Package `doctor`.
-
-Instead of: checking each bin's version, tea's login and the hooks by hand
-
-```sh
-doctor [--only <check>] [--quiet] [--fix | --install [<name>...|all]] [--list] [--dry-run] [--force] [--json]
-doctor
-doctor --json  # the checks for a script
-doctor -q  # silent unless something fails
-doctor --fix --dry-run  # what --fix would run
-doctor --install  # check to install, uncheck to remove
-doctor --install forgejo check hooks  # three named ones
-doctor --install all --dry-run  # what installing everything would run
-```
-
 ## errs
 
 prints one `file:line:col: message (rule)` line per error found in a tsc, eslint, bun test, vitest, playwright, phpunit, phpstan, php-cs-fixer, go, cargo, ruff or pytest log, or any `file:line[:col]: error|warning: message` line, read from a file, from stdin or from the output of the command run after --. Package `check`.

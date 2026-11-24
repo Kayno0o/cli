@@ -10,7 +10,6 @@ export const BINS: Record<string, string> = {
   dc: '`dc`: unified Docker Compose CLI — service picker/listing, health & error summary, redacted logs, shell/exec,… (instead of docker compose -f ..., docker compose…)',
   dev: '`dev`: small developer utilities: passwords and bcrypt hashes, JWTs, timestamps, IDs, encodings, URLs, file hashes,… (instead of openssl rand, htpasswd, jwt.io, date -d,…)',
   dl: '`dl`: downloads a file into a folder of its own, checks its sha256, then extracts it, installs it as a command or… (instead of curl -fsSL <url> | sh, curl -LO then sha256sum…)',
-  doctor: '`doctor`: checks this host\'s @kaynooo/cli-* install, one line per check with the fix beside a failing one, and installs… (instead of checking each bin\'s version, tea\'s login and…)',
   errs: '`errs`: prints one `file:line:col: message (rule)` line per error found in a tsc, eslint, bun test, vitest,… (instead of reading raw tsc, eslint, phpunit, phpstan or…)',
   ev: '`ev`: .env files listed, run, synced and edited with secrets masked (instead of cat .env, grep on env files, sourcing .env into…)',
   fg: '`fg`: unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and… (instead of tea, glab, gh api calls piped through jq, and…)',
