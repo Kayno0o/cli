@@ -150,6 +150,8 @@ describe('in a clone', () => {
     expect(out('--emit', '-')).toBe('run\n-\n\n=git\n=switch\n=-\n')
     expect(out('--emit', '-c', 'feat/new')).toBe('run\n-c feat/new\n\n=git\n=switch\n=-c\n=feat/new\n')
     expect(out('--emit', '-d', 'work')).toBe('run\n-d work\n\n=git\n=branch\n=-d\n=work\n')
+    expect(out('--emit', '-D', 'work')).toBe('run\n-D work\n\n=git\n=branch\n=-D\n=work\n')
+    expect(out('--emit', '-m', 'work', 'work-renamed')).toBe('run\n-m work work-renamed\n\n=git\n=branch\n=-m\n=work\n=work-renamed\n')
   })
 
   test('gb --list gives the rows tmux_pick reads, each with its preview and its keys, and --emit with no terminal does not open the picker', () => {

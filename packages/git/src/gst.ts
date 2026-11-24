@@ -11,7 +11,7 @@ import { operationOf } from './operation'
 import { branchOf, changesOf, reposOf, repoState, trackingOf } from './repos'
 import { parseStatus, stashOf, summary } from './status'
 
-const USAGE = `gst [-n N]: the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked
+const USAGE = `gst [-n N] [--author <who>] [--path <path>] [--since <date>] [--range <a..b>]: the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked
 
 gst --repos [dir]... lists every repository at and below the current one's toplevel (or below each dir given, the current directory outside a repository), four levels down, past node_modules, vendor, dist and hidden folders: one line each with its path, branch, how it stands against its upstream as of the last fetch, and the files left to commit.`
 const EXITS: ExitRow[] = [[0, 'it printed the status'], [2, 'outside a git repository or a usage error']]
@@ -19,7 +19,11 @@ const EXITS: ExitRow[] = [[0, 'it printed the status'], [2, 'outside a git repos
 const OPTIONS = {
   limit: { type: 'string', short: 'n', description: 'add the last N commits as <sha7> <title>' },
   log: { type: 'string', short: 'l', description: 'the former spelling of --limit' },
-  repos: { type: 'boolean', short: 'r', description: 'one line for each repository nested below, the current one included', conflicts: ['limit', 'log'] },
+  author: { type: 'string', description: 'filter commits by author name or email (implies -n 20 unless -n is given)', conflicts: ['repos'] },
+  path: { type: 'string', description: 'filter commits touching this path (implies -n 20 unless -n is given)', conflicts: ['repos'] },
+  since: { type: 'string', description: 'filter commits since this date or duration (e.g. "2 weeks ago")', conflicts: ['repos'] },
+  range: { type: 'string', description: 'commit range to list (e.g. main..HEAD)', conflicts: ['repos'] },
+  repos: { type: 'boolean', short: 'r', description: 'one line for each repository nested below, the current one included', conflicts: ['limit', 'log', 'author', 'path', 'since', 'range'] },
   watch: watchOption('the status'),
   json: jsonOption('{branch, oid, upstream, ahead, behind, head, staged, unstaged, untracked, conflicted, operation, stash, commits}, operation being {kind, step?, total?} while a rebase, merge, cherry-pick, revert or bisect is in progress and null otherwise; with --repos an array of them, each with its path and no commits, a repository git cannot read being {path, error}'),
 } as const
@@ -86,7 +90,12 @@ function staged({ index, from, path }: Change): string {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS, { exits: EXITS, positionals: ['[dir]...'], replaces: 'git status --short, git log --oneline and a git -C <repo> status per nested repository', examples: ['gst', ['gst -n 5', 'with the last five commits'], ['gst --repos', 'the repositories nested in this one']] })
+  const parsed = parse(argv, USAGE, OPTIONS, {
+    exits: EXITS,
+    positionals: ['[dir]...'],
+    replaces: 'git status --short, git log --oneline and a git -C <repo> status per nested repository',
+    examples: ['gst', ['gst -n 5', 'with the last five commits'], ['gst --path src/api.ts --author alice', 'filtered commit history'], ['gst --repos', 'the repositories nested in this one']],
+  })
 
   if (parsed.positionals.length > 0 && parsed.values.repos !== true)
     fail(`gst takes dirs with --repos alone\n\n${USAGE}`)
@@ -100,12 +109,25 @@ async function main(argv: string[]): Promise<number> {
   if (parsed.values.limit !== undefined && parsed.values.log !== undefined)
     fail('--limit and --log are the same flag, give one')
 
+  const hasLogFilter = parsed.values.author !== undefined || parsed.values.path !== undefined || parsed.values.since !== undefined || parsed.values.range !== undefined
   const asked = parsed.values.limit ?? parsed.values.log
-  const count = asked === undefined ? 0 : wholeNumber(asked, 'limit', 1)
+  const defaultCount = hasLogFilter ? 20 : 0
+  const count = asked === undefined ? defaultCount : wholeNumber(asked, 'limit', 1)
+  const logArgs = count === 0
+    ? undefined
+    : [
+      'log',
+      `-${count}`,
+      '--format=%h%x00%s',
+      ...(parsed.values.author === undefined ? [] : [`--author=${parsed.values.author}`]),
+      ...(parsed.values.since === undefined ? [] : [`--since=${parsed.values.since}`]),
+      ...(parsed.values.range === undefined ? [] : [parsed.values.range]),
+      ...(parsed.values.path === undefined ? [] : ['--', parsed.values.path]),
+    ]
   const [read, head, log, gitDir] = await Promise.all([
     git(['status', '--porcelain=v2', '--branch', '--show-stash']),
     git(['log', '-1', '--format=%h%x00%s']),
-    count === 0 ? undefined : git(['log', `-${count}`, '--format=%h%x00%s']),
+    logArgs === undefined ? undefined : git(logArgs),
     git(['rev-parse', '--absolute-git-dir']),
   ])
   const status = read.code === 0 ? parseStatus(read.stdout) : null

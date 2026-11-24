@@ -148,9 +148,10 @@ describe('gb', () => {
     git('commit', '-q', '-m', 'feat: first')
     git('branch', 'other')
 
-    const [first] = JSON.parse(gb('--json').out) as { name: string, when: string }[]
+    const list = JSON.parse(gb('--json').out) as { name: string, current: boolean, when: string }[]
 
-    expect(first).toMatchObject({ name: 'other', when: 'just now' })
+    expect(list.find(branch => branch.current)).toMatchObject({ name: 'main', current: true, when: 'just now' })
+    expect(list.find(branch => branch.name === 'other')).toMatchObject({ name: 'other', current: false, when: 'just now' })
   })
 })
 

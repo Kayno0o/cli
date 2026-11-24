@@ -2,7 +2,7 @@
 
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Hunk } from './conflicts'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import process from 'node:process'
 import { badUsage, fail, formatAge, isInteractive, jsonOption, marked, paint, parse, printJson, role, runMain, table } from '@kaynooo/cli-kit'
@@ -12,18 +12,20 @@ import { conflictHunks } from './conflicts'
 import { git } from './git'
 
 const USAGE = `gm [branch]: merges the branch into the current one with git merge --no-edit, saying what came in
+gm --rebase <branch>: rebases the current branch onto <branch>, using the same conflict reporting and --continue / --abort
 
-Without a branch, on a terminal, picks one with a preview of what merging it would do (enter merges, ctrl-s squashes); without a terminal it lists the branches with that verdict. A merge in progress is refused here: \`gm --continue\` or \`gm --abort\`.
+Without a branch, on a terminal, picks one with a preview of what merging it would do (enter merges, ctrl-s squashes); without a terminal it lists the branches with that verdict. A merge or rebase in progress is refused here: \`gm --continue\` or \`gm --abort\`.
 Staged changes are refused, and so are unstaged ones in files the merge changes; other unstaged edits stay as they are.
 On a conflict every conflicted file is listed with its conflict regions and the exit is 1.`
-const EXITS: ExitRow[] = [[0, 'it merged, the branch was already merged, or --dry-run found no conflict'], [1, 'a conflict, a dirty tree, an unknown branch, a refused step or git failed'], [2, 'outside a git repository or a usage error']]
+const EXITS: ExitRow[] = [[0, 'it merged or rebased, the branch was already up to date, or --dry-run found no conflict'], [1, 'a conflict, a dirty tree, an unknown branch, a refused step or git failed'], [2, 'outside a git repository or a usage error']]
 
 const OPTIONS = {
-  'abort': { type: 'boolean', description: 'give up the merge in progress', conflicts: ['continue', 'dry-run'] },
-  'continue': { type: 'boolean', description: 'commit the merge in progress once no conflict marker is left and a side is picked for each file git could not mark', conflicts: ['abort', 'dry-run'] },
-  'squash': { type: 'boolean', short: 's', description: 'stage the branch\'s changes without committing or recording a merge', conflicts: ['abort', 'continue', 'dry-run'] },
-  'dry-run': { type: 'boolean', short: 'n', description: 'say whether the merge would conflict, and where, without touching the tree', conflicts: ['abort', 'continue'] },
-  'json': jsonOption('{outcome, branch, into, sha?, commits?, files?: [{status, path, from?}], conflicts?: [{path, hunks: [{from, to, lines: [{line, text}]}]}]}, outcome being fast-forward, merge, squashed, up-to-date, conflict, clean (dry run), aborted or refused; with no branch an array of {name, remote, ahead, behind, outcome, conflicts: [path], when, subject}'),
+  'abort': { type: 'boolean', description: 'give up the merge, rebase, or conflicted squash in progress', conflicts: ['continue', 'dry-run', 'rebase'] },
+  'continue': { type: 'boolean', description: 'finish the merge or rebase in progress once no conflict marker is left', conflicts: ['abort', 'dry-run', 'rebase'] },
+  'squash': { type: 'boolean', short: 's', description: 'stage the branch\'s changes without committing or recording a merge', conflicts: ['abort', 'continue', 'dry-run', 'rebase'] },
+  'rebase': { type: 'boolean', short: 'r', description: 'rebase the current branch onto the target branch instead of merging', conflicts: ['abort', 'continue', 'squash', 'dry-run'] },
+  'dry-run': { type: 'boolean', short: 'n', description: 'say whether the merge would conflict, and where, without touching the tree', conflicts: ['abort', 'continue', 'rebase'] },
+  'json': jsonOption('{outcome, branch, into, sha?, commits?, files?: [{status, path, from?}], conflicts?: [{path, hunks: [{from, to, lines: [{line, text}]}]}]}, outcome being fast-forward, merge, squashed, rebased, up-to-date, conflict, clean (dry run), aborted or refused; with no branch an array of {name, remote, ahead, behind, outcome, conflicts: [path], when, subject}'),
 } as const
 
 const NOT_A_REPOSITORY = /not a git repository/i
@@ -60,8 +62,24 @@ async function currentBranch(): Promise<string> {
   return name === 'HEAD' ? 'HEAD (detached)' : name
 }
 
+async function gitDirPath(): Promise<string> {
+  return (await ran(['rev-parse', '--absolute-git-dir'])).trim()
+}
+
 async function merging(): Promise<boolean> {
   return succeeds(['rev-parse', '-q', '--verify', 'MERGE_HEAD'])
+}
+
+async function rebasing(): Promise<boolean> {
+  const dir = await gitDirPath()
+
+  return existsSync(join(dir, 'rebase-merge')) || existsSync(join(dir, 'rebase-apply'))
+}
+
+async function squashConflicted(): Promise<boolean> {
+  const dir = await gitDirPath()
+
+  return existsSync(join(dir, 'SQUASH_MSG')) && (await unmergedStages()).size > 0
 }
 
 interface Stage { mode: string, blob: string }
@@ -135,16 +153,18 @@ function files(text: string) {
   })
 }
 
-// Reports a merge that left conflicts, exit 1.
-function conflictReport(branch: string, into: string, conflicts: Conflict[], json: boolean, squash = false): number {
+// Reports a merge, squash, or rebase that left conflicts, exit 1.
+function conflictReport(branch: string, into: string, conflicts: Conflict[], json: boolean, kind: 'merge' | 'squash' | 'rebase' = 'merge'): number {
   if (json) {
     printJson({ outcome: 'conflict', branch, into, conflicts: conflicts.map(({ path, hunks }) => ({ path, hunks })) })
 
     return 1
   }
 
-  console.log([marked('problem', `merging ${branch} into ${into} left ${conflicts.length} conflicted ${conflicts.length === 1 ? 'file' : 'files'}`, process.stdout), ...conflictLines(conflicts)].join('\n').trimEnd())
-  console.log(squash ? '\nresolve the files and commit them with gc, or git reset --merge to give up' : '\nresolve the files, then gm --continue, or gm --abort')
+  const verb = kind === 'rebase' ? `rebasing ${into} onto ${branch}` : `merging ${branch} into ${into}`
+
+  console.log([marked('problem', `${verb} left ${conflicts.length} conflicted ${conflicts.length === 1 ? 'file' : 'files'}`, process.stdout), ...conflictLines(conflicts)].join('\n').trimEnd())
+  console.log(kind === 'squash' ? '\nresolve the files and commit them with gc --staged, or gm --abort to give up' : '\nresolve the files, then gm --continue, or gm --abort')
 
   return 1
 }
@@ -168,6 +188,25 @@ async function mergedReport(before: string, branch: string, into: string, json: 
   const list = changed.split('\n').filter(Boolean)
 
   console.log([marked('ok', `${into} <- ${branch}, ${how}, ${count}, ${list.length} ${list.length === 1 ? 'file' : 'files'} changed`, process.stdout), ...list.map(fileLine)].join('\n'))
+
+  return 0
+}
+
+async function rebasedReport(branch: string, into: string, json: boolean): Promise<number> {
+  const sha = (await ran(['rev-parse', 'HEAD'])).trim()
+  const commits = Number((await ran(['rev-list', '--count', `${branch}..HEAD`])).trim())
+  const changed = await ran(['diff', '--name-status', '-M', branch, 'HEAD'])
+
+  if (json) {
+    printJson({ outcome: 'rebased', branch, into, sha, commits, files: files(changed) })
+
+    return 0
+  }
+
+  const count = `${commits} ${commits === 1 ? 'commit' : 'commits'}`
+  const list = changed.split('\n').filter(Boolean)
+
+  console.log([marked('ok', `rebased ${into} onto ${branch} (${sha.slice(0, 7)}, ${count}, ${list.length} ${list.length === 1 ? 'file' : 'files'} changed)`, process.stdout), ...list.map(fileLine)].join('\n'))
 
   return 0
 }
@@ -212,7 +251,7 @@ async function squashedReport(before: string, branch: string, into: string, json
 
   const list = changed.split('\n').filter(Boolean)
 
-  console.log([marked('ok', `${branch} squashed into the index of ${into}: ${commits} ${commits === 1 ? 'commit' : 'commits'}, ${list.length} ${list.length === 1 ? 'file' : 'files'}, commit them with gc`, process.stdout), ...list.map(fileLine)].join('\n'))
+  console.log([marked('ok', `${branch} squashed into the index of ${into}: ${commits} ${commits === 1 ? 'commit' : 'commits'}, ${list.length} ${list.length === 1 ? 'file' : 'files'}, commit them with gc --staged`, process.stdout), ...list.map(fileLine)].join('\n'))
 
   return 0
 }
@@ -290,17 +329,20 @@ async function choose(into: string): Promise<{ branch: string, squash: boolean }
 }
 
 // Staged changes would go into the merge commit, and an abort could not give back an unstaged edit in a file the merge changes; other unstaged edits stay as they are.
-async function refuseUnsafeChanges(branch: string): Promise<void> {
+async function refuseUnsafeChanges(branch: string, isRebase = false): Promise<void> {
   const paths = async (args: string[]) => (await ran([...args, '--name-only', '-z'])).split('\0').filter(path => path !== '')
   const staged = await paths(['diff', '--cached'])
 
   if (staged.length > 0)
-    fail(`staged changes would go into the merge (${staged.join(', ')}): commit them first (gc), or unstage them (gu --staged)`, 1)
+    fail(`staged changes ${isRebase ? 'prevent rebasing' : 'would go into the merge'} (${staged.join(', ')}): commit them first (gc), or unstage them (gu --staged)`, 1)
 
   const dirty = await paths(['diff'])
 
   if (dirty.length === 0)
     return
+
+  if (isRebase)
+    fail(`uncommitted changes prevent rebasing (${dirty.join(', ')}): commit them first (gc), or set them aside as a patch (gu)`, 1)
 
   const touched = new Set(await paths(['diff', '--no-renames', `HEAD...${branch}`]))
   const overlap = dirty.filter(path => touched.has(path))
@@ -309,8 +351,35 @@ async function refuseUnsafeChanges(branch: string): Promise<void> {
     fail(`uncommitted changes in files the merge changes (${overlap.join(', ')}): commit them first (gc), or set them aside as a patch (gu)`, 1)
 }
 
+function checkUnresolved(conflicts: Conflict[], into: string, json: boolean): number | undefined {
+  const left = conflicts.filter(conflict => conflict.hunks.length > 0)
+  // A binary file or one deleted on a side holds no markers to remove: only the user can pick its side.
+  const unpicked = conflicts.filter(conflict => conflict.hunks.length === 0 && !conflict.isMarked)
+
+  if (left.length === 0 && unpicked.length === 0)
+    return undefined
+
+  const problems = [
+    left.length > 0 ? `conflict markers remain in ${left.map(conflict => conflict.path).join(', ')}` : undefined,
+    unpicked.length > 0 ? `no side is picked yet in ${unpicked.map(conflict => conflict.path).join(', ')}: keep one and git add it, or git rm it` : undefined,
+  ].filter(problem => problem !== undefined)
+
+  if (json)
+    printJson({ outcome: 'refused', into, conflicts: [...left, ...unpicked].map(({ path, hunks }) => ({ path, hunks })) })
+  else
+    console.log([...problems.map(problem => marked('problem', problem, process.stdout)), ...conflictLines([...left, ...unpicked])].join('\n').trimEnd())
+
+  return 1
+}
+
 async function main(argv: string[]): Promise<number> {
-  const { values, positionals } = parse(argv, USAGE, OPTIONS, { positionals: ['[branch]'], candidates: { '[branch]': () => branchCandidates(true) }, exits: EXITS, replaces: 'git merge and then git diff --name-only --diff-filter=U and reading each file for markers', examples: ['gm feature', ['gm --dry-run feature', 'whether it would conflict, and where'], ['gm --continue', 'commit once the conflicts are resolved'], ['gm --abort', 'give the merge up']] })
+  const { values, positionals } = parse(argv, USAGE, OPTIONS, {
+    positionals: ['[branch]'],
+    candidates: { '[branch]': () => branchCandidates(true) },
+    exits: EXITS,
+    replaces: 'git merge, git rebase and reading each conflicted file for markers',
+    examples: ['gm feature', ['gm --rebase main', 'rebase onto main with conflict UI'], ['gm --dry-run feature', 'whether it would conflict, and where'], ['gm --continue', 'finish once conflicts are resolved'], ['gm --abort', 'give up the merge, rebase, or conflicted squash']],
+  })
   const json = values.json === true
   const into = await currentBranch()
 
@@ -318,45 +387,78 @@ async function main(argv: string[]): Promise<number> {
     if (positionals.length > 0)
       badUsage('--abort and --continue take no branch')
 
-    if (!await merging())
-      fail('no merge in progress', 1)
+    const isMerging = await merging()
+    const isRebasing = await rebasing()
+    const isSquashConflict = !isMerging && !isRebasing && await squashConflicted()
+
+    if (!isMerging && !isRebasing && !isSquashConflict)
+      fail('no merge or rebase in progress', 1)
 
     if (values.abort === true) {
-      await ran(['merge', '--abort'])
+      if (isMerging) {
+        await ran(['merge', '--abort'])
+      }
+      else if (isRebasing) {
+        await ran(['rebase', '--abort'])
+      }
+      else {
+        await ran(['reset', '--merge'])
+        rmSync(join(await gitDirPath(), 'SQUASH_MSG'), { force: true })
+      }
+
+      let kind = 'merge'
+
+      if (isRebasing)
+        kind = 'rebase'
+      else if (isSquashConflict)
+        kind = 'squash merge'
 
       if (json)
         printJson({ outcome: 'aborted', into })
       else
-        console.log(`merge into ${into} aborted`)
+        console.log(`${kind} into ${into} aborted`)
 
       return 0
     }
 
-    const conflicts = await conflicted()
-    const left = conflicts.filter(conflict => conflict.hunks.length > 0)
-    // A binary file or one deleted on a side holds no markers to remove: only the user can pick its side.
-    const unpicked = conflicts.filter(conflict => conflict.hunks.length === 0 && !conflict.isMarked)
+    if (isSquashConflict)
+      fail('a squash merge is not committed with gm --continue: resolve the files, then commit with gc --staged (or gm --abort to give up)', 1)
 
-    if (left.length > 0 || unpicked.length > 0) {
-      const problems = [
-        left.length > 0 ? `conflict markers remain in ${left.map(conflict => conflict.path).join(', ')}` : undefined,
-        unpicked.length > 0 ? `no side is picked yet in ${unpicked.map(conflict => conflict.path).join(', ')}: keep one and git add it, or git rm it` : undefined,
-      ].filter(problem => problem !== undefined)
+    const conflicts = await conflicted()
+    const refused = checkUnresolved(conflicts, into, json)
+
+    if (refused !== undefined)
+      return refused
+
+    if (conflicts.length > 0)
+      await ran(['add', '-A', '--', ...conflicts.map(conflict => conflict.path)])
+
+    if (isRebasing) {
+      const onto = (await git(['rev-parse', '--short', 'REBASE_HEAD'])).stdout.trim() || 'onto'
+      const cont = await git(['rebase', '--continue'], EDITOR_OFF)
+
+      if (cont.code !== 0) {
+        const nextConflicts = await conflicted()
+
+        if (nextConflicts.length > 0)
+          return conflictReport(onto, into, nextConflicts, json, 'rebase')
+
+        fail(`git rebase --continue failed:\n${(cont.stderr || cont.stdout).trim()}`, 1)
+      }
+
+      const sha = (await ran(['rev-parse', 'HEAD'])).trim()
+      const finalBranch = await currentBranch()
 
       if (json)
-        printJson({ outcome: 'refused', into, conflicts: [...left, ...unpicked].map(({ path, hunks }) => ({ path, hunks })) })
+        printJson({ outcome: 'rebased', into: finalBranch, sha })
       else
-        console.log([...problems.map(problem => marked('problem', problem, process.stdout)), ...conflictLines([...left, ...unpicked])].join('\n').trimEnd())
+        console.log(marked('ok', `rebased ${finalBranch} (${sha.slice(0, 7)})`, process.stdout))
 
-      return 1
+      return 0
     }
 
     const before = (await ran(['rev-parse', 'HEAD'])).trim()
     const incoming = (await ran(['rev-parse', 'MERGE_HEAD'])).trim()
-
-    // Only the files still conflicted are staged: one the user git-added is staged already, and other edits stay out of the merge.
-    if (conflicts.length > 0)
-      await ran(['add', '-A', '--', ...conflicts.map(conflict => conflict.path)])
 
     await ran(['commit', '--no-edit'], EDITOR_OFF)
 
@@ -366,17 +468,17 @@ async function main(argv: string[]): Promise<number> {
   const [named, ...extra] = positionals
 
   if (extra.length > 0)
-    badUsage(`give one branch to merge\n\n${USAGE}`)
+    badUsage(`give one branch to ${values.rebase === true ? 'rebase onto' : 'merge'}\n\n${USAGE}`)
 
-  if (named === undefined && values['dry-run'] === true)
-    badUsage('--dry-run needs the branch to try')
+  if (named === undefined && (values['dry-run'] === true || values.rebase === true))
+    badUsage(`${values.rebase === true ? '--rebase' : '--dry-run'} needs the target branch`)
 
   let branch = named
   let squash = values.squash === true
 
   if (branch === undefined) {
-    if (await merging())
-      fail('a merge is in progress: gm --continue once the conflicts are resolved, or gm --abort', 1)
+    if (await merging() || await rebasing())
+      fail('a merge or rebase is in progress: gm --continue once the conflicts are resolved, or gm --abort', 1)
 
     if (!isInteractive() || json)
       return listing(json)
@@ -399,10 +501,12 @@ async function main(argv: string[]): Promise<number> {
   if (values['dry-run'] === true)
     return dryRun(branch, into, json)
 
-  if (await merging())
-    fail('a merge is already in progress: gm --continue once the conflicts are resolved, or gm --abort', 1)
+  if (await merging() || await rebasing())
+    fail('a merge or rebase is already in progress: gm --continue once the conflicts are resolved, or gm --abort', 1)
 
-  await refuseUnsafeChanges(branch)
+  const isRebase = values.rebase === true
+
+  await refuseUnsafeChanges(branch, isRebase)
 
   if (await succeeds(['merge-base', '--is-ancestor', branch, 'HEAD'])) {
     if (json)
@@ -413,6 +517,18 @@ async function main(argv: string[]): Promise<number> {
     return 0
   }
 
+  if (isRebase) {
+    const rebased = await git(['rebase', branch], EDITOR_OFF)
+
+    if (rebased.code === 0)
+      return rebasedReport(branch, into, json)
+
+    if (await rebasing())
+      return conflictReport(branch, into, await conflicted(), json, 'rebase')
+
+    return fail(`git rebase failed:\n${(rebased.stderr || rebased.stdout).trim()}`, NOT_A_REPOSITORY.test(rebased.stderr) ? 2 : 1)
+  }
+
   const before = (await ran(['rev-parse', 'HEAD'])).trim()
   const merged = await git(squash ? ['merge', '--squash', branch] : ['merge', '--no-edit', branch], EDITOR_OFF)
 
@@ -420,7 +536,7 @@ async function main(argv: string[]): Promise<number> {
     return squash ? squashedReport(before, branch, into, json) : mergedReport(before, branch, into, json)
 
   if (squash ? (await conflicted()).length > 0 : await merging())
-    return conflictReport(branch, into, await conflicted(), json, squash)
+    return conflictReport(branch, into, await conflicted(), json, squash ? 'squash' : 'merge')
 
   return fail(`git merge failed:\n${(merged.stderr || merged.stdout).trim()}`, NOT_A_REPOSITORY.test(merged.stderr) ? 2 : 1)
 }

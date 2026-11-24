@@ -4,6 +4,7 @@ import { basename } from 'node:path'
 import process from 'node:process'
 import { closest, fail, formatAge, isInteractive, jsonOption, paint, parse, printJson, takesControlCodes } from '@kaynooo/cli-kit'
 import { emit, list, pick, table } from '@kaynooo/cli-kit/picker'
+import { git, gitSync } from './git'
 
 export interface Branch {
   // What git calls it, `feature` or `origin/feature`.
@@ -25,18 +26,21 @@ export interface Branch {
 const usage = `gb [branch]: picks a git branch and switches to it
 gb -
 gb -c <name>
-gb -d <branch>
+gb -d | -D <branch>
+gb -m [old] <new>
 
 Without a branch, on a terminal, picks one: the recently checked out first, then the other local ones, then the remote ones with no local branch yet (enter switches, ctrl-n creates, ctrl-d deletes a merged local branch with \`git branch -d\`, ctrl-r fetches and prunes); without a terminal it lists them.
-\`gb <branch>\` switches without the picker, \`gb -\` goes back to the previous branch, \`gb -c <name>\` creates one and switches to it, \`gb -d <branch>\` deletes a local one.
+\`gb <branch>\` switches without the picker, \`gb -\` goes back to the previous branch, \`gb -c <name>\` creates one and switches to it, \`gb -d <branch>\` deletes a merged local one (\`-D\` forces), \`gb -m [old] <new>\` renames the current or named branch.
 A branch checked out in another worktree cannot be switched to: gb prints that worktree's path, since a command cannot change its shell's folder.`
 
-const EXITS: ExitRow[] = [[0, 'it switched, created, deleted or listed'], ['git', 'the code of the git command it ran, when that failed'], [1, 'there is no branch by that name or nothing was picked'], [2, 'outside a git repository or a usage error']]
+const EXITS: ExitRow[] = [[0, 'it switched, created, renamed, deleted or listed'], ['git', 'the code of the git command it ran, when that failed'], [1, 'there is no branch by that name or nothing was picked'], [2, 'outside a git repository or a usage error']]
 
 const options = {
-  create: { type: 'boolean', short: 'c', description: 'create the branch named by the rest of the line and switch to it' },
-  delete: { type: 'boolean', short: 'd', description: 'delete the local branch with git branch -d' },
-  json: jsonOption('[{ name, remote, worktree, when, subject, date, upstream, track, merged }]'),
+  'create': { type: 'boolean', short: 'c', description: 'create the branch named by the rest of the line and switch to it', conflicts: ['delete', 'force-delete', 'rename'] },
+  'delete': { type: 'boolean', short: 'd', description: 'delete the local branch with git branch -d', conflicts: ['create', 'force-delete', 'rename'] },
+  'force-delete': { type: 'boolean', short: 'D', description: 'force-delete the local branch with git branch -D', conflicts: ['create', 'delete', 'rename'] },
+  'rename': { type: 'boolean', short: 'm', description: 'rename the current branch (gb -m <new>) or another branch (gb -m <old> <new>)', conflicts: ['create', 'delete', 'force-delete'] },
+  'json': jsonOption('[{ name, current, remote, worktree, when, subject, date, upstream, track, merged }]'),
 } as const
 
 const FIELDS = ['%(refname)', '%(refname:short)', '%(committerdate:unix)', '%(subject)', '%(worktreepath)', '%(upstream:short)', '%(upstream:track,nobracket)']
@@ -50,9 +54,9 @@ const WHITESPACE = /\s+/
 const colors = paint({ isTTY: true })
 
 function read(args: string[]): string {
-  const proc = Bun.spawnSync(['git', ...args], { stderr: 'pipe' })
+  const proc = gitSync(args)
 
-  return proc.success ? proc.stdout.toString().trim() : ''
+  return proc.code === 0 ? proc.stdout.trim() : ''
 }
 
 // The branches in the order they were last checked out, from the newest move: where it went, then where it came from.
@@ -141,11 +145,11 @@ export function goTo(branch: Branch): Arg[] {
 }
 
 // A remote branch is left to `git push --delete`, which this is too quick a key for.
-export function remove(branch: Branch): string[] {
+export function remove(branch: Branch, force = false): string[] {
   if (branch.remote)
     fail(`${branch.name} is a remote branch, deleting it is left to git push --delete`, 1)
 
-  return ['git', 'branch', '-d', branch.name]
+  return ['git', 'branch', force ? '-D' : '-d', branch.name]
 }
 
 // What is wrong with a new branch name, an empty text when git takes it.
@@ -153,7 +157,7 @@ export function invalid(name: string): string {
   if (!name)
     return 'Type the name of the new branch first'
 
-  return Bun.spawnSync(['git', 'check-ref-format', '--branch', name], { stdout: 'ignore', stderr: 'ignore' }).success ? '' : `${name} is not a valid branch name`
+  return gitSync(['check-ref-format', '--branch', name]).code === 0 ? '' : `${name} is not a valid branch name`
 }
 
 // `ahead 2, behind 1` as `ahead 2 behind 1`, each part in its own color.
@@ -234,8 +238,8 @@ function header(found: Branch[], current: string, failure = ''): string {
 
 // Fetches and prunes every remote, then the header with where HEAD stands, saying when the fetch failed.
 async function fetched(): Promise<string> {
-  const proc = Bun.spawn(['git', 'fetch', '--all', '--prune', '--quiet'], { stdout: 'ignore', stderr: 'ignore' })
-  const success = await proc.exited === 0
+  const res = await git(['fetch', '--all', '--prune', '--quiet'])
+  const success = res.code === 0
 
   return header(branches(base()), read(['branch', '--show-current']), success ? '' : 'fetch failed')
 }
@@ -299,6 +303,19 @@ function create(name: string): string[] {
   return ['git', 'switch', '-c', name]
 }
 
+function rename(args: string[]): { command: string[], typed: string } {
+  if (args.length === 0 || args.length > 2)
+    fail('gb -m takes <new> (to rename the current branch) or <old> <new>', 2)
+
+  const target = args.at(-1) ?? ''
+  const problem = invalid(target)
+
+  if (problem)
+    fail(problem, 1)
+
+  return { command: ['git', 'branch', '-m', ...args], typed: `-m ${args.join(' ')}` }
+}
+
 export async function gb(args: string[]): Promise<number> {
   const [flag = ''] = args
 
@@ -307,7 +324,13 @@ export async function gb(args: string[]): Promise<number> {
 
   // The protocol the tmux picker and the fish wrapper read instead of the command being run: its mode, the words typed back, and the command's words.
   const emitting = flag === '--emit'
-  const parsed = parse(emitting ? args.slice(1) : args, usage, options, { positionals: ['[branch...]'], candidates: { '[branch...]': () => branchCandidates(true) }, exits: EXITS, replaces: 'git switch, git branch -d and git checkout typed per branch', examples: ['gb', ['gb feature', 'switch to feature, or create it from origin/feature'], ['gb -', 'back to the previous branch'], ['gb -c fix/login', 'create a branch and switch to it'], ['gb -d old', 'delete a merged local branch']] })
+  const parsed = parse(emitting ? args.slice(1) : args, usage, options, {
+    positionals: ['[branch...]'],
+    candidates: { '[branch...]': () => branchCandidates(true) },
+    exits: EXITS,
+    replaces: 'git switch, git branch -d/-D/-m and git checkout typed per branch',
+    examples: ['gb', ['gb feature', 'switch to feature, or create it from origin/feature'], ['gb -', 'back to the previous branch'], ['gb -c fix/login', 'create a branch and switch to it'], ['gb -d old', 'delete a merged local branch'], ['gb -D old', 'force-delete a local branch'], ['gb -m new-name', 'rename the current branch']],
+  })
   const [named] = parsed.positionals
 
   if (read(['rev-parse', '--git-dir']) === '')
@@ -322,13 +345,17 @@ export async function gb(args: string[]): Promise<number> {
     command = create(name)
     typed = `-c ${name}`
   }
-  else if (named === '-' && parsed.values.delete !== true) {
+  else if (parsed.values.rename === true) {
+    ({ command, typed } = rename(parsed.positionals))
+  }
+  else if (named === '-' && parsed.values.delete !== true && parsed.values['force-delete'] !== true) {
     command = ['git', 'switch', '-']
     typed = '-'
   }
   else {
     const { found, current, all } = load()
-    const deleting = parsed.values.delete === true
+    const forceDelete = parsed.values['force-delete'] === true
+    const deleting = parsed.values.delete === true || forceDelete
     let branch: Branch | undefined
     let key = ''
 
@@ -339,10 +366,18 @@ export async function gb(args: string[]): Promise<number> {
         if (emitting)
           fail('the picker needs a terminal', 1)
 
-        if (parsed.values.json === true)
-          printJson(all)
-        else
+        if (parsed.values.json === true) {
+          const here = found.find(candidate => !candidate.remote && candidate.name === current)
+          const withCurrent = [
+            ...(here === undefined ? [] : [{ ...here, current: true }]),
+            ...all.map(candidate => ({ ...candidate, current: false })),
+          ]
+
+          printJson(withCurrent)
+        }
+        else {
           console.log(table(all.map(row)).map(line => (takesControlCodes(process.stdout) ? line : Bun.stripANSI(line))).join('\n'))
+        }
 
         return 0
       }
@@ -371,7 +406,7 @@ export async function gb(args: string[]): Promise<number> {
       key = picked!.key
     }
     else if (deleting && named === '-') {
-      return fail('-d takes a branch name, not -', 1)
+      return fail(`${forceDelete ? '-D' : '-d'} takes a branch name, not -`, 1)
     }
     else if (!deleting && isCurrent(named, current, found)) {
       console.error(`already on ${current}`)
@@ -390,8 +425,8 @@ export async function gb(args: string[]): Promise<number> {
     }
 
     if (deleting || key === 'ctrl-d') {
-      command = remove(branch)
-      typed = `-d ${branch.name}`
+      command = remove(branch, forceDelete)
+      typed = `${forceDelete ? '-D' : '-d'} ${branch.name}`
     }
     else {
       command = goTo(branch)

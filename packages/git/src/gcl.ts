@@ -5,21 +5,23 @@ import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
-import { configuredForge, fail, jsonOption, parse, printJson, readUserConfig, runMain, userConfigPath } from '@kaynooo/cli-kit'
+import { configuredForge, fail, jsonOption, parse, printJson, readUserConfig, runMain, userConfigPath, wholeNumber } from '@kaynooo/cli-kit'
 import { askpass, NO_PROMPTS } from '@kaynooo/cli-kit/askpass'
 import { git } from './git'
 import { repoState, toplevelOf } from './repos'
 import { sync } from './sync'
 
-const USAGE = `gcl <repo> [dir]: clones a repository into the current folder and prints where it landed
+const USAGE = `gcl [--depth <n>] [-b <branch>] <repo> [dir]: clones a repository into the current folder and prints where it landed
 
-<repo> is a URL, an scp-style address (\`git@host:port:owner/name\` read as \`ssh://git@host:port/owner/name\`), a local path or \`owner/name\`. Without <dir> the clone goes to ./<name>, as git clone does.
-\`owner/name\` is cloned over ssh from the \`forgeSsh\` config key (\`git@host\` or \`ssh://git@host:port\`), anonymously over https from the \`forge\` config key (a host or a URL, forgeSsh's host when unset) when ssh fails or forgeSsh is unset; with neither key it is refused. Off a terminal git never asks for a password, through the terminal or a desktop window: it fails instead.
+<repo> is a URL, an scp-style address (\`git@host:port:owner/name\` read as \`ssh://git@host:port/owner/name\`), a local path, \`owner/name\`, or a prefixed shorthand (\`gh:owner/name\`, \`gl:owner/name\`, \`fj:owner/name\`). Without <dir> the clone goes to ./<name>, as git clone does.
+\`owner/name\` (or \`fj:owner/name\`) is cloned over ssh from the \`forgeSsh\` config key (\`git@host\` or \`ssh://git@host:port\`), anonymously over https from the \`forge\` config key (a host or a URL, forgeSsh's host when unset) when ssh fails or forgeSsh is unset; with neither key it is refused. Off a terminal git never asks for a password, through the terminal or a desktop window: it fails instead.
 A folder that already holds the repository is fetched and fast-forwarded as gf does, not cloned again; one holding anything else is refused.`
 
 const EXITS: ExitRow[] = [[0, 'it cloned the repository, or found it and brought it up to date'], [1, 'git could not clone it, or the folder is taken'], [2, 'a usage error']]
 
 const OPTIONS = {
+  depth: { type: 'string', description: 'create a shallow clone with a history truncated to N commits' },
+  branch: { type: 'string', short: 'b', description: 'check out this branch or tag after cloning' },
   json: jsonOption('{url, path, branch, head, outcome}, outcome being cloned or existing'),
 } as const
 
@@ -27,6 +29,7 @@ const SCHEME = /^[a-z][a-z\d+.-]*:\/\//i
 const SCP = /^[\w.-]+@[\w.-]+:/
 // `git@host:22022:owner/name`, the port git's scp syntax has no room for.
 const SCP_WITH_PORT = /^([\w.-]+@[\w.-]+):(\d+):\/?(.+)$/
+const FORGE_PREFIX = /^(gh|gl|fj):([\w.-]+\/[\w.-]+)$/i
 const OWNER_NAME = /^[\w.-]+\/[\w.-]+$/
 const GIT_SUFFIX = /\.git\/?$/
 const TRAILING_SLASH = /\/+$/
@@ -36,10 +39,31 @@ const AUTH_REFUSED = /could not read Username|Authentication failed|terminal pro
 const SSH_BASE_END = /[/:]$/
 const SSH_HOST = /^(?:ssh:\/\/)?(?:[^@/]+@)?([\w.-]+)/
 
-/** The address git clones from: a URL, scp address or local path as given, owner/name on the forge, a host served over https unless it names its scheme. */
+const PREFIX_HOSTS: Record<string, string> = {
+  gh: 'github.com',
+  gl: 'gitlab.com',
+}
+
+/** The address git clones from: a URL, scp address or local path as given, prefixed shorthand (gh:/gl:/fj:), or owner/name on the configured forge. */
 export function urlOf(repo: string, forge: string | undefined): string {
   if (repo.startsWith('~/'))
     return join(homedir(), repo.slice(2))
+
+  const prefixed = FORGE_PREFIX.exec(repo)
+
+  if (prefixed !== null) {
+    const kind = prefixed[1]!.toLowerCase()
+    const slug = prefixed[2]!.replace(GIT_SUFFIX, '')
+    const host = PREFIX_HOSTS[kind]
+
+    if (host !== undefined)
+      return `https://${host}/${slug}.git`
+
+    if (forge === undefined)
+      return fail(`${repo} needs the forge it lives on: set forge (a host such as git.example.org) in ${userConfigPath('config')}`, 2)
+
+    return `${SCHEME.test(forge) ? forge.replace(TRAILING_SLASH, '') : `https://${forge}`}/${slug}.git`
+  }
 
   const withPort = SCP_WITH_PORT.exec(repo)
 
@@ -90,6 +114,7 @@ interface Target {
   sshUrl: string | undefined
   forgeSsh: string | undefined
   path: string
+  cloneFlags: string[]
 }
 
 type Env = Record<string, string | undefined>
@@ -114,15 +139,15 @@ async function update({ url, sshUrl, path }: Target, env: Env): Promise<string> 
 }
 
 // Clones the repository, an owner/name over ssh first when forgeSsh names the forge's ssh address, then anonymously over https; answers the address cloned.
-async function clone({ repo, url, sshUrl, forgeSsh, path }: Target, env: Env): Promise<string> {
+async function clone({ repo, url, sshUrl, forgeSsh, path, cloneFlags }: Target, env: Env): Promise<string> {
   if (forgeSsh !== undefined && sshUrl !== undefined) {
-    const overSsh = await git(['clone', sshUrl, path], env)
+    const overSsh = await git(['clone', ...cloneFlags, sshUrl, path], env)
 
     if (overSsh.code === 0)
       return sshUrl
 
     // a public repository needs no login, and a private one ssh refused would only get a password prompt
-    const overHttps = await git(['clone', url, path], { ...env, ...NO_PROMPTS })
+    const overHttps = await git(['clone', ...cloneFlags, url, path], { ...env, ...NO_PROMPTS })
 
     if (overHttps.code !== 0)
       fail(`git clone failed over ssh and over https:\n${overSsh.stderr.trim()}\n${overHttps.stderr.trim()}`, 1)
@@ -130,7 +155,7 @@ async function clone({ repo, url, sshUrl, forgeSsh, path }: Target, env: Env): P
     return url
   }
 
-  const cloned = await git(['clone', url, path], env)
+  const cloned = await git(['clone', ...cloneFlags, url, path], env)
 
   if (cloned.code === 0)
     return url
@@ -142,23 +167,44 @@ async function clone({ repo, url, sshUrl, forgeSsh, path }: Target, env: Env): P
 }
 
 async function main(argv: string[]): Promise<number> {
-  const { values, positionals } = parse(argv, USAGE, OPTIONS, { positionals: ['<repo>', '[dir]'], exits: EXITS, replaces: 'git clone with the url typed out, then a cd', examples: ['gcl kaynooo/cli', ['gcl git@github.com:oven-sh/bun.git', 'an scp address'], ['gcl git@git.example.org:22022:kaynooo/cli', 'an scp address with a port'], ['gcl kaynooo/cli ~/tmp/cli', 'a folder of your own']] })
+  const { values, positionals } = parse(argv, USAGE, OPTIONS, {
+    positionals: ['<repo>', '[dir]'],
+    exits: EXITS,
+    replaces: 'git clone with the url typed out, then a cd',
+    examples: ['gcl kaynooo/cli', ['gcl gh:oven-sh/bun --depth 1', 'shallow clone from GitHub'], ['gcl gl:group/proj -b dev', 'clone a GitLab branch'], ['gcl git@git.example.org:22022:kaynooo/cli', 'an scp address with a port'], ['gcl kaynooo/cli ~/tmp/cli', 'a folder of your own']],
+  })
   const [repo, given] = positionals
 
   if (repo === undefined)
     fail('gcl needs the repository to clone: gcl owner/name', 2)
 
+  const depth = values.depth === undefined ? undefined : wholeNumber(values.depth, '--depth', 1, 1)
+  const cloneFlags = [
+    ...(depth === undefined ? [] : ['--depth', String(depth)]),
+    ...(values.branch === undefined ? [] : ['--branch', values.branch]),
+  ]
+
   const forgeSsh = setting(readUserConfig('config'), 'forgeSsh')
   const forge = configuredForge()?.url ?? (forgeSsh === undefined ? undefined : SSH_HOST.exec(forgeSsh)?.[1])
   const url = urlOf(repo, forge)
-  const isOwnerName = OWNER_NAME.test(repo) && !repo.startsWith('.')
-  const sshUrl = isOwnerName && forge !== undefined ? sshUrlOf(repo, forgeSsh ?? `git@${SCHEME.test(forge) ? new URL(forge).hostname : forge}`) : undefined
+  const prefixed = FORGE_PREFIX.exec(repo)
+  const prefixedHost = prefixed === null ? undefined : PREFIX_HOSTS[prefixed[1]!.toLowerCase()]
+  const slug = prefixed === null ? repo : prefixed[2]!
+  const isOwnerName = (OWNER_NAME.test(repo) && !repo.startsWith('.')) || prefixed !== null
+  let sshUrl: string | undefined
+
+  if (prefixedHost !== undefined)
+    sshUrl = sshUrlOf(slug, `git@${prefixedHost}`)
+  else if (isOwnerName && forge !== undefined)
+    sshUrl = sshUrlOf(slug, forgeSsh ?? `git@${SCHEME.test(forge) ? new URL(forge).hostname : forge}`)
+
+  const effectiveForgeSsh = prefixedHost !== undefined ? undefined : forgeSsh
   const name = nameOf(url)
 
   if (name === '')
     fail(`no folder name can be taken from ${url}, give one: gcl ${repo} <dir>`, 2)
 
-  const target: Target = { repo, url, sshUrl, forgeSsh, path: resolve(given ?? name) }
+  const target: Target = { repo, url, sshUrl, forgeSsh: effectiveForgeSsh, path: resolve(given ?? name), cloneFlags }
   const { path } = target
   const outcome = existsSync(path) && (!statSync(path).isDirectory() || readdirSync(path).length > 0) ? 'existing' : 'cloned'
   const prompts = askpass()

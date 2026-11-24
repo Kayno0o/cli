@@ -2,9 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { urlOf } from '../src/gcl'
 
 const WHITESPACE = /\s+/
-const BINS = Object.fromEntries(['gf', 'gcl', 'gd', 'gu'].map(name => [name, new URL(`../src/${name}.ts`, import.meta.url).pathname]))
+const BINS = Object.fromEntries(['gc', 'gf', 'gcl', 'gd', 'gst', 'gu'].map(name => [name, new URL(`../src/${name}.ts`, import.meta.url).pathname]))
 // The user's global hooks and settings stay out of the test repositories.
 const ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', NO_COLOR: '1' }
 
@@ -432,5 +433,94 @@ describe('gu', () => {
 
     expect(done.code).toBe(1)
     expect(done.err).toContain('already on the upstream')
+  })
+
+  test('gu ls, show, pop, drop manage saved patches and gu revert reverts a commit', () => {
+    writeFileSync(join(work, 'a.txt'), 'one\nrestorable\n')
+    expect(bin('gu', work, 'a.txt').code).toBe(0)
+    expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\n')
+
+    const listed = json<{ index: number, id: string, files: string[] }[]>(bin('gu', work, 'ls', '--json').out)
+
+    expect(listed).toHaveLength(1)
+    expect(listed[0]?.files).toEqual(['a.txt'])
+    expect(bin('gu', work, 'show', '0').out).toContain('+restorable')
+
+    const popped = bin('gu', work, 'pop', '--json')
+
+    expect(popped.code).toBe(0)
+    expect(readFileSync(join(work, 'a.txt'), 'utf8')).toBe('one\nrestorable\n')
+    expect(json<unknown[]>(bin('gu', work, 'ls', '--json').out)).toEqual([])
+
+    expect(bin('gu', work, 'a.txt').code).toBe(0)
+    expect(bin('gu', work, 'drop', '--all').code).toBe(0)
+    expect(json<unknown[]>(bin('gu', work, 'ls', '--json').out)).toEqual([])
+
+    commit(work, 'b.txt', 'hello\n')
+    const sha = git(work, 'rev-parse', 'HEAD')
+    const reverted = bin('gu', work, 'revert', sha, '--json')
+
+    expect(reverted.code).toBe(0)
+    expect(existsSync(join(work, 'b.txt'))).toBe(false)
+  })
+})
+
+describe('workflow additions (#358)', () => {
+  test('gc --staged commits staged changes after gu --commit, and gc --amend updates unpushed HEAD but refuses pushed HEAD', () => {
+    const refused = bin('gc', work, 'feat: too late', '--amend')
+
+    expect(refused.code).toBe(1)
+    expect(refused.err).toContain('already on the upstream')
+
+    commit(work, 'b.txt', 'two\n')
+    expect(bin('gu', work, '--commit').code).toBe(0)
+
+    const committed = bin('gc', work, 'feat: recommit staged', '--staged', '--json')
+
+    expect(committed.code).toBe(0)
+    expect(json<{ subject: string }>(committed.out).subject).toBe('feat: recommit staged')
+
+    const amended = bin('gc', work, 'feat: amended title', '--amend', '--json')
+
+    expect(amended.code).toBe(0)
+    expect(git(work, 'log', '-1', '--format=%s')).toBe('feat: amended title')
+  })
+
+  test('gd --commit inspects one commit and gst filters log by --path and --author', () => {
+    commit(work, 'special.txt', 'x\n')
+
+    const shown = json<{ subject: string, files: { path: string }[], patch?: string }>(bin('gd', work, '--commit', 'HEAD', '-p', '--json').out)
+
+    expect(shown.subject).toBe('edit special.txt')
+    expect(shown.files.map(file => file.path)).toEqual(['special.txt'])
+    expect(shown.patch).toContain('+x')
+
+    const filtered = json<{ commits: { title: string }[] }>(bin('gst', work, '--path', 'special.txt', '--json').out)
+
+    expect(filtered.commits.map(entry => entry.title)).toEqual(['edit special.txt'])
+  })
+
+  test('gf -b fast-forwards a non-current branch without switching to it', () => {
+    git(work, 'checkout', '-q', '-b', 'topic')
+    commit(origin, 'up.txt', 'from upstream\n')
+
+    const beforeMain = git(work, 'rev-parse', 'main')
+    const synced = bin('gf', work, '-b', 'main', '--json')
+
+    expect(synced.code).toBe(0)
+    expect(json<{ branch: string, outcome: string, commits: number }[]>(synced.out)[0]).toMatchObject({ branch: 'main', outcome: 'updated', commits: 1 })
+    expect(git(work, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('topic')
+    expect(git(work, 'rev-parse', 'main')).not.toBe(beforeMain)
+  })
+
+  test('gcl supports gh:/gl:/fj: prefixes and --depth / -b', () => {
+    const dest = join(root, 'shallow')
+    const cloned = bin('gcl', root, '--depth', '1', '-b', 'main', origin, dest, '--json')
+
+    expect(cloned.code).toBe(0)
+    expect(json<{ branch: string, outcome: string }>(cloned.out)).toMatchObject({ branch: 'main', outcome: 'cloned' })
+    expect(urlOf('gh:oven-sh/bun', undefined)).toBe('https://github.com/oven-sh/bun.git')
+    expect(urlOf('gl:group/proj', undefined)).toBe('https://gitlab.com/group/proj.git')
+    expect(urlOf('fj:kaynooo/cli', 'git.kevyn.fr')).toBe('https://git.kevyn.fr/kaynooo/cli.git')
   })
 })

@@ -7,6 +7,7 @@ import { git } from './git'
 import { toplevelOf } from './repos'
 
 const USAGE = `gd [path]...: what changed in the tracked files, per file with its added and removed lines, then the patch of the paths given
+gd --commit <ref> [path]...: inspects one commit's metadata, file stats, or patch
 
 With no path it lists the files, staged apart from unstaged; with paths (or --patch) it prints the patch of those files instead, in the colours of view when it is installed and the output is a terminal. Untracked files are gst's.
 --ref compares the working tree to a commit, branch or tag instead (gd --ref main), and --ref a..b compares two commits.`
@@ -16,9 +17,10 @@ const EXITS: ExitRow[] = [[0, 'it printed the changes, or there were none'], [1,
 const OPTIONS = {
   staged: { type: 'boolean', short: 's', description: 'only what is staged' },
   ref: { type: 'string', description: 'compare to this commit, branch or tag, or a..b, instead of the index' },
+  commit: { type: 'string', short: 'c', description: 'inspect a single commit (metadata + files, or full patch with -p / paths)' },
   patch: { type: 'boolean', short: 'p', description: 'print the patch of every file listed, not just of the paths given' },
   stat: { type: 'boolean', description: 'list the files with their added and removed lines, the paths given too, never a patch' },
-  json: jsonOption('[{title, files: [{path, added, removed}], patch?}] per section, added and removed being null for a binary file, patch there with paths or --patch, the files then those of the paths'),
+  json: jsonOption('[{title, files: [{path, added, removed}], patch?}] per section, or {sha, author, date, subject, body, files, patch?} with --commit'),
 } as const
 
 const LITERAL = { ...process.env, GIT_LITERAL_PATHSPECS: '1' }
@@ -67,6 +69,47 @@ async function diff(args: string[], paths: string[]): Promise<string> {
   return ran.stdout
 }
 
+async function showCommit(ref: string, paths: string[], patched: boolean, json: boolean): Promise<number> {
+  const meta = await git(['show', '-s', '--format=%H%x00%an <%ae>%x00%aI%x00%s%x00%b', ref], LITERAL)
+
+  if (meta.code !== 0)
+    fail(`git show failed:\n${meta.stderr.trim()}`, NOT_A_REPOSITORY.test(meta.stderr) ? 2 : 1)
+
+  const [sha = '', author = '', date = '', subject = '', body = ''] = meta.stdout.trimEnd().split('\0')
+  const numstat = await git(['show', '--format=', '--numstat', '-z', ref, '--', ...paths], LITERAL)
+
+  if (numstat.code !== 0)
+    fail(`git show failed:\n${numstat.stderr.trim()}`, 1)
+
+  const files = parseNumstat(numstat.stdout)
+  const patchText = patched ? (await git(['show', '--format=', '--patch', ref, '--', ...paths], LITERAL)).stdout : undefined
+
+  if (json) {
+    printJson({ sha, author, date, subject, body: body.trim(), files, ...(patchText === undefined ? {} : { patch: patchText }) })
+
+    return 0
+  }
+
+  const { bold, dim } = paint(process.stdout)
+  const green = role('ok', process.stdout)
+  const red = role('problem', process.stdout)
+  const headerLines = [`${role('id', process.stdout)(sha.slice(0, 7))} ${bold(subject)}`, dim(`${author} · ${date}`), ...(body.trim() === '' ? [] : ['', body.trim()])]
+
+  console.log(headerLines.join('\n'))
+
+  if (patchText !== undefined) {
+    console.log('')
+    await show(patchText)
+
+    return 0
+  }
+
+  if (files.length > 0)
+    console.log(`\n${table(files.map(file => [role('path', process.stdout)(file.path), file.added === null ? dim('binary') : green(`+${file.added}`), file.removed === null ? '' : red(`-${file.removed}`)]))}`)
+
+  return 0
+}
+
 // The patch on stdout, through view on a human terminal when it is installed.
 async function show(patch: string): Promise<void> {
   const viewer = isHumanTerminal(process.stdout) ? Bun.which('view') : null
@@ -93,10 +136,21 @@ function sections(values: { staged?: boolean | undefined, ref?: string | undefin
 }
 
 async function main(argv: string[]): Promise<number> {
-  const { values, positionals } = parse(argv, USAGE, OPTIONS, { positionals: ['[path]...'], exits: EXITS, replaces: 'git diff --stat, git diff --cached --stat and then git diff <path>', examples: ['gd', ['gd src/a.ts', 'the patch of one file'], ['gd --staged -p', 'the patch of everything staged'], ['gd --ref main', 'the working tree against main']] })
+  const { values, positionals } = parse(argv, USAGE, OPTIONS, {
+    positionals: ['[path]...'],
+    exits: EXITS,
+    replaces: 'git diff --stat, git diff --cached --stat, git show and git diff <path>',
+    examples: ['gd', ['gd src/a.ts', 'the patch of one file'], ['gd --commit HEAD -p', 'inspect a commit with its patch'], ['gd --staged -p', 'the patch of everything staged'], ['gd --ref main', 'the working tree against main']],
+  })
 
   if (values.ref?.startsWith('-') === true)
     badUsage(`--ref takes a commit, branch or tag, not ${values.ref}`)
+
+  if (values.commit?.startsWith('-') === true)
+    badUsage(`--commit takes a commit ref, not ${values.commit}`)
+
+  if (values.commit !== undefined && (values.ref !== undefined || values.staged === true))
+    badUsage('--commit excludes --ref and --staged')
 
   if (values.ref !== undefined && values.staged === true)
     badUsage('--ref and --staged exclude each other: --ref compares the working tree')
@@ -107,8 +161,12 @@ async function main(argv: string[]): Promise<number> {
   if (await toplevelOf('.') === undefined)
     fail('not inside a git repository', 2)
 
-  const wanted = sections(values)
   const patched = (positionals.length > 0 || values.patch === true) && values.stat !== true
+
+  if (values.commit !== undefined)
+    return showCommit(values.commit, positionals, patched, values.json === true)
+
+  const wanted = sections(values)
 
   if (values.json === true) {
     printJson(await Promise.all(wanted.map(async ({ title, args }) => ({

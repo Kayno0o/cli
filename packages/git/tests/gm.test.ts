@@ -304,4 +304,46 @@ describe('gm', () => {
     rmSync(outside, { recursive: true, force: true })
     expect(result.exitCode).toBe(2)
   })
+
+  test('--abort cleans up after a conflicted --squash merge', () => {
+    setup(true, true)
+
+    const squashed = gm('feature', '--squash')
+
+    expect(squashed.code).toBe(1)
+    expect(squashed.out).toContain('gm --abort')
+
+    const aborted = gm('--abort')
+
+    expect(aborted.code).toBe(0)
+    expect(aborted.out).toContain('squash merge into main aborted')
+    expect(git('status', '--porcelain')).toBe('')
+  })
+
+  test('--rebase replays commits cleanly', () => {
+    setup(true)
+    git('checkout', '-q', 'feature')
+
+    const clean = gm('--rebase', 'main', '--json')
+
+    expect(clean.code).toBe(0)
+    expect(JSON.parse(clean.out)).toMatchObject({ outcome: 'rebased', branch: 'main', into: 'feature', commits: 2 })
+  })
+
+  test('--rebase handles conflicts with --continue and --abort', () => {
+    setup(true, true)
+    git('checkout', '-q', 'feature')
+
+    const conflicted = gm('--rebase', 'main')
+
+    expect(conflicted.code).toBe(1)
+    expect(conflicted.out).toContain('rebasing feature onto main left 1 conflicted file')
+
+    writeFileSync(join(dir, 'a.txt'), 'one\ntwo\nresolved\nfour\nfive\n')
+
+    const finished = gm('--continue')
+
+    expect(finished.code).toBe(0)
+    expect(finished.out).toContain('rebased feature')
+  })
 })

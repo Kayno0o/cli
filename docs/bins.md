@@ -218,7 +218,7 @@ ft issue 12 -c  # an issue with its boxes numbered and its comments
 
 picks a git branch and switches to it. Package `git`.
 
-Instead of: git switch, git branch -d and git checkout typed per branch
+Instead of: git switch, git branch -d/-D/-m and git checkout typed per branch
 
 ```sh
 gb [branch]
@@ -227,17 +227,21 @@ gb feature  # switch to feature, or create it from origin/feature
 gb -  # back to the previous branch
 gb -c fix/login  # create a branch and switch to it
 gb -d old  # delete a merged local branch
+gb -D old  # force-delete a local branch
+gb -m new-name  # rename the current branch
 ```
 
 ## gc
 
-commits exactly the paths given, its message checked before anything is staged; a merge, cherry-pick or revert in progress is refused, as git commits it only whole. Package `git`.
+commits exactly the paths given, its message checked before anything is staged. Package `git`.
 
 Instead of: git add, git status and git commit chained
 
 ```sh
 gc <title> [-m <line>]... [--ticket <line>]... -- <path>...
 gc "fix(api): retry a timed-out fetch" -- src/api.ts
+gc "feat(ui): a dark theme" --staged  # commit already-staged changes
+gc "fix(api): tighten message" --amend  # amend unpushed HEAD
 gc "feat(ui): a dark theme" -m "The toggle sits in the header." --ticket "#12 - Dark theme" -- src/theme.ts src/header.ts  # a body line and a ticket
 ```
 
@@ -248,9 +252,10 @@ clones a repository into the current folder and prints where it landed. Package 
 Instead of: git clone with the url typed out, then a cd
 
 ```sh
-gcl <repo> [dir]
+gcl [--depth <n>] [-b <branch>] <repo> [dir]
 gcl kaynooo/cli
-gcl git@github.com:oven-sh/bun.git  # an scp address
+gcl gh:oven-sh/bun --depth 1  # shallow clone from GitHub
+gcl gl:group/proj -b dev  # clone a GitLab branch
 gcl git@git.example.org:22022:kaynooo/cli  # an scp address with a port
 gcl kaynooo/cli ~/tmp/cli  # a folder of your own
 ```
@@ -259,25 +264,27 @@ gcl kaynooo/cli ~/tmp/cli  # a folder of your own
 
 what changed in the tracked files, per file with its added and removed lines, then the patch of the paths given. Package `git`.
 
-Instead of: git diff --stat, git diff --cached --stat and then git diff <path>
+Instead of: git diff --stat, git diff --cached --stat, git show and git diff <path>
 
 ```sh
 gd [path]...
 gd
 gd src/a.ts  # the patch of one file
+gd --commit HEAD -p  # inspect a commit with its patch
 gd --staged -p  # the patch of everything staged
 gd --ref main  # the working tree against main
 ```
 
 ## gf
 
-fetches with prune and fast-forwards the current branch onto its upstream, saying what came in. Package `git`.
+fetches with prune and fast-forwards the current (or named) branch onto its upstream, saying what came in. Package `git`.
 
 Instead of: git fetch --prune, git pull --ff-only and a git -C <repo> pull per nested repository
 
 ```sh
-gf [dir]...
+gf [-b <branch>] [dir]...
 gf
+gf -b main  # fast-forward main without checking it out
 gf --repos  # every repository nested in this one
 gf --no-pull  # fetch and say how far behind the branch is
 ```
@@ -310,14 +317,15 @@ gloss -- git commit -am fix
 
 merges the branch into the current one with git merge --no-edit, saying what came in. Package `git`.
 
-Instead of: git merge and then git diff --name-only --diff-filter=U and reading each file for markers
+Instead of: git merge, git rebase and reading each conflicted file for markers
 
 ```sh
 gm [branch]
 gm feature
+gm --rebase main  # rebase onto main with conflict UI
 gm --dry-run feature  # whether it would conflict, and where
-gm --continue  # commit once the conflicts are resolved
-gm --abort  # give the merge up
+gm --continue  # finish once conflicts are resolved
+gm --abort  # give up the merge, rebase, or conflicted squash
 ```
 
 ## gp
@@ -343,9 +351,10 @@ the repository's branch, upstream, changed files and HEAD in one line, then the 
 Instead of: git status --short, git log --oneline and a git -C <repo> status per nested repository
 
 ```sh
-gst [-n N]
+gst [-n N] [--author <who>] [--path <path>] [--since <date>] [--range <a..b>]
 gst
 gst -n 5  # with the last five commits
+gst --path src/api.ts --author alice  # filtered commit history
 gst --repos  # the repositories nested in this one
 ```
 
@@ -353,13 +362,16 @@ gst --repos  # the repositories nested in this one
 
 undoes changes to the paths given, keeping what it takes away. Package `git`.
 
-Instead of: git restore, git restore --staged and git reset --soft HEAD~1 typed blind
+Instead of: git restore, git restore --staged, git stash, git revert and git reset --soft HEAD~1 typed blind
 
 ```sh
 gu <path>...
 gu src/a.ts  # discard its unstaged changes, saved as a patch
+gu ls  # list saved discard patches
+gu pop  # restore the newest saved patch
 gu --staged src/a.ts  # unstage it
 gu --commit  # undo the last commit, changes staged
+gu revert abc1234  # revert a commit cleanly
 ```
 
 ## guard

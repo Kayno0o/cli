@@ -3,15 +3,22 @@
 import { copyFileSync, existsSync, realpathSync, renameSync, rmSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, jsonOption, parse, printError, printJson, runHint, runMain } from '@kaynooo/cli-kit'
+import { badUsage, exitCodeOf, fail, holdSignals, jsonOption, parse, printError, printJson, runHint, runMain } from '@kaynooo/cli-kit'
 import { git } from './git'
 import { commitMessageViolation, RULE, TICKET } from './message'
 
-const USAGE = 'gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged; a merge, cherry-pick or revert in progress is refused, as git commits it only whole\n\nExits 0 when it committed, 1 when the message is refused, a merge, cherry-pick or revert is in progress, or git fails (nothing is committed, the index is put back as it was), 2 on a usage error or outside a git repository, 128 plus the signal when interrupted.'
+const USAGE = `gc <title> [-m <line>]... [--ticket <line>]... -- <path>...: commits exactly the paths given, its message checked before anything is staged
+gc <title> [-m <line>]... [--ticket <line>]... --staged: commits what is already staged in the index (e.g. after gu --commit or gm --squash)
+gc [title] [-m <line>]... [--ticket <line>]... --amend [--staged | -- <path>...]: amends HEAD when not yet pushed to upstream
+
+A merge, cherry-pick or revert in progress is refused, as git commits it only whole.
+Exits 0 when it committed, 1 when the message is refused, HEAD is already pushed, a merge/cherry-pick/revert is in progress, or git fails (nothing is committed, the index is put back as it was), 2 on a usage error or outside a git repository, 128 plus the signal when interrupted.`
 
 const OPTIONS = {
   message: { type: 'string', short: 'm', multiple: true, description: 'a line on what changed, at most two' },
   ticket: { type: 'string', multiple: true, description: 'a ticket line, `#<n> - <title>` (`owner/repo#<n> - <title>` across repositories) copied verbatim from the ticket' },
+  staged: { type: 'boolean', short: 's', description: 'commit what is already staged in the index without naming paths' },
+  amend: { type: 'boolean', description: 'amend HEAD (refused if HEAD is already on the upstream or is a merge)' },
   quiet: { type: 'boolean', short: 'q', description: 'print nothing once committed, failures aside' },
   json: jsonOption('{sha, subject, files: [{status, path, from?}]} of the commit'),
 } as const
@@ -109,38 +116,138 @@ function fileLine(line: string): string {
   return RENAME.test(letter) ? `  ${letter[0]} ${from} -> ${to}` : `  ${letter} ${from}`
 }
 
+async function checkAmendSafe(): Promise<void> {
+  const read = await git(['log', '-1', '--format=%h%x00%P'], LITERAL)
+
+  if (read.code !== 0)
+    fail(NOT_A_REPOSITORY.test(read.stderr) ? 'not inside a git repository' : 'there is no commit to amend', NOT_A_REPOSITORY.test(read.stderr) ? 2 : 1)
+
+  const [sha = '', parents = ''] = read.stdout.trim().split('\0')
+
+  if ((await git(['merge-base', '--is-ancestor', 'HEAD', '@{upstream}'])).code === 0)
+    fail(`${sha} is already on the upstream, refusing --amend (make a new commit instead)`, 1)
+
+  if (parents.split(' ').filter(Boolean).length > 1)
+    fail(`${sha} is a merge commit, gc does not amend merges`, 1)
+}
+
+async function reportCommit(values: { json?: boolean | undefined, quiet?: boolean | undefined }, sources: string[]): Promise<void> {
+  const files = await checked(['show', '--format=%h %s', '--name-status', '-M', 'HEAD'])
+  const [head = '', ...lines] = files.trimEnd().split('\n')
+
+  if (values.json === true) {
+    const changes = lines.filter(Boolean).map((line) => {
+      const [letter = '', from = '', to] = line.split('\t')
+
+      return RENAME.test(letter) ? { status: letter[0] ?? letter, path: to ?? from, from } : { status: letter, path: from }
+    })
+
+    printJson({ sha: (await checked(['rev-parse', 'HEAD'])).trim(), subject: head.slice(head.indexOf(' ') + 1), files: changes })
+  }
+  else if (values.quiet !== true) {
+    console.log([head, ...lines.filter(Boolean).map(fileLine), ...sources.map(from => `also committed ${from}, the other side of a staged rename`)].join('\n'))
+  }
+}
+
 async function main(argv: string[]): Promise<number> {
-  const parsed = parse(argv, USAGE, OPTIONS, { rest: true, replaces: 'git add, git status and git commit chained', examples: ['gc "fix(api): retry a timed-out fetch" -- src/api.ts', ['gc "feat(ui): a dark theme" -m "The toggle sits in the header." --ticket "#12 - Dark theme" -- src/theme.ts src/header.ts', 'a body line and a ticket']] })
+  const parsed = parse(argv, USAGE, OPTIONS, {
+    rest: true,
+    replaces: 'git add, git status and git commit chained',
+    examples: [
+      'gc "fix(api): retry a timed-out fetch" -- src/api.ts',
+      ['gc "feat(ui): a dark theme" --staged', 'commit already-staged changes'],
+      ['gc "fix(api): tighten message" --amend', 'amend unpushed HEAD'],
+      ['gc "feat(ui): a dark theme" -m "The toggle sits in the header." --ticket "#12 - Dark theme" -- src/theme.ts src/header.ts', 'a body line and a ticket'],
+    ],
+  })
 
   const { values, positionals, rest = [] } = parsed
   const given = [...new Set(rest)]
+  const staged = values.staged === true
+  const amend = values.amend === true
 
-  if (positionals.length !== 1)
-    fail(`give the title as one quoted argument and the paths after --\n\n${USAGE}`)
+  if (staged && given.length > 0)
+    badUsage('--staged commits the index as it stands: pass no paths after --')
 
-  if (given.length === 0)
-    fail(`give the paths to commit after --\n\n${USAGE}`)
+  if (amend) {
+    if (positionals.length > 1)
+      fail(`give at most one quoted title\n\n${USAGE}`)
 
-  const title = positionals[0]?.trim() ?? ''
-  const tickets = values.ticket ?? []
-  const wrong = tickets.find(line => !TICKET.test(line))
+    if (positionals.length === 0 && !staged && given.length === 0)
+      fail(`--amend needs a new title, --staged, or paths after --\n\n${USAGE}`)
+  }
+  else {
+    if (positionals.length !== 1)
+      fail(`give the title as one quoted argument and the paths after -- (or --staged)\n\n${USAGE}`)
 
-  if (wrong !== undefined)
-    fail(`nothing staged: a ticket line reads \`#<n> - <title>\` or \`owner/repo#<n> - <title>\`, copied verbatim from the ticket, not: ${wrong}. ${RULE}`, 1)
+    if (!staged && given.length === 0)
+      fail(`give the paths to commit after -- (or pass --staged)\n\n${USAGE}`)
+  }
 
-  if (title === '')
-    fail(`the title is empty\n\n${USAGE}`)
+  let message: string | undefined
 
-  const message = messageOf(title, values.message ?? [], tickets)
-  const violation = commitMessageViolation(message)
+  if (positionals.length === 1) {
+    const title = positionals[0]?.trim() ?? ''
+    const tickets = values.ticket ?? []
+    const wrong = tickets.find(line => !TICKET.test(line))
 
-  if (violation !== null)
-    fail(`nothing staged: ${violation}`, 1)
+    if (wrong !== undefined)
+      fail(`nothing staged: a ticket line reads \`#<n> - <title>\` or \`owner/repo#<n> - <title>\`, copied verbatim from the ticket, not: ${wrong}. ${RULE}`, 1)
+
+    if (title === '')
+      fail(`the title is empty\n\n${USAGE}`)
+
+    message = messageOf(title, values.message ?? [], tickets)
+
+    const violation = commitMessageViolation(message)
+
+    if (violation !== null)
+      fail(`nothing staged: ${violation}`, 1)
+  }
+  else if ((values.message?.length ?? 0) > 0 || (values.ticket?.length ?? 0) > 0) {
+    badUsage('-m and --ticket need a title')
+  }
 
   const sequence = await inProgress()
 
   if (sequence !== undefined)
     fail(`nothing staged: ${sequence[1]} is in progress, which git commits only whole`, 1, runHint(sequence[2], `finish ${sequence[1]}`))
+
+  if (amend)
+    await checkAmendSafe()
+
+  // Committing already-staged changes (or message-only --amend).
+  if (staged || (amend && given.length === 0)) {
+    const stagedFiles = (await checked(['diff', '--cached', '--name-only', '-z'])).split('\0').filter(Boolean)
+
+    if (staged && stagedFiles.length === 0)
+      fail('nothing staged in the index to commit', 1, runHint('gst', 'see what changed'))
+
+    const signals = holdSignals()
+
+    try {
+      const commitArgs = ['commit', '--cleanup=whitespace', ...(amend ? ['--amend'] : []), ...(message === undefined ? ['--no-edit'] : ['-m', message])]
+      const commit = await git(commitArgs)
+
+      if (commit.code !== 0) {
+        const refusal = `git commit failed:\n${(commit.stderr + commit.stdout).trim()}`
+
+        if (values.json === true)
+          fail(refusal, 1)
+
+        printError('gc', refusal)
+
+        return 1
+      }
+
+      await reportCommit(values, [])
+
+      return signals.signal === undefined ? 0 : exitCodeOf(null, signals.signal)
+    }
+    finally {
+      signals.release()
+    }
+  }
 
   const statuses = await Promise.all(given.map(async path => checked(['status', '--porcelain', '--untracked-files=all', '--', path])))
   const unchanged = given.filter((_, i) => statuses[i] === '')
@@ -171,7 +278,8 @@ async function main(argv: string[]): Promise<number> {
     }
 
     // The paths are literal one by one rather than through GIT_LITERAL_PATHSPECS, which the commit's hooks would inherit and read their own globs by.
-    const commit = await git(['commit', '--only', '--cleanup=whitespace', '-m', message, '--', ...paths.map(path => `:(literal)${path}`)])
+    const commitArgs = ['commit', ...(amend ? ['--amend'] : []), '--only', '--cleanup=whitespace', ...(message === undefined ? ['--no-edit'] : ['-m', message]), '--', ...paths.map(path => `:(literal)${path}`)]
+    const commit = await git(commitArgs)
 
     if (commit.code !== 0) {
       index.restore()
@@ -186,21 +294,7 @@ async function main(argv: string[]): Promise<number> {
       return 1
     }
 
-    const files = await checked(['show', '--format=%h %s', '--name-status', '-M', 'HEAD'])
-    const [head = '', ...lines] = files.trimEnd().split('\n')
-
-    if (values.json === true) {
-      const changes = lines.filter(Boolean).map((line) => {
-        const [letter = '', from = '', to] = line.split('\t')
-
-        return RENAME.test(letter) ? { status: letter[0] ?? letter, path: to ?? from, from } : { status: letter, path: from }
-      })
-
-      printJson({ sha: (await checked(['rev-parse', 'HEAD'])).trim(), subject: head.slice(head.indexOf(' ') + 1), files: changes })
-    }
-    else if (values.quiet !== true) {
-      console.log([head, ...lines.filter(Boolean).map(fileLine), ...sources.map(from => `also committed ${from}, the other side of a staged rename`)].join('\n'))
-    }
+    await reportCommit(values, sources)
 
     return signals.signal === undefined ? 0 : exitCodeOf(null, signals.signal)
   }

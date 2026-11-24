@@ -51,8 +51,52 @@ function whyFailed(stderr: string, fallback: string): string {
   return `${line} ${paths}`
 }
 
-/** Fetches with prune, then fast-forwards the branch onto its upstream: a branch that has diverged, or a tree a fast-forward would overwrite, is refused and left as it was. */
-export async function sync(repo: Repo, { pull, env }: { pull: boolean, env?: Record<string, string | undefined> | undefined }): Promise<SyncResult> {
+async function syncTargetBranch(repo: Repo, target: string, pull: boolean): Promise<SyncResult> {
+  const { path, dir } = repo
+  const refused = (reason: string, upstream: string | null = null): SyncResult => ({ path, branch: target, upstream, commits: null, outcome: 'refused', reason })
+  const skipped = (reason: string, upstream: string | null = null): SyncResult => ({ path, branch: target, upstream, commits: null, outcome: 'skipped', reason })
+
+  if ((await git(['-C', dir, 'rev-parse', '--verify', '-q', `refs/heads/${target}`])).code !== 0)
+    return refused(`no local branch named ${target}`)
+
+  const upstreamRead = await git(['-C', dir, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', `${target}@{upstream}`])
+
+  if (upstreamRead.code !== 0)
+    return skipped('no upstream, fetched only')
+
+  const upstream = upstreamRead.stdout.trim()
+
+  if ((await git(['-C', dir, 'rev-parse', '--verify', '-q', upstream])).code !== 0)
+    return skipped('upstream gone, fetched only', upstream)
+
+  const counts = await git(['-C', dir, 'rev-list', '--left-right', '--count', `${target}...${upstream}`])
+
+  if (counts.code !== 0)
+    return refused(whyFailed(counts.stderr, 'git rev-list failed'), upstream)
+
+  const [aheadText = '0', behindText = '0'] = counts.stdout.trim().split('\t')
+  const ahead = Number(aheadText)
+  const behind = Number(behindText)
+
+  if (behind === 0)
+    return { path, branch: target, upstream, commits: 0, outcome: 'current' }
+
+  if (ahead > 0)
+    return refused(`diverged: ${ahead} ahead, ${behind} behind, nothing merged`, upstream)
+
+  if (!pull)
+    return { path, branch: target, upstream, commits: behind, outcome: 'fetched' }
+
+  const slash = upstream.indexOf('/')
+  const remote = slash === -1 ? 'origin' : upstream.slice(0, slash)
+  const remoteBranch = slash === -1 ? upstream : upstream.slice(slash + 1)
+  const updated = await git(['-C', dir, 'fetch', remote, `${remoteBranch}:${target}`])
+
+  return updated.code === 0 ? { path, branch: target, upstream, commits: behind, outcome: 'updated' } : refused(whyFailed(updated.stderr, 'git fetch fast-forward failed'), upstream)
+}
+
+/** Fetches with prune, then fast-forwards the current (or named) branch onto its upstream: a branch that has diverged, or a tree a fast-forward would overwrite, is refused and left as it was. */
+export async function sync(repo: Repo, { pull, branch: targetBranch, env }: { pull: boolean, branch?: string | undefined, env?: Record<string, string | undefined> | undefined }): Promise<SyncResult> {
   const { path, dir } = repo
   const refused = (reason: string, branch: string | null = null, upstream: string | null = null): SyncResult => ({ path, branch, upstream, commits: null, outcome: 'refused', reason })
 
@@ -65,6 +109,9 @@ export async function sync(repo: Repo, { pull, env }: { pull: boolean, env?: Rec
 
   if (status === null)
     return refused('git could not read it')
+
+  if (targetBranch !== undefined && targetBranch !== status.branch)
+    return syncTargetBranch(repo, targetBranch, pull)
 
   const { branch, upstream, aheadBehind } = status
   const skipped = (reason: string): SyncResult => ({ path, branch, upstream, commits: null, outcome: 'skipped', reason })
