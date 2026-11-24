@@ -1,0 +1,6 @@
+export { highlight, languageOf, renderCode } from './code'
+export type { Name } from './code'
+export { looksLikeDiff, renderDiff } from './diff'
+export { renderMarkdown } from './markdown'
+export { themeFor } from './theme'
+export type { Theme } from './theme'

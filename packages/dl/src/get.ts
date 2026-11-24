@@ -8,11 +8,11 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { archiveSuffix, extractArchive } from '@kaynooo/cli-arc/src/extract.ts'
+import { archiveSuffix, extractArchive, formatOf, readEntries } from '@kaynooo/cli-arc'
 import { badUsage, escapeControls, fail, formatAge, formatSize, jsonOption, paint, parse, parseSize, printJson, table, truncate, warn } from '@kaynooo/cli-kit'
 import { download } from './download'
 import { binDir, binDirOnPath, installBinary, pickBinary } from './install'
-import { assertReleaseOptions, parseSpec, resolveRelease } from './release'
+import { assertReleaseOptions, forgeAuthHeaders, parseSpec, resolveRelease } from './release'
 import { summarize } from './script'
 import { readKey, verifySignature } from './signature'
 import { lastSeen, record, remember } from './state'
@@ -35,14 +35,17 @@ const EXITS: ExitRow[] = [
 
 const OPTIONS = {
   'output': { type: 'string', short: 'o', description: 'the folder to download into, created if missing, instead of a new one under the temp folder' },
+  'header': { type: 'string', short: 'H', multiple: true, description: 'an extra HTTP header to send as "Name: value" (repeatable)' },
   'sha256': { type: 'string', description: 'the sha256 the file must have', conflicts: ['sums'] },
   'sums': { type: 'string', description: 'the URL of a checksums file (SHA256SUMS) giving the file\'s sha256' },
   'sig': { type: 'string', description: 'the URL of a detached signature of the file, or of the --sums file when there is one' },
   'key': { type: 'string', description: 'the key --sig is checked with: a gpg fingerprint or key file, a minisign key or key file, a cosign PEM file' },
   'extract': { type: 'boolean', short: 'x', description: 'unpack the archive into a new folder beside it' },
-  'bin': { type: 'string', optional: { bare: '' }, description: 'install the file, or the one executable its archive holds, in ~/.local/bin, under the name given or its own', conflicts: ['exec'] },
+  'bin': { type: 'string', optional: { bare: '' }, description: 'install the file, or the one executable its archive holds, in ~/.local/bin (or --dir), under the name given or its own', conflicts: ['exec', 'inspect'] },
+  'dir': { type: 'string', description: 'the folder --bin installs into instead of ~/.local/bin' },
   'force': { type: 'boolean', description: 'let --bin replace a command of the same name' },
-  'exec': { type: 'boolean', description: 'run the file as a script, once --sha256, --sums or --sig pins it, or with --yes' },
+  'exec': { type: 'boolean', description: 'run the file as a script, once --sha256, --sums or --sig pins it, or with --yes', conflicts: ['inspect'] },
+  'inspect': { type: 'boolean', description: 'download and inspect metadata, script findings or archive contents without installing or running' },
   'yes': { type: 'boolean', description: 'run an --exec script that nothing pins' },
   'max-size': { type: 'string', description: 'the largest download taken, 2G by default' },
   'fresh': { type: 'boolean', description: 'take a release under two weeks old' },
@@ -71,6 +74,23 @@ interface Report {
   extracted?: string
   installed?: string
   script?: Summary
+  archiveEntries?: string[]
+}
+
+function parseHeaders(raw: readonly string[] | undefined): Record<string, string> {
+  const headers: Record<string, string> = {}
+
+  for (const item of raw ?? []) {
+    const colon = item.indexOf(':')
+    const name = colon === -1 ? '' : item.slice(0, colon).trim()
+
+    if (name === '')
+      badUsage(`-H/--header takes "Name: value", not '${item}'`)
+
+    headers[name.toLowerCase()] = item.slice(colon + 1).trim()
+  }
+
+  return headers
 }
 
 export async function get(args: string[]): Promise<number> {
@@ -104,6 +124,9 @@ export async function get(args: string[]): Promise<number> {
   if (values.force === true && values.bin === undefined)
     badUsage('--force goes with --bin')
 
+  if (values.dir !== undefined && values.bin === undefined)
+    badUsage('--dir goes with --bin')
+
   if (rest.length > 0 && values.exec !== true)
     badUsage('arguments after -- go to an --exec script')
 
@@ -119,10 +142,12 @@ export async function get(args: string[]): Promise<number> {
   if (values.sig !== undefined && (!URL.canParse(values.sig) || !['http:', 'https:'].includes(new URL(values.sig).protocol)))
     badUsage(`--sig takes an http or https URL, not '${values.sig}'`)
 
+  const userHeaders = parseHeaders(values.header)
   const key = values.key === undefined ? undefined : readKey(values.key)
   const maxSize = parseSize(values['max-size'] ?? DEFAULT_MAX_SIZE) ?? badUsage(`--max-size takes a size such as 500M or 2G, not '${values['max-size']}'`)
-  const release = spec === undefined ? undefined : await resolveRelease(spec, { fresh: values.fresh === true, asset: values.asset, key })
+  const release = spec === undefined ? undefined : await resolveRelease(spec, { fresh: values.fresh === true, asset: values.asset, key, headers: userHeaders })
   const url = release?.asset.url ?? given
+  const extraHeaders = { ...forgeAuthHeaders(url), ...userHeaders }
   // What the user gave wins over what the release ships
   const pinned = values.sha256 !== undefined || values.sums !== undefined
   const sums = values.sums ?? (pinned ? undefined : release?.sums)
@@ -134,7 +159,7 @@ export async function get(args: string[]): Promise<number> {
   mkdirSync(dir, { recursive: true })
 
   const expectsFile = release !== undefined || values.exec === true || values.bin !== undefined || values.extract === true
-  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: values.sha256?.toLowerCase(), sums, digest, sig, key })
+  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: values.sha256?.toLowerCase(), sums, digest, sig, key, headers: extraHeaders })
 
   if (release !== undefined && !verified)
     warn(`${release.spec} ${release.tag} ships no checksums file and its forge gives no sha256 of ${release.asset.name}, so nothing checked it`)
@@ -152,6 +177,27 @@ export async function get(args: string[]): Promise<number> {
 
   remember(url, file)
 
+  const targetBinDir = binDir(values.dir)
+
+  if (values.inspect === true) {
+    if (file.text && !file.html)
+      report.script = summarize(await Bun.file(file.path).text())
+
+    if (formatOf(file.name) !== undefined) {
+      try {
+        report.archiveEntries = (await readEntries(file.path)).map(entry => entry.path)
+      }
+      catch {}
+    }
+
+    print(report, given, values.json === true, targetBinDir)
+
+    if (created)
+      rmSync(dir, { recursive: true, force: true })
+
+    return 0
+  }
+
   const extracted = values.extract === true || (values.bin !== undefined && archiveSuffix(file.name) !== undefined)
 
   if (extracted)
@@ -161,14 +207,14 @@ export async function get(args: string[]): Promise<number> {
     const source = report.extracted === undefined ? file.path : await pickBinary(report.extracted, values.bin === '' ? undefined : values.bin)
     const name = values.bin === '' ? basename(source) : values.bin
 
-    report.installed = installBinary(source, name, values.force === true)
+    report.installed = installBinary(source, name, values.force === true, targetBinDir)
     record({ kind: 'bin', name, url, sha256: file.sha256, path: report.installed, at: new Date().toISOString(), ...release === undefined ? checkedBy(file, values) : fromRelease(release, values) })
   }
 
   if (values.exec === true)
     report.script = summarize(await Bun.file(file.path).text())
 
-  print(report, given, values.json === true)
+  print(report, given, values.json === true, targetBinDir)
 
   if (values.exec !== true)
     return 0
@@ -207,6 +253,7 @@ interface Checks {
   digest: string | undefined
   sig: string | undefined
   key: Key | undefined
+  headers: Record<string, string>
 }
 
 // The sha256 the checksums file gives the download. A release's may leave its asset out, and the forge's sha256 then checks it, unless a signature vouches for that checksums file alone.
@@ -223,13 +270,13 @@ async function fetchChecked(url: string, dir: string, created: boolean, checks: 
   let file: Downloaded | undefined
 
   try {
-    file = await download(url, dir, checks.maxSize)
+    file = await download(url, dir, checks.maxSize, checks.headers)
 
     if (file.html && (checks.expectsFile || !HTML_EXTENSIONS.has(extname(file.name).toLowerCase())))
       fail(`${url} answered an HTML page, not a file`, 1)
 
-    const sums = checks.sums === undefined ? undefined : await fetchSums(checks.sums)
-    const signed = checks.sig === undefined || checks.key === undefined ? undefined : await verifySignature(sums ?? file.path, checks.sig, checks.key)
+    const sums = checks.sums === undefined ? undefined : await fetchSums(checks.sums, checks.headers)
+    const signed = checks.sig === undefined || checks.key === undefined ? undefined : await verifySignature(sums ?? file.path, checks.sig, checks.key, checks.headers)
     const expected = checks.sha256 ?? listedSum(sums, checks, url, file.name, signed !== undefined) ?? checks.digest
 
     if (expected !== undefined && expected !== file.sha256)
@@ -296,7 +343,7 @@ async function extract(file: Downloaded): Promise<string> {
   return await extractArchive(file.path, folder) !== 0 ? fail(`extracting ${file.name} failed`, 1) : folder
 }
 
-function print(report: Report, url: string, json: boolean): void {
+function print(report: Report, url: string, json: boolean, targetBinDir = binDir()): void {
   if (json) {
     printJson(report)
 
@@ -314,7 +361,8 @@ function print(report: Report, url: string, json: boolean): void {
     ['seen', report.seen],
     ...report.extracted === undefined ? [] : [['extracted', report.extracted]],
     ...report.installed === undefined ? [] : [['installed', report.installed]],
-    ...report.installed === undefined || binDirOnPath() ? [] : [['note', `${binDir()} is not on PATH`]],
+    ...report.installed === undefined || binDirOnPath(targetBinDir) ? [] : [['note', `${targetBinDir} is not on PATH`]],
+    ...report.archiveEntries === undefined ? [] : [['entries', `${report.archiveEntries.length} (${report.archiveEntries.slice(0, 5).join(', ')}${report.archiveEntries.length > 5 ? ', …' : ''})`]],
   ]
 
   // A served file name, URL or script line could carry escapes that redraw what the reader trusts, so each control character shows as `cat -v` writes it.

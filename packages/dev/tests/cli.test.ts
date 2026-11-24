@@ -153,37 +153,75 @@ describe('dev ts', () => {
   })
 })
 
-describe('dev uuid and ulid', () => {
-  test('uuid is v4 by default and v7 with --v7, -n counts', () => {
-    expect(dev(['uuid']).out).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\n$/)
-    expect(dev(['uuid', '--v7', '-n', '3']).out.trim().split('\n')).toHaveLength(3)
-    expect(dev(['uuid', '--v7']).out).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7/)
-    expect(JSON.parse(dev(['uuid', '-n', '2', '--json']).out)).toHaveLength(2)
-    expect(dev(['uuid', '-n', '0']).code).toBe(2)
-  })
-
-  test('ulid', () => {
-    expect(dev(['ulid']).out).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}\n$/)
-    expect(dev(['ulid', '-n', '2']).out.trim().split('\n')).toHaveLength(2)
+describe('dev id', () => {
+  test('mints uuid (default), v7, ulid and hex, -n counts', () => {
+    expect(dev(['id']).out).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\n$/)
+    expect(dev(['id', 'v7', '-n', '3']).out.trim().split('\n')).toHaveLength(3)
+    expect(dev(['id', 'v7']).out).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7/)
+    expect(dev(['id', 'ulid']).out).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}\n$/)
+    expect(dev(['id', 'hex', '--bytes', '8']).out).toMatch(/^[0-9a-f]{16}\n$/)
+    expect(JSON.parse(dev(['id', 'uuid', '-n', '2', '--json']).out)).toHaveLength(2)
+    expect(dev(['id', '-n', '0']).code).toBe(2)
+    expect(dev(['id', 'uuid', '--bytes', '8']).code).toBe(2)
   })
 })
 
-describe('dev b64', () => {
-  test('encodes an argument or stdin, --url', () => {
-    expect(dev(['b64', 'hello']).out).toBe('aGVsbG8=\n')
-    expect(dev(['b64', '--url'], 'hello').out).toBe('aGVsbG8\n')
-    expect(dev(['b64'], 'hello\n').out).toBe('aGVsbG8K\n')
+describe('dev enc and dec', () => {
+  test('encodes and decodes b64, b64url, hex, url and html', () => {
+    expect(dev(['enc', 'b64', 'hello']).out).toBe('aGVsbG8=\n')
+    expect(dev(['enc', 'b64url'], 'hello').out).toBe('aGVsbG8\n')
+    expect(dev(['enc', 'hex', 'hi']).out).toBe('6869\n')
+    expect(dev(['enc', 'url', 'a b&c']).out).toBe('a%20b%26c\n')
+    expect(dev(['enc', 'html', '<a "x">']).out).toBe('&lt;a &quot;x&quot;&gt;\n')
+
+    expect(dev(['dec', 'b64', 'aGVsbG8']).out).toBe('hello')
+    expect(dev(['dec', 'b64url'], 'aGVsbG8=\n').out).toBe('hello')
+    expect(dev(['dec', 'hex', '6869']).out).toBe('hi')
+    expect(dev(['dec', 'url', 'a%20b%26c']).out).toBe('a b&c')
+    expect(dev(['dec', 'html', '&lt;a&gt;&#39;']).out).toBe('<a>\'')
+    expect(JSON.parse(dev(['dec', 'b64', 'aGVsbG8=', '--json']).out)).toEqual({ encoding: 'b64', input: 'aGVsbG8=', output: 'hello' })
   })
 
-  test('decodes with -d, padding optional, raw output', () => {
-    expect(dev(['b64', '-d', 'aGVsbG8']).out).toBe('hello')
-    expect(dev(['b64', '-d'], 'aGVsbG8=\n').out).toBe('hello')
-    expect(JSON.parse(dev(['b64', '-d', 'aGVsbG8=', '--json']).out)).toEqual({ input: 'aGVsbG8=', output: 'hello' })
+  test('exit 1 on bad encoded input, 2 on usage errors', () => {
+    expect(dev(['dec', 'b64', 'a$b']).code).toBe(1)
+    expect(dev(['dec', 'hex', 'zz']).code).toBe(1)
+    expect(dev(['dec', 'url', '%E0%A4%A']).code).toBe(1)
+    expect(dev(['enc', 'b64']).code).toBe(2)
   })
+})
 
-  test('exit 1 on bad base64, 2 with nothing given', () => {
-    expect(dev(['b64', '-d', 'a$b']).code).toBe(1)
-    expect(dev(['b64']).code).toBe(2)
+describe('dev cron', () => {
+  test('explains a cron schedule and computes upcoming runs', () => {
+    const res = dev(['cron', '30 9 * * 1-5', '-n', '3', '--json'])
+
+    expect(res.code).toBe(0)
+    const data = JSON.parse(res.out) as { description: string, next: { iso: string }[] }
+
+    expect(data.description).toContain('At 09:30')
+    expect(data.next).toHaveLength(3)
+    expect((JSON.parse(dev(['cron', '@daily', '--json']).out) as { normalized: string }).normalized).toBe('0 0 * * *')
+    expect(dev(['cron', 'not a cron']).code).toBe(1)
+  })
+})
+
+describe('dev convert', () => {
+  test('converts between json, yaml and toml', () => {
+    const yaml = dev(['convert', 'json', 'yaml'], '{"name":"app","port":8080}\n')
+
+    expect(yaml.code).toBe(0)
+    expect(yaml.out).toContain('name: app')
+
+    const toml = dev(['convert', 'yaml', 'toml'], 'name: app\nserver:\n  port: 8080\n')
+
+    expect(toml.code).toBe(0)
+    expect(toml.out).toContain('name = "app"')
+    expect(toml.out).toContain('[server]')
+    expect(toml.out).toContain('port = 8080')
+
+    const back = dev(['convert', 'toml', 'json', '--compact'], toml.out)
+
+    expect(back.code).toBe(0)
+    expect(JSON.parse(back.out)).toEqual({ name: 'app', server: { port: 8080 } })
   })
 })
 

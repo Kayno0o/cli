@@ -1,9 +1,11 @@
 import type { Colors, ExitRow } from '@kaynooo/cli-kit'
-import type { Arg, Row } from '@kaynooo/cli-kit/picker'
+import type { Row } from '@kaynooo/cli-kit/picker'
+import type { Arg } from '@kaynooo/cli-kit/term-pick'
 import { basename } from 'node:path'
 import process from 'node:process'
 import { closest, fail, formatAge, isInteractive, jsonOption, paint, parse, printJson, takesControlCodes } from '@kaynooo/cli-kit'
-import { emit, list, pick, table } from '@kaynooo/cli-kit/picker'
+import { pick, table } from '@kaynooo/cli-kit/picker'
+import { emit, list } from '@kaynooo/cli-kit/term-pick'
 import { git, gitSync } from './git'
 
 export interface Branch {

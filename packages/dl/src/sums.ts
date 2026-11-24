@@ -63,8 +63,8 @@ export function sumFor(text: string, name: string, path?: string): string | unde
 }
 
 // The checksums file at `url`, as bytes so a signature over it can be checked.
-export async function fetchSums(url: string): Promise<Uint8Array> {
-  return smallFile(url)
+export async function fetchSums(url: string, extraHeaders: Record<string, string> = {}): Promise<Uint8Array> {
+  return smallFile(url, extraHeaders)
 }
 
 // The sha256 the checksums file `sums`, fetched from `url`, gives for the download at `fileUrl`, named `name`.

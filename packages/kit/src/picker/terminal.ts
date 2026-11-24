@@ -8,7 +8,7 @@ import { stopJob } from '../job'
 import { overwrite, SYNC_END, SYNC_START } from '../redraw'
 import { paint, role } from '../style'
 import { previewLines, runPreview } from './preview'
-import { chosen, createState, highlighted, parseKeys, press, withRows } from './state'
+import { appendRows, chosen, createState, highlighted, parseKeys, press, withRows } from './state'
 import { caretCell, layoutFor, render } from './view'
 
 /** What the preview shows for the highlighted row, from its hidden fields; `signal` aborts when another row is highlighted. */
@@ -35,6 +35,9 @@ export interface PickSettings {
   /** A shell command, where `{1}`, `{2}`... stand for the hidden fields and `{}` for the row, or a function. */
   preview: string | PreviewFn | undefined
   previewPosition?: PreviewPosition | undefined
+  previewShare?: number | undefined
+  /** Optional stream yielding incremental batches of rows while the picker is already open. */
+  stream?: AsyncIterable<Row[]> | undefined
   reload?: Reload | undefined
   header?: string | undefined
   /** Control keys that end the pick, named as `ctrl-d`. */
@@ -165,11 +168,13 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
   // A lone escape may be the start of a sequence the terminal sends in two reads, such as an Alt-key, so it waits a moment for the rest before it cancels.
   let escape: ReturnType<typeof setTimeout> | undefined
 
+  const showPreview = settings.preview !== undefined && settings.previewPosition !== 'hidden'
+
   function draw(clear = false): void {
     if (restored)
       return
 
-    const layout = layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined, settings.previewPosition)
+    const layout = layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, showPreview, settings.previewPosition, settings.previewShare)
     let frame = SYNC_START + HIDE_CURSOR
 
     // The terminal's cursor stays hidden at the start of the first line, where a terminal rewrapping the frame as it narrows cannot move it off that row, so one erase from there takes the frame whatever rows it spans; the caret is drawn as a reversed cell instead.
@@ -188,13 +193,13 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
   function pageSize(): number {
     const headerLines = state.header === '' ? 0 : state.header.split('\n').length
 
-    return Math.max(1, layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, settings.preview !== undefined, settings.previewPosition).listHeight - 2 - headerLines)
+    return Math.max(1, layoutFor({ columns: terminal.columns, rows: terminal.rows }, settings.height, showPreview, settings.previewPosition, settings.previewShare).listHeight - 2 - headerLines)
   }
 
   function refreshPreview(): void {
     const at = highlighted(state)
 
-    if (settings.preview === undefined || at === shownLine)
+    if (!showPreview || settings.preview === undefined || at === shownLine)
       return
 
     shownLine = at
@@ -351,11 +356,39 @@ export async function select(rows: readonly Row[], settings: PickSettings, termi
   for (const signal of SIGNALS)
     process.once(signal, stop)
 
+  async function consumeStream(source: AsyncIterable<Row[]>): Promise<void> {
+    state = { ...state, status: 'loading' }
+    draw()
+
+    try {
+      for await (const batch of source) {
+        if (restored || state.done !== undefined)
+          return
+
+        if (batch.length === 0)
+          continue
+
+        state = appendRows(state, batch)
+        refreshPreview()
+        draw()
+      }
+    }
+    finally {
+      if (!restored && state.done === undefined) {
+        state = { ...state, status: '' }
+        draw()
+      }
+    }
+  }
+
   try {
     terminal.write(`${PASTE_ON}${MOUSE_ON}`)
     terminal.listen(onChunk, () => draw(true))
     refreshPreview()
     draw(true)
+
+    if (settings.stream !== undefined)
+      void consumeStream(settings.stream)
 
     if (reload?.onOpen === true) {
       pending.push(OPEN)

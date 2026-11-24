@@ -268,6 +268,22 @@ export function withRows(state: State, rows: readonly (string | Row)[], header =
   return { ...state, rows: cells, items: laid.map(row => row.text), styles: laid.map(row => row.styles), searchable, header, matches, cursor: Math.max(0, Math.min(matches.length - 1, state.cursor)), marked: new Set() }
 }
 
+/** Appends newly streamed rows, preserving query, marks, and the highlighted row if it still matches. */
+export function appendRows(state: State, extra: readonly (string | Row)[]): State {
+  if (extra.length === 0)
+    return state
+
+  const previous = highlighted(state)
+  const cells = [...state.rows, ...extra.map(row => typeof row === 'string' ? { hidden: [], cells: [row] } : row)]
+  const laid = lay(cells, state.searched)
+  const searchable = laid.map(row => row.searchable)
+  const matches = rank(state.query, searchable)
+  const kept = previous === undefined ? -1 : matches.findIndex(match => match.index === previous)
+  const cursor = kept === -1 ? Math.max(0, Math.min(matches.length - 1, state.cursor)) : kept
+
+  return { ...state, rows: cells, items: laid.map(row => row.text), styles: laid.map(row => row.styles), searchable, matches, cursor }
+}
+
 // The query once a key edits it, the matches ranked again only when its text changed.
 function withQuery(state: State, key: EditKey | { text: string }): State {
   const { text, caret, killed = '', chained = false } = editLine({ text: state.query, caret: state.caret, killed: state.killed, chained: state.chained }, key)

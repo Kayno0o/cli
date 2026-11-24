@@ -90,6 +90,7 @@ function block(gloss: Gloss, stream: Stream, depth: number): string[] {
   out.push(`${margin}${role('accent', stream)(colors.bold(gloss.name))}${summary === undefined ? '' : colors.dim(`  ${summary}`)}${colors.dim(origin)}`)
 
   const entries = [
+    ...(gloss.wrappers ?? []).map(wrapper => ({ token: wrapper, paintToken: role('note', stream), text: 'runs the command via this wrapper' })),
     ...gloss.assigns.map(assign => ({ token: assign, paintToken: role('value', stream), text: 'sets this variable for the command only' })),
     ...gloss.notes.map(note => ({ token: note.token, paintToken: painter(note.kind, stream), text: noteText(note) })),
     ...gloss.redirects.map(redirect => ({ ...redirect, paintToken: role('path', stream) })),

@@ -140,6 +140,18 @@ export function record(entry: LedgerEntry): void {
   writeJson(ledgerPath(), [...readLedger().filter(other => other.kind !== entry.kind || other.name !== entry.name), entry])
 }
 
+// Removes ledger entries matching `names`, returning the removed ones.
+export function removeFromLedger(names: readonly string[]): LedgerEntry[] {
+  const wanted = new Set(names)
+  const current = readLedger()
+  const removed = current.filter(entry => wanted.has(entry.name))
+
+  if (removed.length > 0)
+    writeJson(ledgerPath(), current.filter(entry => !wanted.has(entry.name)))
+
+  return removed
+}
+
 // Written beside, then renamed over, so an interrupted write leaves the last whole file.
 function writeJson(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true })

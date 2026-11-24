@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
-import { parseZip } from '../src/entries'
+import { parse7z, parseRar, parseZip } from '../src/entries'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const temp = tempDirs()
@@ -137,6 +137,23 @@ describe.skipIf(!GNU)('arc pack', () => {
     expect(existsSync(folder)).toBe(true)
   })
 
+  test('--exclude skips matching entries and still verifies the rest', () => {
+    const { folder, dest } = project()
+
+    mkdirSync(join(folder, 'node_modules/pkg'), { recursive: true })
+    writeFileSync(join(folder, 'node_modules/pkg/index.js'), 'ignored')
+    writeFileSync(join(folder, 'skip.log'), 'ignored')
+
+    const result = arc(['pack', '--exclude', 'node_modules', '--exclude', '*.log', folder, dest])
+
+    expect(result.code).toBe(0)
+    const listed = arc(['ls', '-r', join(dest, 'project.tar.zst')]).out
+
+    expect(listed).toContain('project/src/a.txt')
+    expect(listed).not.toContain('node_modules')
+    expect(listed).not.toContain('skip.log')
+  })
+
   test('refuses a symlink, a missing destination and a destination inside the folder', () => {
     const { root, folder, dest } = project()
 
@@ -189,7 +206,7 @@ describe.skipIf(!GNU)('arc unpack', () => {
 })
 
 describe('arc extract', () => {
-  test('extracts a tarball into the current folder', () => {
+  test('extracts a tarbomb into a subfolder by default, and directly with --flat', () => {
     const { folder, dest } = project()
 
     Bun.spawnSync(['tar', 'czf', join(dest, 'p.tar.gz'), '-C', folder, '.'])
@@ -197,7 +214,24 @@ describe('arc extract', () => {
     const out = temp()
 
     expect(arc(['extract', join(dest, 'p.tar.gz')], out).code).toBe(0)
-    expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('beta')
+    expect(readFileSync(join(out, 'p/b.txt'), 'utf8')).toBe('beta')
+
+    const flatOut = temp()
+
+    expect(arc(['extract', '--flat', join(dest, 'p.tar.gz')], flatOut).code).toBe(0)
+    expect(readFileSync(join(flatOut, 'b.txt'), 'utf8')).toBe('beta')
+  })
+
+  test('extracts a single-root tarball directly into the destination and supports --verify', () => {
+    const { folder, dest } = project()
+
+    Bun.spawnSync(['tar', 'czf', join(dest, 'wrapped.tar.gz'), '-C', join(folder, '..'), 'project'])
+
+    const out = temp()
+    const result = arc(['extract', '--verify', join(dest, 'wrapped.tar.gz'), out])
+
+    expect(result.code).toBe(0)
+    expect(readFileSync(join(out, 'project/src/a.txt'), 'utf8')).toBe('alpha')
   })
 
   test('keeps the source of a lone compressed file and matches the suffix in any case', () => {
@@ -232,7 +266,7 @@ describe('arc extract', () => {
 
     const out = temp()
 
-    expect(arc(['extract', join(dest, 'p.TXZ')], out).code).toBe(0)
+    expect(arc(['extract', '--flat', join(dest, 'p.TXZ')], out).code).toBe(0)
     expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('beta')
   })
 
@@ -245,10 +279,10 @@ describe('arc extract', () => {
 
     writeFileSync(join(out, 'b.txt'), 'mine')
 
-    expect(arc(['extract', join(dest, 'p.tar.gz')], out).code).toBe(1)
+    expect(arc(['extract', '--flat', join(dest, 'p.tar.gz')], out).code).toBe(1)
     expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('mine')
     expect(readFileSync(join(out, 'src/a.txt'), 'utf8')).toBe('alpha')
-    expect(arc(['extract', '--overwrite', join(dest, 'p.tar.gz')], out).code).toBe(0)
+    expect(arc(['extract', '--flat', '--overwrite', join(dest, 'p.tar.gz')], out).code).toBe(0)
     expect(readFileSync(join(out, 'b.txt'), 'utf8')).toBe('beta')
   })
 
@@ -339,6 +373,25 @@ describe.skipIf(!GNU)('arc ls, tree and cat', () => {
     const entries = parseZip('        5  2026-06-23 05:06   mod\\src\\a.lua\n        0  2026-06-23 05:06   mod\\src\\\n')
 
     expect(entries.map(entry => [entry.path, entry.kind, entry.raw])).toEqual([['mod/src/a.lua', 'file', 'mod\\src\\a.lua'], ['mod/src', 'dir', 'mod\\src\\']])
+  })
+
+  test('grep searches text inside an archive without extracting it', () => {
+    const file = archived()
+    const hit = arc(['grep', 'alp', file])
+
+    expect(hit.code).toBe(0)
+    expect(hit.out).toContain('project/src/a.txt:1: alpha')
+    expect(arc(['grep', '-i', '-l', 'BETA', file]).out.trim()).toBe('project/b.txt')
+    expect(JSON.parse(arc(['grep', '--json', 'alpha', file]).out)).toEqual([{ path: 'project/src/a.txt', line: 1, text: 'alpha' }])
+    expect(arc(['grep', 'nonexistent', file]).code).toBe(1)
+  })
+
+  test('parses 7z and rar listings', () => {
+    const seven = parse7z('----------\nPath = app/main.ts\nSize = 42\nModified = 2026-06-23 05:06:00\nAttributes = A\n\nPath = app\nFolder = +\nSize = 0\n')
+    const rar = parseRar('Name: app/main.ts\nType: File\nSize: 42\nmtime: 2026-06-23 05:06:00\nAttributes: -rw-r--r--\n\nName: app\nType: Directory\nSize: 0\n')
+
+    expect(seven.map(entry => [entry.path, entry.kind, entry.size])).toEqual([['app/main.ts', 'file', 42], ['app', 'dir', 0]])
+    expect(rar.map(entry => [entry.path, entry.kind, entry.size])).toEqual([['app/main.ts', 'file', 42], ['app', 'dir', 0]])
   })
 
   test('refuses what is not an archive', () => {

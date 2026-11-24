@@ -113,14 +113,14 @@ async function toolVerify(key: Key, signature: string, signed: string): Promise<
 }
 
 /** Fetches the detached signature at `url` and checks it signs `signed`, a file's path or the bytes of one; answers how it was signed, for the report. */
-export async function verifySignature(signed: string | Uint8Array, url: string, key: Key): Promise<string> {
+export async function verifySignature(signed: string | Uint8Array, url: string, key: Key, extraHeaders: Record<string, string> = {}): Promise<string> {
   const work = mkdtempSync(join(tmpdir(), 'dl-sig-'))
 
   try {
     const signature = join(work, 'signature')
     const data = typeof signed === 'string' ? signed : join(work, 'signed')
 
-    writeFileSync(signature, await smallFile(url))
+    writeFileSync(signature, await smallFile(url, extraHeaders))
 
     if (typeof signed !== 'string')
       writeFileSync(data, signed)

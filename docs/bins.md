@@ -12,10 +12,11 @@ Instead of: tar czf then rm -rf on trust, tar xf over existing files, and rememb
 arc <command> [options]
 arc ls backup.tar.zst  # what is in an archive
 arc cat backup.tar.zst project/package.json  # one file out of it
+arc grep TODO backup.tar.zst  # search text inside an archive
 arc pack --delete ~/old-project /mnt/backup  # archive, verify, then delete the folder
 arc pack dist  # compress only: ./dist.tar.zst, the folder stays
-arc unpack /mnt/backup/old-project.tar.zst ~/restored  # refuses to overwrite
-arc extract release.tar.gz  # any common archive
+arc extract release.tar.gz  # bomb-proof extract into subfolder when needed
+arc extract --verify /mnt/backup/old-project.tar.zst ~/restored  # extract and verify against archive
 ```
 
 ## base
@@ -106,15 +107,19 @@ dc up -d  # pass through to docker compose on the nearest stack
 
 ## dev
 
-small developer utilities: passwords and bcrypt hashes, JWTs, timestamps, UUIDs, base64, URLs and file hashes. Package `dev`.
+small developer utilities: passwords and bcrypt hashes, JWTs, timestamps, IDs, encodings, URLs, file hashes, cron schedules and JSON/YAML/TOML conversion. Package `dev`.
 
-Instead of: openssl rand, htpasswd, jwt.io, date -d, uuidgen, base64, sha256sum and one-off scripts for each
+Instead of: openssl rand, htpasswd, jwt.io, date -d, uuidgen, base64, sha256sum, crontab.guru, yq and one-off scripts for each
 
 ```sh
 dev <command> [options]
 dev password
 dev jwt <token>  # header, payload and expiry
 dev ts 1700000000  # an epoch as dates
+dev id v7  # time-ordered UUID
+dev enc b64url hello  # URL-safe base64
+dev cron "*/5 * * * *"  # explain a cron schedule
+dev convert yaml json config.yml  # convert YAML to JSON
 ```
 
 ## dl
@@ -126,11 +131,13 @@ Instead of: curl -fsSL <url> | sh, curl -LO then sha256sum -c by hand, and unpac
 ```sh
 dl <command> [options]
 dl https://bun.sh/install  # download a script to read it
+dl https://bun.sh/install --inspect  # download, inspect script findings and clean up
 dl https://bun.sh/install --exec --sha256 <sha>  # run the script that was read
 dl https://example.com/tool.tar.gz --sums https://example.com/SHA256SUMS --bin tool  # a checked binary, installed
 dl ls  # what dl installed or ran
+dl rm tool  # uninstall a tracked binary
 dl outdated  # what changed at its source
-dl update  # install it again
+dl update --dry-run  # preview updates
 ```
 
 ## doctor
@@ -285,8 +292,9 @@ Instead of: explainshell in a browser, reading man pages for each flag
 
 ```sh
 gloss [options] <command line>
-gloss 'tar -xzvf a.tgz -C /tmp'
-gloss -- git commit -am fix
+gloss tar -xzvf a.tgz -C /tmp
+gloss 'tar -xzvf a.tgz | head'
+gloss git -C /repo commit -am fix
 ```
 
 ## gm
@@ -416,7 +424,7 @@ Instead of: fzf for a quick choice in a pipe, select in a shell script
 ```sh
 pick [options]
 git branch --format='%(refname:short)' | pick
-ls | pick --multi --preview 'head -20 {}'
+ls | pick --multi --preview 'head -20 {}' --preview-window bottom:40%
 git branch | pick --filter main  # every match, best first, no terminal
 ps aux | pick --with-nth 2,11.. --nth 11..  # show some fields, search others
 ```
@@ -524,13 +532,15 @@ sub --regex --from "v(\d+)" --to "v$1.0" --dry-run --diff README.md  # the diff,
 
 ## view
 
-shows a markdown file, a source file or a git diff in the colours of the other @kaynooo CLIs. Package `view`.
+shows markdown files, source files, plain text files or git diffs in the colours of the other @kaynooo CLIs. Package `view`.
 
-Instead of: cat, bat or less on a markdown file, delta on a diff
+Instead of: cat, bat or less on a markdown or source file, delta on a diff
 
 ```sh
-view [options] [file]
+view [options] [file...]
 view README.md
+view src/a.ts:10-40
+view a.ts b.ts
 git diff | view
 ```
 

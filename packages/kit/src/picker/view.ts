@@ -20,8 +20,13 @@ export interface Size {
 /** Lines, or a share of the terminal's rows. */
 export type Height = { lines: number } | { percent: number }
 
-/** Beside the list, or under it. */
-export type PreviewPosition = 'right' | 'down'
+/** Beside the list, under it, or hidden. */
+export type PreviewPosition = 'right' | 'down' | 'hidden'
+
+export interface PreviewWindow {
+  position: PreviewPosition
+  share?: number
+}
 
 export interface Layout {
   height: number
@@ -38,9 +43,11 @@ const MIN_HEIGHT = 4
 const PREVIEW_MIN_COLUMNS = 80
 const PREVIEW_MIN_ROWS = 10
 const PREVIEW_SHARE = 0.4
+const PREVIEW_RIGHT_SHARE = 0.5
 const RESET = '\x1B[0m'
 const SEPARATOR = ' │ '
 const HEIGHT = /^(\d+)(%?)$/
+const PREVIEW_WINDOW = /^(right|down|bottom|hidden)(?::(\d+)%)?$/i
 
 export const DEFAULT_HEIGHT: Height = { percent: 100 }
 
@@ -53,21 +60,43 @@ export function parseHeight(text: string): Height | undefined {
   return found[2] === '%' ? { percent: Math.min(100, Number(found[1])) } : { lines: Number(found[1]) }
 }
 
+/** Parses `--preview-window` values such as `right`, `bottom`, `hidden`, `right:60%`, `bottom:40%`. */
+export function parsePreviewWindow(text: string): PreviewWindow | undefined {
+  const found = PREVIEW_WINDOW.exec(text.trim())
+
+  if (found === null)
+    return undefined
+
+  const rawPos = found[1]!.toLowerCase()
+  const position: PreviewPosition = rawPos === 'bottom' ? 'down' : rawPos as PreviewPosition
+
+  if (found[2] === undefined)
+    return { position }
+
+  const percent = Number(found[2])
+
+  return position === 'hidden' || percent < 10 || percent > 90 ? undefined : { position, share: percent / 100 }
+}
+
 /** The region the picker draws in: at least four lines unless the terminal has fewer, never more than the terminal. */
-export function layoutFor(size: Size, height: Height, previewing: boolean, position: PreviewPosition = 'right'): Layout {
+export function layoutFor(size: Size, height: Height, previewing: boolean, position: PreviewPosition = 'right', share?: number): Layout {
   const wanted = 'lines' in height ? height.lines : Math.round(size.rows * height.percent / 100)
   const rows = Math.min(size.rows, Math.max(MIN_HEIGHT, wanted))
 
+  if (!previewing || position === 'hidden')
+    return { height: rows, listHeight: rows, listWidth: size.columns, previewWidth: 0, previewHeight: 0 }
+
   if (position === 'down') {
-    const previewHeight = previewing && rows >= PREVIEW_MIN_ROWS ? Math.round(rows * PREVIEW_SHARE) : 0
+    const previewHeight = rows >= PREVIEW_MIN_ROWS ? Math.round(rows * (share ?? PREVIEW_SHARE)) : 0
 
     return { height: rows, listHeight: rows - previewHeight, listWidth: size.columns, previewWidth: 0, previewHeight }
   }
 
-  const split = previewing && size.columns >= PREVIEW_MIN_COLUMNS
-  const listWidth = split ? Math.floor(size.columns / 2) : size.columns
+  const split = size.columns >= PREVIEW_MIN_COLUMNS
+  const rightShare = share ?? PREVIEW_RIGHT_SHARE
+  const listWidth = split ? Math.max(10, Math.floor(size.columns * (1 - rightShare))) : size.columns
 
-  return { height: rows, listHeight: rows, listWidth, previewWidth: split ? size.columns - listWidth - SEPARATOR.length : 0, previewHeight: 0 }
+  return { height: rows, listHeight: rows, listWidth, previewWidth: split ? Math.max(0, size.columns - listWidth - SEPARATOR.length) : 0, previewHeight: 0 }
 }
 
 interface Fitted {

@@ -178,10 +178,35 @@ beforeAll(async () => {
       '/moved': () => Response.redirect('/install.sh', 302),
       '/missing': () => new Response('gone', { status: 404 }),
       '/encoded.tar.gz': () => new Response(archive, { headers: { 'content-type': 'application/gzip', 'content-encoding': 'gzip' } }),
-      '/gh/repos/o/tool/releases': () => Response.json(releases.map(apiRelease)),
+      '/authed.bin': (request) => {
+        if (request.headers.get('x-token') !== 'secret' && request.headers.get('authorization') !== 'token fj-secret')
+          return new Response('unauthorized', { status: 401 })
+
+        return new Response('authorized-bin\n', { headers: { 'content-type': 'application/octet-stream' } })
+      },
+      '/gh/repos/o/tool/releases': (request) => {
+        const page = Number(new URL(request.url).searchParams.get('page') ?? '1')
+        const perPage = Number(new URL(request.url).searchParams.get('per_page') ?? '30')
+
+        return Response.json(releases.slice((page - 1) * perPage, page * perPage).map(apiRelease))
+      },
       '/gh/repos/o/tool/releases/tags/:tag': request => tagged(request.params.tag),
-      '/fj/api/v1/repos/o/tool/releases': () => Response.json(releases.map(apiRelease)),
+      '/fj/api/v1/repos/o/tool/releases': (request) => {
+        if (request.headers.get('authorization') === 'token wrong')
+          return new Response('unauthorized', { status: 401 })
+
+        const page = Number(new URL(request.url).searchParams.get('page') ?? '1')
+        const limit = Number(new URL(request.url).searchParams.get('limit') ?? '30')
+
+        return Response.json(releases.slice((page - 1) * limit, page * limit).map(apiRelease))
+      },
       '/fj/api/v1/repos/o/tool/releases/tags/:tag': request => tagged(request.params.tag),
+      '/fj/api/v1/repos/o/private/releases': (request) => {
+        if (request.headers.get('authorization') !== 'token fj-secret')
+          return new Response('unauthorized', { status: 401 })
+
+        return Response.json(releases.map(apiRelease))
+      },
       '/rel/:tag/:name': (request) => {
         const content = releases.find(each => each.tag === request.params.tag)?.assets[request.params.name]
 
@@ -776,6 +801,59 @@ describe('releases', () => {
     releases = [{ tag: 'v1.2.0', published: ago(20), assets: builds('v1.2.0') }, { tag: 'v1.1.0', published: ago(30), assets: builds('v1.1.0') }]
     expect((await dl(['gh:o/tool@v1.1.0', '--bin', 'tool'], dir, forges())).code).toBe(0)
     expect(await dl(['outdated'], dir, forges())).toMatchObject({ code: 0, out: 'all 1 current\n' })
+  })
+
+  test('paginates past 30 releases to find one at least 14 days old', async () => {
+    const dir = home()
+
+    releases = [
+      ...Array.from({ length: 32 }, (_, index) => ({ tag: `v2.0.${32 - index}`, published: ago(1), assets: builds(`v2.0.${32 - index}`) })),
+      { tag: 'v1.9.0', published: ago(20), assets: builds('v1.9.0') },
+    ]
+    const ran = await dl(['gh:o/tool', '--bin', 'tool'], dir, forges())
+
+    expect(ran.code).toBe(0)
+    expect(installed(dir, 'tool')).toBe('#!/bin/sh\necho v1.9.0\n')
+  })
+
+  test('authenticates to private Forgejo releases with FORGEJO_TOKEN and supports -H headers', async () => {
+    const dir = home()
+
+    releases = [{ tag: 'v1.0.0', published: ago(20), assets: builds('v1.0.0') }]
+    expect((await dl(['fj:o/private', '--bin', 'priv'], dir, forges())).code).toBe(1)
+    expect((await dl(['fj:o/private', '--bin', 'priv'], dir, { ...forges(), FORGEJO_TOKEN: 'fj-secret' })).code).toBe(0)
+    expect((await dl([url('/authed.bin')], dir)).code).toBe(1)
+    expect((await dl([url('/authed.bin'), '-H', 'X-Token: secret'], dir)).code).toBe(0)
+  })
+
+  test('supports --dir, dl rm/uninstall, --inspect and dl update --dry-run', async () => {
+    const dir = home()
+    const customBin = join(dir, 'custom-bin')
+
+    releases = [{ tag: 'v1.0.0', published: ago(20), assets: builds('v1.0.0') }]
+    expect((await dl(['gh:o/tool', '--bin', 'tool', '--dir', customBin], dir, forges())).code).toBe(0)
+    expect(readFileSync(join(customBin, 'tool'), 'utf8')).toBe('#!/bin/sh\necho v1.0.0\n')
+
+    releases = [{ tag: 'v1.1.0', published: ago(15), assets: builds('v1.1.0') }, ...releases]
+    const preview = await dl(['update', '--dry-run', '--json'], dir, forges())
+
+    expect(preview.code).toBe(0)
+    expect(JSON.parse(preview.out)).toEqual({ dryRun: true, updates: [{ name: 'tool', kind: 'bin', from: 'v1.0.0', to: 'v1.1.0' }] })
+    expect(readFileSync(join(customBin, 'tool'), 'utf8')).toBe('#!/bin/sh\necho v1.0.0\n')
+
+    const removed = await dl(['uninstall', 'tool', '--json'], dir, forges())
+
+    expect(removed.code).toBe(0)
+    expect((JSON.parse(removed.out) as { removed: { name: string, deleted: boolean }[] }).removed[0]).toMatchObject({ name: 'tool', deleted: true })
+    expect(existsSync(join(customBin, 'tool'))).toBe(false)
+    expect((await dl(['ls', '--json'], dir)).out.trim()).toBe('[]')
+
+    script = SCRIPT_V1
+    const inspected = await dl([url('/install.sh'), '--inspect', '--json'], dir)
+
+    expect(inspected.code).toBe(0)
+    expect((JSON.parse(inspected.out) as { script: { findings: unknown[] } }).script.findings.length).toBeGreaterThan(0)
+    expect(existsSync(join(dir, 'mark'))).toBe(false)
   })
 })
 

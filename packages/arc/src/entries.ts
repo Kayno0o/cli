@@ -2,7 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import { fail } from '@kaynooo/cli-kit'
 import { lines, need, probe } from './proc'
 
-export type Format = 'tar' | 'zip'
+export type Format = 'tar' | 'zip' | '7z' | 'rar'
 
 export interface Entry {
   // The path with no leading ./ nor trailing slash.
@@ -16,7 +16,7 @@ export interface Entry {
   target?: string
 }
 
-const TAR_SUFFIXES = ['.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tar.xz', '.txz', '.tar.zst', '.tzst']
+const TAR_SUFFIXES = ['.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tbz', '.tar.xz', '.txz', '.tar.zst', '.tzst']
 // mode, owner/group, size, date, time, then the name, which may hold spaces.
 const TAR_LINE = /^([-dlhcbpsC])(\S{9}) \S+ +(\d+) (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})(?::\d{2})? (.+)$/
 const ZIP_LINE = /^\s*(\d+)\s+(\S+) (\d{2}:\d{2})\s+(\S.*)$/
@@ -27,12 +27,19 @@ const TRAILING_SLASHES = /\/+$/
 const BACKSLASHES = /\\/g
 const ZIP_FOLDER = /[/\\]$/
 const ZIP_GLOB = /[*?[\]\\]/g
+const BLANK_BLOCK = /\r?\n\r?\n+/
 
 export function formatOf(file: string): Format | undefined {
   const name = file.toLowerCase()
 
   if (name.endsWith('.zip'))
     return 'zip'
+
+  if (name.endsWith('.7z'))
+    return '7z'
+
+  if (name.endsWith('.rar'))
+    return 'rar'
 
   return TAR_SUFFIXES.some(suffix => name.endsWith(suffix)) ? 'tar' : undefined
 }
@@ -127,6 +134,100 @@ export function withParents(entries: Entry[]): Entry[] {
   return [...byPath.values()].toSorted((a, b) => a.path.localeCompare(b.path))
 }
 
+function entryKind(isDir: boolean, isLink = false): Entry['kind'] {
+  if (isDir)
+    return 'dir'
+
+  return isLink ? 'link' : 'file'
+}
+
+function defaultMode(mode: string, isDir: boolean): string {
+  if (mode !== '')
+    return mode
+
+  return isDir ? 'd' : '-'
+}
+
+export function parse7z(output: string): Entry[] {
+  const entries: Entry[] = []
+  const marker = output.indexOf('----------')
+  const body = marker === -1 ? output : output.slice(marker + 10)
+
+  for (const block of body.split(BLANK_BLOCK)) {
+    const fields = new Map<string, string>()
+
+    for (const line of lines(block)) {
+      const eq = line.indexOf(' = ')
+
+      if (eq !== -1)
+        fields.set(line.slice(0, eq).trim(), line.slice(eq + 3).trim())
+    }
+
+    const raw = fields.get('Path')
+
+    if (raw === undefined || raw === '')
+      continue
+
+    const path = clean(raw.replace(BACKSLASHES, '/'))
+
+    if (path === '' || path === '.')
+      continue
+
+    const attrs = fields.get('Attributes') ?? ''
+    const isDir = fields.get('Folder') === '+' || attrs.startsWith('D')
+    const size = Number(fields.get('Size') ?? '0')
+    const modified = (fields.get('Modified') ?? '').slice(0, 16)
+
+    entries.push({ path, raw, kind: entryKind(isDir), size: Number.isNaN(size) ? 0 : size, mode: defaultMode(attrs, isDir), modified })
+  }
+
+  return entries
+}
+
+export function parseRar(output: string): Entry[] {
+  const entries: Entry[] = []
+
+  for (const block of output.split(BLANK_BLOCK)) {
+    const fields = new Map<string, string>()
+
+    for (const line of lines(block)) {
+      const colon = line.indexOf(':')
+
+      if (colon !== -1)
+        fields.set(line.slice(0, colon).trim().toLowerCase(), line.slice(colon + 1).trim())
+    }
+
+    const raw = fields.get('name')
+
+    if (raw === undefined || raw === '')
+      continue
+
+    const path = clean(raw.replace(BACKSLASHES, '/'))
+
+    if (path === '' || path === '.')
+      continue
+
+    const type = (fields.get('type') ?? '').toLowerCase()
+    const isDir = type === 'directory' || ZIP_FOLDER.test(raw)
+    const isLink = type === 'symlink'
+    const size = Number(fields.get('size') ?? '0')
+    const modified = (fields.get('mtime') ?? '').slice(0, 16)
+    const target = fields.get('target')
+
+    entries.push({
+      path,
+      raw,
+      kind: entryKind(isDir, isLink),
+      size: Number.isNaN(size) ? 0 : size,
+      mode: defaultMode(fields.get('attributes') ?? '', isDir),
+      modified,
+      ...target === undefined ? {} : { target },
+    })
+  }
+
+  return entries
+}
+
 // Opens the archive and lists what it holds, ending the command when it cannot.
 export async function readEntries(file: string): Promise<Entry[]> {
   if (!existsSync(file) || !statSync(file).isFile())
@@ -135,16 +236,31 @@ export async function readEntries(file: string): Promise<Entry[]> {
   const format = formatOf(file)
 
   if (format === undefined)
-    return fail(`'${file}' is not an archive arc can read: it lists .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz, .tar.zst and .zip`, 1)
+    return fail(`'${file}' is not an archive arc can read: it lists .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz, .tar.zst, .zip, .7z and .rar`, 1)
 
-  need(format === 'zip' ? 'unzip' : 'tar')
+  const tool: Record<Format, string> = { 'zip': 'unzip', 'tar': 'tar', '7z': '7z', 'rar': 'unrar' }
 
-  const listed = format === 'zip' ? await probe(['unzip', '-l', file]) : await probe(['tar', '-tvf', file, ...tarFlags(file)])
+  need(tool[format])
+
+  const argv: Record<Format, string[]> = {
+    'zip': ['unzip', '-l', file],
+    'tar': ['tar', '-tvf', file, ...tarFlags(file)],
+    '7z': ['7z', 'l', '-slt', file],
+    'rar': ['unrar', 'vt', file],
+  }
+  const listed = await probe(argv[format])
 
   if (listed.code !== 0)
     return fail(`could not read '${file}': is it damaged?`, 1)
 
-  return withParents(format === 'zip' ? parseZip(listed.stdout) : parseTar(listed.stdout))
+  const parsers: Record<Format, (out: string) => Entry[]> = {
+    'zip': parseZip,
+    'tar': parseTar,
+    '7z': parse7z,
+    'rar': parseRar,
+  }
+
+  return withParents(parsers[format](listed.stdout))
 }
 
 // What lies under `prefix`: the entries one level down, or every level with `recursive`. The prefix is cleaned the way paths are.

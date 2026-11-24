@@ -78,10 +78,12 @@ describe('select', () => {
     expect(await select('pick', CHOICES, { hint: 'pass --flag', terminal: terminal([`${DOWN}\x1B[15~${DOWN}\r`]).fake })).toBe('c')
   })
 
-  it('filters on every word typed, in the label or the hint, case ignored', async () => {
+  it('fuzzy-matches on the label or the hint, case ignored, best match first', async () => {
     expect(await select('pick', CHOICES, { hint: 'pass --flag', terminal: terminal(['TH', 'ird', '\r']).fake })).toBe('c')
     expect(await select('pick', CHOICES, { hint: 'pass --flag', terminal: terminal(['the sec\r']).fake })).toBe('b')
-    expect(await select('pick', CHOICES, { hint: 'pass --flag', terminal: terminal(['e', DOWN, '\r']).fake })).toBe('b')
+    expect(await select('pick', CHOICES, { hint: 'pass --flag', terminal: terminal(['gm\r']).fake })).toBe('c')
+    expect(await select('pick', CHOICES, { hint: 'pass --flag', terminal: terminal(['e', UP, '\r']).fake })).toBe('b')
+    expect(await select('pick', CHOICES, { hint: 'pass --flag', terminal: terminal(['e', DOWN, '\r']).fake })).toBe('c')
   })
 
   it('keeps the cursor on its choice while it still matches, else goes to the first match', async () => {

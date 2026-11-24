@@ -45,6 +45,33 @@ describe('view', () => {
     expect(view(['--markdown'], 'see \u001B]8;;https://x.test\u001B\\the link\u001B]8;;\u001B\\ here\n').out).toBe('see the link here\n')
   })
 
+  test('shows .txt and .log files as plain text preserving line breaks, not markdown', () => {
+    const dir = temp('view-')
+
+    writeFileSync(join(dir, 'notes.txt'), 'line one\nline two\n**not bold**\n')
+
+    const res = view([join(dir, 'notes.txt')])
+
+    expect(res).toMatchObject({ code: 0, out: 'line one\nline two\n**not bold**\n' })
+    expect(JSON.parse(view(['--json', join(dir, 'notes.txt')]).out)).toEqual({ kind: 'text', language: null, text: 'line one\nline two\n**not bold**\n' })
+  })
+
+  test('supports multiple files and line ranges', () => {
+    const dir = temp('view-')
+
+    writeFileSync(join(dir, 'a.ts'), 'const a = 1\nconst b = 2\nconst c = 3\nconst d = 4\n')
+    writeFileSync(join(dir, 'b.txt'), 'hello\nworld\n')
+
+    expect(view([`${join(dir, 'a.ts')}:2-3`, '--lines']).out).toBe('2 │ const b = 2\n3 │ const c = 3\n')
+
+    const multi = view([join(dir, 'a.ts'), join(dir, 'b.txt')])
+
+    expect(multi.code).toBe(0)
+    expect(multi.out).toContain('a.ts')
+    expect(multi.out).toContain('b.txt')
+    expect(JSON.parse(view(['--json', join(dir, 'a.ts'), join(dir, 'b.txt')]).out)).toHaveLength(2)
+  })
+
   test('exits 1 on nothing to show, 2 on a missing file or a usage error', () => {
     expect(view(['/nonexistent.md']).code).toBe(2)
     expect(view([], '  \n').code).toBe(1)

@@ -1,3 +1,5 @@
+import { parseCommand, splitCommand } from '@kaynooo/cli-kit/shell'
+
 export type Operator = '|' | '|&' | '&&' | '||' | ';' | '&'
 
 export interface Word {
@@ -30,10 +32,8 @@ export interface Step {
 }
 
 const REDIRECT = /&>>?|>&|<&|<<<|<<-?|>>|>\||>|</y
-const CONTROL = /\|[&|]?|&&|&(?!>)|[;\n]/y
 const ASSIGN = /^[A-Z_]\w*\+?=/i
 const FD = /\d+(?=[<>])/y
-
 const ESCAPABLE_IN_QUOTES = new Set(['"', '\\', '$', '`'])
 
 function matchAt(pattern: RegExp, line: string, index: number): string | undefined {
@@ -86,8 +86,8 @@ interface Read {
   substitutions: string[]
 }
 
-// Reads the word starting at `from`, up to the next blank or operator outside quotes.
-function readWord(line: string, from: number): Read {
+// Reads the word starting at `from`, up to the next blank or redirect outside quotes.
+function readWord(line: string, from: number, offset: number): Read {
   const substitutions: string[] = []
   let text = ''
   let i = from
@@ -95,7 +95,7 @@ function readWord(line: string, from: number): Read {
   while (i < line.length) {
     const ch = line[i]!
 
-    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '|' || ch === '&' || ch === ';' || ch === '<' || ch === '>')
+    if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '<' || ch === '>' || (ch === '&' && line[i + 1] === '>'))
       break
 
     if (ch === '\\') {
@@ -157,81 +157,116 @@ function readWord(line: string, from: number): Read {
     }
   }
 
-  return { word: { text, start: from, end: i }, substitutions }
+  return { word: { text, start: offset + from, end: offset + i }, substitutions }
 }
 
-function emptyCommand(): Command {
-  return { assigns: [], words: [], redirects: [], substitutions: [] }
+function normalizeSeparator(separator: string): Operator | undefined {
+  if (separator === '')
+    return undefined
+
+  return separator === '\n' ? ';' : separator as Operator
 }
 
-// Splits a command line into its simple commands and what joins them. It never throws: an unclosed quote runs to the end of the line.
+// Splits a command line into its simple commands using `@kaynooo/cli-kit/shell` for separator/comment/heredoc handling, while keeping character offsets and redirects.
 export function parseLine(line: string): Step[] {
   const steps: Step[] = []
-  let command = emptyCommand()
-  let i = 0
 
-  const finish = (next: Operator | undefined): void => {
+  for (const piece of splitCommand(line)) {
+    const command: Command = { assigns: [], words: [], redirects: [], substitutions: [] }
+    const text = piece.command
+    let i = 0
+
+    while (i < text.length) {
+      const ch = text[i]!
+
+      if (ch === ' ' || ch === '\t' || ch === '\n') {
+        i++
+
+        continue
+      }
+
+      const fd = matchAt(FD, text, i)
+      const redirectAt = i + (fd?.length ?? 0)
+      const redirect = matchAt(REDIRECT, text, redirectAt)
+
+      if (redirect !== undefined) {
+        const start = piece.start + i
+
+        i = redirectAt + redirect.length
+
+        while (text[i] === ' ' || text[i] === '\t')
+          i++
+
+        const read = i < text.length ? readWord(text, i, piece.start) : undefined
+
+        command.redirects.push({ op: redirect, fd, target: read?.word, start, end: read?.word.end ?? piece.start + i })
+        command.substitutions.push(...read?.substitutions ?? [])
+        i = read === undefined ? i : read.word.end - piece.start
+
+        continue
+      }
+
+      const { word, substitutions } = readWord(text, i, piece.start)
+
+      command.substitutions.push(...substitutions)
+
+      if (command.words.length === 0 && ASSIGN.test(word.text))
+        command.assigns.push(word)
+      else
+        command.words.push(word)
+
+      i = Math.max(word.end - piece.start, i + 1)
+    }
+
+    const next = normalizeSeparator(piece.separator)
+
     if (command.words.length > 0 || command.assigns.length > 0 || command.redirects.length > 0)
       steps.push({ command, next })
     else if (next !== undefined && steps.length > 0)
       steps.at(-1)!.next = next
-
-    command = emptyCommand()
   }
-
-  while (i < line.length) {
-    const ch = line[i]!
-
-    if (ch === ' ' || ch === '\t') {
-      i++
-
-      continue
-    }
-
-    if (ch === '#')
-      break
-
-    const control = matchAt(CONTROL, line, i)
-
-    if (control !== undefined) {
-      finish(control === '\n' ? ';' : control as Operator)
-      i += control.length
-
-      continue
-    }
-
-    const fd = matchAt(FD, line, i)
-    const redirectAt = i + (fd?.length ?? 0)
-    const redirect = matchAt(REDIRECT, line, redirectAt)
-
-    if (redirect !== undefined) {
-      i = redirectAt + redirect.length
-
-      while (line[i] === ' ' || line[i] === '\t')
-        i++
-
-      const read = i < line.length && matchAt(CONTROL, line, i) === undefined ? readWord(line, i) : undefined
-
-      command.redirects.push({ op: redirect, fd, target: read?.word, start: i - redirect.length - (fd?.length ?? 0), end: read?.word.end ?? i })
-      command.substitutions.push(...read?.substitutions ?? [])
-      i = read?.word.end ?? i
-
-      continue
-    }
-
-    const { word, substitutions } = readWord(line, i)
-
-    command.substitutions.push(...substitutions)
-
-    if (command.words.length === 0 && ASSIGN.test(word.text))
-      command.assigns.push(word)
-    else
-      command.words.push(word)
-
-    i = Math.max(word.end, i + 1)
-  }
-
-  finish(undefined)
 
   return steps
+}
+
+export interface Unwrapped {
+  wrappers: string[]
+  assigns: string[]
+  words: Word[]
+}
+
+// Unwraps leading wrappers (`sudo`, `env`, `out --`, `slot --`, `timeout`, `nice`, etc.) via `@kaynooo/cli-kit/shell`'s `parseCommand`.
+export function unwrapCommand(words: Word[]): Unwrapped {
+  if (words.length < 2)
+    return { wrappers: [], assigns: [], words }
+
+  const raw = words.map(word => word.text).join(' ')
+  const parsed = parseCommand(raw)
+
+  if (!parsed.isWrapped || parsed.program === '')
+    return { wrappers: [], assigns: [], words }
+
+  const targetCount = 1 + parsed.args.length
+
+  if (targetCount >= words.length)
+    return { wrappers: [], assigns: [], words }
+
+  const splitAt = words.length - targetCount
+  const prefix = words.slice(0, splitAt)
+  const rest = words.slice(splitAt)
+  const assigns: string[] = []
+  const wrapperWords: string[] = []
+
+  for (const word of prefix) {
+    if (ASSIGN.test(word.text))
+      assigns.push(word.text)
+    else
+      wrapperWords.push(word.text)
+  }
+
+  return {
+    wrappers: wrapperWords.length > 0 ? [wrapperWords.join(' ')] : [],
+    assigns,
+    words: rest,
+  }
 }

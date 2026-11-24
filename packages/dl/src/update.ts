@@ -1,7 +1,9 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { LedgerEntry } from './state'
+import { dirname } from 'node:path'
 import { Exit, fail, formatAge, formatSize, jsonOption, parse, parseSize, printError, printJson, table } from '@kaynooo/cli-kit'
 import { DEFAULT_MAX_SIZE, get } from './get'
+import { binDir } from './install'
 import { latestRelease, parseSpec } from './release'
 import { readLedger } from './state'
 
@@ -142,25 +144,31 @@ const UPDATE_EXITS: ExitRow[] = [[0, 'every one updated, or nothing changed'], [
 
 // The dl arguments that fetch an entry again the way it was the first time.
 function argvOf(entry: LedgerEntry, yes: boolean): string[] {
+  const dirArgs = entry.path !== undefined && dirname(entry.path) !== binDir() ? ['--dir', dirname(entry.path)] : []
+
   if (entry.release !== undefined)
-    return [entry.release, '--bin', entry.name, '--force', ...entry.asset === undefined ? [] : ['--asset', entry.asset], ...entry.key === undefined ? [] : ['--key', entry.key]]
+    return [entry.release, '--bin', entry.name, '--force', ...dirArgs, ...entry.asset === undefined ? [] : ['--asset', entry.asset], ...entry.key === undefined ? [] : ['--key', entry.key]]
 
   const checks = [...entry.sums === undefined ? [] : ['--sums', entry.sums], ...entry.sig === undefined || entry.key === undefined ? [] : ['--sig', entry.sig, '--key', entry.key]]
 
   if (entry.kind === 'bin')
-    return [entry.url, '--bin', entry.name, '--force', ...checks]
+    return [entry.url, '--bin', entry.name, '--force', ...dirArgs, ...checks]
 
   return [entry.url, '--exec', ...checks, ...yes ? ['--yes'] : [], ...entry.args === undefined ? [] : ['--', ...entry.args]]
 }
 
 export async function update(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, UPDATE_USAGE, { yes: { type: 'boolean', description: 'run a changed script that no checksums file or signature pins' } }, {
+  const { values, positionals } = parse(args, UPDATE_USAGE, {
+    'yes': { type: 'boolean', description: 'run a changed script that no checksums file or signature pins' },
+    'dry-run': { type: 'boolean', description: 'show what would be updated without downloading or installing' },
+    'json': jsonOption('{dryRun, updates: [{name, kind, from, to}]}'),
+  }, {
     positionals: ['[name...]'],
     exits: UPDATE_EXITS,
-    examples: [['dl update', 'everything that changed'], ['dl update tool', 'one command']],
+    examples: [['dl update', 'everything that changed'], ['dl update --dry-run', 'preview updates without applying them'], ['dl update tool', 'one command']],
   })
   const checked = await checkAll(positionals, false)
-  const changed = checked.filter(({ freshness }) => freshness.state === 'changed')
+  const changed = checked.filter((item): item is Checked & { freshness: { state: 'changed', now: string } } => item.freshness.state === 'changed')
   let code = 0
 
   for (const { entry, freshness } of checked) {
@@ -170,8 +178,33 @@ export async function update(args: string[]): Promise<number> {
     }
   }
 
+  if (values['dry-run'] === true) {
+    const plan = changed.map(({ entry, freshness }) => ({
+      name: entry.name,
+      kind: entry.kind,
+      from: entry.version ?? entry.sha256.slice(0, 12),
+      to: entry.version === undefined ? freshness.now.slice(0, 12) : freshness.now,
+    }))
+
+    if (values.json === true) {
+      printJson({ dryRun: true, updates: plan })
+
+      return code
+    }
+
+    if (plan.length === 0)
+      console.log('nothing changed')
+    else
+      console.log(table([['name', 'kind', 'from', 'to'], ...plan.map(item => [item.name, item.kind, item.from, item.to])], { header: true }))
+
+    return code
+  }
+
   if (changed.length === 0) {
-    console.log('nothing changed')
+    if (values.json === true)
+      printJson({ dryRun: false, updates: [] })
+    else
+      console.log('nothing changed')
 
     return code
   }

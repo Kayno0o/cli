@@ -15,6 +15,8 @@ interface Language {
   quotedKeys?: boolean
   // A whole line drawn as a heading, such as an ini or toml section.
   section?: RegExp
+  // Whether keywords match regardless of case (SQL, Dockerfile).
+  caseInsensitive?: boolean
 }
 
 const WORD_START = /[a-z_$]/i
@@ -56,7 +58,7 @@ const LANGUAGES = {
   ini: { line: ['#', ';'], quotes: '"\'', keywords: words('true false yes no on off'), key: SETTING_KEY, section: SECTION },
   css: { line: [], block: ['/*', '*/'], quotes: '"\'', keywords: words('important inherit initial unset auto none') },
   html: { line: [], block: ['<!--', '-->'], quotes: '"\'', keywords: words('') },
-  sql: { line: ['--'], block: ['/*', '*/'], quotes: '"\'`', keywords: words('select from where and or not insert into values update set delete create alter drop table index view join left right inner outer full on group by order having limit offset as distinct union all null is in like between case when then else end primary key foreign references default unique with returning true false') },
+  sql: { line: ['--'], block: ['/*', '*/'], quotes: '"\'`', caseInsensitive: true, keywords: words('select from where and or not insert into values update set delete create alter drop table index view join left right inner outer full on group by order having limit offset as distinct union all null is in like between case when then else end primary key foreign references default unique with returning true false') },
   rust: { ...SLASHES, quotes: '"', keywords: words('fn let mut const static struct enum impl trait pub use mod crate self super if else match for while loop break continue return as in ref move async await dyn where type unsafe true false None Some Ok Err') },
   go: { ...SLASHES, quotes: '"\'`', keywords: words('func var const type struct interface map chan package import if else for range switch case default break continue return go defer select fallthrough goto nil true false') },
   php: { ...SLASHES, line: ['//', '#'], quotes: '"\'', keywords: words(`${C_LIKE} function class interface trait namespace use public private protected static final echo array fn match list isset empty require include require_once include_once true false null`) },
@@ -64,7 +66,7 @@ const LANGUAGES = {
   c: { ...SLASHES, quotes: '"\'', keywords: words(`${C_LIKE} struct union typedef enum const volatile extern sizeof void int long double float char short unsigned signed auto register inline static include define ifdef ifndef endif pragma true false NULL nullptr class template typename namespace using bool`) },
   ruby: { ...HASH, quotes: '"\'', keywords: words('def end class module if elsif else unless while until for in do begin rescue ensure return yield self nil true false and or not require require_relative include extend attr_accessor attr_reader puts then case when') },
   lua: { line: ['--'], quotes: '"\'', keywords: words('function end if then else elseif for while do repeat until return local break in and or not nil true false') },
-  dockerfile: { ...HASH, quotes: '"\'', keywords: words('FROM RUN CMD LABEL EXPOSE ENV ADD COPY ENTRYPOINT VOLUME USER WORKDIR ARG ONBUILD STOPSIGNAL HEALTHCHECK SHELL AS') },
+  dockerfile: { ...HASH, quotes: '"\'', caseInsensitive: true, keywords: words('from run cmd label expose env add copy entrypoint volume user workdir arg onbuild stopsignal healthcheck shell as') },
   makefile: { ...HASH, quotes: '"\'', keywords: words('ifeq ifneq ifdef ifndef else endif include define endef export') },
 } satisfies Record<string, Language>
 
@@ -216,8 +218,9 @@ export function highlight(source: string, name: Name, theme: Theme): string {
       const word = WORD.exec(text.slice(at))?.[0] ?? char
       const before = text.slice(text.lastIndexOf('\n', at - 1) + 1, at)
       const command = language.commands === true && (PROMPT.test(before) || COMMAND_END.test(before))
+      const lookup = language.caseInsensitive === true ? word.toLowerCase() : word
 
-      if (language.keywords.has(word))
+      if (language.keywords.has(lookup))
         out += theme.keyword(word)
       else
         out += command && !word.startsWith('$') ? theme.accent(word) : word
@@ -234,7 +237,7 @@ export function highlight(source: string, name: Name, theme: Theme): string {
 }
 
 // The code behind a gutter of line numbers on a terminal; a `lineNumbers` of false leaves it bare.
-export function renderCode(source: string, name: Name | undefined, theme: Theme, lineNumbers: boolean): string {
+export function renderCode(source: string, name: Name | undefined, theme: Theme, lineNumbers: boolean, startLine = 1): string {
   const text = escapeControls(source.replaceAll('\r\n', '\n')).replace(TRAILING_NEWLINE, '')
   const shown = name === undefined ? text : highlight(text, name, theme)
 
@@ -242,7 +245,7 @@ export function renderCode(source: string, name: Name | undefined, theme: Theme,
     return `${shown}\n`
 
   const lines = shown.split('\n')
-  const digits = String(lines.length).length
+  const digits = String(startLine + lines.length - 1).length
 
-  return `${lines.map((line, index) => `${theme.dim(`${String(index + 1).padStart(digits)} │`)} ${line}`.trimEnd()).join('\n')}\n`
+  return `${lines.map((line, index) => `${theme.dim(`${String(startLine + index).padStart(digits)} │`)} ${line}`.trimEnd()).join('\n')}\n`
 }

@@ -18,11 +18,15 @@
     "diff",
     "terminal"
   ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "bin": {
     "view": "./dist/view.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "engines": {
     "bun": ">=1.4.3"
@@ -31,7 +35,7 @@
     "build": "$npm_execpath ../../scripts/build.ts src/view.ts",
     "view": "$npm_execpath src/view.ts"
   },
-  "devDependencies": {
+  "dependencies": {
     "@kaynooo/cli-kit": "workspace:*"
   }
 }

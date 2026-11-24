@@ -56,7 +56,10 @@ describe('pick fzf options', () => {
     expect([...result.stdout]).toEqual([0x63, 0x61, 0x66, 0xE9, 0, 0x63, 0x61, 0x66, 0xE8, 0])
   })
 
-  test('--header and --with-nth are accepted', () => {
+  test('--header, --with-nth and --preview-window are accepted and validated', () => {
     expect(pick(['--header', 'Pick one', '--with-nth', '2', '--filter', 'b'], 'a b\n')).toMatchObject({ code: 0, out: 'a b\n' })
+    expect(pick(['--preview-window', 'bottom:40%', '--filter', 'a'], 'a\nb\n')).toMatchObject({ code: 0, out: 'a\n' })
+    expect(pick(['--preview-window', 'hidden', '--filter', 'a'], 'a\nb\n')).toMatchObject({ code: 0, out: 'a\n' })
+    expect(pick(['--preview-window', 'invalid'], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('--preview-window') })
   })
 })

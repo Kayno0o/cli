@@ -38,6 +38,10 @@ export function uuidV4(): string {
   return crypto.randomUUID()
 }
 
+export function hexId(bytes = 16): string {
+  return Buffer.from(randomBytes(bytes)).toString('hex')
+}
+
 // The ULID after this one: its base32 number plus one, a carry out of the random part moving the time on a millisecond.
 export function nextUlid(id: string): string {
   const digits = [...id]

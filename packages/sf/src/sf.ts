@@ -1,13 +1,15 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Service as ComposeService } from '@kaynooo/cli-kit/compose'
-import type { Arg, Row } from '@kaynooo/cli-kit/picker'
+import type { Row } from '@kaynooo/cli-kit/picker'
+import type { Arg } from '@kaynooo/cli-kit/term-pick'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { cacheFolder, captureOutput, fail, ignoredFolders, isInteractive, paint, parse, printJson, readUserConfig } from '@kaynooo/cli-kit'
 import { findComposeDir, readServices } from '@kaynooo/cli-kit/compose'
-import { byRecency, emit, list, pick, record, runs, table } from '@kaynooo/cli-kit/picker'
+import { byRecency, pick, record, runs, table } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
+import { emit, list } from '@kaynooo/cli-kit/term-pick'
 
 interface Argument {
   name: string

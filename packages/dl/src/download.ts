@@ -30,9 +30,9 @@ const CONTENT_RANGE = /^bytes (\d+)-\d+\/(?:\d+|\*)$/
 const RANGE_NOT_SATISFIABLE = 416
 
 // The request of `url`, asking for the rest of a part kept from a download that broke off; If-Range makes a server whose file changed since answer it whole. A weak ETag cannot go in If-Range, so Last-Modified stands in.
-async function request(url: string, kept: (Part & { size: number }) | undefined): Promise<{ response: Response, offset: number }> {
+async function request(url: string, kept: (Part & { size: number }) | undefined, extraHeaders: Record<string, string>): Promise<{ response: Response, offset: number }> {
   // A .tar.gz an S3 bucket or static host labels Content-Encoding: gzip would otherwise be saved inflated, under a sha256 nobody published.
-  const headers: Record<string, string> = { 'accept-encoding': 'identity' }
+  const headers: Record<string, string> = { 'accept-encoding': 'identity', ...extraHeaders }
   const validator = kept?.etag !== undefined && !kept.etag.startsWith('W/') ? kept.etag : kept?.lastModified
 
   if (kept === undefined || validator === undefined)
@@ -76,11 +76,11 @@ function moveInto(from: string, to: string): void {
  * Streams `url` into a new file of `dir`, hashing it on the way under a progress line.
  * The bytes go to a part kept per URL until the file is whole, so a download that broke off is resumed by the next `dl` of that URL when the server can tell the file did not change.
  */
-export async function download(url: string, dir: string, maxSize: number): Promise<Downloaded> {
+export async function download(url: string, dir: string, maxSize: number, extraHeaders: Record<string, string> = {}): Promise<Downloaded> {
   dropStaleParts()
 
   const { file: partFile, kept } = partOf(url)
-  const { response, offset } = await request(url, kept)
+  const { response, offset } = await request(url, kept, extraHeaders)
   const name = offset > 0 ? kept!.name : fileName(response, url)
   const path = join(dir, name)
 
@@ -185,8 +185,8 @@ function validators(from: Headers | Part): Pick<Part, 'etag' | 'lastModified'> {
 const SMALL_FILE = 16 * 1024 * 1024
 
 /** The whole body of a small file at `url`, such as a signature or a checksums file, failing with exit 1 past 16M. */
-export async function smallFile(url: string): Promise<Uint8Array> {
-  const response = await reach(url)
+export async function smallFile(url: string, extraHeaders: Record<string, string> = {}): Promise<Uint8Array> {
+  const response = await reach(url, Object.keys(extraHeaders).length === 0 ? undefined : { headers: extraHeaders })
   const chunks: Uint8Array[] = []
   let size = 0
 

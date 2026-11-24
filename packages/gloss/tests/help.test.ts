@@ -41,7 +41,13 @@ Options:
   --lock          lock it
 TEXT`)
 
-const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, MANPATH: '/nonexistent' }
+tool('zzkit', `if [ "$KIT_HELP" = json ]; then
+  echo '{"synopsis":"zzkit [options]","summary":"a kit tool","options":[{"name":"dry-run","short":"d","type":"boolean","description":"preview only"},{"name":"out","short":"o","type":"string","description":"output path"}]}'
+else
+  echo "Usage: zzkit"
+fi`)
+
+const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, MANPATH: '/nonexistent', XDG_CACHE_HOME: join(dir, 'cache') }
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -55,9 +61,38 @@ describe('man pages', () => {
     expect(command?.notes[0]?.text).toContain('use a long listing format')
     expect(analyze('./zzpage -l', { env: { ...env, MANPATH: join(dir, 'man') } }).commands[0]?.page).toBeUndefined()
   })
+
+  test.skipIf(Bun.which('nroff') === null)('handles git global flags before subcommand lookup and caches parsed man pages', () => {
+    mkdirSync(join(dir, 'man/man1'), { recursive: true })
+    writeFileSync(join(dir, 'man/man1/git.1'), '.TH GIT 1\n.SH NAME\ngit \\- the stupid content tracker\n.SH OPTIONS\n.TP\n\\fB\\-C\\fR \\fIpath\\fR\nRun as if git was started in path.\n')
+    writeFileSync(join(dir, 'man/man1/git-commit.1'), '.TH GIT-COMMIT 1\n.SH NAME\ngit-commit \\- Record changes to the repository\n.SH OPTIONS\n.TP\n\\fB\\-m\\fR \\fImsg\\fR\nUse the given msg as the commit message.\n')
+
+    const manEnv = { ...env, MANPATH: join(dir, 'man') }
+    const [cmd] = analyze('git -C /tmp commit -m fix', { env: manEnv }).commands
+
+    expect(cmd?.name).toBe('git commit')
+    expect(cmd?.page).toBe('git-commit')
+    expect(cmd?.notes.map(note => [note.kind, note.token])).toEqual([['option', '-C'], ['value', '/tmp'], ['option', '-m'], ['value', 'fix']])
+
+    // Second call uses the on-disk parsed cache even with empty PATH (no nroff).
+    const [cached] = analyze('git -C /tmp commit -m fix', { env: { ...manEnv, PATH: '' } }).commands
+
+    expect(cached?.page).toBe('git-commit')
+    expect(cached?.notes.length).toBe(4)
+  })
 })
 
 describe('--run-help', () => {
+  test('reads KIT_HELP=json natively for @kaynooo/cli tools', () => {
+    const [gloss] = analyze('zzkit -d -o file.txt', { env, runHelp: true }).commands
+
+    expect(gloss).toMatchObject({ source: 'help', summary: 'a kit tool' })
+    expect(gloss?.notes.map(note => [note.kind, note.token, note.text])).toEqual([
+      ['option', '-d', 'preview only'],
+      ['option', '-o', 'output path'],
+      ['value', 'file.txt', 'the OUT for -o'],
+    ])
+  })
   test('reads the options of a command with no man page from its help', () => {
     const [gloss] = analyze('zzdemo -q -o out.txt in', { env, runHelp: true }).commands
 

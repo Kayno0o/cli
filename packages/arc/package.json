@@ -19,11 +19,15 @@
     "zstd",
     "backup"
   ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "bin": {
     "arc": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "engines": {
     "bun": ">=1.4.3"
@@ -32,7 +36,7 @@
     "build": "$npm_execpath ../../scripts/build.ts src/cli.ts --splitting",
     "arc": "$npm_execpath src/cli.ts"
   },
-  "devDependencies": {
+  "dependencies": {
     "@kaynooo/cli-kit": "workspace:*"
   }
 }

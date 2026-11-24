@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from 'bun:test'
-import { byRecency, emit, list, pick } from '../src/picker'
+import { byRecency, pick } from '../src/picker'
+import { emit, list } from '../src/term-pick'
 
 describe('byRecency', () => {
   test('puts the ones run last first, the rest keeping their order', () => {

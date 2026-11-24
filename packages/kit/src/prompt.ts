@@ -11,11 +11,11 @@ import { textWidth, truncate } from './format'
 import { stopJob } from './job'
 import { isInteractive } from './mode'
 import { editLine, endsKills, isEditKey, visible } from './picker/line'
+import { rank } from './picker/score'
 import { parseKeys } from './picker/state'
 import { overwrite, rowsTaken, SYNC_END, SYNC_START } from './redraw'
 import { paint } from './style'
 
-const WORDS = /\s+/
 // Choices drawn at once at most, the rest scrolled to.
 const MAX_ROWS = 10
 
@@ -334,11 +334,13 @@ class List<T> {
   private cursor: number
   private top = 0
   private readonly width: number
+  private readonly searchable: string[]
 
   constructor(private readonly choices: Choice<T>[], initial: number) {
     this.matches = choices
     this.cursor = Math.min(Math.max(initial, 0), choices.length - 1)
     this.width = Math.max(0, ...choices.map(choice => choice.label.length))
+    this.searchable = choices.map(({ label, hint }) => `${label} ${hint}`.toLowerCase())
   }
 
   current(): Choice<T> | undefined {
@@ -382,12 +384,12 @@ class List<T> {
     return this.line.text === '' ? '' : withCaret(colors, this.line, roomAfter(question, columns))
   }
 
-  // Every word typed is in the label or the hint, case ignored; the cursor stays on its choice while it still matches, else goes to the first.
+  // Fuzzy matches against label and hint via the picker's ranking engine, case ignored; keeps the cursor on its choice while it still matches, else goes to the best match.
   private filter(query: string): void {
-    const words = query.toLowerCase().split(WORDS).filter(word => word !== '')
+    const trimmed = query.trim().toLowerCase()
     const current = this.current()
 
-    this.matches = this.choices.filter(({ label, hint }) => words.every(word => `${label} ${hint}`.toLowerCase().includes(word)))
+    this.matches = trimmed === '' ? this.choices : rank(trimmed, this.searchable).map(({ index }) => this.choices[index]!)
     this.cursor = current === undefined ? 0 : Math.max(this.matches.indexOf(current), 0)
     this.top = 0
   }

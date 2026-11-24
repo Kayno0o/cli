@@ -1,7 +1,8 @@
 import type { Key } from './signature'
-import { readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
-import { badUsage, configuredForge, fail, formatAge, userConfigPath, warn } from '@kaynooo/cli-kit'
+import { badUsage, configBase, configuredForge, fail, formatAge, readUserConfig, userConfigPath, warn } from '@kaynooo/cli-kit'
 
 /** `gh:owner/repo` or `fj:owner/repo`, with `@tag` for one release rather than the latest. */
 export interface ReleaseSpec {
@@ -83,24 +84,85 @@ export function thisPlatform(): Platform {
   return { os: process.platform, arch: process.arch, musl }
 }
 
-// GitHub's API, or the Forgejo instance's; both answer a release list of the same shape. A token in GITHUB_TOKEN or GH_TOKEN lifts GitHub's limit of 60 requests an hour.
-function releasesUrl(spec: ReleaseSpec): { url: string, headers: Record<string, string> } {
+const PAGE_SIZE = 30
+const MAX_PAGES = 10
+
+function teaToken(host: string): string | undefined {
+  const path = join(configBase(), 'tea', 'config.yml')
+
+  if (!existsSync(path))
+    return undefined
+
+  try {
+    const parsed = Bun.YAML.parse(readFileSync(path, 'utf8')) as { logins?: { url?: string, token?: string }[] } | null
+    const logins = Array.isArray(parsed?.logins) ? parsed.logins : []
+
+    for (const login of logins) {
+      if (typeof login.url === 'string' && typeof login.token === 'string' && login.token !== '' && URL.canParse(login.url) && new URL(login.url).host === host)
+        return login.token
+    }
+  }
+  catch {
+    return undefined
+  }
+
+  return undefined
+}
+
+function forgejoToken(forgeUrl: string): string | undefined {
+  const envToken = process.env.FORGEJO_TOKEN ?? process.env.GITEA_TOKEN
+
+  if (envToken !== undefined && envToken !== '')
+    return envToken
+
+  const host = URL.canParse(forgeUrl) ? new URL(forgeUrl).host : ''
+  const ftToken = readUserConfig('ft', {}, [['ft', 'config.json']]).token
+
+  if (typeof ftToken === 'string' && ftToken !== '')
+    return ftToken
+
+  const fgToken = readUserConfig('fg').token
+
+  if (typeof fgToken === 'string' && fgToken !== '')
+    return fgToken
+
+  return host === '' ? undefined : teaToken(host)
+}
+
+/** Auth headers for a release asset URL when it lives on the configured Forgejo instance. */
+export function forgeAuthHeaders(url: string): Record<string, string> {
+  const forgeUrl = process.env.DL_FORGEJO_URL ?? configuredForge()?.url
+
+  if (forgeUrl === undefined || !URL.canParse(forgeUrl) || !URL.canParse(url))
+    return {}
+
+  if (new URL(url).origin !== new URL(forgeUrl).origin)
+    return {}
+
+  const token = forgejoToken(forgeUrl)
+
+  return token === undefined ? {} : { authorization: `token ${token}` }
+}
+
+// GitHub's API, or the Forgejo instance's; both answer a release list of the same shape. A token in GITHUB_TOKEN/GH_TOKEN or FORGEJO_TOKEN/GITEA_TOKEN/tea lifts limits and enables private repos.
+function releasesUrl(spec: ReleaseSpec, page = 1, extraHeaders: Record<string, string> = {}): { url: string, headers: Record<string, string> } {
   const path = `repos/${spec.owner}/${spec.repo}/releases`
   const tagged = spec.tag === undefined ? '' : `/tags/${encodeURIComponent(spec.tag)}`
 
   if (spec.forge === 'fj') {
     const forge = process.env.DL_FORGEJO_URL ?? configuredForge()?.url ?? fail(`fj:${spec.owner}/${spec.repo} needs the forge it lives on: set forge (a host such as git.example.org) in ${userConfigPath('config')}`, 2)
+    const token = forgejoToken(forge)
+    const headers: Record<string, string> = { accept: 'application/json', ...token === undefined ? {} : { authorization: `token ${token}` }, ...extraHeaders }
+    const query = tagged === '' ? `?limit=${PAGE_SIZE}${page > 1 ? `&page=${page}` : ''}` : tagged
 
-    return { url: `${forge}/api/v1/${path}${tagged || '?limit=30'}`, headers: { accept: 'application/json' } }
+    return { url: `${forge}/api/v1/${path}${query}`, headers }
   }
 
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN
-  const headers: Record<string, string> = { 'accept': 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' }
+  const headers: Record<string, string> = { 'accept': 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', ...token !== undefined && token !== '' ? { authorization: `Bearer ${token}` } : {}, ...extraHeaders }
+  const query = tagged === '' ? `?per_page=${PAGE_SIZE}${page > 1 ? `&page=${page}` : ''}` : tagged
 
-  if (token !== undefined && token !== '')
-    headers.authorization = `Bearer ${token}`
-
-  return { url: `${process.env.DL_GITHUB_API ?? 'https://api.github.com'}/${path}${tagged || '?per_page=30'}`, headers }
+  return { url: `${process.env.DL_GITHUB_API ?? 'https://api.github.com'}/${path}${query}`, headers }
 }
 
 interface ApiRelease {
@@ -111,8 +173,8 @@ interface ApiRelease {
   assets: { name: string, browser_download_url: string, digest?: string | null }[]
 }
 
-async function releases(spec: ReleaseSpec): Promise<Release[]> {
-  const { url, headers } = releasesUrl(spec)
+async function releasePage(spec: ReleaseSpec, page: number, extraHeaders: Record<string, string> = {}): Promise<{ items: Release[], rawCount: number }> {
+  const { url, headers } = releasesUrl(spec, page, extraHeaders)
   let response: Response
 
   try {
@@ -132,18 +194,41 @@ async function releases(spec: ReleaseSpec): Promise<Release[]> {
   }
 
   const body = await response.json() as ApiRelease | ApiRelease[]
-
-  return (Array.isArray(body) ? body : [body])
+  const raw = Array.isArray(body) ? body : [body]
+  const items = raw
     .filter(release => !release.draft && (spec.tag !== undefined || !release.prerelease) && release.published_at !== null)
     .map(release => ({
       tag: release.tag_name,
       published: release.published_at!,
       assets: release.assets.map(asset => ({ name: asset.name, url: asset.browser_download_url, ...typeof asset.digest === 'string' ? { digest: asset.digest } : {} })),
     }))
+
+  return { items, rawCount: raw.length }
 }
 
-async function newestFirst(spec: ReleaseSpec): Promise<Release[]> {
-  return (await releases(spec)).sort((a, b) => Date.parse(b.published) - Date.parse(a.published))
+// Fetches pages until we either don't need an old release, find one >= MIN_AGE, or reach the end (or MAX_PAGES).
+async function newestFirst(spec: ReleaseSpec, needOld: boolean, now: number, extraHeaders: Record<string, string> = {}): Promise<Release[]> {
+  const all: Release[] = []
+  const seen = new Set<string>()
+  const limit = spec.tag !== undefined || !needOld ? 1 : MAX_PAGES
+
+  for (let page = 1; page <= limit; page++) {
+    const { items, rawCount } = await releasePage(spec, page, extraHeaders)
+    let added = 0
+
+    for (const item of items) {
+      if (!seen.has(item.tag)) {
+        seen.add(item.tag)
+        all.push(item)
+        added++
+      }
+    }
+
+    if (items.some(release => oldEnough(release, now)) || rawCount < PAGE_SIZE || (page > 1 && added === 0))
+      break
+  }
+
+  return all.sort((a, b) => Date.parse(b.published) - Date.parse(a.published))
 }
 
 function oldEnough(release: Release, now: number): boolean {
@@ -151,13 +236,13 @@ function oldEnough(release: Release, now: number): boolean {
 }
 
 /** The newest release at least two weeks old, the one `dl outdated` compares an install with. */
-export async function latestRelease(spec: ReleaseSpec, now = Date.now()): Promise<Release | undefined> {
-  return (await newestFirst(spec)).find(release => oldEnough(release, now))
+export async function latestRelease(spec: ReleaseSpec, now = Date.now(), extraHeaders: Record<string, string> = {}): Promise<Release | undefined> {
+  return (await newestFirst(spec, true, now, extraHeaders)).find(release => oldEnough(release, now))
 }
 
 /** The release to install: the one tagged, else the newest at least two weeks old, or the newest with `fresh`; a newer one skipped is said on stderr. */
-export async function pickRelease(spec: ReleaseSpec, fresh: boolean, now = Date.now()): Promise<Release> {
-  const found = await newestFirst(spec)
+export async function pickRelease(spec: ReleaseSpec, fresh: boolean, now = Date.now(), extraHeaders: Record<string, string> = {}): Promise<Release> {
+  const found = await newestFirst(spec, !fresh && spec.tag === undefined, now, extraHeaders)
   const newest = found[0] ?? fail(`${specName(spec)} has no published release`, 1)
 
   if (spec.tag !== undefined || fresh)
@@ -244,8 +329,8 @@ function signatureOf(assets: Asset[], target: string, key: Key): Asset | undefin
 }
 
 /** Resolves a release spec to the asset to download and what checks it; with `key`, the release must ship a signature of the checksums file, or of the asset without one. */
-export async function resolveRelease(spec: ReleaseSpec, options: { fresh: boolean, asset?: string | undefined, key?: Key | undefined, platform?: Platform }): Promise<Resolved> {
-  const release = await pickRelease(spec, options.fresh)
+export async function resolveRelease(spec: ReleaseSpec, options: { fresh: boolean, asset?: string | undefined, key?: Key | undefined, platform?: Platform, headers?: Record<string, string> }): Promise<Resolved> {
+  const release = await pickRelease(spec, options.fresh, Date.now(), options.headers)
   const asset = pickAsset(release.assets, options.platform ?? thisPlatform(), options.asset)
   const own = release.assets.find(each => each.name.startsWith(`${asset.name}.sha256`))
   const sums = own ?? release.assets.find(each => SUMS.test(each.name))

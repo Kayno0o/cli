@@ -39,7 +39,7 @@ export const BINS: Record<string, BinBrief> = {
   slot: { summary: 'waits in FIFO order for free machine-wide slots, then runs the…', replaces: 'flock wrappers, hand-written…' },
   src: { summary: 'reads, outlines, graphs and ranks source code: spans,…', replaces: 'sed -n N,Mp, grep -n chains and…' },
   sub: { summary: 'replaces text in files, writing nothing unless every…', replaces: 'sed -i and one-off bun -e or python…' },
-  view: { summary: 'shows a markdown file, a source file or a git diff in the…', replaces: 'cat, bat or less on a markdown…' },
+  view: { summary: 'shows markdown files, source files, plain text files or git…', replaces: 'cat, bat or less on a markdown or…' },
   waitfor: { summary: 'waits until a file shows a line, a port listens, a URL answers…', replaces: 'sleep loops, tail -f and until !…' },
   ws: { summary: 'multi-repo workspace manager: repos status, pull, push, exec,…', replaces: 'shell loops over workspace…' },
   wt: { summary: 'git worktrees of a compose project, each with its own stack,…', replaces: 'a second clone, port juggling and a…' },

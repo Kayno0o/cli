@@ -53,6 +53,17 @@ describe('highlight', () => {
   test('does not read a digit inside a word as a number', () => {
     expect(highlight('a1 b2', 'script', tint)).toBe('a1 b2')
   })
+
+  test('highlights SQL and Dockerfile keywords case-insensitively', () => {
+    const sql = highlight('SELECT id FROM users where active = TRUE', 'sql', tint)
+    const docker = highlight('from alpine\nRUN echo hi', 'dockerfile', tint)
+
+    expect(sql).toContain(tint.keyword('SELECT'))
+    expect(sql).toContain(tint.keyword('FROM'))
+    expect(sql).toContain(tint.keyword('where'))
+    expect(docker).toContain(tint.keyword('from'))
+    expect(docker).toContain(tint.keyword('RUN'))
+  })
 })
 
 describe('renderCode', () => {

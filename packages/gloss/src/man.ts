@@ -1,8 +1,8 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { stripAnsi } from '@kaynooo/cli-kit'
+import { cacheFolder, stripAnsi } from '@kaynooo/cli-kit'
 
 export interface OptionDoc {
   flags: string[]
@@ -216,8 +216,74 @@ export function parsePage(name: string, text: string): ManPage {
   return { name, summary: summaryOf(text), options: parseOptions(text) }
 }
 
-export function loadPage(name: string, env: Record<string, string | undefined> = process.env): ManPage | undefined {
-  const text = pageText(name, env)
+interface CachedManPage {
+  path: string
+  mtimeMs: number
+  size: number
+  page: ManPage
+}
 
-  return text === undefined ? undefined : parsePage(name, text)
+function cachePathOf(filePath: string, env: Record<string, string | undefined>): string {
+  const hash = new Bun.CryptoHasher('sha256').update(filePath).digest('hex').slice(0, 24)
+  const base = env.XDG_CACHE_HOME ?? cacheFolder()
+
+  return join(base, 'kaynooo-gloss', `${hash}.json`)
+}
+
+function readCachedPage(filePath: string, mtimeMs: number, size: number, env: Record<string, string | undefined>): ManPage | undefined {
+  try {
+    const file = cachePathOf(filePath, env)
+
+    if (!existsSync(file))
+      return undefined
+
+    const cached = JSON.parse(readFileSync(file, 'utf8')) as Partial<CachedManPage>
+
+    if (cached.path === filePath && cached.mtimeMs === mtimeMs && cached.size === size && cached.page !== undefined)
+      return cached.page
+  }
+  catch {
+    return undefined
+  }
+
+  return undefined
+}
+
+function writeCachedPage(filePath: string, mtimeMs: number, size: number, page: ManPage, env: Record<string, string | undefined>): void {
+  try {
+    const file = cachePathOf(filePath, env)
+
+    mkdirSync(join(file, '..'), { recursive: true })
+    writeFileSync(file, JSON.stringify({ path: filePath, mtimeMs, size, page } satisfies CachedManPage))
+  }
+  catch {}
+}
+
+export function loadPage(name: string, env: Record<string, string | undefined> = process.env): ManPage | undefined {
+  const path = findPage(name, env)
+
+  if (path === undefined)
+    return undefined
+
+  const stat = statSync(path, { throwIfNoEntry: false })
+
+  if (stat !== undefined) {
+    const cached = readCachedPage(path, stat.mtimeMs, stat.size, env)
+
+    if (cached !== undefined)
+      return cached
+  }
+
+  const source = readSource(path)
+  const text = source === undefined ? undefined : render(source)
+
+  if (text === undefined)
+    return undefined
+
+  const page = parsePage(name, text)
+
+  if (stat !== undefined)
+    writeCachedPage(path, stat.mtimeMs, stat.size, page, env)
+
+  return page
 }

@@ -18,8 +18,23 @@ describe('gloss', () => {
     expect(out).toContain('> out  writes the output to out')
   })
 
+  test('takes bare commands without -- and quotes the words that need it', () => {
+    const bare = JSON.parse(gloss(['--json', 'zz-nope', '-x', 'a b']).out) as { commands: { name: string, notes: { token: string, kind: string }[] }[] }
+
+    expect(bare.commands[0]?.name).toBe('zz-nope')
+    expect(bare.commands[0]?.notes).toMatchObject([{ token: '-x', kind: 'unknown' }, { token: 'a b', kind: 'argument' }])
+  })
+
   test('takes the words after -- and quotes the ones that need it', () => {
     expect((JSON.parse(gloss(['--json', '--', 'zz-nope', 'a b']).out) as { commands: { notes: unknown[] }[] }).commands[0]?.notes).toMatchObject([{ token: 'a b', kind: 'argument' }])
+  })
+
+  test('unwraps sudo, env, out and slot wrappers', () => {
+    const sudo = JSON.parse(gloss(['--json', 'sudo', '-u', 'root', 'zz-nope', '-x']).out) as { commands: { name: string, wrappers?: string[] }[] }
+    const slot = JSON.parse(gloss(['--json', 'slot', '--', 'zz-nope', '-x']).out) as { commands: { name: string, wrappers?: string[] }[] }
+
+    expect(sudo.commands[0]).toMatchObject({ name: 'zz-nope', wrappers: ['sudo -u root'] })
+    expect(slot.commands[0]).toMatchObject({ name: 'zz-nope', wrappers: ['slot --'] })
   })
 
   test('reads the command line from stdin', () => {

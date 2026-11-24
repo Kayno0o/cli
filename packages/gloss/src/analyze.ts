@@ -4,7 +4,7 @@ import { basename } from 'node:path'
 import { loadHelp } from './help'
 import { loadPage } from './man'
 import { explain } from './match'
-import { parseLine } from './shell'
+import { parseLine, unwrapCommand } from './shell'
 
 export interface Gloss {
   name: string
@@ -12,6 +12,7 @@ export interface Gloss {
   page: string | undefined
   summary: string | undefined
   source: 'man' | 'help' | undefined
+  wrappers?: string[]
   assigns: string[]
   notes: Note[]
   redirects: { token: string, text: string }[]
@@ -27,6 +28,10 @@ export interface Line {
 const MAX_DEPTH = 3
 const SINGLE_DIGIT = /^\d$/
 const SAFE_NAME = /^[\w.+-]+$/
+
+// Git global flags that precede a subcommand (`git -C /repo -c k=v --no-pager commit -am fix`).
+const GIT_VALUE_FLAGS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--super-prefix', '--config-env', '--exec-path', '--list-cmds'])
+const GIT_BOOL_FLAGS = new Set(['-p', '--paginate', '-P', '--no-pager', '--bare', '--no-replace-objects', '--literal-pathspecs', '--glob-pathspecs', '--noglob-pathspecs', '--icase-pathspecs', '--no-optional-locks', '--no-lazy-fetch', '--no-advice'])
 
 const REDIRECTS: Record<string, string> = {
   '>': 'writes the output to',
@@ -64,6 +69,42 @@ function describeSubcommand(name: string, word: Word | undefined, env: Record<st
   return page === undefined ? undefined : { page, used: `${name}-${word.text}` }
 }
 
+// Scans past git global flags (`-C <dir>`, `-c <k=v>`, `--no-pager`, etc.) to locate the real subcommand index in `words`.
+function gitSubcommandIndex(words: Word[]): number {
+  let i = 1
+
+  while (i < words.length) {
+    const token = words[i]!.text
+
+    if (!token.startsWith('-') || token === '--')
+      return i
+
+    if (GIT_VALUE_FLAGS.has(token)) {
+      i += 2
+
+      continue
+    }
+
+    const eq = token.indexOf('=')
+
+    if (eq !== -1 && GIT_VALUE_FLAGS.has(token.slice(0, eq))) {
+      i++
+
+      continue
+    }
+
+    if (GIT_BOOL_FLAGS.has(token) || (token.startsWith('-C') && token.length > 2) || (token.startsWith('-c') && token.length > 2)) {
+      i++
+
+      continue
+    }
+
+    return -1
+  }
+
+  return -1
+}
+
 function sourceOf(page: unknown, fromHelp: boolean): Gloss['source'] {
   if (page === undefined)
     return undefined
@@ -82,25 +123,36 @@ export function analyze(line: string, settings: AnalyzeSettings = {}, depth = 0)
   const commands: Gloss[] = []
 
   for (const { command, next } of parseLine(line)) {
-    const [head, second] = command.words
+    const unwrapped = unwrapCommand(command.words)
+    const activeWords = unwrapped.words
+    const [head] = activeWords
     const name = head?.text ?? ''
     // A command given by its absolute path has its page under its name; a relative one such as ./ls is a local script, whatever system command it shares a name with.
     const paged = name.startsWith('/') ? basename(name) : name
-    const sub = head === undefined ? undefined : describeSubcommand(paged, second, env)
-    const manual = sub?.page ?? (head === undefined ? undefined : loadPage(paged, env))
-    const page = manual ?? (runHelp && head !== undefined ? loadHelp(name, second?.text, env) : undefined)
+    const subIndex = paged === 'git' ? gitSubcommandIndex(activeWords) : 1
+    const subWord = subIndex > 0 ? activeWords[subIndex] : undefined
+    const globalWords = subIndex > 1 ? activeWords.slice(1, subIndex) : []
+    const sub = head === undefined ? undefined : describeSubcommand(paged, subWord, env)
+    const rootManual = head === undefined ? undefined : loadPage(paged, env)
+    const manual = sub?.page ?? rootManual
+    const page = manual ?? (runHelp && head !== undefined ? loadHelp(name, subWord?.text, env) : undefined)
     const fromHelp = manual === undefined && page !== undefined
-    const words = command.words.slice(sub === undefined && !(fromHelp && page?.name.includes(' ')) ? 1 : 2)
+    const usedSub = sub !== undefined || (fromHelp && page?.name.includes(' ') === true)
+    const restWords = usedSub ? activeWords.slice(subIndex + 1) : activeWords.slice(1)
     const notes: Note[] = []
 
-    notes.push(...explain(words, page?.options ?? []))
+    if (usedSub && globalWords.length > 0)
+      notes.push(...explain(globalWords, rootManual?.options ?? []))
+
+    notes.push(...explain(restWords, page?.options ?? []))
 
     commands.push({
-      name: sub === undefined && !(fromHelp && page?.name.includes(' ')) ? name : `${name} ${second?.text}`,
+      name: usedSub && subWord !== undefined ? `${name} ${subWord.text}` : name,
       page: sub?.used ?? (page === undefined ? undefined : page.name),
       source: sourceOf(page, fromHelp),
       summary: page?.summary,
-      assigns: command.assigns.map(word => word.text),
+      ...unwrapped.wrappers.length === 0 ? {} : { wrappers: unwrapped.wrappers },
+      assigns: [...command.assigns.map(word => word.text), ...unwrapped.assigns],
       notes,
       redirects: command.redirects.map(describeRedirect),
       substitutions: depth >= MAX_DEPTH ? [] : command.substitutions.map(inner => analyze(inner, settings, depth + 1)),

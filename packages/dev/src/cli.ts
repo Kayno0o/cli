@@ -1,15 +1,17 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
 import type { ExitRow } from '@kaynooo/cli-kit'
+import type { Encoding } from './encode'
 import type { Algorithm } from './hash'
 import type { Format } from './password'
 import process from 'node:process'
 import { badUsage, copyOption, copyText, fail, isInteractive, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
 import { input } from '@kaynooo/cli-kit/prompt'
-import { b64Decode, b64Encode } from './encode'
+import { CONVERT_FORMATS, formatStructured, normalizeFormat, parseStructured } from './convert'
+import { evaluateCron } from './cron'
+import { decodeValue, encodeValue, ENCODINGS } from './encode'
 import { ALGORITHMS, hashHex, hashStream } from './hash'
-import { monotonic, nextUlid, nextUuidV7, ulid, uuidV4, uuidV7 } from './ids'
-import { publicIp } from './ip'
+import { hexId, monotonic, nextUlid, nextUuidV7, ulid, uuidV4, uuidV7 } from './ids'
 import { claimTimes, decodeJwt } from './jwt'
 import { BCRYPT_MAX_BYTES, bcryptHash, DEFAULT_LENGTH, FORMATS, generatePassword } from './password'
 import { convert } from './ts'
@@ -21,6 +23,11 @@ const TRAILING_NEWLINE = /\r?\n$/
 const STDIN_OR_VALUE = /^(?!-.)/
 
 const ZONE_OPTION = { type: 'string', description: 'the IANA zone of the local dates, such as Europe/Paris (default: this host\'s)' } as const
+const COUNT_OPTION = { type: 'string', short: 'n', description: 'how many to print (default 1)' } as const
+
+const ID_KINDS = ['uuid', 'v7', 'ulid', 'hex'] as const
+
+type IdKind = (typeof ID_KINDS)[number]
 
 // Runs a pure function, ending the command with exit 1 and its message when the input is not what it reads.
 function reading<T>(read: () => T): T {
@@ -214,89 +221,99 @@ export async function ts(args: string[]): Promise<number> {
   return 0
 }
 
-const UUID_USAGE = `dev uuid [-n <count>] [--v7]: random UUIDs, version 4 or, with --v7, version 7 (time-ordered)`
+const ID_USAGE = `dev id [uuid|v7|ulid|hex] [-n <count>] [--bytes <n>]: mint random or time-ordered identifiers
 
-const UUID_EXITS: ExitRow[] = [[0, 'it printed them'], [2, 'a usage error']]
+Defaults to uuid (version 4). v7 and ulid are time-ordered and monotonic within a batch; hex prints random lowercase hex (16 bytes by default, override with --bytes).`
 
-const COUNT_OPTION = { type: 'string', short: 'n', description: 'how many to print (default 1)' } as const
+const ID_EXITS: ExitRow[] = [[0, 'it printed them'], [2, 'a usage error']]
 
-export function uuid(args: string[]): number {
-  const { values } = parse(args, UUID_USAGE, { n: COUNT_OPTION, v7: { type: 'boolean', description: 'a version 7 UUID, which sorts by creation time' }, json: jsonOption('["uuid"]') }, {
-    exits: UUID_EXITS,
-    positionals: [],
-    replaces: 'uuidgen and python -c "import uuid"',
-    examples: ['dev uuid', ['dev uuid -n 5 --v7', 'five time-ordered UUIDs']],
+export function id(args: string[]): number {
+  const { values, positionals } = parse(args, ID_USAGE, {
+    n: COUNT_OPTION,
+    bytes: { type: 'string', description: 'byte length for hex IDs (default 16)' },
+    json: jsonOption('["id"]'),
+  }, {
+    exits: ID_EXITS,
+    positionals: ['[kind]'],
+    candidates: { '[kind]': () => [...ID_KINDS] },
+    replaces: 'uuidgen, python uuid, ulid packages and openssl rand -hex',
+    examples: ['dev id', ['dev id v7 -n 5', 'five time-ordered UUID v7s'], ['dev id ulid -n 3', 'three ULIDs'], ['dev id hex --bytes 8', 'a 16-char hex ID']],
   })
+  const kind: IdKind = oneOf(positionals[0] ?? 'uuid', '<kind>', ID_KINDS)
   const count = wholeNumber(values.n, 'n', 1)
-  const ids = values.v7 === true ? monotonic(count, now => uuidV7(now), nextUuidV7) : Array.from({ length: count }, uuidV4)
+  const bytes = wholeNumber(values.bytes, 'bytes', 16)
 
-  printIds(ids, values.json === true)
+  if (values.bytes !== undefined && kind !== 'hex')
+    badUsage('--bytes only goes with hex')
 
-  return 0
-}
+  let ids: string[]
 
-const ULID_USAGE = `dev ulid [-n <count>]: random ULIDs, 26 sortable characters of time and randomness`
+  if (kind === 'uuid')
+    ids = Array.from({ length: count }, uuidV4)
+  else if (kind === 'v7')
+    ids = monotonic(count, now => uuidV7(now), nextUuidV7)
+  else if (kind === 'ulid')
+    ids = monotonic(count, now => ulid(now), nextUlid)
+  else
+    ids = Array.from({ length: count }, () => hexId(bytes))
 
-const ULID_EXITS: ExitRow[] = [[0, 'it printed them'], [2, 'a usage error']]
-
-export function ulidCommand(args: string[]): number {
-  const { values } = parse(args, ULID_USAGE, { n: COUNT_OPTION, json: jsonOption('["ulid"]') }, {
-    exits: ULID_EXITS,
-    positionals: [],
-    replaces: 'installing a ulid package to mint one',
-    examples: ['dev ulid', ['dev ulid -n 3', 'three ULIDs']],
-  })
-
-  printIds(monotonic(wholeNumber(values.n, 'n', 1), now => ulid(now), nextUlid), values.json === true)
-
-  return 0
-}
-
-function printIds(ids: string[], json: boolean): void {
-  if (json)
+  if (values.json === true)
     printJson(ids)
   else
     console.log(ids.join('\n'))
+
+  return 0
 }
 
-const B64_USAGE = `dev b64 [-d] [--url] [text]: base64 of the text, or with -d the text behind a base64 one
+const ENC_USAGE = `dev enc <b64|b64url|hex|url|html> [text]: encodes the argument or stdin as base64, base64url, hex, URL-encoded or HTML-escaped text
 
-The text is the argument or what is piped on stdin, taken as is (a piped trailing newline is encoded, as base64 does). With --url the output is URL-safe and unpadded. Decoding takes either alphabet, padded or not, and writes the raw bytes.`
+Stdin is encoded verbatim (a trailing newline is included, as base64 does).`
 
-const B64_EXITS: ExitRow[] = [[0, 'it printed the result'], [1, '-d is given text that is not base64'], [2, 'a usage error']]
+const ENC_EXITS: ExitRow[] = [[0, 'it printed the encoded text'], [2, 'a usage error']]
 
-const B64_OPTIONS = {
-  decode: { type: 'boolean', short: 'd', description: 'decode instead of encode' },
-  url: { type: 'boolean', description: 'URL-safe alphabet without padding, when encoding' },
-  json: jsonOption('{input, output} as text'),
-} as const
-
-export async function b64(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, B64_USAGE, B64_OPTIONS, {
-    exits: B64_EXITS,
-    positionals: ['[text]'],
-    replaces: 'base64 and base64 -d, which leave the URL-safe alphabet to tr',
-    examples: ['dev b64 hello', ['echo aGVsbG8 | dev b64 -d', 'decoded, padding optional']],
+export async function enc(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, ENC_USAGE, { json: jsonOption('{encoding, input, output}') }, {
+    exits: ENC_EXITS,
+    positionals: ['<encoding>', '[text]'],
+    candidates: { '<encoding>': () => [...ENCODINGS] },
+    replaces: 'base64, xxd -p, python urllib.parse.quote and html.escape',
+    examples: ['dev enc b64 hello', 'dev enc b64url hello', 'dev enc hex hello', 'dev enc url "a b&c"', 'dev enc html "<a>"'],
   })
-  const input = await bytesInput(positionals[0], 'the text')
-
-  if (values.decode === true) {
-    const output = reading(() => b64Decode(new TextDecoder().decode(input)))
-
-    if (values.json === true)
-      printJson({ input: new TextDecoder().decode(input), output: new TextDecoder().decode(output) })
-    else
-      await Bun.write(Bun.stdout, output)
-
-    return 0
-  }
-
-  const output = b64Encode(input, values.url === true)
+  const encoding: Encoding = oneOf(positionals[0] ?? '', '<encoding>', ENCODINGS)
+  const raw = await bytesInput(positionals[1], 'the text')
+  const output = encodeValue(encoding, raw)
 
   if (values.json === true)
-    printJson({ input: new TextDecoder().decode(input), output })
+    printJson({ encoding, input: new TextDecoder().decode(raw), output })
   else
     console.log(output)
+
+  return 0
+}
+
+const DEC_USAGE = `dev dec <b64|b64url|hex|url|html> [text]: decodes base64, base64url, hex, URL-encoded or HTML-escaped text
+
+Binary encodings (b64, b64url, hex) write the raw decoded bytes on stdout; text encodings (url, html) write the decoded UTF-8 text.`
+
+const DEC_EXITS: ExitRow[] = [[0, 'it printed the decoded output'], [1, 'the input is not valid for that encoding'], [2, 'a usage error']]
+
+export async function dec(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, DEC_USAGE, { json: jsonOption('{encoding, input, output}') }, {
+    exits: DEC_EXITS,
+    positionals: ['<encoding>', '[text]'],
+    candidates: { '<encoding>': () => [...ENCODINGS] },
+    replaces: 'base64 -d, xxd -r -p, python urllib.parse.unquote and html.unescape',
+    examples: ['dev dec b64 aGVsbG8=', 'dev dec hex 68656c6c6f', 'dev dec url "a%20b%26c"', 'dev dec html "&lt;a&gt;"'],
+  })
+  const encoding: Encoding = oneOf(positionals[0] ?? '', '<encoding>', ENCODINGS)
+  const raw = await bytesInput(positionals[1], 'the text')
+  const inputText = new TextDecoder().decode(raw)
+  const output = reading(() => decodeValue(encoding, inputText))
+
+  if (values.json === true)
+    printJson({ encoding, input: inputText, output: new TextDecoder().decode(output) })
+  else
+    await Bun.write(Bun.stdout, output)
 
   return 0
 }
@@ -371,60 +388,103 @@ export async function hash(args: string[]): Promise<number> {
   return 0
 }
 
-const IP_USAGE = `dev ip [-4|-6]: the public IP address of this host, as a web service sees it
+const CRON_USAGE = `dev cron <expression> [-n <count>] [--zone <iana>]: explains a 5-field cron schedule (or @macro) and lists its next run times`
 
--4 or -6 asks over that IP family only, which fails when the host has no route over it.`
+const CRON_EXITS: ExitRow[] = [[0, 'it explained the schedule'], [1, 'the cron expression is invalid'], [2, 'a usage error']]
 
-const IP_EXITS: ExitRow[] = [[0, 'it printed the address'], [1, 'the service could not be reached'], [2, 'a usage error']]
-
-export async function ip(args: string[]): Promise<number> {
-  const { values } = parse(args, IP_USAGE, { 4: { type: 'boolean', short: '4', description: 'over IPv4 only' }, 6: { type: 'boolean', short: '6', description: 'over IPv6 only' }, json: jsonOption('{ip, family?}') }, {
-    exits: IP_EXITS,
-    replaces: 'curl https://ipecho.net/plain typed from memory',
-    examples: ['dev ip', ['dev ip -6', 'the IPv6 address']],
+export function cron(args: string[]): number {
+  const { values, positionals } = parse(args, CRON_USAGE, {
+    n: { type: 'string', short: 'n', description: 'how many upcoming runs to show (default 5)' },
+    zone: ZONE_OPTION,
+    json: jsonOption('{expression, normalized, description, next: [{iso, local, utc}]}'),
+  }, {
+    exits: CRON_EXITS,
+    positionals: ['<expression>'],
+    replaces: 'opening crontab.guru to check a schedule',
+    examples: ['dev cron "*/15 * * * *"', ['dev cron "30 9 * * 1-5" --zone Europe/Paris', 'weekdays at 09:30 Paris time'], 'dev cron @daily'],
   })
+  const count = wholeNumber(values.n, 'n', 5)
+  const zone = zoneOf(values.zone)
+  const schedule = reading(() => evaluateCron(positionals[0], count, Date.now(), zone))
 
-  if (values[4] === true && values[6] === true)
-    badUsage('-4 and -6 cannot be combined')
-
-  let family: 4 | 6 | undefined
-
-  if (values[4] === true)
-    family = 4
-  else if (values[6] === true)
-    family = 6
-
-  try {
-    const address = await publicIp(family)
-
-    if (values.json === true)
-      printJson(family === undefined ? { ip: address } : { ip: address, family })
-    else
-      console.log(address)
+  if (values.json === true) {
+    printJson(schedule)
 
     return 0
   }
-  catch (error) {
-    return fail(`could not read the public address: ${error instanceof Error ? error.message : String(error)}`, 1)
+
+  const rows: [string, string][] = [
+    ['schedule', schedule.description],
+    ...schedule.normalized === schedule.expression ? [] : [['expanded', schedule.normalized] as [string, string]],
+    ...schedule.next.map((run, index): [string, string] => [index === 0 ? 'next' : '', `${run.local}  (${run.utc})`]),
+  ]
+
+  printRows(rows)
+
+  return 0
+}
+
+const CONVERT_USAGE = `dev convert <from> <to> [file]: converts structured data between json, yaml and toml
+
+Reads [file] (or - / piped stdin). Accepts yml as an alias for yaml and JSONC comments when reading json.`
+
+const CONVERT_EXITS: ExitRow[] = [[0, 'it printed the converted document'], [1, 'the input could not be parsed or represented in the target format'], [2, 'a usage error']]
+
+export async function convertCommand(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, CONVERT_USAGE, {
+    compact: { type: 'boolean', description: 'single-line output when converting to json' },
+    json: jsonOption('{from, to, output}'),
+  }, {
+    exits: CONVERT_EXITS,
+    positionals: ['<from>', '<to>', '[file]'],
+    candidates: { '<from>': () => [...CONVERT_FORMATS], '<to>': () => [...CONVERT_FORMATS] },
+    replaces: 'yq, dasel and one-off python scripts to convert JSON, YAML and TOML',
+    examples: ['dev convert yaml json config.yml', 'dev convert json toml package.json', 'cat Cargo.toml | dev convert toml json'],
+  })
+  const from = normalizeFormat(positionals[0] ?? '') ?? badUsage(`<from> takes one of ${CONVERT_FORMATS.join(', ')}, not ${positionals[0]}`)
+  const to = normalizeFormat(positionals[1] ?? '') ?? badUsage(`<to> takes one of ${CONVERT_FORMATS.join(', ')}, not ${positionals[1]}`)
+  const file = positionals[2]
+  let raw: string
+
+  if (file === undefined || file === '-') {
+    raw = await textInput(undefined, 'the input')
   }
+  else {
+    const source = Bun.file(file)
+
+    if (!await source.exists())
+      return fail(`no file ${file}`, 1)
+
+    raw = await source.text()
+  }
+
+  const output = reading(() => formatStructured(to, parseStructured(from, raw), values.compact === true))
+
+  if (values.json === true)
+    printJson({ from, to, output })
+  else
+    console.log(output)
+
+  return 0
 }
 
 if (import.meta.main) {
   process.exitCode = await runCli({
     name: 'dev',
-    about: 'small developer utilities: passwords and bcrypt hashes, JWTs, timestamps, UUIDs, base64, URLs and file hashes',
-    replaces: 'openssl rand, htpasswd, jwt.io, date -d, uuidgen, base64, sha256sum and one-off scripts for each',
-    examples: ['dev password', ['dev jwt <token>', 'header, payload and expiry'], ['dev ts 1700000000', 'an epoch as dates']],
+    about: 'small developer utilities: passwords and bcrypt hashes, JWTs, timestamps, IDs, encodings, URLs, file hashes, cron schedules and JSON/YAML/TOML conversion',
+    replaces: 'openssl rand, htpasswd, jwt.io, date -d, uuidgen, base64, sha256sum, crontab.guru, yq and one-off scripts for each',
+    examples: ['dev password', ['dev jwt <token>', 'header, payload and expiry'], ['dev ts 1700000000', 'an epoch as dates'], ['dev id v7', 'time-ordered UUID'], ['dev enc b64url hello', 'URL-safe base64'], ['dev cron "*/5 * * * *"', 'explain a cron schedule'], ['dev convert yaml json config.yml', 'convert YAML to JSON']],
     commands: {
       password: { summary: 'a random password, or its bcrypt hash', run: password },
       jwt: { summary: 'decode a JWT without verifying it, expiry shown as dates', run: jwt },
       ts: { summary: 'convert epochs, ISO dates and durations, local and UTC', run: ts },
-      uuid: { summary: 'random UUIDs, v4 or v7', run: async args => Promise.resolve(uuid(args)) },
-      ulid: { summary: 'random ULIDs', run: async args => Promise.resolve(ulidCommand(args)) },
-      b64: { summary: 'base64 encode or decode, standard or URL-safe', run: b64 },
+      id: { summary: 'mint UUID (v4 or v7), ULID or random hex IDs', run: async args => Promise.resolve(id(args)) },
+      enc: { summary: 'encode as b64, b64url, hex, url or html', run: enc },
+      dec: { summary: 'decode b64, b64url, hex, url or html', run: dec },
       url: { summary: 'the parts of a URL and its decoded query', run: url },
       hash: { summary: 'sha256, sha1, md5 or sha512 of a file or stdin', run: hash },
-      ip: { summary: 'the public IP address of this host, IPv4 or IPv6', run: ip },
+      cron: { summary: 'explain a cron expression and list its next run times', run: async args => Promise.resolve(cron(args)) },
+      convert: { summary: 'convert between json, yaml and toml', run: convertCommand },
     },
   })
 }

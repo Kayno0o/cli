@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path'
 import { fail, parse, role } from '@kaynooo/cli-kit'
 import { lines, need, pipeline, probe, run, TAR_FIDELITY, ZSTD_LONG } from './proc'
 
-const USAGE = `arc pack [--delete] <folder> [dest dir]: packs a folder into <dest dir>/<name>.tar.zst (the current folder by default), checks every file against it and keeps the folder unless --delete
+const USAGE = `arc pack [--delete] [--exclude <pattern>]... <folder> [dest dir]: packs a folder into <dest dir>/<name>.tar.zst (the current folder by default), checks every file against it and keeps the folder unless --delete
 
 The archive is written as <name>.tar.zst.partial and renamed once complete; nothing is overwritten. With --delete, the folder is deleted only after the archive passes zstd's checksum and compares equal to it file by file. A symlink, a mount point, a destination inside the folder and a destination with too little free space are refused, and a folder you cannot read or write is packed, and deleted, through sudo.`
 
@@ -16,15 +16,44 @@ function say(message: string): void {
   console.error(`${role('note', process.stderr)('arc pack:')} ${message}`)
 }
 
+function isExcluded(relPath: string, globs: Bun.Glob[]): boolean {
+  if (globs.length === 0)
+    return false
+
+  const segments = relPath.split('/')
+
+  for (const glob of globs) {
+    if (glob.match(relPath))
+      return true
+
+    let prefix = ''
+
+    for (const segment of segments) {
+      prefix = prefix === '' ? segment : `${prefix}/${segment}`
+
+      if (glob.match(segment) || glob.match(prefix))
+        return true
+    }
+  }
+
+  return false
+}
+
 export async function pack(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, { delete: { type: 'boolean', description: 'delete the folder once the archive is verified' } }, {
+  const { values, positionals } = parse(args, USAGE, {
+    delete: { type: 'boolean', description: 'delete the folder once the archive is verified' },
+    exclude: { type: 'string', short: 'e', multiple: true, description: 'exclude matching files or folders (repeatable)' },
+  }, {
     exits: EXITS,
     positionals: ['<folder>', '[dest dir]'],
     replaces: 'tar czf, then diff or tar --compare by hand, then rm -rf once it looks right',
-    examples: [['arc pack ./data /mnt/backup', 'the folder stays'], ['arc pack dist', 'compress only: ./dist.tar.zst'], ['arc pack --delete ~/old-project /mnt/backup', 'archive, verify, then delete the folder']],
+    examples: [['arc pack ./data /mnt/backup', 'the folder stays'], ['arc pack dist', 'compress only: ./dist.tar.zst'], ['arc pack --exclude node_modules --exclude .git ./app', 'skip dependencies and git'], ['arc pack --delete ~/old-project /mnt/backup', 'archive, verify, then delete the folder']],
   })
   const [folder, destination = '.'] = positionals
   const given = folder.replace(TRAILING_SLASHES, '')
+  const excludes = (values.exclude ?? []).filter(Boolean)
+  const excludeArgs = excludes.map(pattern => `--exclude=${pattern}`)
+  const excludeGlobs = excludes.map(pattern => new Bun.Glob(pattern))
 
   need('tar')
   need('zstd')
@@ -69,7 +98,7 @@ export async function pack(args: string[]): Promise<number> {
 
   say(`packing ${source} into ${out}`)
 
-  const packed = await pipeline([...as, 'tar', '--create', '--file=-', `--directory=${parent}`, '--one-file-system', ...TAR_FIDELITY, '--sparse', '--', name], ['zstd', '-T0', '-10', ZSTD_LONG, '-o', partial])
+  const packed = await pipeline([...as, 'tar', '--create', '--file=-', `--directory=${parent}`, '--one-file-system', ...TAR_FIDELITY, '--sparse', ...excludeArgs, '--', name], ['zstd', '-T0', '-10', ZSTD_LONG, '-o', partial])
 
   if (packed.codes.some(code => code !== 0)) {
     rmSync(partial, { force: true })
@@ -96,14 +125,18 @@ export async function pack(args: string[]): Promise<number> {
     return refuse(`'${out}' fails its checksum`)
 
   // NUL-separated, as a file name may hold a newline; tar lists one escaped on one line.
-  const onDisk = (await probe([...as, 'find', source, '-xdev', '-print0'])).stdout.split('\0').filter(Boolean).length
+  const diskEntries = (await probe([...as, 'find', source, '-xdev', '-print0'])).stdout.split('\0').filter(Boolean)
+  const keptOnDisk = excludeGlobs.length === 0
+    ? diskEntries
+    : diskEntries.filter(entry => entry === source || (!isExcluded(`${name}/${entry.slice(source.length + 1)}`, excludeGlobs) && !isExcluded(entry.slice(source.length + 1), excludeGlobs)))
+  const onDisk = keptOnDisk.length
   const listed = await pipeline(['zstd', '-dc', ZSTD_LONG, '--', out], ['tar', '--list', '--file=-'], true)
   const inArchive = lines(listed.stdout).length
 
   if (onDisk !== inArchive)
     return refuse(`'${source}' holds ${onDisk} entries but the archive ${inArchive} (a socket, or a file added meanwhile)`)
 
-  const compared = await pipeline(['zstd', '-dc', ZSTD_LONG, '--', out], [...as, 'tar', '--compare', '--file=-', `--directory=${parent}`, ...TAR_FIDELITY])
+  const compared = await pipeline(['zstd', '-dc', ZSTD_LONG, '--', out], [...as, 'tar', '--compare', '--file=-', `--directory=${parent}`, ...TAR_FIDELITY, ...excludeArgs])
 
   if (compared.codes.some(code => code !== 0))
     return refuse(`the archive differs from '${source}'`)

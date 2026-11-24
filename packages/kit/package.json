@@ -28,7 +28,8 @@
     "./prompt": "./src/prompt.ts",
     "./shell": "./src/shell.ts",
     "./test": "./src/test.ts",
-    "./picker": "./src/picker.ts"
+    "./picker": "./src/picker.ts",
+    "./term-pick": "./src/term-pick.ts"
   },
   "files": ["src"],
   "engines": {

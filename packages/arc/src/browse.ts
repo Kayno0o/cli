@@ -1,8 +1,25 @@
 import type { ExitRow, TreeNode } from '@kaynooo/cli-kit'
-import type { Entry } from './entries'
+import type { Entry, Format } from './entries'
 import process from 'node:process'
-import { fail, formatSize, jsonOption, paint, parse, printJson, tree, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, fail, formatSize, jsonOption, paint, parse, printJson, tree, wholeNumber } from '@kaynooo/cli-kit'
 import { cleanPath, formatOf, readEntries, tarFlags, under, zipPattern } from './entries'
+
+const MAX_GREP_BYTES = 16 * 1024 * 1024
+
+function catArgv(archive: string, entry: Entry): string[] {
+  const format: Format | undefined = formatOf(archive)
+
+  if (format === 'zip')
+    return ['unzip', '-p', archive, zipPattern(entry.raw)]
+
+  if (format === '7z')
+    return ['7z', 'x', '-so', archive, '--', entry.raw]
+
+  if (format === 'rar')
+    return ['unrar', 'p', '-inul', archive, '--', entry.raw]
+
+  return ['tar', '-xOf', archive, ...tarFlags(archive), '--', entry.raw]
+}
 
 function label(entry: Entry, shown: string): string {
   if (entry.kind === 'dir')
@@ -13,7 +30,7 @@ function label(entry: Entry, shown: string): string {
 
 const LS_USAGE = `arc ls [-r] [--json] <archive> [path]: lists what an archive holds, the way ls -l would, without extracting it
 
-Reads .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz, .tar.zst and .zip. Without a path it lists the top level; with a folder in the archive, what is directly in it; -r lists every level below. Folders that only their files' paths imply are listed too.`
+Reads .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz, .tar.zst, .zip, .7z and .rar. Without a path it lists the top level; with a folder in the archive, what is directly in it; -r lists every level below. Folders that only their files' paths imply are listed too.`
 
 const LS_EXITS: ExitRow[] = [[0, 'it listed them'], [1, 'the archive or the path in it cannot be read'], [2, 'a usage error']]
 
@@ -111,7 +128,118 @@ export async function cat(args: string[]): Promise<number> {
   if (found.kind === 'dir')
     return fail(`'${found.path}' is a folder, arc ls lists it`, 1)
 
-  const argv = formatOf(archive) === 'zip' ? ['unzip', '-p', archive, zipPattern(found.raw)] : ['tar', '-xOf', archive, ...tarFlags(archive), '--', found.raw]
+  return Bun.spawn(catArgv(archive, found), { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' }).exited
+}
 
-  return Bun.spawn(argv, { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' }).exited
+const GREP_USAGE = `arc grep [options] <pattern> <archive> [path]: searches text files inside an archive without extracting it
+
+Skips binary files (containing NUL bytes) and files over 16 MiB. Searches a regex by default, or a literal string with -F.`
+
+const GREP_EXITS: ExitRow[] = [[0, 'at least one line matched'], [1, 'no line matched or the archive could not be read'], [2, 'a usage error']]
+
+const GREP_OPTIONS = {
+  'ignore-case': { type: 'boolean', short: 'i', description: 'match without regard to case' },
+  'fixed-strings': { type: 'boolean', short: 'F', description: 'match the pattern as literal text' },
+  'files-with-matches': { type: 'boolean', short: 'l', description: 'print only the paths of matching files' },
+  'json': jsonOption('[{path, line, text}]'),
+} as const
+
+interface GrepHit {
+  path: string
+  line: number
+  text: string
+}
+
+async function readEntryBytes(archive: string, entry: Entry): Promise<Uint8Array | undefined> {
+  const child = Bun.spawn(catArgv(archive, entry), { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' })
+  const [bytes, code] = await Promise.all([new Response(child.stdout).bytes(), child.exited])
+
+  return code === 0 ? bytes : undefined
+}
+
+export async function grep(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, GREP_USAGE, GREP_OPTIONS, {
+    exits: GREP_EXITS,
+    positionals: ['<pattern>', '<archive>', '[path]'],
+    replaces: 'extracting an archive into /tmp just to grep its files',
+    examples: ['arc grep TODO backup.tar.zst', ['arc grep -i error logs.zip app/', 'case-insensitive under app/']],
+  })
+  const [pattern, archive, prefix = ''] = positionals as [string, string, string | undefined]
+  const ignoreCase = values['ignore-case'] === true
+  const fixed = values['fixed-strings'] === true
+  let matcher: (line: string) => boolean
+
+  if (fixed) {
+    const needle = ignoreCase ? pattern.toLowerCase() : pattern
+
+    matcher = line => (ignoreCase ? line.toLowerCase() : line).includes(needle)
+  }
+  else {
+    try {
+      const regex = new RegExp(pattern, ignoreCase ? 'i' : '')
+
+      matcher = line => regex.test(line)
+    }
+    catch (error) {
+      return badUsage(`invalid regex '${pattern}': ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  const entries = await readEntries(archive)
+  const scoped = under(entries, prefix, true)
+
+  if (scoped === undefined)
+    return fail(`no '${cleanPath(prefix)}' in '${archive}'`, 1)
+
+  const files = scoped.filter(entry => entry.kind === 'file' && entry.size <= MAX_GREP_BYTES)
+  const hits: GrepHit[] = []
+  const matchedFiles: string[] = []
+  const decoder = new TextDecoder()
+
+  for (const entry of files) {
+    const bytes = await readEntryBytes(archive, entry)
+
+    if (bytes === undefined || bytes.length > MAX_GREP_BYTES || bytes.subarray(0, 8192).includes(0))
+      continue
+
+    const text = decoder.decode(bytes)
+    let fileMatched = false
+
+    for (const [index, line] of text.split('\n').entries()) {
+      if (!matcher(line))
+        continue
+
+      fileMatched = true
+      hits.push({ path: entry.path, line: index + 1, text: line })
+
+      if (values['files-with-matches'] === true)
+        break
+    }
+
+    if (fileMatched)
+      matchedFiles.push(entry.path)
+  }
+
+  if (values.json === true) {
+    printJson(hits)
+
+    return hits.length > 0 ? 0 : 1
+  }
+
+  if (hits.length === 0)
+    return 1
+
+  const { cyan, dim } = paint(process.stdout)
+
+  if (values['files-with-matches'] === true) {
+    for (const file of matchedFiles)
+      console.log(file)
+
+    return 0
+  }
+
+  for (const hit of hits)
+    console.log(`${cyan(hit.path)}${dim(`:${hit.line}:`)} ${hit.text}`)
+
+  return 0
 }
