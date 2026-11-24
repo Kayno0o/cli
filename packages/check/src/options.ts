@@ -7,11 +7,16 @@ export const options = {
   'only': { type: 'string', short: 'o', description: `comma separated steps to run, among ${STEP_NAMES.join(', ')}; with --fix the fixers to run, by the names --list prints`, candidates: () => [...STEP_NAMES] },
   'timeout': { type: 'string', short: 't', description: 'longest a step or fixer may run before it is ended (30s, 5m, 1h), none by default' },
   ...placeOptions,
-  'json': jsonOption('[{name, command, in?, ok, ms, log, failed?}], with --list [{name, command, source, in?}], with --fix {fixers, changed}'),
+  'json': jsonOption('[{name, command, in?, ok, ms, log, failed?, errors?}], with --list [{name, command, source, in?}], with --fix {fixers, changed}'),
   'fix': { type: 'boolean', short: 'f', description: 'run the folder\'s fixers and formatters instead of the steps' },
   'quiet': { type: 'boolean', short: 'q', description: 'print nothing for a passing step, and nothing at all when every step passes' },
   'failed': { type: 'boolean', description: 'run only the steps that failed in the last run of this folder, read from the run folder' },
-  'changed': { type: 'boolean', short: 'c', description: 'narrow lint and test to the files changed against HEAD (a bare linter script, a bare bun test script), every other step runs in full and says so' },
+  'changed': { type: 'boolean', short: 'c', description: 'narrow lint, fmt, fix, and test to files changed against --base (default HEAD), with 1-hop reverse-import test selection' },
+  'base': { type: 'string', description: 'git ref to diff against with --changed (default HEAD)' },
+  'fail-fast': { type: 'boolean', short: 'x', description: 'stop after the first failing step' },
+  'retry': { type: 'string', description: 'retry a failing step up to N times before reporting failure' },
+  'lock': { type: 'string', description: 'named slot lock to hold alongside the slot (visible in slot ls)' },
+  'watch': { type: 'boolean', short: 'w', description: 'watch project files and re-run on changes' },
   'slot': { type: 'boolean', description: 'run each step through slot, queued behind the machine-wide slots of the other sessions, as it does by default when the slot bin is installed; fails without the bin' },
   'no-slot': { type: 'boolean', description: 'run the steps at once, without queueing behind the other sessions\' slots' },
   'parallel': { type: 'boolean', description: 'run the steps at the same time, printing each one\'s output in step order' },
@@ -19,20 +24,21 @@ export const options = {
 
 const COMMA = /\s*,\s*/
 
-// The steps --only names, failing on one the repo lacks.
-export function pick<T extends { name: string }>(steps: T[], only: string | undefined, noun = 'step'): T[] {
+// The steps --only names, failing on one the repo lacks; matches either step name or qualified label.
+export function pick<T extends { name: string, label?: string }>(steps: T[], only: string | undefined, noun = 'step'): T[] {
   if (only === undefined)
     return steps
 
   const names = only.split(COMMA).filter(name => name !== '')
 
   if (names.length === 0)
-    fail(`--only names no ${noun}, found ${steps.map(step => step.name).join(', ')}`)
+    fail(`--only names no ${noun}, found ${steps.map(step => step.label ?? step.name).join(', ')}`)
 
-  const unknown = names.filter(name => !steps.some(step => step.name === name))
+  const matches = (step: T, wanted: string) => step.name === wanted || step.label === wanted
+  const unknown = names.filter(name => !steps.some(step => matches(step, name)))
 
   if (unknown.length > 0)
-    fail(`no ${unknown.join(', ')} ${noun} here, found ${[...new Set(steps.map(step => step.name))].join(', ')}`)
+    fail(`no ${unknown.join(', ')} ${noun} here, found ${[...new Set(steps.map(step => step.label ?? step.name))].join(', ')}`)
 
-  return steps.filter(step => names.includes(step.name))
+  return steps.filter(step => names.some(wanted => matches(step, wanted)))
 }

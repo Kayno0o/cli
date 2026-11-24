@@ -428,22 +428,22 @@ function readOr<T>(read: () => T, fallback: T): T {
 }
 
 // The package folders the workspace globs of a package.json or a pnpm-workspace.yaml name, which may sit deeper than the direct children.
-function workspaces(): string[] {
-  const manifest = readOr<Table>(() => JSON.parse(readFileSync('package.json', 'utf-8')) as Table, {})
+export function workspaces(dir = '.'): string[] {
+  const manifest = readOr<Table>(() => JSON.parse(readFileSync(join(dir, 'package.json'), 'utf-8')) as Table, {})
   const declared = Array.isArray(manifest.workspaces) ? manifest.workspaces : table(manifest.workspaces).packages
-  const pnpm = readOr(() => table(Bun.YAML.parse(readFileSync('pnpm-workspace.yaml', 'utf-8'))).packages, undefined)
+  const pnpm = readOr(() => table(Bun.YAML.parse(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf-8'))).packages, undefined)
   const patterns = [declared, pnpm].flatMap(value => (Array.isArray(value) ? value.filter((pattern): pattern is string => typeof pattern === 'string') : []))
   const excluded = patterns.filter(pattern => pattern.startsWith('!')).map(pattern => new Bun.Glob(pattern.slice(1)))
 
   return patterns
     .filter(pattern => !pattern.startsWith('!'))
-    .flatMap(pattern => [...new Bun.Glob(`${pattern.replace(TRAILING_SLASHES, '')}/package.json`).scanSync({ cwd: '.' })].map(file => dirname(file)))
-    .filter(dir => !dir.split('/').includes('node_modules') && !excluded.some(glob => glob.match(dir)))
+    .flatMap(pattern => [...new Bun.Glob(`${pattern.replace(TRAILING_SLASHES, '')}/package.json`).scanSync({ cwd: dir })].map(file => dirname(file)))
+    .filter(found => !found.split('/').includes('node_modules') && !excluded.some(glob => glob.match(found)))
 }
 
 // The direct children, then the workspace packages deeper down.
-export function folders(): string[] {
-  return [...new Set([...children(), ...workspaces()])].filter(dir => dir !== '.')
+export function folders(dir = '.'): string[] {
+  return [...new Set([...children(dir), ...workspaces(dir)])].filter(found => found !== '.')
 }
 
 // What the folder `j` runs from offers, its parents included, then each child folder.
@@ -460,9 +460,9 @@ function guarded(reader: Reader, dir: string, here: boolean, isWarned = false): 
   }
 }
 
-export function everything(): Entry[] {
-  const here = READERS.flatMap(reader => guarded(reader, '.', true, true))
-  const below = folders().flatMap(dir => READERS.flatMap(reader => guarded(reader, dir, false, true)))
+export function everything(cwd = '.'): Entry[] {
+  const here = READERS.flatMap(reader => guarded(reader, cwd, true, true))
+  const below = folders(cwd).flatMap(dir => READERS.flatMap(reader => guarded(reader, cwd === '.' ? dir : join(cwd, dir), false, true)))
   const seen = new Set<string>()
 
   return [...here, ...below].filter((entry) => {

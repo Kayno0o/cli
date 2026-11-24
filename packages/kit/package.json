@@ -22,6 +22,7 @@
     ".": "./src/index.ts",
     "./askpass": "./src/askpass.ts",
     "./errors": "./src/errors/index.ts",
+    "./compose": "./src/compose.ts",
     "./progress": "./src/progress.ts",
     "./prompt": "./src/prompt.ts",
     "./shell": "./src/shell.ts",

@@ -44,17 +44,17 @@ changelog undo v1.2.0 --dry-run  # what undoing that release would remove
 
 ## check
 
-runs the repo's check, typecheck, lint, fmt (its fmt:check or format:check script) and test steps, found in package.json scripts, composer.json, a Justfile, a Makefile or the PHP tools' configs; a folder with no steps runs its subfolders' (api/, client/). Package `check`.
+runs the repo's check, typecheck, lint, fmt (fmt:check / format:check) and test steps from package.json (bun/pnpm/yarn/npm), composer.json, deno.json, Justfile, Makefile, Taskfile, mise, pyproject.toml, Go, Rust, Python, or PHP configs, or .checkrc.json; a folder with no steps runs its subfolders and workspaces. Package `check`.
 
 Instead of: chaining docker compose exec <service> bun run check | tail, lint and test by hand, or bun run check && bun run lint && bun run test read through tail, and with --fix each fixer and formatter run by hand
 
 ```sh
-check [--only <steps>] [--changed] [--failed] [--quiet] [--timeout <duration>] [--slot | --no-slot] [--parallel] [--in <service> | --host] [--list]
+check [path|workspace...] [--only <steps>] [--changed [--base <ref>]] [--failed] [--fail-fast] [--retry <n>] [--watch] [--quiet] [--timeout <duration>] [--slot | --no-slot] [--lock <name>] [--parallel] [--in <service> | --host] [--list]
 check
-check --only lint,test  # two of the steps
+check packages/kit --only lint,test  # one workspace, two steps
+check --changed --base main -x  # narrowed to branch diff, fail fast
 check --in app  # every step inside the app service
-check --fix  # the fixers and formatters instead
-check --fix --list  # the fixers it would run
+check --fix --changed  # fixers on changed files only
 ```
 
 ## cli
@@ -381,9 +381,10 @@ without a name, picks a recipe, script or task of this folder, its parents and i
 Instead of: reading the Justfile, Makefile, package.json scripts or composer scripts to find what to run, then retyping it
 
 ```sh
-j [name] [args...]
+j [name] [args...] [--in <service> | --host]
 j
 j test  # run the test recipe, script or task
+j --in app test  # run inside the app compose service
 j api/test --watch  # a child folder's, with an argument
 j just:check  # the one of a runner, when several share the name
 j -  # the last one again

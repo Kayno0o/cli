@@ -1,4 +1,4 @@
-import { statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { Exit } from '@kaynooo/cli-kit'
 import { capture, tempDirs } from '@kaynooo/cli-kit/test'
@@ -312,5 +312,93 @@ describe('check --failed', () => {
     expect(await failure(check(['--failed'], dir))).toContain('no failed step in the last run')
     await capture(async () => check([], dir))
     expect(await failure(check(['--failed'], dir))).toContain('no failed step in the last run')
+  })
+})
+
+describe('check multi-runner, workspaces, config, fail-fast, retry', () => {
+  test('detects lockfile package manager (pnpm/yarn/npm), Deno, Taskfile, Go, Rust, Python', async () => {
+    const pnpm = temp('check-pnpm-')
+
+    writeFileSync(join(pnpm, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n')
+    writeFileSync(join(pnpm, 'package.json'), JSON.stringify({ scripts: { lint: 'eslint', test: 'vitest run' } }))
+    expect((await discover(pnpm)).map(step => step.command)).toEqual(['pnpm run lint', 'pnpm run test'])
+
+    const goDir = temp('check-go-')
+
+    writeFileSync(join(goDir, 'go.mod'), 'module example.com/app\n')
+    expect((await discover(goDir)).map(step => [step.name, step.command])).toEqual([['lint', 'go vet ./...'], ['test', 'go test ./...']])
+
+    const rustDir = temp('check-rust-')
+
+    writeFileSync(join(rustDir, 'Cargo.toml'), '[package]\nname = "app"\n')
+    expect((await discover(rustDir)).map(step => step.name)).toEqual(['check', 'lint', 'fmt', 'test'])
+
+    const pyDir = temp('check-py-')
+
+    writeFileSync(join(pyDir, 'uv.lock'), '')
+    writeFileSync(join(pyDir, 'pyproject.toml'), '[tool.ruff]\n[tool.pytest.ini_options]\n')
+    expect((await discover(pyDir)).map(step => [step.name, step.command])).toEqual([
+      ['lint', 'uv run ruff check .'],
+      ['fmt', 'uv run ruff format --check .'],
+      ['test', 'uv run pytest'],
+    ])
+
+    const denoDir = temp('check-deno-')
+
+    writeFileSync(join(denoDir, 'deno.json'), JSON.stringify({ tasks: { check: 'deno check', test: 'deno test' } }))
+    expect((await discover(denoDir)).map(step => step.command)).toEqual(['deno task check', 'deno task test'])
+  })
+
+  test('discovers monorepo workspaces and accepts positional workspace targets', async () => {
+    const root = temp('check-ws-')
+
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ workspaces: ['packages/*'] }))
+    mkdirSync(join(root, 'packages/alpha'), { recursive: true })
+    mkdirSync(join(root, 'packages/beta'), { recursive: true })
+    writeFileSync(join(root, 'packages/alpha/package.json'), JSON.stringify({ name: '@demo/alpha', scripts: { lint: 'true' } }))
+    writeFileSync(join(root, 'packages/beta/package.json'), JSON.stringify({ name: '@demo/beta', scripts: { test: 'true' } }))
+
+    const all = JSON.parse((await capture(async () => check(['--list', '--json'], root))).out) as { name: string }[]
+
+    expect(all.map(step => step.name)).toEqual(['packages/alpha/lint', 'packages/beta/test'])
+
+    const one = JSON.parse((await capture(async () => check(['alpha', '--list', '--json'], root))).out) as { name: string }[]
+
+    expect(one.map(step => step.name)).toEqual(['packages/alpha/lint'])
+  })
+
+  test('.checkrc.json overrides and disables steps', async () => {
+    const dir = temp('check-rc-')
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: { lint: 'false', test: 'true' } }))
+    writeFileSync(join(dir, '.checkrc.json'), JSON.stringify({ steps: { lint: null, custom: 'echo ok' } }))
+
+    const steps = await discover(dir)
+
+    expect(steps.map(step => [step.name, step.command])).toEqual([['test', 'bun run test'], ['custom', 'echo ok']])
+  })
+
+  test('--fail-fast stops after the first failure, and --retry retries a flaky step', async () => {
+    const dir = temp('check-ff-')
+    const counter = join(dir, 'count')
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      scripts: {
+        check: 'exit 1',
+        lint: 'echo lint-ran',
+        test: `if [ -f ${counter} ]; then exit 0; else touch ${counter}; exit 1; fi`,
+      },
+    }))
+
+    const ff = await capture(async () => check(['--no-slot', '-x', '--only', 'check,lint'], dir))
+
+    expect(ff.result).toBe(1)
+    expect(ff.out).toContain('FAIL  check')
+    expect(ff.out).not.toContain('lint')
+
+    const retried = await capture(async () => check(['--no-slot', '--retry', '1', '--only', 'test'], dir))
+
+    expect(retried.result).toBe(0)
+    expect(retried.out).toContain('ok    test')
   })
 })

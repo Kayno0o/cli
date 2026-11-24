@@ -1,14 +1,16 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Arg } from '@kaynooo/cli-kit/picker'
 import type { Entry, Kind } from './jobs'
+import { resolve as resolvePath } from 'node:path'
 import process from 'node:process'
 import { closest, fail, isInteractive, jsonOption, paint, parse, printJson, table } from '@kaynooo/cli-kit'
+import { argvIn, place, placeOptions, placeSettings, Stack } from '@kaynooo/cli-kit/compose'
 import { byRecency, emit, list, record, runs } from '@kaynooo/cli-kit/picker'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { labelled, pickJob } from './job-picker'
 import { everything, id, justFlags, key, readKind, resolve, shortest, signature } from './jobs'
 
-const usage = `j [name] [args...]
+const usage = `j [name] [args...] [--in <service> | --host]
 j -
 
 Without a name, picks a recipe, script or task of this folder, its parents and its child folders and runs it, the ones run last first; without a terminal it lists them instead.
@@ -18,6 +20,7 @@ The sources are a Justfile, a Makefile, package.json and composer.json scripts, 
 const EXITS: ExitRow[] = [['its own', 'the code of the command it ran'], [1, 'there is nothing to run here or nothing by that name']]
 
 const options = {
+  ...placeOptions,
   json: jsonOption('[{ id, key, runner, dir, name, doc, parameters }]'),
 } as const
 
@@ -129,15 +132,16 @@ export async function j(argv: string[]): Promise<number> {
   // A lone dash is the last run again, which the option parser would take for a flag of the words after it.
   const last = args[0] === '-'
   const parsed = last
-    ? { values: {} as { json?: boolean }, positionals: ['-'], rest: args.slice(1) }
+    ? { values: {} as { json?: boolean, in?: string, host?: boolean }, positionals: ['-'], rest: args.slice(1) }
     : parse(args, usage, options, {
       exits: EXITS,
       positionals: ['[name]'],
       candidates: { '[name]': completions },
       trailing: true,
       replaces: 'reading the Justfile, Makefile, package.json scripts or composer scripts to find what to run, then retyping it',
-      examples: ['j', ['j test', 'run the test recipe, script or task'], ['j api/test --watch', 'a child folder\'s, with an argument'], ['j just:check', 'the one of a runner, when several share the name'], ['j -', 'the last one again']],
+      examples: ['j', ['j test', 'run the test recipe, script or task'], ['j --in app test', 'run inside the app compose service'], ['j api/test --watch', 'a child folder\'s, with an argument'], ['j just:check', 'the one of a runner, when several share the name'], ['j -', 'the last one again']],
     })
+  const settings = placeSettings(parsed.values)
   const [named] = parsed.positionals
   const given = parsed.rest ?? []
   const found = everything()
@@ -217,6 +221,21 @@ export async function j(argv: string[]): Promise<number> {
   const all = [...words, ...answers]
 
   record('j', { id: id(entry), args: all })
+
+  const entryDir = resolvePath(entry.dir)
+  const placement = await place(entryDir, entry.runner[0] ?? '', settings)
+
+  if (placement !== undefined) {
+    const down = await new Stack().problem(placement)
+
+    if (down !== undefined)
+      fail(down, 1)
+
+    const separated = entry.separated && all.length > 0 ? ['--'] : []
+    const inner = [...entry.runner, entry.name, ...separated, ...all]
+
+    return Bun.spawn(argvIn(placement, inner), { cwd: placement.composeDir, stdio: ['inherit', 'inherit', 'inherit'] }).exited
+  }
 
   return Bun.spawn(commandOf(entry, all), { stdio: ['inherit', 'inherit', 'inherit'] }).exited
 }

@@ -3,17 +3,18 @@ import type { Outcome, StepSettings } from './run'
 import type { Step } from './steps'
 import { existsSync, statSync } from 'node:fs'
 import { rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { extname, join } from 'node:path'
 import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, paint, printJson, table } from '@kaynooo/cli-kit'
 import { changedFiles, dirtyFiles } from './changes'
 import { place, placeSettings, programOf, shellIn, Stack } from './compose'
 import { declarePhony } from './makefile'
+import { changedPaths } from './narrow'
 import { pick } from './options'
 import { logDirectory, outcomeJson, printOutcome, refusedStep, runStep } from './run'
 import { candidates, CS_FIXER_CONFIGS, firstFile, MAKEFILES, read } from './steps'
 
-export interface FixValues { list?: boolean | undefined, only?: string | undefined, timeout?: string | undefined, in?: string | undefined, host?: boolean | undefined, json?: boolean | undefined }
+export interface FixValues { list?: boolean | undefined, only?: string | undefined, timeout?: string | undefined, in?: string | undefined, host?: boolean | undefined, json?: boolean | undefined, changed?: boolean | undefined, base?: string | undefined }
 
 export interface Fixer extends Step {
   // The binary it runs, skipped with a note when missing.
@@ -28,6 +29,86 @@ const JUSTFILES = ['justfile', 'Justfile', '.justfile']
 const RUFF_CONFIGS = ['ruff.toml', '.ruff.toml']
 const RUFF_SECTION = /^\[tool\.ruff/m
 const MAX_CHANGED = 30
+const JS_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts', '.vue', '.svelte'])
+const PY_EXTS = new Set(['.py', '.pyi'])
+const PHP_EXTS = new Set(['.php'])
+const GO_EXTS = new Set(['.go'])
+const RS_EXTS = new Set(['.rs'])
+const JS_FIXER = /^(?:(?:bunx|npx|pnpm\s+exec|yarn)\s+)?(?:keslint|eslint|oxlint|prettier|biome)\b/
+const TRAILING_DOT = /\s+\.\/?$/
+
+const quotePath = (path: string) => `'${path.replaceAll('\'', '\'\\\'\'')}'`
+
+async function narrowFixers(found: Fixer[], cwd: string, base: string | undefined): Promise<Fixer[]> {
+  const paths = await changedPaths(cwd, base)
+
+  if (paths === undefined)
+    fail('--changed needs a git repository')
+
+  const result: Fixer[] = []
+  const pkgText = await read(cwd, 'package.json')
+  const scripts = pkgText === undefined ? {} : (JSON.parse(pkgText) as { scripts?: Record<string, string> }).scripts ?? {}
+
+  for (const fixer of found) {
+    if (fixer.name === 'python') {
+      const files = paths.filter(path => PY_EXTS.has(extname(path)))
+
+      if (files.length > 0)
+        result.push({ ...fixer, command: `ruff check --fix ${files.map(quotePath).join(' ')} && ruff format ${files.map(quotePath).join(' ')}` })
+
+      continue
+    }
+
+    if (fixer.name === 'php-cs-fixer') {
+      const files = paths.filter(path => PHP_EXTS.has(extname(path)))
+
+      if (files.length > 0)
+        result.push({ ...fixer, command: `vendor/bin/php-cs-fixer fix ${files.map(quotePath).join(' ')}` })
+
+      continue
+    }
+
+    if (fixer.name === 'go') {
+      if (paths.some(path => GO_EXTS.has(extname(path)) || path === 'go.mod'))
+        result.push(fixer)
+
+      continue
+    }
+
+    if (fixer.name === 'rust') {
+      if (paths.some(path => RS_EXTS.has(extname(path)) || path === 'Cargo.toml'))
+        result.push(fixer)
+
+      continue
+    }
+
+    if (fixer.name === 'makefile' || fixer.name === 'justfile') {
+      if (paths.includes(fixer.source))
+        result.push(fixer)
+
+      continue
+    }
+
+    if (fixer.source === 'package.json') {
+      const script = scripts[fixer.name]?.trim() ?? ''
+      const files = paths.filter(path => JS_EXTS.has(extname(path)))
+
+      if (JS_FIXER.test(script)) {
+        if (files.length > 0) {
+          const stripped = script.replace(TRAILING_DOT, '')
+
+          result.push({ ...fixer, command: TRAILING_DOT.test(script) ? `${stripped} ${files.map(quotePath).join(' ')}` : `${fixer.command} -- ${files.map(quotePath).join(' ')}` })
+        }
+
+        continue
+      }
+    }
+
+    result.push(fixer)
+  }
+
+  return result
+}
 
 // Writes beside the file and renames over it, so an interrupted write never leaves it half done.
 async function replaceFile(path: string, content: string): Promise<void> {
@@ -148,7 +229,18 @@ export async function runFixers(values: FixValues, cwd: string): Promise<number>
   if (found.length === 0)
     fail('nothing to fix here: no fix, lint:fix, fmt or format script, php-cs-fixer config, Makefile, Justfile, go.mod, Cargo.toml nor ruff config')
 
-  const picked = pick(found, parsed.values.only, 'fixer')
+  const pickedAll = pick(found, parsed.values.only, 'fixer')
+  const picked = parsed.values.changed === true ? await narrowFixers(pickedAll, cwd, parsed.values.base) : pickedAll
+
+  if (picked.length === 0) {
+    if (parsed.values.json === true)
+      printJson(parsed.values.list === true ? [] : { fixers: [], changed: [] })
+    else
+      console.log('nothing changed to fix')
+
+    return 0
+  }
+
   const placements = new Map<Fixer, Placement | undefined>()
 
   for (const fixer of picked)

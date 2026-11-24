@@ -119,4 +119,35 @@ describe('check --changed', () => {
 
     expect(run.status === 'rejected' ? String(run.reason) : '').toContain('--changed needs a git repository')
   })
+
+  test('supports wrapped lint scripts with trailing dot, 1-hop reverse-import tests, vitest, ruff, pytest, go, and --fix --changed', async () => {
+    const dir = repo({ 'lint': 'bunx eslint --cache .', 'test': 'bun test', 'lint:fix': 'eslint --fix .' })
+
+    write(dir, 'tests/consumer.test.ts', 'import { b } from "../src/b"\nexport { b }\n')
+    git(dir, 'add', '.')
+    git(dir, 'commit', '-qm', 'add consumer')
+
+    expect(await narrow({ name: 'lint', command: 'bun run lint', source: 'package.json' }, dir, ['src/b.ts'])).toEqual({
+      command: 'bunx eslint --cache \'src/b.ts\'',
+      note: '1 changed file',
+    })
+    expect(await narrow({ name: 'test', command: 'bun run test', source: 'package.json' }, dir, ['src/b.ts'])).toEqual({
+      command: 'bun run test -- \'./tests/consumer.test.ts\'',
+      note: '1 test file',
+    })
+    expect(await narrow({ name: 'lint', command: 'uv run ruff check .', source: 'pyproject.toml' }, dir, ['app/x.py'])).toEqual({
+      command: 'uv run ruff check \'app/x.py\'',
+      note: '1 changed file',
+    })
+    expect(await narrow({ name: 'test', command: 'go test ./...', source: 'go.mod' }, dir, ['pkg/api/handler.go'])).toEqual({
+      command: 'go test \'./pkg/api\'',
+      note: '1 Go package',
+    })
+
+    write(dir, 'src/b.ts', 'export const b = 2\n')
+
+    const fixed = JSON.parse((await capture(async () => check(['--fix', '--changed', '--list', '--json'], dir))).out) as { name: string, command: string, source: string }[]
+
+    expect(fixed).toEqual([{ name: 'lint:fix', command: 'eslint --fix \'src/b.ts\'', source: 'package.json' }])
+  })
 })

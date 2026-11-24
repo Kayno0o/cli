@@ -6,7 +6,7 @@ export const BINS: Record<string, BinBrief> = {
   arc: { summary: 'packs a folder into a verified .tar.zst, deleting it only when…', replaces: 'tar czf then rm -rf on trust, tar…' },
   base: { summary: 'runs a command at HEAD or another ref in a temporary worktree,…', replaces: 'git stash, a test run, then git…' },
   changelog: { summary: 'generate the release notes and publish them', replaces: 'writing the release notes by hand…' },
-  check: { summary: 'runs the repo\'s check, typecheck, lint, fmt (its fmt:check or…', replaces: 'chaining docker compose exec…' },
+  check: { summary: 'runs the repo\'s check, typecheck, lint, fmt (fmt:check /…', replaces: 'chaining docker compose exec…' },
   cli: { summary: 'the hub for @kaynooo/cli-* packages: discover, install, update,…', replaces: 'running each bin\'s --help to find…' },
   db: { summary: 'read-only SQL against Postgres, MySQL and MariaDB, credentials…', replaces: 'psql or mysql with the connection…' },
   dc: { summary: 'runs docker compose on the stack found here: the nearest…', replaces: 'docker compose -f docker-compose.pro…' },
