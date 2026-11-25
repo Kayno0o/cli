@@ -1,4 +1,4 @@
-import { capture } from '@kaynooo/cli-kit/test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { take } from '../src/commands/board'
 import { digest } from '../src/commands/digest'
@@ -8,6 +8,8 @@ import { pr } from '../src/commands/pr'
 import { play, retry } from '../src/commands/retry'
 import { runs } from '../src/commands/runs'
 import { withFakeForge } from './fake-tea'
+
+const temp = tempDirs()
 
 describe('multi-forge CI, logs, retry, and play', () => {
   test('GitLab pipelines list, structured errs log parsing, retry, play, and dispatch', async () => {
@@ -132,9 +134,12 @@ describe('digest -r isolation and non-Claude claims', () => {
   })
 
   test('take works via FORGE_SESSION without Claude Code session', async () => {
-    const saved = process.env.FORGE_SESSION
+    const saved = { FORGE_SESSION: process.env.FORGE_SESSION, HOME: process.env.HOME, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR }
 
     process.env.FORGE_SESSION = 'codex-worker-1'
+    // A home with no Claude Code session files, so a run from inside a session does not claim under its name.
+    process.env.HOME = temp('ft-home-')
+    Reflect.deleteProperty(process.env, 'CLAUDE_CONFIG_DIR')
 
     try {
       const state = await withFakeForge('forgejo', {
@@ -149,10 +154,12 @@ describe('digest -r isolation and non-Claude claims', () => {
       expect(state.comments?.[5]).toContain('Taken by session codex-worker-1.')
     }
     finally {
-      if (saved === undefined)
-        Reflect.deleteProperty(process.env, 'FORGE_SESSION')
-      else
-        process.env.FORGE_SESSION = saved
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined)
+          Reflect.deleteProperty(process.env, name)
+        else
+          process.env[name] = value
+      }
     }
   })
 })

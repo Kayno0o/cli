@@ -12,7 +12,8 @@ const SESSION_FILES = new Glob('*.json')
 const ACCOUNT_DIRS = new Glob('*/sessions')
 
 async function sessionDirs(): Promise<string[]> {
-  const home = homedir()
+  // `$HOME` read now, as Node's `homedir()` does and Bun's, which keeps the one the process began with, does not.
+  const home = process.env.HOME ?? homedir()
   const dirs = new Set([join(home, '.claude', 'sessions')])
 
   if (process.env.CLAUDE_CONFIG_DIR !== undefined)
