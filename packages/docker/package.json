@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-docker",
   "type": "module",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "dc: unified Docker Compose CLI — service picker/listing, health & error summary, redacted logs, shell/exec, deterministic ports, and compose passthrough.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
