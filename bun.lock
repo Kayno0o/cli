@@ -177,7 +177,7 @@
     },
     "packages/gloss": {
       "name": "@kaynooo/cli-gloss",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "bin": {
         "gloss": "./dist/gloss.js",
       },
