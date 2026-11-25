@@ -154,14 +154,15 @@ export function tinted(colors: Colors, spec: ColorSpec, env: Env = process.env):
   }, colors)
 }
 
-// The colour of one bar over the theme's: a gradient of its own wins over a single colour.
-export interface BarTint {
+// The look of one bar over the theme's: a gradient of its own wins over a single colour, and `glyph`, one column wide, replaces the theme's bar glyph.
+export interface BarStyle {
   color?: ColorSpec | undefined
   gradient?: [string, string] | undefined
+  glyph?: string | undefined
 }
 
 // `cells` glyphs drawn from the start of a bar `width` cells long, each on the gradient at its own place, so the colour shifts along the bar and a full one shows the whole blend; the accent when the theme has no gradient. `tint` replaces the theme's colours for this bar.
-export function shaded(theme: Theme, colors: Parameters<typeof tinted>[0], glyph: string, cells: number, width: number, env: Env = process.env, { color, gradient }: BarTint = {}): string {
+export function shaded(theme: Theme, colors: Parameters<typeof tinted>[0], glyph: string, cells: number, width: number, env: Env = process.env, { color, gradient }: BarStyle = {}): string {
   return Array.from({ length: cells }, (_, index) => {
     const at = width <= 1 ? 0 : index / (width - 1)
     const spec = gradient === undefined ? color ?? gradientAt(theme, at) ?? theme.colors.accent : blend(gradient, at)

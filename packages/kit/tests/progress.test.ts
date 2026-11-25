@@ -62,6 +62,20 @@ describe('the progress line', () => {
     expect(progressText({ step: 'uploading', done: 1, total: 2, gradient: ['#ff0000', '#0000ff'] }, '⠋', 0)).toBe('⠋ uploading ━━━━━━━━━━━━━━━━━━━━ 1/2 0s')
   })
 
+  it('draws the bar with the glyph a step gives it, the empty part included', () => {
+    const { written, stream } = terminal()
+    const line = progressLine(stream, {})
+
+    try {
+      line.update({ step: 'uploading', done: 1, total: 4, color: 'red', glyph: '█' })
+    }
+    finally {
+      line.stop()
+    }
+
+    expect(written.join('')).toContain(`${'\x1B[31m█\x1B[39m'.repeat(5)}\x1B[2m${'█'.repeat(15)}\x1B[22m`)
+  })
+
   it('redraws one line in place, cut to the terminal\'s width', () => {
     const { written, stream } = terminal(20)
     const line = progressLine(stream, {})
