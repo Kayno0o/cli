@@ -1,0 +1,38 @@
+{
+  "name": "@kaynooo/cli-icons",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "icons: finds the icons of the project's iconify sets by name, related word, typo or half-typed word.",
+  "author": "Kaynooo <contact@kaynooo.fr>",
+  "license": "MIT",
+  "homepage": "https://github.com/Kayno0o/cli/tree/main/packages/icons#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kayno0o/cli.git",
+    "directory": "packages/icons"
+  },
+  "bugs": "https://github.com/Kayno0o/cli/issues",
+  "keywords": [
+    "cli",
+    "icons",
+    "iconify",
+    "search"
+  ],
+  "bin": {
+    "icons": "./dist/icons.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "scripts": {
+    "build": "$npm_execpath ../../scripts/build.ts src/icons.ts",
+    "icons": "$npm_execpath src/icons.ts"
+  },
+  "devDependencies": {
+    "@kayjs/icons": "2.0.0-beta.3",
+    "@kaynooo/cli-kit": "workspace:*"
+  }
+}

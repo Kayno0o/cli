@@ -353,6 +353,19 @@ guard check "git push --force"  # the rules a command breaks, with their routes
 guard path .env  # whether a file tool may open a path
 ```
 
+## icons
+
+finds the icons of the project's iconify sets by name, related word, typo or half-typed word. Package `icons`.
+
+Instead of: guessing icon names, or searching icones.js.org by hand
+
+```sh
+icons [options] <words>
+icons garbage
+icons --set tabler dark mode
+icons --json calnedar
+```
+
 ## j
 
 without a name, picks a recipe, script or task of this folder, its parents and its child folders and runs it, the ones run last first; without a terminal it lists them instead. Package `check`.

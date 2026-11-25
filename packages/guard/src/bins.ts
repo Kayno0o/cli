@@ -25,6 +25,7 @@ export const BINS: Record<string, string> = {
   gst: '`gst`: the repository\'s branch, upstream, changed files and HEAD in one line, then the changed paths by staged,… (instead of git status --short, git log --oneline and a git…)',
   gu: '`gu`: undoes changes to the paths given, keeping what it takes away (instead of git restore, git restore --staged, git stash,…)',
   guard: '`guard`: the safety rules a Claude Code Bash call is held to, each refusal naming the route (instead of a hook script per rule, each wording its own…)',
+  icons: '`icons`: finds the icons of the project\'s iconify sets by name, related word, typo or half-typed word (instead of guessing icon names, or searching icones.js.org…)',
   j: '`j`: without a name, picks a recipe, script or task of this folder, its parents and its child folders and runs it,… (instead of reading the Justfile, Makefile, package.json…)',
   out: '`out`: runs the command and shortens its output when it is long, exiting with its code (instead of piping a noisy command through tail or head)',
   page: '`page`: shoots HTML files or URLs at several widths in a local Chromium and reports their layout defects one line… (instead of reading screenshots by eye for overflow,…)',

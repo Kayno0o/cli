@@ -15,7 +15,7 @@ Follow these steps when a user asks you to install these tools.
    - `forgejo` (`ft`) and `changelog`, when their repositories push to a Forgejo or Gitea host and `tea` is installed.
    - `gitlab` (`gl`), when they push to GitLab and `glab` is installed.
    - `docker`, `db` and `stack`, when their projects hold compose files; `wt` too when they work on several branches of one compose project at once.
-   - `env` for projects with `.env` files, `pkg` for npm or Bun projects, `page` for web front-ends with Chromium installed.
+   - `env` for projects with `.env` files, `pkg` for npm or Bun projects, `page` for web front-ends with Chromium installed, `icons` for those using iconify sets.
    - The rest (`arc`, `dev`, `dl`, `gloss`, `pick`, `probe`, `proc`, `view`, `workspace`) on the user's word.
 5. Show the user the list, one reason per package, and wait for their go.
 6. Run `doctor --install <name>...` with the names `--list` printed. A package whose tool is missing is left out and named; tell the user what to install rather than passing `--force`.
