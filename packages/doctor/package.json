@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-doctor",
   "type": "module",
-  "version": "0.23.2",
+  "version": "0.23.3",
   "description": "cli: hub for @kaynooo/cli-* packages — discover, install, remove, update, configure, and diagnose (cli doctor).",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
