@@ -12,7 +12,7 @@ const SESSION_FILES = new Glob('*.json')
 const ACCOUNT_DIRS = new Glob('*/sessions')
 
 async function sessionDirs(): Promise<string[]> {
-  // `$HOME` read now, as Node's `homedir()` does and Bun's, which keeps the one the process began with, does not.
+  // `$HOME` read now, as Node's `homedir()` does and Bun's, which keeps the one the process began with, does not (oven-sh/bun#29244).
   const home = process.env.HOME ?? homedir()
   const dirs = new Set([join(home, '.claude', 'sessions')])
 
