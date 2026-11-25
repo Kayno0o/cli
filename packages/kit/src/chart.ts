@@ -1,3 +1,4 @@
+import type { BarTint } from './theme'
 import process from 'node:process'
 import { formatPercent, textWidth } from './format'
 import { outputMode } from './mode'
@@ -34,14 +35,14 @@ export function sparkline(values: number[], { stream = process.stdout, env = pro
   return levels.map(level => tinted(colors, gradientAt(theme, level / (LEVELS.length - 1)) ?? theme.colors.accent, env)(LEVELS[level]!)).join('')
 }
 
-export interface BarSettings {
+export interface BarSettings extends BarTint {
   width?: number
   stream?: { isTTY?: boolean }
   env?: Env
 }
 
-// `━━━━━━━━━━━━━━━━━━━━` for a ratio between 0 and 1, the filled part on the theme's gradient, light purple at the start to light blue at the end, and the rest the same glyph dimmed on a terminal, so the two share one baseline; with no colour the rest is `─`.
-export function bar(ratio: number, { width = 20, stream = process.stdout, env = process.env }: BarSettings = {}): string {
+// `━━━━━━━━━━━━━━━━━━━━` for a ratio between 0 and 1, the filled part on the theme's gradient, light purple at the start to light blue at the end, or on the `gradient` or in the `color` given, and the rest the same glyph dimmed on a terminal, so the two share one baseline; with no colour the rest is `─`.
+export function bar(ratio: number, { width = 20, stream = process.stdout, env = process.env, color, gradient }: BarSettings = {}): string {
   if (outputMode(stream, env) === 'agent')
     return formatPercent(Math.min(1, Math.max(0, ratio)))
 
@@ -53,7 +54,7 @@ export function bar(ratio: number, { width = 20, stream = process.stdout, env = 
 
   const { theme } = activeTheme()
 
-  return `${shaded(theme, colors, theme.glyphs.bar, filled, width, env)}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
+  return `${shaded(theme, colors, theme.glyphs.bar, filled, width, env, { color, gradient })}${colors.dim(theme.glyphs.bar.repeat(width - filled))}`
 }
 
 export interface KeyValueSettings {

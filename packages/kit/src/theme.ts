@@ -59,16 +59,13 @@ function fromOklab([lightness, a, b]: Triple): string {
 // The ends of a gradient in OKLab, converted once per pair rather than for every cell drawn.
 const ENDS = new Map<string, [Triple, Triple]>()
 
-// The colour a ratio between 0 and 1 takes on the theme's gradient, blended in OKLab so the middle keeps the ends' lightness and saturation, undefined when the theme has none.
-export function gradientAt(theme: Theme, ratio: number): string | undefined {
-  if (theme.gradient === undefined)
-    return undefined
-
-  const key = theme.gradient.join()
+// The colour a ratio between 0 and 1 takes between two `#rrggbb` ends, blended in OKLab so the middle keeps the ends' lightness and saturation.
+function blend(gradient: [string, string], ratio: number): string {
+  const key = gradient.join()
   let ends = ENDS.get(key)
 
   if (ends === undefined) {
-    ends = [toOklab(theme.gradient[0]), toOklab(theme.gradient[1])]
+    ends = [toOklab(gradient[0]), toOklab(gradient[1])]
     ENDS.set(key, ends)
   }
 
@@ -76,6 +73,11 @@ export function gradientAt(theme: Theme, ratio: number): string | undefined {
   const [from, to] = ends
 
   return fromOklab(from.map((start, index) => start + (to[index]! - start) * at) as Triple)
+}
+
+// The colour a ratio between 0 and 1 takes on the theme's gradient, undefined when the theme has none.
+export function gradientAt(theme: Theme, ratio: number): string | undefined {
+  return theme.gradient === undefined ? undefined : blend(theme.gradient, ratio)
 }
 
 const DEFAULT: Theme = {
@@ -152,9 +154,20 @@ export function tinted(colors: Colors, spec: ColorSpec, env: Env = process.env):
   }, colors)
 }
 
-// `cells` glyphs drawn from the start of a bar `width` cells long, each on the gradient at its own place, so the colour shifts along the bar and a full one shows the whole blend; the accent when the theme has no gradient.
-export function shaded(theme: Theme, colors: Parameters<typeof tinted>[0], glyph: string, cells: number, width: number, env: Env = process.env): string {
-  return Array.from({ length: cells }, (_, index) => tinted(colors, gradientAt(theme, width <= 1 ? 0 : index / (width - 1)) ?? theme.colors.accent, env)(glyph)).join('')
+// The colour of one bar over the theme's: a gradient of its own wins over a single colour.
+export interface BarTint {
+  color?: ColorSpec | undefined
+  gradient?: [string, string] | undefined
+}
+
+// `cells` glyphs drawn from the start of a bar `width` cells long, each on the gradient at its own place, so the colour shifts along the bar and a full one shows the whole blend; the accent when the theme has no gradient. `tint` replaces the theme's colours for this bar.
+export function shaded(theme: Theme, colors: Parameters<typeof tinted>[0], glyph: string, cells: number, width: number, env: Env = process.env, { color, gradient }: BarTint = {}): string {
+  return Array.from({ length: cells }, (_, index) => {
+    const at = width <= 1 ? 0 : index / (width - 1)
+    const spec = gradient === undefined ? color ?? gradientAt(theme, at) ?? theme.colors.accent : blend(gradient, at)
+
+    return tinted(colors, spec, env)(glyph)
+  }).join('')
 }
 
 export interface ThemeSettings {

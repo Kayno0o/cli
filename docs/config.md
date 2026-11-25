@@ -51,9 +51,9 @@ Every bin draws with one theme: the default, then the `preset` a file names, the
 | `preset` | `default`, `high-contrast` (bright colours), `light` (for light terminal backgrounds), `mono` (bold, dim and underline only) or `ascii` (glyphs in plain ASCII) |
 | `colors` | a colour per role: `accent`, `id`, `path`, `label`, `value`; per mark: `ok`, `warn`, `problem`, `note`, `plan`; per status: `passed`, `failed`, `running`, `queued`, `skipped` |
 | `glyphs` | one column wide each: the marks and statuses above, `bar`, `rule`, `corner`, and `open`, `leaf`, `guide` for trees |
-| `accents` | the colours a bin's header picks from by its name |
-| `bins` | a header colour per bin, over `accents` |
-| `gradient` | the two `#rrggbb` ends bars and sparklines blend between, or `null` to draw them in the accent |
+| `accents` | the colours a bin's header picks from by its name when `gradient` is `null` |
+| `bins` | a header colour per bin, over `gradient` and `accents` |
+| `gradient` | the two `#rrggbb` ends bars, sparklines and a bin's header blend between, or `null` to draw bars and sparklines in the accent and headers in `accents` |
 
 A colour is an ANSI name or style (`cyan`, `redBright`, `bold blue`), a 256-colour index or `#rrggbb`. A bad value is reported once on stderr and skipped, the rest still applies. A theme file is JSON only, so a project's file cannot run anything, and nothing drawn off a terminal or under `NO_COLOR` changes.
 

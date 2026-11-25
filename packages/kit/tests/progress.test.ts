@@ -47,6 +47,21 @@ describe('the progress line', () => {
     expect(progressText({ step: 'bundling', done: 0, total: 0 }, '⠹', 61_900)).toBe('⠹ bundling 1m 1s')
   })
 
+  it('draws the bar in the colour a step gives it, and the same text whatever the colour', () => {
+    const { written, stream } = terminal()
+    const line = progressLine(stream, {})
+
+    try {
+      line.update({ step: 'uploading', done: 1, total: 2, color: 'red' })
+    }
+    finally {
+      line.stop()
+    }
+
+    expect(written.join('')).toContain(`\x1B[31m━\x1B[39m`.repeat(10))
+    expect(progressText({ step: 'uploading', done: 1, total: 2, gradient: ['#ff0000', '#0000ff'] }, '⠋', 0)).toBe('⠋ uploading ━━━━━━━━━━━━━━━━━━━━ 1/2 0s')
+  })
+
   it('redraws one line in place, cut to the terminal\'s width', () => {
     const { written, stream } = terminal(20)
     const line = progressLine(stream, {})

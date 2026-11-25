@@ -4,7 +4,7 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { createColors } from '@kaynooo/utils/tools/colors'
 import { outputMode } from './mode'
-import { activeTheme, tinted } from './theme'
+import { activeTheme, gradientAt, tinted } from './theme'
 
 export type Colors = ReturnType<typeof createColors>
 
@@ -90,18 +90,34 @@ export function badge(word: string, stream: { isTTY?: boolean }, env: Record<str
   return tinted(paint(stream, env), theme.colors[status], env)(`${theme.glyphs[status]} ${word}`)
 }
 
-// `check › cli · 4 steps` with the bin in its own accent, bold, and the context dimmed, the accent the theme gives the bin or one of its accents picked by the bin's name so each keeps one colour everywhere; empty off a terminal, where a log has no use for it.
+const GRAPHEMES = new Intl.Segmenter()
+
+// The text with each character on the theme's gradient at its own place, the first on its first end and the last on its second; in the accent where the theme has no gradient, and as it is off a terminal.
+export function gradientText(text: string, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
+  const colors = paint(stream, env)
+  const { theme } = activeTheme()
+  const chars = Array.from(GRAPHEMES.segment(text), ({ segment }) => segment)
+
+  return chars.map((char, index) => char.trim() === '' ? char : tinted(colors, gradientAt(theme, chars.length <= 1 ? 0 : index / (chars.length - 1)) ?? theme.colors.accent, env)(char)).join('')
+}
+
+// `check › cli · 4 steps` with the bin bold and the context dimmed: the bin in the colour the theme gives it, else on the theme's gradient, else in one of its accents picked by the bin's name so each keeps one colour everywhere; empty off a terminal, where a log has no use for it.
 export function header(bin: string, context: string | undefined, stream: { isTTY?: boolean }, env: Record<string, string | undefined> = process.env): string {
   if (!takesControlCodes(stream, env))
     return ''
 
   const colors = paint(stream, env)
-  const hash = [...bin].reduce((sum, char) => sum + char.charCodeAt(0), 0)
   const { theme } = activeTheme()
+  const rest = context === undefined ? '' : colors.dim(` › ${context}`)
+
+  if (theme.bins[bin] === undefined && theme.gradient !== undefined)
+    return `${colors.bold(gradientText(bin, stream, env))}${rest}`
+
+  const hash = [...bin].reduce((sum, char) => sum + char.charCodeAt(0), 0)
   const spec = theme.bins[bin] ?? theme.accents[hash % theme.accents.length]!
   const accent = tinted(typeof spec === 'string' && spec.split(' ').includes('bold') ? colors : colors.bold, spec, env)
 
-  return `${accent(bin)}${context === undefined ? '' : colors.dim(` › ${context}`)}`
+  return `${accent(bin)}${rest}`
 }
 
 // A clickable OSC 8 link on a terminal; elsewhere `text (url)`, or the text alone when it is the url.

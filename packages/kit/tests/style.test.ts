@@ -1,14 +1,17 @@
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'bun:test'
 import { helpText, parse } from '../src/args'
 import { bar } from '../src/chart'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
 import { usageLine } from '../src/help'
-import { badge, fileLink, header, hyperlink, link, marked, paint, printHeader, role, section, statusOf } from '../src/style'
-import { capture } from '../src/test'
+import { badge, fileLink, gradientText, header, hyperlink, link, marked, paint, printHeader, role, section, statusOf } from '../src/style'
+import { capture, tempDirs } from '../src/test'
 import { stripAnsi } from '../src/text'
 
 const TERMINAL = { isTTY: true }
+const temp = tempDirs()
 
 describe('marked', () => {
   it('draws a coloured symbol on a terminal, and a word anywhere else', () => {
@@ -121,24 +124,49 @@ describe('badge', () => {
   })
 })
 
-describe('header', () => {
-  it('names the bin in its own accent on a terminal, and is empty elsewhere', () => {
-    expect(header('check', 'cli', TERMINAL, {})).toBe('\x1B[1m\x1B[36mcheck\x1B[39m\x1B[22m\x1B[2m › cli\x1B[22m')
-    expect(header('check', 'cli', {}, {})).toBe('')
-    expect(header('check', 'cli', TERMINAL, { NO_COLOR: '1' })).toBe('')
+describe('gradientText', () => {
+  it('draws each character on the gradient from its first end to its last, spaces left bare', () => {
+    expect(gradientText('abc', TERMINAL, {})).toBe('\x1B[38;5;141ma\x1B[39m\x1B[38;5;147mb\x1B[39m\x1B[38;5;81mc\x1B[39m')
+    expect(gradientText('a c', TERMINAL, {})).toBe('\x1B[38;5;141ma\x1B[39m \x1B[38;5;81mc\x1B[39m')
+    expect(gradientText('ab', TERMINAL, { COLORTERM: 'truecolor' })).toBe('\x1B[38;2;192;132;252ma\x1B[39m\x1B[38;2;103;232;249mb\x1B[39m')
   })
 
-  it('gives a bin the same accent every time', () => {
-    expect(header('ft', undefined, TERMINAL, {})).toBe(header('ft', undefined, TERMINAL, {}))
+  it('counts a character drawn from several code points as one', () => {
+    expect(gradientText('é👍🏽x', TERMINAL, {})).toBe('\x1B[38;5;141mé\x1B[39m\x1B[38;5;147m👍🏽\x1B[39m\x1B[38;5;81mx\x1B[39m')
+  })
+
+  it('puts a single character on the first end', () => {
+    expect(gradientText('a', TERMINAL, {})).toBe('\x1B[38;5;141ma\x1B[39m')
+  })
+
+  it('leaves the text as it is off a terminal, and draws it in the accent on a theme with no gradient', () => {
+    expect(gradientText('abc', {}, {})).toBe('abc')
+    expect(gradientText('abc', TERMINAL, { NO_COLOR: '1' })).toBe('abc')
+    withTheme('mono', () => {
+      expect(gradientText('ab', TERMINAL, {})).toBe('\x1B[1ma\x1B[22m\x1B[1mb\x1B[22m')
+    })
   })
 })
 
-describe('header accents', () => {
-  it('gives different bins different accents, each stable', () => {
-    const accents = ['check', 'ft', 'pick', 'db', 'doctor', 'wait'].map(bin => header(bin, undefined, TERMINAL, {}))
+describe('header', () => {
+  it('draws the bin bold on the gradient on a terminal, and is empty elsewhere', () => {
+    expect(header('ft', 'cli', TERMINAL, {})).toBe('\x1B[1m\x1B[38;5;141mf\x1B[39m\x1B[38;5;81mt\x1B[39m\x1B[22m\x1B[2m › cli\x1B[22m')
+    expect(header('ft', 'cli', {}, {})).toBe('')
+    expect(header('ft', 'cli', TERMINAL, { NO_COLOR: '1' })).toBe('')
+  })
 
-    expect(new Set(accents).size).toBeGreaterThan(2)
-    expect(header('ft', undefined, TERMINAL, {})).toBe(accents[1]!)
+  it('keeps the colour a theme pins to a bin over the gradient', () => {
+    withThemeFile({ bins: { ft: 'magenta' } }, () => {
+      expect(header('ft', undefined, TERMINAL, {})).toBe('\x1B[1m\x1B[35mft\x1B[39m\x1B[22m')
+      expect(header('db', undefined, TERMINAL, {})).toBe('\x1B[1m\x1B[38;5;141md\x1B[39m\x1B[38;5;81mb\x1B[39m\x1B[22m')
+    })
+  })
+
+  it('picks a stable accent by the bin\'s name on a theme with no gradient', () => {
+    withThemeFile({ gradient: null }, () => {
+      expect(header('check', 'cli', TERMINAL, {})).toBe('\x1B[1m\x1B[36mcheck\x1B[39m\x1B[22m\x1B[2m › cli\x1B[22m')
+      expect(header('ft', undefined, TERMINAL, {})).toBe('\x1B[1m\x1B[32mft\x1B[39m\x1B[22m')
+    })
   })
 })
 
@@ -186,6 +214,14 @@ function withTheme(name: string, run: () => void): void {
     else
       process.env.KIT_THEME = before
   }
+}
+
+// Runs `run` with KIT_THEME naming a theme file holding `theme`.
+function withThemeFile(theme: object, run: () => void): void {
+  const path = join(temp('kit-theme-'), 'theme.json')
+
+  writeFileSync(path, JSON.stringify(theme))
+  withTheme(path, run)
 }
 
 describe('a theme in force', () => {

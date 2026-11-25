@@ -20,6 +20,19 @@ describe('chart', () => {
     expect(bar(1, { stream: { isTTY: true }, env: { COLORTERM: 'truecolor' }, width: 2 })).toBe('\x1B[38;2;192;132;252m━\x1B[39m\x1B[38;2;103;232;249m━\x1B[39m\x1B[2m\x1B[22m')
   })
 
+  test('bar takes a colour or a gradient of its own over the theme\'s, the empty part still dimmed', () => {
+    const terminal = { stream: { isTTY: true }, env: { COLORTERM: 'truecolor' }, width: 2 }
+
+    expect(bar(0.5, { ...terminal, color: 'red' })).toBe('\x1B[31m━\x1B[39m\x1B[2m━\x1B[22m')
+    expect(bar(1, { ...terminal, gradient: ['#ff0000', '#0000ff'] })).toBe('\x1B[38;2;255;0;0m━\x1B[39m\x1B[38;2;0;0;255m━\x1B[39m\x1B[2m\x1B[22m')
+    expect(bar(1, { ...terminal, color: 'red', gradient: ['#ff0000', '#0000ff'] })).toBe('\x1B[38;2;255;0;0m━\x1B[39m\x1B[38;2;0;0;255m━\x1B[39m\x1B[2m\x1B[22m')
+  })
+
+  test('bar prints the same off a terminal and for an agent whatever colour it is given', () => {
+    expect(bar(0.5, { stream: {}, env: {}, width: 4, color: 'red', gradient: ['#ff0000', '#0000ff'] })).toBe('━━──')
+    expect(bar(0.5, { stream: { isTTY: true }, env: { CLAUDECODE: '1' }, color: 'red' })).toBe('50%')
+  })
+
   test('keyValue pads labels to the longest', () => {
     expect(keyValue([['state', 'open'], ['labels', 'a, b']], { stream: {}, env: {} })).toBe('state   open\nlabels  a, b')
   })

@@ -1,4 +1,5 @@
 import type { Colors } from './style'
+import type { BarTint } from './theme'
 import process from 'node:process'
 import { formatDuration, formatElapsed } from './format'
 import { holdSignals } from './process'
@@ -6,7 +7,8 @@ import { marked, paint, takesControlCodes } from './style'
 import { cutToWidth } from './text'
 import { activeTheme, shaded, tinted } from './theme'
 
-export interface Progress {
+// `color` and `gradient` draw the bar as `bar()` takes them, so a step can change its bar's colour as it fills.
+export interface Progress extends BarTint {
   step: string
   done?: number | undefined
   total?: number | undefined
@@ -276,7 +278,7 @@ export function progressText(progress: Progress, spinner: string, ms: number): s
   return progressParts(progress, spinner, ms).map(part => part.text).join('')
 }
 
-function progressParts({ step, done, total, unit }: Progress, spinner: string, ms: number): Part[] {
+function progressParts({ step, done, total, unit, color, gradient }: Progress, spinner: string, ms: number): Part[] {
   const { theme } = activeTheme()
   const parts: Part[] = [{ text: spinner, tint: colors => tinted(colors, theme.colors.accent) }, { text: ` ${step}`, tint: () => plain }]
 
@@ -287,7 +289,7 @@ function progressParts({ step, done, total, unit }: Progress, spinner: string, m
     // The same bar `bar()` draws: the theme's glyph, the filled part on its gradient and the rest dimmed.
     parts.push(
       { text: ' ', tint: () => plain },
-      { text: theme.glyphs.bar.repeat(filled), tint: colors => () => shaded(theme, colors, theme.glyphs.bar, filled, BAR_WIDTH) },
+      { text: theme.glyphs.bar.repeat(filled), tint: colors => () => shaded(theme, colors, theme.glyphs.bar, filled, BAR_WIDTH, process.env, { color, gradient }) },
       { text: theme.glyphs.bar.repeat(BAR_WIDTH - filled), tint: colors => colors.dim },
       { text: ` ${counted}/${total}${unit === undefined ? '' : ` ${unit}`}`, tint: colors => colors.dim },
     )
