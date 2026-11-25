@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { parse7z, parseRar, parseZip } from '../src/entries'
+import { byteProgress, ratioSummary } from '../src/proc'
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname
 const temp = tempDirs()
@@ -166,6 +167,125 @@ describe.skipIf(!GNU)('arc pack', () => {
 
     expect(arc(['pack', folder, join(folder, 'inside')]).err).toContain('inside')
     expect(existsSync(folder)).toBe(true)
+  })
+
+  test('packs a read-only folder without sudo when --delete is not passed, and asks for sudo with --delete', () => {
+    const { root, folder, dest } = project()
+    const bin = join(root, 'bin')
+
+    mkdirSync(bin)
+    writeFileSync(join(bin, 'sudo'), `#!/bin/sh\ntouch '${join(root, 'sudo-ran')}'\nexit 1\n`, { mode: 0o755 })
+    chmodSync(folder, 0o555)
+
+    try {
+      const kept = arc(['pack', folder, dest], process.cwd(), { PATH: `${bin}:${process.env.PATH}` })
+
+      expect(kept.code).toBe(0)
+      expect(existsSync(join(root, 'sudo-ran'))).toBe(false)
+
+      const dest2 = join(root, 'dest2')
+
+      mkdirSync(dest2)
+
+      const del = arc(['pack', '--delete', folder, dest2], process.cwd(), { PATH: `${bin}:${process.env.PATH}` })
+
+      expect(del.code).toBe(1)
+      expect(existsSync(join(root, 'sudo-ran'))).toBe(true)
+    }
+    finally {
+      chmodSync(folder, 0o755)
+    }
+  })
+
+  test('accepts --level and --threads and rejects out-of-range values', () => {
+    const { folder, dest } = project()
+
+    expect(arc(['pack', '--level', '1', '--threads', '1', folder, dest]).code).toBe(0)
+    expect(arc(['pack', '--level', '0', folder, dest]).code).toBe(2)
+    expect(arc(['pack', '--level', '20', folder, dest]).code).toBe(2)
+    expect(arc(['pack', '--threads', '0', folder, dest]).code).toBe(2)
+  })
+
+  test('prints a progress bar and no red ANSI on a real TTY for pack, unpack and extract', () => {
+    if (Bun.which('python3') === null)
+      return
+
+    const { folder, dest, root } = project()
+    const restored = join(root, 'restored')
+    const extracted = join(root, 'extracted')
+
+    mkdirSync(restored)
+    mkdirSync(extracted)
+    writeFileSync(join(folder, 'big.bin'), Buffer.alloc(256 * 1024, 0x41))
+
+    const runPty = (args: string[]) => {
+      const script = `import os, pty, select, subprocess, sys
+master, slave = pty.openpty()
+env = dict(os.environ)
+env["KIT_MODE"] = "terminal"
+env["TERM"] = "xterm-256color"
+env.pop("NO_COLOR", None)
+env.pop("NODE_DISABLE_COLORS", None)
+env.pop("CLAUDECODE", None)
+env.pop("AI_AGENT", None)
+env.pop("ANTIGRAVITY_AGENT", None)
+p = subprocess.Popen(sys.argv[1:], stdin=slave, stdout=slave, stderr=slave, env=env)
+os.close(slave)
+chunks = []
+while True:
+    r, _, _ = select.select([master], [], [], 0.2)
+    if r:
+        try:
+            data = os.read(master, 4096)
+            if not data:
+                break
+            chunks.append(data)
+        except OSError:
+            break
+    elif p.poll() is not None:
+        break
+p.wait()
+os.close(master)
+sys.stdout.buffer.write(b"".join(chunks))
+sys.exit(p.returncode)`
+      const res = Bun.spawnSync(['python3', '-c', script, process.execPath, CLI, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
+
+      return { code: res.exitCode, out: res.stdout.toString() }
+    }
+
+    const packed = runPty(['pack', folder, dest])
+
+    expect(packed.code).toBe(0)
+    expect(packed.out).not.toContain('\x1B[31m')
+    expect(packed.out).toContain('━')
+    expect(packed.out).toContain('✓')
+
+    const unpacked = runPty(['unpack', join(dest, 'project.tar.zst'), restored])
+
+    expect(unpacked.code).toBe(0)
+    expect(unpacked.out).not.toContain('\x1B[31m')
+    expect(unpacked.out).toContain('━')
+    expect(unpacked.out).toContain('✓')
+
+    const ext = runPty(['extract', join(dest, 'project.tar.zst'), extracted])
+
+    expect(ext.code).toBe(0)
+    expect(ext.out).not.toContain('\x1B[31m')
+    expect(ext.out).toContain('━')
+    expect(ext.out).toContain('✓')
+  })
+})
+
+describe('progress formatting', () => {
+  test('scales byte progress across B, KiB and MiB with percent and throughput', () => {
+    expect(byteProgress(0, 0)).toEqual({})
+    expect(byteProgress(0, undefined)).toEqual({})
+    expect(byteProgress(256, 512)).toEqual({ done: 256, total: 512, unit: 'B (50%)' })
+    expect(byteProgress(50 * 1024, 100 * 1024, 1000)).toEqual({ done: 50, total: 100, unit: 'KiB (50%, 50K/s)' })
+    expect(byteProgress(25 * 1024 ** 2, 50 * 1024 ** 2, 1000)).toEqual({ done: 25, total: 50, unit: 'MiB (50%, 25M/s)' })
+    // Clamps when tar header overhead pushes streamed bytes slightly past estimated total.
+    expect(byteProgress(600, 512)).toEqual({ done: 512, total: 512, unit: 'B (100%)' })
+    expect(ratioSummary(1024 * 1024, 512 * 1024)).toBe('1.0M -> 512K (50%)')
   })
 })
 

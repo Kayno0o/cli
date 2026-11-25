@@ -1,10 +1,12 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
+import type { ProgressLine } from '@kaynooo/cli-kit/progress'
 import { existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, parse, role } from '@kaynooo/cli-kit'
-import { formatOf, readEntries, tarFlags } from './entries'
-import { interactive, probe } from './proc'
+import { fail, parse } from '@kaynooo/cli-kit'
+import { progressLine } from '@kaynooo/cli-kit/progress'
+import { formatOf, readEntries, tarDecompressFlags } from './entries'
+import { byteProgress, feedFile, interactive, probe, ratioSummary, say } from './proc'
 import { unpack } from './unpack'
 
 const USAGE = `arc extract [options] <file> [dest dir]: extracts an archive of any common kind, bomb-proof by default, never replacing a file that is there unless --overwrite
@@ -27,58 +29,94 @@ const EXTRACTORS: [suffix: string, argv: (file: string, overwrite: boolean) => s
   ['.tbz', (file, overwrite) => ['tar', ...keepOld(overwrite), '-xjf', file]],
   ['.txz', (file, overwrite) => ['tar', ...keepOld(overwrite), '-xJf', file]],
   ['.tzst', (file, overwrite) => ['tar', ...keepOld(overwrite), '--zstd', '-xf', file]],
-  ['.bz2', file => ['bunzip2', '-c', file]],
-  ['.gz', file => ['gunzip', '-c', file]],
-  ['.xz', file => ['xz', '-dc', file]],
-  ['.zst', file => ['zstd', '-dc', file]],
+  ['.bz2', () => ['bunzip2', '-c']],
+  ['.gz', () => ['gunzip', '-c']],
+  ['.xz', () => ['xz', '-dc']],
+  ['.zst', () => ['zstd', '-dc', '-q']],
   ['.zip', (file, overwrite) => ['unzip', overwrite ? '-o' : '-n', file]],
-  ['.z', file => ['gzip', '-dc', file]],
+  ['.z', () => ['gzip', '-dc']],
   ['.rar', (file, overwrite) => ['unrar', 'x', overwrite ? '-o+' : '-o-', file]],
   ['.7z', (file, overwrite) => ['7z', 'x', overwrite ? '-aoa' : '-aos', file]],
 ]
 
 // A single compressed file decompresses to stdout, arc naming the output itself: busybox's gunzip refuses a suffix in another case.
 const LONE = new Set(['.bz2', '.gz', '.xz', '.zst', '.z'])
+const TAR_SUFFIXES = new Set(['.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tbz', '.tar.xz', '.txz', '.tar.zst', '.tzst'])
 
-function say(message: string): void {
-  console.error(`${role('note', process.stderr)('arc extract:')} ${message}`)
-}
-
-async function needsSubfolder(file: string): Promise<boolean> {
+async function needsSubfolder(file: string, progress?: ProgressLine): Promise<boolean> {
   if (formatOf(file) === undefined)
     return false
 
-  const entries = await readEntries(file)
+  const name = basename(file)
+  const size = statSync(file).size
+  const started = performance.now()
+
+  progress?.update({ step: `inspecting ${name}`, ...byteProgress(0, formatOf(file) === 'tar' ? size : undefined) })
+
+  const entries = await readEntries(file, progress === undefined
+    ? undefined
+    : bytes => progress.update({ step: `inspecting ${name}`, ...byteProgress(bytes, size, performance.now() - started) }))
   const tops = entries.filter(entry => !entry.path.includes('/'))
 
   return tops.length !== 1 || tops[0]!.kind !== 'dir'
 }
 
-async function verifyBefore(file: string): Promise<void> {
+async function verifyBefore(file: string, progress: ProgressLine): Promise<void> {
   const format = formatOf(file)
+  const name = basename(file)
 
   if (format === 'zip') {
-    if ((await probe(['unzip', '-tq', file])).code !== 0)
+    progress.update({ step: `verifying ${name}` })
+
+    if ((await probe(['unzip', '-tq', file])).code !== 0) {
+      progress.stop()
       fail(`'${file}' failed integrity check`, 1)
+    }
   }
   else if (format === '7z') {
-    if ((await probe(['7z', 't', file])).code !== 0)
+    progress.update({ step: `verifying ${name}` })
+
+    if ((await probe(['7z', 't', file])).code !== 0) {
+      progress.stop()
       fail(`'${file}' failed integrity check`, 1)
+    }
   }
   else if (format === 'rar') {
-    if ((await probe(['unrar', 't', file])).code !== 0)
+    progress.update({ step: `verifying ${name}` })
+
+    if ((await probe(['unrar', 't', file])).code !== 0) {
+      progress.stop()
       fail(`'${file}' failed integrity check`, 1)
+    }
   }
 }
 
-async function verifyAfterTar(file: string, targetDir: string): Promise<void> {
+async function verifyAfterTar(file: string, targetDir: string, progress: ProgressLine): Promise<void> {
   if (formatOf(file) !== 'tar')
     return
 
-  const compared = await probe(['tar', '--compare', '-f', file, ...tarFlags(file), '-C', targetDir])
+  const name = basename(file)
+  const size = statSync(file).size
+  const started = performance.now()
 
-  if (compared.code !== 0)
+  progress.update({ step: `verifying ${name}`, ...byteProgress(0, size) })
+
+  const compared = await feedFile(
+    file,
+    ['tar', '--compare', ...tarDecompressFlags(file), '-f', '-', '-C', targetDir],
+    { capture: true, onBytes: bytes => progress.update({ step: `verifying ${name}`, ...byteProgress(bytes, size, performance.now() - started) }) },
+  )
+
+  if (compared.code !== 0) {
+    progress.stop()
+
+    const detail = compared.stderr || compared.stdout.trim()
+
+    if (detail !== '')
+      process.stderr.write(`${detail}\n`)
+
     fail(`the extracted files differ from '${file}'`, 1)
+  }
 }
 
 export async function extract(args: string[]): Promise<number> {
@@ -113,7 +151,16 @@ export async function extract(args: string[]): Promise<number> {
 
   // Verified .tar.zst restore without --overwrite delegates to unpack's checksum + tar --compare + owner-preserving flow.
   if (verify && !overwrite && (suffix === '.tar.zst' || suffix === '.tzst')) {
-    const wrap = !flat && await needsSubfolder(file)
+    const inspectProgress = progressLine()
+    let wrap = false
+
+    try {
+      wrap = !flat && await needsSubfolder(file, inspectProgress)
+    }
+    finally {
+      inspectProgress.stop()
+    }
+
     const targetDir = wrap ? prepareSubfolder(file, suffix, destDir, false) : destDir
 
     return unpack([file, targetDir])
@@ -122,27 +169,56 @@ export async function extract(args: string[]): Promise<number> {
   if (LONE.has(suffix))
     return extractArchive(file, destDir, overwrite)
 
-  if (verify)
-    await verifyBefore(resolve(file))
+  const progress = progressLine()
+  const resolved = resolve(file)
+  const name = basename(file)
 
-  let targetDir = destDir
+  try {
+    if (verify)
+      await verifyBefore(resolved, progress)
 
-  if (!flat && await needsSubfolder(file)) {
-    targetDir = prepareSubfolder(file, suffix, destDir, overwrite)
-    say(`extracting into ${basename(targetDir)}/`)
+    let targetDir = destDir
+
+    if (!flat && await needsSubfolder(file, progress)) {
+      const resume = progress.pause()
+
+      targetDir = prepareSubfolder(file, suffix, destDir, overwrite)
+      say(`extracting into ${basename(targetDir)}/`)
+      resume()
+    }
+
+    const isTar = TAR_SUFFIXES.has(suffix)
+
+    if (!isTar)
+      progress.stop()
+
+    const code = await runExtract(file, targetDir, overwrite, isTar ? progress : undefined)
+
+    if (code !== 0) {
+      progress.stop()
+
+      return code
+    }
+
+    if (verify && isTar)
+      await verifyAfterTar(resolved, targetDir, progress)
+
+    if (isTar) {
+      const targetNote = targetDir === destDir ? '' : ` into ${basename(targetDir)}/`
+
+      progress.done(`${verify ? 'extracted and verified' : 'extracted'} ${name}${targetNote}`)
+    }
+    else if (verify) {
+      say(`verified against '${file}'`)
+    }
+
+    return 0
   }
+  catch (error) {
+    progress.stop()
 
-  const code = await extractArchive(file, targetDir, overwrite)
-
-  if (code !== 0)
-    return code
-
-  if (verify) {
-    await verifyAfterTar(resolve(file), targetDir)
-    say(`verified against '${file}'`)
+    throw error
   }
-
-  return 0
 }
 
 function prepareSubfolder(file: string, suffix: string, destDir: string, overwrite: boolean): string {
@@ -166,45 +242,106 @@ function extractorOf(file: string) {
   return EXTRACTORS.find(([suffix]) => file.toLowerCase().endsWith(suffix))
 }
 
-// Extracts `file` into `cwd` by its extension, failing with exit 1 on a missing file, an unknown extension or a missing extractor; answers 0 or 1.
-export async function extractArchive(file: string, cwd: string, overwrite = false): Promise<number> {
-  if (!existsSync(file) || !statSync(file).isFile())
-    return fail(`'${file}' is not a file`, 1)
-
+async function runExtract(file: string, cwd: string, overwrite: boolean, sharedProgress?: ProgressLine): Promise<number> {
   const extractor = extractorOf(file)
 
   if (extractor === undefined)
     return fail(`'${file}' cannot be extracted: unknown extension`, 1)
 
   const [suffix, argvOf] = extractor
-  const argv = argvOf(resolve(file), overwrite)
+  const resolved = resolve(file)
+  const argv = argvOf(resolved, overwrite)
 
   if (Bun.which(argv[0] ?? '') === null)
     return fail(`${argv[0]} is not on PATH`, 1)
 
+  const name = basename(file)
+  const srcSize = statSync(resolved).size
+
+  if (TAR_SUFFIXES.has(suffix)) {
+    const progress = sharedProgress ?? progressLine()
+    const started = performance.now()
+
+    progress.update({ step: `extracting ${name}`, ...byteProgress(0, srcSize) })
+
+    const ran = await feedFile(
+      resolved,
+      ['tar', ...keepOld(overwrite), ...tarDecompressFlags(resolved), '-xf', '-', '-C', cwd],
+      { onBytes: bytes => progress.update({ step: `extracting ${name}`, ...byteProgress(bytes, srcSize, performance.now() - started) }) },
+    )
+
+    if (ran.code !== 0) {
+      progress.stop()
+
+      if (ran.stderr !== '')
+        process.stderr.write(`${ran.stderr}\n`)
+
+      return 1
+    }
+
+    if (sharedProgress === undefined)
+      progress.done(`extracted ${name}`)
+
+    return 0
+  }
+
   if (!LONE.has(suffix))
     return await interactive(argv, cwd) === 0 ? 0 : 1
 
-  const name = basename(file).slice(0, -suffix.length)
+  const outName = name.slice(0, -suffix.length)
 
-  if (name === '')
+  if (outName === '')
     return fail(`'${file}' has no name left once ${suffix} is taken off`, 1)
 
-  const target = join(cwd, name)
+  const target = join(cwd, outName)
 
   if (existsSync(target) && !overwrite)
     return fail(`'${target}' already exists, nothing written`, 1, 'pass --overwrite to replace it')
 
   // Written aside and renamed once complete, so a failing decompress never leaves a half file nor removes the one that was there.
   const partial = `${target}.arc-partial`
+  const progress = sharedProgress ?? progressLine()
+  const started = performance.now()
 
-  if (await Bun.spawn(argv, { stdin: 'ignore', stdout: Bun.file(partial), stderr: 'inherit' }).exited === 0) {
-    renameSync(partial, target)
+  progress.update({ step: `extracting ${name}`, ...byteProgress(0, srcSize) })
 
-    return 0
+  try {
+    const ran = await feedFile(resolved, argv, {
+      outFile: partial,
+      onBytes: bytes => progress.update({ step: `extracting ${name}`, ...byteProgress(bytes, srcSize, performance.now() - started) }),
+    })
+
+    if (ran.code === 0) {
+      renameSync(partial, target)
+
+      const outSize = statSync(target, { throwIfNoEntry: false })?.size ?? 0
+
+      if (sharedProgress === undefined)
+        progress.done(`extracted ${outName} (${ratioSummary(srcSize, outSize)})`)
+
+      return 0
+    }
+
+    rmSync(partial, { force: true })
+    progress.stop()
+
+    if (ran.stderr !== '')
+      process.stderr.write(`${ran.stderr}\n`)
+
+    return 1
   }
+  catch (error) {
+    rmSync(partial, { force: true })
+    progress.stop()
 
-  rmSync(partial, { force: true })
+    throw error
+  }
+}
 
-  return 1
+// Extracts `file` into `cwd` by its extension, failing with exit 1 on a missing file, an unknown extension or a missing extractor; answers 0 or 1.
+export async function extractArchive(file: string, cwd: string, overwrite = false): Promise<number> {
+  if (!existsSync(file) || !statSync(file).isFile())
+    return fail(`'${file}' is not a file`, 1)
+
+  return runExtract(file, cwd, overwrite)
 }

@@ -1,10 +1,32 @@
 import type { ExitRow, TreeNode } from '@kaynooo/cli-kit'
 import type { Entry, Format } from './entries'
+import { existsSync, statSync } from 'node:fs'
+import { basename } from 'node:path'
 import process from 'node:process'
 import { badUsage, fail, formatSize, jsonOption, paint, parse, printJson, tree, wholeNumber } from '@kaynooo/cli-kit'
+import { progressLine } from '@kaynooo/cli-kit/progress'
 import { cleanPath, formatOf, readEntries, tarFlags, under, zipPattern } from './entries'
+import { byteProgress } from './proc'
 
 const MAX_GREP_BYTES = 16 * 1024 * 1024
+
+async function readEntriesWithProgress(archive: string): Promise<Entry[]> {
+  const progress = progressLine()
+  const name = basename(archive)
+  const size = formatOf(archive) === 'tar' && existsSync(archive) && statSync(archive).isFile() ? statSync(archive).size : undefined
+  const started = performance.now()
+
+  try {
+    progress.update({ step: `reading ${name}`, ...byteProgress(0, size) })
+
+    return await readEntries(archive, size === undefined
+      ? undefined
+      : bytes => progress.update({ step: `reading ${name}`, ...byteProgress(bytes, size, performance.now() - started) }))
+  }
+  finally {
+    progress.stop()
+  }
+}
 
 function catArgv(archive: string, entry: Entry): string[] {
   const format: Format | undefined = formatOf(archive)
@@ -42,7 +64,7 @@ export async function ls(args: string[]): Promise<number> {
     examples: ['arc ls backup.tar.zst', ['arc ls -r backup.tar.zst src', 'everything under src'], ['arc ls site.zip --json', 'for a script']],
   })
   const [archive, prefix = ''] = positionals as [string, string | undefined]
-  const entries = await readEntries(archive)
+  const entries = await readEntriesWithProgress(archive)
   const shown = under(entries, prefix, values.recursive === true)
 
   if (shown === undefined)
@@ -92,7 +114,7 @@ export async function treeCommand(args: string[]): Promise<number> {
     examples: ['arc tree backup.tar.zst', ['arc tree -L 2 site.zip', 'two levels deep']],
   })
   const [archive, prefix = ''] = positionals as [string, string | undefined]
-  const entries = await readEntries(archive)
+  const entries = await readEntriesWithProgress(archive)
   const base = cleanPath(prefix)
 
   if (under(entries, base, true) === undefined)
@@ -119,7 +141,7 @@ export async function cat(args: string[]): Promise<number> {
     examples: ['arc cat backup.tar.zst project/package.json', ['arc cat site.zip index.html | head', 'the start of a file']],
   })
   const [archive, file] = positionals
-  const entries = await readEntries(archive)
+  const entries = await readEntriesWithProgress(archive)
   const found = entries.find(entry => entry.path === cleanPath(file))
 
   if (found === undefined)
@@ -185,7 +207,7 @@ export async function grep(args: string[]): Promise<number> {
     }
   }
 
-  const entries = await readEntries(archive)
+  const entries = await readEntriesWithProgress(archive)
   const scoped = under(entries, prefix, true)
 
   if (scoped === undefined)
@@ -195,29 +217,39 @@ export async function grep(args: string[]): Promise<number> {
   const hits: GrepHit[] = []
   const matchedFiles: string[] = []
   const decoder = new TextDecoder()
+  const progress = progressLine()
 
-  for (const entry of files) {
-    const bytes = await readEntryBytes(archive, entry)
+  try {
+    const step = `searching ${basename(archive)}`
 
-    if (bytes === undefined || bytes.length > MAX_GREP_BYTES || bytes.subarray(0, 8192).includes(0))
-      continue
+    for (const [at, entry] of files.entries()) {
+      progress.update({ step, done: at, total: files.length, unit: 'files' })
 
-    const text = decoder.decode(bytes)
-    let fileMatched = false
+      const bytes = await readEntryBytes(archive, entry)
 
-    for (const [index, line] of text.split('\n').entries()) {
-      if (!matcher(line))
+      if (bytes === undefined || bytes.length > MAX_GREP_BYTES || bytes.subarray(0, 8192).includes(0))
         continue
 
-      fileMatched = true
-      hits.push({ path: entry.path, line: index + 1, text: line })
+      const text = decoder.decode(bytes)
+      let fileMatched = false
 
-      if (values['files-with-matches'] === true)
-        break
+      for (const [index, line] of text.split('\n').entries()) {
+        if (!matcher(line))
+          continue
+
+        fileMatched = true
+        hits.push({ path: entry.path, line: index + 1, text: line })
+
+        if (values['files-with-matches'] === true)
+          break
+      }
+
+      if (fileMatched)
+        matchedFiles.push(entry.path)
     }
-
-    if (fileMatched)
-      matchedFiles.push(entry.path)
+  }
+  finally {
+    progress.stop()
   }
 
   if (values.json === true) {

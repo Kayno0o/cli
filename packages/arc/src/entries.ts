@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { fail } from '@kaynooo/cli-kit'
-import { lines, need, probe } from './proc'
+import { feedFile, lines, need, probe } from './proc'
 
 export type Format = 'tar' | 'zip' | '7z' | 'rar'
 
@@ -16,9 +16,14 @@ export interface Entry {
   target?: string
 }
 
+export interface TarVerboseEntry {
+  raw: string
+  owner: string
+}
+
 const TAR_SUFFIXES = ['.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.tbz', '.tar.xz', '.txz', '.tar.zst', '.tzst']
-// mode, owner/group, size, date, time, then the name, which may hold spaces.
-const TAR_LINE = /^([-dlhcbpsC])(\S{9}) \S+ +(\d+) (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})(?::\d{2})? (.+)$/
+// mode (with optional ACL/SELinux marker), owner/group, size (or major, minor for devices), date, time, then the name, which may hold spaces.
+const TAR_LINE = /^([-dlhcbpsC])(\S{9,10}) (\S+) +(?:(\d+)|\d+, *\d+) (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})(?::\d{2})? (.+)$/
 const ZIP_LINE = /^\s*(\d+)\s+(\S+) (\d{2}:\d{2})\s+(\S.*)$/
 const SYMLINK_ARROW = ' -> '
 const HARDLINK_TO = / link to .*$/
@@ -47,6 +52,22 @@ export function formatOf(file: string): Format | undefined {
 // GNU tar picks gzip, bzip2 and xz from the file itself; zstd it is told.
 export function tarFlags(file: string): string[] {
   const name = file.toLowerCase()
+
+  return name.endsWith('.zst') || name.endsWith('.tzst') ? ['--zstd'] : []
+}
+
+// Explicit decompression flag for tar when reading from stdin, working on both GNU and BusyBox tar.
+export function tarDecompressFlags(file: string): string[] {
+  const name = file.toLowerCase()
+
+  if (name.endsWith('.gz') || name.endsWith('.tgz'))
+    return ['-z']
+
+  if (name.endsWith('.bz2') || name.endsWith('.tbz2') || name.endsWith('.tbz'))
+    return ['-j']
+
+  if (name.endsWith('.xz') || name.endsWith('.txz'))
+    return ['-J']
 
   return name.endsWith('.zst') || name.endsWith('.tzst') ? ['--zstd'] : []
 }
@@ -86,7 +107,7 @@ export function parseTar(output: string): Entry[] {
     if (found === null)
       continue
 
-    const [, type, permissions, size, date, time, name] = found as unknown as [string, string, string, string, string, string, string]
+    const [, type, permissions, , size = '0', date, time, name] = found as unknown as [string, string, string, string, string | undefined, string, string, string]
     const { raw, target } = splitName(type, name)
     const path = clean(raw)
 
@@ -94,6 +115,25 @@ export function parseTar(output: string): Entry[] {
       continue
 
     entries.push({ path, raw, kind: kindOf(type), size: Number(size), mode: `${type}${permissions}`, modified: `${date} ${time}`, ...target === undefined ? {} : { target } })
+  }
+
+  return entries
+}
+
+// Extracts raw entry path and numeric owner/group from `tar --list --verbose --numeric-owner`.
+export function parseTarVerbose(output: string): TarVerboseEntry[] {
+  const entries: TarVerboseEntry[] = []
+
+  for (const line of lines(output)) {
+    const found = TAR_LINE.exec(line)
+
+    if (found === null)
+      continue
+
+    const [, type, , owner, , , , name] = found as unknown as [string, string, string, string, string | undefined, string, string, string]
+    const { raw } = splitName(type, name)
+
+    entries.push({ raw, owner })
   }
 
   return entries
@@ -229,7 +269,7 @@ export function parseRar(output: string): Entry[] {
 }
 
 // Opens the archive and lists what it holds, ending the command when it cannot.
-export async function readEntries(file: string): Promise<Entry[]> {
+export async function readEntries(file: string, onBytes?: (bytes: number) => void): Promise<Entry[]> {
   if (!existsSync(file) || !statSync(file).isFile())
     return fail(`'${file}' is not a file`, 1)
 
@@ -242,13 +282,21 @@ export async function readEntries(file: string): Promise<Entry[]> {
 
   need(tool[format])
 
-  const argv: Record<Format, string[]> = {
-    'zip': ['unzip', '-l', file],
-    'tar': ['tar', '-tvf', file, ...tarFlags(file)],
-    '7z': ['7z', 'l', '-slt', file],
-    'rar': ['unrar', 'vt', file],
+  let listed
+
+  if (format === 'tar' && onBytes !== undefined) {
+    listed = await feedFile(file, ['tar', ...tarDecompressFlags(file), '-tvf', '-'], { capture: true, onBytes, stderr: 'ignore' })
   }
-  const listed = await probe(argv[format])
+  else {
+    const argv: Record<Format, string[]> = {
+      'zip': ['unzip', '-l', file],
+      'tar': ['tar', '-tvf', file, ...tarFlags(file)],
+      '7z': ['7z', 'l', '-slt', file],
+      'rar': ['unrar', 'vt', file],
+    }
+
+    listed = await probe(argv[format])
+  }
 
   if (listed.code !== 0)
     return fail(`could not read '${file}': is it damaged?`, 1)
