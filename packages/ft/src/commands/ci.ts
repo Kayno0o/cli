@@ -1,7 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { FailedJob, Run } from '../runs'
 import process from 'node:process'
-import { ciHeader, duration, fail, jsonOption, parse, printJson, runHint, takesControlCodes, waitForCi } from '@kaynooo/cli-kit'
+import { ciHeader, duration, fail, jsonOption, parse, printJson, runHint, takesControlCodes, waitForCi, writeErr } from '@kaynooo/cli-kit'
 import { defaultBranch, fetchBranch, git, gitOk, leaveWorktree, resolveCommit, tagsAt } from '../git'
 import { good } from '../good'
 import { ciJson, failedJobsOf, failureText, FINISHED, jobsOf, newestPerWorkflow, overall, refreshed, runLine, runsOn, stallReason } from '../runs'
@@ -130,7 +130,7 @@ export async function ci(args: string[]): Promise<number> {
       if (live)
         return
 
-      const say = json ? console.error : console.log
+      const say = json ? writeErr : console.log
 
       for (const run of found)
         say(`following ${run.workflow_id} run ${run.id} on ${run.commit_sha.slice(0, 7)}${run.commit_sha === sha ? '' : `, which covers ${short}`}: ${run.html_url}`)
@@ -181,7 +181,7 @@ export async function ci(args: string[]): Promise<number> {
 
   for (const run of runs) {
     if (run.status === 'failure')
-      console.error(`\n${failureText(failed.filter(job => job.run === run.id))}\n\nrun ${run.id} failed${run.commit_sha === sha ? '' : `, testing every commit from ${short} to ${run.commit_sha.slice(0, 7)}`}: ${run.html_url}`)
+      writeErr(`\n${failureText(failed.filter(job => job.run === run.id))}\n\nrun ${run.id} failed${run.commit_sha === sha ? '' : `, testing every commit from ${short} to ${run.commit_sha.slice(0, 7)}`}: ${run.html_url}`)
   }
 
   return 1

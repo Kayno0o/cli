@@ -1,7 +1,7 @@
 import type { Chunk } from '@kaynooo/cli-kit'
 import { closeSync, rmSync, writeSync } from 'node:fs'
 import process from 'node:process'
-import { holdSignals, isHumanTerminal, paint, problem, runCommand, warn } from '@kaynooo/cli-kit'
+import { holdSignals, isHumanTerminal, paint, problem, runCommand, warn, writeErr } from '@kaynooo/cli-kit'
 import { formatError, parseErrors } from '@kaynooo/cli-kit/errors'
 import { fold, shouldFold } from './fold'
 import { cleanLogs, logDir, newLog } from './logs'
@@ -212,7 +212,7 @@ export async function run(command: string[], threshold: number, options: RunOpti
     if (long) {
       const path = recorder.save()
 
-      console.error(paint(process.stderr).dim(`[out: full log: ${path}]`))
+      writeErr(paint(process.stderr).dim(`[out: full log: ${path}]`))
     }
 
     count(recorder, { shown: recorder.bytes, folded: false }, { command: commandKey(command), was })

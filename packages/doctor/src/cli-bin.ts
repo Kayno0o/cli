@@ -6,7 +6,7 @@ import type { Listed } from './list'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import process from 'node:process'
-import { activeTheme, badge, badUsage, bar, completionScript, duration, fail, formatDuration, getConfigKey, header, isInteractive, jsonOption, keyValue, mainConfigPath, marked, paint, parse, parseConfigValue, PRESETS, printHeader, printJson, readMainConfig, readUsage, role, runCli, section, setConfigKey, sparkline, summarizeUsage, table, tree, unsetConfigKey, updateMainConfig, usagePath } from '@kaynooo/cli-kit'
+import { activeTheme, badge, badUsage, bar, completionScript, duration, fail, formatDuration, getConfigKey, header, isInteractive, jsonOption, keyValue, mainConfigPath, marked, paint, parse, parseConfigValue, PRESETS, printHeader, printJson, readMainConfig, readUsage, role, runCli, section, setConfigKey, sparkline, summarizeUsage, table, tree, unsetConfigKey, updateMainConfig, usagePath, writeErr } from '@kaynooo/cli-kit'
 import { pick } from '@kaynooo/cli-kit/picker'
 import { completePath, input, select } from '@kaynooo/cli-kit/prompt'
 import { isInstalled, runChecks, TOOLS } from './checks'
@@ -432,7 +432,7 @@ export async function update(args: string[], host: Host = hostHere()): Promise<n
     if (!json)
       printResults(verbose ? results : failing, { header: verbose, showFix: verbose, showBatch: false })
 
-    const log = json ? console.error : console.log
+    const log = json ? writeErr : console.log
     const run = await convergeFixes(host, results, async () => runChecks(host, checks, { offline, registryCache }), { dry, onOutcome: outcome => printOutcome(outcome, log) })
 
     if (dry) {

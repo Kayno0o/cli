@@ -6,7 +6,7 @@ import { bar } from '../src/chart'
 import { runMain } from '../src/cli'
 import { table } from '../src/format'
 import { usageLine } from '../src/help'
-import { badge, fileLink, gradientText, header, hyperlink, link, marked, paint, printHeader, role, section, statusOf } from '../src/style'
+import { badge, fileLink, gradientText, header, hyperlink, link, marked, paint, printHeader, role, section, statusOf, writeErr } from '../src/style'
 import { capture, tempDirs } from '../src/test'
 import { stripAnsi } from '../src/text'
 
@@ -277,5 +277,52 @@ describe('hyperlink and fileLink', () => {
     expect(hyperlink('#7', 'https://x.test/7', {}, {})).toBe('#7')
     expect(fileLink('a.ts', 'src/a.ts', TERMINAL, '/repo', {})).toContain('\x1B]8;;file:///repo/src/a.ts\x1B\\')
     expect(fileLink('a.ts', 'src/a.ts', {}, '/repo', {})).toBe('a.ts')
+  })
+})
+
+describe('writeErr', () => {
+  it('writes a line to stderr without adding Bun\'s red console.error tint on a TTY', async () => {
+    expect((await capture(() => writeErr('hello'))).err).toBe('hello\n')
+
+    if (Bun.which('python3') === null)
+      return
+
+    const stylePath = join(import.meta.dir, '../src/style.ts')
+    const cliPath = join(import.meta.dir, '../src/cli.ts')
+    const evalCode = `import { warn, writeErr } from ${JSON.stringify(stylePath)}; import { printHint } from ${JSON.stringify(cliPath)}; writeErr('plain note'); warn('careful'); printHint('try --flag')`
+    const py = `import os, pty, select, subprocess, sys
+master, slave = pty.openpty()
+env = dict(os.environ)
+env["KIT_MODE"] = "terminal"
+env["TERM"] = "xterm-256color"
+env.pop("NO_COLOR", None)
+env.pop("NODE_DISABLE_COLORS", None)
+for k in ("CLAUDECODE", "AI_AGENT", "ANTIGRAVITY_AGENT"):
+    env.pop(k, None)
+p = subprocess.Popen(sys.argv[1:], stdin=slave, stdout=slave, stderr=slave, env=env)
+os.close(slave)
+chunks = []
+while True:
+    r, _, _ = select.select([master], [], [], 0.2)
+    if r:
+        try:
+            data = os.read(master, 4096)
+            if not data:
+                break
+            chunks.append(data)
+        except OSError:
+            break
+    elif p.poll() is not None:
+        break
+p.wait()
+os.close(master)
+sys.stdout.buffer.write(b"".join(chunks))`
+    const res = Bun.spawnSync(['python3', '-c', py, process.execPath, '-e', evalCode], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
+    const out = res.stdout.toString()
+
+    expect(out).toContain('plain note')
+    expect(out).toContain('careful')
+    expect(out).toContain('try --flag')
+    expect(out).not.toContain('\x1B[31m')
   })
 })

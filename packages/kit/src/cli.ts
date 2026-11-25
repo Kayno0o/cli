@@ -11,7 +11,7 @@ import { candidates, COMPLETE, COMPLETIONS, expand, FILES, flagValue, leafCandid
 import { COMPLETION_SHELLS } from './completions'
 import { outputMode } from './mode'
 import { notifyEnd } from './notify'
-import { paint, takesControlCodes } from './style'
+import { paint, takesControlCodes, writeErr } from './style'
 import { closest } from './text'
 import { noteUsageError, recordUsage, usageEntry } from './usage'
 
@@ -142,7 +142,7 @@ export function printError(prefix: string, message: string, hint?: string, cause
   const head = styled ? `${colors.red.bold('error')} ${colors.dim(`${prefix}:`)}` : `error: ${prefix}:`
   const under = (label: string, text: string | undefined, tint: (text: string) => string) => text === undefined ? '' : `\n  ${styled ? tint(label) : `${label}:`} ${text}`
 
-  console.error(`${head} ${message}${under('cause', cause, colors.dim)}${under('hint', hint, colors.yellow)}`)
+  writeErr(`${head} ${message}${under('cause', cause, colors.dim)}${under('hint', hint, colors.yellow)}`)
 }
 
 // The hint of a refusal a command resolves with another command, worded alike everywhere: ``run `ft take 12 --take-stale` ``, then what it does when that is not obvious.
@@ -154,12 +154,12 @@ export function runHint(command: string, effect?: string): string {
 export function printHint(hint: string): void {
   const colors = paint(process.stderr)
 
-  console.error(`  ${takesControlCodes(process.stderr) ? colors.yellow('hint') : 'hint:'} ${hint}`)
+  writeErr(`  ${takesControlCodes(process.stderr) ? colors.yellow('hint') : 'hint:'} ${hint}`)
 }
 
 // An error as `{"error", "code"?, "command"?, "hint"?, "cause"?}` on stderr, for a command run with `--json`, so a caller parses its failures as it parses its output.
 export function printJsonError(message: string, hint?: string, cause?: string, extra?: { code?: number, command?: string }): void {
-  console.error(JSON.stringify({
+  writeErr(JSON.stringify({
     error: message,
     ...(extra?.code === undefined ? {} : { code: extra.code }),
     ...(extra?.command === undefined ? {} : { command: extra.command }),
@@ -222,7 +222,7 @@ async function dispatch(level: Level, typed: string[], { version, redact }: { ve
   }
 
   if (name === undefined && level.path.length > 1) {
-    console.error(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stderr))
+    writeErr(await help(await expand(level, [...level.path.slice(1), ...argv]), process.stderr))
 
     return { code: 2, meta: true }
   }

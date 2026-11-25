@@ -1,5 +1,5 @@
 import type { RunSettings, ToolRun } from '@kaynooo/cli-kit'
-import { exitCodeOf, fail, holdSignals, runHint, runTool } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, runHint, runTool, writeErr } from '@kaynooo/cli-kit'
 import { askpass } from '@kaynooo/cli-kit/askpass'
 import { fetchBranch, git, gitOk } from '../git'
 import { FINISHED, newestPerWorkflow, overall, recentRuns } from '../runs'
@@ -47,7 +47,7 @@ export async function pushToOrigin(refspecs: string[], onStart: RunSettings['onS
       const mirrored = await push(mirror)
 
       if (mirrored.code !== 0)
-        console.error(`warning: ${mirror} refused the push, so it lags behind origin until a later push lands:\n${mirrored.stderr.trim()}`)
+        writeErr(`warning: ${mirror} refused the push, so it lags behind origin until a later push lands:\n${mirrored.stderr.trim()}`)
     }
 
     return pushed
@@ -76,7 +76,7 @@ async function alreadyPassed(sha: string): Promise<boolean> {
 // Pushes the commit a release sits on when origin lacks it and waits for its own runs, so a red run stops the release before a tag exists that would never publish.
 // Runs that already passed on a commit origin has are not waited for nor printed again.
 export async function testsPass(sha: string, branch: string, timeout: number, json = false): Promise<boolean> {
-  const say = json ? console.error : console.log
+  const say = json ? writeErr : console.log
 
   if (!await gitOk(['merge-base', '--is-ancestor', sha, `origin/${branch}`])) {
     const held = holdSignals()

@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:f
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
-import { badge, configuredNumber, currentSession, duration, exitCodeOf, fail, formatAge, formatDuration, formatElapsed, holdSignals, jsonOption, liveSessions, paint, parse, printJson, privateLogDirectory, table, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { badge, configuredNumber, currentSession, duration, exitCodeOf, fail, formatAge, formatDuration, formatElapsed, holdSignals, jsonOption, liveSessions, paint, parse, printJson, privateLogDirectory, table, truncate, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { tryLock, writeHeld } from './flock'
 
@@ -220,7 +220,7 @@ async function acquire(dir: string, resources: Resource[], holder: Holder, deadl
         if (process.stderr.isTTY)
           region = liveRegion(spinner => [`${spinner} ${waitingLine(dir, currentBusy)} ${dim(formatElapsed(Date.now() - started))}`])
         else
-          console.error(waitingLine(dir, busy))
+          writeErr(waitingLine(dir, busy))
       }
       else if (waiter.resource !== resource) {
         writeHeld(waiter.held, JSON.stringify({ ...holder, resource }))

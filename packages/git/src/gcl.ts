@@ -5,7 +5,7 @@ import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
-import { configuredForge, fail, jsonOption, parse, printJson, readUserConfig, runMain, userConfigPath, wholeNumber } from '@kaynooo/cli-kit'
+import { configuredForge, fail, jsonOption, parse, printJson, readUserConfig, runMain, userConfigPath, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { askpass, NO_PROMPTS } from '@kaynooo/cli-kit/askpass'
 import { git } from './git'
 import { repoState, toplevelOf } from './repos'
@@ -227,7 +227,7 @@ async function main(argv: string[]): Promise<number> {
     console.log(path)
 
   if (values.json !== true)
-    console.error(`${outcome === 'cloned' ? 'cloned' : 'already cloned'} ${from}${result.branch === null ? '' : ` on ${result.branch}`}${result.head === null ? '' : ` at ${result.head}`}`)
+    writeErr(`${outcome === 'cloned' ? 'cloned' : 'already cloned'} ${from}${result.branch === null ? '' : ` on ${result.branch}`}${result.head === null ? '' : ` at ${result.head}`}`)
 
   return 0
 }

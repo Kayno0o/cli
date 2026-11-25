@@ -1,7 +1,7 @@
 import type { Choice } from '@kaynooo/cli-kit/prompt'
 import type { Host } from './checks'
 import process from 'node:process'
-import { badUsage, isInteractive, paint, saveWorkspace, userConfigPath, workspaceChosen } from '@kaynooo/cli-kit'
+import { badUsage, isInteractive, paint, saveWorkspace, userConfigPath, workspaceChosen, writeErr } from '@kaynooo/cli-kit'
 import { checklist, completePath, confirm, input } from '@kaynooo/cli-kit/prompt'
 import { ABOUT, HOOKS_REQUIRES, NEEDS } from './catalog'
 import { firstLine, hooksWiring, isInstalled, MARKETPLACE, TOOLS } from './checks'
@@ -140,7 +140,7 @@ async function askWorkspace(host: Host): Promise<void> {
   const folder = await input('folder holding your repositories (repos, sweep and pkg bump look there)', { default: '~/Workspace', complete: before => completePath(before, process.cwd(), host.home).filter(path => path.endsWith('/')), hint: 'set workspace in ~/.config/kaynooo-cli/config.json or KAYNOOO_WORKSPACE' })
 
   if (folder !== undefined && folder !== '' && !saveWorkspace(folder, { home: host.home }))
-    console.error(`could not write the workspace into ${userConfigPath('config', { home: host.home })}: it does not parse, fix it by hand`)
+    writeErr(`could not write the workspace into ${userConfigPath('config', { home: host.home })}: it does not parse, fix it by hand`)
 }
 
 // Installs what the user names or picks, refusing a package whose required tool is missing unless --force, then checks and fixes what it installed through `recheck`.
@@ -224,7 +224,7 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
     const ran = await host.run(command)
 
     if (ran.code !== 0) {
-      console.error(`${red('failed')}   bun install -g: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+      writeErr(`${red('failed')}   bun install -g: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
 
       return 1
     }
@@ -238,7 +238,7 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
       const ran = await host.run(PLUGIN_INSTALL)
 
       if (ran.code !== 0)
-        console.error(`${red('failed')}   ${PLUGIN_INSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+        writeErr(`${red('failed')}   ${PLUGIN_INSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
     }
   }
 
@@ -246,20 +246,20 @@ export async function install(host: Host, options: InstallOptions, recheck: (onl
     const ran = await host.run(uninstall)
 
     if (ran.code !== 0) {
-      console.error(`${red('failed')}   bun remove -g: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+      writeErr(`${red('failed')}   bun remove -g: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
 
       return 1
     }
   }
 
   if (removing.plugin && host.which('claude') === null) {
-    console.error(`${yellow('not run')}  ${PLUGIN_UNINSTALL.join(' ')}: claude is not on PATH`)
+    writeErr(`${yellow('not run')}  ${PLUGIN_UNINSTALL.join(' ')}: claude is not on PATH`)
   }
   else if (removing.plugin) {
     const ran = await host.run(PLUGIN_UNINSTALL)
 
     if (ran.code !== 0) {
-      console.error(`${red('failed')}   ${PLUGIN_UNINSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+      writeErr(`${red('failed')}   ${PLUGIN_UNINSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
 
       return 1
     }
@@ -319,20 +319,20 @@ export async function remove(host: Host, options: RemoveOptions): Promise<number
     const ran = await host.run(uninstall)
 
     if (ran.code !== 0) {
-      console.error(`${red('failed')}   bun remove -g: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+      writeErr(`${red('failed')}   bun remove -g: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
 
       return 1
     }
   }
 
   if (removing.plugin && host.which('claude') === null) {
-    console.error(`${yellow('not run')}  ${PLUGIN_UNINSTALL.join(' ')}: claude is not on PATH`)
+    writeErr(`${yellow('not run')}  ${PLUGIN_UNINSTALL.join(' ')}: claude is not on PATH`)
   }
   else if (removing.plugin) {
     const ran = await host.run(PLUGIN_UNINSTALL)
 
     if (ran.code !== 0) {
-      console.error(`${red('failed')}   ${PLUGIN_UNINSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
+      writeErr(`${red('failed')}   ${PLUGIN_UNINSTALL.join(' ')}: exit ${ran.code}: ${firstLine(ran.stderr || ran.stdout)}`)
 
       return 1
     }

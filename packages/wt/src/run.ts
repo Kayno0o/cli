@@ -3,7 +3,7 @@ import type { RunConfig, Worktree } from './project'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
-import { holdSignals } from '@kaynooo/cli-kit'
+import { holdSignals, writeErr } from '@kaynooo/cli-kit'
 import { $ } from 'bun'
 import { baseComposeFiles, composeConfig } from './compose'
 import { readEnvFile } from './env_file'
@@ -264,11 +264,11 @@ async function provision(worktree: Worktree, run: RunConfig, plan: RunPlan, data
   if (existsSync(marker))
     return
 
-  await inLine(queueDir(worktree.project.settings, `${worktree.id}.provision`), 'provisioning', () => console.error(`wt run: waiting for ${worktree.task}'s test database to be provisioned`), async () => {
+  await inLine(queueDir(worktree.project.settings, `${worktree.id}.provision`), 'provisioning', () => writeErr(`wt run: waiting for ${worktree.task}'s test database to be provisioned`), async () => {
     if (existsSync(marker))
       return
 
-    console.error(`wt run: provisioning ${worktree.task}'s test database`)
+    writeErr(`wt run: provisioning ${worktree.task}'s test database`)
 
     for (const step of run.provision) {
       if (await runInherit(['docker', ...plan.runner(['sh', '-c', step])]) !== 0)

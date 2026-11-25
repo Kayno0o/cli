@@ -1,6 +1,6 @@
 import type { Labels, Stack } from './stack'
 import process from 'node:process'
-import { isInteractive, paint, problem } from '@kaynooo/cli-kit'
+import { isInteractive, paint, problem, writeErr } from '@kaynooo/cli-kit'
 import { nearestStack, recordedNearby, stackAt, stackOf } from './stack'
 
 // The words a compose command starts with, which never name a stack, so the containers are not listed to check.
@@ -51,7 +51,7 @@ async function choose(recorded: Labels[]): Promise<Labels | undefined> {
 async function run(stack: Stack, args: string[], announce: boolean): Promise<number> {
   // The command it stands for, above its output, since nothing in `dc` says which files it took.
   if (announce && process.stderr.isTTY)
-    console.error(paint(process.stderr).dim([...stack.run, ...args].join(' ')))
+    writeErr(paint(process.stderr).dim([...stack.run, ...args].join(' ')))
 
   return Bun.spawn([...stack.list.argv, ...args], { cwd: stack.list.cwd, env: stack.list.env, stdio: ['inherit', 'inherit', 'inherit'] }).exited
 }

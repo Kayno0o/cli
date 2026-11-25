@@ -159,7 +159,7 @@ describe('removeTree', () => {
     if (process.getuid?.() === 0)
       return
 
-    const warned = spyOn(console, 'error').mockImplementation(() => undefined)
+    const warned = spyOn(process.stderr, 'write').mockImplementation(() => true)
     let warning = ''
 
     mkdirSync(join(root, 'kept'))

@@ -3,7 +3,7 @@ import type { Container, Protocol, Socket } from './parse'
 import type { ProcInfo } from './read'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { badUsage, duration, fail, jsonOption, paint, parse, printJson, problem, runCommand, table, truncate, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, paint, parse, printJson, problem, runCommand, table, truncate, watching, watchOption, wholeNumber, withoutWatch, writeErr } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { dockerContainers } from './docker'
 import { protectionOf, terminate } from './kill'
@@ -230,7 +230,7 @@ export async function ports(args: string[]): Promise<number> {
   const unknown = rows.filter(row => row.pid === undefined && row.container === undefined).length
 
   if (unknown > 0)
-    console.error(paint(process.stderr).dim(`${unknown} ${unknown === 1 ? 'port has' : 'ports have'} an owner this user cannot read, shown as -`))
+    writeErr(paint(process.stderr).dim(`${unknown} ${unknown === 1 ? 'port has' : 'ports have'} an owner this user cannot read, shown as -`))
 
   return 0
 }

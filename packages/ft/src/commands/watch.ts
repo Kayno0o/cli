@@ -1,6 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { FailedJob, Run } from '../runs'
-import { ciHeader, duration, Exit, fail, formatDuration, isPermanentFailure, jsonOption, parse, printJson, takesControlCodes, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { ciHeader, duration, Exit, fail, formatDuration, isPermanentFailure, jsonOption, parse, printJson, takesControlCodes, warn, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { repoOption } from '../args'
 import { ciJson, failedJobsOf, failureText, FINISHED, overall, recentRuns, runById, runLine, stallReason } from '../runs'
@@ -96,7 +96,7 @@ export async function followRuns(pick: (runs: Run[]) => Run[], timeout: number, 
         failedJobs.push(...jobs)
 
         if (!json)
-          console.error(`\n${failureText(jobs)}\n\n${run.html_url}`)
+          writeErr(`\n${failureText(jobs)}\n\n${run.html_url}`)
 
         failed.add(run.id)
       }

@@ -2,7 +2,7 @@ import type { ComposeConfig } from './compose'
 import type { Route, Worktree } from './project'
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { holdSignals } from '@kaynooo/cli-kit'
+import { holdSignals, writeErr } from '@kaynooo/cli-kit'
 import { escapeRegExp } from '@kaynooo/utils/text'
 import { $ } from 'bun'
 import { baseComposeFiles } from './compose'
@@ -207,7 +207,7 @@ function writePending(file: string, volumes: Iterable<string>): void {
  * Clones of one project run one at a time, so no clone unpauses main while another still copies; a copy cut short is redone by the next sync, and main's containers a killed clone left paused are unpaused, those it had paused only.
  */
 export async function cloneData(worktree: Worktree, main: ComposeConfig): Promise<string[]> {
-  return inLine(queueDir(worktree.project.settings, `${worktree.project.name}.clone`), `cloning ${worktree.task}`, (_, running) => console.error(`wt: ${worktree.project.name}'s main is busy ${running || 'cloning'}, waiting`), async () => {
+  return inLine(queueDir(worktree.project.settings, `${worktree.project.name}.clone`), `cloning ${worktree.task}`, (_, running) => writeErr(`wt: ${worktree.project.name}'s main is busy ${running || 'cloning'}, waiting`), async () => {
     const record = pausedRecord(worktree)
     const recorded = readPending(record)
     const leftover = recorded.size ? (await mainContainers(main, 'paused')).filter(id => recorded.has(id)) : []

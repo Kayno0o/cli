@@ -147,7 +147,7 @@ describe('everything with a broken manifest', () => {
     mkdirSync(join(root, 'broken'), { recursive: true })
     writeFileSync(join(root, 'broken/package.json'), '{ nope')
 
-    const warned = spyOn(console, 'error').mockImplementation(() => undefined)
+    const warned = spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     try {
       expect(everything().some(entry => id(entry) === 'bun:check')).toBe(true)

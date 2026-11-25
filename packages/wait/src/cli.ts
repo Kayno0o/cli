@@ -4,7 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Line, UrlExpect } from './conditions'
 import { existsSync } from 'node:fs'
 import process from 'node:process'
-import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, problem, runCommand, runMain, truncate, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, fail, formatDuration, formatElapsed, jsonOption, paint, parse, printJson, problem, runCommand, runMain, truncate, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { FileWatch, healthyProblem, parseStatus, portProblem, urlCheck } from './conditions'
 import { exitCode, isTranscript, pidAlive, taskEnd, taskFile } from './task'
@@ -248,7 +248,7 @@ async function main(args: string[]): Promise<number> {
   const watch = values.file === undefined ? undefined : new FileWatch(values.file, regex(values.until, 'until'), regex(values.fail, 'fail'), values['from-end'] === true)
   const started = Date.now()
   const json = values.json === true
-  const say = json ? console.error : console.log
+  const say = json ? writeErr : console.log
   let matched: { number: number, text: string } | undefined
 
   let isPidLeft = pid !== undefined

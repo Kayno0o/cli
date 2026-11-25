@@ -91,7 +91,7 @@ describe('loadSettings', () => {
   })
 
   test('warns about a file that is not JSON and allows nothing', async () => {
-    const warning = spyOn(console, 'error').mockImplementation(() => undefined)
+    const warning = spyOn(process.stderr, 'write').mockImplementation(() => true)
 
     try {
       const home = homeWith('{ nope')

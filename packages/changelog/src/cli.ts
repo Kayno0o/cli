@@ -4,7 +4,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { ResolvedChangelogOptions } from './types'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Exit, fail, parse, printJson, role, runCli } from '@kaynooo/cli-kit'
+import { Exit, fail, parse, printJson, role, runCli, writeErr } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { sendDiscordWebhook } from '@kaynooo/utils/discord'
 import { version } from '../package.json'
@@ -34,7 +34,7 @@ function failed(e: unknown, debug: boolean | undefined): never {
     throw e
 
   if (debug === true && e instanceof Error && e.stack !== undefined)
-    console.error(err().dim(e.stack.split('\n').slice(1).join('\n')))
+    writeErr(err().dim(e.stack.split('\n').slice(1).join('\n')))
 
   return fail(e instanceof Error ? e.message : String(e), 1)
 }
@@ -49,9 +49,9 @@ async function printManualRelease(config: ResolvedChangelogOptions, md: string, 
 
   await Bun.write(file, md)
   console.log()
-  console.error(err().yellow(heading))
-  console.error(err().yellow(`  https://${config.baseUrl}/${config.releaseRepo}/releases/new?tag=${encodeURIComponent(config.to)}`))
-  console.error(err().yellow(`  pasting the notes saved to ${file}`))
+  writeErr(err().yellow(heading))
+  writeErr(err().yellow(`  https://${config.baseUrl}/${config.releaseRepo}/releases/new?tag=${encodeURIComponent(config.to)}`))
+  writeErr(err().yellow(`  pasting the notes saved to ${file}`))
   console.log()
 }
 
@@ -129,7 +129,7 @@ async function release(argv: string[], report: (value: Report) => unknown) {
         result.discord = 'posted'
       }
       catch (e) {
-        console.error(err().red(`Released, but the Discord post failed: ${String(e)}`))
+        writeErr(err().red(`Released, but the Discord post failed: ${String(e)}`))
         result.discord = 'failed'
         code = 1
       }

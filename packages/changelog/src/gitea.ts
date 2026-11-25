@@ -1,5 +1,6 @@
 import type { AuthorInfo, ChangelogOptions, Commit } from './types'
 import path from 'node:path'
+import { writeErr } from '@kaynooo/cli-kit'
 import { err, out } from './ui'
 
 const REQUEST_MS = 60_000
@@ -331,7 +332,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
       }
     }
     catch (error) {
-      console.error(err().red(`Failed to process glob pattern "${pattern}": ${String(error)}`))
+      writeErr(err().red(`Failed to process glob pattern "${pattern}": ${String(error)}`))
       // Keep the original pattern as fallback
       expandedAssets.push(pattern)
     }
@@ -348,7 +349,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
     const file = Bun.file(filePath)
 
     if (!await file.exists()) {
-      console.error(err().red(`Failed to read file ${filePath}: file does not exist`))
+      writeErr(err().red(`Failed to read file ${filePath}: file does not exist`))
       failed++
 
       continue
@@ -374,7 +375,7 @@ export async function uploadAssets(options: ChangelogOptions, assets: string | s
       console.log(out().green(`Uploaded ${fileName} successfully.`))
     }
     catch (error) {
-      console.error(err().red(`Failed to upload ${fileName}: ${String(error)}`))
+      writeErr(err().red(`Failed to upload ${fileName}: ${String(error)}`))
       failed++
     }
   }

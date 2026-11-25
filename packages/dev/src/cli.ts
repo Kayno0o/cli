@@ -5,7 +5,7 @@ import type { Encoding } from './encode'
 import type { Algorithm } from './hash'
 import type { Format } from './password'
 import process from 'node:process'
-import { badUsage, copyOption, copyText, fail, isInteractive, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, copyOption, copyText, fail, isInteractive, isStdinPiped, jsonOption, oneOf, paint, parse, printJson, runCli, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { input } from '@kaynooo/cli-kit/prompt'
 import { CONVERT_FORMATS, formatStructured, normalizeFormat, parseStructured } from './convert'
 import { evaluateCron } from './cron'
@@ -131,10 +131,10 @@ export async function password(args: string[]): Promise<number> {
   }
 
   if (copied)
-    console.error(paint(process.stderr).dim('copied to clipboard'))
+    writeErr(paint(process.stderr).dim('copied to clipboard'))
 
   if (hash !== undefined && given === undefined)
-    console.error(secret)
+    writeErr(secret)
 
   console.log(hash ?? secret)
 

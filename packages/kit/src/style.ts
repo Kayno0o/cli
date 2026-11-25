@@ -39,6 +39,11 @@ export function marked(mark: Mark, text: string, stream: { isTTY?: boolean }, de
   return `${head} ${text}${detail === undefined ? '' : ` ${colors.dim(detail)}`}`
 }
 
+// Writes a line to stderr without Bun's `console.error` red tint on a TTY.
+export function writeErr(text = ''): void {
+  process.stderr.write(`${text}\n`)
+}
+
 export function ok(text: string, detail?: string): void {
   console.log(marked('ok', text, process.stdout, detail))
 }
@@ -48,11 +53,11 @@ export function note(text: string, detail?: string): void {
 }
 
 export function warn(text: string, detail?: string): void {
-  console.error(marked('warn', text, process.stderr, detail))
+  writeErr(marked('warn', text, process.stderr, detail))
 }
 
 export function problem(text: string, detail?: string): void {
-  console.error(marked('problem', text, process.stderr, detail))
+  writeErr(marked('problem', text, process.stderr, detail))
 }
 
 // `role('id', process.stdout)('#49')`: plain text on a stream that takes no control codes; a mark or status name tints with its own colour (`role('ok', stream)`).

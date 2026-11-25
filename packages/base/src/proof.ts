@@ -1,7 +1,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Run } from './worktree'
 import process from 'node:process'
-import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, wholeNumber } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { autoKeptPaths, checkout, chooseProofRef, folded, formattedFailure, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
 const USAGE = 'base proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--keep-new] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]: runs the command at the ref below in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nDefaults to HEAD when the working tree has uncommitted changes, else the merge base with origin\'s default branch when on a branch ahead of it. Untracked/new test files referenced in the command are kept automatically (--keep-new copies all untracked files).'
@@ -76,7 +76,7 @@ export async function proof(argv: string[]): Promise<number> {
   if (parsed.values.json !== true) {
     const dim = role('label', process.stderr)
 
-    console.error(dim(`base proof: ref ${sha.slice(0, 7)} (${chosen.reason})${autoKept.length === 0 ? '' : `, auto-kept ${autoKept.join(', ')}`}`))
+    writeErr(dim(`base proof: ref ${sha.slice(0, 7)} (${chosen.reason})${autoKept.length === 0 ? '' : `, auto-kept ${autoKept.join(', ')}`}`))
   }
 
   const signals = holdSignals()

@@ -3,7 +3,7 @@ import type { RepoState } from './repos-scan'
 import { existsSync, statSync } from 'node:fs'
 import { basename, relative } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, watching, watchOption, withoutWatch, workspaceRoot } from '@kaynooo/cli-kit'
+import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, watching, watchOption, withoutWatch, workspaceRoot, writeErr } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf, skipped } from './repos-scan'
 
@@ -117,7 +117,7 @@ export async function repos(args: string[], watched = false): Promise<number> {
   let failedPulls = 0
 
   if (values.pull === true) {
-    const log = values.json === true || values.path === true ? console.error : console.log
+    const log = values.json === true || values.path === true ? writeErr : console.log
 
     for (const [index, repo] of states.entries()) {
       if (!keeps(repo) || (repo.behind ?? 0) === 0)

@@ -1,4 +1,4 @@
-import { paint } from '@kaynooo/cli-kit'
+import { paint, writeErr } from '@kaynooo/cli-kit'
 
 // Read per call: the colour flags are applied to the environment once the arguments are parsed.
 export const out = () => paint(process.stdout)
@@ -9,7 +9,7 @@ export async function stdoutToStderr<T>(active: boolean, body: () => Promise<T>)
   const log = console.log
 
   if (active)
-    console.log = (...args: unknown[]) => console.error(...args.length === 0 ? [''] : args)
+    console.log = (...args: unknown[]) => writeErr(args.map(String).join(' '))
 
   try {
     return await body()

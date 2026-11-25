@@ -8,7 +8,7 @@ import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, 
 import { homedir } from 'node:os'
 import { dirname, join, normalize, resolve } from 'node:path'
 import process from 'node:process'
-import { Exit, fail, jsonOption, parse, printJson, readInput, role, runMain, wholeNumber, xdgFolder } from '@kaynooo/cli-kit'
+import { Exit, fail, jsonOption, parse, printJson, readInput, role, runMain, wholeNumber, writeErr, xdgFolder } from '@kaynooo/cli-kit'
 import { counted, plural } from '@kaynooo/utils/text'
 import { parseBlocks } from './blocks'
 import { diffTexts } from './diff'
@@ -344,7 +344,7 @@ function writeAll(writes: { path: string, text: string }[]): Problem | undefined
 }
 
 function nothingWritten(problems: Problem[], json: boolean): number {
-  console.error(json ? JSON.stringify({ error: 'nothing written', failures: problems }) : `${role('problem', process.stderr)('sub: nothing written')}\n${problems.map(({ path, problem }) => path === '' ? problem : `${path}: ${problem}`).join('\n')}`)
+  writeErr(json ? JSON.stringify({ error: 'nothing written', failures: problems }) : `${role('problem', process.stderr)('sub: nothing written')}\n${problems.map(({ path, problem }) => path === '' ? problem : `${path}: ${problem}`).join('\n')}`)
 
   return 1
 }
@@ -365,7 +365,7 @@ async function blocksOnStdin(files: string[]): Promise<string> {
     const chunks: Buffer[] = []
     // fail() would only throw into a timer, so the usage error is printed and the process ended here, with its exit code.
     const timer = setTimeout(() => {
-      console.error(`error: sub: ${hint}`)
+      writeErr(`error: sub: ${hint}`)
       process.exit(2)
     }, STDIN_SILENCE_MS)
 
@@ -377,7 +377,7 @@ async function blocksOnStdin(files: string[]): Promise<string> {
       clearTimeout(timer)
 
       if (chunks.length === 0 && extra.length > 0) {
-        console.error(`error: sub: ${hint}`)
+        writeErr(`error: sub: ${hint}`)
         process.exit(2)
       }
 

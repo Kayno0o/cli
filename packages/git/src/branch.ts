@@ -3,7 +3,7 @@ import type { Row } from '@kaynooo/cli-kit/picker'
 import type { Arg } from '@kaynooo/cli-kit/term-pick'
 import { basename } from 'node:path'
 import process from 'node:process'
-import { closest, fail, formatAge, isInteractive, jsonOption, paint, parse, printJson, takesControlCodes } from '@kaynooo/cli-kit'
+import { closest, fail, formatAge, isInteractive, jsonOption, paint, parse, printJson, takesControlCodes, writeErr } from '@kaynooo/cli-kit'
 import { pick, table } from '@kaynooo/cli-kit/picker'
 import { emit, list } from '@kaynooo/cli-kit/term-pick'
 import { git, gitSync } from './git'
@@ -411,7 +411,7 @@ export async function gb(args: string[]): Promise<number> {
       return fail(`${forceDelete ? '-D' : '-d'} takes a branch name, not -`, 1)
     }
     else if (!deleting && isCurrent(named, current, found)) {
-      console.error(`already on ${current}`)
+      writeErr(`already on ${current}`)
 
       return 0
     }
@@ -451,7 +451,7 @@ async function finish(command: Arg[], typed: string, emitting: boolean): Promise
 
   if (words[0] === 'cd') {
     console.log(words[1])
-    console.error(`checked out in another worktree: cd ${words[1]}`)
+    writeErr(`checked out in another worktree: cd ${words[1]}`)
 
     return 0
   }

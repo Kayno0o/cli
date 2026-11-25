@@ -3,7 +3,7 @@ import type { Group } from './select'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import process from 'node:process'
-import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printJson, problem, table, truncate, watching, watchOption, withoutWatch } from '@kaynooo/cli-kit'
+import { duration, fail, formatFileSize, formatSeconds, jsonOption, paint, parse, parseSize, printJson, problem, table, truncate, watching, watchOption, withoutWatch, writeErr } from '@kaynooo/cli-kit'
 import { terminate } from './kill'
 import { maskArgs } from './mask'
 import { ancestry, snapshot } from './read'
@@ -122,10 +122,10 @@ export async function cleanup(args: string[]): Promise<number> {
     show()
 
     if (values.json !== true && protectedCount > 0)
-      console.error(paint(process.stderr).dim(`${protectedCount} more left out: shells, terminals and this command's ancestors are never touched`))
+      writeErr(paint(process.stderr).dim(`${protectedCount} more left out: shells, terminals and this command's ancestors are never touched`))
 
     if (values.kill === true && pids.length > 0)
-      console.error(`dry run: would stop ${pids.length} ${pids.length === 1 ? 'process' : 'processes'} (${pids.join(' ')}), pass --yes to do it`)
+      writeErr(`dry run: would stop ${pids.length} ${pids.length === 1 ? 'process' : 'processes'} (${pids.join(' ')}), pass --yes to do it`)
 
     return 0
   }

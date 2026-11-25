@@ -2,7 +2,7 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Host, Result } from './checks'
 import type { Outcome } from './fix'
 import process from 'node:process'
-import { jsonOption, marked, paint, parse, printHeader, printJson } from '@kaynooo/cli-kit'
+import { jsonOption, marked, paint, parse, printHeader, printJson, writeErr } from '@kaynooo/cli-kit'
 import { CHECK_NAMES, isInstalled, runChecks, TOOLS } from './checks'
 import { convergeFixes } from './fix'
 import { hostHere } from './host'
@@ -80,7 +80,7 @@ export async function main(args: string[], host: Host = hostHere()): Promise<num
     if (!json)
       printResults(results.filter(result => !result.ok), { showBatch: false })
 
-    const log = json ? console.error : console.log
+    const log = json ? writeErr : console.log
     const run = await convergeFixes(host, results, async () => runChecks(host, only, { offline, registryCache }), { dry, onOutcome: outcome => printOutcome(outcome, log) })
 
     if (dry)

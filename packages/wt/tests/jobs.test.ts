@@ -122,9 +122,11 @@ describe('Jobs', () => {
   })
 
   test('prints a failed command as what it said, with no stack trace', async () => {
-    const printed: unknown[] = []
-    const spy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
-      printed.push(...args)
+    const printed: string[] = []
+    const spy = spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
+      printed.push(String(chunk).trimEnd())
+
+      return true
     })
 
     try {

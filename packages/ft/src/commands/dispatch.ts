@@ -1,6 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
-import { badUsage, duration, fail, jsonOption, parse, printJson } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, parse, printJson, writeErr } from '@kaynooo/cli-kit'
 import { repoOption } from '../args'
 import { ciJson, recentRuns, runById } from '../runs'
 import { repoDefaultBranch, repoWriteOrEmpty, resolveForge } from '../tea'
@@ -67,7 +67,7 @@ export async function dispatch(args: string[]): Promise<number> {
   const ref = values.ref ?? await repoDefaultBranch(values.repo)
   const json = values.json === true
   const wait = values.wait === true
-  const say = json ? console.error : console.log
+  const say = json ? writeErr : console.log
 
   let started: Dispatched | undefined
 
@@ -104,7 +104,7 @@ export async function dispatch(args: string[]): Promise<number> {
     if (wait || json)
       fail(`${said}, so it cannot be ${wait ? 'followed' : 'printed'}`, 1, `fg runs${workflow === undefined ? '' : ` -w ${workflow}`} lists it`)
 
-    console.error(`${said}: fg runs${workflow === undefined ? '' : ` -w ${workflow}`} lists it`)
+    writeErr(`${said}: fg runs${workflow === undefined ? '' : ` -w ${workflow}`} lists it`)
 
     return 0
   }

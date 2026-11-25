@@ -1,6 +1,6 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
-import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, runCommand } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, runCommand, writeErr } from '@kaynooo/cli-kit'
 import { autoKeptPaths, checkout, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
 const USAGE = `base bisect --good <ref> [--bad <ref>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]
@@ -67,7 +67,7 @@ export async function bisect(argv: string[]): Promise<number> {
     tested.push({ sha, code: run.code })
 
     if (!json)
-      console.error(`  ${sha.slice(0, 7)} ${run.code === 0 ? role('ok', process.stderr)('good') : role('problem', process.stderr)('bad')}`)
+      writeErr(`  ${sha.slice(0, 7)} ${run.code === 0 ? role('ok', process.stderr)('good') : role('problem', process.stderr)('bad')}`)
 
     return run.code
   }

@@ -4,7 +4,7 @@ import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readd
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
-import { exitCodeOf, fail, holdSignals, linkedWorktreeEntries, linkWorktreeEntries, role, runCommand } from '@kaynooo/cli-kit'
+import { exitCodeOf, fail, holdSignals, linkedWorktreeEntries, linkWorktreeEntries, role, runCommand, writeErr } from '@kaynooo/cli-kit'
 import { formatError, parseErrors } from '@kaynooo/cli-kit/errors'
 
 const WHITESPACE = /\s/
@@ -219,7 +219,7 @@ export function removeTree(path: string): void {
       rmSync(path, { recursive: true, force: true })
     }
     catch (error) {
-      console.error(`${role('warn', process.stderr)('base:')} could not remove ${path}: ${error instanceof Error ? error.message : String(error)}`)
+      writeErr(`${role('warn', process.stderr)('base:')} could not remove ${path}: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 }

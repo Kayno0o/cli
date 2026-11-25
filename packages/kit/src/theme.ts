@@ -312,7 +312,7 @@ function warnOnce(message: string): void {
     return
 
   warned.add(message)
-  console.error(`warning: theme ${message}`)
+  process.stderr.write(`warning: theme ${message}\n`)
 }
 
 function isPath(chosen: string): boolean {

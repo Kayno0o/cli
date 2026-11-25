@@ -7,7 +7,7 @@ import type { DnsReport, RecordType, TypedRecords } from './dns'
 import type { Addresses, TlsInfo, Wire } from './net'
 import { isIP } from 'node:net'
 import process from 'node:process'
-import { badUsage, duration, fail, jsonOption, marked, paint, parse, printJson, role, runCli, table } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, jsonOption, marked, paint, parse, printJson, role, runCli, table, writeErr } from '@kaynooo/cli-kit'
 import { cdnHint, daysLeftLabel, httpRedirectOf, isRedirect, MAX_HOPS, nextUrl, offersOf, parseTarget, securityAudit, versionLabel, wantsHttpCheck, warningsOf, worthKnowing } from './analyze'
 import { corsVerdict, methodOf, originOf, requestedHeaders } from './cors'
 import { dnsReport, known, network, queryRecordTypes, RECORD_TYPES } from './dns'
@@ -336,7 +336,7 @@ async function httpCmd(args: string[]): Promise<number> {
 
   for (const report of reports) {
     if ('error' in report) {
-      console.error(marked('problem', report.error, process.stderr))
+      writeErr(marked('problem', report.error, process.stderr))
     }
     else if (detailed) {
       if (!first)
@@ -525,7 +525,7 @@ async function corsCmd(args: string[]): Promise<number> {
   else {
     for (const report of reports) {
       if ('error' in report)
-        console.error(marked('problem', report.error, process.stderr))
+        writeErr(marked('problem', report.error, process.stderr))
       else
         printCors(report)
     }
@@ -581,7 +581,7 @@ async function tlsCmd(args: string[]): Promise<number> {
       console.log('')
 
     if ('error' in result) {
-      console.error(marked('problem', result.error, process.stderr))
+      writeErr(marked('problem', result.error, process.stderr))
 
       continue
     }

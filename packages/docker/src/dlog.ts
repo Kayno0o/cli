@@ -4,7 +4,7 @@ import type { Container, Service } from './stack'
 import process from 'node:process'
 import { loadKnown } from '@kaynooo/cli-env/files'
 import { maskLine, PEM_BEGIN, PEM_END } from '@kaynooo/cli-env/mask'
-import { badUsage, configuredNumber, fail, jsonOption, paint, parse, printHeader, printJson, stripAnsi, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, configuredNumber, fail, jsonOption, paint, parse, printHeader, printJson, stripAnsi, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { truncate } from '@kaynooo/utils/text'
 import { allServices, attempt, containers, key, stateColor } from './stack'
 
@@ -237,7 +237,7 @@ export async function dlog(args: string[]): Promise<number> {
     show(parsed.values.quiet === true ? down : reports)
 
   if (parsed.values.json !== true && down.length > 0)
-    console.error(paint(process.stderr).dim(`${down.length} of ${reports.length} services need a look: ${down.map(report => report.key).join(', ')}`))
+    writeErr(paint(process.stderr).dim(`${down.length} of ${reports.length} services need a look: ${down.map(report => report.key).join(', ')}`))
 
   return down.length > 0 ? 1 : 0
 }

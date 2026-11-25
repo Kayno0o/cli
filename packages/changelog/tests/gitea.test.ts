@@ -86,7 +86,7 @@ it('counts the assets it could not upload', async () => {
   await Bun.write(file, 'a')
   answer({ '/releases/tags/v1': { id: 7 }, '/assets': { ok: true } })
   spyOn(console, 'log').mockImplementation(() => undefined)
-  spyOn(console, 'error').mockImplementation(() => undefined)
+  spyOn(process.stderr, 'write').mockImplementation(() => true)
 
   expect(await uploadAssets(withRelease, [file])).toBe(0)
   expect(await uploadAssets(withRelease, [file, join(dir, 'missing.txt')])).toBe(1)

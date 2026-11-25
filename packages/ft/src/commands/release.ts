@@ -25,7 +25,7 @@ import {
   softResetLastCommit,
   uploadAssets,
 } from '@kaynooo/cli-changelog'
-import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, warn } from '@kaynooo/cli-kit'
+import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, runHint, warn, writeErr } from '@kaynooo/cli-kit'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { sendDiscordWebhook } from '@kaynooo/utils/discord'
 import { $ } from 'bun'
@@ -143,7 +143,7 @@ async function releaseNotes(args: string[]): Promise<number> {
   }, { exits: EXITS })
 
   const json = values.json === true
-  const say = json ? console.error : console.log
+  const say = json ? writeErr : console.log
   const tag = values.to ?? (await tagsAt('HEAD'))[0] ?? await git(['rev-parse', '--abbrev-ref', 'HEAD'])
   const url = await publishReleaseNotes(tag, {
     dry: values['dry-run'] === true,
@@ -179,7 +179,7 @@ async function releaseUndo(args: string[]): Promise<number> {
   }, { positionals: ['[tag]'], exits: EXITS })
 
   const json = values.json === true
-  const say = json ? console.error : console.log
+  const say = json ? writeErr : console.log
   const tag = positionals[0] ?? (await getGitTags())[0]
 
   if (tag === undefined || tag === '') {
@@ -292,7 +292,7 @@ export async function release(args: string[]): Promise<number> {
 
   const { values, positionals } = parsed
   const json = values.json === true
-  const say = json ? console.error : console.log
+  const say = json ? writeErr : console.log
 
   if (json && values['dry-run'] === true)
     fail('--json does not take --dry-run')
