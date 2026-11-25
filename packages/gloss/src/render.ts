@@ -1,7 +1,7 @@
 import type { Gloss, Line } from './analyze'
 import type { Note, NoteKind } from './match'
 import type { Operator } from './shell'
-import { paint, role } from '@kaynooo/cli-kit'
+import { paint, role, wrapToWidth } from '@kaynooo/cli-kit'
 
 const OPERATORS: Record<Operator, string> = {
   '|': 'pipes the output into the next command',
@@ -27,23 +27,6 @@ function clip(text: string): string {
   return sentence > MAX_TEXT / 2 ? cut.slice(0, sentence + 1) : `${cut.trimEnd()}...`
 }
 
-function wrap(text: string, width: number): string[] {
-  const lines: string[] = []
-  let current = ''
-
-  for (const word of text.split(' ')) {
-    if (current !== '' && current.length + 1 + word.length > width) {
-      lines.push(current)
-      current = word
-    }
-    else {
-      current = current === '' ? word : `${current} ${word}`
-    }
-  }
-
-  return current === '' ? lines : [...lines, current]
-}
-
 function rows(entries: { token: string, paintToken: (text: string) => string, text: string }[], stream: Stream, depth: number): string[] {
   const colors = paint(stream)
   const margin = INDENT.repeat(depth + 1)
@@ -52,7 +35,7 @@ function rows(entries: { token: string, paintToken: (text: string) => string, te
   const out: string[] = []
 
   for (const entry of entries) {
-    const [first = '', ...more] = wrap(clip(entry.text), width)
+    const [first = '', ...more] = wrapToWidth(clip(entry.text), width)
     const pad = ' '.repeat(Math.max(gutter - entry.token.length, 0))
 
     out.push(`${margin}${entry.paintToken(entry.token)}${pad}  ${first === '' ? '' : colors.dim(first)}`.trimEnd())

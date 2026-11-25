@@ -2,6 +2,7 @@ import type { Described, Example, Options } from './args'
 import process from 'node:process'
 import { outputMode } from './mode'
 import { paint } from './style'
+import { wrapToWidth } from './text'
 
 // Optional parts of a usage line, `[options]` or `[tag]`, dimmed in the help.
 // eslint-disable-next-line no-control-regex -- an escape code's bracket is what it skips
@@ -119,33 +120,6 @@ export function exampleRows(examples: Example[], colors = paint(process.stdout))
 // Choices longer than this are listed after the description, so one option does not push every description off the screen.
 const MAX_INLINE_CHOICES = 24
 
-// Wraps prose at word boundaries to `limit` columns, keeping a word longer than `limit` whole.
-function wrapText(text: string, limit: number): string[] {
-  if (text.length <= limit)
-    return [text]
-
-  const lines: string[] = []
-  let current = ''
-
-  for (const word of text.split(' ')) {
-    if (current === '') {
-      current = word
-    }
-    else if (current.length + 1 + word.length <= limit) {
-      current = `${current} ${word}`
-    }
-    else {
-      lines.push(current)
-      current = word
-    }
-  }
-
-  if (current !== '')
-    lines.push(current)
-
-  return lines
-}
-
 // A line per option, `-n, --times <value>  how many`, aligned on the visible text; wraps long descriptions under their column when `columns` is given.
 export function optionRows(options: Options, colors = paint(process.stdout), columns?: number): string[] {
   const rows = Object.entries(options).map(([name, option]) => {
@@ -167,7 +141,7 @@ export function optionRows(options: Options, colors = paint(process.stdout), col
     if (row.description === '')
       return [`  ${row.flag}`]
 
-    const wrapped = room === undefined ? [row.description] : wrapText(row.description, room)
+    const wrapped = room === undefined ? [row.description] : wrapToWidth(row.description, room)
     const [first = '', ...rest] = wrapped
 
     return [`  ${row.flag}${' '.repeat(width - row.width)}  ${colors.dim(first)}`, ...rest.map(line => `${' '.repeat(indent)}${colors.dim(line)}`)]

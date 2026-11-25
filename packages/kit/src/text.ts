@@ -70,6 +70,24 @@ const ESCAPE_CODE = new RegExp(`${ESC}(?:\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\
 const RESET_STYLE = `${ESC}[0m`
 const CLOSE_LINK = `${ESC}]8;;${ESC}\\`
 
+// Prose broken at spaces into lines at most `width` columns wide, escapes and wide characters measured as drawn; a word wider than that keeps a line to itself, whole.
+export function wrapToWidth(text: string, width: number): string[] {
+  const lines: string[] = []
+  let current = ''
+
+  for (const word of text.split(' ')) {
+    if (current !== '' && Bun.stringWidth(current) + 1 + Bun.stringWidth(word) > width) {
+      lines.push(current)
+      current = word
+    }
+    else {
+      current = current === '' ? word : `${current} ${word}`
+    }
+  }
+
+  return current === '' ? lines : [...lines, current]
+}
+
 // The line cut to `width` columns of visible text, its escapes kept whole, and styles and links ended after a cut so none runs into the next cell or line.
 export function cutToWidth(line: string, width: number, suffix = ''): string {
   if (Bun.stringWidth(line) <= width)
