@@ -1,7 +1,7 @@
 {
   "name": "@kaynooo/cli-forge",
   "type": "module",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "description": "fg (ft): unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and releases.",
   "author": "Kaynooo <contact@kaynooo.fr>",
   "license": "MIT",
