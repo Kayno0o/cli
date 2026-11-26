@@ -355,7 +355,8 @@ export async function release(args: string[]): Promise<number> {
   if (current !== branch)
     fail(`a release is cut from ${branch}, not ${current || 'a detached HEAD'}`, 2, runHint(`git switch ${branch}`))
 
-  if (await git(['status', '--porcelain']) !== '')
+  // Untracked files cannot reach the bump commit, which stages only package.json (bun pm version, with --force past its own untracked check) and bun.lock.
+  if (await git(['status', '--porcelain', '--untracked-files=no']) !== '')
     fail('the tree has uncommitted changes', 2, runHint('gst', 'see them, then commit them with gc'))
 
   // A push origin would refuse is caught before the bump; a new repository's origin has no branch yet, which the push of HEAD makes.
@@ -386,7 +387,7 @@ export async function release(args: string[]): Promise<number> {
 
       if (level !== undefined) {
         const bump = dir === undefined
-          ? await $`bun pm version ${level}`.quiet().nothrow()
+          ? await $`bun pm version ${level} --force`.quiet().nothrow()
           : await $`bun pm version ${level} --no-git-tag-version`.cwd(dir).quiet().nothrow()
 
         if (bump.exitCode !== 0)

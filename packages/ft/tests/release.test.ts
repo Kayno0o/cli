@@ -236,6 +236,30 @@ describe('release', () => {
     }
   })
 
+  test('an untracked file does not stop a release, a tracked change does', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
+    const origin = join(root, 'origin.git')
+    const work = join(root, 'work')
+    const home = process.cwd()
+
+    try {
+      await $`git init -q --bare -b main ${origin} && git clone -q ${origin} ${work}`.cwd(root).quiet()
+      process.chdir(work)
+      await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0' }))
+      await $`git config user.name t && git config user.email t@t && git add package.json && git commit -q -m init && git push -q origin main`.cwd(work).quiet()
+      await Bun.write(join(work, 'notes.txt'), 'scratch\n')
+      expect((await capture(async () => release(['patch', '--dry-run']))).result).toBe(0)
+
+      await Bun.write(join(work, 'package.json'), JSON.stringify({ name: 'a', version: '1.0.0', private: false }))
+      // eslint-disable-next-line ts/await-thenable -- bun types .rejects as void
+      await expect(capture(async () => release(['patch', '--dry-run']))).rejects.toThrow('the tree has uncommitted changes')
+    }
+    finally {
+      process.chdir(home)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test('plans the push of HEAD when origin has no branch yet, a stale tracking ref dropped', async () => {
     const root = await mkdtemp(join(tmpdir(), 'ft-release-'))
     const origin = join(root, 'origin.git')
