@@ -202,6 +202,14 @@ describe('base', () => {
 
     expect(result.code).toBe(2)
     expect(result.err).toContain('mounts the main checkout')
+    expect(result.err).toContain('--allow-container')
+  })
+
+  test('--allow-container lifts the container refusal', () => {
+    const result = base(['--allow-container', '--', 'sh', '-c', 'echo docker exec is only text'])
+
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('ran at HEAD')
   })
 })
 

@@ -14,7 +14,8 @@ base --keep tests/NewTest.php -- vendor/bin/phpunit tests/NewTest.php
 - The env files (`.env.local`, `.env.test.local`), `node_modules`, `vendor` and `.venv` the checkout has but git ignores are symlinked into the worktree, at any depth, so the run finds its dependencies and settings: they are the working tree's own, and a write to them lands there. `--no-link` leaves them out for a fully separate run. Other ignored files (build output, caches) are not, so the ref's own are rebuilt; `--keep` copies one a run needs.
 - The worktree is removed afterwards, on failure and on SIGINT, SIGTERM or SIGHUP too (passed on to the command), its links unlinked first so nothing is deleted through them.
 - One argument holding spaces runs through `sh -c`: `base -- 'bun test a.test.ts | tail -5'`.
-- A command run through `docker compose exec|run` or `docker exec` is refused: the container mounts the main checkout, not the temporary worktree, so it would not run at the ref.
+- A command run through `docker compose exec|run` or `docker exec` is refused: the container mounts the main checkout, not the temporary worktree, so it would not run at the ref; `--allow-container` (also on `proof` and `bisect`) lifts the refusal for a command that reads the worktree itself, or one the pattern matched by mistake.
+- `base bisect` takes `--good <ref>`, or defaults it to the latest tag reachable from the bad ref, else the merge-base with the upstream or default branch, and prints which it picked.
 - The exit code is the command's; a last stderr line says which ref ran, `base: ran at HEAD (1a2b3c4), exit 1`.
 - Exit codes of its own: 2 a usage error, an unknown ref or a refused command, 127 a command that cannot start.
 

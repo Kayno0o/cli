@@ -259,4 +259,35 @@ describe('base bisect', () => {
     expect(parsed.firstBad.subject).toBe('c3-bad')
     expect(parsed.tested.length).toBeGreaterThanOrEqual(1)
   })
+
+  test('defaults --good to the latest reachable tag and says which', () => {
+    file('a.txt', 'v1\n')
+    git('commit', '-q', '-am', 'c1')
+    git('tag', 'v1.0.0')
+    file('a.txt', 'broken\n')
+    git('commit', '-q', '-am', 'c2-bad')
+
+    const result = Bun.spawnSync([process.execPath, CLI, 'bisect', '--', 'sh', '-c', '! grep -q broken a.txt'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr.toString()).toContain('good: v1.0.0')
+    expect(result.stdout.toString()).toContain('c2-bad')
+  })
+
+  test('fails clearly when there is no tag and no default branch to start from', () => {
+    const result = Bun.spawnSync([process.execPath, CLI, 'bisect', '--', 'true'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+
+    expect(result.exitCode).toBe(2)
+    expect(result.stderr.toString()).toContain('--good')
+  })
+
+  test('--allow-container lifts the container refusal', () => {
+    const refused = Bun.spawnSync([process.execPath, CLI, 'bisect', '--good', 'HEAD', '--', 'docker', 'exec', 'x', 'true'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+
+    expect(refused.stderr.toString()).toContain('--allow-container')
+
+    const allowed = Bun.spawnSync([process.execPath, CLI, 'bisect', '--allow-container', '--good', 'HEAD', '--', 'docker', 'exec', 'x', 'true'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+
+    expect(allowed.stderr.toString()).not.toContain('mounts the main checkout')
+  })
 })

@@ -1,20 +1,21 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, runCommand, writeErr } from '@kaynooo/cli-kit'
-import { autoKeptPaths, checkout, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
+import { ALLOW_CONTAINER, autoKeptPaths, checkout, containerRefusal, defaultGoodRef, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
-const USAGE = `base bisect --good <ref> [--bad <ref>] [--keep <path>...] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]
+const USAGE = `base bisect [--good <ref>] [--bad <ref>] [--keep <path>...] [--timeout <duration>] [--no-link] [--allow-container] [--json] -- <command> [args...]
 
 Non-destructive binary search for the first commit where <command> fails, testing each midpoint in a temporary linked worktree without touching the current checkout.`
 
 const EXITS: ExitRow[] = [[0, 'found the first bad commit'], [1, 'good ref already fails, bad ref passes, or no commit between them'], [2, 'a usage error, unknown ref, or timeout'], [130, 'interrupted (128 plus the signal)']]
 
 const OPTIONS = {
-  'good': { type: 'string', short: 'g', description: 'known good commit/tag/branch where the command passes (required)' },
+  'good': { type: 'string', short: 'g', description: 'known good commit/tag/branch where the command passes (default: the latest tag reachable from the bad ref, else its merge-base with the upstream or default branch)' },
   'bad': { type: 'string', short: 'b', description: 'known bad commit/tag/branch where the command fails (default: HEAD)' },
   'keep': { type: 'string', short: 'k', multiple: true, description: 'a working-tree file or folder copied into each temporary worktree, repeatable' },
   'timeout': { type: 'string', short: 't', description: 'kill a step lasting longer than this (30s, 5m, 1h)' },
   'no-link': { type: 'boolean', description: 'do not link ignored env files, node_modules, vendor and .venv' },
+  'allow-container': ALLOW_CONTAINER,
   'json': jsonOption('{firstBad: {sha, subject, author, date}, good, bad, tested: [{sha, code}]}'),
 } as const
 
@@ -25,17 +26,28 @@ export async function bisect(argv: string[]): Promise<number> {
   if (given.length === 0 || parsed.positionals.length > 0)
     fail(`give the command after --\n\n${USAGE}`)
 
-  if (parsed.values.good === undefined)
-    fail(`--good <ref> is required\n\n${USAGE}`)
-
-  if (runsInContainer(given))
-    fail('a container of the compose project mounts the main checkout, not the temporary worktree')
+  if (parsed.values['allow-container'] !== true && runsInContainer(given))
+    fail(containerRefusal('temporary worktree'))
 
   const command = shellCommand(given)
   const cwd = process.cwd()
   const { root, prefix } = await checkout(cwd)
-  const goodSha = await resolveRef(root, parsed.values.good)
   const badSha = await resolveRef(root, parsed.values.bad ?? 'HEAD')
+  let goodRef = parsed.values.good
+
+  if (goodRef === undefined) {
+    const chosen = await defaultGoodRef(root, badSha)
+
+    if (chosen === undefined)
+      fail(`--good <ref> is required: no tag is reachable from ${badSha.slice(0, 7)} and there is no upstream or default branch to start from\n\n${USAGE}`)
+
+    goodRef = chosen.ref
+
+    if (parsed.values.json !== true)
+      writeErr(`base bisect: good: ${chosen.ref} (${chosen.reason})`)
+  }
+
+  const goodSha = await resolveRef(root, goodRef)
   const listRan = await runCommand(['git', 'rev-list', '--first-parent', '--reverse', `${goodSha}..${badSha}`], { cwd: root })
 
   if (listRan.code !== 0)

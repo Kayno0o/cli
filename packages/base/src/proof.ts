@@ -2,9 +2,9 @@ import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Run } from './worktree'
 import process from 'node:process'
 import { duration, exitCodeOf, fail, holdSignals, jsonOption, parse, printJson, role, wholeNumber, writeErr } from '@kaynooo/cli-kit'
-import { autoKeptPaths, checkout, chooseProofRef, folded, formattedFailure, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
+import { ALLOW_CONTAINER, autoKeptPaths, checkout, chooseProofRef, containerRefusal, folded, formattedFailure, inWorktree, keptPaths, resolveRef, runIn, runsInContainer, shellCommand } from './worktree'
 
-const USAGE = 'base proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--keep-new] [--timeout <duration>] [--no-link] [--json] -- <command> [args...]: runs the command at the ref below in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nDefaults to HEAD when the working tree has uncommitted changes, else the merge base with origin\'s default branch when on a branch ahead of it. Untracked/new test files referenced in the command are kept automatically (--keep-new copies all untracked files).'
+const USAGE = 'base proof [--ref <rev>] [--runs <n>] [--keep <path>...] [--keep-new] [--timeout <duration>] [--no-link] [--allow-container] [--json] -- <command> [args...]: runs the command at the ref below in a temporary worktree, then in the working tree, to show that a test fails before a change and passes after it\n\nDefaults to HEAD when the working tree has uncommitted changes, else the merge base with origin\'s default branch when on a branch ahead of it. Untracked/new test files referenced in the command are kept automatically (--keep-new copies all untracked files).'
 
 const EXITS: ExitRow[] = [[0, 'the command fails before and passes in every run now'], [1, 'it passes before too, fails in any run now, or passes before and fails now'], [2, 'a usage error, an unknown ref, a command that cannot start, ends with exit 126, 127, 125 or a signal, or runs past --timeout'], [130, 'interrupted (128 plus the signal)']]
 
@@ -15,6 +15,7 @@ const OPTIONS = {
   'keep-new': { type: 'boolean', description: 'copy all untracked files from the working tree into the temporary worktree' },
   'timeout': { type: 'string', short: 't', description: 'kill each run lasting longer than this (30s, 5m, 1h), a result of neither side' },
   'no-link': { type: 'boolean', description: 'do not link the ignored env files, node_modules, vendor and .venv of the checkout' },
+  'allow-container': ALLOW_CONTAINER,
   'json': jsonOption('{outcome, proved, ref, sha, autoKept, before: {code, output}, now: {code, output}}'),
 } as const
 
@@ -58,8 +59,8 @@ export async function proof(argv: string[]): Promise<number> {
   if (given.length === 0 || parsed.positionals.length > 0)
     fail(`give the command after --\n\n${USAGE}`)
 
-  if (runsInContainer(given))
-    fail('a container of the compose project mounts the main checkout, not the temporary worktree, so the command would not run at the ref: run the tool on the host, or check the ref out by hand')
+  if (parsed.values['allow-container'] !== true && runsInContainer(given))
+    fail(containerRefusal('temporary worktree'))
 
   const command = shellCommand(given)
   const cwd = process.cwd()

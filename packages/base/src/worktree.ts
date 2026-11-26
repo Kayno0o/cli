@@ -382,3 +382,36 @@ export async function inWorktree<T>(options: WorktreeOptions, body: (runDir: str
       signals.release()
   }
 }
+
+export const ALLOW_CONTAINER = { type: 'boolean', description: 'run a command that matches a container (docker exec|run) anyway; it must then read the worktree itself, as a container mounts the main checkout' } as const
+
+export function containerRefusal(subject: string): string {
+  return `a container of the compose project mounts the main checkout, not the ${subject}, so the command would not run at the ref: run the tool on the host, check the ref out by hand, or pass --allow-container if the command reads the worktree itself`
+}
+
+export interface GoodRef {
+  ref: string
+  reason: string
+}
+
+// The latest tag reachable from the bad ref, else its merge-base with the upstream or the default remote branch; undefined when neither exists.
+export async function defaultGoodRef(root: string, bad: string): Promise<GoodRef | undefined> {
+  const tag = await git(['describe', '--tags', '--abbrev=0', bad], root)
+
+  if (tag.code === 0 && tag.stdout.trim() !== '')
+    return { ref: tag.stdout.trim(), reason: 'latest tag' }
+
+  const upstream = await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], root)
+
+  for (const remote of [upstream.code === 0 ? upstream.stdout.trim() : '', await defaultRemoteRef(root)]) {
+    if (remote === '')
+      continue
+
+    const base = await git(['merge-base', bad, remote], root)
+
+    if (base.code === 0 && base.stdout.trim() !== '')
+      return { ref: base.stdout.trim(), reason: `merge-base with ${remote}` }
+  }
+
+  return undefined
+}
