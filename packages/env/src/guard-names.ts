@@ -68,9 +68,17 @@ function variantsOf(word: Word, variables: ReadonlyMap<string, string[]>): strin
 
 // Whether code names an env file and could open it: a mention in code that calls nothing able to read a file, run a command or import a module (`/\.env files/.test(x)`) is only text. Deliberately generous, so a doubtful script stays refused.
 function codeReadsEnvFile(code: string): boolean {
-  const namesPath = (match: RegExpExecArray) => isEnvFile(match[1] ?? '') && PATH_START.test(code.slice(0, match.index + match[0].length - (match[1] ?? '').length))
+  if (!CAN_REACH_FILES.test(code))
+    return false
 
-  return [...code.matchAll(ENV_NAME_IN_CODE)].some(namesPath) && CAN_REACH_FILES.test(code)
+  for (const match of code.matchAll(ENV_NAME_IN_CODE)) {
+    const name = match[1] ?? ''
+
+    if (isEnvFile(name) && PATH_START.test(code.slice(0, match.index + match[0].length - name.length)))
+      return true
+  }
+
+  return false
 }
 
 // Whether code run by an interpreter, given as an argument or fed as a heredoc, reads an env file or dumps the environment of a Python process.
