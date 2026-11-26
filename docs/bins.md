@@ -318,7 +318,7 @@ the repository's branch, upstream, changed files and HEAD in one line, then the 
 Instead of: git status --short, git log --oneline and a git -C <repo> status per nested repository
 
 ```sh
-gst [-n N] [--author <who>] [--path <path>] [--since <date>] [--range <a..b>]
+gst [-n N] [--author <who>] [--path <path>] [--since <date>] [--range <a..b>] [dir]
 gst
 gst -n 5  # with the last five commits
 gst --path src/api.ts --author alice  # filtered commit history
@@ -413,12 +413,12 @@ page shift before.html after.html  # what moved or resized, one line per cause
 
 ## pick
 
-a fuzzy selector, the lines on stdin in, the chosen one on stdout out. Package `pick`.
+a fuzzy selector, the lines of a file or of stdin in, the chosen one on stdout out. Package `pick`.
 
 Instead of: fzf for a quick choice in a pipe, select in a shell script
 
 ```sh
-pick [options]
+pick [options] [file]
 git branch --format='%(refname:short)' | pick
 ls | pick --multi --preview 'head -20 {}' --preview-window bottom:40%
 git branch | pick --filter main  # every match, best first, no terminal

@@ -29,7 +29,7 @@ export const BINS: Record<string, string> = {
   j: '`j`: without a name, picks a recipe, script or task of this folder, its parents and its child folders and runs it,… (instead of reading the Justfile, Makefile, package.json…)',
   out: '`out`: runs the command and shortens its output when it is long, exiting with its code (instead of piping a noisy command through tail or head)',
   page: '`page`: shoots HTML files or URLs at several widths in a local Chromium and reports their layout defects one line… (instead of reading screenshots by eye for overflow,…)',
-  pick: '`pick`: a fuzzy selector, the lines on stdin in, the chosen one on stdout out (instead of fzf for a quick choice in a pipe, select in a…)',
+  pick: '`pick`: a fuzzy selector, the lines of a file or of stdin in, the chosen one on stdout out (instead of fzf for a quick choice in a pipe, select in a…)',
   pkg: '`pkg`: checks, adds, audits and updates packages safely across bun, pnpm, yarn, npm, composer, cargo and uv (instead of bun add on trust, and a bun info and sleep loop…)',
   probe: '`probe`: HTTP, DNS, CORS, TLS and public IP diagnostics (instead of curl -sI chains, openssl s_client, dig @server…)',
   proc: '`proc`: inspect, search, tree, rank and safely clean processes and listening ports from /proc (instead of cat /proc/<pid>/..., ps aux | grep, pstree, ss…)',
