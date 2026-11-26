@@ -1,6 +1,9 @@
+import { join } from 'node:path'
+import { tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 
 const CLI = new URL('../src/pick.ts', import.meta.url).pathname
+const temp = tempDirs()
 
 function pick(args: string[], stdin: string) {
   const result = Bun.spawnSync([process.execPath, CLI, ...args], { stdin: new Blob([stdin]), stdout: 'pipe', stderr: 'pipe', env: { ...process.env, NO_COLOR: '1' } })
@@ -24,7 +27,7 @@ describe('pick', () => {
   })
 
   test('reads the lines of a file given as the argument, stdin ignored, and names a missing one', async () => {
-    const path = `${await Bun.$`mktemp -d`.text().then(text => text.trim())}/lines.txt`
+    const path = join(temp(), 'lines.txt')
 
     await Bun.write(path, 'zzz\nfoobar\n')
     expect(pick(['--query', 'fbr', path], 'ignored\n')).toMatchObject({ code: 0, out: 'foobar\n' })
