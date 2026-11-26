@@ -107,8 +107,8 @@ async function main(args: string[]): Promise<number> {
     return 0
   }
 
-  // Bare `dc`, `dc --json`, `dc -`, or picker protocol flags (`--list`, `--names`, `--emit`, `--show`) delegate to the service picker / listing.
-  if (first === undefined || first === '-' || first === '--json' || first === '--list' || first === '--names' || first === '--emit' || first === '--show')
+  // Bare `dc`, `dc --json`, `dc -`, or picker protocol flags (`--list`, `--names`, `--emit`, `--masked`, `--show`) delegate to the service picker / listing.
+  if (first === undefined || first === '-' || first === '--json' || first === '--list' || first === '--names' || first === '--emit' || first === '--masked' || first === '--show')
     return dx(args)
 
   if (first === 'health')

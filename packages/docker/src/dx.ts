@@ -85,12 +85,9 @@ async function hidden(flag: string, rest: string[], services: Service[]): Promis
   return undefined
 }
 
-/** The logs command with its output piped through `ev redact`, for the picker that runs the words itself; refused when `ev` is missing rather than leaking the logs. */
-export function maskedLogs(command: string[], evPath: string | null = Bun.which('ev')): string[] {
-  if (evPath === null)
-    fail('ev is not installed, so the logs would not be masked', 1)
-
-  return ['sh', '-c', '"$@" | ev redact', 'sh', ...command]
+/** The logs command run through this CLI's own `--masked` filter, for the picker that runs the words itself; the masking is in-process, so no other binary is needed. */
+export function maskedLogs(command: string[], self: string[] = [process.execPath, process.argv[1]!]): string[] {
+  return [...self, '--masked', ...command]
 }
 
 /** Logs follow on a terminal and are printed once elsewhere, where a follow would hang a script or an agent until its timeout. */
@@ -122,6 +119,9 @@ async function serviceCandidates(): Promise<[string, string][]> {
 
 export async function dx(args: string[]): Promise<number> {
   const [flag = ''] = args
+
+  if (flag === '--masked')
+    return followMasked(args.slice(1))
 
   if (flag === '--show' || flag === '--list' || flag === '--names') {
     const services = flag === '--show' ? [] : await allServices()

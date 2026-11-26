@@ -22,12 +22,8 @@ afterAll(() => {
 })
 
 describe('maskedLogs', () => {
-  test('pipes the logs through redact when it is installed', () => {
-    expect(maskedLogs(['docker', 'logs'], '/usr/bin/ev')).toEqual(['sh', '-c', '"$@" | ev redact', 'sh', 'docker', 'logs'])
-  })
-
-  test('refuses to hand back unmasked logs when redact is missing', () => {
-    expect(() => maskedLogs(['docker', 'logs'], null)).toThrow('ev is not installed')
+  test('runs the logs through this CLI, which masks them in-process, so ev is not needed', () => {
+    expect(maskedLogs(['docker', 'logs'], ['bun', '/x/dc-cli.js'])).toEqual(['bun', '/x/dc-cli.js', '--masked', 'docker', 'logs'])
   })
 })
 
