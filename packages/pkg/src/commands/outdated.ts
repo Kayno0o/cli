@@ -5,7 +5,7 @@ import type { Fetcher } from '../registry'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { capped, fail, formatAge, isInteractive, jsonOption, limitOf, limitOptions, ok, parse, pool, printJson, problem, role, runCommand, table, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { capped, fail, formatAge, isInteractive, jsonOption, limitOf, limitOptions, ok, parse, pool, printJson, problem, role, runCommand, table, warn, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { JS_LOCKFILES } from '@kaynooo/cli-kit/audit'
 import { checklist } from '@kaynooo/cli-kit/prompt'
 import { advisoriesFor, fetchAdvisories } from '../advisories'
@@ -14,11 +14,12 @@ import { loadConfigs, loadSettings, registryFor } from '../config'
 import { addCommand, registryDependencies } from '../consumers'
 import { detectManager } from '../manager'
 import { fetchPackument } from '../registry'
+import { nearestFolder, nearestWith } from '../root'
 
 const usage = `pkg update [dir] [--apply] [--yes] [--major]
 pkg outdated [dir]
 
-Lists the dependencies of this folder (and its workspaces) that have a newer version safe to take (at least --min-age days old, or any age for a \`trusted\` name), flagging current versions with known advisories.
+Lists the dependencies of this folder, or of the nearest folder above with a package.json (and its workspaces) that have a newer version safe to take (at least --min-age days old, or any age for a \`trusted\` name), flagging current versions with known advisories.
 With --apply, updates selected packages using the folder's detected package manager (interactive checklist on a TTY unless --yes; skips major bumps unless --major).`
 
 const EXITS: ExitRow[] = [[0, 'listed or updated'], [1, 'an update install failed'], [2, 'the registry could not be reached or answered badly, no package.json, or a usage error']]
@@ -78,15 +79,12 @@ function changeOf(current: string, next: string): Outdated['change'] {
   return from?.[1] === to?.[1] ? 'patch' : 'minor'
 }
 
+// The lockfile of the folder or, in a workspace package, the one of the monorepo root above it.
 function readLocked(folder: string): Locked[] {
-  for (const spec of JS_LOCKFILES) {
-    const file = join(folder, spec.file)
+  const at = nearestFolder(folder, each => JS_LOCKFILES.some(spec => existsSync(join(each, spec.file))))
+  const spec = at === undefined ? undefined : JS_LOCKFILES.find(each => existsSync(join(at, each.file)))
 
-    if (existsSync(file))
-      return spec.parse(readFileSync(file, 'utf8'))
-  }
-
-  return []
+  return at === undefined || spec === undefined ? [] : spec.parse(readFileSync(join(at, spec.file), 'utf8'))
 }
 
 function workspaceDirsOf(folder: string, manifestText: string): string[] {
@@ -171,13 +169,16 @@ export async function outdated(manifest: string, context: OutdatedContext): Prom
 
 export async function outdatedCommand(args: string[], testRun?: (argv: string[], cwd: string) => Promise<Ran>): Promise<number> {
   const { values, positionals: [dir = '.'] } = parse(args, usage, options, { allowNegative: true, positionals: ['[dir]'], exits: EXITS })
-  const folder = resolve(dir)
-  const manifestFile = Bun.file(join(folder, 'package.json'))
+  const asked = resolve(dir)
+  const folder = nearestWith(asked, 'package.json')
 
-  if (!await manifestFile.exists())
-    fail(`no package.json in ${folder}`)
+  if (folder === undefined)
+    fail(`no package.json in ${asked} or above`)
 
-  const rootManifest = await manifestFile.text()
+  if (folder !== asked)
+    writeErr(`using the package.json in ${folder}`)
+
+  const rootManifest = await Bun.file(join(folder, 'package.json')).text()
   const locked = readLocked(folder)
   const settings = await loadSettings(folder)
   const minAgeDays = wholeNumber(values['min-age'], 'min-age', settings.minAge ?? DEFAULT_MIN_AGE_DAYS, 0)

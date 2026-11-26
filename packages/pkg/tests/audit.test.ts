@@ -2,10 +2,10 @@ import type { AuditContext } from '../src/commands/audit'
 import type { Fetcher } from '../src/registry'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { tempDirs } from '@kaynooo/cli-kit/test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { advisoriesFor, filterAdvisories, fixedVersion } from '../src/advisories'
-import { auditPackages, renderAudit } from '../src/commands/audit'
+import { audit, auditPackages, renderAudit } from '../src/commands/audit'
 import { checkPackage } from '../src/commands/check'
 import { loadSettings, parseSettings } from '../src/config'
 import { isLicenseAllowed } from '../src/licenses'
@@ -281,5 +281,19 @@ describe('auditPackages', () => {
     expect(unavailable).toHaveLength(1)
     expect(unavailable[0]).toContain('503')
     expect(audited.every(each => each.advisories.length === 0)).toBe(true)
+  })
+})
+
+describe('audit folder lookup', () => {
+  test('walks up from a subfolder to the nearest lockfile and says which it used', async () => {
+    const root = temp('pkg-audit-up-')
+
+    await Bun.write(join(root, 'bun.lock'), '{"lockfileVersion":1,"workspaces":{"":{}},"packages":{}}')
+    await Bun.write(join(root, 'packages/app/keep'), '')
+
+    const { result, err } = await capture(async () => audit([join(root, 'packages/app'), '--json']))
+
+    expect(result).toBe(0)
+    expect(err).toContain(`using the lockfile in ${root}`)
   })
 })

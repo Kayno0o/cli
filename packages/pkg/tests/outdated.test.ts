@@ -1,9 +1,9 @@
 import type { Fetcher } from '../src/registry'
 import { join } from 'node:path'
-import { tempDirs } from '@kaynooo/cli-kit/test'
+import { capture, tempDirs } from '@kaynooo/cli-kit/test'
 import { describe, expect, test } from 'bun:test'
 import { wanted } from '../src/commands/check'
-import { outdated } from '../src/commands/outdated'
+import { outdated, outdatedCommand } from '../src/commands/outdated'
 import { registryDependencies } from '../src/consumers'
 import { parseBunLock } from '../src/lockfile'
 
@@ -61,5 +61,33 @@ describe('the names pkg check takes from a package.json', () => {
 
     expect(await wanted([], file)).toEqual(['esbuild@^0.27.0', 'missing-pkg@1.0.0'])
     expect(await wanted(['zod', 'esbuild@^0.27.0'], file)).toEqual(['zod', 'esbuild@^0.27.0', 'missing-pkg@1.0.0'])
+  })
+})
+
+describe('outdatedCommand folder lookup', () => {
+  test('walks up from a folder with no package.json to the nearest one and says which it used', async () => {
+    const root = temp('pkg-outdated-up-')
+
+    await Bun.write(join(root, 'package.json'), '{}')
+    await Bun.write(join(root, 'src/deep/keep'), '')
+
+    const { result, err } = await capture(async () => outdatedCommand([join(root, 'src/deep'), '--json']))
+
+    expect(result).toBe(0)
+    expect(err).toContain(`using the package.json in ${root}`)
+  })
+
+  test('keeps a workspace package\'s own package.json and says nothing', async () => {
+    const root = temp('pkg-outdated-own-')
+    const own = join(root, 'packages/app')
+
+    await Bun.write(join(root, 'package.json'), JSON.stringify({ dependencies: { esbuild: '0.28.1' } }))
+    await Bun.write(join(own, 'package.json'), '{}')
+
+    const { result, err, out } = await capture(async () => outdatedCommand([own, '--json']))
+
+    expect(result).toBe(0)
+    expect(err).toBe('')
+    expect(JSON.parse(out)).toEqual([])
   })
 })

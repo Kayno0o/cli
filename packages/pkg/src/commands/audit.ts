@@ -7,7 +7,7 @@ import type { Fetcher, Packument, Registry } from '../registry'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { fail, jsonOption, parse, pool, printJson, role, warn, wholeNumber } from '@kaynooo/cli-kit'
+import { fail, jsonOption, parse, pool, printJson, role, warn, wholeNumber, writeErr } from '@kaynooo/cli-kit'
 import { detectLockfiles, directDependenciesOf, JS_LOCKFILES, lockGraphFromBun, OSV_LOCKFILES, osvAuditLockfiles, reachedFrom } from '@kaynooo/cli-kit/audit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
@@ -15,10 +15,11 @@ import { analyze, DEFAULT_MIN_AGE_DAYS } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor, SEVERITIES } from '../config'
 import { productionPackages } from '../lockfile'
 import { fetchPackument } from '../registry'
+import { nearestFolder } from '../root'
 
 const usage = `pkg audit [dir]
 
-Reads the lockfile(s) of the folder (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock, uv.lock), runs safety vetting + advisory checks with direct/via attribution, and lists every finding.
+Reads the lockfile(s) of the folder, or of the nearest folder above it that has one (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock, uv.lock), runs safety vetting + advisory checks with direct/via attribution, and lists every finding.
 Reach for it to vet one repository in depth; \`ws audit\` sweeps many repositories at once.`
 
 const EXITS: ExitRow[] = [[0, 'nothing blocks'], [1, 'a package is missing, too fresh or outside the licence allowlist, or an advisory reaches --level'], [2, 'the registry could not be reached or answered badly (a warning says which, and nothing is reported as clean), a usage error or no lockfile']]
@@ -161,11 +162,14 @@ export async function audit(args: string[]): Promise<number> {
   const { values, positionals: [asked] } = parse(args, usage, options, { positionals: ['[dir]'], exits: EXITS })
   const { level } = values
 
-  const dir = resolve(asked ?? process.cwd())
-  const foundLocks = detectLockfiles(dir)
+  const from = resolve(asked ?? process.cwd())
+  const dir = nearestFolder(from, folder => detectLockfiles(folder).length > 0)
 
-  if (foundLocks.length === 0)
-    fail(`no lockfile (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock or uv.lock) in ${dir}`)
+  if (dir === undefined)
+    fail(`no lockfile (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock or uv.lock) in ${from} or above`)
+
+  if (dir !== from)
+    writeErr(`using the lockfile in ${dir}`)
 
   const jsLock = JS_LOCKFILES.find(spec => existsSync(join(dir, spec.file)))
   const osvLocks = OSV_LOCKFILES.filter(spec => existsSync(join(dir, spec.file)))
