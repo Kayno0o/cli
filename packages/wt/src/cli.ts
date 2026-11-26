@@ -160,7 +160,7 @@ const ALL_OPTION = { type: 'boolean', description: 'every worktree of the projec
 
 const ADD_USAGE = `wt add <task> [branch] [--from <ref>] [--up] [-p <name>] [--bg]
 
-Creates a worktree, copies its files and data from main, and routes its subdomains; --up starts its stack too. The task is a lowercase name, also the subdomain label; the branch defaults to wt/<task>. A branch that does not exist yet forks from main's current commit, or from --from, and the output says which.
+Creates a worktree, copies its files and data from main, and routes its subdomains; --up starts its stack too. The task is also the subdomain label, so a name like ABC-123 or feat/x is turned into abc-123 or feat-x, and the output says so; the branch defaults to wt/<task>. A branch that does not exist yet forks from main's current commit, or from --from, and the output says which.
 
 Exits 0 once the worktree is ready (and up), 1 when it cannot be made, provisioned or started, 2 on a usage error.`
 

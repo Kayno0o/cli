@@ -12,7 +12,7 @@ bun install -g @kaynooo/cli-wt
 
 | Command | What it does |
 | --- | --- |
-| `wt add <task> [branch] [--from <ref>] [--up]` | creates the worktree on `branch` (`wt/<task>`), a new one forked from main's current commit or `--from`, copies and clones from main, routes its subdomains; `--up` starts it too |
+| `wt add <task> [branch] [--from <ref>] [--up]` | creates the worktree on `branch` (`wt/<task>`; a task name is slugged, `ABC-123` becomes `abc-123`), a new one forked from main's current commit or `--from`, copies and clones from main, routes its subdomains; `--up` starts it too |
 | `wt sync [task]` | provisions it again after a manifest change |
 | `wt up [task]` / `wt down [task]` | starts or stops its stack, `--all` every worktree's in turn; `down` also stops a stack whose folder is gone |
 | `wt rm <task>` | stops the stack, deletes the checkouts, volumes, certificates and override, keeps the branches; refuses uncommitted changes or commits on no branch unless `--force`; gitignored files (a copied `.env.local` edited since, uploads) go with the folder unchecked |

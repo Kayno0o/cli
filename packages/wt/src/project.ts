@@ -82,6 +82,14 @@ export class WtError extends KnownError {}
 // A DNS label, as the task prefixes every host of the worktree, without the `--` that joins a project to its task in a slug: task b--c of project a would share a--b--c with task c of project a--b.
 const TASK_PATTERN = /^(?!.*--)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 
+const NOT_IN_LABEL = /[^a-z0-9]+/g
+const EDGE_DASHES = /^-+|-+$/g
+
+/** The DNS label a typed task name stands for: lower case, each run of other characters one dash, none at the ends, at most 63 long; empty when nothing is left. */
+export function taskSlug(name: string): string {
+  return name.toLowerCase().replace(NOT_IN_LABEL, '-').replace(EDGE_DASHES, '').slice(0, 63).replace(EDGE_DASHES, '')
+}
+
 const ROUTE_TARGET = /^client$|^[\w.-]+:\d+$/
 const NOT_IN_STACK_NAME = /[^\w-]/g
 const LEADING_SEPARATORS = /^[_-]+/
@@ -242,9 +250,12 @@ export function stackName(project: Pick<Project, 'root'>): string {
   return basename(project.root).toLowerCase().replace(NOT_IN_STACK_NAME, '').replace(LEADING_SEPARATORS, '')
 }
 
-export function worktreeOf(project: Project, task: string): Worktree {
+/** The worktree of a task given as typed: `ABC-123` is the task `abc-123`, whether it is being created or found. */
+export function worktreeOf(project: Project, name: string): Worktree {
+  const task = taskSlug(name)
+
   if (task === 'main' || !TASK_PATTERN.test(task))
-    throw new WtError(`invalid task name "${task}": lowercase letters, digits and single inner dashes, at most 63, and not "main"`)
+    throw new WtError(`invalid task name "${name}": it has to hold a letter or a digit, and not be "main"`)
 
   const mainHosts = new Set(project.routes.map(route => route.host))
   const taken = project.routes.find(route => mainHosts.has(worktreeHost(route.host, task)))

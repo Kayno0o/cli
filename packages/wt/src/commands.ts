@@ -48,10 +48,14 @@ async function removeVolumes(worktree: Worktree, anonymous: string[]): Promise<v
 }
 
 /** Creates the worktree, then starts its stack with `up`, else names the command that would. */
-export async function addTask(task: string, branch: string | undefined, options: GlobalOptions & { up?: boolean, from?: string }): Promise<void> {
+export async function addTask(name: string, branch: string | undefined, options: GlobalOptions & { up?: boolean, from?: string }): Promise<void> {
   const { project } = await locate(currentDir(), options.project)
-  const worktree = worktreeOf(project, task)
+  const worktree = worktreeOf(project, name)
+  const task = worktree.task
   const checkout = branch ?? `wt/${task}`
+
+  if (name !== task)
+    console.log(`wt: task ${name} is named ${task}`)
 
   await assertTools(project)
 

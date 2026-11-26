@@ -186,6 +186,25 @@ describe('addTask', () => {
     expect(await git(dirOf('other'), 'rev-parse', '--short', 'HEAD')).toBe(first)
   })
 
+  test('turns a task name into a label and says so, the branch following it unless named, and finds it again by the typed name', async () => {
+    const { wt, git, dirOf } = env
+    const added = await wt('add', 'ABC-123')
+
+    expect(added.code).toBe(0)
+    expect(added.out).toContain('wt: task ABC-123 is named abc-123')
+    expect(added.out).toContain(`wt: created ${dirOf('abc-123')} on wt/abc-123`)
+    expect(added.out).toContain('wt up abc-123')
+
+    const named = await wt('add', 'feat/x', 'feat/x')
+
+    expect(named.out).toContain(`wt: created ${dirOf('feat-x')} on feat/x`)
+    expect(await git(dirOf('feat-x'), 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('feat/x')
+    expect((await wt('path', 'ABC-123')).out).toBe(`${dirOf('abc-123')}\n`)
+    expect((await wt('rm', 'ABC-123')).code).toBe(0)
+    expect((await wt('rm', 'feat/x')).code).toBe(0)
+    expect(existsSync(dirOf('abc-123'))).toBe(false)
+  })
+
   test('refuses --from on a branch that already exists, before making anything', async () => {
     const { root, wt, git, dirOf } = env
 
@@ -610,7 +629,7 @@ describe('commands checking their target before any job', () => {
     [['up', 'nothing'], 'no worktree nothing'],
     [['down', 'nothing'], 'no worktree nothing'],
     [['sync', 'nothing'], 'no worktree nothing'],
-    [['add', 'Bad_Name'], 'invalid task name "Bad_Name"'],
+    [['add', '___'], 'invalid task name "___"'],
   ])('%p fails before claiming a job, leaving no job record', async (args, message) => {
     const jobs = join(env.sandbox.home, '.cache', 'wt', 'jobs')
     const run = await env.wt(...args)

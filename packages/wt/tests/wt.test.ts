@@ -488,11 +488,21 @@ describe('worktreeOf', () => {
     expect(() => worktreeOf(project, 'api')).toThrow('api.shop.localhost would be one of main\'s hosts')
   })
 
-  test('refuses what is no DNS label', () => {
-    for (const task of ['plan-', '-plan', 'Plan', 'a'.repeat(64), 'main', 'b--c'])
+  test('refuses a name that slugs to nothing or to main', () => {
+    for (const task of ['main', 'Main', '---', '//', ''])
       expect(() => worktreeOf(project, task)).toThrow('invalid task name')
 
     expect(worktreeOf(project, 'plan-2').task).toBe('plan-2')
+  })
+
+  test('slugs a name into a DNS label, so a lookup finds the task as it was created', () => {
+    const slugged = { 'ABC-123': 'abc-123', 'feat/x': 'feat-x', 'my_task': 'my-task', '-plan-': 'plan', 'b--c': 'b-c', 'a b': 'a-b' }
+
+    for (const [given, task] of Object.entries(slugged))
+      expect(worktreeOf(project, given)).toMatchObject({ task, id: worktreeOf(project, task).id })
+
+    expect(worktreeOf(project, 'a'.repeat(64)).task).toBe('a'.repeat(63))
+    expect(worktreeOf(project, `${'a'.repeat(62)}/b`).task).toBe('a'.repeat(62))
   })
 })
 
