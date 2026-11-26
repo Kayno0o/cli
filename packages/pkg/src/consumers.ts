@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fail, ignoredFolders } from '@kaynooo/cli-kit'
 import { LOCKFILES } from './pin'
+import { nearestFolder } from './root'
 
 export const KINDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const
 
@@ -45,15 +46,10 @@ function packageFiles(dir: string, depth: number, found: string[], ignored = ign
 }
 
 function managerFor(dir: string, root: string): Manager {
-  for (let at = dir; ; at = dirname(at)) {
-    const lockfile = LOCKFILES.find(([file]) => existsSync(join(at, file)))
+  const at = nearestFolder(dir, folder => LOCKFILES.some(([file]) => existsSync(join(folder, file))), root)
+  const lockfile = at === undefined ? undefined : LOCKFILES.find(([file]) => existsSync(join(at, file)))
 
-    if (lockfile !== undefined)
-      return lockfile[1]
-
-    if (at === root || at === dirname(at))
-      return 'bun'
-  }
+  return lockfile?.[1] ?? 'bun'
 }
 
 // `npm:@scope/name@~1.2.3` as its target and the version range it asks for.

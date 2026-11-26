@@ -2,7 +2,7 @@ import type { ExitRow, Ran } from '@kaynooo/cli-kit'
 import type { PkgSettings, RegistryConfig } from '../config'
 import type { Fetcher, Packument, Registry } from '../registry'
 import { existsSync } from 'node:fs'
-import { basename, dirname, join, relative } from 'node:path'
+import { basename, join, relative } from 'node:path'
 import { duration, Exit, fail, formatDuration, formatElapsed, isInteractive, note, ok, parse, problem, runCommand, warn, wholeNumber, workspaceRoot } from '@kaynooo/cli-kit'
 import { liveRegion } from '@kaynooo/cli-kit/progress'
 import { checklist, confirm } from '@kaynooo/cli-kit/prompt'
@@ -11,6 +11,7 @@ import { loadConfigs, loadSettings, registryFor } from '../config'
 import { addCommand, findConsumers, isLocal, RANGE_PREFIX, similarDependencies, wantedVersion } from '../consumers'
 import { loadExcluded, saveExcluded } from '../excluded'
 import { fetchPackument, isValidName } from '../registry'
+import { nearestFolder } from '../root'
 import { EXACT_VERSION } from '../semver'
 import { checkPackage } from './check'
 
@@ -144,17 +145,14 @@ export async function vet(name: string, version: string, settings: BumpSettings)
   return false
 }
 
+const LOCKFILES = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json']
+
 // The lockfile of the folder, which a monorepo keeps at its root, as a path relative to the folder; undefined when there is none.
 export function lockfileOf(dir: string, root: string): string | undefined {
-  for (let at = dir; ; at = dirname(at)) {
-    const found = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json'].find(file => existsSync(join(at, file)))
+  const at = nearestFolder(dir, folder => LOCKFILES.some(file => existsSync(join(folder, file))), root)
+  const found = at === undefined ? undefined : LOCKFILES.find(file => existsSync(join(at, file)))
 
-    if (found !== undefined)
-      return relative(dir, join(at, found))
-
-    if (at === root || at === dirname(at))
-      return undefined
-  }
+  return at === undefined || found === undefined ? undefined : relative(dir, join(at, found))
 }
 
 // Whether the folder's package.json or lockfile already differs from git, which the commit of the bump would carry along.
