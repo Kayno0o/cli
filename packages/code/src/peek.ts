@@ -4,7 +4,7 @@ import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { badUsage, capped, fail, isStdinPiped, jsonOption, limitOf, limitOptions, parse, printJson, runCommand, wholeNumber } from '@kaynooo/cli-kit'
 import { counted } from '@kaynooo/utils/text'
-import { listFiles, readText } from './files'
+import { listFiles, MAX_SIZE_OPTION, readText, unreadableReason, useMaxSize } from './files'
 import { around, definitions, locations, outline, spansAround, usages } from './source'
 
 const USAGE = `src peek [options] <file[:from-to]>...: prints files or line spans with their line numbers, several in one call
@@ -29,6 +29,7 @@ const OPTIONS = {
   'defs-first': { type: 'boolean', description: 'with --refs, print the symbol\'s declarations before its lines' },
   'context': { type: 'string', short: 'C', description: 'lines on each side of an --around match or a piped location (3)' },
   ...limitOptions(REFS_LIMIT),
+  ...MAX_SIZE_OPTION,
   'json': jsonOption('spans [{path, from, to, lines}], --refs [{path, line, text}] ({definitions, references} with --defs-first), --outline [{path, line, depth, text}]'),
 } as const
 
@@ -58,7 +59,7 @@ async function textOf(path: string): Promise<string> {
   const text = await readText(resolve(process.cwd(), path))
 
   if (text === undefined)
-    fail(`cannot read ${path} (missing, binary or too large)`, 1)
+    fail(`cannot read ${path} (${await unreadableReason(resolve(process.cwd(), path))})`, 1)
 
   return text
 }
@@ -198,6 +199,8 @@ export async function peek(args: string[]): Promise<number> {
   const modes = [values.def?.length === 0 ? undefined : values.def, values.refs, values.outline, values.around].filter(mode => mode !== undefined && mode !== false)
   const json = values.json === true
 
+  useMaxSize(values['max-size'])
+
   if (values['defs-first'] === true && values.refs === undefined)
     badUsage('--defs-first goes with --refs')
 
@@ -310,8 +313,12 @@ const AROUND_USAGE = 'src around <regex> [-C 3] [path...]: prints lines around e
 export async function defCmd(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, DEF_USAGE, {
     def: { type: 'string', short: 'd', multiple: true, description: 'additional symbol to look up, repeatable' },
+    ...MAX_SIZE_OPTION,
     json: jsonOption('[{path, from, to, lines}]'),
   }, { exits: EXITS, positionals: ['<symbol>', '[path...]'], examples: [['src def parseArgs packages/kit/src', 'find parseArgs declaration']] })
+
+  useMaxSize(values['max-size'])
+
   const [symbol, ...paths] = positionals
   const symbols = [symbol, ...(values.def ?? [])]
 
@@ -324,8 +331,12 @@ export async function refsCmd(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, REFS_USAGE, {
     'defs-first': { type: 'boolean', description: 'print the symbol\'s declarations before its references' },
     ...limitOptions(REFS_LIMIT),
+    ...MAX_SIZE_OPTION,
     'json': jsonOption('[{path, line, text}] ({definitions, references} with --defs-first)'),
   }, { exits: EXITS, positionals: ['<symbol>', '[path...]'], examples: [['src refs parseArgs --defs-first', 'declarations followed by every reference']] })
+
+  useMaxSize(values['max-size'])
+
   const [symbol, ...paths] = positionals
   const json = values.json === true
   const rows: { path: string, line: number, text: string }[] = []
@@ -360,8 +371,11 @@ export async function refsCmd(args: string[]): Promise<number> {
 
 export async function outlineCmd(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, OUTLINE_USAGE, {
+    ...MAX_SIZE_OPTION,
     json: jsonOption('[{path, line, depth, text}]'),
   }, { exits: EXITS, positionals: ['<file>...'], examples: [['src outline packages/code/src/source.ts', 'declarations and class members']] })
+
+  useMaxSize(values['max-size'])
   const rows: { path: string, line: number, depth: number, text: string }[] = []
 
   for (const path of positionals)
@@ -379,8 +393,12 @@ export async function aroundCmd(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, AROUND_USAGE, {
     context: { type: 'string', short: 'C', description: 'lines on each side of each match (3)' },
     ...limitOptions(AROUND_LIMIT),
+    ...MAX_SIZE_OPTION,
     json: jsonOption('[{path, from, to, lines}]'),
   }, { exits: EXITS, positionals: ['<regex>', '[path...]'], examples: [['src around "TODO|FIXME" -C 2 src', 'lines around each match']] })
+
+  useMaxSize(values['max-size'])
+
   const [rawPattern, ...paths] = positionals
   const pattern = regex(rawPattern)
   const context = wholeNumber(values.context, 'context', 3, 0)

@@ -356,3 +356,54 @@ describe('declarations in other languages', () => {
     expect((JSON.parse(coup.out) as { a: string, b: string, coChanges: number }[]).some(p => p.a === 'src/a.ts' && p.b === 'src/b.ts' && p.coChanges === 2)).toBe(true)
   })
 })
+
+describe('unreadable files', () => {
+  test('peek says whether a file is missing, binary or too large, and --max-size raises the limit', () => {
+    writeFileSync(join(dir, 'bin.dat'), Buffer.from([1, 2, 0, 3]))
+    writeFileSync(join(dir, 'big.txt'), `${'x'.repeat(3000)}\n`)
+
+    expect(peek('nope.ts').err).toContain('cannot read nope.ts (missing)')
+    expect(peek('bin.dat').err).toContain('cannot read bin.dat (binary)')
+
+    const tooLarge = peek('big.txt', '--max-size', '1K')
+
+    expect(tooLarge.code).toBe(1)
+    expect(tooLarge.err).toContain('cannot read big.txt (2.9K, over the 1.0K --max-size)')
+    expect(peek('big.txt', '--max-size', '10K').code).toBe(0)
+    expect(peek('big.txt', '--max-size', 'lots').code).toBe(2)
+  })
+
+  test('the symbol commands skip a file over --max-size', () => {
+    expect(peek('--refs', 'addOne', '--max-size', '10').err).toContain('nothing names addOne')
+  })
+})
+
+describe('deps with several files or a folder', () => {
+  const runDeps = (...args: string[]) => {
+    const res = Bun.spawnSync([process.execPath, new URL('../src/cli.ts', import.meta.url).pathname, 'deps', ...args], { cwd: dir, stdout: 'pipe', stderr: 'pipe' })
+
+    return { code: res.exitCode, out: res.stdout.toString(), err: res.stderr.toString() }
+  }
+
+  test('several files print one report each, as a JSON array', () => {
+    const run = runDeps('src/a.ts', 'src/b.ts', '--json')
+    const reports = JSON.parse(run.out) as { file: string, importers: string[] }[]
+
+    expect(run.code).toBe(0)
+    expect(reports.map(report => report.file)).toEqual(['src/a.ts', 'src/b.ts'])
+    expect(reports[0]?.importers).toEqual(['src/b.ts'])
+    expect(runDeps('src/a.ts', 'src/b.ts').out).toContain('src/b.ts\nimports (1)')
+  })
+
+  test('a folder reports each source file in it, a single file keeps the one object', () => {
+    const folder = JSON.parse(runDeps('src', '--json').out) as { file: string }[]
+
+    expect(folder.map(report => report.file)).toEqual(['src/a.ts', 'src/b.ts'])
+    expect(Array.isArray(JSON.parse(runDeps('src/a.ts', '--json').out))).toBe(false)
+  })
+
+  test('a missing file or a folder with no source fails with exit 1', () => {
+    expect(runDeps('src/a.ts', 'nope.ts').err).toContain('cannot read nope.ts (missing)')
+    expect(runDeps('src/a.ts', 'nope.ts').code).toBe(1)
+  })
+})

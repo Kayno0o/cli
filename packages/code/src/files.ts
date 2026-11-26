@@ -1,9 +1,19 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { ignoredFolders, runCommand } from '@kaynooo/cli-kit'
+import { badUsage, formatSize, ignoredFolders, parseSize, runCommand } from '@kaynooo/cli-kit'
 
-// A file past this size is generated or data, never read.
-const MAX_BYTES = 2_000_000
+// A file past this size is generated or data, never read unless --max-size raises it.
+let maxBytes = 2_000_000
+
+export const MAX_SIZE_OPTION = { 'max-size': { type: 'string', description: 'the largest file read, 2000000 bytes by default, a size such as 10M' } } as const
+
+// Sets the size limit of every read after it from `--max-size`; a usage error when it is no size.
+export function useMaxSize(value: string | undefined): void {
+  if (value === undefined)
+    return
+
+  maxBytes = parseSize(value) ?? badUsage(`--max-size takes a size such as 500K or 10M, not '${value}'`)
+}
 // Bytes looked at for a NUL, the sign of a binary file.
 const SNIFF_BYTES = 8000
 
@@ -49,12 +59,30 @@ export async function readText(path: string): Promise<string | undefined> {
   const file = Bun.file(path)
 
   try {
-    if (file.size > MAX_BYTES || (await file.slice(0, SNIFF_BYTES).bytes()).includes(0))
+    if (file.size > maxBytes || (await file.slice(0, SNIFF_BYTES).bytes()).includes(0))
       return undefined
 
     return await file.text()
   }
   catch {
     return undefined
+  }
+}
+
+// Why the file cannot be read: missing, binary, or too large with its size and the limit.
+export async function unreadableReason(path: string): Promise<string> {
+  const file = Bun.file(path)
+
+  if (!(await file.exists()))
+    return 'missing'
+
+  if (file.size > maxBytes)
+    return `${formatSize(file.size)}, over the ${formatSize(maxBytes)} --max-size`
+
+  try {
+    return (await file.slice(0, SNIFF_BYTES).bytes()).includes(0) ? 'binary' : 'unreadable'
+  }
+  catch {
+    return 'unreadable'
   }
 }

@@ -1,17 +1,18 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { badUsage, fail, jsonOption, parse, printJson, role } from '@kaynooo/cli-kit'
-import { listFiles, readText } from './files'
+import { listFiles, MAX_SIZE_OPTION, readText, unreadableReason, useMaxSize } from './files'
 
-const USAGE = `src deps <file> [--json]: inspects the local dependency graph of a JS/TS file
+const USAGE = `src deps <file|folder>... [--json]: inspects the local dependency graph of JS/TS files
 
-Shows what local files it imports, which files in the repo import it, any circular dependency cycles through it, and any exports unused by other files in the repository.`
-const EXITS: ExitRow[] = [[0, 'it inspected the file'], [1, 'the file could not be read or has no local source'], [2, 'a usage error']]
+Shows what local files each imports, which files in the repo import it, any circular dependency cycles through it, and any exports unused by other files in the repository. A folder stands for the JS/TS files under it, one report per file.`
+const EXITS: ExitRow[] = [[0, 'it inspected the file'], [1, 'a file could not be read, or a folder has no JS/TS file'], [2, 'a usage error']]
 
 const OPTIONS = {
-  json: jsonOption('{file, imports: string[], importers: string[], cycles: string[][], unusedExports: string[]}'),
+  json: jsonOption('one file {file, imports: string[], importers: string[], cycles: string[][], unusedExports: string[]}, several files or a folder an array of them'),
+  ...MAX_SIZE_OPTION,
 } as const
 
 const CODE_EXTS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
@@ -151,67 +152,81 @@ function findCyclesFrom(start: string, graph: Map<string, string[]>): string[][]
   return cycles
 }
 
-export async function analyzeDeps(targetPath: string, cwd: string): Promise<DepsReport> {
-  const abs = resolve(cwd, targetPath)
-  const target = relative(cwd, abs)
-  const targetText = await readText(abs)
+// One report per target, over a graph of the repository's JS/TS files built once.
+export async function analyzeDeps(targetPaths: readonly string[], cwd: string): Promise<DepsReport[]> {
+  const targets: string[] = []
+  const targetTexts = new Map<string, string>()
 
-  if (targetText === undefined)
-    fail(`cannot read ${targetPath}`, 1)
+  for (const targetPath of targetPaths) {
+    const abs = resolve(cwd, targetPath)
+    const target = relative(cwd, abs)
+    const text = await readText(abs)
+
+    if (text === undefined)
+      fail(`cannot read ${targetPath} (${await unreadableReason(abs)})`, 1)
+
+    targets.push(target)
+    targetTexts.set(target, text)
+  }
 
   const allFiles = (await listFiles([], cwd)).filter(file => LOADER_BY_EXT[extname(file).toLowerCase()] !== undefined)
   const fileTexts = new Map<string, string>()
   const graph = new Map<string, string[]>()
 
-  await Promise.all(allFiles.map(async (file) => {
-    const text = file === target ? targetText : await readText(join(cwd, file))
-
-    if (text === undefined)
-      return
-
+  function addToGraph(file: string, text: string): void {
     fileTexts.set(file, text)
+    graph.set(file, [...new Set(scanModule(text, file).specifiers.map(spec => resolveLocal(file, spec, cwd)).filter((item): item is string => item !== undefined))].sort())
+  }
 
-    const scanned = scanModule(text, file)
-    const resolved = [...new Set(scanned.specifiers.map(spec => resolveLocal(file, spec, cwd)).filter((item): item is string => item !== undefined))].sort()
+  await Promise.all(allFiles.map(async (file) => {
+    const text = targetTexts.get(file) ?? await readText(join(cwd, file))
 
-    graph.set(file, resolved)
+    if (text !== undefined)
+      addToGraph(file, text)
   }))
 
-  if (!graph.has(target)) {
-    const scanned = scanModule(targetText, target)
-    const resolved = [...new Set(scanned.specifiers.map(spec => resolveLocal(target, spec, cwd)).filter((item): item is string => item !== undefined))].sort()
-
-    graph.set(target, resolved)
+  for (const [target, text] of targetTexts) {
+    if (!graph.has(target))
+      addToGraph(target, text)
   }
 
-  const imports = graph.get(target) ?? []
-  const importers = [...graph.entries()].filter(([file, deps]) => file !== target && deps.includes(target)).map(([file]) => file).sort()
-  const cycles = findCyclesFrom(target, graph)
-  const { exports } = scanModule(targetText, target)
-  const importerTexts = importers.map(file => fileTexts.get(file) ?? '')
-  const unusedExports = exports.filter((name) => {
-    const word = new RegExp(String.raw`(?<![\w$])${name}(?![\w$])`)
+  return targets.map((target) => {
+    const targetText = targetTexts.get(target) ?? ''
+    const importers = [...graph.entries()].filter(([file, deps]) => file !== target && deps.includes(target)).map(([file]) => file).sort()
+    const importerTexts = importers.map(file => fileTexts.get(file) ?? '')
+    const unusedExports = scanModule(targetText, target).exports.filter((name) => {
+      const word = new RegExp(String.raw`(?<![\w$])${name}(?![\w$])`)
 
-    return !importerTexts.some(text => word.test(text))
-  }).sort()
+      return !importerTexts.some(text => word.test(text))
+    }).sort()
 
-  return { file: target, imports, importers, cycles, unusedExports }
+    return { file: target, imports: graph.get(target) ?? [], importers, cycles: findCyclesFrom(target, graph), unusedExports }
+  })
 }
 
-export async function deps(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['<file>'], examples: [['src deps packages/kit/src/args.ts', 'imports, importers, cycles and unused exports']] })
+// The files named, a folder standing for the JS/TS files under it; an explicit file is kept whatever its extension.
+async function expandTargets(positionals: readonly string[], cwd: string): Promise<string[]> {
+  const targets: string[] = []
 
-  if (positionals.length !== 1)
-    badUsage('give one file')
+  for (const positional of positionals) {
+    if (statSync(resolve(cwd, positional), { throwIfNoEntry: false })?.isDirectory() !== true) {
+      targets.push(positional)
 
-  const report = await analyzeDeps(positionals[0], process.cwd())
+      continue
+    }
 
-  if (values.json === true) {
-    printJson(report)
+    const inside = (await listFiles([positional], cwd)).filter(file => LOADER_BY_EXT[extname(file).toLowerCase()] !== undefined)
 
-    return 0
+    if (inside.length === 0)
+      fail(`no JS/TS file under ${positional}`, 1)
+
+    targets.push(...inside)
   }
 
+  return [...new Set(targets)]
+}
+
+function printReport(report: DepsReport): void {
   const p = role('path', process.stdout)
   const label = role('label', process.stdout)
   const warnRole = role('warn', process.stdout)
@@ -237,6 +252,32 @@ export async function deps(args: string[]): Promise<number> {
   if (report.unusedExports.length > 0) {
     console.log(`${warnRole('unused exports')} (${report.unusedExports.length}):`)
     console.log(`  ${report.unusedExports.join(', ')}`)
+  }
+}
+
+export async function deps(args: string[]): Promise<number> {
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['<file|folder>...'], examples: [['src deps packages/kit/src/args.ts', 'imports, importers, cycles and unused exports'], ['src deps src/a.ts src/b.ts', 'one report per file'], ['src deps packages/kit/src', 'one report per JS/TS file in the folder']] })
+
+  if (positionals.length === 0)
+    badUsage('give a file or a folder')
+
+  useMaxSize(values['max-size'])
+
+  const cwd = process.cwd()
+  const reports = await analyzeDeps(await expandTargets(positionals, cwd), cwd)
+
+  if (values.json === true) {
+    // One explicit file keeps the single object it always printed.
+    printJson(reports.length === 1 && positionals.length === 1 && reports[0]?.file === relative(cwd, resolve(cwd, positionals[0] ?? '')) ? reports[0] : reports)
+
+    return 0
+  }
+
+  for (const [index, report] of reports.entries()) {
+    if (index > 0)
+      console.log()
+
+    printReport(report)
   }
 
   return 0
