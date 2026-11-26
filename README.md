@@ -68,7 +68,7 @@ Every config file, the [theme](docs/config.md#theme) every bin draws with and ev
 | [`@kaynooo/cli-doctor`](packages/doctor) | `doctor`, `cli` | the whole install checked in one call: each bin's version against the registry, tea's login to Forgejo, the Claude Code hooks wired one way, the Bun floor, each failure with its fix; every bin in one line, what it does and what it replaces, read from its own help |
 | [`@kaynooo/cli-edit`](packages/edit) | `sub` | text replaced in files, written only when every replacement matches as often as expected |
 | [`@kaynooo/cli-env`](packages/env) | `ev` | .env files listed and edited with secrets masked; secrets masked in any piped output |
-| [`@kaynooo/cli-forgejo`](packages/ft) | `ft` | Forgejo CI runs and failures, releases, issue checklists and issue claims between sessions, through tea |
+| [`@kaynooo/cli-forge`](packages/ft) | `ft` | Forgejo, GitHub and GitLab CI runs and failures, pull requests, releases, issue checklists and claims between sessions, over their HTTP APIs |
 | [`@kaynooo/cli-git`](packages/git) | `gst`, `gc`, `gb`, `gp`, `gf`, `gm`, `gcl`, `gd`, `gu` | a repository's state in one call; a commit of exactly the paths given, its message checked before anything is staged; a branch picked and switched to, created or deleted; a push only when ahead, a fetch that fast-forwards, a merge listing every conflict; a clone over ssh first, the changes per file, a discard saved as a patch first |
 | [`@kaynooo/cli-gitlab`](packages/gitlab) | `gl` | GitLab pipelines waited on, listed and read, each failed job's trace cut to its failed tests, through glab |
 | [`@kaynooo/cli-gloss`](packages/gloss) | `gloss` | explains a shell command line, each option matched to its man page |

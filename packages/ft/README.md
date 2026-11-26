@@ -1,12 +1,12 @@
 # ft
 
-Forgejo tools for the terminal: CI runs and their failures, releases, issue checklists and issue claims between Claude Code sessions.
+Forgejo, GitHub and GitLab from the terminal: CI runs and their failures, pull requests, releases, issue checklists and issue claims between Claude Code sessions.
 
 ```sh
-bun install -g @kaynooo/cli-forgejo
+bun install -g @kaynooo/cli-forge
 ```
 
-Needs [tea](https://gitea.com/gitea/tea) logged in to the Forgejo instance (`tea login add`), or [gt](https://gitea.com/gitea/gitea-cli) (gitea-cli) when tea is not installed: ft then hands gt the token and host of the matching login in `~/.config/tea/config.yml` through `GITEA_TOKEN` and `GITEA_CLI_HOST` (a `GITEA_TOKEN` already set wins), so no second login is needed, and issues are written through the API. Every call goes through `tea api` (`gt api`), so ft has no token of its own: the client owns the login and finds the repository from origin. Run ft from the repository, or pass `--repo owner/name` to the commands that take it.
+ft calls the forge's HTTP API itself and finds the forge and the repository from origin. Run it from the repository, or pass `--repo owner/name` to the commands that take it. It has no login of its own and borrows a token: on Forgejo `FORGEJO_TOKEN` or `GITEA_TOKEN`, else the matching login in tea's `~/.config/tea/config.yml`; on GitHub `GITHUB_TOKEN`, `GH_TOKEN` or gh's login; on GitLab `GITLAB_TOKEN`, `GL_TOKEN` or glab's login.
 
 ## Commands
 
