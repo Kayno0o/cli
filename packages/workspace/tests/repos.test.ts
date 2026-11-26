@@ -170,6 +170,20 @@ describe('repos', () => {
     expect(repos([], empty).out).toBe('nothing needs attention in 1 repositories\n')
   })
 
+  test('several roots are listed together, a repository under two of them once', () => {
+    const other = temp('repos-other-')
+    const lone = repo(join(other, 'lone'))
+
+    writeFileSync(join(lone, 'README.md'), 'changed\n')
+
+    const ran = repos(['--path', '--only', 'dirty', join(root, 'dirty')], other)
+
+    expect(ran.code).toBe(0)
+    expect(ran.out.trim().split('\n').toSorted()).toEqual([join(root, 'dirty'), lone].toSorted())
+    expect(repos(['--path', '--only', 'dirty', join(root, 'dirty')], join(root, 'dirty')).out).toBe(`${join(root, 'dirty')}\n`)
+    expect(repos([join(other, 'nowhere')], other).code).toBe(2)
+  })
+
   test('a missing root is a usage error', () => {
     expect(repos([], join(root, 'nowhere')).code).toBe(2)
   })

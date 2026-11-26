@@ -1,24 +1,24 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Outcome } from './apply'
-import { existsSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { relative } from 'node:path'
-import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, paint, parse, parseSize, printJson, problem, role, runTool, table, workspaceRoot } from '@kaynooo/cli-kit'
+import { badUsage, duration, fail, formatAge, formatFileSize, jsonOption, note, ok, paint, parse, parseSize, printJson, problem, role, runTool, table } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { confirm } from '@kaynooo/cli-kit/prompt'
 import { applyAll } from './apply'
 import { containerPlaces, processPlaces, userOf } from './busy'
+import { baseOf, rootsOf } from './roots'
 import { findCandidates, inspect, MAX_DEPTH } from './sweep-scan'
 
 const LARGE = 100 * 1024 ** 2
 const BIG = 1024 ** 3
 
-const USAGE = `ws sweep [options] [root]: lists the regenerable folders, caches and worktrees under root (the configured workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit
+const USAGE = `ws sweep [options] [root...]: lists the regenerable folders, caches and worktrees under each root (the configured workspace by default, ${MAX_DEPTH} levels down), largest first with the age of the repo's last commit
 
 Dry unless --apply, which deletes for good, not trashed, after a confirm showing the total (off a terminal, pass --yes).
 Never touched: a symlink, a folder git tracks files in, a build folder git does not ignore. A worktree is removed with \`git worktree remove\`, never forced, and only when it is clean and every commit of its branch is on another branch or a remote.
 What a running dev process or container uses, a folder holding files another user owns and a worktree that is not removable stay listed as kept, with the reason, and count for nothing in the total.`
-const EXITS: ExitRow[] = [[0, 'it listed, or removed every entry it was allowed to'], [1, 'a removal failed or the confirm was declined'], [2, 'a usage error, a missing root, or --apply off a terminal without --yes']]
+const EXITS: ExitRow[] = [[0, 'it listed, or removed every entry it was allowed to'], [1, 'a removal failed or the confirm was declined'], [2, 'a usage error, a root that is no folder, or --apply off a terminal without --yes']]
 
 const ONLY_KINDS = { worktrees: 'worktree', folders: 'folder', caches: 'cache' } as const
 
@@ -29,7 +29,7 @@ const OPTIONS = {
   min: { type: 'string', description: 'only the entries of at least this size (500K, 10M, 1G)' },
   only: { type: 'string', choices: Object.keys(ONLY_KINDS) as (keyof typeof ONLY_KINDS)[], description: 'leave the other kinds out (.nuxt, .next, .turbo, .svelte-kit, __pycache__ and .gradle are caches; the global caches are listed with no root or with caches)' },
   docker: { type: 'boolean', description: 'add the docker system df output, which alone takes about ten seconds' },
-  json: jsonOption('{root, entries: [{path, kind (folder, worktree or cache), bytes, committedAt, action (remove or keep), reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
+  json: jsonOption('{roots, entries: [{path, kind (folder, worktree or cache), bytes, committedAt, action (remove or keep), reason}], skipped: [{path, reason}], reclaimable, docker, removed?}'),
 } as const
 
 async function dockerUsage(): Promise<string | undefined> {
@@ -47,15 +47,10 @@ async function dockerUsage(): Promise<string | undefined> {
 }
 
 export async function sweep(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[root]'], replaces: 'find ~/Workspace -name node_modules, du -sh and rm -rf by hand', examples: ['ws sweep', 'ws sweep ~/Workspace --older 30d --min 100M --apply', 'ws sweep --only worktrees --apply'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[root...]'], replaces: 'find ~/Workspace -name node_modules, du -sh and rm -rf by hand', examples: ['ws sweep', 'ws sweep ~/Workspace --older 30d --min 100M --apply', 'ws sweep --only worktrees --apply'] })
 
-  if (positionals.length > 1)
-    badUsage('give one root')
-
-  const root = workspaceRoot({ given: positionals[0] })
-
-  if (!existsSync(root) || !statSync(root).isDirectory())
-    fail(`${root} is not a folder`)
+  const roots = rootsOf(positionals, root => `${root} is not a folder`)
+  const base = baseOf(roots)
 
   const olderMs = values.older === undefined ? undefined : duration(values.older, 'older', 0)
   const minBytes = values.min === undefined ? 0 : parseSize(values.min)
@@ -69,7 +64,22 @@ export async function sweep(args: string[]): Promise<number> {
 
   try {
     progress.update({ step: 'finding the folders' })
-    const found = await findCandidates(root, homedir(), positionals.length === 0 || values.only === 'caches')
+    const found: Awaited<ReturnType<typeof findCandidates>> = { candidates: [], skipped: [] }
+    const seen = new Set<string>()
+
+    for (const [index, root] of roots.entries()) {
+      const each = await findCandidates(root, homedir(), index === 0 && (positionals.length === 0 || values.only === 'caches'))
+
+      for (const candidate of each.candidates) {
+        if (!seen.has(candidate.path)) {
+          seen.add(candidate.path)
+          found.candidates.push(candidate)
+        }
+      }
+
+      found.skipped.push(...each.skipped.filter(skip => !found.skipped.some(known => known.path === skip.path)))
+    }
+
     const wanted = values.only === undefined ? found.candidates : found.candidates.filter(candidate => candidate.kind === ONLY_KINDS[values.only!])
 
     progress.update({ step: 'sizing', done: 0, total: wanted.length, unit: 'folders' })
@@ -92,7 +102,7 @@ export async function sweep(args: string[]): Promise<number> {
 
   if (values.apply === true && removable.length > 0 && values.yes !== true) {
     if (!json)
-      print(root, entries, skipped.length, reclaimable, now)
+      print(base, entries, skipped.length, reclaimable, now)
 
     const agreed = await confirm(`Delete ${removable.length} ${removable.length === 1 ? 'entry' : 'entries'} (${formatFileSize(reclaimable)})?`, { default: false, hint: 'pass --yes to skip the confirm' })
 
@@ -106,17 +116,17 @@ export async function sweep(args: string[]): Promise<number> {
     }
   }
 
-  const outcomes = values.apply === true ? await applyAll(removable, outcome => report(root, outcome, json)) : undefined
+  const outcomes = values.apply === true ? await applyAll(removable, outcome => report(base, outcome, json)) : undefined
   const failed = outcomes?.filter(outcome => !outcome.removed).length ?? 0
 
   if (json) {
-    printJson({ root, entries: entries.map(entry => ({ path: entry.path, kind: entry.kind, bytes: entry.bytes, committedAt: entry.committedAt === undefined ? null : new Date(entry.committedAt).toISOString(), action: entry.action, reason: entry.reason ?? null })), skipped, reclaimable, docker: docker ?? null, ...(outcomes === undefined ? {} : { removed: outcomes }) })
+    printJson({ roots, entries: entries.map(entry => ({ path: entry.path, kind: entry.kind, bytes: entry.bytes, committedAt: entry.committedAt === undefined ? null : new Date(entry.committedAt).toISOString(), action: entry.action, reason: entry.reason ?? null })), skipped, reclaimable, docker: docker ?? null, ...(outcomes === undefined ? {} : { removed: outcomes }) })
 
     return failed === 0 ? 0 : 1
   }
 
   if (outcomes === undefined) {
-    print(root, entries, skipped.length, reclaimable, now)
+    print(base, entries, skipped.length, reclaimable, now)
 
     if (removable.length > 0)
       console.log('dry run, pass --apply to delete')

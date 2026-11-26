@@ -78,6 +78,22 @@ describe('sweep', () => {
     expect(existsSync(join(a, 'dist', 'file'))).toBe(true)
   })
 
+  test('takes several roots, listing an entry under two of them once', () => {
+    const first = temp('sweep-one-')
+    const second = temp('sweep-two-')
+    const a = repo(first, 'a')
+    const b = repo(second, 'b')
+
+    fill(join(a, 'node_modules'), 3000)
+    fill(join(b, 'dist'), 2000)
+
+    const result = listing([first, second, a])
+
+    expect(result.entries.map(entry => entry.path)).toEqual([join(a, 'node_modules'), join(b, 'dist')])
+    expect(result.reclaimable).toBe(5000)
+    expect(sweep([first, join(second, 'nowhere')]).code).toBe(2)
+  })
+
   test('keeps the folders of a project a dev process runs in, naming it, and removes nothing of it on --apply', () => {
     const root = temp('sweep-busy-')
     const a = repo(root, 'a')

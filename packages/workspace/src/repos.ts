@@ -1,13 +1,13 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { RepoState } from './repos-scan'
-import { existsSync, statSync } from 'node:fs'
 import { basename, relative } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, watching, watchOption, withoutWatch, workspaceRoot, writeErr } from '@kaynooo/cli-kit'
+import { configuredNumber, jsonOption, marked, paint, parse, pool, printHeader, printJson, role, table, takesControlCodes, watching, watchOption, withoutWatch, writeErr } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { CONCURRENCY, fastForward, findRepos, inspect, MAX_DEPTH, pullBlocker, REASONS, reasonsOf, skipped } from './repos-scan'
+import { baseOf, rootsOf, scanRoots } from './roots'
 
-const USAGE = `ws repos [options] [root]: the git repositories under root (the configured workspace by default) that need attention: dirty files, commits not pushed, an upstream ahead, commits since the latest tag
+const USAGE = `ws repos [options] [root...]: the git repositories under each root (the configured workspace by default) that need attention: dirty files, commits not pushed, an upstream ahead, commits since the latest tag
 
 A clean repository, or one with only unreleased commits, is left out unless --all or --only unreleased. The walk goes ${MAX_DEPTH} levels deep and skips the names in "skip" of \`~/.config/kaynooo-cli/repos.json\`; ahead and behind are those of the last fetch unless --fetch reaches the remote.
 --pull fetches, then fast-forwards only the repositories listed that are clean, on a branch and only behind their upstream; the others are reported as skipped.`
@@ -79,15 +79,13 @@ function row(repo: RepoState, shown: string): string[] {
 
 // `watched` keeps the progress line off the screen a watch holds up while it refreshes.
 export async function repos(args: string[], watched = false): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a cd, git status, git log and git tag loop over each repository of the workspace', examples: ['ws repos', 'ws repos ~/Workspace --only unreleased --fetch', ['ws repos --only behind --pull', 'fast-forward what is behind and clean'], ['ws repos --only dirty --path', 'the paths, for xargs']] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root...]'], exits: EXITS, replaces: 'a cd, git status, git log and git tag loop over each repository of the workspace', examples: ['ws repos', 'ws repos ~/Workspace --only unreleased --fetch', ['ws repos --only behind --pull', 'fast-forward what is behind and clean'], ['ws repos --only dirty --path', 'the paths, for xargs']] })
 
   if (values.watch !== undefined)
     return watching(values.watch, async () => repos(withoutWatch(args), true))
 
-  const root = workspaceRoot({ given: positionals[0] })
-
-  if (!existsSync(root) || !statSync(root).isDirectory())
-    fail(`no folder ${root}`)
+  const roots = rootsOf(positionals)
+  const base = baseOf(roots)
 
   const only = values.only ?? []
   const progress = watched ? undefined : progressLine()
@@ -97,7 +95,7 @@ export async function repos(args: string[], watched = false): Promise<number> {
 
   try {
     progress?.update({ step: 'finding the repositories' })
-    const paths = await findRepos(root, await skipped())
+    const paths = await scanRoots(roots, async root => findRepos(root, await skipped()))
 
     progress?.update({ step, done: 0, total: paths.length, unit: 'repositories' })
     states = await pool(paths, configuredNumber('repos', 'concurrency', CONCURRENCY), async path => inspect(path, fetching), (done, total) => progress?.update({ step, done, total, unit: 'repositories' }))
@@ -157,7 +155,7 @@ export async function repos(args: string[], watched = false): Promise<number> {
 
   const label = role('label', process.stdout)
 
-  printHeader('repos', `${basename(root)} · ${states.length} ${states.length === 1 ? 'repository' : 'repositories'}`)
+  printHeader('repos', `${roots.map(root => basename(root)).join(', ')} · ${states.length} ${states.length === 1 ? 'repository' : 'repositories'}`)
 
   if (kept.length === 0) {
     console.log(label(`nothing needs attention in ${states.length} repositories`))
@@ -165,7 +163,7 @@ export async function repos(args: string[], watched = false): Promise<number> {
     return failedPulls > 0 ? 1 : 0
   }
 
-  console.log(table([['repo', 'branch', 'dirty', 'ahead/behind', 'worktrees', 'unreleased'], ...kept.map(repo => row(repo, relative(root, repo.path) || repo.name))], { header: true, align: ['left', 'left', 'right', 'left', 'right', 'left'] }))
+  console.log(table([['repo', 'branch', 'dirty', 'ahead/behind', 'worktrees', 'unreleased'], ...kept.map(repo => row(repo, relative(base, repo.path) || repo.name))], { header: true, align: ['left', 'left', 'right', 'left', 'right', 'left'] }))
 
   const failed = kept.filter(repo => repo.fetchFailed).map(repo => repo.name)
 

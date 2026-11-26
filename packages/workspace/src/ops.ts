@@ -1,17 +1,17 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
-import { existsSync, statSync } from 'node:fs'
 import { relative } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, marked, parse, pool, printJson, role, runCommand, wholeNumber, workspaceRoot } from '@kaynooo/cli-kit'
+import { configuredNumber, fail, jsonOption, marked, parse, pool, printJson, role, runCommand, wholeNumber } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { CONCURRENCY, fastForward, fastForwardDirty, findRepos, inspect, pullBlocker, pushRepo, REASONS, reasonsOf, skipped } from './repos-scan'
+import { baseOf, rootsOf, scanRoots } from './roots'
 
-const PULL_USAGE = `ws pull [options] [root]: fetch and fast-forward every repository under root (configured workspace by default)
+const PULL_USAGE = `ws pull [options] [root...]: fetch and fast-forward every repository under each root (configured workspace by default)
 
 Clean repositories behind their upstream are fast-forwarded; with --dirty, dirty repositories that are only behind are safely stashed, fast-forwarded, and popped.
 --prune deletes stale remote-tracking branches while fetching.`
 
-const PULL_EXITS: ExitRow[] = [[0, 'pulled or up to date'], [1, 'a fast-forward or stash pop failed'], [2, 'a usage error or missing root']]
+const PULL_EXITS: ExitRow[] = [[0, 'pulled or up to date'], [1, 'a fast-forward or stash pop failed'], [2, 'a usage error or a root that is no folder']]
 
 const PULL_OPTIONS = {
   'prune': { type: 'boolean', short: 'p', description: 'pass --prune to git fetch' },
@@ -21,18 +21,16 @@ const PULL_OPTIONS = {
 } as const
 
 export async function pull(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, PULL_USAGE, PULL_OPTIONS, { positionals: ['[root]'], exits: PULL_EXITS })
-  const root = workspaceRoot({ given: positionals[0] })
-
-  if (!existsSync(root) || !statSync(root).isDirectory())
-    fail(`no folder ${root}`)
+  const { values, positionals } = parse(args, PULL_USAGE, PULL_OPTIONS, { positionals: ['[root...]'], exits: PULL_EXITS })
+  const roots = rootsOf(positionals)
+  const base = baseOf(roots)
 
   const progress = progressLine()
   let states
 
   try {
     progress.update({ step: 'finding the repositories' })
-    const paths = await findRepos(root, await skipped())
+    const paths = await scanRoots(roots, async root => findRepos(root, await skipped()))
 
     progress.update({ step: 'fetching', done: 0, total: paths.length, unit: 'repositories' })
     states = await pool(paths, configuredNumber('repos', 'concurrency', CONCURRENCY), async path => inspect(path, true, values.prune === true), (done, total) => progress.update({ step: 'fetching', done, total, unit: 'repositories' }))
@@ -45,7 +43,7 @@ export async function pull(args: string[]): Promise<number> {
   let failed = 0
 
   for (const repo of states) {
-    const shown = relative(root, repo.path) || repo.name
+    const shown = relative(base, repo.path) || repo.name
 
     if ((repo.behind ?? 0) === 0 && !repo.fetchFailed && !repo.unreadable) {
       results.push({ repo: shown, path: repo.path, action: 'up-to-date', detail: '' })
@@ -105,9 +103,9 @@ export async function pull(args: string[]): Promise<number> {
   return failed > 0 ? 1 : 0
 }
 
-const PUSH_USAGE = `ws push [options] [root]: push every repository under root (configured workspace by default) that is ahead of its upstream and not behind`
+const PUSH_USAGE = `ws push [options] [root...]: push every repository under each root (configured workspace by default) that is ahead of its upstream and not behind`
 
-const PUSH_EXITS: ExitRow[] = [[0, 'pushed or nothing ahead'], [1, 'a push failed'], [2, 'a usage error or missing root']]
+const PUSH_EXITS: ExitRow[] = [[0, 'pushed or nothing ahead'], [1, 'a push failed'], [2, 'a usage error or a root that is no folder']]
 
 const PUSH_OPTIONS = {
   'dry-run': { type: 'boolean', description: 'list the repositories that would be pushed without pushing' },
@@ -115,20 +113,18 @@ const PUSH_OPTIONS = {
 } as const
 
 export async function push(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, PUSH_USAGE, PUSH_OPTIONS, { positionals: ['[root]'], exits: PUSH_EXITS })
-  const root = workspaceRoot({ given: positionals[0] })
+  const { values, positionals } = parse(args, PUSH_USAGE, PUSH_OPTIONS, { positionals: ['[root...]'], exits: PUSH_EXITS })
+  const roots = rootsOf(positionals)
+  const base = baseOf(roots)
 
-  if (!existsSync(root) || !statSync(root).isDirectory())
-    fail(`no folder ${root}`)
-
-  const paths = await findRepos(root, await skipped())
+  const paths = await scanRoots(roots, async root => findRepos(root, await skipped()))
   const states = await pool(paths, configuredNumber('repos', 'concurrency', CONCURRENCY), async path => inspect(path, false))
   const aheadRepos = states.filter(repo => (repo.ahead ?? 0) > 0)
   const results: { repo: string, path: string, action: 'pushed' | 'skipped' | 'failed', detail: string }[] = []
   let failed = 0
 
   for (const repo of aheadRepos) {
-    const shown = relative(root, repo.path) || repo.name
+    const shown = relative(base, repo.path) || repo.name
 
     if (repo.branch === '(detached)' || repo.upstream === null) {
       results.push({ repo: shown, path: repo.path, action: 'skipped', detail: 'no upstream or detached' })
@@ -183,9 +179,9 @@ export async function push(args: string[]): Promise<number> {
   return failed > 0 ? 1 : 0
 }
 
-const EXEC_USAGE = `ws exec [options] [root] -- <cmd...>: run a command across every repository under root (configured workspace by default)`
+const EXEC_USAGE = `ws exec [options] [root...] -- <cmd...>: run a command across every repository under each root (configured workspace by default)`
 
-const EXEC_EXITS: ExitRow[] = [[0, 'command exited 0 in every repository'], [1, 'command exited non-zero in one or more repositories'], [2, 'a usage error or missing root']]
+const EXEC_EXITS: ExitRow[] = [[0, 'command exited 0 in every repository'], [1, 'command exited non-zero in one or more repositories'], [2, 'a usage error or a root that is no folder']]
 
 const EXEC_OPTIONS = {
   only: { type: 'string', multiple: true, choices: REASONS, description: 'only repositories matching this reason (dirty, unpushed, unreleased, behind)' },
@@ -197,19 +193,17 @@ export async function exec(args: string[]): Promise<number> {
   const sep = args.indexOf('--')
   const ownArgs = sep === -1 ? args : args.slice(0, sep)
   const cmd = sep === -1 ? [] : args.slice(sep + 1)
-  const { values, positionals } = parse(ownArgs, EXEC_USAGE, EXEC_OPTIONS, { positionals: ['[root]'], exits: EXEC_EXITS })
+  const { values, positionals } = parse(ownArgs, EXEC_USAGE, EXEC_OPTIONS, { positionals: ['[root...]'], exits: EXEC_EXITS })
 
   if (cmd.length === 0)
     fail(`a command is needed after --\n\n${EXEC_USAGE}`, 2)
 
-  const root = workspaceRoot({ given: positionals[0] })
-
-  if (!existsSync(root) || !statSync(root).isDirectory())
-    fail(`no folder ${root}`)
+  const roots = rootsOf(positionals)
+  const base = baseOf(roots)
 
   const concurrency = wholeNumber(values.parallel, 'parallel', 4, 1)
   const only = values.only ?? []
-  let paths = await findRepos(root, await skipped())
+  let paths = await scanRoots(roots, async root => findRepos(root, await skipped()))
 
   if (only.length > 0) {
     const states = await pool(paths, configuredNumber('repos', 'concurrency', CONCURRENCY), async path => inspect(path, false))
@@ -220,7 +214,7 @@ export async function exec(args: string[]): Promise<number> {
   const results = await pool(paths, concurrency, async (path) => {
     const ran = await runCommand(cmd, { cwd: path })
 
-    return { repo: relative(root, path) || path, path, code: ran.code, stdout: ran.stdout, output: ran.text }
+    return { repo: relative(base, path) || path, path, code: ran.code, stdout: ran.stdout, output: ran.text }
   })
 
   if (values.json === true) {

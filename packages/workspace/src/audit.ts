@@ -1,21 +1,22 @@
 import type { ExitRow, Ran } from '@kaynooo/cli-kit'
 import type { Finding, Severity } from './report'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import process from 'node:process'
-import { configuredNumber, fail, jsonOption, oneOf, paint, parse, pool, printHeader, printJson, role, runCommand, table, workspaceRoot } from '@kaynooo/cli-kit'
+import { configuredNumber, jsonOption, oneOf, paint, parse, pool, printHeader, printJson, role, runCommand, table } from '@kaynooo/cli-kit'
 import { holdsAnyLock, JS_LOCKFILES, OSV_LOCKFILES, osvAuditLockfiles } from '@kaynooo/cli-kit/audit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { directDependencies, findingsOf, lockGraph, parseAudit, reachedFrom, SEVERITIES, workspaceFolders } from './report'
+import { baseOf, rootsOf, scanRoots } from './roots'
 
-const USAGE = `ws audit [options] [root]: the known vulnerabilities of the Bun, pnpm, Yarn, npm, Composer, Cargo and uv repositories under root (configured workspace by default), one table per repository
+const USAGE = `ws audit [options] [root...]: the known vulnerabilities of the Bun, pnpm, Yarn, npm, Composer, Cargo and uv repositories under each root (configured workspace by default), one table per repository
 
 Each package with an advisory is one row: its worst severity, advisory count, prod or dev, direct or via the direct dependencies leading to it, and the version that fixes every advisory at once.
 It reaches the network: \`bun audit --json\` for bun.lock, osv.dev for pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock and uv.lock; the walk goes three levels deep and stops at a lockfile.
 To sweep many repositories at once; \`pkg audit\` vets the one repository in depth.`
 
-const EXITS: ExitRow[] = [[0, 'no repository has an advisory at the level asked'], [1, 'one has'], [2, 'a repository\'s audit failed, no lockfile sits under root, a usage error or a root that is no folder']]
+const EXITS: ExitRow[] = [[0, 'no repository has an advisory at the level asked'], [1, 'one has'], [2, 'a repository\'s audit failed, a usage error or a root that is no folder']]
 
 const OPTIONS = {
   level: { type: 'string', choices: SEVERITIES, default: 'moderate', description: 'only the advisories at least this severe: low, moderate, high or critical' },
@@ -187,25 +188,30 @@ function rows(findings: Finding[]): string[][] {
 }
 
 export async function audit(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root]'], exits: EXITS, replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['ws audit', 'ws audit ~/Workspace --level high --prod'] })
-  const root = workspaceRoot({ given: positionals[0] })
-
-  if (!existsSync(root) || !statSync(root).isDirectory())
-    fail(`no folder ${root}`)
-
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { positionals: ['[root...]'], exits: EXITS, replaces: 'a bun audit run in each repository and a read of every advisory to find what is worth fixing', examples: ['ws audit', 'ws audit ~/Workspace --level high --prod'] })
+  const roots = rootsOf(positionals)
+  const base = baseOf(roots)
   const level = oneOf(values.level, 'level', SEVERITIES)
   const progress = progressLine()
   let audits: RepoAudit[]
 
   try {
     progress.update({ step: 'finding the repositories' })
-    const paths = await findRepos(root)
+    const paths = await scanRoots(roots, findRepos)
 
-    if (paths.length === 0)
-      fail(`no lockfile (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock or uv.lock) under ${root}`)
+    if (paths.length === 0) {
+      progress.stop()
+
+      if (values.json === true)
+        printJson([])
+      else
+        console.log(role('label', process.stdout)(`nothing to audit: no lockfile (bun.lock, pnpm-lock.yaml, yarn.lock, package-lock.json, composer.lock, Cargo.lock or uv.lock) under ${roots.join(', ')}`))
+
+      return 0
+    }
 
     progress.update({ step: 'auditing', done: 0, total: paths.length, unit: 'repositories' })
-    audits = await pool(paths, configuredNumber('audit', 'concurrency', CONCURRENCY), async path => audited(path, relative(root, path) || '.', level, values.ignore ?? []), (done, total) => progress.update({ step: 'auditing', done, total, unit: 'repositories' }))
+    audits = await pool(paths, configuredNumber('audit', 'concurrency', CONCURRENCY), async path => audited(path, relative(base, path) || '.', level, values.ignore ?? []), (done, total) => progress.update({ step: 'auditing', done, total, unit: 'repositories' }))
   }
   finally {
     progress.stop()

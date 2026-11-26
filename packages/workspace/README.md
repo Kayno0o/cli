@@ -1,6 +1,6 @@
 # @kaynooo/cli-workspace
 
-`ws` helps with the repositories under a root: `ws repos` lists the ones needing attention, `ws sweep` reclaims disk, `ws audit` lists known vulnerabilities.
+`ws` helps with the repositories under one or several roots (paths are shown from the folder holding them all): `ws repos` lists the ones needing attention, `ws sweep` reclaims disk, `ws audit` lists known vulnerabilities.
 
 ```sh
 bun add -g @kaynooo/cli-workspace
@@ -12,7 +12,7 @@ bun add -g @kaynooo/cli-workspace
 
 | Command | What it does |
 | --- | --- |
-| `ws repos [root]` | one row per repository with something to report: branch, dirty files, ahead/behind its upstream, linked worktrees, commits since its latest tag; one whose only news is unreleased commits is left out |
+| `ws repos [root...]` | one row per repository with something to report: branch, dirty files, ahead/behind its upstream, linked worktrees, commits since its latest tag; one whose only news is unreleased commits is left out |
 | `ws repos --all` | the clean and the only-unreleased repositories too |
 | `ws repos --only dirty\|unpushed\|unreleased\|behind` | only the repositories with that reason, repeatable for any of several |
 | `ws repos --fetch` | refreshes each upstream first; it reaches the remote, so it is never done without the flag |
@@ -38,7 +38,7 @@ Without `--fetch` the ahead and behind counts are those of the last fetch. The w
 
 | Command | What it does |
 | --- | --- |
-| `ws sweep [root]` | lists `node_modules`, `.output`, `dist`, `build`, `.venv`, `target` (beside a `Cargo.toml`), `vendor` (beside a `composer.json` or `composer.lock`), the caches (per project `.nuxt`, `.next`, `.turbo`, `.svelte-kit`, `__pycache__`, `.gradle`, `node_modules/.cache`, listed only when `node_modules` is not; global `~/.bun/install/cache`, `~/.npm/_cacache`, `~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript}`, `~/.cargo/registry`, exact paths only, listed only when no root is given or with `--only caches`; a root narrows the scan to its own projects) and `.worktrees/*` and `.claude/worktrees/*` under root (the configured workspace folder, `~/Workspace` by default, three levels down) with size and the age of the repo's last commit; deletes nothing |
+| `ws sweep [root...]` | lists `node_modules`, `.output`, `dist`, `build`, `.venv`, `target` (beside a `Cargo.toml`), `vendor` (beside a `composer.json` or `composer.lock`), the caches (per project `.nuxt`, `.next`, `.turbo`, `.svelte-kit`, `__pycache__`, `.gradle`, `node_modules/.cache`, listed only when `node_modules` is not; global `~/.bun/install/cache`, `~/.npm/_cacache`, `~/.cache/{pip,uv,ms-playwright,puppeteer,go-build,typescript}`, `~/.cargo/registry`, exact paths only, listed only when no root is given or with `--only caches`; a root narrows the scan to its own projects) and `.worktrees/*` and `.claude/worktrees/*` under root (the configured workspace folder, `~/Workspace` by default, three levels down) with size and the age of the repo's last commit; deletes nothing |
 | `ws sweep --apply` | deletes what is listed as removable after a confirm showing the total, read from the terminal |
 | `--yes` | with `--apply`, skip the confirm; without it, `--apply` refuses off a terminal |
 | `--older <duration>`, `--min <size>` | only the entries whose repo last committed longer ago (`30d`) or that weigh at least this much (`500K`, `10M`, `1G`) |
@@ -53,7 +53,7 @@ Safety rules: a symlink is skipped and never followed, a folder git tracks files
 
 | Command | What it does |
 | --- | --- |
-| `ws audit [root]` | one row per package with an advisory: its worst severity, how many advisories, `prod` when a production dependency needs it and `dev` when only a development one does, `direct` when the repository's package.json asks for it and `via` when a dependency does (the `origin` column), and the version that fixes every advisory at once |
+| `ws audit [root...]` | one row per package with an advisory: its worst severity, how many advisories, `prod` when a production dependency needs it and `dev` when only a development one does, `direct` when the repository's package.json asks for it and `via` when a dependency does (the `origin` column), and the version that fixes every advisory at once |
 | `ws audit --level high` | only the advisories at least that severe: `low`, `moderate` (the default), `high` or `critical` |
 | `ws audit --prod` | only the packages a production dependency needs |
 | `ws audit --ignore GHSA-xxxx` | skip an advisory by GHSA or numeric id, repeatable, so an accepted advisory stops failing the run |
@@ -61,6 +61,6 @@ Safety rules: a symlink is skipped and never followed, a folder git tracks files
 
 It runs `bun audit --json` (and once more with `--prod`, which tells what reaches production) in each folder holding a `bun.lock`, so it reaches the registry, and asks osv.dev about the packages of a `composer.lock`, `Cargo.lock` or `uv.lock` (a severity the source leaves out reads as moderate, and only composer's manifest tells direct from pulled in). Advisories under `--level` are counted under the table, and what `bun audit` warned about, such as a private registry that would not audit its packages, is repeated there. The walk goes three levels deep, stops at a lockfile and skips `node_modules` and hidden folders. A `via` row names the direct dependencies leading to the package, upgrading one of which is what fixes it. The worst rows and the production ones come first; a fix of `-` means an advisory names no fixed version, and a package with ranges for several majors is given the highest fix, which may be a major jump. A repository's workspaces are read as folders or `dir/*`; other globs are not, and their dependencies then show as `via`.
 
-It exits 1 when a repository has an advisory at the level asked, so it can gate a script; it exits 2 when a repository's audit failed, no `bun.lock` sits under the root, on a usage error or a root that is no folder.
+It exits 1 when a repository has an advisory at the level asked, so it can gate a script; it exits 2 when a repository's audit failed, on a usage error or a root that is no folder. With no lockfile under the roots it says there is nothing to audit and exits 0.
 
 `ws audit` sweeps many repositories for advisories only. To vet one repository in depth (package age, install scripts, licences and advisories), use `pkg audit`, which shares `--level`, `--prod` and `--ignore` and nests the same advisory rows in a flat array.

@@ -19,16 +19,33 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }))
 describe('audit', () => {
   test('prints its version and its usage', () => {
     expect(Bun.spawnSync([process.execPath, WS, '--version']).stdout.toString().trim()).toBe(version)
-    expect(audit('--help').out).toContain('ws audit [options] [root]')
+    expect(audit('--help').out).toContain('ws audit [options] [root...]')
   })
 
-  test('a root that is no folder is a usage error, and a folder with no bun.lock exits 2 saying so', () => {
+  test('a root that is no folder is a usage error, and a folder with no lockfile has nothing to audit and exits 0', () => {
     expect(audit(join(dir, 'nowhere')).code).toBe(2)
 
     const empty = audit(dir)
 
-    expect(empty.code).toBe(2)
-    expect(empty.err).toContain('no lockfile')
+    expect(empty.code).toBe(0)
+    expect(empty.out).toContain('nothing to audit')
+    expect(JSON.parse(audit('--json', dir).out)).toEqual([])
+  })
+
+  test('several roots are audited together, a repository under two of them once, and shown from the folder holding them all', () => {
+    const first = join(dir, 'one')
+    const second = join(dir, 'two')
+
+    for (const repo of [join(first, 'a'), join(second, 'b')]) {
+      mkdirSync(repo, { recursive: true })
+      writeFileSync(join(repo, 'composer.lock'), '{"packages":[],"packages-dev":[]}')
+    }
+
+    const ran = audit('--json', first, second, join(first, 'a'))
+
+    expect(ran.code).toBe(0)
+    expect((JSON.parse(ran.out) as { repo: string }[]).map(each => each.repo)).toEqual(['one/a', 'two/b'])
+    expect(audit(first, join(dir, 'nowhere')).code).toBe(2)
   })
 
   test('a repository holding only a composer.lock without packages is audited, asking osv.dev nothing', () => {
