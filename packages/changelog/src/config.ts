@@ -33,7 +33,8 @@ async function readText(path: string): Promise<string> {
   }
 }
 
-async function teaTokenFor(host: string): Promise<string | undefined> {
+// The first host a tea login answers to by URL or SSH host wins, then the default login.
+async function teaTokenFor(hosts: (string | undefined)[]): Promise<string | undefined> {
   const raw = await readText(join(configBase(), 'tea', 'config.yml'))
   let current: Record<string, string> | undefined
   const logins: { url: string, sshHost?: string | undefined, token: string, isDefault: boolean }[] = []
@@ -60,8 +61,8 @@ async function teaTokenFor(host: string): Promise<string | undefined> {
 
   finish()
 
-  const lower = host.toLowerCase()
-  const match = logins.find(each => (URL.canParse(each.url) && new URL(each.url).hostname.toLowerCase() === lower) || each.sshHost?.toLowerCase() === lower)
+  const matches = (host: string) => logins.find(each => (URL.canParse(each.url) && new URL(each.url).hostname.toLowerCase() === host) || each.sshHost?.toLowerCase() === host)
+  const match = hosts.map(host => host === undefined ? undefined : matches(host.toLowerCase())).find(Boolean)
 
   return (match ?? logins.find(each => each.isDefault))?.token
 }
@@ -248,7 +249,8 @@ export async function resolveConfig(options: ChangelogOptions) {
     else if (config.provider === 'gitlab')
       token = firstNonEmpty(process.env.GITLAB_TOKEN, process.env.GL_TOKEN, await hostYamlToken(join(configBase(), 'glab-cli', 'config.yml'), true, baseUrl, 'token'))
     else
-      token = firstNonEmpty(process.env.FORGEJO_TOKEN, process.env.GITEA_TOKEN, await teaTokenFor(baseUrl))
+      // A forge named by its public address keeps the tea login of the private one origin uses.
+      token = firstNonEmpty(process.env.FORGEJO_TOKEN, process.env.GITEA_TOKEN, await teaTokenFor([baseUrl, origin]))
 
     if (token !== undefined)
       config.token = token
