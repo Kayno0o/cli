@@ -282,6 +282,30 @@ describe('downloading', () => {
     expect(again.err).toContain('already exists')
   })
 
+  test('a re-run into the same folder skips a file whose sha256 matches, and --force replaces any other', async () => {
+    const dir = home()
+    const target = join(dir, 'downloads')
+    const file = join(target, 'tool.bin')
+    const sha = sha256(BINARY)
+
+    expect((await dl([url('/tool.bin'), '-o', target, '--sha256', sha], dir)).code).toBe(0)
+
+    const again = await dl([url('/tool.bin'), '-o', target, '--sha256', sha], dir)
+
+    expect(again.code).toBe(0)
+    expect(again.out).toContain(`sha256\t${sha}`)
+
+    writeFileSync(file, 'edited')
+
+    const refused = await dl([url('/tool.bin'), '-o', target, '--sha256', sha], dir)
+
+    expect(refused.code).toBe(1)
+    expect(refused.err).toContain('--force')
+    expect(readFileSync(file, 'utf8')).toBe('edited')
+    expect((await dl([url('/tool.bin'), '-o', target, '--force'], dir)).code).toBe(0)
+    expect(readFileSync(file)).toEqual(Buffer.from(BINARY))
+  })
+
   test('names the file from Content-Disposition, kept to a plain name, and shows the URL redirects ended on', async () => {
     const dir = home()
     const named = await dl([url('/named')], dir)
@@ -539,6 +563,21 @@ describe('extracting and installing', () => {
     expect(code).toBe(0)
     expect(folder.endsWith('/tool')).toBe(true)
     expect(readFileSync(join(folder, 'tool-1.0', 'README'), 'utf8')).toBe('read me\n')
+  })
+
+  test('-x reuses an empty folder beside the archive and refuses one that holds files', async () => {
+    const dir = home()
+    const target = join(dir, 'downloads')
+    const folder = join(target, 'tool')
+
+    mkdirSync(folder, { recursive: true })
+    expect((await dl([url('/tool.tar.gz'), '-x', '-o', target], dir)).code).toBe(0)
+    expect(readFileSync(join(folder, 'tool-1.0', 'README'), 'utf8')).toBe('read me\n')
+
+    const again = await dl([url('/tool.tar.gz'), '-x', '-o', target, '--force'], dir)
+
+    expect(again.code).toBe(1)
+    expect(again.err).toContain('already exists')
   })
 
   test('--bin installs the one executable of an archive, refuses to replace it without --force, and records it', async () => {

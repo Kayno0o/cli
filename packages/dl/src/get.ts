@@ -4,7 +4,7 @@ import type { Resolved } from './release'
 import type { Summary } from './script'
 import type { Key } from './signature'
 import type { LedgerEntry } from './state'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -21,7 +21,7 @@ import { fetchSums, pathUnder, sumFor, sumIn } from './sums'
 const USAGE = `dl [options] <url> [-- <script args>]: downloads a file into a new folder of its own, checks its sha256, then extracts it, installs it as a command or runs it as a script
 
 <url> is an http or https URL, or a release: gh:owner/repo on GitHub, fj:owner/repo on the Forgejo the forge key of ~/.config/kaynooo-cli/config.json names (DL_FORGEJO_URL over it), with @tag for one release. A release is the newest at least two weeks old unless --fresh; its asset the one built for this OS and arch, or the one --asset names; it is checked against the checksums file the release ships, else the sha256 the forge gives, and --key alone finds the signature beside it.
-Without -o the file lands in a new folder under the temp folder. It prints where the file went, its size, final URL, type and sha256, and how it compares with the last download of the same URL (a changed text file shows its diff).
+Without -o the file lands in a new folder under the temp folder. With -o a file of that name already there is kept when it has the sha256 asked, refused otherwise, replaced with --force. It prints where the file went, its size, final URL, type and sha256, and how it compares with the last download of the same URL (a changed text file shows its diff).
 An HTML page arriving where a file was expected fails, as does a download over --max-size.
 --sig checks a detached signature with --key: of the file, or of the checksums file when --sums names one. A gpg key is a fingerprint of your keyring or a key file, a minisign key its string or file, a cosign key its PEM file; the tool has to be on PATH.
 --exec lists what the script does and runs it only when --sha256, --sums or --sig pins it, or with --yes; arguments after -- go to the script.
@@ -40,10 +40,10 @@ const OPTIONS = {
   'sums': { type: 'string', description: 'the URL of a checksums file (SHA256SUMS) giving the file\'s sha256' },
   'sig': { type: 'string', description: 'the URL of a detached signature of the file, or of the --sums file when there is one' },
   'key': { type: 'string', description: 'the key --sig is checked with: a gpg fingerprint or key file, a minisign key or key file, a cosign PEM file' },
-  'extract': { type: 'boolean', short: 'x', description: 'unpack the archive into a new folder beside it' },
+  'extract': { type: 'boolean', short: 'x', description: 'unpack the archive into a new or empty folder beside it' },
   'bin': { type: 'string', optional: { bare: '' }, description: 'install the file, or the one executable its archive holds, in ~/.local/bin (or --dir), under the name given or its own', conflicts: ['exec', 'inspect'] },
   'dir': { type: 'string', description: 'the folder --bin installs into instead of ~/.local/bin' },
-  'force': { type: 'boolean', description: 'let --bin replace a command of the same name' },
+  'force': { type: 'boolean', description: 'replace a downloaded file of the same name, and with --bin a command of the same name' },
   'exec': { type: 'boolean', description: 'run the file as a script, once --sha256, --sums or --sig pins it, or with --yes', conflicts: ['inspect'] },
   'inspect': { type: 'boolean', description: 'download and inspect metadata, script findings or archive contents without installing or running' },
   'yes': { type: 'boolean', description: 'run an --exec script that nothing pins' },
@@ -121,9 +121,6 @@ export async function get(args: string[]): Promise<number> {
   if (values.yes === true && values.exec !== true)
     badUsage('--yes goes with --exec')
 
-  if (values.force === true && values.bin === undefined)
-    badUsage('--force goes with --bin')
-
   if (values.dir !== undefined && values.bin === undefined)
     badUsage('--dir goes with --bin')
 
@@ -159,7 +156,7 @@ export async function get(args: string[]): Promise<number> {
   mkdirSync(dir, { recursive: true })
 
   const expectsFile = release !== undefined || values.exec === true || values.bin !== undefined || values.extract === true
-  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: values.sha256?.toLowerCase(), sums, digest, sig, key, headers: extraHeaders })
+  const { file, verified, signature } = await fetchChecked(url, dir, created, { maxSize, expectsFile, sha256: values.sha256?.toLowerCase(), sums, digest, sig, key, headers: extraHeaders, force: values.force === true })
 
   if (release !== undefined && !verified)
     warn(`${release.spec} ${release.tag} ships no checksums file and its forge gives no sha256 of ${release.asset.name}, so nothing checked it`)
@@ -254,6 +251,7 @@ interface Checks {
   sig: string | undefined
   key: Key | undefined
   headers: Record<string, string>
+  force: boolean
 }
 
 // The sha256 the checksums file gives the download. A release's may leave its asset out, and the forge's sha256 then checks it, unless a signature vouches for that checksums file alone.
@@ -268,14 +266,18 @@ function listedSum(sums: Uint8Array | undefined, checks: Checks, url: string, na
 // With --sums the signature is the checksums file's, which then vouches for the sha256: how most projects sign their releases.
 async function fetchChecked(url: string, dir: string, created: boolean, checks: Checks): Promise<{ file: Downloaded, verified: boolean, signature?: string }> {
   let file: Downloaded | undefined
+  let fetched: Promise<Uint8Array | undefined> | undefined
+  const sumsFile = async (): Promise<Uint8Array | undefined> => fetched ??= checks.sums === undefined ? Promise.resolve(undefined) : fetchSums(checks.sums, checks.headers)
+  // What a file of that name already in the folder must hash to for the download to be skipped.
+  const expectedFor = async (name: string): Promise<string | undefined> => checks.sha256 ?? listedSum(await sumsFile(), checks, url, name, checks.sig !== undefined && checks.key !== undefined) ?? checks.digest
 
   try {
-    file = await download(url, dir, checks.maxSize, checks.headers)
+    file = await download(url, dir, checks.maxSize, checks.headers, { force: checks.force, expectedFor })
 
     if (file.html && (checks.expectsFile || !HTML_EXTENSIONS.has(extname(file.name).toLowerCase())))
       fail(`${url} answered an HTML page, not a file`, 1)
 
-    const sums = checks.sums === undefined ? undefined : await fetchSums(checks.sums, checks.headers)
+    const sums = await sumsFile()
     const signed = checks.sig === undefined || checks.key === undefined ? undefined : await verifySignature(sums ?? file.path, checks.sig, checks.key, checks.headers)
     const expected = checks.sha256 ?? listedSum(sums, checks, url, file.name, signed !== undefined) ?? checks.digest
 
@@ -330,15 +332,15 @@ function coloredDiff(text: string): string {
   }).join('\n')
 }
 
-// Unpacks the archive into a new folder beside it named after it, so nothing already there is overwritten.
+// Unpacks the archive into a folder beside it named after it, made new or an empty one already there, so nothing is overwritten.
 async function extract(file: Downloaded): Promise<string> {
   const suffix = archiveSuffix(file.name) ?? fail(`${file.name} is no archive arc can extract`, 1)
   const folder = join(file.path, '..', file.name.slice(0, -suffix.length) || 'extracted')
 
-  if (existsSync(folder))
+  if (existsSync(folder) && (!statSync(folder).isDirectory() || readdirSync(folder).length > 0))
     return fail(`'${folder}' already exists`, 1)
 
-  mkdirSync(folder)
+  mkdirSync(folder, { recursive: true })
 
   return await extractArchive(file.path, folder) !== 0 ? fail(`extracting ${file.name} failed`, 1) : folder
 }

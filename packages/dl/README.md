@@ -21,8 +21,9 @@ bun add -g @kaynooo/cli-dl
 | `--sha256 <hex>` | the sha256 the file must have; on a mismatch the file is deleted |
 | `--sums <url>` | a checksums file (`SHA256SUMS`, `sha256sum` or BSD style, or a lone hash) giving the file's sha256 |
 | `--sig <url> --key <key>` | a detached signature of the file, or of the `--sums` file when there is one, checked before the file is kept; `--key` is a gpg fingerprint of your keyring or a gpg key file, a minisign key or key file, or a cosign PEM file, and that tool must be on PATH |
-| `--extract`, `-x` | unpacks the archive into a new folder beside it |
-| `--bin [name]` | installs the file, or the one executable its archive holds, into `~/.local/bin`; `--force` replaces a command already there |
+| `--extract`, `-x` | unpacks the archive into a new or empty folder beside it |
+| `--bin [name]` | installs the file, or the one executable its archive holds, into `~/.local/bin` |
+| `--force` | replaces a command `--bin` finds already there, and a file of the same name in `-o`; without it a file whose sha256 matches the expected one is kept and not downloaded again, any other is refused |
 | `--exec` | lists what the script does, then runs it only when `--sha256`, `--sums` or `--sig` pins it, or with `--yes`; arguments after `--` go to the script |
 | `--max-size <size>` | the largest download taken, `2G` by default |
 

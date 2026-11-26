@@ -1,5 +1,5 @@
 import type { Part } from './state'
-import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { open } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { fail, formatSize } from '@kaynooo/cli-kit'
@@ -72,11 +72,19 @@ function moveInto(from: string, to: string): void {
   }
 }
 
+export interface Existing {
+  // Replaces a file of the same name.
+  force?: boolean
+  // The sha256 the named file must have, when one is known: an existing file that has it is kept instead of downloaded again.
+  expectedFor?: (name: string) => Promise<string | undefined>
+}
+
 /**
- * Streams `url` into a new file of `dir`, hashing it on the way under a progress line.
+ * Streams `url` into a file of `dir`, hashing it on the way under a progress line.
+ * A file of that name already there is kept when it has the sha256 `existing` expects, replaced with `force`, and refused otherwise.
  * The bytes go to a part kept per URL until the file is whole, so a download that broke off is resumed by the next `dl` of that URL when the server can tell the file did not change.
  */
-export async function download(url: string, dir: string, maxSize: number, extraHeaders: Record<string, string> = {}): Promise<Downloaded> {
+export async function download(url: string, dir: string, maxSize: number, extraHeaders: Record<string, string> = {}, existing: Existing = {}): Promise<Downloaded> {
   dropStaleParts()
 
   const { file: partFile, kept } = partOf(url)
@@ -84,10 +92,27 @@ export async function download(url: string, dir: string, maxSize: number, extraH
   const name = offset > 0 ? kept!.name : fileName(response, url)
   const path = join(dir, name)
 
-  if (existsSync(path)) {
+  if (existsSync(path) && existing.force !== true) {
     await response.body?.cancel()
 
-    return fail(`'${path}' already exists`, 1, 'download into another folder with -o, or none to get a new one')
+    const expected = await existing.expectedFor?.(name)
+    const hasher = new Bun.CryptoHasher('sha256')
+    const start = expected === undefined ? undefined : await replay(path, hasher)
+    const sha256 = hasher.digest('hex')
+
+    if (start === undefined || sha256 !== expected)
+      return fail(`'${path}' already exists`, 1, 'download into another folder with -o, or none to get a new one, or pass --force to replace it')
+
+    return {
+      path,
+      name,
+      size: statSync(path).size,
+      url: response.url === '' ? url : response.url,
+      type: response.headers.get('content-type') ?? '',
+      sha256,
+      html: HTML_START.test(Buffer.from(start).toString('utf8')),
+      text: !start.includes(0),
+    }
   }
 
   const length = Number(response.headers.get('content-length') ?? Number.NaN)
