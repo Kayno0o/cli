@@ -10,6 +10,7 @@ import { counted } from '@kaynooo/utils/text'
 import { loadConfigs, loadSettings, registryFor } from '../config'
 import { addCommand, findConsumers, isLocal, RANGE_PREFIX, similarDependencies, wantedVersion } from '../consumers'
 import { loadExcluded, saveExcluded } from '../excluded'
+import { LOCKFILES } from '../pin'
 import { fetchPackument, isValidName } from '../registry'
 import { nearestFolder } from '../root'
 import { EXACT_VERSION } from '../semver'
@@ -145,12 +146,10 @@ export async function vet(name: string, version: string, settings: BumpSettings)
   return false
 }
 
-const LOCKFILES = ['bun.lock', 'bun.lockb', 'pnpm-lock.yaml', 'yarn.lock', 'package-lock.json']
-
 // The lockfile of the folder, which a monorepo keeps at its root, as a path relative to the folder; undefined when there is none.
 export function lockfileOf(dir: string, root: string): string | undefined {
-  const at = nearestFolder(dir, folder => LOCKFILES.some(file => existsSync(join(folder, file))), root)
-  const found = at === undefined ? undefined : LOCKFILES.find(file => existsSync(join(at, file)))
+  const at = nearestFolder(dir, folder => LOCKFILES.some(([file]) => existsSync(join(folder, file))), root)
+  const found = at === undefined ? undefined : LOCKFILES.find(([file]) => existsSync(join(at, file)))?.[0]
 
   return at === undefined || found === undefined ? undefined : relative(dir, join(at, found))
 }
