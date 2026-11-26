@@ -28,7 +28,7 @@ describe('touchesEnv', () => {
 })
 
 describe('touchesEnv, commands that print no value', () => {
-  const allowed = ['ls -a | grep -E \'^\\.env\'', 'grep -l GCU_API_TOKEN .env*', 'grep -L KEY .env', 'grep -c KEY .env', 'grep -rl KEY .env.local', 'grep -ql KEY .env', 'grep --files-with-matches KEY .env', 'rg -l KEY .env', 'rg --count KEY .env', 'find . -name \'.env*\'', 'find . -maxdepth 2 -name .env -print', 'git ls-files .env', 'bun -e \'console.log(/\\.env files/.test("x"))\'', 'bun -e \'console.log("the .env files")\'', 'python3 - <<\'EOF\'\nprint(\'the .env files\')\nEOF', 'python3 -c \'print("mentions .env")\'', 'grep -rl KEY .', 'find . -name \'.env*\' | xargs ls -la', 'ls .env | xargs wc -c', 'grep -l KEY .env* | xargs echo', 'ls | xargs cat', 'grep -l environment src | xargs cat', 'find . -name \'.env*\' | while read f; do ls -la $f; done', 'find . -name \'.env*\' | while IFS= read -r f; do\n  wc -c "$f"\ndone', 'ls .env* | while read f; do echo "$f"; bun test; done', 'find . -name \'.env*\' | parallel ls -la', 'find . -name \'.env*\' | parallel -j4 wc -c {}', 'ls | parallel cat']
+  const allowed = ['ls -a | grep -E \'^\\.env\'', 'grep -l GCU_API_TOKEN .env*', 'grep -L KEY .env', 'grep -c KEY .env', 'grep -rl KEY .env.local', 'grep -ql KEY .env', 'grep --files-with-matches KEY .env', 'rg -l KEY .env', 'rg --count KEY .env', 'find . -name \'.env*\'', 'find . -maxdepth 2 -name .env -print', 'git ls-files .env', 'bun -e \'console.log(/\\.env files/.test("x"))\'', 'bun -e \'console.log("the .env files")\'', 'python3 - <<\'EOF\'\nprint(\'the .env files\')\nEOF', 'python3 -c \'print("mentions .env")\'', 'bun -e \'const d = { a: "Run bun with --env-file, not inline vars: it replaces .env loading" }; console.log(d)\'', 'node -e \'console.log("load the .env file first, then read it")\'', 'grep -rl KEY .', 'find . -name \'.env*\' | xargs ls -la', 'ls .env | xargs wc -c', 'grep -l KEY .env* | xargs echo', 'ls | xargs cat', 'grep -l environment src | xargs cat', 'find . -name \'.env*\' | while read f; do ls -la $f; done', 'find . -name \'.env*\' | while IFS= read -r f; do\n  wc -c "$f"\ndone', 'ls .env* | while read f; do echo "$f"; bun test; done', 'find . -name \'.env*\' | parallel ls -la', 'find . -name \'.env*\' | parallel -j4 wc -c {}', 'ls | parallel cat']
 
   for (const command of allowed) {
     test(`lets ${command} through`, () => {
@@ -77,6 +77,8 @@ describe('touchesEnv, commands that print no value', () => {
     'bun -e \'Bun.spawn(["cat", ".env"])\'',
     'bun -e \'console.log(require("fs").readFileSync(".env", "utf8"))\'',
     'python3 -c \'print(open(".env").read())\'',
+    'bun -e \'console.log("a prose line", await Bun.file("./.env.local").text())\'',
+    'bun -e \'const p = ".env"; console.log(await Bun.file(p).text())\'',
     'python3 - <<\'EOF\'\nprint(open(".env").read())\nEOF',
     'bun - <<\'EOF\'\nconsole.log(await Bun.file(".env").text())\nEOF',
     'bun - <<\'EOF\'\nimport { $ } from "bun"\nawait $`cat .env`\nEOF',

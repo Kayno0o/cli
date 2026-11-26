@@ -5,6 +5,8 @@ import { isEnvFile, namesEnvFile } from './guard-paths'
 import { GREP_VALUE_OPTIONS, GREPS, listsFiles, patternIndex, printsNamesOnly, RG_VALUE_OPTIONS } from './guard-search'
 
 const ENV_NAME_IN_CODE = /(?:^|[^\w.-])(\.env(?:\.[\w.-]*\w)?|\.envrc)(?![\w-])/g
+// What may precede an env file's name in code for it to be a path rather than a word in a sentence: an opening quote or backtick, a `/`, `=` or `<`/`>`, or a shell reader and its flags.
+const PATH_START = /(?:["'`/=<>]\s*|\b(?:cat|head|tail|less|more|source|cp|mv|grep|rg|sed|awk|tee|xargs|base64|strings|od|xxd|bat|nl|tac|wc|diff|cmp|sort|uniq|cut|paste|dd)\s+(?:-\S+\s+)*|^\.\s+)$/
 const PYTHON_ENVIRON = /\bos\.environ\b(?!\s*(?:\[|\.get\b))/
 const VARIABLE = /\$(?:(\w+)|\{(\w+)\})/
 const ASSIGNMENT = /^\w+=/
@@ -66,7 +68,9 @@ function variantsOf(word: Word, variables: ReadonlyMap<string, string[]>): strin
 
 // Whether code names an env file and could open it: a mention in code that calls nothing able to read a file, run a command or import a module (`/\.env files/.test(x)`) is only text. Deliberately generous, so a doubtful script stays refused.
 function codeReadsEnvFile(code: string): boolean {
-  return [...code.matchAll(ENV_NAME_IN_CODE)].some(match => isEnvFile(match[1] ?? '')) && CAN_REACH_FILES.test(code)
+  const namesPath = (match: RegExpExecArray) => isEnvFile(match[1] ?? '') && PATH_START.test(code.slice(0, match.index + match[0].length - (match[1] ?? '').length))
+
+  return [...code.matchAll(ENV_NAME_IN_CODE)].some(namesPath) && CAN_REACH_FILES.test(code)
 }
 
 // Whether code run by an interpreter, given as an argument or fed as a heredoc, reads an env file or dumps the environment of a Python process.
