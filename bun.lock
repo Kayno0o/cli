@@ -131,7 +131,7 @@
     },
     "packages/env": {
       "name": "@kaynooo/cli-env",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "bin": {
         "ev": "./dist/ev.js",
       },
