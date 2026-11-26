@@ -394,9 +394,9 @@ export interface GoodRef {
   reason: string
 }
 
-// The latest tag reachable from the bad ref, else its merge-base with the upstream or the default remote branch; undefined when neither exists.
+// The latest tag reachable from the bad ref's parent, so a tag on the bad commit itself is skipped, else its merge-base with the upstream or the default remote branch; undefined when neither exists.
 export async function defaultGoodRef(root: string, bad: string): Promise<GoodRef | undefined> {
-  const tag = await git(['describe', '--tags', '--abbrev=0', bad], root)
+  const tag = await git(['describe', '--tags', '--abbrev=0', `${bad}^`], root)
 
   if (tag.code === 0 && tag.stdout.trim() !== '')
     return { ref: tag.stdout.trim(), reason: 'latest tag' }

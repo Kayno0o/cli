@@ -274,6 +274,23 @@ describe('base bisect', () => {
     expect(result.stdout.toString()).toContain('c2-bad')
   })
 
+  test('skips a tag on the bad commit itself and takes the previous one', () => {
+    file('a.txt', 'v1\n')
+    git('commit', '-q', '-am', 'c1')
+    git('tag', 'v1.0.0')
+    file('a.txt', 'broken\n')
+    git('commit', '-q', '-am', 'c2-bad')
+    file('a.txt', 'broken-still\n')
+    git('commit', '-q', '-am', 'c3-release')
+    git('tag', 'v2.0.0')
+
+    const result = Bun.spawnSync([process.execPath, CLI, 'bisect', '--', 'sh', '-c', '! grep -q broken a.txt'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stderr.toString()).toContain('good: v1.0.0')
+    expect(result.stdout.toString()).toContain('c2-bad')
+  })
+
   test('fails clearly when there is no tag and no default branch to start from', () => {
     const result = Bun.spawnSync([process.execPath, CLI, 'bisect', '--', 'true'], { cwd: repo, stdout: 'pipe', stderr: 'pipe' })
 
