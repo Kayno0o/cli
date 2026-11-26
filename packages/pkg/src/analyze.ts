@@ -65,7 +65,7 @@ function isStable(version: string): boolean {
 }
 
 // An exact version, a dist-tag, or the highest version a range matches.
-function resolve(packument: Packument, request: string | undefined): string | undefined {
+export function resolveVersion(packument: Packument, request: string | undefined): string | undefined {
   const tags = packument['dist-tags'] ?? {}
   const versions = Object.keys(packument.versions ?? {})
   const wanted = request === undefined || request === '' ? 'latest' : request
@@ -181,7 +181,7 @@ export function analyze(input: AnalyzeInput): Report {
   }
 
   const latest = packument['dist-tags']?.latest
-  const version = resolve(packument, spec.request)
+  const version = resolveVersion(packument, spec.request)
   const entry = version === undefined ? undefined : packument.versions?.[version]
 
   report.description = packument.description

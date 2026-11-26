@@ -5,7 +5,7 @@ import type { Fetcher } from '../registry'
 import { dirname, resolve } from 'node:path'
 import { fail, formatAge, isStdinPiped, jsonOption, parse, printJson, readInput, role, table, wholeNumber } from '@kaynooo/cli-kit'
 import { advisoriesFor, fetchAdvisories, filterAdvisories } from '../advisories'
-import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec } from '../analyze'
+import { analyze, DEFAULT_MIN_AGE_DAYS, parseSpec, resolveVersion } from '../analyze'
 import { DEFAULT_BLOCK_SEVERITY, loadConfigs, loadSettings, registryFor } from '../config'
 import { registryDependencies } from '../consumers'
 import { fetchDownloads, fetchPackument, isPublic, unreachable } from '../registry'
@@ -38,7 +38,7 @@ interface Context {
 export async function checkPackage(text: string, context: Context): Promise<Report> {
   const spec = parseSpec(text)
   const registry = registryFor(spec.name, context.configs)
-  const packument = await fetchPackument(spec.name, registry, context.fetcher)
+  const packument = await fetchPackument(spec.name, registry, context.fetcher, cached => resolveVersion(cached, spec.request) !== undefined)
   const downloads = packument !== undefined && isPublic(registry) ? await fetchDownloads(spec.name, context.fetcher) : undefined
 
   const input: AnalyzeInput = { spec, packument, downloads, registry: new URL(registry.url).host, now: context.now, minAgeDays: context.minAgeDays, licenses: context.settings?.licenses, trusted: context.settings?.trusted }

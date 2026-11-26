@@ -1,6 +1,7 @@
 import type { Fetcher } from '../src/registry'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import process from 'node:process'
 import * as kit from '@kaynooo/cli-kit'
 import { Exit } from '@kaynooo/cli-kit'
 import { tempDirs } from '@kaynooo/cli-kit/test'
@@ -287,6 +288,40 @@ describe('registry failures end on exit 2', () => {
     })).toBeUndefined()
     expect(signal).toBeInstanceOf(AbortSignal)
     expect(((await failure(async () => new Response('{}'), '../etc/passwd')) as Exit).message).toContain('not a valid npm package name')
+  })
+})
+
+describe('the packument cache', () => {
+  test('asks the registry again when the cached packument lacks the version asked for, and not when it has it', async () => {
+    const versions = ['1.0.0']
+    const seen: string[] = []
+    const cache = process.env.XDG_CACHE_HOME
+    // The cache serves the global fetch alone, so the registry stands in for it.
+    const registry = spyOn(globalThis, 'fetch').mockImplementation(Object.assign(async (input: Parameters<typeof fetch>[0]) => {
+      seen.push(String(input))
+
+      if (String(input).endsWith('/bulk'))
+        return Response.json({})
+
+      return Response.json({ name: 'some-lib', versions: Object.fromEntries(versions.map(version => [version, { version }])) })
+    }, { preconnect: fetch.preconnect }))
+    const context = { configs: [parseNpmrc('registry=https://private.test/', {})], minAgeDays: 0 }
+
+    process.env.XDG_CACHE_HOME = temp('pkg-cache-')
+
+    try {
+      await checkPackage('some-lib@1.0.0', context)
+      versions.push('1.0.1')
+      seen.length = 0
+
+      expect((await checkPackage('some-lib@1.0.0', context)).version).toBe('1.0.0')
+      expect(seen).toEqual(['https://private.test/-/npm/v1/security/advisories/bulk'])
+      expect((await checkPackage('some-lib@1.0.1', context)).version).toBe('1.0.1')
+    }
+    finally {
+      registry.mockRestore()
+      process.env.XDG_CACHE_HOME = cache
+    }
   })
 })
 

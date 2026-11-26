@@ -111,8 +111,8 @@ async function writeCachedPackument(registryUrl: string, name: string, packument
   }
 }
 
-// The full metadata document, which carries the publish times and licence that the abbreviated one leaves out; undefined when the registry has no such package.
-export async function fetchPackument(name: string, registry: Registry, fetcher: Fetcher = fetch): Promise<Packument | undefined> {
+// The full metadata document, which carries the publish times and licence that the abbreviated one leaves out; undefined when the registry has no such package. A cached one that `serves` refuses, lacking a version released since, is asked for again.
+export async function fetchPackument(name: string, registry: Registry, fetcher: Fetcher = fetch, serves: (packument: Packument) => boolean = () => true): Promise<Packument | undefined> {
   if (!isValidName(name))
     fail(`${name} is not a valid npm package name`)
 
@@ -121,7 +121,7 @@ export async function fetchPackument(name: string, registry: Registry, fetcher: 
   if (useCache) {
     const cached = await readCachedPackument(registry.url, name)
 
-    if (cached !== undefined)
+    if (cached !== undefined && serves(cached))
       return cached
   }
 
