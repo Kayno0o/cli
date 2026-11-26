@@ -166,19 +166,6 @@ ev run -f .env.test --redact -- bun test  # run a command with .env.test loaded 
 ev get DATABASE_URL  # one key, its value masked
 ```
 
-## fg
-
-unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and releases. Package `ft`.
-
-Instead of: tea, glab, gh api calls piped through jq, and sleep loops waiting on CI
-
-```sh
-fg <command> [options]
-fg ci  # wait for the runs of origin's tip, failures printed
-fg pr list  # open pull/merge requests
-fg issue 12 -c  # an issue with its boxes numbered and its comments
-```
-
 ## ft
 
 unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and releases. Package `ft`.

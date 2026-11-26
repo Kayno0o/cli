@@ -6,10 +6,10 @@ import { ciJson, recentRuns, runById } from '../runs'
 import { repoDefaultBranch, repoWriteOrEmpty, resolveForge } from '../tea'
 import { followRuns } from './watch'
 
-const usage = `fg dispatch [<workflow>] [--ref <branch>] [--input key=value]...
+const usage = `ft dispatch [<workflow>] [--ref <branch>] [--input key=value]...
 
 Starts a run of a workflow that declares \`on: workflow_dispatch\` (Forgejo/GitHub), or creates a new GitLab pipeline (with \`--input key=value\` as CI variables), on the ref (the default branch's tip unless given).
---wait then follows it to its end as \`fg watch\` does.`
+--wait then follows it to its end as \`ft watch\` does.`
 const EXITS: ExitRow[] = [[0, 'the run started, and with --wait it passed'], [1, 'the forge refused it, or with --wait the run failed or was cancelled'], [2, 'a usage error, or with --wait a timeout or a stalled queue']]
 
 const options = {
@@ -18,7 +18,7 @@ const options = {
   wait: { type: 'boolean', short: 'w', description: 'follow the run to its end, exit 1 when it fails' },
   timeout: { type: 'string', short: 't', description: 'how long --wait waits before giving up (30m), a bare number in minutes' },
   quiet: { type: 'boolean', short: 'q', description: 'with --wait, print only the failures and the run\'s final status' },
-  json: jsonOption('{id, number, workflow, ref, url}; with --wait, fg watch --json\'s status, runs and failedJobs'),
+  json: jsonOption('{id, number, workflow, ref, url}; with --wait, ft watch --json\'s status, runs and failedJobs'),
   ...repoOption,
 } as const
 
@@ -46,7 +46,7 @@ export async function dispatch(args: string[]): Promise<number> {
     positionals: ['[workflow]'],
     exits: EXITS,
     replaces: 'tea/gh/glab api -X POST on a workflow dispatch or pipeline trigger',
-    examples: [['fg dispatch apps.yml', 'on the default branch'], ['fg dispatch deploy.yml --ref v1.2.0 -i target=prod --wait', 'a tag, an input, and wait for it']],
+    examples: [['ft dispatch apps.yml', 'on the default branch'], ['ft dispatch deploy.yml --ref v1.2.0 -i target=prod --wait', 'a tag, an input, and wait for it']],
   })
 
   if (values.wait !== true && (values.timeout !== undefined || values.quiet === true))
@@ -102,9 +102,9 @@ export async function dispatch(args: string[]): Promise<number> {
     const said = `${label} started on ${ref}, but the forge did not say which run`
 
     if (wait || json)
-      fail(`${said}, so it cannot be ${wait ? 'followed' : 'printed'}`, 1, `fg runs${workflow === undefined ? '' : ` -w ${workflow}`} lists it`)
+      fail(`${said}, so it cannot be ${wait ? 'followed' : 'printed'}`, 1, `ft runs${workflow === undefined ? '' : ` -w ${workflow}`} lists it`)
 
-    writeErr(`${said}: fg runs${workflow === undefined ? '' : ` -w ${workflow}`} lists it`)
+    writeErr(`${said}: ft runs${workflow === undefined ? '' : ` -w ${workflow}`} lists it`)
 
     return 0
   }

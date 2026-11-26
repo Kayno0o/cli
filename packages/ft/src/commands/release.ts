@@ -40,18 +40,18 @@ import { followRuns } from './watch'
 
 const SEVERAL = /[,:]/
 
-const usage = `fg release <patch|minor|major|x.y.z>
-fg release <level> -p <a,b:minor,...>
-fg release <level> --changed
-fg release <level> --all
-fg release --tagged
-fg release notes [--to <tag>] [--from <tag>] [--dry-run] [--discord-webhook <url>]
-fg release undo [tag] [--note] [--force] [--yes] [--dry-run]
+const usage = `ft release <patch|minor|major|x.y.z>
+ft release <level> -p <a,b:minor,...>
+ft release <level> --changed
+ft release <level> --all
+ft release --tagged
+ft release notes [--to <tag>] [--from <tag>] [--dry-run] [--discord-webhook <url>]
+ft release undo [tag] [--note] [--force] [--yes] [--dry-run]
 
 Cuts a release from the default branch: waits for the runs on HEAD, bumps and tags with \`bun pm version\`, pushes, then waits for the runs and the registry.
 --changed selects every publishable package under packages/ with commits since its last <folder>-v* tag.
 --notes publishes generated conventional-commit release notes to Forgejo, GitHub, or GitLab (and posts to Discord when --discord-webhook or DISCORD_WEBHOOK is set).
-\`fg release undo\` removes the tag (and optionally the release note) and resets HEAD only when HEAD is not already pushed to a remote branch (unless --force).`
+\`ft release undo\` removes the tag (and optionally the release note) and resets HEAD only when HEAD is not already pushed to a remote branch (unless --force).`
 const EXITS: ExitRow[] = [[0, 'released, planned or undone'], [1, 'a run fails, origin refuses a push or the registry/release API fails'], [2, 'a timeout, a stalled queue, a refusal before anything ran (another branch, uncommitted changes, origin ahead) or a usage error']]
 
 const options = {
@@ -132,7 +132,7 @@ async function publishReleaseNotes(tag: string, options: { dry?: boolean | undef
 }
 
 async function releaseNotes(args: string[]): Promise<number> {
-  const { values } = parse(args, 'fg release notes [--to <tag>] [--from <tag>] [--output <file>] [--dry-run] [--discord-webhook <url>] [--assets <glob>] [--json]', {
+  const { values } = parse(args, 'ft release notes [--to <tag>] [--from <tag>] [--output <file>] [--dry-run] [--discord-webhook <url>] [--assets <glob>] [--json]', {
     'from': { type: 'string', description: 'start ref/tag' },
     'to': { type: 'string', description: 'end tag (defaults to tag at HEAD or current branch)' },
     'output': { type: 'string', short: 'o', description: 'write Markdown notes to a file instead of publishing' },
@@ -170,7 +170,7 @@ async function releaseNotes(args: string[]): Promise<number> {
 }
 
 async function releaseUndo(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, 'fg release undo [tag] [--note] [--force] [--yes] [--dry-run] [--json]', {
+  const { values, positionals } = parse(args, 'ft release undo [tag] [--note] [--force] [--yes] [--dry-run] [--json]', {
     'note': { type: 'boolean', description: 'also delete the release note on the forge' },
     'force': { type: 'boolean', description: 'reset HEAD even when already pushed to a remote branch' },
     'yes': { type: 'boolean', short: 'y', description: 'skip confirmation prompt' },
@@ -370,7 +370,7 @@ export async function release(args: string[]): Promise<number> {
     return printPlan({ releases: targets.map(({ level, dir }) => ({ level, dir, prefix: prefixOf(dir) })), branch, base, timeout, registry: values['no-registry'] !== true })
 
   if (!await testsPass(base, branch, timeout, json))
-    fail(`the runs on ${base.slice(0, 7)} failed, so nothing was bumped or tagged`, 1, runHint(`fg runs --sha ${base.slice(0, 7)}`, 'list the runs, then fg logs <id> reads the failure'))
+    fail(`the runs on ${base.slice(0, 7)} failed, so nothing was bumped or tagged`, 1, runHint(`ft runs --sha ${base.slice(0, 7)}`, 'list the runs, then ft logs <id> reads the failure'))
 
   // Read before the bump, so a failure here leaves nothing to undo.
   const preBump = await git(['rev-parse', 'HEAD'])
@@ -416,7 +416,7 @@ export async function release(args: string[]): Promise<number> {
     }
     catch (error) {
       isPushUnknown = true
-      fail(`${error instanceof Error ? error.message : String(error)}, so ${tags.join(', ')} and ${tags.length === 1 ? 'its commit are' : 'their commits are'} kept: the push may have landed`, 2, tags.length === 1 ? `git ls-remote origin refs/tags/${tags[0]} tells; if it is there, fg release --tagged waits for its runs` : `git ls-remote --tags origin tells; if they are there, fg watch --after ${before} waits for their runs`)
+      fail(`${error instanceof Error ? error.message : String(error)}, so ${tags.join(', ')} and ${tags.length === 1 ? 'its commit are' : 'their commits are'} kept: the push may have landed`, 2, tags.length === 1 ? `git ls-remote origin refs/tags/${tags[0]} tells; if it is there, ft release --tagged waits for its runs` : `git ls-remote --tags origin tells; if they are there, ft watch --after ${before} waits for their runs`)
     }
 
     if (push.code !== 0) {
@@ -489,7 +489,7 @@ export async function release(args: string[]): Promise<number> {
         if (!await waitForRegistry(pkg.name, version)) {
           const rest = bumped.slice(index + 1).map(next => next.tag)
 
-          fail(`the runs passed but the registry does not serve ${pkg.name}@${version}${rest.length === 0 ? '' : `, so ${rest.join(', ')} ${rest.length === 1 ? 'is' : 'are'} pushed but not waited for`}: read the publish job with \`fg logs\``, 1)
+          fail(`the runs passed but the registry does not serve ${pkg.name}@${version}${rest.length === 0 ? '' : `, so ${rest.join(', ')} ${rest.length === 1 ? 'is' : 'are'} pushed but not waited for`}: read the publish job with \`ft logs\``, 1)
         }
 
         say(`released ${pkg.name}@${version}`)

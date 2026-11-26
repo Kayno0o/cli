@@ -148,7 +148,6 @@
       "name": "@kaynooo/cli-forge",
       "version": "0.32.0",
       "bin": {
-        "fg": "./dist/fg.js",
         "ft": "./dist/ft.js",
       },
       "devDependencies": {
