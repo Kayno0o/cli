@@ -118,16 +118,29 @@ async function replaceFile(path: string, content: string): Promise<void> {
   await rename(temporary, path)
 }
 
-// The project's own fix script, recipe or target when it has one, else its lint:fix and fmt or format ones.
+const LINT_FIXERS = ['lint:fix', 'lint-fix', 'fix:lint', 'fix-lint', 'eslint:fix', 'eslint-fix', 'biome:fix', 'oxlint:fix']
+const FORMAT_FIXERS = ['fmt', 'format', 'format:fix', 'format-fix', 'fmt:fix', 'fmt-fix', 'fix:format', 'fix:fmt', 'prettier', 'biome']
+// A script command that rewrites files: the same tools as JS_FIXER, with the flag that makes them write.
+const WRITING_FIXER = /^(?:(?:bunx|npx|pnpm\s+exec|yarn)\s+)?(?:(?:keslint|eslint|oxlint)\b.*\s--fix\b|prettier\b.*\s--write\b|biome\s+(?:check|format|lint)\b.*\s--(?:write|apply)\b)/
+
+// The project's own fix script, recipe or target when it has one, else its lint fix and format ones by their usual names, else the package.json scripts whose command rewrites files.
 async function projectFixers(dir: string): Promise<Fixer[]> {
   const found = await candidates(dir, 'check')
-  const named = (name: string) => found.find(step => step.name === name)
-  const all = named('fix')
+  const named = (names: string[]) => names.map(name => found.find(step => step.name === name)).find(step => step !== undefined)
+  const all = named(['fix'])
 
   if (all !== undefined)
     return [all]
 
-  return [named('lint:fix') ?? named('lint-fix'), named('fmt') ?? named('format')].filter(step => step !== undefined)
+  const byName = [named(LINT_FIXERS), named(FORMAT_FIXERS)].filter(step => step !== undefined)
+
+  if (byName.length > 0)
+    return byName
+
+  const text = await read(dir, 'package.json')
+  const scripts = text === undefined ? {} : (JSON.parse(text) as { scripts?: Record<string, unknown> }).scripts ?? {}
+
+  return found.filter(step => step.source === 'package.json' && typeof scripts[step.name] === 'string' && WRITING_FIXER.test(scripts[step.name] as string))
 }
 
 async function toolFixers(dir: string): Promise<Fixer[]> {
@@ -227,7 +240,7 @@ export async function runFixers(values: FixValues, cwd: string): Promise<number>
   const found = await fixers(cwd)
 
   if (found.length === 0)
-    fail('nothing to fix here: no fix, lint:fix, fmt or format script, php-cs-fixer config, Makefile, Justfile, go.mod, Cargo.toml nor ruff config')
+    fail('nothing to fix here: no fix, lint:fix, fmt or format script (nor one running prettier --write, biome --write or eslint --fix), php-cs-fixer config, Makefile, Justfile, go.mod, Cargo.toml nor ruff config')
 
   const pickedAll = pick(found, parsed.values.only, 'fixer')
   const picked = parsed.values.changed === true ? await narrowFixers(pickedAll, cwd, parsed.values.base) : pickedAll

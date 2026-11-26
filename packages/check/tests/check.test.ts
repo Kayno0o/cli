@@ -153,7 +153,7 @@ describe('check', () => {
     expect(passing.out).toBe('')
   })
 
-  test('--slot runs each step through the slot bin, and fails when there is none', async () => {
+  test('--slot runs each step through the slot bin, and runs unqueued with a warning when there is none', async () => {
     const bin = temp('check-slot-')
     const calls = join(bin, 'calls')
     const path = process.env.PATH
@@ -168,8 +168,16 @@ describe('check', () => {
       expect(result).toBe(0)
       expect((await Bun.file(calls).text()).trim().split('\n')).toEqual(['-- sh -c bun run check', '-- sh -c bun run test'])
 
-      process.env.PATH = '/nonexistent'
-      expect(await failure(check(['--slot'], repo('js')))).toContain('--slot needs the slot bin')
+      const bare = temp('check-slot-missing-')
+
+      symlinkSync(process.execPath, join(bare, 'bun'))
+      process.env.PATH = `${bare}:/usr/bin:/bin`
+
+      const missing = await capture(async () => check(['--slot', '--only', 'check'], repo('js')))
+
+      expect(missing.result).toBe(0)
+      expect(missing.err).toContain('slot bin not found, running unqueued: bun install -g @kaynooo/cli-wait')
+      expect(await failure(check(['--lock', 'db', '--only', 'check'], repo('js')))).toContain('--lock needs the slot bin')
     }
     finally {
       process.env.PATH = path

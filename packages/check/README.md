@@ -46,7 +46,7 @@ In a repo that runs its tools in a container, `check`, `check --fix` and `errs -
 - `COMPOSE_FILE` (in the environment or the project's `.env`) replaces the search for `compose.yaml`: the files it names, separated by `:` (`COMPOSE_PATH_SEPARATOR` if set) and read relative to the project folder, are merged in order. A file it names that does not exist fails the call, as `docker compose` would.
 - No `docker` on the PATH (a devcontainer, CI): there is no container to reach, so the step runs on the host and stderr says `host, docker not found` once per project; `--in <service>` fails instead.
 - A compose file that does not parse fails the call naming the file and the parse error, and points at `--host`; it never falls back to the host silently, even without docker.
-- The slot queue (the default when `slot` is installed, `--slot` to require it) holds the whole docker command. `--timeout` ends the `docker compose exec` client, which does not always end what it started inside the container.
+- The slot queue (the default when `slot` is installed; `--slot` warns on stderr and runs unqueued without it, while `--lock` refuses) holds the whole docker command. `--timeout` ends the `docker compose exec` client, which does not always end what it started inside the container.
 - `check --changed` (`-c`) narrows `lint` to the changed source files (staged, unstaged and untracked, against HEAD) when its script is a bare `keslint`, `eslint` or `oxlint`, and `test` to the changed test files and the tests next to changed sources (same folder, `tests/`, `../tests/`) when its script is a bare `bun test`. Every other step runs in full and its line says so, a test step finding no test for the diff included. The typecheck is never narrowed.
 - `check --fix` runs the project's scripts and `php-cs-fixer` in the service, and keeps its own formatters (`justfile`, `go`, `rust`, `python`, `makefile`) on the host. The recursion guard variable is passed into the container.
 
@@ -74,7 +74,7 @@ check --fix --in app     # run the scripts in this compose service; --host force
 check --fix --json       # {fixers, changed}, a skipped fixer as {name, command, skipped}
 ```
 
-The project's own `fix` script, recipe or target when it has one, else its `lint:fix` (or `lint-fix`) and `fmt` (or `format`) ones, found in the same sources as `check`'s steps. Then the formatters the folder's files call for:
+The project's own `fix` script, recipe or target when it has one, else its lint fixer (`lint:fix`, `lint-fix`, `fix:lint`, `eslint:fix`...) and formatter (`fmt`, `format`, `format:fix`, `prettier`, `biome`...), found in the same sources as `check`'s steps; a `package.json` with none of those names takes the scripts running `prettier --write`, `biome check --write` or `eslint --fix`. Then the formatters the folder's files call for:
 
 | Fixer | When | Runs |
 | --- | --- | --- |

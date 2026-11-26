@@ -15,9 +15,9 @@ export const options = {
   'base': { type: 'string', description: 'git ref to diff against with --changed (default HEAD)' },
   'fail-fast': { type: 'boolean', short: 'x', description: 'stop after the first failing step' },
   'retry': { type: 'string', description: 'retry a failing step up to N times before reporting failure' },
-  'lock': { type: 'string', description: 'named slot lock to hold alongside the slot (visible in slot ls)' },
+  'lock': { type: 'string', description: 'named slot lock to hold alongside the slot (visible in slot ls); refused without the slot bin' },
   'watch': { type: 'boolean', short: 'w', description: 'watch project files and re-run on changes' },
-  'slot': { type: 'boolean', description: 'run each step through slot, queued behind the machine-wide slots of the other sessions, as it does by default when the slot bin is installed; fails without the bin' },
+  'slot': { type: 'boolean', description: 'run each step through slot, queued behind the machine-wide slots of the other sessions, as it does by default when the slot bin is installed; without the bin it warns and runs unqueued' },
   'no-slot': { type: 'boolean', description: 'run the steps at once, without queueing behind the other sessions\' slots' },
   'parallel': { type: 'boolean', description: 'run the steps at the same time, printing each one\'s output in step order' },
 } as const

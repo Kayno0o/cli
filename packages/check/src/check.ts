@@ -324,8 +324,12 @@ export async function check(args: string[], cwd = process.cwd()): Promise<number
 
   const hasSlot = Bun.which('slot', { PATH: process.env.PATH ?? '' }) !== null
 
-  if ((parsed.values.slot === true || lock !== undefined) && !hasSlot)
-    fail(`${lock === undefined ? '--slot' : '--lock'} needs the slot bin: bun install -g @kaynooo/cli-wait`)
+  // A lock keeps two runs off a shared resource, so without the bin it refuses; --slot only queues, so it runs unqueued.
+  if (lock !== undefined && !hasSlot)
+    fail('--lock needs the slot bin: bun install -g @kaynooo/cli-wait')
+
+  if (parsed.values.slot === true && !hasSlot)
+    console.error('slot bin not found, running unqueued: bun install -g @kaynooo/cli-wait')
 
   const slotting = parsed.values['no-slot'] !== true && hasSlot
   const targets = parsed.positionals

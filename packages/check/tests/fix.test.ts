@@ -61,6 +61,17 @@ describe('fixers', () => {
     expect(await names()).toEqual(['fmt'])
   })
 
+  test('finds the usual fixer names, then scripts whose command rewrites files', async () => {
+    scripts({ 'fix:lint': 'x', 'format:fix': 'x', 'lint': 'x' })
+    expect(await names()).toEqual(['fix:lint', 'format:fix'])
+
+    scripts({ 'eslint:fix': 'x', 'prettier': 'x' })
+    expect(await names()).toEqual(['eslint:fix', 'prettier'])
+
+    scripts({ tidy: 'prettier --write .', polish: 'bunx biome check --write .', sweep: 'eslint . --fix', lint: 'eslint .', test: 'bun test' })
+    expect(await names()).toEqual(['tidy', 'polish', 'sweep'])
+  })
+
   test('skips a fix script calling check, and takes a Justfile recipe or Makefile target', async () => {
     scripts({ 'fix': 'check --fix --only lint:fix', 'lint:fix': 'x' })
     expect(await names()).toEqual(['lint:fix'])
