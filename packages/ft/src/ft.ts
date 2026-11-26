@@ -3,4 +3,4 @@
 import process from 'node:process'
 import { runForge } from './cli'
 
-process.exitCode = await runForge('ft')
+process.exitCode = await runForge()

@@ -167,7 +167,7 @@ async function isLocalRepo(repo: string | undefined): Promise<boolean> {
   return origin.repo.toLowerCase() === parseRepoSpec(repo).repo.toLowerCase()
 }
 
-const usage = `fg digest
+const usage = `ft digest
 
 Summarises the repository for a session starting cold: the issues this session holds with their boxes left, the claims no live session here answers to, red or running CI on the default branch, unpushed commits, dirty files and TODO comments naming a closed issue.
 When -r targets another repository than cwd, local git/TODO sections are skipped instead of mixing cwd's working tree into it.`

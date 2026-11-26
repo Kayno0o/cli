@@ -12,20 +12,20 @@ const TITLE_WIDTH = 72
 const DEFAULT_LIMIT = 30
 const LEADING_HASH = /^#/
 
-const prUsage = `fg pr <list|view|create|checkout|merge> [args...]
+const prUsage = `ft pr <list|view|create|checkout|merge> [args...]
 
 Manage pull requests (Forgejo, GitHub) and merge requests (GitLab).
 
-  fg pr list [--state open|closed|all] [--base <branch>] [--author <user>] [--json]
-  fg pr view <n> [-c] [--diff] [--open] [--json]
-  fg pr create [-t <title>] [-b <body> | -F <file>] [--base <branch>] [--head <branch>] [--draft] [--json]
-  fg pr checkout <n>
-  fg pr merge <n> [--squash | --rebase | --merge] [--delete-branch] [--json]`
+  ft pr list [--state open|closed|all] [--base <branch>] [--author <user>] [--json]
+  ft pr view <n> [-c] [--diff] [--open] [--json]
+  ft pr create [-t <title>] [-b <body> | -F <file>] [--base <branch>] [--head <branch>] [--draft] [--json]
+  ft pr checkout <n>
+  ft pr merge <n> [--squash | --rebase | --merge] [--delete-branch] [--json]`
 
 const PR_EXITS: ExitRow[] = [[0, 'completed'], [1, 'forge or git failed'], [2, 'a usage error']]
 
 async function prList(args: string[]): Promise<number> {
-  const { values } = parse(args, 'fg pr list [--state open|closed|all] [--base <branch>] [--author <user>] [--limit <n>] [--json]', {
+  const { values } = parse(args, 'ft pr list [--state open|closed|all] [--base <branch>] [--author <user>] [--limit <n>] [--json]', {
     state: { type: 'string', choices: ['open', 'closed', 'all'], description: 'filter by PR/MR state (default: open)' },
     base: { type: 'string', short: 'B', description: 'only targeting this base branch' },
     author: { type: 'string', short: 'a', description: 'only opened by this user' },
@@ -80,7 +80,7 @@ async function prList(args: string[]): Promise<number> {
 }
 
 async function prView(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, 'fg pr view <n> [-c] [--diff] [--open] [--json]', {
+  const { values, positionals } = parse(args, 'ft pr view <n> [-c] [--diff] [--open] [--json]', {
     comments: { type: 'boolean', short: 'c', description: 'include comments' },
     diff: { type: 'boolean', short: 'd', description: 'print the unified diff' },
     json: jsonOption('{number, title, state, draft, author, head, base, body, url, comments, diff?}'),
@@ -134,7 +134,7 @@ async function prView(args: string[]): Promise<number> {
 }
 
 async function prCreate(args: string[]): Promise<number> {
-  const { values } = parse(args, 'fg pr create [-t <title>] [-b <body> | -F <file>] [--base <branch>] [--head <branch>] [--draft] [--json]', {
+  const { values } = parse(args, 'ft pr create [-t <title>] [-b <body> | -F <file>] [--base <branch>] [--head <branch>] [--draft] [--json]', {
     title: { type: 'string', short: 't', description: 'PR/MR title (defaults to latest commit subject)' },
     body: { type: 'string', short: 'b', description: 'PR/MR description' },
     file: { type: 'string', short: 'F', description: 'read description from a file, or - for stdin' },
@@ -173,7 +173,7 @@ async function prCreate(args: string[]): Promise<number> {
 }
 
 async function prCheckout(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, 'fg pr checkout <n> [--branch <name>]', {
+  const { values, positionals } = parse(args, 'ft pr checkout <n> [--branch <name>]', {
     branch: { type: 'string', short: 'b', description: 'local branch name to create/update (default: pr-<n>)' },
     ...repoOption,
   }, { positionals: ['<n>'], exits: PR_EXITS })
@@ -190,7 +190,7 @@ async function prCheckout(args: string[]): Promise<number> {
 }
 
 async function prMerge(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, 'fg pr merge <n> [--squash | --rebase | --merge] [--delete-branch] [--json]', {
+  const { values, positionals } = parse(args, 'ft pr merge <n> [--squash | --rebase | --merge] [--delete-branch] [--json]', {
     'squash': { type: 'boolean', short: 's', description: 'squash commits when merging' },
     'rebase': { type: 'boolean', description: 'rebase commits onto base' },
     'merge': { type: 'boolean', short: 'm', description: 'create a merge commit (default)' },
@@ -241,5 +241,5 @@ export async function pr(args: string[]): Promise<number> {
   if (sub === 'merge')
     return prMerge(rest)
 
-  fail(`unknown pr subcommand '${sub}': expected list, view, create, checkout or merge`, 2, runHint('fg pr --help'))
+  fail(`unknown pr subcommand '${sub}': expected list, view, create, checkout or merge`, 2, runHint('ft pr --help'))
 }

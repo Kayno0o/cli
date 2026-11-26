@@ -84,7 +84,7 @@ describe('multi-forge CI, logs, retry, and play', () => {
   })
 })
 
-describe('fg pr across Forgejo, GitHub, and GitLab', () => {
+describe('ft pr across Forgejo, GitHub, and GitLab', () => {
   test.each(['forgejo', 'github', 'gitlab'] as const)('%s lists, views, creates, and merges PRs/MRs', async (provider) => {
     const final = await withFakeForge(provider, {
       issues: [],

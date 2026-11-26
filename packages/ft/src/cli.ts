@@ -1,6 +1,5 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 
-import { basename } from 'node:path'
 import process from 'node:process'
 import { runCli } from '@kaynooo/cli-kit'
 import { board, drop, take } from './commands/board'
@@ -18,12 +17,12 @@ import { runs } from './commands/runs'
 import { closeIssues, label, reopenIssues } from './commands/triage'
 import { watch } from './commands/watch'
 
-export async function runForge(binName: 'fg' | 'ft'): Promise<number> {
+export async function runForge(): Promise<number> {
   return runCli({
-    name: binName,
+    name: 'ft',
     about: 'unified Forgejo, GitHub and GitLab CLI over direct HTTP — CI runs, logs, PRs/MRs, issues, milestones and releases',
     replaces: 'tea, glab, gh api calls piped through jq, and sleep loops waiting on CI',
-    examples: [[`${binName} ci`, 'wait for the runs of origin\'s tip, failures printed'], [`${binName} pr list`, 'open pull/merge requests'], [`${binName} issue 12 -c`, 'an issue with its boxes numbered and its comments']],
+    examples: [[`ft ci`, 'wait for the runs of origin\'s tip, failures printed'], [`ft pr list`, 'open pull/merge requests'], [`ft issue 12 -c`, 'an issue with its boxes numbered and its comments']],
     commands: {
       runs: { run: runs, summary: 'recent CI runs/pipelines with workflow, ref, duration and age', group: 'CI and release' },
       ci: { run: ci, summary: 'wait for the runs/pipelines covering a commit, printing what failed', group: 'CI and release' },
@@ -55,8 +54,5 @@ export async function runForge(binName: 'fg' | 'ft'): Promise<number> {
   })
 }
 
-if (import.meta.main) {
-  const invoked = basename(process.argv[1] ?? 'fg')
-
-  process.exitCode = await runForge(invoked === 'ft' ? 'ft' : 'fg')
-}
+if (import.meta.main)
+  process.exitCode = await runForge()

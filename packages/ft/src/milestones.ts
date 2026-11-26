@@ -94,7 +94,7 @@ export async function findMilestone(reference: string, repo?: string): Promise<M
   const found = all.find(each => each.title === reference) ?? all.find(each => String(each.id) === reference)
 
   if (found === undefined)
-    fail(`no milestone ${reference}, ${all.length === 0 ? 'the repository has none' : `it has: ${all.map(each => each.title).join(', ')}`}`, 2, runHint(`fg milestone new ${reference}`, 'create it'))
+    fail(`no milestone ${reference}, ${all.length === 0 ? 'the repository has none' : `it has: ${all.map(each => each.title).join(', ')}`}`, 2, runHint(`ft milestone new ${reference}`, 'create it'))
 
   return found
 }

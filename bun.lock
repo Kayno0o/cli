@@ -131,7 +131,7 @@
     },
     "packages/env": {
       "name": "@kaynooo/cli-env",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "bin": {
         "ev": "./dist/ev.js",
       },
@@ -146,9 +146,8 @@
     },
     "packages/ft": {
       "name": "@kaynooo/cli-forge",
-      "version": "0.32.0",
+      "version": "0.33.0",
       "bin": {
-        "fg": "./dist/fg.js",
         "ft": "./dist/ft.js",
       },
       "devDependencies": {
@@ -187,7 +186,7 @@
     },
     "packages/guard": {
       "name": "@kaynooo/cli-guard",
-      "version": "0.15.4",
+      "version": "0.15.5",
       "bin": {
         "guard": "./dist/cli.js",
       },

@@ -93,7 +93,7 @@ describe('ft dispatch', () => {
 
     expect(plain.result).toBe(0)
     expect(plain.out).toBe('')
-    expect(plain.err).toContain('apps.yml started on main, but the forge did not say which run: fg runs -w apps.yml lists it')
+    expect(plain.err).toContain('apps.yml started on main, but the forge did not say which run: ft runs -w apps.yml lists it')
 
     for (const flag of ['--wait', '--json']) {
       await withFakeTea({ issues: [], workflows: ['apps.yml'], noRunInfo: true }, async () => {

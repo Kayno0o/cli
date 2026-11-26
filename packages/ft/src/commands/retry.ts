@@ -3,7 +3,7 @@ import { fail, jsonOption, parse, printJson, role, runHint, wholeNumber } from '
 import { repoOption } from '../args'
 import { jobsOf, playJob, retryJob, retryRun, runJson } from '../runs'
 
-const retryUsage = `fg retry <run id> [-j <job>]
+const retryUsage = `ft retry <run id> [-j <job>]
 
 Retries the failed jobs of a run/pipeline, or with -j one job by name or id.
 With -j and no run id, the value is a job id.`
@@ -21,7 +21,7 @@ export async function retry(args: string[]): Promise<number> {
   const [given] = positionals
 
   if (given === undefined && values.job === undefined)
-    fail('a run id or a job is needed', 2, runHint('fg runs', 'list recent runs'))
+    fail('a run id or a job is needed', 2, runHint('ft runs', 'list recent runs'))
 
   if (values.job === undefined) {
     const id = wholeNumber(given ?? '', '<run id>', 1)
@@ -48,7 +48,7 @@ export async function retry(args: string[]): Promise<number> {
     jobId = found.id
   }
   else if (!Number.isInteger(jobId) || jobId < 1) {
-    fail(`without a run id, -j takes a job id, not ${values.job}`, 2, runHint('fg retry <run id> -j <name>', 'retry it by name'))
+    fail(`without a run id, -j takes a job id, not ${values.job}`, 2, runHint('ft retry <run id> -j <name>', 'retry it by name'))
   }
 
   const job = await retryJob(jobId, values.repo)
@@ -61,7 +61,7 @@ export async function retry(args: string[]): Promise<number> {
   return 0
 }
 
-const playUsage = `fg play <job id> | fg play <pipeline id> -j <job>
+const playUsage = `ft play <job id> | ft play <pipeline id> -j <job>
 
 Starts a manual GitLab job by job id, or by job name inside a pipeline.`
 
@@ -78,7 +78,7 @@ export async function play(args: string[]): Promise<number> {
   const [given] = positionals
 
   if (given === undefined)
-    fail('a job id or pipeline id with -j <job> is needed', 2, runHint('fg runs', 'list pipelines'))
+    fail('a job id or pipeline id with -j <job> is needed', 2, runHint('ft runs', 'list pipelines'))
 
   let jobId = wholeNumber(given, '<id>', 1)
 
