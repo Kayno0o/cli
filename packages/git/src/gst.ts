@@ -3,6 +3,7 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import type { Repo } from './repos'
 import type { Change, Operation, Status } from './status'
+import { resolve } from 'node:path'
 import process from 'node:process'
 import { fail, jsonOption, paint, parse, printJson, role, runMain, table, watching, watchOption, wholeNumber, withoutWatch } from '@kaynooo/cli-kit'
 import { letter } from './colour'
@@ -11,9 +12,11 @@ import { operationOf } from './operation'
 import { branchOf, changesOf, reposOf, repoState, trackingOf } from './repos'
 import { parseStatus, stashOf, summary } from './status'
 
-const USAGE = `gst [-n N] [--author <who>] [--path <path>] [--since <date>] [--range <a..b>]: the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked
+const USAGE = `gst [-n N] [--author <who>] [--path <path>] [--since <date>] [--range <a..b>] [dir]: the repository's branch, upstream, changed files and HEAD in one line, then the changed paths by staged, unstaged and untracked
 
 gst --repos [dir]... lists every repository at and below the current one's toplevel (or below each dir given, the current directory outside a repository), four levels down, past node_modules, vendor, dist and hidden folders: one line each with its path, branch, how it stands against its upstream as of the last fetch, and the files left to commit.`
+// A dir is resolved from here each time main runs, since --watch runs it again after the first chdir.
+const START_DIR = process.cwd()
 const EXITS: ExitRow[] = [[0, 'it printed the status'], [2, 'outside a git repository or a usage error']]
 
 const OPTIONS = {
@@ -97,8 +100,17 @@ async function main(argv: string[]): Promise<number> {
     examples: ['gst', ['gst -n 5', 'with the last five commits'], ['gst --path src/api.ts --author alice', 'filtered commit history'], ['gst --repos', 'the repositories nested in this one']],
   })
 
-  if (parsed.positionals.length > 0 && parsed.values.repos !== true)
-    fail(`gst takes dirs with --repos alone\n\n${USAGE}`)
+  if (parsed.positionals.length > 1 && parsed.values.repos !== true)
+    fail(`gst takes several dirs with --repos alone\n\n${USAGE}`)
+
+  if (parsed.positionals.length === 1 && parsed.values.repos !== true) {
+    try {
+      process.chdir(resolve(START_DIR, parsed.positionals[0]!))
+    }
+    catch {
+      fail(`${parsed.positionals[0]} is not a directory`)
+    }
+  }
 
   if (parsed.values.watch !== undefined)
     return watching(parsed.values.watch, async () => main(withoutWatch(argv)))

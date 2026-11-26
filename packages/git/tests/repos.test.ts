@@ -109,8 +109,13 @@ describe('gst --repos', () => {
     expect(gst('--repos', 'nowhere').code).toBe(2)
   })
 
-  test('takes a dir with --repos alone, and no -n with it', () => {
-    expect(gst('app').code).toBe(2)
+  test('a single dir without --repos shows that repository as if run from there, several need --repos, and no -n goes with --repos', () => {
+    writeFileSync(join(root, 'app', 'new.txt'), 'x')
+
+    expect(gst('app').out).toBe(run([process.execPath, GST], join(root, 'app')).out)
+    expect(gst('app').out).toContain('untracked:\n  new.txt')
+    expect(gst('nowhere').code).toBe(2)
+    expect(gst('app', 'tools/lib').code).toBe(2)
     expect(gst('--repos', '-n', '2').err).toContain('--repos cannot be used with --limit')
   })
 })
