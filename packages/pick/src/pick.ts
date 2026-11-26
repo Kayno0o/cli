@@ -7,7 +7,7 @@ import { badUsage, fail, jsonOption, parse, printJson, runMain } from '@kaynooo/
 import { DEFAULT_HEIGHT, parseHeight, parsePreviewWindow, rank, select } from '@kaynooo/cli-kit/picker'
 import { parseFields, pickFields } from './fields'
 
-const USAGE = `pick [options]: a fuzzy selector, the lines on stdin in, the chosen one on stdout out
+const USAGE = `pick [options] [file]: a fuzzy selector, the lines of a file or of stdin in, the chosen one on stdout out
 
 Type to filter: the query matches as a subsequence, best matches first, and ctrl-/ or f1 shows the keys; enter picks, esc and ctrl-c cancel.
 The keys are read from the terminal and the selector is drawn on stderr, so \`pick\` in a pipe or a command substitution prints only the choice. In interactive mode stdin streams in incrementally so large or slow pipes become usable immediately. With --multi, tab marks lines and enter prints them in input order.
@@ -65,7 +65,8 @@ function buildRow(line: string, nth: ((count: number) => number[]) | undefined, 
   return { hidden: [line], cells: [display], ...search === undefined ? {} : { search } }
 }
 
-async function* streamStdinRows(
+async function* streamRows(
+  input: Bun.BunFile,
   separator: number,
   nth: ((count: number) => number[]) | undefined,
   withNth: ((count: number) => number[]) | undefined,
@@ -75,7 +76,7 @@ async function* streamStdinRows(
   const decoder = new TextDecoder()
   let carry: Uint8Array<ArrayBufferLike> = new Uint8Array(0)
 
-  for await (const chunk of Bun.stdin.stream()) {
+  for await (const chunk of input.stream()) {
     const combined = carry.length === 0 ? chunk : Buffer.concat([carry, chunk])
     const batch: Row[] = []
     let start = 0
@@ -116,10 +117,14 @@ async function* streamStdinRows(
 }
 
 async function main(args: string[]): Promise<number> {
-  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, replaces: 'fzf for a quick choice in a pipe, select in a shell script', examples: ['git branch --format=\'%(refname:short)\' | pick', 'ls | pick --multi --preview \'head -20 {}\' --preview-window bottom:40%', 'git branch | pick --filter main  # every match, best first, no terminal', 'ps aux | pick --with-nth 2,11.. --nth 11..  # show some fields, search others'] })
+  const { values, positionals } = parse(args, USAGE, OPTIONS, { exits: EXITS, positionals: ['[file]'], replaces: 'fzf for a quick choice in a pipe, select in a shell script', examples: ['git branch --format=\'%(refname:short)\' | pick', 'ls | pick --multi --preview \'head -20 {}\' --preview-window bottom:40%', 'git branch | pick --filter main  # every match, best first, no terminal', 'ps aux | pick --with-nth 2,11.. --nth 11..  # show some fields, search others'] })
 
-  if (positionals.length > 0)
-    badUsage('pick takes its lines on stdin, not as arguments')
+  const [file] = positionals
+
+  if (file !== undefined && !await Bun.file(file).exists())
+    fail(`${file}: no such file`, 2)
+
+  const input = file === undefined ? Bun.stdin : Bun.file(file)
 
   const height = values.height === undefined ? DEFAULT_HEIGHT : parseHeight(values.height)
 
@@ -131,7 +136,7 @@ async function main(args: string[]): Promise<number> {
   if (values['preview-window'] !== undefined && previewWindow === undefined)
     badUsage(`--preview-window takes right, bottom, hidden (optionally :<10-90>%), not ${values['preview-window']}`)
 
-  if (process.stdin.isTTY)
+  if (file === undefined && process.stdin.isTTY)
     badUsage('pipe the lines to pick on stdin')
 
   const fieldsOf = (name: 'nth' | 'with-nth'): ((count: number) => number[]) | undefined => {
@@ -170,7 +175,7 @@ async function main(args: string[]): Promise<number> {
       previewPosition: previewWindow?.position,
       previewShare: previewWindow?.share,
       header: values.header,
-      stream: streamStdinRows(separator, nth, withNth, delimiter, sink),
+      stream: streamRows(input, separator, nth, withNth, delimiter, sink),
     })
 
     if (picked === undefined)
@@ -182,7 +187,7 @@ async function main(args: string[]): Promise<number> {
   }
 
   // Lines are matched as text and printed as the bytes they came in.
-  const raw = splitBytes(await Bun.stdin.bytes(), separator)
+  const raw = splitBytes(await input.bytes(), separator)
   const decoder = new TextDecoder()
   const lines = raw.map(bytes => decoder.decode(bytes))
 

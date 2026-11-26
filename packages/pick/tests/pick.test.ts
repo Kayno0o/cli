@@ -23,8 +23,17 @@ describe('pick', () => {
     expect(JSON.parse(pick(['--json', '--multi', '--query', 'b'], 'ab\nb\nc\n').out)).toEqual({ picked: ['b', 'ab'] })
   })
 
-  test('rejects arguments and a bad height before looking for a terminal', () => {
-    expect(pick(['file'], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('stdin') })
+  test('reads the lines of a file given as the argument, stdin ignored, and names a missing one', async () => {
+    const path = `${await Bun.$`mktemp -d`.text().then(text => text.trim())}/lines.txt`
+
+    await Bun.write(path, 'zzz\nfoobar\n')
+    expect(pick(['--query', 'fbr', path], 'ignored\n')).toMatchObject({ code: 0, out: 'foobar\n' })
+    expect(pick(['--multi', '--filter', 'o', path], '')).toMatchObject({ code: 0, out: 'foobar\n' })
+    expect(pick([`${path}.missing`], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('no such file') })
+  })
+
+  test('rejects several files and a bad height before looking for a terminal', () => {
+    expect(pick(['one', 'two'], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('unexpected argument') })
     expect(pick(['--height', 'tall'], 'a\n')).toMatchObject({ code: 2, err: expect.stringContaining('--height') })
   })
 })
