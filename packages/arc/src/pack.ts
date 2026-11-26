@@ -1,13 +1,13 @@
 import type { ExitRow } from '@kaynooo/cli-kit'
 import { existsSync, lstatSync, realpathSync, renameSync, rmSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { badUsage, fail, formatSize, parse, wholeNumber } from '@kaynooo/cli-kit'
+import { badUsage, fail, parse, wholeNumber } from '@kaynooo/cli-kit'
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { byteProgress, DEFAULT_LEVEL, defaultThreads, ensureSudo, feedPipeline, lines, need, niced, pipeline, probe, ratioSummary, run, say, TAR_FIDELITY, ZSTD_DECODE_LONG } from './proc'
 
 const USAGE = `arc pack [options] <folder|file> [dest dir]: packs a folder or a file into <dest dir>/<name>.tar.zst (the current folder by default), checks every file against it and keeps the source unless --delete
 
-The archive is written as <name>.tar.zst.partial and renamed once complete; nothing is overwritten. With --delete, the folder or file is deleted only after the archive passes zstd's checksum and compares equal to it file by file. A symlink, a mount point, a destination inside the folder and a destination with too little free space are refused, and a folder you cannot read (or write, with --delete) is packed, and deleted, through sudo. Compression defaults to level 3 with at most half the CPUs (max 4) under nice so packing stays light on CPU and RAM.`
+The archive is written as <name>.tar.zst.partial and renamed once complete; nothing is overwritten. With --delete, the folder or file is deleted only after the archive passes zstd's checksum and compares equal to it file by file. A symlink, a mount point and a destination inside the folder are refused, a disk that fills up fails the pack with the partial archive removed, and a folder you cannot read (or write, with --delete) is packed, and deleted, through sudo. Compression defaults to level 3 with at most half the CPUs (max 4) under nice so packing stays light on CPU and RAM.`
 
 const EXITS: ExitRow[] = [[0, 'the archive is verified (and the folder deleted with --delete)'], [1, 'anything was refused or failed, with the folder kept'], [2, 'a usage error']]
 
@@ -111,13 +111,9 @@ export async function pack(args: string[]): Promise<number> {
     return fail('sudo authentication failed', 1)
 
   const size = Number.parseInt((await probe([...as, 'du', '-sxb', ...excludeArgs, '--', source])).stdout, 10)
-  const free = Number((await probe(['df', '--output=avail', '-B1', '--', destDir])).stdout.trim().split('\n').at(-1))
 
-  if (Number.isNaN(size) || Number.isNaN(free))
-    return fail(`could not read the size of '${source}' or the free space in '${destDir}'`, 1)
-
-  if (size > free)
-    return fail(`'${source}' holds ${formatSize(size)}, more than the ${formatSize(free)} free in '${destDir}'`, 1)
+  if (Number.isNaN(size))
+    return fail(`could not read the size of '${source}'`, 1)
 
   say(`packing ${source} -> ${out}`)
 

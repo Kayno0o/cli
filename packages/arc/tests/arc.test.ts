@@ -321,6 +321,17 @@ describe.skipIf(!GNU)('arc unpack', () => {
     expect(existsSync(join(dest, 'project.tar.zst'))).toBe(true)
   })
 
+  test('unpacks into the current folder when no destination is given', () => {
+    const { folder, dest, root } = project()
+    const restored = join(root, 'restored')
+
+    mkdirSync(restored)
+    arc(['pack', folder, dest])
+
+    expect(arc(['unpack', join(dest, 'project.tar.zst')], restored).code).toBe(0)
+    expect(readFileSync(join(restored, 'project/src/a.txt'), 'utf8')).toBe('alpha')
+  })
+
   test('refuses to overwrite a top-level entry', () => {
     const { folder, dest, root } = project()
 

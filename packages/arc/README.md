@@ -11,7 +11,7 @@ It needs `tar` and `zstd` on the machine (`findmnt`, `mountpoint` and `df` from 
 | Command | What it does |
 | --- | --- |
 | `arc pack [--delete] [--level <1..19>] [--threads <n>] [--exclude <pattern>]... <folder\|file> [dest dir]` | packs the folder or file into `<dest dir>/<name>.tar.zst` (the current folder by default) with live progress bars and checks it; `--delete` then deletes it |
-| `arc unpack <archive.tar.zst> <dest dir>` | unpacks it into the folder, refusing to overwrite, then checks every file against the archive; the archive is kept |
+| `arc unpack <archive.tar.zst> [dest dir]` | unpacks it into the folder (the current folder by default), refusing to overwrite, then checks every file against the archive; the archive is kept |
 | `arc ls [-r] <archive> [path]` | lists what an archive holds without extracting it, as `ls -l` would: the top level, the folder `path`, or every level with `-r`; `--json` for the entries |
 | `arc tree [-L <depth>] <archive> [path]` | draws the archive's files as a tree |
 | `arc cat <archive> <file>` | prints a file of the archive on stdout |
@@ -24,7 +24,7 @@ It needs `tar` and `zstd` on the machine (`findmnt`, `mountpoint` and `df` from 
 ## What `pack --delete` checks before it deletes
 
 - The archive is written as `<name>.tar.zst.partial` and renamed once complete; an existing archive or partial is never overwritten.
-- It refuses a symlink, a mount point, a folder with a file system mounted inside (tar and `rm` would both skip it), a destination inside the folder, and a destination with less free space than the folder holds.
+- It refuses a symlink, a mount point, a folder with a file system mounted inside (tar and `rm` would both skip it), and a destination inside the folder. A disk that fills up fails the pack and removes the partial archive, so the free space is not checked up front: the archive is usually far smaller than the folder.
 - The finished archive must pass zstd's checksum, list as many entries as the folder holds, and `tar --compare` equal to it, owners, ACLs and extended attributes included.
 - Only then, and only with `--delete`, is the folder deleted, with `rm -rf --one-file-system`. Without it, or on any failure before that, the folder stays as it was.
 - A folder you cannot read or write is packed, compared and deleted through `sudo`.

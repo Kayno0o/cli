@@ -7,7 +7,7 @@ import { progressLine } from '@kaynooo/cli-kit/progress'
 import { cleanPath, parseTarVerbose } from './entries'
 import { byteProgress, ensureSudo, feedPipeline, need, niced, probe, run, say, TAR_FIDELITY, ZSTD_DECODE_LONG } from './proc'
 
-const USAGE = `arc unpack <archive.tar.zst> <dest dir>: unpacks an archive made by arc pack into a folder, refusing to overwrite anything, then checks every file against it
+const USAGE = `arc unpack <archive.tar.zst> [dest dir]: unpacks an archive made by arc pack into a folder (the current folder by default), refusing to overwrite anything, then checks every file against it
 
 The archive's checksum is tested first, and nothing is extracted when a top-level entry already exists in the destination. Files owned by someone else get their owner back only as root, so sudo is used when the destination is not writable or the archive holds other owners. The archive is kept.`
 
@@ -16,11 +16,11 @@ const EXITS: ExitRow[] = [[0, 'every extracted file matches the archive'], [1, '
 export async function unpack(args: string[]): Promise<number> {
   const { positionals } = parse(args, USAGE, {}, {
     exits: EXITS,
-    positionals: ['<archive>', '<dest dir>'],
+    positionals: ['<archive>', '[dest dir]'],
     replaces: 'tar xf into a folder that may already hold files, then a tar --compare by hand',
-    examples: ['arc unpack /mnt/backup/old-project.tar.zst ~/restored'],
+    examples: ['arc unpack /mnt/backup/old-project.tar.zst ~/restored', ['arc unpack old-project.tar.zst', 'into the current folder']],
   })
-  const [given, destination] = positionals
+  const [given, destination = '.'] = positionals
 
   need('tar')
   need('zstd')
