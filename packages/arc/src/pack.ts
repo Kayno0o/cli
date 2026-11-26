@@ -5,9 +5,9 @@ import { badUsage, fail, formatSize, parse, wholeNumber } from '@kaynooo/cli-kit
 import { progressLine } from '@kaynooo/cli-kit/progress'
 import { byteProgress, DEFAULT_LEVEL, defaultThreads, ensureSudo, feedPipeline, lines, need, niced, pipeline, probe, ratioSummary, run, say, TAR_FIDELITY, ZSTD_DECODE_LONG } from './proc'
 
-const USAGE = `arc pack [options] <folder> [dest dir]: packs a folder into <dest dir>/<name>.tar.zst (the current folder by default), checks every file against it and keeps the folder unless --delete
+const USAGE = `arc pack [options] <folder|file> [dest dir]: packs a folder or a file into <dest dir>/<name>.tar.zst (the current folder by default), checks every file against it and keeps the source unless --delete
 
-The archive is written as <name>.tar.zst.partial and renamed once complete; nothing is overwritten. With --delete, the folder is deleted only after the archive passes zstd's checksum and compares equal to it file by file. A symlink, a mount point, a destination inside the folder and a destination with too little free space are refused, and a folder you cannot read (or write, with --delete) is packed, and deleted, through sudo. Compression defaults to level 3 with at most half the CPUs (max 4) under nice so packing stays light on CPU and RAM.`
+The archive is written as <name>.tar.zst.partial and renamed once complete; nothing is overwritten. With --delete, the folder or file is deleted only after the archive passes zstd's checksum and compares equal to it file by file. A symlink, a mount point, a destination inside the folder and a destination with too little free space are refused, and a folder you cannot read (or write, with --delete) is packed, and deleted, through sudo. Compression defaults to level 3 with at most half the CPUs (max 4) under nice so packing stays light on CPU and RAM.`
 
 const EXITS: ExitRow[] = [[0, 'the archive is verified (and the folder deleted with --delete)'], [1, 'anything was refused or failed, with the folder kept'], [2, 'a usage error']]
 
@@ -39,15 +39,15 @@ function isExcluded(relPath: string, globs: Bun.Glob[]): boolean {
 
 export async function pack(args: string[]): Promise<number> {
   const { values, positionals } = parse(args, USAGE, {
-    delete: { type: 'boolean', description: 'delete the folder once the archive is verified' },
+    delete: { type: 'boolean', description: 'delete the folder or file once the archive is verified' },
     exclude: { type: 'string', short: 'e', multiple: true, description: 'exclude matching files or folders (repeatable)' },
     level: { type: 'string', short: 'l', description: `zstd compression level 1..${MAX_LEVEL} (default ${DEFAULT_LEVEL})` },
     threads: { type: 'string', short: 'T', description: `zstd worker threads (default ${defaultThreads()})` },
   }, {
     exits: EXITS,
-    positionals: ['<folder>', '[dest dir]'],
+    positionals: ['<folder|file>', '[dest dir]'],
     replaces: 'tar czf, then diff or tar --compare by hand, then rm -rf once it looks right',
-    examples: [['arc pack ./data /mnt/backup', 'the folder stays'], ['arc pack dist', 'compress only: ./dist.tar.zst'], ['arc pack --exclude node_modules --exclude .git ./app', 'skip dependencies and git'], ['arc pack --delete ~/old-project /mnt/backup', 'archive, verify, then delete the folder']],
+    examples: [['arc pack ./data /mnt/backup', 'the folder stays'], ['arc pack dist', 'compress only: ./dist.tar.zst'], ['arc pack dump.jsonl', 'a single file: ./dump.jsonl.tar.zst'], ['arc pack --exclude node_modules --exclude .git ./app', 'skip dependencies and git'], ['arc pack --delete ~/old-project /mnt/backup', 'archive, verify, then delete the folder']],
   })
   const [folder, destination = '.'] = positionals
   const given = folder.replace(TRAILING_SLASHES, '')
@@ -66,8 +66,14 @@ export async function pack(args: string[]): Promise<number> {
   need('tar')
   need('zstd')
 
-  if (given === '' || !existsSync(given) || lstatSync(given).isSymbolicLink() || !statSync(given).isDirectory())
-    return fail(`'${folder}' is not a folder (a symlink is refused, as deleting it would not free its target)`, 1)
+  if (given === '' || !existsSync(given))
+    return fail(`'${folder}' does not exist`, 1)
+
+  if (lstatSync(given).isSymbolicLink())
+    return fail(`'${folder}' is a symlink, refused as deleting it would not free its target`, 1)
+
+  if (!statSync(given).isDirectory() && !statSync(given).isFile())
+    return fail(`'${folder}' is neither a folder nor a file`, 1)
 
   if (!existsSync(destination) || !statSync(destination).isDirectory())
     return fail(`'${destination}' is not a folder: [dest dir] is where <name>.tar.zst goes`, 1)

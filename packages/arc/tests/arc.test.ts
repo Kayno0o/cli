@@ -155,12 +155,28 @@ describe.skipIf(!GNU)('arc pack', () => {
     expect(listed).not.toContain('skip.log')
   })
 
+  test('packs a single file, verifies it and deletes it with --delete', () => {
+    const { root, folder, dest } = project()
+    const file = join(folder, 'b.txt')
+    const restored = join(root, 'restored')
+
+    mkdirSync(restored)
+
+    const result = arc(['pack', '--delete', file, dest])
+
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('1 entries')
+    expect(existsSync(file)).toBe(false)
+    expect(arc(['unpack', join(dest, 'b.txt.tar.zst'), restored]).code).toBe(0)
+    expect(readFileSync(join(restored, 'b.txt'), 'utf8')).toBe('beta')
+  })
+
   test('refuses a symlink, a missing destination and a destination inside the folder', () => {
     const { root, folder, dest } = project()
 
     symlinkSync(folder, join(root, 'link'))
 
-    expect(arc(['pack', join(root, 'link'), dest]).err).toContain('not a folder')
+    expect(arc(['pack', join(root, 'link'), dest]).err).toContain('is a symlink')
     expect(arc(['pack', folder, join(root, 'nope')]).err).toContain('not a folder')
 
     mkdirSync(join(folder, 'inside'))
