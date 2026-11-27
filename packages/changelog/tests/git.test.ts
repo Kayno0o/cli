@@ -214,6 +214,21 @@ describe('with a forge in config.json', () => {
     expect(await inside(dir, async () => resolveConfig({}))).toMatchObject({ baseUrl: 'git.public.example', baseUrlApi: 'git.public.example/api/v1', provider: 'gitea' })
   })
 
+  it('takes the token of the tea login for origin\'s private address, tea knowing no public one', async () => {
+    const { dir, git } = await bareRepo()
+    const tea = join(process.env.XDG_CONFIG_HOME!, 'tea', 'config.yml')
+
+    await git('remote', 'add', 'origin', 'git@git.private.example:owner/repo.git')
+    await Bun.write(tea, 'logins:\n    - name: other\n      url: https://git.other.example\n      token: other-token\n      default: false\n    - name: private\n      url: https://git.private.example\n      token: private-token\n      default: false\n      ssh_host: git.private.example\n')
+
+    try {
+      expect(await inside(dir, async () => resolveConfig({}))).toMatchObject({ baseUrl: 'git.public.example', token: 'private-token' })
+    }
+    finally {
+      await Bun.file(tea).delete()
+    }
+  })
+
   it('sends a repo on github.com to GitHub', async () => {
     const { dir, git } = await bareRepo()
 
