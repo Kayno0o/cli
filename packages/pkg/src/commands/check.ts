@@ -12,7 +12,7 @@ import { fetchDownloads, fetchPackument, isPublic, unreachable } from '../regist
 
 const usage = `pkg [check] <name>[@version]... | --from <package.json> | -
 
-Checks npm packages before they are added: the name exists, the newest version at least two weeks old (any age for the \`trusted\` setting's names, \`@kaynooo/*\` and \`@kayjs/*\` by default), downloads, licence, install scripts, a near miss of a popular name, and a changed publisher or lost provenance attestation.
+Checks npm packages before they are added: the name exists, the newest version at least two weeks old (any age for the \`trusted\` setting's names, \`@kaynooo/*\`, \`@kayjs/*\`, \`prunelle\` and \`@prunellejs/*\` by default), downloads, licence, install scripts, a near miss of a popular name, and a changed publisher or lost provenance attestation.
 Names come from the arguments, from a package.json with --from, or from stdin.
 A \`.pkgrc.json\` with \`licenses\` refuses a licence outside the list, and \`blockSeverity\` a version with an advisory at that level or above.`
 

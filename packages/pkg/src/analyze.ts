@@ -10,7 +10,7 @@ import { isRange } from './semver'
 
 export const DEFAULT_MIN_AGE_DAYS = 14
 // The user's own scopes, published by the user: waiting out their releases only holds back the user's own work.
-export const DEFAULT_TRUSTED = ['@kaynooo/*', '@kayjs/*']
+export const DEFAULT_TRUSTED = ['@kaynooo/*', '@kayjs/*', 'prunelle', '@prunellejs/*']
 const DAY = 86_400_000
 const PUBLIC_HOST = new URL(PUBLIC_REGISTRY).host
 const INSTALL_SCRIPTS = ['preinstall', 'install', 'postinstall'] as const

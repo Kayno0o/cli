@@ -372,7 +372,11 @@ describe('analyze edge cases', () => {
     const untrusted = await checkPackage('@kaynooo/eslint@1.1.0', { configs: [], minAgeDays: 14, now, fetcher, settings: { trusted: [] } })
     const undated = await checkPackage('@kayjs/ui', { configs: [], minAgeDays: 14, fetcher: dated({}, '@kayjs/ui') })
     const licensed = await checkPackage('@kaynooo/eslint@1.1.0', { configs: [], minAgeDays: 14, now, fetcher, settings: { licenses: ['MIT'] } })
+    const framework = await checkPackage('prunelle@1.1.0', { configs: [], minAgeDays: 14, now, fetcher: dated(time, 'prunelle') })
+    const plugin = await checkPackage('@prunellejs/ui@1.1.0', { configs: [], minAgeDays: 14, now, fetcher: dated(time, '@prunellejs/ui') })
 
+    expect(framework.warnings.join()).toContain('its age not checked as prunelle is trusted')
+    expect(plugin.warnings.join()).toContain('its age not checked as @prunellejs/* is trusted')
     expect(own.blocked).toBe(false)
     expect(own.safe?.version).toBe('1.1.0')
     expect(own.warnings.join()).toContain('1.1.0 was published 3 days ago, under 14 days, its age not checked as @kaynooo/* is trusted')
