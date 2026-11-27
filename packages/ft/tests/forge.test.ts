@@ -45,6 +45,13 @@ describe('config token parsers', () => {
 
     expect(glabLogins(glab)).toEqual([{ host: 'gitlab.example.com', apiHost: 'gitlab.example.com', protocol: 'https', token: 'tok-glab' }])
 
+    const tagged = `hosts:
+  gitlab.com:
+    token: !!null glpat-tok
+`
+
+    expect(glabLogins(tagged)).toEqual([{ host: 'gitlab.com', apiHost: 'gitlab.com', protocol: 'https', token: 'glpat-tok' }])
+
     const gh = `github.com:
   user: kaynooo
   oauth_token: gho_secret123

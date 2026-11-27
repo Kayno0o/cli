@@ -40,6 +40,8 @@ const URL_REMOTE = /^[a-z+]+:\/\/(?:[^@/\s]+@)?(\[[^\]]+\]|[^:/\s]+)(?::\d+)?\/(
 const REPO_PREFIX = /^(gh|gl|fj|github|gitlab|forgejo):(.+)$/i
 const LOGIN_LINE = /^\s*(-\s+)?([a-z_]+):(.*)$/
 const QUOTES = /^["']|["']$/g
+// glab writes some values behind a YAML type tag (`token: !!null glpat-...`), which its own loader drops.
+const YAML_TAG = /^!!\w+\s+/
 const CREDENTIALS = /:\/\/[^/@]+@/
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
@@ -171,7 +173,7 @@ function parseHostYaml(config: string, underHostsKey: boolean): Map<string, Reco
       const kv = KV_LINE.exec(raw)
 
       if (kv !== null)
-        result.get(currentHost)![kv[1]!.toLowerCase()] = (kv[2] ?? '').trim().replace(QUOTES, '')
+        result.get(currentHost)![kv[1]!.toLowerCase()] = (kv[2] ?? '').trim().replace(YAML_TAG, '').replace(QUOTES, '')
     }
   }
 
